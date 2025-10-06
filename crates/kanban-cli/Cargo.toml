@@ -1,0 +1,21 @@
+[package]
+name = "kanban-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "kanban"
+path = "src/main.rs"
+
+[dependencies]
+kanban-core = { path = "../kanban-core" }
+kanban-domain = { path = "../kanban-domain" }
+kanban-db = { path = "../kanban-db" }
+kanban-tui = { path = "../kanban-tui" }
+clap.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

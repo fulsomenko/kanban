@@ -1,0 +1,20 @@
+[package]
+name = "kanban-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+kanban-core = { path = "../kanban-core" }
+kanban-domain = { path = "../kanban-domain" }
+ratatui.workspace = true
+crossterm.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+serde.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+async-trait.workspace = true
+tracing.workspace = true

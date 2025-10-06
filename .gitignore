@@ -1,0 +1,41 @@
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Database
+.pgdata/
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.direnv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Nix
+result
+result-*
+out
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+logfile
+
+# Build artifacts
+artifacts
+changed.txt
+BUILD
+coverage
