@@ -81,15 +81,15 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
         Line::from(Span::raw("")),
     ];
 
-    if app.projects.is_empty() {
+    if app.boards.is_empty() {
         lines.push(Line::from(Span::styled(
             "No projects yet. Press 'n' to create one!",
             Style::default().fg(Color::Gray),
         )));
     } else {
-        for (idx, project) in app.projects.iter().enumerate() {
-            let is_selected = app.project_selection.get() == Some(idx);
-            let is_active = app.active_project_index == Some(idx);
+        for (idx, board) in app.boards.iter().enumerate() {
+            let is_selected = app.board_selection.get() == Some(idx);
+            let is_active = app.active_board_index == Some(idx);
 
             let mut style = Style::default();
             let prefix;
@@ -107,7 +107,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
             }
 
             lines.push(Line::from(Span::styled(
-                format!("{}{}", prefix, project.name),
+                format!("{}{}", prefix, board.name),
                 style,
             )));
         }
@@ -126,8 +126,8 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
-    let project_name = if let Some(project_idx) = app.active_project_index {
-        app.projects.get(project_idx).map(|p| p.name.as_str()).unwrap_or("Unknown")
+    let project_name = if let Some(board_idx) = app.active_board_index {
+        app.boards.get(board_idx).map(|b| b.name.as_str()).unwrap_or("Unknown")
     } else {
         "No Project"
     };
@@ -140,22 +140,22 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
         Line::from(Span::raw("")),
     ];
 
-    if let Some(idx) = app.active_project_index {
-        if let Some(project) = app.projects.get(idx) {
-            let project_tasks: Vec<_> = app.cards.iter()
+    if let Some(idx) = app.active_board_index {
+        if let Some(board) = app.boards.get(idx) {
+            let board_tasks: Vec<_> = app.cards.iter()
                 .filter(|card| {
                     app.columns.iter()
-                        .any(|col| col.id == card.column_id && col.board_id == project.id)
+                        .any(|col| col.id == card.column_id && col.board_id == board.id)
                 })
                 .collect();
 
-            if project_tasks.is_empty() {
+            if board_tasks.is_empty() {
                 lines.push(Line::from(Span::styled(
                     "No tasks yet. Press 'n' to create one!",
                     Style::default().fg(Color::Gray),
                 )));
             } else {
-                for (task_idx, task) in project_tasks.iter().enumerate() {
+                for (task_idx, task) in board_tasks.iter().enumerate() {
                     let is_selected = app.task_selection.get() == Some(task_idx);
                     let style = if is_selected {
                         Style::default().fg(Color::White).bg(Color::Blue)
@@ -286,16 +286,16 @@ fn render_create_task_popup(app: &App, frame: &mut Frame) {
 
 fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(task_idx) = app.active_task_index {
-        if let Some(project_idx) = app.active_project_index {
-            if let Some(project) = app.projects.get(project_idx) {
-                let project_tasks: Vec<_> = app.cards.iter()
+        if let Some(board_idx) = app.active_board_index {
+            if let Some(board) = app.boards.get(board_idx) {
+                let board_tasks: Vec<_> = app.cards.iter()
                     .filter(|card| {
                         app.columns.iter()
-                            .any(|col| col.id == card.column_id && col.board_id == project.id)
+                            .any(|col| col.id == card.column_id && col.board_id == board.id)
                     })
                     .collect();
 
-                if let Some(task) = project_tasks.get(task_idx) {
+                if let Some(task) = board_tasks.get(task_idx) {
                     let chunks = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints([
@@ -401,8 +401,8 @@ fn render_rename_project_popup(app: &App, frame: &mut Frame) {
 }
 
 fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(project_idx) = app.project_selection.get() {
-        if let Some(board) = app.projects.get(project_idx) {
+    if let Some(board_idx) = app.board_selection.get() {
+        if let Some(board) = app.boards.get(board_idx) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([

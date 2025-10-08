@@ -16,9 +16,9 @@ pub struct App {
     pub should_quit: bool,
     pub mode: AppMode,
     pub input_buffer: String,
-    pub projects: Vec<Board>,
-    pub project_selection: SelectionState,
-    pub active_project_index: Option<usize>,
+    pub boards: Vec<Board>,
+    pub board_selection: SelectionState,
+    pub active_board_index: Option<usize>,
     pub task_selection: SelectionState,
     pub active_task_index: Option<usize>,
     pub columns: Vec<Column>,
@@ -73,9 +73,9 @@ impl App {
             should_quit: false,
             mode: AppMode::Normal,
             input_buffer: String::new(),
-            projects: Vec::new(),
-            project_selection: SelectionState::new(),
-            active_project_index: None,
+            boards: Vec::new(),
+            board_selection: SelectionState::new(),
+            active_board_index: None,
             task_selection: SelectionState::new(),
             active_task_index: None,
             columns: Vec::new(),
@@ -105,7 +105,7 @@ impl App {
                                 self.input_buffer.clear();
                             }
                             Focus::Tasks => {
-                                if self.active_project_index.is_some() {
+                                if self.active_board_index.is_some() {
                                     self.mode = AppMode::CreateTask;
                                     self.input_buffer.clear();
                                 }
@@ -113,30 +113,30 @@ impl App {
                         }
                     }
                     KeyCode::Char('r') => {
-                        if self.focus == Focus::Projects && self.project_selection.get().is_some() {
-                            if let Some(project_idx) = self.project_selection.get() {
-                                if let Some(project) = self.projects.get(project_idx) {
-                                    self.input_buffer = project.name.clone();
+                        if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                            if let Some(board_idx) = self.board_selection.get() {
+                                if let Some(board) = self.boards.get(board_idx) {
+                                    self.input_buffer = board.name.clone();
                                     self.mode = AppMode::RenameProject;
                                 }
                             }
                         }
                     }
                     KeyCode::Char('e') => {
-                        if self.focus == Focus::Projects && self.project_selection.get().is_some() {
+                        if self.focus == Focus::Projects && self.board_selection.get().is_some() {
                             self.mode = AppMode::BoardDetail;
                             self.board_focus = BoardFocus::Name;
                         }
                     }
                     KeyCode::Char('1') => self.focus = Focus::Projects,
                     KeyCode::Char('2') => {
-                        if self.active_project_index.is_some() {
+                        if self.active_board_index.is_some() {
                             self.focus = Focus::Tasks;
                         }
                     }
                     KeyCode::Esc => {
-                        if self.active_project_index.is_some() {
-                            self.active_project_index = None;
+                        if self.active_board_index.is_some() {
+                            self.active_board_index = None;
                             self.task_selection.clear();
                             self.focus = Focus::Projects;
                         }
@@ -144,12 +144,12 @@ impl App {
                     KeyCode::Char('j') | KeyCode::Down => {
                         match self.focus {
                             Focus::Projects => {
-                                self.project_selection.next(self.projects.len());
+                                self.board_selection.next(self.boards.len());
                             }
                             Focus::Tasks => {
-                                if let Some(project_idx) = self.active_project_index {
-                                    if let Some(project) = self.projects.get(project_idx) {
-                                        let task_count = self.get_project_task_count(project.id);
+                                if let Some(board_idx) = self.active_board_index {
+                                    if let Some(board) = self.boards.get(board_idx) {
+                                        let task_count = self.get_board_task_count(board.id);
                                         self.task_selection.next(task_count);
                                     }
                                 }
@@ -159,7 +159,7 @@ impl App {
                     KeyCode::Char('k') | KeyCode::Up => {
                         match self.focus {
                             Focus::Projects => {
-                                self.project_selection.prev();
+                                self.board_selection.prev();
                             }
                             Focus::Tasks => {
                                 self.task_selection.prev();
@@ -169,13 +169,13 @@ impl App {
                     KeyCode::Enter | KeyCode::Char(' ') => {
                         match self.focus {
                             Focus::Projects => {
-                                if self.project_selection.get().is_some() {
-                                    self.active_project_index = self.project_selection.get();
+                                if self.board_selection.get().is_some() {
+                                    self.active_board_index = self.board_selection.get();
                                     self.task_selection.clear();
 
-                                    if let Some(project_idx) = self.active_project_index {
-                                        if let Some(project) = self.projects.get(project_idx) {
-                                            let task_count = self.get_project_task_count(project.id);
+                                    if let Some(board_idx) = self.active_board_index {
+                                        if let Some(board) = self.boards.get(board_idx) {
+                                            let task_count = self.get_board_task_count(board.id);
                                             if task_count > 0 {
                                                 self.task_selection.set(Some(0));
                                             }
@@ -204,7 +204,7 @@ impl App {
                     }
                     KeyCode::Enter => {
                         if !self.input_buffer.is_empty() {
-                            self.create_project();
+                            self.create_board();
                             self.mode = AppMode::Normal;
                             self.input_buffer.clear();
                         }
@@ -252,7 +252,7 @@ impl App {
                     }
                     KeyCode::Enter => {
                         if !self.input_buffer.is_empty() {
-                            self.rename_project();
+                            self.rename_board();
                             self.mode = AppMode::Normal;
                             self.input_buffer.clear();
                         }
@@ -339,34 +339,34 @@ impl App {
         should_restart_events
     }
 
-    fn create_project(&mut self) {
-        let project = Board::new(self.input_buffer.clone(), None);
-        tracing::info!("Creating project: {} (id: {})", project.name, project.id);
-        self.projects.push(project);
-        let new_index = self.projects.len() - 1;
-        self.project_selection.set(Some(new_index));
+    fn create_board(&mut self) {
+        let board = Board::new(self.input_buffer.clone(), None);
+        tracing::info!("Creating project: {} (id: {})", board.name, board.id);
+        self.boards.push(board);
+        let new_index = self.boards.len() - 1;
+        self.board_selection.set(Some(new_index));
     }
 
-    fn rename_project(&mut self) {
-        if let Some(idx) = self.project_selection.get() {
-            if let Some(project) = self.projects.get_mut(idx) {
-                project.update_name(self.input_buffer.clone());
-                tracing::info!("Renamed project to: {}", project.name);
+    fn rename_board(&mut self) {
+        if let Some(idx) = self.board_selection.get() {
+            if let Some(board) = self.boards.get_mut(idx) {
+                board.update_name(self.input_buffer.clone());
+                tracing::info!("Renamed project to: {}", board.name);
             }
         }
     }
 
     fn create_task(&mut self) {
-        if let Some(idx) = self.active_project_index {
-            if let Some(project) = self.projects.get(idx) {
+        if let Some(idx) = self.active_board_index {
+            if let Some(board) = self.boards.get(idx) {
                 let column = self.columns.iter()
-                    .find(|col| col.board_id == project.id)
+                    .find(|col| col.board_id == board.id)
                     .cloned();
 
                 let column = match column {
                     Some(col) => col,
                     None => {
-                        let new_column = Column::new(project.id, "Todo".to_string(), 0);
+                        let new_column = Column::new(board.id, "Todo".to_string(), 0);
                         self.columns.push(new_column.clone());
                         new_column
                     }
@@ -377,14 +377,14 @@ impl App {
                 tracing::info!("Creating task: {} (id: {})", card.title, card.id);
                 self.cards.push(card);
 
-                let task_count = self.get_project_task_count(project.id);
+                let task_count = self.get_board_task_count(board.id);
                 let new_task_index = task_count.saturating_sub(1);
                 self.task_selection.set(Some(new_task_index));
             }
         }
     }
 
-    fn get_project_task_count(&self, board_id: uuid::Uuid) -> usize {
+    fn get_board_task_count(&self, board_id: uuid::Uuid) -> usize {
         self.cards.iter()
             .filter(|card| {
                 self.columns.iter()
@@ -394,8 +394,8 @@ impl App {
     }
 
     fn edit_board_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: BoardField) -> io::Result<()> {
-        if let Some(project_idx) = self.project_selection.get() {
-            if let Some(board) = self.projects.get(project_idx) {
+        if let Some(board_idx) = self.board_selection.get() {
+            if let Some(board) = self.boards.get(board_idx) {
                 let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
 
                 let temp_dir = std::env::temp_dir();
@@ -436,7 +436,7 @@ impl App {
                     let new_content = std::fs::read_to_string(&temp_file)?;
 
                     let board_id = board.id;
-                    if let Some(board) = self.projects.iter_mut().find(|b| b.id == board_id) {
+                    if let Some(board) = self.boards.iter_mut().find(|b| b.id == board_id) {
                         match field {
                             BoardField::Name => {
                                 if !new_content.trim().is_empty() {
@@ -463,16 +463,16 @@ impl App {
 
     fn edit_task_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: TaskField) -> io::Result<()> {
         if let Some(task_idx) = self.active_task_index {
-            if let Some(project_idx) = self.active_project_index {
-                if let Some(project) = self.projects.get(project_idx) {
-                    let project_tasks: Vec<_> = self.cards.iter()
+            if let Some(board_idx) = self.active_board_index {
+                if let Some(board) = self.boards.get(board_idx) {
+                    let board_tasks: Vec<_> = self.cards.iter()
                         .filter(|card| {
                             self.columns.iter()
-                                .any(|col| col.id == card.column_id && col.board_id == project.id)
+                                .any(|col| col.id == card.column_id && col.board_id == board.id)
                         })
                         .collect();
 
-                    if let Some(task) = project_tasks.get(task_idx) {
+                    if let Some(task) = board_tasks.get(task_idx) {
                         let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
 
                         let temp_dir = std::env::temp_dir();
