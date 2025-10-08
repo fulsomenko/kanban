@@ -111,9 +111,15 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
+    let project_name = if let Some(project_idx) = app.active_project_index {
+        app.projects.get(project_idx).map(|p| p.name.as_str()).unwrap_or("Unknown")
+    } else {
+        "No Project"
+    };
+
     let mut lines = vec![
         Line::from(Span::styled(
-            "Tasks",
+            format!("{}", project_name),
             Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::raw("")),
