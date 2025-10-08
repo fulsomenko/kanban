@@ -354,15 +354,16 @@ impl App {
                                 match field {
                                     TaskField::Title => {
                                         if !new_content.trim().is_empty() {
-                                            card.title = new_content.trim().to_string();
+                                            card.update_title(new_content.trim().to_string());
                                         }
                                     }
                                     TaskField::Description => {
-                                        card.description = if new_content.trim().is_empty() {
+                                        let desc = if new_content.trim().is_empty() {
                                             None
                                         } else {
                                             Some(new_content)
                                         };
+                                        card.update_description(desc);
                                     }
                                 }
                             }

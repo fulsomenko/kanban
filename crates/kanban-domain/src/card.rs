@@ -73,4 +73,14 @@ impl Card {
         self.due_date = due_date;
         self.updated_at = Utc::now();
     }
+
+    pub fn update_title(&mut self, title: String) {
+        self.title = title;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn update_description(&mut self, description: Option<String>) {
+        self.description = description;
+        self.updated_at = Utc::now();
+    }
 }
