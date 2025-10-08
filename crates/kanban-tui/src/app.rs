@@ -133,19 +133,21 @@ impl App {
                     KeyCode::Enter | KeyCode::Char(' ') => {
                         match self.focus {
                             Focus::Projects => {
-                                self.active_project_index = self.project_selection.get();
-                                self.task_selection.clear();
+                                if self.project_selection.get().is_some() {
+                                    self.active_project_index = self.project_selection.get();
+                                    self.task_selection.clear();
 
-                                if let Some(project_idx) = self.active_project_index {
-                                    if let Some(project) = self.projects.get(project_idx) {
-                                        let task_count = self.get_project_task_count(project.id);
-                                        if task_count > 0 {
-                                            self.task_selection.set(Some(0));
+                                    if let Some(project_idx) = self.active_project_index {
+                                        if let Some(project) = self.projects.get(project_idx) {
+                                            let task_count = self.get_project_task_count(project.id);
+                                            if task_count > 0 {
+                                                self.task_selection.set(Some(0));
+                                            }
                                         }
                                     }
-                                }
 
-                                self.focus = Focus::Tasks;
+                                    self.focus = Focus::Tasks;
+                                }
                             }
                             Focus::Tasks => {
                                 if self.task_selection.get().is_some() {
