@@ -8,7 +8,7 @@ use ratatui::{
     backend::CrosstermBackend,
     Terminal,
 };
-use std::io;
+use std::io::{self, Write};
 use std::process::Command;
 use crate::{events::{EventHandler, Event}, ui, selection::SelectionState};
 
@@ -70,8 +70,9 @@ impl App {
         self.should_quit = true;
     }
 
-    fn handle_key_event(&mut self, key: crossterm::event::KeyEvent, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) {
+    fn handle_key_event(&mut self, key: crossterm::event::KeyEvent, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler) -> bool {
         use crossterm::event::{KeyCode, KeyModifiers};
+        let mut should_restart_events = false;
 
         match self.mode {
             AppMode::Normal => {
@@ -223,15 +224,17 @@ impl App {
                     }
                     KeyCode::Enter | KeyCode::Char(' ') => {
                         if self.task_focus == TaskFocus::Description {
-                            if let Err(e) = self.edit_description(terminal) {
+                            if let Err(e) = self.edit_description(terminal, event_handler) {
                                 tracing::error!("Failed to edit description: {}", e);
                             }
+                            should_restart_events = true;
                         }
                     }
                     _ => {}
                 }
             }
         }
+        should_restart_events
     }
 
     fn create_project(&mut self) {
@@ -279,7 +282,7 @@ impl App {
             .count()
     }
 
-    fn edit_description(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
+    fn edit_description(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler) -> io::Result<()> {
         if let Some(task_idx) = self.active_task_index {
             if let Some(project_idx) = self.active_project_index {
                 if let Some(project) = self.projects.get(project_idx) {
@@ -299,12 +302,19 @@ impl App {
                         let current_desc = task.description.as_ref().map(|s| s.as_str()).unwrap_or("");
                         std::fs::write(&temp_file, current_desc)?;
 
+                        event_handler.stop();
+
                         disable_raw_mode()?;
                         execute!(io::stdout(), LeaveAlternateScreen)?;
+                        io::stdout().flush()?;
 
                         let status = Command::new(&editor)
                             .arg(&temp_file)
                             .status()?;
+
+                        while crossterm::event::poll(std::time::Duration::from_millis(0))? {
+                            let _ = crossterm::event::read()?;
+                        }
 
                         execute!(io::stdout(), EnterAlternateScreen)?;
                         enable_raw_mode()?;
@@ -334,18 +344,32 @@ impl App {
 
     pub async fn run(&mut self) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
-        let mut events = EventHandler::new();
 
         while !self.should_quit {
-            terminal.draw(|frame| ui::render(self, frame))?;
+            let mut events = EventHandler::new();
 
-            if let Some(event) = events.next().await {
-                match event {
-                    Event::Key(key) => {
-                        self.handle_key_event(key, &mut terminal);
+            loop {
+                terminal.draw(|frame| ui::render(self, frame))?;
+
+                if let Some(event) = events.next().await {
+                    match event {
+                        Event::Key(key) => {
+                            let should_restart = self.handle_key_event(key, &mut terminal, &events);
+                            if should_restart {
+                                break;
+                            }
+                        }
+                        Event::Tick => {}
                     }
-                    Event::Tick => {}
                 }
+
+                if self.should_quit {
+                    break;
+                }
+            }
+
+            if self.should_quit {
+                break;
             }
         }
 

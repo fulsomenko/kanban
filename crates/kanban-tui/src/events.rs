@@ -10,33 +10,46 @@ pub enum Event {
 
 pub struct EventHandler {
     rx: mpsc::UnboundedReceiver<Event>,
+    shutdown_tx: mpsc::UnboundedSender<()>,
 }
 
 impl EventHandler {
     pub fn new() -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
+        let (shutdown_tx, mut shutdown_rx) = mpsc::unbounded_channel();
 
         tokio::spawn(async move {
             loop {
-                if event::poll(Duration::from_millis(100)).unwrap() {
-                    if let Ok(CrosstermEvent::Key(key)) = event::read() {
-                        if tx.send(Event::Key(key)).is_err() {
-                            break;
-                        }
-                    }
-                } else {
-                    if tx.send(Event::Tick).is_err() {
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
                         break;
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                        if event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                            if let Ok(CrosstermEvent::Key(key)) = event::read() {
+                                if tx.send(Event::Key(key)).is_err() {
+                                    break;
+                                }
+                            }
+                        } else {
+                            if tx.send(Event::Tick).is_err() {
+                                break;
+                            }
+                        }
                     }
                 }
             }
         });
 
-        Self { rx }
+        Self { rx, shutdown_tx }
     }
 
     pub async fn next(&mut self) -> Option<Event> {
         self.rx.recv().await
+    }
+
+    pub fn stop(&self) {
+        let _ = self.shutdown_tx.send(());
     }
 }
 
