@@ -40,6 +40,11 @@ pub enum TaskFocus {
     Description,
 }
 
+enum TaskField {
+    Title,
+    Description,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
     Normal,
@@ -225,11 +230,20 @@ impl App {
                         self.task_focus = TaskFocus::Description;
                     }
                     KeyCode::Enter | KeyCode::Char(' ') => {
-                        if self.task_focus == TaskFocus::Description {
-                            if let Err(e) = self.edit_description(terminal, event_handler) {
-                                tracing::error!("Failed to edit description: {}", e);
+                        match self.task_focus {
+                            TaskFocus::Title => {
+                                if let Err(e) = self.edit_task_field(terminal, event_handler, TaskField::Title) {
+                                    tracing::error!("Failed to edit title: {}", e);
+                                }
+                                should_restart_events = true;
                             }
-                            should_restart_events = true;
+                            TaskFocus::Description => {
+                                if let Err(e) = self.edit_task_field(terminal, event_handler, TaskField::Description) {
+                                    tracing::error!("Failed to edit description: {}", e);
+                                }
+                                should_restart_events = true;
+                            }
+                            _ => {}
                         }
                     }
                     _ => {}
@@ -284,7 +298,7 @@ impl App {
             .count()
     }
 
-    fn edit_description(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler) -> io::Result<()> {
+    fn edit_task_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: TaskField) -> io::Result<()> {
         if let Some(task_idx) = self.active_task_index {
             if let Some(project_idx) = self.active_project_index {
                 if let Some(project) = self.projects.get(project_idx) {
@@ -299,10 +313,19 @@ impl App {
                         let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
 
                         let temp_dir = std::env::temp_dir();
-                        let temp_file = temp_dir.join(format!("kanban-task-{}.md", task.id));
+                        let (temp_file, current_content) = match field {
+                            TaskField::Title => {
+                                let temp_file = temp_dir.join(format!("kanban-task-{}-title.txt", task.id));
+                                (temp_file, task.title.clone())
+                            }
+                            TaskField::Description => {
+                                let temp_file = temp_dir.join(format!("kanban-task-{}-description.md", task.id));
+                                let content = task.description.as_ref().map(|s| s.as_str()).unwrap_or("").to_string();
+                                (temp_file, content)
+                            }
+                        };
 
-                        let current_desc = task.description.as_ref().map(|s| s.as_str()).unwrap_or("");
-                        std::fs::write(&temp_file, current_desc)?;
+                        std::fs::write(&temp_file, current_content)?;
 
                         event_handler.stop();
 
@@ -328,11 +351,20 @@ impl App {
 
                             let task_id = task.id;
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
-                                card.description = if new_content.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(new_content)
-                                };
+                                match field {
+                                    TaskField::Title => {
+                                        if !new_content.trim().is_empty() {
+                                            card.title = new_content.trim().to_string();
+                                        }
+                                    }
+                                    TaskField::Description => {
+                                        card.description = if new_content.trim().is_empty() {
+                                            None
+                                        } else {
+                                            Some(new_content)
+                                        };
+                                    }
+                                }
                             }
                         }
 

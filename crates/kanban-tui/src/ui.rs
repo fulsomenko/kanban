@@ -179,6 +179,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::CreateProject => "ESC: cancel | ENTER: confirm",
         AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
         AppMode::TaskDetail => match app.task_focus {
+            TaskFocus::Title => "ESC/q: close | 1/2/3: select panel | Enter/Space: edit title",
             TaskFocus::Description => "ESC/q: close | 1/2/3: select panel | Enter/Space: edit description",
             _ => "ESC/q: close | 1/2/3: select panel",
         },
