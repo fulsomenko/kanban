@@ -284,7 +284,7 @@ impl App {
                     KeyCode::Char('3') => {
                         self.task_focus = TaskFocus::Description;
                     }
-                    KeyCode::Enter | KeyCode::Char(' ') => {
+                    KeyCode::Char('e') => {
                         match self.task_focus {
                             TaskFocus::Title => {
                                 if let Err(e) = self.edit_task_field(terminal, event_handler, TaskField::Title) {
@@ -316,7 +316,7 @@ impl App {
                     KeyCode::Char('2') => {
                         self.board_focus = BoardFocus::Description;
                     }
-                    KeyCode::Enter | KeyCode::Char(' ') => {
+                    KeyCode::Char('e') => {
                         match self.board_focus {
                             BoardFocus::Name => {
                                 if let Err(e) = self.edit_board_field(terminal, event_handler, BoardField::Name) {

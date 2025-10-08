@@ -195,13 +195,13 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
         AppMode::RenameProject => "ESC: cancel | ENTER: confirm",
         AppMode::TaskDetail => match app.task_focus {
-            TaskFocus::Title => "ESC/q: close | 1/2/3: select panel | Enter/Space: edit title",
-            TaskFocus::Description => "ESC/q: close | 1/2/3: select panel | Enter/Space: edit description",
+            TaskFocus::Title => "ESC/q: close | 1/2/3: select panel | e: edit title",
+            TaskFocus::Description => "ESC/q: close | 1/2/3: select panel | e: edit description",
             _ => "ESC/q: close | 1/2/3: select panel",
         },
         AppMode::BoardDetail => match app.board_focus {
-            BoardFocus::Name => "ESC/q: close | 1/2: select panel | Enter/Space: edit name",
-            BoardFocus::Description => "ESC/q: close | 1/2: select panel | Enter/Space: edit description",
+            BoardFocus::Name => "ESC/q: close | 1/2: select panel | e: edit name",
+            BoardFocus::Description => "ESC/q: close | 1/2: select panel | e: edit description",
         },
     };
     let help = Paragraph::new(help_text)
