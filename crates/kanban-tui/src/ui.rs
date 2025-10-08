@@ -49,6 +49,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::CreateProject => render_create_project_popup(app, frame),
                 AppMode::CreateTask => render_create_task_popup(app, frame),
                 AppMode::RenameProject => render_rename_project_popup(app, frame),
+                AppMode::ExportBoard => render_export_board_popup(app, frame),
                 _ => {}
             }
         }
@@ -192,10 +193,11 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateProject => "ESC: cancel | ENTER: confirm",
         AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
         AppMode::RenameProject => "ESC: cancel | ENTER: confirm",
+        AppMode::ExportBoard => "ESC: cancel | ENTER: export",
         AppMode::TaskDetail => match app.task_focus {
             TaskFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
             TaskFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | e: edit description",
@@ -244,7 +246,7 @@ fn render_create_project_popup(app: &App, frame: &mut Frame) {
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(input, chunks[1]);
 
-    let cursor_x = chunks[1].x + app.input_buffer.len() as u16 + 1;
+    let cursor_x = chunks[1].x + app.input_cursor as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 }
@@ -281,7 +283,7 @@ fn render_create_task_popup(app: &App, frame: &mut Frame) {
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(input, chunks[1]);
 
-    let cursor_x = chunks[1].x + app.input_buffer.len() as u16 + 1;
+    let cursor_x = chunks[1].x + app.input_cursor as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 }
@@ -397,7 +399,44 @@ fn render_rename_project_popup(app: &App, frame: &mut Frame) {
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(input, chunks[1]);
 
-    let cursor_x = chunks[1].x + app.input_buffer.len() as u16 + 1;
+    let cursor_x = chunks[1].x + app.input_cursor as u16 + 1;
+    let cursor_y = chunks[1].y + 1;
+    frame.set_cursor_position((cursor_x, cursor_y));
+}
+
+fn render_export_board_popup(app: &App, frame: &mut Frame) {
+    let area = centered_rect(60, 30, frame.area());
+
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Export Board")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let label = Paragraph::new("Filename:")
+        .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(label, chunks[0]);
+
+    let input = Paragraph::new(app.input_buffer.as_str())
+        .style(Style::default().fg(Color::White))
+        .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(input, chunks[1]);
+
+    let cursor_x = chunks[1].x + app.input_cursor as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 }

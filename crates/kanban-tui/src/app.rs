@@ -10,12 +10,14 @@ use ratatui::{
 };
 use std::io::{self, Write};
 use std::process::Command;
+use serde::Serialize;
 use crate::{events::{EventHandler, Event}, ui, selection::SelectionState};
 
 pub struct App {
     pub should_quit: bool,
     pub mode: AppMode,
     pub input_buffer: String,
+    pub input_cursor: usize,
     pub boards: Vec<Board>,
     pub board_selection: SelectionState,
     pub active_board_index: Option<usize>,
@@ -65,6 +67,7 @@ pub enum AppMode {
     TaskDetail,
     RenameProject,
     BoardDetail,
+    ExportBoard,
 }
 
 impl App {
@@ -73,6 +76,7 @@ impl App {
             should_quit: false,
             mode: AppMode::Normal,
             input_buffer: String::new(),
+            input_cursor: 0,
             boards: Vec::new(),
             board_selection: SelectionState::new(),
             active_board_index: None,
@@ -88,6 +92,54 @@ impl App {
 
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    fn handle_input_char(&mut self, c: char) {
+        self.input_buffer.insert(self.input_cursor, c);
+        self.input_cursor += 1;
+    }
+
+    fn handle_input_backspace(&mut self) {
+        if self.input_cursor > 0 {
+            self.input_cursor -= 1;
+            self.input_buffer.remove(self.input_cursor);
+        }
+    }
+
+    fn handle_input_delete(&mut self) {
+        if self.input_cursor < self.input_buffer.len() {
+            self.input_buffer.remove(self.input_cursor);
+        }
+    }
+
+    fn handle_input_left(&mut self) {
+        if self.input_cursor > 0 {
+            self.input_cursor -= 1;
+        }
+    }
+
+    fn handle_input_right(&mut self) {
+        if self.input_cursor < self.input_buffer.len() {
+            self.input_cursor += 1;
+        }
+    }
+
+    fn handle_input_home(&mut self) {
+        self.input_cursor = 0;
+    }
+
+    fn handle_input_end(&mut self) {
+        self.input_cursor = self.input_buffer.len();
+    }
+
+    fn clear_input(&mut self) {
+        self.input_buffer.clear();
+        self.input_cursor = 0;
+    }
+
+    fn set_input(&mut self, text: String) {
+        self.input_buffer = text;
+        self.input_cursor = self.input_buffer.len();
     }
 
     fn handle_key_event(&mut self, key: crossterm::event::KeyEvent, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler) -> bool {
@@ -106,12 +158,12 @@ impl App {
                         match self.focus {
                             Focus::Projects => {
                                 self.mode = AppMode::CreateProject;
-                                self.input_buffer.clear();
+                                self.clear_input();
                             }
                             Focus::Tasks => {
                                 if self.active_board_index.is_some() {
                                     self.mode = AppMode::CreateTask;
-                                    self.input_buffer.clear();
+                                    self.clear_input();
                                 }
                             }
                         }
@@ -120,7 +172,7 @@ impl App {
                         if self.focus == Focus::Projects && self.board_selection.get().is_some() {
                             if let Some(board_idx) = self.board_selection.get() {
                                 if let Some(board) = self.boards.get(board_idx) {
-                                    self.input_buffer = board.name.clone();
+                                    self.set_input(board.name.clone());
                                     self.mode = AppMode::RenameProject;
                                 }
                             }
@@ -130,6 +182,20 @@ impl App {
                         if self.focus == Focus::Projects && self.board_selection.get().is_some() {
                             self.mode = AppMode::BoardDetail;
                             self.board_focus = BoardFocus::Name;
+                        }
+                    }
+                    KeyCode::Char('x') => {
+                        if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                            if let Some(board_idx) = self.board_selection.get() {
+                                if let Some(board) = self.boards.get(board_idx) {
+                                    let filename = format!("{}-{}.json",
+                                        board.name.replace(" ", "-").to_lowercase(),
+                                        chrono::Utc::now().format("%Y%m%d-%H%M%S")
+                                    );
+                                    self.set_input(filename);
+                                    self.mode = AppMode::ExportBoard;
+                                }
+                            }
                         }
                     }
                     KeyCode::Char('1') => self.focus = Focus::Projects,
@@ -204,23 +270,26 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.mode = AppMode::Normal;
-                        self.input_buffer.clear();
+                        self.clear_input();
                     }
                     KeyCode::Enter => {
                         if !self.input_buffer.is_empty() {
                             self.create_board();
                             self.mode = AppMode::Normal;
-                            self.input_buffer.clear();
+                            self.clear_input();
                         }
                     }
                     KeyCode::Char(c) => {
                         if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.input_buffer.push(c);
+                            self.handle_input_char(c);
                         }
                     }
-                    KeyCode::Backspace => {
-                        self.input_buffer.pop();
-                    }
+                    KeyCode::Backspace => self.handle_input_backspace(),
+                    KeyCode::Delete => self.handle_input_delete(),
+                    KeyCode::Left => self.handle_input_left(),
+                    KeyCode::Right => self.handle_input_right(),
+                    KeyCode::Home => self.handle_input_home(),
+                    KeyCode::End => self.handle_input_end(),
                     _ => {}
                 }
             }
@@ -228,23 +297,26 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.mode = AppMode::Normal;
-                        self.input_buffer.clear();
+                        self.clear_input();
                     }
                     KeyCode::Enter => {
                         if !self.input_buffer.is_empty() {
                             self.create_task();
                             self.mode = AppMode::Normal;
-                            self.input_buffer.clear();
+                            self.clear_input();
                         }
                     }
                     KeyCode::Char(c) => {
                         if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.input_buffer.push(c);
+                            self.handle_input_char(c);
                         }
                     }
-                    KeyCode::Backspace => {
-                        self.input_buffer.pop();
-                    }
+                    KeyCode::Backspace => self.handle_input_backspace(),
+                    KeyCode::Delete => self.handle_input_delete(),
+                    KeyCode::Left => self.handle_input_left(),
+                    KeyCode::Right => self.handle_input_right(),
+                    KeyCode::Home => self.handle_input_home(),
+                    KeyCode::End => self.handle_input_end(),
                     _ => {}
                 }
             }
@@ -252,23 +324,55 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.mode = AppMode::Normal;
-                        self.input_buffer.clear();
+                        self.clear_input();
                     }
                     KeyCode::Enter => {
                         if !self.input_buffer.is_empty() {
                             self.rename_board();
                             self.mode = AppMode::Normal;
-                            self.input_buffer.clear();
+                            self.clear_input();
                         }
                     }
                     KeyCode::Char(c) => {
                         if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.input_buffer.push(c);
+                            self.handle_input_char(c);
                         }
                     }
-                    KeyCode::Backspace => {
-                        self.input_buffer.pop();
+                    KeyCode::Backspace => self.handle_input_backspace(),
+                    KeyCode::Delete => self.handle_input_delete(),
+                    KeyCode::Left => self.handle_input_left(),
+                    KeyCode::Right => self.handle_input_right(),
+                    KeyCode::Home => self.handle_input_home(),
+                    KeyCode::End => self.handle_input_end(),
+                    _ => {}
+                }
+            }
+            AppMode::ExportBoard => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.mode = AppMode::Normal;
+                        self.clear_input();
                     }
+                    KeyCode::Enter => {
+                        if !self.input_buffer.is_empty() {
+                            if let Err(e) = self.export_board_with_filename() {
+                                tracing::error!("Failed to export board: {}", e);
+                            }
+                            self.mode = AppMode::Normal;
+                            self.clear_input();
+                        }
+                    }
+                    KeyCode::Char(c) => {
+                        if !key.modifiers.contains(KeyModifiers::CONTROL) {
+                            self.handle_input_char(c);
+                        }
+                    }
+                    KeyCode::Backspace => self.handle_input_backspace(),
+                    KeyCode::Delete => self.handle_input_delete(),
+                    KeyCode::Left => self.handle_input_left(),
+                    KeyCode::Right => self.handle_input_right(),
+                    KeyCode::Home => self.handle_input_home(),
+                    KeyCode::End => self.handle_input_end(),
                     _ => {}
                 }
             }
@@ -395,6 +499,44 @@ impl App {
                     .any(|col| col.id == card.column_id && col.board_id == board_id)
             })
             .count()
+    }
+
+    fn export_board_with_filename(&self) -> io::Result<()> {
+        if let Some(board_idx) = self.board_selection.get() {
+            if let Some(board) = self.boards.get(board_idx) {
+                let board_columns: Vec<Column> = self.columns.iter()
+                    .filter(|col| col.board_id == board.id)
+                    .cloned()
+                    .collect();
+
+                let column_ids: Vec<uuid::Uuid> = board_columns.iter().map(|c| c.id).collect();
+
+                let board_cards: Vec<Card> = self.cards.iter()
+                    .filter(|card| column_ids.contains(&card.column_id))
+                    .cloned()
+                    .collect();
+
+                #[derive(Serialize)]
+                struct BoardExport {
+                    board: Board,
+                    columns: Vec<Column>,
+                    tasks: Vec<Card>,
+                }
+
+                let export = BoardExport {
+                    board: board.clone(),
+                    columns: board_columns,
+                    tasks: board_cards,
+                };
+
+                let json = serde_json::to_string_pretty(&export)
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                std::fs::write(&self.input_buffer, json)?;
+                tracing::info!("Exported board to: {}", self.input_buffer);
+            }
+        }
+        Ok(())
     }
 
     fn edit_board_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: BoardField) -> io::Result<()> {

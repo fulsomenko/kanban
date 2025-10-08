@@ -803,6 +803,7 @@ dependencies = [
  "kanban-domain",
  "ratatui",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",

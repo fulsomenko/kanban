@@ -24,7 +24,7 @@ impl EventHandler {
                     _ = shutdown_rx.recv() => {
                         break;
                     }
-                    _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                    _ = tokio::time::sleep(Duration::from_millis(16)) => {
                         if event::poll(Duration::from_millis(0)).unwrap_or(false) {
                             if let Ok(CrosstermEvent::Key(key)) = event::read() {
                                 if tx.send(Event::Key(key)).is_err() {
