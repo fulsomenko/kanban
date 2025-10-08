@@ -11,13 +11,12 @@ use ratatui::{
 use std::io::{self, Write};
 use std::process::Command;
 use serde::Serialize;
-use crate::{events::{EventHandler, Event}, ui, selection::SelectionState};
+use crate::{events::{EventHandler, Event}, ui, selection::SelectionState, input::InputState};
 
 pub struct App {
     pub should_quit: bool,
     pub mode: AppMode,
-    pub input_buffer: String,
-    pub input_cursor: usize,
+    pub input: InputState,
     pub boards: Vec<Board>,
     pub board_selection: SelectionState,
     pub active_board_index: Option<usize>,
@@ -75,8 +74,7 @@ impl App {
         Self {
             should_quit: false,
             mode: AppMode::Normal,
-            input_buffer: String::new(),
-            input_cursor: 0,
+            input: InputState::new(),
             boards: Vec::new(),
             board_selection: SelectionState::new(),
             active_board_index: None,
@@ -94,53 +92,6 @@ impl App {
         self.should_quit = true;
     }
 
-    fn handle_input_char(&mut self, c: char) {
-        self.input_buffer.insert(self.input_cursor, c);
-        self.input_cursor += 1;
-    }
-
-    fn handle_input_backspace(&mut self) {
-        if self.input_cursor > 0 {
-            self.input_cursor -= 1;
-            self.input_buffer.remove(self.input_cursor);
-        }
-    }
-
-    fn handle_input_delete(&mut self) {
-        if self.input_cursor < self.input_buffer.len() {
-            self.input_buffer.remove(self.input_cursor);
-        }
-    }
-
-    fn handle_input_left(&mut self) {
-        if self.input_cursor > 0 {
-            self.input_cursor -= 1;
-        }
-    }
-
-    fn handle_input_right(&mut self) {
-        if self.input_cursor < self.input_buffer.len() {
-            self.input_cursor += 1;
-        }
-    }
-
-    fn handle_input_home(&mut self) {
-        self.input_cursor = 0;
-    }
-
-    fn handle_input_end(&mut self) {
-        self.input_cursor = self.input_buffer.len();
-    }
-
-    fn clear_input(&mut self) {
-        self.input_buffer.clear();
-        self.input_cursor = 0;
-    }
-
-    fn set_input(&mut self, text: String) {
-        self.input_buffer = text;
-        self.input_cursor = self.input_buffer.len();
-    }
 
     fn handle_key_event(&mut self, key: crossterm::event::KeyEvent, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler) -> bool {
         use crossterm::event::{KeyCode, KeyModifiers};
@@ -158,12 +109,12 @@ impl App {
                         match self.focus {
                             Focus::Projects => {
                                 self.mode = AppMode::CreateProject;
-                                self.clear_input();
+                                self.input.clear();
                             }
                             Focus::Tasks => {
                                 if self.active_board_index.is_some() {
                                     self.mode = AppMode::CreateTask;
-                                    self.clear_input();
+                                    self.input.clear();
                                 }
                             }
                         }
@@ -172,7 +123,7 @@ impl App {
                         if self.focus == Focus::Projects && self.board_selection.get().is_some() {
                             if let Some(board_idx) = self.board_selection.get() {
                                 if let Some(board) = self.boards.get(board_idx) {
-                                    self.set_input(board.name.clone());
+                                    self.input.set(board.name.clone());
                                     self.mode = AppMode::RenameProject;
                                 }
                             }
@@ -192,7 +143,7 @@ impl App {
                                         board.name.replace(" ", "-").to_lowercase(),
                                         chrono::Utc::now().format("%Y%m%d-%H%M%S")
                                     );
-                                    self.set_input(filename);
+                                    self.input.set(filename);
                                     self.mode = AppMode::ExportBoard;
                                 }
                             }
@@ -270,26 +221,26 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.mode = AppMode::Normal;
-                        self.clear_input();
+                        self.input.clear();
                     }
                     KeyCode::Enter => {
-                        if !self.input_buffer.is_empty() {
+                        if !self.input.is_empty() {
                             self.create_board();
                             self.mode = AppMode::Normal;
-                            self.clear_input();
+                            self.input.clear();
                         }
                     }
                     KeyCode::Char(c) => {
                         if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.handle_input_char(c);
+                            self.input.insert_char(c);
                         }
                     }
-                    KeyCode::Backspace => self.handle_input_backspace(),
-                    KeyCode::Delete => self.handle_input_delete(),
-                    KeyCode::Left => self.handle_input_left(),
-                    KeyCode::Right => self.handle_input_right(),
-                    KeyCode::Home => self.handle_input_home(),
-                    KeyCode::End => self.handle_input_end(),
+                    KeyCode::Backspace => self.input.backspace(),
+                    KeyCode::Delete => self.input.delete(),
+                    KeyCode::Left => self.input.move_left(),
+                    KeyCode::Right => self.input.move_right(),
+                    KeyCode::Home => self.input.move_home(),
+                    KeyCode::End => self.input.move_end(),
                     _ => {}
                 }
             }
@@ -297,26 +248,26 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.mode = AppMode::Normal;
-                        self.clear_input();
+                        self.input.clear();
                     }
                     KeyCode::Enter => {
-                        if !self.input_buffer.is_empty() {
+                        if !self.input.is_empty() {
                             self.create_task();
                             self.mode = AppMode::Normal;
-                            self.clear_input();
+                            self.input.clear();
                         }
                     }
                     KeyCode::Char(c) => {
                         if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.handle_input_char(c);
+                            self.input.insert_char(c);
                         }
                     }
-                    KeyCode::Backspace => self.handle_input_backspace(),
-                    KeyCode::Delete => self.handle_input_delete(),
-                    KeyCode::Left => self.handle_input_left(),
-                    KeyCode::Right => self.handle_input_right(),
-                    KeyCode::Home => self.handle_input_home(),
-                    KeyCode::End => self.handle_input_end(),
+                    KeyCode::Backspace => self.input.backspace(),
+                    KeyCode::Delete => self.input.delete(),
+                    KeyCode::Left => self.input.move_left(),
+                    KeyCode::Right => self.input.move_right(),
+                    KeyCode::Home => self.input.move_home(),
+                    KeyCode::End => self.input.move_end(),
                     _ => {}
                 }
             }
@@ -324,26 +275,26 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.mode = AppMode::Normal;
-                        self.clear_input();
+                        self.input.clear();
                     }
                     KeyCode::Enter => {
-                        if !self.input_buffer.is_empty() {
+                        if !self.input.is_empty() {
                             self.rename_board();
                             self.mode = AppMode::Normal;
-                            self.clear_input();
+                            self.input.clear();
                         }
                     }
                     KeyCode::Char(c) => {
                         if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.handle_input_char(c);
+                            self.input.insert_char(c);
                         }
                     }
-                    KeyCode::Backspace => self.handle_input_backspace(),
-                    KeyCode::Delete => self.handle_input_delete(),
-                    KeyCode::Left => self.handle_input_left(),
-                    KeyCode::Right => self.handle_input_right(),
-                    KeyCode::Home => self.handle_input_home(),
-                    KeyCode::End => self.handle_input_end(),
+                    KeyCode::Backspace => self.input.backspace(),
+                    KeyCode::Delete => self.input.delete(),
+                    KeyCode::Left => self.input.move_left(),
+                    KeyCode::Right => self.input.move_right(),
+                    KeyCode::Home => self.input.move_home(),
+                    KeyCode::End => self.input.move_end(),
                     _ => {}
                 }
             }
@@ -351,28 +302,28 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.mode = AppMode::Normal;
-                        self.clear_input();
+                        self.input.clear();
                     }
                     KeyCode::Enter => {
-                        if !self.input_buffer.is_empty() {
+                        if !self.input.is_empty() {
                             if let Err(e) = self.export_board_with_filename() {
                                 tracing::error!("Failed to export board: {}", e);
                             }
                             self.mode = AppMode::Normal;
-                            self.clear_input();
+                            self.input.clear();
                         }
                     }
                     KeyCode::Char(c) => {
                         if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.handle_input_char(c);
+                            self.input.insert_char(c);
                         }
                     }
-                    KeyCode::Backspace => self.handle_input_backspace(),
-                    KeyCode::Delete => self.handle_input_delete(),
-                    KeyCode::Left => self.handle_input_left(),
-                    KeyCode::Right => self.handle_input_right(),
-                    KeyCode::Home => self.handle_input_home(),
-                    KeyCode::End => self.handle_input_end(),
+                    KeyCode::Backspace => self.input.backspace(),
+                    KeyCode::Delete => self.input.delete(),
+                    KeyCode::Left => self.input.move_left(),
+                    KeyCode::Right => self.input.move_right(),
+                    KeyCode::Home => self.input.move_home(),
+                    KeyCode::End => self.input.move_end(),
                     _ => {}
                 }
             }
@@ -448,7 +399,7 @@ impl App {
     }
 
     fn create_board(&mut self) {
-        let board = Board::new(self.input_buffer.clone(), None);
+        let board = Board::new(self.input.as_str().to_string(), None);
         tracing::info!("Creating project: {} (id: {})", board.name, board.id);
         self.boards.push(board);
         let new_index = self.boards.len() - 1;
@@ -458,7 +409,7 @@ impl App {
     fn rename_board(&mut self) {
         if let Some(idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get_mut(idx) {
-                board.update_name(self.input_buffer.clone());
+                board.update_name(self.input.as_str().to_string());
                 tracing::info!("Renamed project to: {}", board.name);
             }
         }
@@ -481,7 +432,7 @@ impl App {
                 };
 
                 let position = self.cards.iter().filter(|c| c.column_id == column.id).count() as i32;
-                let card = Card::new(column.id, self.input_buffer.clone(), position);
+                let card = Card::new(column.id, self.input.as_str().to_string(), position);
                 tracing::info!("Creating task: {} (id: {})", card.title, card.id);
                 self.cards.push(card);
 
@@ -532,8 +483,8 @@ impl App {
                 let json = serde_json::to_string_pretty(&export)
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-                std::fs::write(&self.input_buffer, json)?;
-                tracing::info!("Exported board to: {}", self.input_buffer);
+                std::fs::write(self.input.as_str(), json)?;
+                tracing::info!("Exported board to: {}", self.input.as_str());
             }
         }
         Ok(())

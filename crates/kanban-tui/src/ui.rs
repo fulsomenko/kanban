@@ -241,12 +241,12 @@ fn render_create_project_popup(app: &App, frame: &mut Frame) {
         .style(Style::default().fg(Color::Yellow));
     frame.render_widget(label, chunks[0]);
 
-    let input = Paragraph::new(app.input_buffer.as_str())
+    let input = Paragraph::new(app.input.as_str())
         .style(Style::default().fg(Color::White))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(input, chunks[1]);
 
-    let cursor_x = chunks[1].x + app.input_cursor as u16 + 1;
+    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 }
@@ -278,12 +278,12 @@ fn render_create_task_popup(app: &App, frame: &mut Frame) {
         .style(Style::default().fg(Color::Yellow));
     frame.render_widget(label, chunks[0]);
 
-    let input = Paragraph::new(app.input_buffer.as_str())
+    let input = Paragraph::new(app.input.as_str())
         .style(Style::default().fg(Color::White))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(input, chunks[1]);
 
-    let cursor_x = chunks[1].x + app.input_cursor as u16 + 1;
+    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 }
@@ -394,12 +394,12 @@ fn render_rename_project_popup(app: &App, frame: &mut Frame) {
         .style(Style::default().fg(Color::Yellow));
     frame.render_widget(label, chunks[0]);
 
-    let input = Paragraph::new(app.input_buffer.as_str())
+    let input = Paragraph::new(app.input.as_str())
         .style(Style::default().fg(Color::White))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(input, chunks[1]);
 
-    let cursor_x = chunks[1].x + app.input_cursor as u16 + 1;
+    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 }
@@ -431,12 +431,12 @@ fn render_export_board_popup(app: &App, frame: &mut Frame) {
         .style(Style::default().fg(Color::Yellow));
     frame.render_widget(label, chunks[0]);
 
-    let input = Paragraph::new(app.input_buffer.as_str())
+    let input = Paragraph::new(app.input.as_str())
         .style(Style::default().fg(Color::White))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(input, chunks[1]);
 
-    let cursor_x = chunks[1].x + app.input_cursor as u16 + 1;
+    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 }
