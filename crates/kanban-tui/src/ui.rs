@@ -90,6 +90,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
         for (idx, board) in app.boards.iter().enumerate() {
             let is_selected = app.board_selection.get() == Some(idx);
             let is_active = app.active_board_index == Some(idx);
+            let is_focused = app.focus == Focus::Projects;
 
             let mut style = Style::default();
             let prefix;
@@ -102,7 +103,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
                 prefix = "  ";
             }
 
-            if is_selected {
+            if is_selected && is_focused {
                 style = style.bg(Color::Blue);
             }
 
@@ -157,7 +158,8 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
             } else {
                 for (task_idx, task) in board_tasks.iter().enumerate() {
                     let is_selected = app.task_selection.get() == Some(task_idx);
-                    let style = if is_selected {
+                    let is_focused = app.focus == Focus::Tasks;
+                    let style = if is_selected && is_focused {
                         Style::default().fg(Color::White).bg(Color::Blue)
                     } else {
                         Style::default().fg(Color::White)
