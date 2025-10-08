@@ -94,10 +94,14 @@ impl App {
         use crossterm::event::{KeyCode, KeyModifiers};
         let mut should_restart_events = false;
 
+        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) {
+            self.quit();
+            return false;
+        }
+
         match self.mode {
             AppMode::Normal => {
                 match key.code {
-                    KeyCode::Char('q') | KeyCode::Char('Q') => self.quit(),
                     KeyCode::Char('n') => {
                         match self.focus {
                             Focus::Projects => {
@@ -270,7 +274,7 @@ impl App {
             }
             AppMode::TaskDetail => {
                 match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
+                    KeyCode::Esc => {
                         self.mode = AppMode::Normal;
                         self.active_task_index = None;
                         self.task_focus = TaskFocus::Title;
@@ -306,7 +310,7 @@ impl App {
             }
             AppMode::BoardDetail => {
                 match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
+                    KeyCode::Esc => {
                         self.mode = AppMode::Normal;
                         self.board_focus = BoardFocus::Name;
                     }
