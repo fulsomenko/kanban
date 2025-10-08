@@ -401,7 +401,7 @@ impl App {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     BoardField::Name => {
-                        let temp_file = temp_dir.join(format!("kanban-board-{}-name.txt", board.id));
+                        let temp_file = temp_dir.join(format!("kanban-board-{}-name.md", board.id));
                         (temp_file, board.name.clone())
                     }
                     BoardField::Description => {
@@ -478,7 +478,7 @@ impl App {
                         let temp_dir = std::env::temp_dir();
                         let (temp_file, current_content) = match field {
                             TaskField::Title => {
-                                let temp_file = temp_dir.join(format!("kanban-task-{}-title.txt", task.id));
+                                let temp_file = temp_dir.join(format!("kanban-task-{}-title.md", task.id));
                                 (temp_file, task.title.clone())
                             }
                             TaskField::Description => {
