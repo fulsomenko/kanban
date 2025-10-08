@@ -1,5 +1,5 @@
 use ratatui::{Frame, layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, Paragraph, Clear}};
-use crate::app::{App, AppMode, Focus, TaskFocus};
+use crate::app::{App, AppMode, Focus, TaskFocus, BoardFocus};
 
 pub fn render(app: &App, frame: &mut Frame) {
     match app.mode {
@@ -15,6 +15,20 @@ pub fn render(app: &App, frame: &mut Frame) {
 
             render_header(frame, chunks[0]);
             render_task_detail_view(app, frame, chunks[1]);
+            render_footer(app, frame, chunks[2]);
+        }
+        AppMode::BoardDetail => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3),
+                    Constraint::Min(0),
+                    Constraint::Length(3),
+                ])
+                .split(frame.area());
+
+            render_header(frame, chunks[0]);
+            render_board_detail_view(app, frame, chunks[1]);
             render_footer(app, frame, chunks[2]);
         }
         _ => {
@@ -176,7 +190,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateProject => "ESC: cancel | ENTER: confirm",
         AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
         AppMode::RenameProject => "ESC: cancel | ENTER: confirm",
@@ -184,6 +198,10 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             TaskFocus::Title => "ESC/q: close | 1/2/3: select panel | Enter/Space: edit title",
             TaskFocus::Description => "ESC/q: close | 1/2/3: select panel | Enter/Space: edit description",
             _ => "ESC/q: close | 1/2/3: select panel",
+        },
+        AppMode::BoardDetail => match app.board_focus {
+            BoardFocus::Name => "ESC/q: close | 1/2: select panel | Enter/Space: edit name",
+            BoardFocus::Description => "ESC/q: close | 1/2: select panel | Enter/Space: edit description",
         },
     };
     let help = Paragraph::new(help_text)
@@ -380,6 +398,47 @@ fn render_rename_project_popup(app: &App, frame: &mut Frame) {
     let cursor_x = chunks[1].x + app.input_buffer.len() as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
+}
+
+fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(project_idx) = app.project_selection.get() {
+        if let Some(board) = app.projects.get(project_idx) {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(5),
+                    Constraint::Min(0),
+                ])
+                .split(area);
+
+            let name_focused = app.board_focus == BoardFocus::Name;
+            let name_border_color = if name_focused { Color::Cyan } else { Color::White };
+            let name_block = Block::default()
+                .title(if name_focused { "Board Name [1]" } else { "Board Name" })
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(name_border_color));
+            let name = Paragraph::new(board.name.clone())
+                .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .block(name_block);
+            frame.render_widget(name, chunks[0]);
+
+            let desc_focused = app.board_focus == BoardFocus::Description;
+            let desc_border_color = if desc_focused { Color::Cyan } else { Color::White };
+            let desc_block = Block::default()
+                .title(if desc_focused { "Description [2]" } else { "Description" })
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(desc_border_color));
+            let desc_text = if let Some(desc) = &board.description {
+                desc.clone()
+            } else {
+                "No description".to_string()
+            };
+            let desc = Paragraph::new(desc_text)
+                .style(Style::default().fg(Color::White))
+                .block(desc_block);
+            frame.render_widget(desc, chunks[1]);
+        }
+    }
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

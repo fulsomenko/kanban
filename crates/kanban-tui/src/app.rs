@@ -25,6 +25,7 @@ pub struct App {
     pub cards: Vec<Card>,
     pub focus: Focus,
     pub task_focus: TaskFocus,
+    pub board_focus: BoardFocus,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,8 +41,19 @@ pub enum TaskFocus {
     Description,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum BoardFocus {
+    Name,
+    Description,
+}
+
 enum TaskField {
     Title,
+    Description,
+}
+
+enum BoardField {
+    Name,
     Description,
 }
 
@@ -52,6 +64,7 @@ pub enum AppMode {
     CreateTask,
     TaskDetail,
     RenameProject,
+    BoardDetail,
 }
 
 impl App {
@@ -69,6 +82,7 @@ impl App {
             cards: Vec::new(),
             focus: Focus::Projects,
             task_focus: TaskFocus::Title,
+            board_focus: BoardFocus::Name,
         }
     }
 
@@ -106,6 +120,12 @@ impl App {
                                     self.mode = AppMode::RenameProject;
                                 }
                             }
+                        }
+                    }
+                    KeyCode::Char('e') => {
+                        if self.focus == Focus::Projects && self.project_selection.get().is_some() {
+                            self.mode = AppMode::BoardDetail;
+                            self.board_focus = BoardFocus::Name;
                         }
                     }
                     KeyCode::Char('1') => self.focus = Focus::Projects,
@@ -284,6 +304,37 @@ impl App {
                     _ => {}
                 }
             }
+            AppMode::BoardDetail => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.mode = AppMode::Normal;
+                        self.board_focus = BoardFocus::Name;
+                    }
+                    KeyCode::Char('1') => {
+                        self.board_focus = BoardFocus::Name;
+                    }
+                    KeyCode::Char('2') => {
+                        self.board_focus = BoardFocus::Description;
+                    }
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        match self.board_focus {
+                            BoardFocus::Name => {
+                                if let Err(e) = self.edit_board_field(terminal, event_handler, BoardField::Name) {
+                                    tracing::error!("Failed to edit board name: {}", e);
+                                }
+                                should_restart_events = true;
+                            }
+                            BoardFocus::Description => {
+                                if let Err(e) = self.edit_board_field(terminal, event_handler, BoardField::Description) {
+                                    tracing::error!("Failed to edit board description: {}", e);
+                                }
+                                should_restart_events = true;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
         should_restart_events
     }
@@ -340,6 +391,74 @@ impl App {
                     .any(|col| col.id == card.column_id && col.board_id == board_id)
             })
             .count()
+    }
+
+    fn edit_board_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: BoardField) -> io::Result<()> {
+        if let Some(project_idx) = self.project_selection.get() {
+            if let Some(board) = self.projects.get(project_idx) {
+                let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+
+                let temp_dir = std::env::temp_dir();
+                let (temp_file, current_content) = match field {
+                    BoardField::Name => {
+                        let temp_file = temp_dir.join(format!("kanban-board-{}-name.txt", board.id));
+                        (temp_file, board.name.clone())
+                    }
+                    BoardField::Description => {
+                        let temp_file = temp_dir.join(format!("kanban-board-{}-description.md", board.id));
+                        let content = board.description.as_ref().map(|s| s.as_str()).unwrap_or("").to_string();
+                        (temp_file, content)
+                    }
+                };
+
+                std::fs::write(&temp_file, current_content)?;
+
+                event_handler.stop();
+
+                disable_raw_mode()?;
+                execute!(io::stdout(), LeaveAlternateScreen)?;
+                io::stdout().flush()?;
+
+                let status = Command::new(&editor)
+                    .arg(&temp_file)
+                    .status()?;
+
+                while crossterm::event::poll(std::time::Duration::from_millis(0))? {
+                    let _ = crossterm::event::read()?;
+                }
+
+                execute!(io::stdout(), EnterAlternateScreen)?;
+                enable_raw_mode()?;
+
+                terminal.clear()?;
+
+                if status.success() {
+                    let new_content = std::fs::read_to_string(&temp_file)?;
+
+                    let board_id = board.id;
+                    if let Some(board) = self.projects.iter_mut().find(|b| b.id == board_id) {
+                        match field {
+                            BoardField::Name => {
+                                if !new_content.trim().is_empty() {
+                                    board.update_name(new_content.trim().to_string());
+                                }
+                            }
+                            BoardField::Description => {
+                                let desc = if new_content.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(new_content)
+                                };
+                                board.update_description(desc);
+                            }
+                        }
+                    }
+                }
+
+                let _ = std::fs::remove_file(&temp_file);
+            }
+        }
+        Ok(())
     }
 
     fn edit_task_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: TaskField) -> io::Result<()> {
