@@ -23,12 +23,20 @@ pub struct App {
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
     pub focus: Focus,
+    pub task_focus: TaskFocus,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Focus {
     Projects,
     Tasks,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TaskFocus {
+    Title,
+    Metadata,
+    Description,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,6 +61,7 @@ impl App {
             columns: Vec::new(),
             cards: Vec::new(),
             focus: Focus::Projects,
+            task_focus: TaskFocus::Title,
         }
     }
 
@@ -200,6 +209,16 @@ impl App {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.mode = AppMode::Normal;
                         self.active_task_index = None;
+                        self.task_focus = TaskFocus::Title;
+                    }
+                    KeyCode::Char('1') => {
+                        self.task_focus = TaskFocus::Title;
+                    }
+                    KeyCode::Char('2') => {
+                        self.task_focus = TaskFocus::Metadata;
+                    }
+                    KeyCode::Char('3') => {
+                        self.task_focus = TaskFocus::Description;
                     }
                     _ => {}
                 }

@@ -1,5 +1,5 @@
 use ratatui::{Frame, layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, Paragraph, Clear}};
-use crate::app::{App, AppMode, Focus};
+use crate::app::{App, AppMode, Focus, TaskFocus};
 
 pub fn render(app: &App, frame: &mut Frame) {
     match app.mode {
@@ -178,7 +178,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::Normal => "q: quit | n: new | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateProject => "ESC: cancel | ENTER: confirm",
         AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
-        AppMode::TaskDetail => "ESC/q: close",
+        AppMode::TaskDetail => "ESC/q: close | 1/2/3: select panel",
     };
     let help = Paragraph::new(help_text)
         .style(Style::default().fg(Color::Gray))
@@ -281,19 +281,23 @@ fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         ])
                         .split(area);
 
+                    let title_focused = app.task_focus == TaskFocus::Title;
+                    let title_border_color = if title_focused { Color::Cyan } else { Color::White };
                     let title_block = Block::default()
-                        .title("Task Title")
+                        .title(if title_focused { "Task Title [1]" } else { "Task Title" })
                         .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::Cyan));
+                        .border_style(Style::default().fg(title_border_color));
                     let title = Paragraph::new(task.title.clone())
                         .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
                         .block(title_block);
                     frame.render_widget(title, chunks[0]);
 
+                    let meta_focused = app.task_focus == TaskFocus::Metadata;
+                    let meta_border_color = if meta_focused { Color::Cyan } else { Color::White };
                     let meta_block = Block::default()
-                        .title("Metadata")
+                        .title(if meta_focused { "Metadata [2]" } else { "Metadata" })
                         .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::Cyan));
+                        .border_style(Style::default().fg(meta_border_color));
                     let meta_lines = vec![
                         Line::from(vec![
                             Span::styled("Priority: ", Style::default().fg(Color::Gray)),
@@ -314,10 +318,12 @@ fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let meta = Paragraph::new(meta_lines).block(meta_block);
                     frame.render_widget(meta, chunks[1]);
 
+                    let desc_focused = app.task_focus == TaskFocus::Description;
+                    let desc_border_color = if desc_focused { Color::Cyan } else { Color::White };
                     let desc_block = Block::default()
-                        .title("Description")
+                        .title(if desc_focused { "Description [3]" } else { "Description" })
                         .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::Cyan));
+                        .border_style(Style::default().fg(desc_border_color));
                     let desc_text = if let Some(desc) = &task.description {
                         desc.clone()
                     } else {
