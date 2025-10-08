@@ -51,6 +51,7 @@ pub enum AppMode {
     CreateProject,
     CreateTask,
     TaskDetail,
+    RenameProject,
 }
 
 impl App {
@@ -93,6 +94,16 @@ impl App {
                                 if self.active_project_index.is_some() {
                                     self.mode = AppMode::CreateTask;
                                     self.input_buffer.clear();
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('r') => {
+                        if self.focus == Focus::Projects && self.project_selection.get().is_some() {
+                            if let Some(project_idx) = self.project_selection.get() {
+                                if let Some(project) = self.projects.get(project_idx) {
+                                    self.input_buffer = project.name.clone();
+                                    self.mode = AppMode::RenameProject;
                                 }
                             }
                         }
@@ -213,6 +224,30 @@ impl App {
                     _ => {}
                 }
             }
+            AppMode::RenameProject => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.mode = AppMode::Normal;
+                        self.input_buffer.clear();
+                    }
+                    KeyCode::Enter => {
+                        if !self.input_buffer.is_empty() {
+                            self.rename_project();
+                            self.mode = AppMode::Normal;
+                            self.input_buffer.clear();
+                        }
+                    }
+                    KeyCode::Char(c) => {
+                        if !key.modifiers.contains(KeyModifiers::CONTROL) {
+                            self.input_buffer.push(c);
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        self.input_buffer.pop();
+                    }
+                    _ => {}
+                }
+            }
             AppMode::TaskDetail => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
@@ -259,6 +294,15 @@ impl App {
         self.projects.push(project);
         let new_index = self.projects.len() - 1;
         self.project_selection.set(Some(new_index));
+    }
+
+    fn rename_project(&mut self) {
+        if let Some(idx) = self.project_selection.get() {
+            if let Some(project) = self.projects.get_mut(idx) {
+                project.update_name(self.input_buffer.clone());
+                tracing::info!("Renamed project to: {}", project.name);
+            }
+        }
     }
 
     fn create_task(&mut self) {
