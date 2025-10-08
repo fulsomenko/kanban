@@ -31,7 +31,10 @@
           pname = "kanban";
           version = "0.1.0";
           src = ./.;
-          cargoLock.lockFile = ./Cargo.lock;
+
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
 
           nativeBuildInputs = with pkgs; [
             pkg-config
@@ -40,8 +43,7 @@
           buildInputs = with pkgs; [
             openssl
           ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-            pkgs.darwin.apple_sdk.frameworks.Security
-            pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
+            pkgs.libiconv
           ];
         };
       }
