@@ -1,8 +1,0 @@
-{
-  "command": "npx",
-  "args": ["@cyanheads/git-mcp-server"],
-  "env": {
-    "MCP_LOG_LEVEL": "info",
-    "GIT_SIGN_COMMITS": "false"
-  }
-}
