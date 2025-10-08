@@ -2,23 +2,41 @@ use ratatui::{Frame, layout::{Constraint, Direction, Layout, Rect}, style::{Colo
 use crate::app::{App, AppMode, Focus};
 
 pub fn render(app: &App, frame: &mut Frame) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(0),
-            Constraint::Length(3),
-        ])
-        .split(frame.area());
+    match app.mode {
+        AppMode::TaskDetail => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3),
+                    Constraint::Min(0),
+                    Constraint::Length(3),
+                ])
+                .split(frame.area());
 
-    render_header(frame, chunks[0]);
-    render_main(app, frame, chunks[1]);
-    render_footer(app, frame, chunks[2]);
+            render_header(frame, chunks[0]);
+            render_task_detail_view(app, frame, chunks[1]);
+            render_footer(app, frame, chunks[2]);
+        }
+        _ => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3),
+                    Constraint::Min(0),
+                    Constraint::Length(3),
+                ])
+                .split(frame.area());
 
-    if app.mode == AppMode::CreateProject {
-        render_create_project_popup(app, frame);
-    } else if app.mode == AppMode::CreateTask {
-        render_create_task_popup(app, frame);
+            render_header(frame, chunks[0]);
+            render_main(app, frame, chunks[1]);
+            render_footer(app, frame, chunks[2]);
+
+            match app.mode {
+                AppMode::CreateProject => render_create_project_popup(app, frame),
+                AppMode::CreateTask => render_create_task_popup(app, frame),
+                _ => {}
+            }
+        }
     }
 }
 
@@ -58,21 +76,20 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
             let is_selected = app.project_selection.get() == Some(idx);
             let is_active = app.active_project_index == Some(idx);
 
-            let style = if is_selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else if is_active {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::White)
-            };
+            let mut style = Style::default();
+            let prefix;
 
-            let prefix = if is_selected {
-                "▶ "
-            } else if is_active {
-                "● "
+            if is_active {
+                style = style.fg(Color::Green).add_modifier(Modifier::BOLD);
+                prefix = "● ";
             } else {
-                "  "
-            };
+                style = style.fg(Color::White);
+                prefix = "  ";
+            }
+
+            if is_selected {
+                style = style.bg(Color::Blue);
+            }
 
             lines.push(Line::from(Span::styled(
                 format!("{}{}", prefix, project.name),
@@ -120,13 +137,12 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                 for (task_idx, task) in project_tasks.iter().enumerate() {
                     let is_selected = app.task_selection.get() == Some(task_idx);
                     let style = if is_selected {
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                        Style::default().fg(Color::White).bg(Color::Blue)
                     } else {
                         Style::default().fg(Color::White)
                     };
-                    let prefix = if is_selected { "▶ " } else { "  " };
                     lines.push(Line::from(Span::styled(
-                        format!("{}☐ {}", prefix, task.title),
+                        format!("  ☐ {}", task.title),
                         style,
                     )));
                 }
@@ -153,9 +169,10 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | 1/2: switch panel | j/k: navigate | Enter/Space: activate project",
+        AppMode::Normal => "q: quit | n: new | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateProject => "ESC: cancel | ENTER: confirm",
         AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
+        AppMode::TaskDetail => "ESC/q: close",
     };
     let help = Paragraph::new(help_text)
         .style(Style::default().fg(Color::Gray))
@@ -235,6 +252,79 @@ fn render_create_task_popup(app: &App, frame: &mut Frame) {
     let cursor_x = chunks[1].x + app.input_buffer.len() as u16 + 1;
     let cursor_y = chunks[1].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
+}
+
+fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(task_idx) = app.active_task_index {
+        if let Some(project_idx) = app.active_project_index {
+            if let Some(project) = app.projects.get(project_idx) {
+                let project_tasks: Vec<_> = app.cards.iter()
+                    .filter(|card| {
+                        app.columns.iter()
+                            .any(|col| col.id == card.column_id && col.board_id == project.id)
+                    })
+                    .collect();
+
+                if let Some(task) = project_tasks.get(task_idx) {
+                    let chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Length(5),
+                            Constraint::Length(5),
+                            Constraint::Min(0),
+                        ])
+                        .split(area);
+
+                    let title_block = Block::default()
+                        .title("Task Title")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Cyan));
+                    let title = Paragraph::new(task.title.clone())
+                        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                        .block(title_block);
+                    frame.render_widget(title, chunks[0]);
+
+                    let meta_block = Block::default()
+                        .title("Metadata")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Cyan));
+                    let meta_lines = vec![
+                        Line::from(vec![
+                            Span::styled("Priority: ", Style::default().fg(Color::Gray)),
+                            Span::styled(format!("{:?}", task.priority), Style::default().fg(Color::White)),
+                            Span::raw("  "),
+                            Span::styled("Status: ", Style::default().fg(Color::Gray)),
+                            Span::styled(format!("{:?}", task.status), Style::default().fg(Color::White)),
+                        ]),
+                        Line::from(if let Some(due_date) = task.due_date {
+                            vec![
+                                Span::styled("Due: ", Style::default().fg(Color::Gray)),
+                                Span::styled(due_date.format("%Y-%m-%d %H:%M").to_string(), Style::default().fg(Color::Red)),
+                            ]
+                        } else {
+                            vec![Span::styled("No due date", Style::default().fg(Color::Gray))]
+                        }),
+                    ];
+                    let meta = Paragraph::new(meta_lines).block(meta_block);
+                    frame.render_widget(meta, chunks[1]);
+
+                    let desc_block = Block::default()
+                        .title("Description")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Cyan));
+                    let desc_text = if let Some(desc) = &task.description {
+                        desc.clone()
+                    } else {
+                        "No description".to_string()
+                    };
+                    let desc = Paragraph::new(desc_text)
+                        .style(Style::default().fg(Color::White))
+                        .block(desc_block);
+                    frame.render_widget(desc, chunks[2]);
+                }
+            }
+        }
+    }
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

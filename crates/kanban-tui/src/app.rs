@@ -19,6 +19,7 @@ pub struct App {
     pub project_selection: SelectionState,
     pub active_project_index: Option<usize>,
     pub task_selection: SelectionState,
+    pub active_task_index: Option<usize>,
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
     pub focus: Focus,
@@ -35,6 +36,7 @@ pub enum AppMode {
     Normal,
     CreateProject,
     CreateTask,
+    TaskDetail,
 }
 
 impl App {
@@ -47,6 +49,7 @@ impl App {
             project_selection: SelectionState::new(),
             active_project_index: None,
             task_selection: SelectionState::new(),
+            active_task_index: None,
             columns: Vec::new(),
             cards: Vec::new(),
             focus: Focus::Projects,
@@ -65,12 +68,17 @@ impl App {
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Char('Q') => self.quit(),
                     KeyCode::Char('n') => {
-                        if self.active_project_index.is_some() {
-                            self.mode = AppMode::CreateTask;
-                            self.input_buffer.clear();
-                        } else {
-                            self.mode = AppMode::CreateProject;
-                            self.input_buffer.clear();
+                        match self.focus {
+                            Focus::Projects => {
+                                self.mode = AppMode::CreateProject;
+                                self.input_buffer.clear();
+                            }
+                            Focus::Tasks => {
+                                if self.active_project_index.is_some() {
+                                    self.mode = AppMode::CreateTask;
+                                    self.input_buffer.clear();
+                                }
+                            }
                         }
                     }
                     KeyCode::Char('1') => self.focus = Focus::Projects,
@@ -112,9 +120,28 @@ impl App {
                         }
                     }
                     KeyCode::Enter | KeyCode::Char(' ') => {
-                        if self.focus == Focus::Projects {
-                            self.active_project_index = self.project_selection.get();
-                            self.task_selection.clear();
+                        match self.focus {
+                            Focus::Projects => {
+                                self.active_project_index = self.project_selection.get();
+                                self.task_selection.clear();
+
+                                if let Some(project_idx) = self.active_project_index {
+                                    if let Some(project) = self.projects.get(project_idx) {
+                                        let task_count = self.get_project_task_count(project.id);
+                                        if task_count > 0 {
+                                            self.task_selection.set(Some(0));
+                                        }
+                                    }
+                                }
+
+                                self.focus = Focus::Tasks;
+                            }
+                            Focus::Tasks => {
+                                if self.task_selection.get().is_some() {
+                                    self.active_task_index = self.task_selection.get();
+                                    self.mode = AppMode::TaskDetail;
+                                }
+                            }
                         }
                     }
                     _ => {}
@@ -168,6 +195,15 @@ impl App {
                     _ => {}
                 }
             }
+            AppMode::TaskDetail => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.mode = AppMode::Normal;
+                        self.active_task_index = None;
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -175,7 +211,8 @@ impl App {
         let project = Board::new(self.input_buffer.clone(), None);
         tracing::info!("Creating project: {} (id: {})", project.name, project.id);
         self.projects.push(project);
-        self.project_selection.auto_select_first_if_empty(!self.projects.is_empty());
+        let new_index = self.projects.len() - 1;
+        self.project_selection.set(Some(new_index));
     }
 
     fn create_task(&mut self) {
@@ -198,6 +235,10 @@ impl App {
                 let card = Card::new(column.id, self.input_buffer.clone(), position);
                 tracing::info!("Creating task: {} (id: {})", card.title, card.id);
                 self.cards.push(card);
+
+                let task_count = self.get_project_task_count(project.id);
+                let new_task_index = task_count.saturating_sub(1);
+                self.task_selection.set(Some(new_task_index));
             }
         }
     }
