@@ -9,6 +9,7 @@ use ratatui::{
     Terminal,
 };
 use std::io;
+use std::process::Command;
 use crate::{events::{EventHandler, Event}, ui, selection::SelectionState};
 
 pub struct App {
@@ -69,7 +70,7 @@ impl App {
         self.should_quit = true;
     }
 
-    fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) {
+    fn handle_key_event(&mut self, key: crossterm::event::KeyEvent, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) {
         use crossterm::event::{KeyCode, KeyModifiers};
 
         match self.mode {
@@ -220,6 +221,13 @@ impl App {
                     KeyCode::Char('3') => {
                         self.task_focus = TaskFocus::Description;
                     }
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        if self.task_focus == TaskFocus::Description {
+                            if let Err(e) = self.edit_description(terminal) {
+                                tracing::error!("Failed to edit description: {}", e);
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -271,6 +279,59 @@ impl App {
             .count()
     }
 
+    fn edit_description(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
+        if let Some(task_idx) = self.active_task_index {
+            if let Some(project_idx) = self.active_project_index {
+                if let Some(project) = self.projects.get(project_idx) {
+                    let project_tasks: Vec<_> = self.cards.iter()
+                        .filter(|card| {
+                            self.columns.iter()
+                                .any(|col| col.id == card.column_id && col.board_id == project.id)
+                        })
+                        .collect();
+
+                    if let Some(task) = project_tasks.get(task_idx) {
+                        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+
+                        let temp_dir = std::env::temp_dir();
+                        let temp_file = temp_dir.join(format!("kanban-task-{}.md", task.id));
+
+                        let current_desc = task.description.as_ref().map(|s| s.as_str()).unwrap_or("");
+                        std::fs::write(&temp_file, current_desc)?;
+
+                        disable_raw_mode()?;
+                        execute!(io::stdout(), LeaveAlternateScreen)?;
+
+                        let status = Command::new(&editor)
+                            .arg(&temp_file)
+                            .status()?;
+
+                        execute!(io::stdout(), EnterAlternateScreen)?;
+                        enable_raw_mode()?;
+
+                        terminal.clear()?;
+
+                        if status.success() {
+                            let new_content = std::fs::read_to_string(&temp_file)?;
+
+                            let task_id = task.id;
+                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                                card.description = if new_content.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(new_content)
+                                };
+                            }
+                        }
+
+                        let _ = std::fs::remove_file(&temp_file);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub async fn run(&mut self) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
         let mut events = EventHandler::new();
@@ -281,7 +342,7 @@ impl App {
             if let Some(event) = events.next().await {
                 match event {
                     Event::Key(key) => {
-                        self.handle_key_event(key);
+                        self.handle_key_event(key, &mut terminal);
                     }
                     Event::Tick => {}
                 }

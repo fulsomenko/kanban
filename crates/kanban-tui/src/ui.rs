@@ -178,7 +178,10 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::Normal => "q: quit | n: new | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateProject => "ESC: cancel | ENTER: confirm",
         AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
-        AppMode::TaskDetail => "ESC/q: close | 1/2/3: select panel",
+        AppMode::TaskDetail => match app.task_focus {
+            TaskFocus::Description => "ESC/q: close | 1/2/3: select panel | Enter/Space: edit description",
+            _ => "ESC/q: close | 1/2/3: select panel",
+        },
     };
     let help = Paragraph::new(help_text)
         .style(Style::default().fg(Color::Gray))
