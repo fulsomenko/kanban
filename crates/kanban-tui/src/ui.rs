@@ -131,8 +131,10 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
-    let project_name = if let Some(board_idx) = app.active_board_index {
-        app.boards.get(board_idx).map(|b| b.name.as_str()).unwrap_or("Unknown")
+    let board_idx = app.active_board_index.or(app.board_selection.get());
+
+    let project_name = if let Some(idx) = board_idx {
+        app.boards.get(idx).map(|b| b.name.as_str()).unwrap_or("Unknown")
     } else {
         "No Project"
     };
@@ -145,7 +147,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
         Line::from(Span::raw("")),
     ];
 
-    if let Some(idx) = app.active_board_index {
+    if let Some(idx) = board_idx {
         if let Some(board) = app.boards.get(idx) {
             let board_tasks: Vec<_> = app.cards.iter()
                 .filter(|card| {
@@ -155,8 +157,13 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                 .collect();
 
             if board_tasks.is_empty() {
+                let message = if app.active_board_index.is_some() {
+                    "  No tasks yet. Press 'n' to create one!"
+                } else {
+                    "  (Enter/Space) to add tasks"
+                };
                 lines.push(Line::from(Span::styled(
-                    "No tasks yet. Press 'n' to create one!",
+                    message,
                     Style::default().fg(Color::Gray),
                 )));
             } else {
@@ -188,7 +195,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
         }
     } else {
         lines.push(Line::from(Span::styled(
-            "Activate a project (Enter/Space) to view tasks",
+            "  Select a project to preview tasks",
             Style::default().fg(Color::Gray),
         )));
     }
