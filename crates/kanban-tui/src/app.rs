@@ -698,24 +698,41 @@ impl App {
         use serde::Deserialize;
 
         #[derive(Deserialize)]
-        struct BoardImport {
+        struct SingleBoardImport {
             board: Board,
             columns: Vec<Column>,
             tasks: Vec<Card>,
         }
 
+        #[derive(Deserialize)]
+        struct MultiBoardImport {
+            boards: Vec<SingleBoardImport>,
+        }
+
         let content = std::fs::read_to_string(filename)?;
-        let import: BoardImport = serde_json::from_str(&content)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let first_new_index = self.boards.len();
 
-        self.boards.push(import.board);
-        self.columns.extend(import.columns);
-        self.cards.extend(import.tasks);
+        if let Ok(multi_import) = serde_json::from_str::<MultiBoardImport>(&content) {
+            let count = multi_import.boards.len();
+            for board_data in multi_import.boards {
+                self.boards.push(board_data.board);
+                self.columns.extend(board_data.columns);
+                self.cards.extend(board_data.tasks);
+            }
+            tracing::info!("Imported {} boards from: {}", count, filename);
+        } else if let Ok(single_import) = serde_json::from_str::<SingleBoardImport>(&content) {
+            self.boards.push(single_import.board);
+            self.columns.extend(single_import.columns);
+            self.cards.extend(single_import.tasks);
+            tracing::info!("Imported board from: {}", filename);
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid JSON format: expected single board or multi-board export"
+            ));
+        }
 
-        let new_index = self.boards.len() - 1;
-        self.board_selection.set(Some(new_index));
-
-        tracing::info!("Imported board from: {}", filename);
+        self.board_selection.set(Some(first_new_index));
         Ok(())
     }
 }
