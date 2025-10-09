@@ -12,7 +12,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Launch the interactive TUI
-    Tui,
+    Tui {
+        /// File to load and auto-save on exit
+        #[arg(short, long)]
+        file: Option<String>,
+    },
     /// Initialize a new kanban board
     Init {
         #[arg(short, long)]
@@ -27,8 +31,12 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Tui) | None => {
-            let mut app = App::new();
+        Some(Commands::Tui { file }) => {
+            let mut app = App::new(file);
+            app.run().await?;
+        }
+        None => {
+            let mut app = App::new(None);
             app.run().await?;
         }
         Some(Commands::Init { name }) => {

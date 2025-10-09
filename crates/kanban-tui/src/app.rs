@@ -25,6 +25,7 @@ pub struct App {
     pub board_focus: BoardFocus,
     pub import_files: Vec<String>,
     pub import_selection: SelectionState,
+    pub save_file: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,8 +71,8 @@ pub enum AppMode {
 }
 
 impl App {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(save_file: Option<String>) -> Self {
+        let mut app = Self {
             should_quit: false,
             mode: AppMode::Normal,
             input: InputState::new(),
@@ -87,7 +88,18 @@ impl App {
             board_focus: BoardFocus::Name,
             import_files: Vec::new(),
             import_selection: SelectionState::new(),
+            save_file: save_file.clone(),
+        };
+
+        if let Some(ref filename) = save_file {
+            if std::path::Path::new(filename).exists() {
+                if let Err(e) = app.import_board_from_file(filename) {
+                    tracing::error!("Failed to load file {}: {}", filename, e);
+                }
+            }
         }
+
+        app
     }
 
     pub fn quit(&mut self) {
@@ -582,6 +594,94 @@ impl App {
         Ok(())
     }
 
+    fn auto_save(&self) -> io::Result<()> {
+        if let Some(ref filename) = self.save_file {
+            if self.boards.is_empty() {
+                return Ok(());
+            }
+
+            if self.boards.len() == 1 {
+                if let Some(board) = self.boards.first() {
+                    let board_columns: Vec<Column> = self.columns.iter()
+                        .filter(|col| col.board_id == board.id)
+                        .cloned()
+                        .collect();
+
+                    let column_ids: Vec<uuid::Uuid> = board_columns.iter().map(|c| c.id).collect();
+
+                    let board_cards: Vec<Card> = self.cards.iter()
+                        .filter(|card| column_ids.contains(&card.column_id))
+                        .cloned()
+                        .collect();
+
+                    #[derive(Serialize)]
+                    struct BoardExport {
+                        board: Board,
+                        columns: Vec<Column>,
+                        tasks: Vec<Card>,
+                    }
+
+                    let export = BoardExport {
+                        board: board.clone(),
+                        columns: board_columns,
+                        tasks: board_cards,
+                    };
+
+                    let json = serde_json::to_string_pretty(&export)
+                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                    std::fs::write(filename, json)?;
+                    tracing::info!("Auto-saved board to: {}", filename);
+                }
+            } else {
+                #[derive(Serialize)]
+                struct BoardExport {
+                    board: Board,
+                    columns: Vec<Column>,
+                    tasks: Vec<Card>,
+                }
+
+                #[derive(Serialize)]
+                struct AllBoardsExport {
+                    boards: Vec<BoardExport>,
+                }
+
+                let mut board_exports = Vec::new();
+
+                for board in &self.boards {
+                    let board_columns: Vec<Column> = self.columns.iter()
+                        .filter(|col| col.board_id == board.id)
+                        .cloned()
+                        .collect();
+
+                    let column_ids: Vec<uuid::Uuid> = board_columns.iter().map(|c| c.id).collect();
+
+                    let board_cards: Vec<Card> = self.cards.iter()
+                        .filter(|card| column_ids.contains(&card.column_id))
+                        .cloned()
+                        .collect();
+
+                    board_exports.push(BoardExport {
+                        board: board.clone(),
+                        columns: board_columns,
+                        tasks: board_cards,
+                    });
+                }
+
+                let export = AllBoardsExport {
+                    boards: board_exports,
+                };
+
+                let json = serde_json::to_string_pretty(&export)
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                std::fs::write(filename, json)?;
+                tracing::info!("Auto-saved {} boards to: {}", self.boards.len(), filename);
+            }
+        }
+        Ok(())
+    }
+
     fn edit_board_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: BoardField) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get(board_idx) {
@@ -706,6 +806,10 @@ impl App {
             }
         }
 
+        if let Err(e) = self.auto_save() {
+            tracing::error!("Failed to auto-save: {}", e);
+        }
+
         restore_terminal(&mut terminal)?;
         Ok(())
     }
@@ -788,6 +892,6 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
 
 impl Default for App {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
