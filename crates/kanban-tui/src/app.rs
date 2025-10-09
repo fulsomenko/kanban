@@ -23,6 +23,8 @@ pub struct App {
     pub focus: Focus,
     pub card_focus: CardFocus,
     pub board_focus: BoardFocus,
+    pub import_files: Vec<String>,
+    pub import_selection: SelectionState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,6 +65,7 @@ pub enum AppMode {
     RenameBoard,
     BoardDetail,
     ExportBoard,
+    ImportBoard,
 }
 
 impl App {
@@ -81,6 +84,8 @@ impl App {
             focus: Focus::Projects,
             card_focus: CardFocus::Title,
             board_focus: BoardFocus::Name,
+            import_files: Vec::new(),
+            import_selection: SelectionState::new(),
         }
     }
 
@@ -142,6 +147,15 @@ impl App {
                                     self.input.set(filename);
                                     self.mode = AppMode::ExportBoard;
                                 }
+                            }
+                        }
+                    }
+                    KeyCode::Char('i') => {
+                        if self.focus == Focus::Projects {
+                            self.scan_import_files();
+                            if !self.import_files.is_empty() {
+                                self.import_selection.set(Some(0));
+                                self.mode = AppMode::ImportBoard;
                             }
                         }
                     }
@@ -269,6 +283,32 @@ impl App {
                         self.input.clear();
                     }
                     DialogAction::None => {}
+                }
+            }
+            AppMode::ImportBoard => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.mode = AppMode::Normal;
+                        self.import_selection.clear();
+                    }
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        self.import_selection.next(self.import_files.len());
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        self.import_selection.prev();
+                    }
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        if let Some(idx) = self.import_selection.get() {
+                            if let Some(filename) = self.import_files.get(idx).cloned() {
+                                if let Err(e) = self.import_board_from_file(&filename) {
+                                    tracing::error!("Failed to import board: {}", e);
+                                }
+                            }
+                        }
+                        self.mode = AppMode::Normal;
+                        self.import_selection.clear();
+                    }
+                    _ => {}
                 }
             }
             AppMode::CardDetail => {
@@ -559,6 +599,49 @@ impl App {
         }
 
         restore_terminal(&mut terminal)?;
+        Ok(())
+    }
+
+    fn scan_import_files(&mut self) {
+        self.import_files.clear();
+        if let Ok(entries) = std::fs::read_dir(".") {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_file() {
+                        if let Some(filename) = entry.file_name().to_str() {
+                            if filename.ends_with(".json") {
+                                self.import_files.push(filename.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        self.import_files.sort();
+    }
+
+    fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
+        use serde::Deserialize;
+
+        #[derive(Deserialize)]
+        struct BoardImport {
+            board: Board,
+            columns: Vec<Column>,
+            tasks: Vec<Card>,
+        }
+
+        let content = std::fs::read_to_string(filename)?;
+        let import: BoardImport = serde_json::from_str(&content)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        self.boards.push(import.board);
+        self.columns.extend(import.columns);
+        self.cards.extend(import.tasks);
+
+        let new_index = self.boards.len() - 1;
+        self.board_selection.set(Some(new_index));
+
+        tracing::info!("Imported board from: {}", filename);
         Ok(())
     }
 }

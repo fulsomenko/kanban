@@ -50,6 +50,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::CreateCard => render_create_card_popup(app, frame),
                 AppMode::RenameBoard => render_rename_board_popup(app, frame),
                 AppMode::ExportBoard => render_export_board_popup(app, frame),
+                AppMode::ImportBoard => render_import_board_popup(app, frame),
                 _ => {}
             }
         }
@@ -193,11 +194,12 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | i: import | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateCard => "ESC: cancel | ENTER: confirm",
         AppMode::RenameBoard => "ESC: cancel | ENTER: confirm",
         AppMode::ExportBoard => "ESC: cancel | ENTER: export",
+        AppMode::ImportBoard => "ESC: cancel | j/k: navigate | ENTER/Space: import selected",
         AppMode::CardDetail => match app.card_focus {
             CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
             CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | e: edit description",
@@ -307,6 +309,53 @@ fn render_rename_board_popup(app: &App, frame: &mut Frame) {
 
 fn render_export_board_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Export Board", "Filename:");
+}
+
+fn render_import_board_popup(app: &App, frame: &mut Frame) {
+    let area = centered_rect(60, 50, frame.area());
+
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Import Board")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let label = Paragraph::new("Select a JSON file to import:")
+        .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(label, chunks[0]);
+
+    if app.import_files.is_empty() {
+        let empty_msg = Paragraph::new("No JSON files found in current directory")
+            .style(Style::default().fg(Color::Gray));
+        frame.render_widget(empty_msg, chunks[1]);
+    } else {
+        let mut lines = vec![];
+        for (idx, filename) in app.import_files.iter().enumerate() {
+            let is_selected = app.import_selection.get() == Some(idx);
+            let style = if is_selected {
+                Style::default().fg(Color::White).bg(Color::Blue)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let prefix = if is_selected { "> " } else { "  " };
+            lines.push(Line::from(Span::styled(format!("{}{}", prefix, filename), style)));
+        }
+        let list = Paragraph::new(lines);
+        frame.render_widget(list, chunks[1]);
+    }
 }
 
 fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
