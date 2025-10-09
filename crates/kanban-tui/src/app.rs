@@ -437,13 +437,10 @@ impl App {
                                 }
                                 should_restart_events = true;
                             }
-                            _ => {}
-                        }
-                    }
-                    KeyCode::Enter | KeyCode::Char(' ') => {
-                        if self.card_focus == CardFocus::Metadata {
-                            self.input.clear();
-                            self.mode = AppMode::SetCardPoints;
+                            CardFocus::Metadata => {
+                                self.input.clear();
+                                self.mode = AppMode::SetCardPoints;
+                            }
                         }
                     }
                     _ => {}

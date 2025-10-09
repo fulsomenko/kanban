@@ -262,7 +262,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::CardDetail => match app.card_focus {
             CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
             CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | e: edit description",
-            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | Enter/Space: set points",
+            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | e: edit points",
         },
         AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm",
         AppMode::BoardDetail => match app.board_focus {
