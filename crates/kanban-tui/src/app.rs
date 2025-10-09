@@ -57,10 +57,10 @@ enum BoardField {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
     Normal,
-    CreateProject,
+    CreateBoard,
     CreateTask,
     TaskDetail,
-    RenameProject,
+    RenameBoard,
     BoardDetail,
     ExportBoard,
 }
@@ -104,7 +104,7 @@ impl App {
                     KeyCode::Char('n') => {
                         match self.focus {
                             Focus::Projects => {
-                                self.mode = AppMode::CreateProject;
+                                self.mode = AppMode::CreateBoard;
                                 self.input.clear();
                             }
                             Focus::Tasks => {
@@ -120,7 +120,7 @@ impl App {
                             if let Some(board_idx) = self.board_selection.get() {
                                 if let Some(board) = self.boards.get(board_idx) {
                                     self.input.set(board.name.clone());
-                                    self.mode = AppMode::RenameProject;
+                                    self.mode = AppMode::RenameBoard;
                                 }
                             }
                         }
@@ -213,7 +213,7 @@ impl App {
                     _ => {}
                 }
             }
-            AppMode::CreateProject => {
+            AppMode::CreateBoard => {
                 match handle_dialog_input(&mut self.input, key.code) {
                     DialogAction::Confirm => {
                         self.create_board();
@@ -241,7 +241,7 @@ impl App {
                     DialogAction::None => {}
                 }
             }
-            AppMode::RenameProject => {
+            AppMode::RenameBoard => {
                 match handle_dialog_input(&mut self.input, key.code) {
                     DialogAction::Confirm => {
                         self.rename_board();

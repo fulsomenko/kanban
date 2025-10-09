@@ -46,9 +46,9 @@ pub fn render(app: &App, frame: &mut Frame) {
             render_footer(app, frame, chunks[2]);
 
             match app.mode {
-                AppMode::CreateProject => render_create_project_popup(app, frame),
+                AppMode::CreateBoard => render_create_board_popup(app, frame),
                 AppMode::CreateTask => render_create_task_popup(app, frame),
-                AppMode::RenameProject => render_rename_project_popup(app, frame),
+                AppMode::RenameBoard => render_rename_board_popup(app, frame),
                 AppMode::ExportBoard => render_export_board_popup(app, frame),
                 _ => {}
             }
@@ -194,9 +194,9 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
         AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
-        AppMode::CreateProject => "ESC: cancel | ENTER: confirm",
+        AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
-        AppMode::RenameProject => "ESC: cancel | ENTER: confirm",
+        AppMode::RenameBoard => "ESC: cancel | ENTER: confirm",
         AppMode::ExportBoard => "ESC: cancel | ENTER: export",
         AppMode::TaskDetail => match app.task_focus {
             TaskFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
@@ -214,7 +214,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(help, area);
 }
 
-fn render_create_project_popup(app: &App, frame: &mut Frame) {
+fn render_create_board_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Create New Project", "Project Name:");
 }
 
@@ -301,7 +301,7 @@ fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     }
 }
 
-fn render_rename_project_popup(app: &App, frame: &mut Frame) {
+fn render_rename_board_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Rename Project", "Project Name:");
 }
 
