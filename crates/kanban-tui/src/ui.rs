@@ -1,5 +1,6 @@
 use ratatui::{Frame, layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, Paragraph, Clear}};
 use crate::app::{App, AppMode, Focus, CardFocus, BoardFocus};
+use kanban_domain::CardStatus;
 
 pub fn render(app: &App, frame: &mut Frame) {
     match app.mode {
@@ -162,13 +163,24 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                 for (task_idx, task) in board_tasks.iter().enumerate() {
                     let is_selected = app.card_selection.get() == Some(task_idx);
                     let is_focused = app.focus == Focus::Tasks;
-                    let style = if is_selected && is_focused {
-                        Style::default().fg(Color::White).bg(Color::Blue)
+                    let is_done = task.status == CardStatus::Done;
+
+                    let (checkbox, text_color, text_modifier) = if is_done {
+                        ("☑", Color::DarkGray, Modifier::CROSSED_OUT)
                     } else {
-                        Style::default().fg(Color::White)
+                        ("☐", Color::White, Modifier::empty())
                     };
+
+                    let mut style = Style::default()
+                        .fg(text_color)
+                        .add_modifier(text_modifier);
+
+                    if is_selected && is_focused {
+                        style = style.bg(Color::Blue);
+                    }
+
                     lines.push(Line::from(Span::styled(
-                        format!("  ☐ {}", task.title),
+                        format!("  {} {}", checkbox, task.title),
                         style,
                     )));
                 }
@@ -195,7 +207,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | X: export all | i: import | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | X: export all | i: import | c: toggle complete | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateCard => "ESC: cancel | ENTER: confirm",
         AppMode::RenameBoard => "ESC: cancel | ENTER: confirm",

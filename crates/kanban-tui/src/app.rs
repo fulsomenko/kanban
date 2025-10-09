@@ -1,5 +1,5 @@
 use kanban_core::KanbanResult;
-use kanban_domain::{Board, Column, Card};
+use kanban_domain::{Board, Column, Card, CardStatus};
 use crossterm::{execute, terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
 use ratatui::{
     backend::CrosstermBackend,
@@ -167,6 +167,11 @@ impl App {
                                 self.import_selection.set(Some(0));
                                 self.mode = AppMode::ImportBoard;
                             }
+                        }
+                    }
+                    KeyCode::Char('c') => {
+                        if self.focus == Focus::Tasks && self.card_selection.get().is_some() {
+                            self.toggle_card_completion();
                         }
                     }
                     KeyCode::Char('1') => self.focus = Focus::Projects,
@@ -421,6 +426,35 @@ impl App {
             if let Some(board) = self.boards.get_mut(idx) {
                 board.update_name(self.input.as_str().to_string());
                 tracing::info!("Renamed project to: {}", board.name);
+            }
+        }
+    }
+
+    fn toggle_card_completion(&mut self) {
+        if let Some(task_idx) = self.card_selection.get() {
+            if let Some(board_idx) = self.active_board_index {
+                if let Some(board) = self.boards.get(board_idx) {
+                    let board_tasks: Vec<_> = self.cards.iter()
+                        .filter(|card| {
+                            self.columns.iter()
+                                .any(|col| col.id == card.column_id && col.board_id == board.id)
+                        })
+                        .collect();
+
+                    if let Some(task) = board_tasks.get(task_idx) {
+                        let task_id = task.id;
+                        let new_status = if task.status == CardStatus::Done {
+                            CardStatus::Todo
+                        } else {
+                            CardStatus::Done
+                        };
+
+                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                            card.update_status(new_status);
+                            tracing::info!("Toggled task '{}' to status: {:?}", card.title, new_status);
+                        }
+                    }
+                }
             }
         }
     }
