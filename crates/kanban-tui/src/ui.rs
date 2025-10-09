@@ -215,77 +215,11 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_create_project_popup(app: &App, frame: &mut Frame) {
-    let area = centered_rect(60, 30, frame.area());
-
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title("Create New Project")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Black));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
-        .split(inner);
-
-    let label = Paragraph::new("Project Name:")
-        .style(Style::default().fg(Color::Yellow));
-    frame.render_widget(label, chunks[0]);
-
-    let input = Paragraph::new(app.input.as_str())
-        .style(Style::default().fg(Color::White))
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(input, chunks[1]);
-
-    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
-    let cursor_y = chunks[1].y + 1;
-    frame.set_cursor_position((cursor_x, cursor_y));
+    render_input_popup(app, frame, "Create New Project", "Project Name:");
 }
 
 fn render_create_task_popup(app: &App, frame: &mut Frame) {
-    let area = centered_rect(60, 30, frame.area());
-
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title("Create New Task")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Black));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
-        .split(inner);
-
-    let label = Paragraph::new("Task Title:")
-        .style(Style::default().fg(Color::Yellow));
-    frame.render_widget(label, chunks[0]);
-
-    let input = Paragraph::new(app.input.as_str())
-        .style(Style::default().fg(Color::White))
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(input, chunks[1]);
-
-    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
-    let cursor_y = chunks[1].y + 1;
-    frame.set_cursor_position((cursor_x, cursor_y));
+    render_input_popup(app, frame, "Create New Task", "Task Title:");
 }
 
 fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
@@ -368,77 +302,11 @@ fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_rename_project_popup(app: &App, frame: &mut Frame) {
-    let area = centered_rect(60, 30, frame.area());
-
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title("Rename Project")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Black));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
-        .split(inner);
-
-    let label = Paragraph::new("Project Name:")
-        .style(Style::default().fg(Color::Yellow));
-    frame.render_widget(label, chunks[0]);
-
-    let input = Paragraph::new(app.input.as_str())
-        .style(Style::default().fg(Color::White))
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(input, chunks[1]);
-
-    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
-    let cursor_y = chunks[1].y + 1;
-    frame.set_cursor_position((cursor_x, cursor_y));
+    render_input_popup(app, frame, "Rename Project", "Project Name:");
 }
 
 fn render_export_board_popup(app: &App, frame: &mut Frame) {
-    let area = centered_rect(60, 30, frame.area());
-
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title("Export Board")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Black));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
-        .split(inner);
-
-    let label = Paragraph::new("Filename:")
-        .style(Style::default().fg(Color::Yellow));
-    frame.render_widget(label, chunks[0]);
-
-    let input = Paragraph::new(app.input.as_str())
-        .style(Style::default().fg(Color::White))
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(input, chunks[1]);
-
-    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
-    let cursor_y = chunks[1].y + 1;
-    frame.set_cursor_position((cursor_x, cursor_y));
+    render_input_popup(app, frame, "Export Board", "Filename:");
 }
 
 fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
@@ -480,6 +348,43 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
             frame.render_widget(desc, chunks[1]);
         }
     }
+}
+
+fn render_input_popup(app: &App, frame: &mut Frame, title: &str, label: &str) {
+    let area = centered_rect(60, 30, frame.area());
+
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let label_widget = Paragraph::new(label)
+        .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(label_widget, chunks[0]);
+
+    let input = Paragraph::new(app.input.as_str())
+        .style(Style::default().fg(Color::White))
+        .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(input, chunks[1]);
+
+    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
+    let cursor_y = chunks[1].y + 1;
+    frame.set_cursor_position((cursor_x, cursor_y));
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

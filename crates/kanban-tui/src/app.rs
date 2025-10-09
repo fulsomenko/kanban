@@ -1,17 +1,13 @@
 use kanban_core::KanbanResult;
 use kanban_domain::{Board, Column, Card};
-use crossterm::{
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
+use crossterm::{execute, terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
 use ratatui::{
     backend::CrosstermBackend,
     Terminal,
 };
-use std::io::{self, Write};
-use std::process::Command;
+use std::io;
 use serde::Serialize;
-use crate::{events::{EventHandler, Event}, ui, selection::SelectionState, input::InputState};
+use crate::{events::{EventHandler, Event}, ui, selection::SelectionState, input::InputState, dialog::{handle_dialog_input, DialogAction}, editor::edit_in_external_editor};
 
 pub struct App {
     pub should_quit: bool,
@@ -94,7 +90,7 @@ impl App {
 
 
     fn handle_key_event(&mut self, key: crossterm::event::KeyEvent, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler) -> bool {
-        use crossterm::event::{KeyCode, KeyModifiers};
+        use crossterm::event::KeyCode;
         let mut should_restart_events = false;
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) {
@@ -218,113 +214,61 @@ impl App {
                 }
             }
             AppMode::CreateProject => {
-                match key.code {
-                    KeyCode::Esc => {
+                match handle_dialog_input(&mut self.input, key.code) {
+                    DialogAction::Confirm => {
+                        self.create_board();
                         self.mode = AppMode::Normal;
                         self.input.clear();
                     }
-                    KeyCode::Enter => {
-                        if !self.input.is_empty() {
-                            self.create_board();
-                            self.mode = AppMode::Normal;
-                            self.input.clear();
-                        }
+                    DialogAction::Cancel => {
+                        self.mode = AppMode::Normal;
+                        self.input.clear();
                     }
-                    KeyCode::Char(c) => {
-                        if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.input.insert_char(c);
-                        }
-                    }
-                    KeyCode::Backspace => self.input.backspace(),
-                    KeyCode::Delete => self.input.delete(),
-                    KeyCode::Left => self.input.move_left(),
-                    KeyCode::Right => self.input.move_right(),
-                    KeyCode::Home => self.input.move_home(),
-                    KeyCode::End => self.input.move_end(),
-                    _ => {}
+                    DialogAction::None => {}
                 }
             }
             AppMode::CreateTask => {
-                match key.code {
-                    KeyCode::Esc => {
+                match handle_dialog_input(&mut self.input, key.code) {
+                    DialogAction::Confirm => {
+                        self.create_task();
                         self.mode = AppMode::Normal;
                         self.input.clear();
                     }
-                    KeyCode::Enter => {
-                        if !self.input.is_empty() {
-                            self.create_task();
-                            self.mode = AppMode::Normal;
-                            self.input.clear();
-                        }
+                    DialogAction::Cancel => {
+                        self.mode = AppMode::Normal;
+                        self.input.clear();
                     }
-                    KeyCode::Char(c) => {
-                        if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.input.insert_char(c);
-                        }
-                    }
-                    KeyCode::Backspace => self.input.backspace(),
-                    KeyCode::Delete => self.input.delete(),
-                    KeyCode::Left => self.input.move_left(),
-                    KeyCode::Right => self.input.move_right(),
-                    KeyCode::Home => self.input.move_home(),
-                    KeyCode::End => self.input.move_end(),
-                    _ => {}
+                    DialogAction::None => {}
                 }
             }
             AppMode::RenameProject => {
-                match key.code {
-                    KeyCode::Esc => {
+                match handle_dialog_input(&mut self.input, key.code) {
+                    DialogAction::Confirm => {
+                        self.rename_board();
                         self.mode = AppMode::Normal;
                         self.input.clear();
                     }
-                    KeyCode::Enter => {
-                        if !self.input.is_empty() {
-                            self.rename_board();
-                            self.mode = AppMode::Normal;
-                            self.input.clear();
-                        }
+                    DialogAction::Cancel => {
+                        self.mode = AppMode::Normal;
+                        self.input.clear();
                     }
-                    KeyCode::Char(c) => {
-                        if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.input.insert_char(c);
-                        }
-                    }
-                    KeyCode::Backspace => self.input.backspace(),
-                    KeyCode::Delete => self.input.delete(),
-                    KeyCode::Left => self.input.move_left(),
-                    KeyCode::Right => self.input.move_right(),
-                    KeyCode::Home => self.input.move_home(),
-                    KeyCode::End => self.input.move_end(),
-                    _ => {}
+                    DialogAction::None => {}
                 }
             }
             AppMode::ExportBoard => {
-                match key.code {
-                    KeyCode::Esc => {
+                match handle_dialog_input(&mut self.input, key.code) {
+                    DialogAction::Confirm => {
+                        if let Err(e) = self.export_board_with_filename() {
+                            tracing::error!("Failed to export board: {}", e);
+                        }
                         self.mode = AppMode::Normal;
                         self.input.clear();
                     }
-                    KeyCode::Enter => {
-                        if !self.input.is_empty() {
-                            if let Err(e) = self.export_board_with_filename() {
-                                tracing::error!("Failed to export board: {}", e);
-                            }
-                            self.mode = AppMode::Normal;
-                            self.input.clear();
-                        }
+                    DialogAction::Cancel => {
+                        self.mode = AppMode::Normal;
+                        self.input.clear();
                     }
-                    KeyCode::Char(c) => {
-                        if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.input.insert_char(c);
-                        }
-                    }
-                    KeyCode::Backspace => self.input.backspace(),
-                    KeyCode::Delete => self.input.delete(),
-                    KeyCode::Left => self.input.move_left(),
-                    KeyCode::Right => self.input.move_right(),
-                    KeyCode::Home => self.input.move_home(),
-                    KeyCode::End => self.input.move_end(),
-                    _ => {}
+                    DialogAction::None => {}
                 }
             }
             AppMode::TaskDetail => {
@@ -493,8 +437,6 @@ impl App {
     fn edit_board_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: BoardField) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get(board_idx) {
-                let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     BoardField::Name => {
@@ -508,30 +450,7 @@ impl App {
                     }
                 };
 
-                std::fs::write(&temp_file, current_content)?;
-
-                event_handler.stop();
-
-                disable_raw_mode()?;
-                execute!(io::stdout(), LeaveAlternateScreen)?;
-                io::stdout().flush()?;
-
-                let status = Command::new(&editor)
-                    .arg(&temp_file)
-                    .status()?;
-
-                while crossterm::event::poll(std::time::Duration::from_millis(0))? {
-                    let _ = crossterm::event::read()?;
-                }
-
-                execute!(io::stdout(), EnterAlternateScreen)?;
-                enable_raw_mode()?;
-
-                terminal.clear()?;
-
-                if status.success() {
-                    let new_content = std::fs::read_to_string(&temp_file)?;
-
+                if let Some(new_content) = edit_in_external_editor(terminal, event_handler, temp_file, &current_content)? {
                     let board_id = board.id;
                     if let Some(board) = self.boards.iter_mut().find(|b| b.id == board_id) {
                         match field {
@@ -551,8 +470,6 @@ impl App {
                         }
                     }
                 }
-
-                let _ = std::fs::remove_file(&temp_file);
             }
         }
         Ok(())
@@ -570,8 +487,6 @@ impl App {
                         .collect();
 
                     if let Some(task) = board_tasks.get(task_idx) {
-                        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-
                         let temp_dir = std::env::temp_dir();
                         let (temp_file, current_content) = match field {
                             TaskField::Title => {
@@ -585,30 +500,7 @@ impl App {
                             }
                         };
 
-                        std::fs::write(&temp_file, current_content)?;
-
-                        event_handler.stop();
-
-                        disable_raw_mode()?;
-                        execute!(io::stdout(), LeaveAlternateScreen)?;
-                        io::stdout().flush()?;
-
-                        let status = Command::new(&editor)
-                            .arg(&temp_file)
-                            .status()?;
-
-                        while crossterm::event::poll(std::time::Duration::from_millis(0))? {
-                            let _ = crossterm::event::read()?;
-                        }
-
-                        execute!(io::stdout(), EnterAlternateScreen)?;
-                        enable_raw_mode()?;
-
-                        terminal.clear()?;
-
-                        if status.success() {
-                            let new_content = std::fs::read_to_string(&temp_file)?;
-
+                        if let Some(new_content) = edit_in_external_editor(terminal, event_handler, temp_file, &current_content)? {
                             let task_id = task.id;
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
                                 match field {
@@ -628,8 +520,6 @@ impl App {
                                 }
                             }
                         }
-
-                        let _ = std::fs::remove_file(&temp_file);
                     }
                 }
             }
