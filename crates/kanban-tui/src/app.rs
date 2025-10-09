@@ -68,6 +68,7 @@ pub enum AppMode {
     ExportBoard,
     ExportAll,
     ImportBoard,
+    SetCardPoints,
 }
 
 impl App {
@@ -354,6 +355,58 @@ impl App {
                     _ => {}
                 }
             }
+            AppMode::SetCardPoints => {
+                match handle_dialog_input(&mut self.input, key.code) {
+                    DialogAction::Confirm => {
+                        let input_str = self.input.as_str().trim();
+                        let points = if input_str.is_empty() {
+                            None
+                        } else if let Ok(p) = input_str.parse::<u8>() {
+                            if (1..=5).contains(&p) {
+                                Some(p)
+                            } else {
+                                tracing::error!("Points must be between 1-5");
+                                self.mode = AppMode::CardDetail;
+                                self.input.clear();
+                                return should_restart_events;
+                            }
+                        } else {
+                            tracing::error!("Invalid points value");
+                            self.mode = AppMode::CardDetail;
+                            self.input.clear();
+                            return should_restart_events;
+                        };
+
+                        if let Some(task_idx) = self.active_card_index {
+                            if let Some(board_idx) = self.active_board_index {
+                                if let Some(board) = self.boards.get(board_idx) {
+                                    let board_tasks: Vec<_> = self.cards.iter()
+                                        .filter(|card| {
+                                            self.columns.iter()
+                                                .any(|col| col.id == card.column_id && col.board_id == board.id)
+                                        })
+                                        .collect();
+
+                                    if let Some(task) = board_tasks.get(task_idx) {
+                                        let task_id = task.id;
+                                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                                            card.set_points(points);
+                                            tracing::info!("Set points to: {:?}", points);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        self.mode = AppMode::CardDetail;
+                        self.input.clear();
+                    }
+                    DialogAction::Cancel => {
+                        self.mode = AppMode::CardDetail;
+                        self.input.clear();
+                    }
+                    DialogAction::None => {}
+                }
+            }
             AppMode::CardDetail => {
                 match key.code {
                     KeyCode::Esc => {
@@ -385,6 +438,12 @@ impl App {
                                 should_restart_events = true;
                             }
                             _ => {}
+                        }
+                    }
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        if self.card_focus == CardFocus::Metadata {
+                            self.input.clear();
+                            self.mode = AppMode::SetCardPoints;
                         }
                     }
                     _ => {}

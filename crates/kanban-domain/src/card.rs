@@ -32,6 +32,7 @@ pub struct Card {
     pub status: CardStatus,
     pub position: i32,
     pub due_date: Option<DateTime<Utc>>,
+    pub points: Option<u8>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -48,6 +49,7 @@ impl Card {
             status: CardStatus::Todo,
             position,
             due_date: None,
+            points: None,
             created_at: now,
             updated_at: now,
         }
@@ -81,6 +83,11 @@ impl Card {
 
     pub fn update_description(&mut self, description: Option<String>) {
         self.description = description;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn set_points(&mut self, points: Option<u8>) {
+        self.points = points;
         self.updated_at = Utc::now();
     }
 }

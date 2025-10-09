@@ -53,6 +53,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::ExportBoard => render_export_board_popup(app, frame),
                 AppMode::ExportAll => render_export_all_popup(app, frame),
                 AppMode::ImportBoard => render_import_board_popup(app, frame),
+                AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
                 _ => {}
             }
         }
@@ -186,10 +187,47 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         style = style.bg(Color::Blue);
                     }
 
-                    lines.push(Line::from(Span::styled(
-                        format!("  {} {}", checkbox, task.title),
-                        style,
-                    )));
+                    let points_badge = if let Some(points) = task.points {
+                        let color = match points {
+                            1 => Color::Cyan,
+                            2 => Color::Green,
+                            3 => Color::Yellow,
+                            4 => Color::LightMagenta,
+                            5 => Color::Red,
+                            _ => Color::White,
+                        };
+                        format!(" [{}]", points)
+                    } else {
+                        String::new()
+                    };
+
+                    let line = if points_badge.is_empty() {
+                        Line::from(Span::styled(
+                            format!("  {} {}", checkbox, task.title),
+                            style,
+                        ))
+                    } else {
+                        let points_color = task.points.map(|p| match p {
+                            1 => Color::Cyan,
+                            2 => Color::Green,
+                            3 => Color::Yellow,
+                            4 => Color::LightMagenta,
+                            5 => Color::Red,
+                            _ => Color::White,
+                        }).unwrap_or(Color::White);
+
+                        let mut points_style = Style::default().fg(points_color);
+                        if is_selected && is_focused {
+                            points_style = points_style.bg(Color::Blue);
+                        }
+
+                        Line::from(vec![
+                            Span::styled(format!("  {} {}", checkbox, task.title), style),
+                            Span::styled(points_badge, points_style),
+                        ])
+                    };
+
+                    lines.push(line);
                 }
             }
         }
@@ -224,8 +262,9 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::CardDetail => match app.card_focus {
             CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
             CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | e: edit description",
-            _ => "q: quit | ESC: back | 1/2/3: select panel",
+            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | Enter/Space: set points",
         },
+        AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm",
         AppMode::BoardDetail => match app.board_focus {
             BoardFocus::Name => "q: quit | ESC: back | 1/2: select panel | e: edit name",
             BoardFocus::Description => "q: quit | ESC: back | 1/2: select panel | e: edit description",
@@ -243,6 +282,10 @@ fn render_create_board_popup(app: &App, frame: &mut Frame) {
 
 fn render_create_card_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Create New Task", "Task Title:");
+}
+
+fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
+    render_input_popup(app, frame, "Set Points", "Points (1-5 or empty):");
 }
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
@@ -290,6 +333,12 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             Span::raw("  "),
                             Span::styled("Status: ", Style::default().fg(Color::Gray)),
                             Span::styled(format!("{:?}", task.status), Style::default().fg(Color::White)),
+                            Span::raw("  "),
+                            Span::styled("Points: ", Style::default().fg(Color::Gray)),
+                            Span::styled(
+                                task.points.map(|p| p.to_string()).unwrap_or_else(|| "-".to_string()),
+                                Style::default().fg(Color::White)
+                            ),
                         ]),
                         Line::from(if let Some(due_date) = task.due_date {
                             vec![
