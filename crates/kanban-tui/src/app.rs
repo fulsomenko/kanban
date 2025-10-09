@@ -16,12 +16,12 @@ pub struct App {
     pub boards: Vec<Board>,
     pub board_selection: SelectionState,
     pub active_board_index: Option<usize>,
-    pub task_selection: SelectionState,
-    pub active_task_index: Option<usize>,
+    pub card_selection: SelectionState,
+    pub active_card_index: Option<usize>,
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
     pub focus: Focus,
-    pub task_focus: TaskFocus,
+    pub card_focus: CardFocus,
     pub board_focus: BoardFocus,
 }
 
@@ -32,7 +32,7 @@ pub enum Focus {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TaskFocus {
+pub enum CardFocus {
     Title,
     Metadata,
     Description,
@@ -44,7 +44,7 @@ pub enum BoardFocus {
     Description,
 }
 
-enum TaskField {
+enum CardField {
     Title,
     Description,
 }
@@ -58,8 +58,8 @@ enum BoardField {
 pub enum AppMode {
     Normal,
     CreateBoard,
-    CreateTask,
-    TaskDetail,
+    CreateCard,
+    CardDetail,
     RenameBoard,
     BoardDetail,
     ExportBoard,
@@ -74,12 +74,12 @@ impl App {
             boards: Vec::new(),
             board_selection: SelectionState::new(),
             active_board_index: None,
-            task_selection: SelectionState::new(),
-            active_task_index: None,
+            card_selection: SelectionState::new(),
+            active_card_index: None,
             columns: Vec::new(),
             cards: Vec::new(),
             focus: Focus::Projects,
-            task_focus: TaskFocus::Title,
+            card_focus: CardFocus::Title,
             board_focus: BoardFocus::Name,
         }
     }
@@ -109,7 +109,7 @@ impl App {
                             }
                             Focus::Tasks => {
                                 if self.active_board_index.is_some() {
-                                    self.mode = AppMode::CreateTask;
+                                    self.mode = AppMode::CreateCard;
                                     self.input.clear();
                                 }
                             }
@@ -154,7 +154,7 @@ impl App {
                     KeyCode::Esc => {
                         if self.active_board_index.is_some() {
                             self.active_board_index = None;
-                            self.task_selection.clear();
+                            self.card_selection.clear();
                             self.focus = Focus::Projects;
                         }
                     }
@@ -167,7 +167,7 @@ impl App {
                                 if let Some(board_idx) = self.active_board_index {
                                     if let Some(board) = self.boards.get(board_idx) {
                                         let task_count = self.get_board_task_count(board.id);
-                                        self.task_selection.next(task_count);
+                                        self.card_selection.next(task_count);
                                     }
                                 }
                             }
@@ -179,7 +179,7 @@ impl App {
                                 self.board_selection.prev();
                             }
                             Focus::Tasks => {
-                                self.task_selection.prev();
+                                self.card_selection.prev();
                             }
                         }
                     }
@@ -188,13 +188,13 @@ impl App {
                             Focus::Projects => {
                                 if self.board_selection.get().is_some() {
                                     self.active_board_index = self.board_selection.get();
-                                    self.task_selection.clear();
+                                    self.card_selection.clear();
 
                                     if let Some(board_idx) = self.active_board_index {
                                         if let Some(board) = self.boards.get(board_idx) {
                                             let task_count = self.get_board_task_count(board.id);
                                             if task_count > 0 {
-                                                self.task_selection.set(Some(0));
+                                                self.card_selection.set(Some(0));
                                             }
                                         }
                                     }
@@ -203,9 +203,9 @@ impl App {
                                 }
                             }
                             Focus::Tasks => {
-                                if self.task_selection.get().is_some() {
-                                    self.active_task_index = self.task_selection.get();
-                                    self.mode = AppMode::TaskDetail;
+                                if self.card_selection.get().is_some() {
+                                    self.active_card_index = self.card_selection.get();
+                                    self.mode = AppMode::CardDetail;
                                 }
                             }
                         }
@@ -227,7 +227,7 @@ impl App {
                     DialogAction::None => {}
                 }
             }
-            AppMode::CreateTask => {
+            AppMode::CreateCard => {
                 match handle_dialog_input(&mut self.input, key.code) {
                     DialogAction::Confirm => {
                         self.create_task();
@@ -271,32 +271,32 @@ impl App {
                     DialogAction::None => {}
                 }
             }
-            AppMode::TaskDetail => {
+            AppMode::CardDetail => {
                 match key.code {
                     KeyCode::Esc => {
                         self.mode = AppMode::Normal;
-                        self.active_task_index = None;
-                        self.task_focus = TaskFocus::Title;
+                        self.active_card_index = None;
+                        self.card_focus = CardFocus::Title;
                     }
                     KeyCode::Char('1') => {
-                        self.task_focus = TaskFocus::Title;
+                        self.card_focus = CardFocus::Title;
                     }
                     KeyCode::Char('2') => {
-                        self.task_focus = TaskFocus::Metadata;
+                        self.card_focus = CardFocus::Metadata;
                     }
                     KeyCode::Char('3') => {
-                        self.task_focus = TaskFocus::Description;
+                        self.card_focus = CardFocus::Description;
                     }
                     KeyCode::Char('e') => {
-                        match self.task_focus {
-                            TaskFocus::Title => {
-                                if let Err(e) = self.edit_task_field(terminal, event_handler, TaskField::Title) {
+                        match self.card_focus {
+                            CardFocus::Title => {
+                                if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Title) {
                                     tracing::error!("Failed to edit title: {}", e);
                                 }
                                 should_restart_events = true;
                             }
-                            TaskFocus::Description => {
-                                if let Err(e) = self.edit_task_field(terminal, event_handler, TaskField::Description) {
+                            CardFocus::Description => {
+                                if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Description) {
                                     tracing::error!("Failed to edit description: {}", e);
                                 }
                                 should_restart_events = true;
@@ -382,7 +382,7 @@ impl App {
 
                 let task_count = self.get_board_task_count(board.id);
                 let new_task_index = task_count.saturating_sub(1);
-                self.task_selection.set(Some(new_task_index));
+                self.card_selection.set(Some(new_task_index));
             }
         }
     }
@@ -475,8 +475,8 @@ impl App {
         Ok(())
     }
 
-    fn edit_task_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: TaskField) -> io::Result<()> {
-        if let Some(task_idx) = self.active_task_index {
+    fn edit_card_field(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, event_handler: &EventHandler, field: CardField) -> io::Result<()> {
+        if let Some(task_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
                     let board_tasks: Vec<_> = self.cards.iter()
@@ -489,11 +489,11 @@ impl App {
                     if let Some(task) = board_tasks.get(task_idx) {
                         let temp_dir = std::env::temp_dir();
                         let (temp_file, current_content) = match field {
-                            TaskField::Title => {
+                            CardField::Title => {
                                 let temp_file = temp_dir.join(format!("kanban-task-{}-title.md", task.id));
                                 (temp_file, task.title.clone())
                             }
-                            TaskField::Description => {
+                            CardField::Description => {
                                 let temp_file = temp_dir.join(format!("kanban-task-{}-description.md", task.id));
                                 let content = task.description.as_ref().map(|s| s.as_str()).unwrap_or("").to_string();
                                 (temp_file, content)
@@ -504,12 +504,12 @@ impl App {
                             let task_id = task.id;
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
                                 match field {
-                                    TaskField::Title => {
+                                    CardField::Title => {
                                         if !new_content.trim().is_empty() {
                                             card.update_title(new_content.trim().to_string());
                                         }
                                     }
-                                    TaskField::Description => {
+                                    CardField::Description => {
                                         let desc = if new_content.trim().is_empty() {
                                             None
                                         } else {

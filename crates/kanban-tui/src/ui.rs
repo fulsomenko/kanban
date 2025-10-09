@@ -1,9 +1,9 @@
 use ratatui::{Frame, layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, Paragraph, Clear}};
-use crate::app::{App, AppMode, Focus, TaskFocus, BoardFocus};
+use crate::app::{App, AppMode, Focus, CardFocus, BoardFocus};
 
 pub fn render(app: &App, frame: &mut Frame) {
     match app.mode {
-        AppMode::TaskDetail => {
+        AppMode::CardDetail => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -14,7 +14,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 .split(frame.area());
 
             render_header(frame, chunks[0]);
-            render_task_detail_view(app, frame, chunks[1]);
+            render_card_detail_view(app, frame, chunks[1]);
             render_footer(app, frame, chunks[2]);
         }
         AppMode::BoardDetail => {
@@ -47,7 +47,7 @@ pub fn render(app: &App, frame: &mut Frame) {
 
             match app.mode {
                 AppMode::CreateBoard => render_create_board_popup(app, frame),
-                AppMode::CreateTask => render_create_task_popup(app, frame),
+                AppMode::CreateCard => render_create_card_popup(app, frame),
                 AppMode::RenameBoard => render_rename_board_popup(app, frame),
                 AppMode::ExportBoard => render_export_board_popup(app, frame),
                 _ => {}
@@ -158,7 +158,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                 )));
             } else {
                 for (task_idx, task) in board_tasks.iter().enumerate() {
-                    let is_selected = app.task_selection.get() == Some(task_idx);
+                    let is_selected = app.card_selection.get() == Some(task_idx);
                     let is_focused = app.focus == Focus::Tasks;
                     let style = if is_selected && is_focused {
                         Style::default().fg(Color::White).bg(Color::Blue)
@@ -195,12 +195,12 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
         AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
-        AppMode::CreateTask => "ESC: cancel | ENTER: confirm",
+        AppMode::CreateCard => "ESC: cancel | ENTER: confirm",
         AppMode::RenameBoard => "ESC: cancel | ENTER: confirm",
         AppMode::ExportBoard => "ESC: cancel | ENTER: export",
-        AppMode::TaskDetail => match app.task_focus {
-            TaskFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
-            TaskFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | e: edit description",
+        AppMode::CardDetail => match app.card_focus {
+            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
+            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | e: edit description",
             _ => "q: quit | ESC: back | 1/2/3: select panel",
         },
         AppMode::BoardDetail => match app.board_focus {
@@ -218,12 +218,12 @@ fn render_create_board_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Create New Project", "Project Name:");
 }
 
-fn render_create_task_popup(app: &App, frame: &mut Frame) {
+fn render_create_card_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Create New Task", "Task Title:");
 }
 
-fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(task_idx) = app.active_task_index {
+fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(task_idx) = app.active_card_index {
         if let Some(board_idx) = app.active_board_index {
             if let Some(board) = app.boards.get(board_idx) {
                 let board_tasks: Vec<_> = app.cards.iter()
@@ -243,7 +243,7 @@ fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         ])
                         .split(area);
 
-                    let title_focused = app.task_focus == TaskFocus::Title;
+                    let title_focused = app.card_focus == CardFocus::Title;
                     let title_border_color = if title_focused { Color::Cyan } else { Color::White };
                     let title_block = Block::default()
                         .title(if title_focused { "Task Title [1]" } else { "Task Title" })
@@ -254,7 +254,7 @@ fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         .block(title_block);
                     frame.render_widget(title, chunks[0]);
 
-                    let meta_focused = app.task_focus == TaskFocus::Metadata;
+                    let meta_focused = app.card_focus == CardFocus::Metadata;
                     let meta_border_color = if meta_focused { Color::Cyan } else { Color::White };
                     let meta_block = Block::default()
                         .title(if meta_focused { "Metadata [2]" } else { "Metadata" })
@@ -280,7 +280,7 @@ fn render_task_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let meta = Paragraph::new(meta_lines).block(meta_block);
                     frame.render_widget(meta, chunks[1]);
 
-                    let desc_focused = app.task_focus == TaskFocus::Description;
+                    let desc_focused = app.card_focus == CardFocus::Description;
                     let desc_border_color = if desc_focused { Color::Cyan } else { Color::White };
                     let desc_block = Block::default()
                         .title(if desc_focused { "Description [3]" } else { "Description" })
