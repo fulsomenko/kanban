@@ -50,6 +50,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::CreateCard => render_create_card_popup(app, frame),
                 AppMode::RenameBoard => render_rename_board_popup(app, frame),
                 AppMode::ExportBoard => render_export_board_popup(app, frame),
+                AppMode::ExportAll => render_export_all_popup(app, frame),
                 AppMode::ImportBoard => render_import_board_popup(app, frame),
                 _ => {}
             }
@@ -194,11 +195,12 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | i: import | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | X: export all | i: import | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateCard => "ESC: cancel | ENTER: confirm",
         AppMode::RenameBoard => "ESC: cancel | ENTER: confirm",
         AppMode::ExportBoard => "ESC: cancel | ENTER: export",
+        AppMode::ExportAll => "ESC: cancel | ENTER: export all",
         AppMode::ImportBoard => "ESC: cancel | j/k: navigate | ENTER/Space: import selected",
         AppMode::CardDetail => match app.card_focus {
             CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
@@ -309,6 +311,10 @@ fn render_rename_board_popup(app: &App, frame: &mut Frame) {
 
 fn render_export_board_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Export Board", "Filename:");
+}
+
+fn render_export_all_popup(app: &App, frame: &mut Frame) {
+    render_input_popup(app, frame, "Export All Boards", "Filename:");
 }
 
 fn render_import_board_popup(app: &App, frame: &mut Frame) {

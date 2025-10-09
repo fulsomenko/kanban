@@ -65,6 +65,7 @@ pub enum AppMode {
     RenameBoard,
     BoardDetail,
     ExportBoard,
+    ExportAll,
     ImportBoard,
 }
 
@@ -148,6 +149,15 @@ impl App {
                                     self.mode = AppMode::ExportBoard;
                                 }
                             }
+                        }
+                    }
+                    KeyCode::Char('X') => {
+                        if self.focus == Focus::Projects && !self.boards.is_empty() {
+                            let filename = format!("kanban-all-{}.json",
+                                chrono::Utc::now().format("%Y%m%d-%H%M%S")
+                            );
+                            self.input.set(filename);
+                            self.mode = AppMode::ExportAll;
                         }
                     }
                     KeyCode::Char('i') => {
@@ -274,6 +284,22 @@ impl App {
                     DialogAction::Confirm => {
                         if let Err(e) = self.export_board_with_filename() {
                             tracing::error!("Failed to export board: {}", e);
+                        }
+                        self.mode = AppMode::Normal;
+                        self.input.clear();
+                    }
+                    DialogAction::Cancel => {
+                        self.mode = AppMode::Normal;
+                        self.input.clear();
+                    }
+                    DialogAction::None => {}
+                }
+            }
+            AppMode::ExportAll => {
+                match handle_dialog_input(&mut self.input, key.code) {
+                    DialogAction::Confirm => {
+                        if let Err(e) = self.export_all_boards_with_filename() {
+                            tracing::error!("Failed to export all boards: {}", e);
                         }
                         self.mode = AppMode::Normal;
                         self.input.clear();
@@ -471,6 +497,54 @@ impl App {
                 tracing::info!("Exported board to: {}", self.input.as_str());
             }
         }
+        Ok(())
+    }
+
+    fn export_all_boards_with_filename(&self) -> io::Result<()> {
+        #[derive(Serialize)]
+        struct BoardExport {
+            board: Board,
+            columns: Vec<Column>,
+            tasks: Vec<Card>,
+        }
+
+        #[derive(Serialize)]
+        struct AllBoardsExport {
+            boards: Vec<BoardExport>,
+        }
+
+        let mut board_exports = Vec::new();
+
+        for board in &self.boards {
+            let board_columns: Vec<Column> = self.columns.iter()
+                .filter(|col| col.board_id == board.id)
+                .cloned()
+                .collect();
+
+            let column_ids: Vec<uuid::Uuid> = board_columns.iter().map(|c| c.id).collect();
+
+            let board_cards: Vec<Card> = self.cards.iter()
+                .filter(|card| column_ids.contains(&card.column_id))
+                .cloned()
+                .collect();
+
+            board_exports.push(BoardExport {
+                board: board.clone(),
+                columns: board_columns,
+                tasks: board_cards,
+            });
+        }
+
+        let export = AllBoardsExport {
+            boards: board_exports,
+        };
+
+        let json = serde_json::to_string_pretty(&export)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        std::fs::write(self.input.as_str(), json)?;
+        tracing::info!("Exported all boards to: {}", self.input.as_str());
+
         Ok(())
     }
 
