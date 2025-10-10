@@ -20,33 +20,14 @@
         };
 
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-          extensions = ["rust-src" "rust-analyzer"];
+          extensions = ["rust-src" "rust-analyzer" "clippy" "rustfmt"];
         };
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
         };
 
-        packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "kanban";
-          version = "0.1.0";
-          src = ./.;
-
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-          ];
-
-          buildInputs = with pkgs; [
-            openssl
-            postgresql
-          ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-            pkgs.libiconv
-          ];
-        };
+        packages.default = pkgs.callPackage ./default.nix {};
       }
     );
 }

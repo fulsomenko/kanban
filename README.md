@@ -49,7 +49,7 @@ The project follows SOLID principles with a clean layered architecture:
 ```
 crates/
 ├── kanban-core     → Core traits and error handling
-├── kanban-domain   → Domain models (Board, Card, Column)
+├── kanban-domain   → Domain models (Board, Card, Column, Tag)
 ├── kanban-tui      → Terminal user interface
 └── kanban-cli      → CLI entry point
 ```
@@ -86,20 +86,26 @@ kanban board.json     # Launch with import
 - `q` - Quit application
 - `1` / `2` - Switch between Projects and Tasks panels
 - `j` / `k` - Navigate up/down
-- `n` - Create new project/task (context-aware)
-- `r` - Rename selected project
-- `e` - Edit selected project details
-- `c` - Toggle task completion
+- `n` - Create new board/card (context-aware)
+- `r` - Rename selected board
+- `e` - Edit selected board details
+- `c` - Toggle card completion
 - `x` - Export current board to JSON file
 - `X` - Export all boards to JSON file
 - `i` - Import board(s) from JSON file
-- `Enter` / `Space` - Activate project or view task details
+- `Enter` / `Space` - Activate board or view card details
 
-**Task Detail View:**
+**Card Detail View:**
 - `ESC` - Return to main view
 - `q` - Quit application
 - `1` / `2` / `3` - Switch between Title, Metadata, and Description panels
 - `e` - Edit current panel (title, points, or description)
+
+**Board Detail View:**
+- `ESC` - Return to main view
+- `q` - Quit application
+- `1` / `2` - Switch between Name and Description panels
+- `e` - Edit current panel
 
 **Dialogs:**
 - `ESC` - Cancel
@@ -108,38 +114,31 @@ kanban board.json     # Launch with import
 
 ## Data Persistence
 
-Kanban supports JSON-based file persistence with two formats:
+Kanban uses JSON for all imports and exports:
 
-**Single Board:**
-```json
-{
-  "board": { ... },
-  "columns": [...],
-  "cards": [...]
-}
-```
-
-**Multiple Boards:**
 ```json
 {
   "boards": [
-    { "board": { ... }, "columns": [...], "cards": [...] },
-    { "board": { ... }, "columns": [...], "cards": [...] }
+    {
+      "board": { "id": "...", "name": "My Board", ... },
+      "columns": [ { "id": "...", "name": "Todo", ... } ],
+      "cards": [ { "id": "...", "title": "My Task", ... } ]
+    }
   ]
 }
 ```
 
 When providing a file path:
 - If file exists, boards are loaded on startup
-- If file doesn't exist, it's created with empty boards array
-- Changes are automatically saved on exit
-- Single board files export as single format
-- Multiple boards export as multi-board format
+- If file doesn't exist, it's created with empty boards array: `{"boards":[]}`
+- Changes are automatically saved on exit (`q`)
+- Single board export: `{"boards": [...]}`  with one board
+- Multiple boards export: `{"boards": [...]}` with all boards
 
-## Task Metadata
+## Card Metadata
 
-Tasks support rich metadata:
-- **Title**: Task description
+Cards support rich metadata:
+- **Title**: Card title
 - **Description**: Long-form details (supports external editor)
 - **Status**: Todo, InProgress, Blocked, Done
 - **Priority**: Low, Medium, High, Critical

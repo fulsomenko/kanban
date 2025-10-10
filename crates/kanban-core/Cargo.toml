@@ -12,4 +12,3 @@ serde.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
-diesel.workspace = true

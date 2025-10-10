@@ -3,7 +3,7 @@ use kanban_tui::App;
 
 #[derive(Parser)]
 #[command(name = "kanban")]
-#[command(about = "A terminal-based kanban board inspired by lazygit", long_about = None)]
+#[command(about = "A terminal-based kanban board", long_about = None)]
 struct Cli {
     /// Optional file path to load and auto-save boards
     file: Option<String>,

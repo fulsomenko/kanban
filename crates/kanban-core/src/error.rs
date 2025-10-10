@@ -2,9 +2,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum KanbanError {
-    #[error("Database error: {0}")]
-    Database(#[from] diesel::result::Error),
-
     #[error("Connection error: {0}")]
     Connection(String),
 
