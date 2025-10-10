@@ -45,6 +45,97 @@
           "points": 1,
           "created_at": "2025-10-10T09:08:28.861766Z",
           "updated_at": "2025-10-10T09:09:13.709970Z"
+        },
+        {
+          "id": "292e3f49-089b-40fb-8ea7-c693603904b2",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add git branches to card meta data",
+          "description": "We want to be able to create git branches and tie them to specific tasks so that we can trace the history.\n\nBe able to specify a prefix for use in the project\n\n- Set prefix in Board settings\n- Assign prefix + autoincremented number to card\n- From a card. Copy branch name\n- From a card. Copy `git checkout -b prefix+id`\n\nShould the id be autoincrement or uuid?\n\nReadability says it should be autoincremented. So we go with that for now.\n\n- If no prefix fallback to a default.\n- Customize default. Requires application configuration file feature?\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 2,
+          "due_date": null,
+          "points": 5,
+          "created_at": "2025-10-10T21:58:56.145240Z",
+          "updated_at": "2025-10-10T22:16:31.688748Z"
+        },
+        {
+          "id": "f1a80abd-338c-4593-92d6-20c2db7dc093",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Links to cards",
+          "description": "Be able to have references to other cards.\n\n[like this](DEV-0001) Should be able to follow that link and open the card in Task Description interface.\n\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 3,
+          "due_date": null,
+          "points": 4,
+          "created_at": "2025-10-10T22:03:42.988557Z",
+          "updated_at": "2025-10-10T22:16:16.792258Z"
+        },
+        {
+          "id": "e96684a5-4645-443e-8e2c-6bb646e248c6",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Card dependencies",
+          "description": "Introduce two features\n\n# Block\n\n- Add blocked by card\n- Add create blocker. Creating the new card that would be the blocker.\n\n# Grouping of cards under one card\n\nI would like to keep things flat but I would like card meta data where I can group cards by a top level card.\n\nThe interface would present the grouping as nested to begin with and we see how it behaves?\n\nExample\n\n```\nImplement Card Grouping ...\n```\n\nWhich would when hit enter or space on expand into\n\n```\nImplement Card Grouping\n  Create ui\n  Add metadata\n```\n\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 4,
+          "due_date": null,
+          "points": null,
+          "created_at": "2025-10-10T22:05:04.607714Z",
+          "updated_at": "2025-10-10T22:10:18.615642Z"
+        },
+        {
+          "id": "90f8121a-045f-47fd-b8fe-bb0e5b7662b1",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add column definitions",
+          "description": "At the project level. Be able to define columns\n\nMinimum and default.\n\n- TODO\n- Complete\n\nBe able to change the name of columns\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 5,
+          "due_date": null,
+          "points": 2,
+          "created_at": "2025-10-10T22:11:25.809290Z",
+          "updated_at": "2025-10-10T22:12:36.415713Z"
+        },
+        {
+          "id": "86c1b649-03bc-4da8-87c3-e20a2c56a640",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Test the application with another editor",
+          "description": "Need to try the application to see how it behaves with different editors\n\n- VSCode\n- vim\n- vi\n- emacs\n\nWindows\n\n- notepad\n- notepad++\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 6,
+          "due_date": null,
+          "points": 1,
+          "created_at": "2025-10-10T22:13:04.048521Z",
+          "updated_at": "2025-10-10T22:14:15.622866Z"
+        },
+        {
+          "id": "eceed2ce-de5e-4166-95e7-7fb9c7e65b20",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Change priority",
+          "description": "- Be able to change the priority of a task\n\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 7,
+          "due_date": null,
+          "points": null,
+          "created_at": "2025-10-10T22:14:31.293267Z",
+          "updated_at": "2025-10-10T22:14:45.824760Z"
+        },
+        {
+          "id": "7cd165b0-6671-46d6-b837-4e73ada26333",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add or update priorities",
+          "description": "On the board level. \n\nBe able to configure priorities and change their names. \n\nWe should start with only medium?\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 8,
+          "due_date": null,
+          "points": 1,
+          "created_at": "2025-10-10T22:15:09.199792Z",
+          "updated_at": "2025-10-10T22:16:05.956954Z"
         }
       ]
     }
