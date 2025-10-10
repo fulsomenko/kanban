@@ -43,8 +43,17 @@
           buildInputs = with pkgs; [
             openssl
           ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-            pkgs.libiconv
+            darwin.apple_sdk.frameworks.Security
           ];
+
+          meta = with pkgs.lib; {
+            description = "A terminal-based kanban board";
+            homepage = "https://github.com/fulsomenko/kanban";
+            license = licenses.asl20;
+            maintainers = [ ];
+            mainProgram = "kanban";
+            platforms = platforms.all;
+          };
         };
       }
     );
