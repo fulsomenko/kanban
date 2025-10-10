@@ -147,6 +147,20 @@ Tasks support rich metadata:
 - **Due Date**: Timestamp for deadlines
 - **Created/Updated**: Automatic timestamp tracking
 
+### External Editor Support
+
+When editing titles or descriptions, Kanban opens an external editor. The editor is selected with the following fallback:
+
+1. `$EDITOR` environment variable (if set)
+2. Search for installed editors:
+   - **Unix/Linux/macOS**: nvim → vim → nano → vi
+   - **Windows**: nvim → vim → nano → notepad
+3. Default fallback:
+   - **Unix/Linux/macOS**: vi
+   - **Windows**: notepad
+
+**Tip**: Set your preferred editor with `export EDITOR=nano` (or add to your shell profile)
+
 ## License
 
 Apache 2.0 - See [LICENSE.md](LICENSE.md) for details
