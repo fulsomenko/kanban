@@ -21,7 +21,7 @@ pkgs.mkShell {
 
   shellHook = ''
     export RUST_BACKTRACE=1
-    echo "🦀 Rust Kanban Development Environment"
+    echo "Kanban Development Environment"
     echo "📦 Cargo: $(cargo --version)"
     echo "🦀 Rustc: $(rustc --version)"
   '';
