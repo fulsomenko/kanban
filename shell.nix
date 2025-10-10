@@ -11,10 +11,6 @@ pkgs.mkShell {
     cargo-audit
     cargo-tarpaulin
 
-    # Build dependencies
-    pkg-config
-    openssl
-
     # Development utilities
     bacon
   ];

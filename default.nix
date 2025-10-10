@@ -1,7 +1,5 @@
 { lib
 , rustPlatform
-, pkg-config
-, openssl
 }:
 
 let
@@ -16,14 +14,6 @@ rustPlatform.buildRustPackage {
   cargoLock = {
     lockFile = ./Cargo.lock;
   };
-
-  nativeBuildInputs = [
-    pkg-config
-  ];
-
-  buildInputs = [
-    openssl
-  ];
 
   meta = {
     inherit (cargoToml.workspace.package) description homepage;
