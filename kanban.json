@@ -70,20 +70,20 @@
           "due_date": null,
           "points": 4,
           "created_at": "2025-10-10T22:03:42.988557Z",
-          "updated_at": "2025-10-10T22:16:16.792258Z"
+          "updated_at": "2025-10-10T22:36:48.510179Z"
         },
         {
           "id": "e96684a5-4645-443e-8e2c-6bb646e248c6",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Card dependencies",
-          "description": "Introduce two features\n\n# Block\n\n- Add blocked by card\n- Add create blocker. Creating the new card that would be the blocker.\n\n# Grouping of cards under one card\n\nI would like to keep things flat but I would like card meta data where I can group cards by a top level card.\n\nThe interface would present the grouping as nested to begin with and we see how it behaves?\n\nExample\n\n```\nImplement Card Grouping ...\n```\n\nWhich would when hit enter or space on expand into\n\n```\nImplement Card Grouping\n  Create ui\n  Add metadata\n```\n\n",
+          "description": "Introduce two features\n\n# Block\n\n- Add blocked by card\n- Add create blocker. Creating the new card that would be the blocker.\n\n# Grouping of cards under one card\n\nI would like to keep things flat but I would like card meta data where I can group cards by a top level card.\n\nThe interface would present the grouping as nested to begin with and we see how it behaves?\n\nExample\n\n```\nImplement Card Grouping ...\n```\n\nWhich would when hit enter or space on expand into\n\n```\nImplement Card Grouping\n  Create ui\n  Add metadata\n```\n\n# Duplicate cards\n\nWhen two cards propose changes that are two sides of the same coin. Be able to add them as siblings. \n\nBut when two cards propose changes that are the same side of the same coin, we want to merge them together. Creating a new card by editing the description and title in a git conflict type way\n\nThe merging will ofcourse be handled by opening EDITOR and injecting the content into their respective section.\n\nExample\n---\n\nTitle\n\n```\n<<<<<<< KAN-0001\nCard Background\n=======\nCard Background Color\n>>>>>>> KAN-0002\n```\n\nDescription\n\n```\nWe want to introduce a new feature that\n<<<<<<< KAN-0001\nMakes card background purple\n=======\nMakes card background green\n>>>>>>> KAN-0002\n```\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 4,
           "due_date": null,
-          "points": null,
+          "points": 4,
           "created_at": "2025-10-10T22:05:04.607714Z",
-          "updated_at": "2025-10-10T22:10:18.615642Z"
+          "updated_at": "2025-10-10T22:44:01.235679Z"
         },
         {
           "id": "90f8121a-045f-47fd-b8fe-bb0e5b7662b1",
@@ -120,9 +120,9 @@
           "status": "Todo",
           "position": 7,
           "due_date": null,
-          "points": null,
+          "points": 1,
           "created_at": "2025-10-10T22:14:31.293267Z",
-          "updated_at": "2025-10-10T22:14:45.824760Z"
+          "updated_at": "2025-10-10T22:36:31.344615Z"
         },
         {
           "id": "7cd165b0-6671-46d6-b837-4e73ada26333",
