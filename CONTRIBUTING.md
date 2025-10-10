@@ -29,8 +29,8 @@ rustup update stable
 # Run the application
 cargo run
 
-# Run with file persistence for testing
-cargo run -- -f test-board.json
+# Run with import
+cargo run -- test-board.json
 
 # Auto-reload on changes
 cargo watch -x run

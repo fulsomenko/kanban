@@ -24,8 +24,8 @@ nix develop
 # Run the application
 cargo run
 
-# Run with auto-save to file
-cargo run -- -f myboard.json
+# Run the app and import boards
+cargo run -- myboard.json
 ```
 
 ### Manual Setup
@@ -38,8 +38,8 @@ Requirements:
 cargo build --release
 cargo run --release
 
-# Run with persistent storage
-cargo run --release -- -f myboard.json
+# Run with file import
+cargo run --release -- myboard.json
 ```
 
 ## Architecture
@@ -76,9 +76,8 @@ cargo fmt
 ## Usage
 
 ```bash
-kanban                    # Launch interactive TUI (ephemeral)
-kanban -f board.json      # Launch with auto-save to file
-kanban tui -f board.json  # Explicit TUI mode with file
+kanban                # Launch interactive TUI
+kanban board.json     # Launch with import
 ```
 
 ### Keyboard Shortcuts
@@ -130,8 +129,9 @@ Kanban supports JSON-based file persistence with two formats:
 }
 ```
 
-When using the `-f` flag:
-- File is loaded on startup if it exists
+When providing a file path:
+- If file exists, boards are loaded on startup
+- If file doesn't exist, it's created with empty boards array
 - Changes are automatically saved on exit
 - Single board files export as single format
 - Multiple boards export as multi-board format

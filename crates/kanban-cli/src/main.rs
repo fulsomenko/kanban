@@ -5,18 +5,15 @@ use kanban_tui::App;
 #[command(name = "kanban")]
 #[command(about = "A terminal-based kanban board inspired by lazygit", long_about = None)]
 struct Cli {
+    /// Optional file path to load and auto-save boards
+    file: Option<String>,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Launch the interactive TUI
-    Tui {
-        /// File to load and auto-save on exit
-        #[arg(short, long)]
-        file: Option<String>,
-    },
     /// Initialize a new kanban board
     Init {
         #[arg(short, long)]
@@ -31,12 +28,14 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Tui { file }) => {
-            let mut app = App::new(file);
-            app.run().await?;
-        }
         None => {
-            let mut app = App::new(None);
+            if let Some(ref file_path) = cli.file {
+                if !std::path::Path::new(file_path).exists() {
+                    std::fs::write(file_path, r#"{"boards":[]}"#)?;
+                    tracing::info!("Created new board file: {}", file_path);
+                }
+            }
+            let mut app = App::new(cli.file);
             app.run().await?;
         }
         Some(Commands::Init { name }) => {
