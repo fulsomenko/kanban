@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/kanban-core",
     "crates/kanban-domain",
-    "crates/kanban-db",
     "crates/kanban-tui",
     "crates/kanban-cli",
 ]
@@ -29,11 +28,6 @@ thiserror = "2.0"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
-# Database
-diesel = { version = "2.2", features = ["postgres", "chrono", "uuid"] }
-diesel-async = { version = "0.6", features = ["postgres", "deadpool", "async-connection-wrapper"] }
-diesel_migrations = "2.2"
 
 # UUID and time
 uuid = { version = "1.11", features = ["v4", "serde"] }

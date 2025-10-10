@@ -42,7 +42,6 @@
 
           buildInputs = with pkgs; [
             openssl
-            postgresql
           ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
             pkgs.libiconv
           ];
