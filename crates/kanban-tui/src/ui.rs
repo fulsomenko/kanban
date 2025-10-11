@@ -79,6 +79,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::ImportBoard => render_import_board_popup(app, frame),
                 AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
                 AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
+                AppMode::OrderTasks => render_order_tasks_popup(app, frame),
                 _ => {}
             }
         }
@@ -195,15 +196,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     if let Some(idx) = board_idx {
         if let Some(board) = app.boards.get(idx) {
-            let board_tasks: Vec<_> = app
-                .cards
-                .iter()
-                .filter(|card| {
-                    app.columns
-                        .iter()
-                        .any(|col| col.id == card.column_id && col.board_id == board.id)
-                })
-                .collect();
+            let board_tasks = app.get_sorted_board_cards(board.id);
 
             if board_tasks.is_empty() {
                 let message = if app.active_board_index.is_some() {
@@ -317,6 +310,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         },
         AppMode::BoardSettings => "q: quit | ESC: back | p: set branch prefix",
         AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)",
+        AppMode::OrderTasks => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending",
     };
     let help = Paragraph::new(help_text)
         .style(Style::default().fg(Color::Gray))
@@ -340,15 +334,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(task_idx) = app.active_card_index {
         if let Some(board_idx) = app.active_board_index {
             if let Some(board) = app.boards.get(board_idx) {
-                let board_tasks: Vec<_> = app
-                    .cards
-                    .iter()
-                    .filter(|card| {
-                        app.columns
-                            .iter()
-                            .any(|col| col.id == card.column_id && col.board_id == board.id)
-                    })
-                    .collect();
+                let board_tasks = app.get_sorted_board_cards(board.id);
 
                 if let Some(task) = board_tasks.get(task_idx) {
                     let chunks = Layout::default()
@@ -669,6 +655,83 @@ fn render_board_settings_view(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Set Branch Prefix", "Prefix (empty to clear):");
+}
+
+fn render_order_tasks_popup(app: &App, frame: &mut Frame) {
+    use kanban_domain::{SortField, SortOrder};
+
+    let area = centered_rect(60, 50, frame.area());
+
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Order Tasks By")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner);
+
+    let label = Paragraph::new("Select sort field:").style(Style::default().fg(Color::Yellow));
+    frame.render_widget(label, chunks[0]);
+
+    let sort_fields = [
+        SortField::Points,
+        SortField::Priority,
+        SortField::CreatedAt,
+        SortField::UpdatedAt,
+        SortField::Status,
+        SortField::Default,
+    ];
+
+    let mut lines = vec![];
+    for (idx, field) in sort_fields.iter().enumerate() {
+        let is_selected = app.sort_field_selection.get() == Some(idx);
+        let is_active = app.current_sort_field == Some(*field);
+
+        let style = if is_selected {
+            Style::default().fg(Color::White).bg(Color::Blue)
+        } else if is_active {
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let prefix = if is_selected { "> " } else { "  " };
+        let field_name = match field {
+            SortField::Points => "Points",
+            SortField::Priority => "Priority",
+            SortField::CreatedAt => "Date Created",
+            SortField::UpdatedAt => "Date Updated",
+            SortField::Status => "Status",
+            SortField::Default => "Default",
+        };
+
+        let order_indicator = if is_active {
+            match app.current_sort_order {
+                Some(SortOrder::Ascending) => " (↑)",
+                Some(SortOrder::Descending) => " (↓)",
+                None => "",
+            }
+        } else {
+            ""
+        };
+
+        lines.push(Line::from(Span::styled(
+            format!("{}{}{}", prefix, field_name, order_indicator),
+            style,
+        )));
+    }
+    let list = Paragraph::new(lines);
+    frame.render_widget(list, chunks[1]);
 }
 
 fn render_input_popup(app: &App, frame: &mut Frame, title: &str, label: &str) {
