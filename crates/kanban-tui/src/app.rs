@@ -222,6 +222,27 @@ impl App {
                         self.mode = AppMode::OrderTasks;
                     }
                 }
+                KeyCode::Char('O') => {
+                    if self.focus == Focus::Tasks && self.active_board_index.is_some() {
+                        if let Some(current_order) = self.current_sort_order {
+                            let new_order = match current_order {
+                                SortOrder::Ascending => SortOrder::Descending,
+                                SortOrder::Descending => SortOrder::Ascending,
+                            };
+                            self.current_sort_order = Some(new_order);
+
+                            if let Some(board_idx) = self.active_board_index {
+                                if let Some(board) = self.boards.get_mut(board_idx) {
+                                    if let Some(field) = self.current_sort_field {
+                                        board.update_task_sort(field, new_order);
+                                    }
+                                }
+                            }
+
+                            tracing::info!("Toggled sort order to: {:?}", new_order);
+                        }
+                    }
+                }
                 KeyCode::Char('1') => self.focus = Focus::Projects,
                 KeyCode::Char('2') => {
                     if self.active_board_index.is_some() {

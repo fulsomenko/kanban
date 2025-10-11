@@ -6,11 +6,11 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 30,
+        "next_card_number": 31,
         "task_sort_field": "Points",
-        "task_sort_order": "Ascending",
+        "task_sort_order": "Descending",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T21:45:54.321947Z"
+        "updated_at": "2025-10-11T21:57:14.078404Z"
       },
       "columns": [
         {
@@ -429,6 +429,20 @@
           "card_number": 29,
           "created_at": "2025-10-11T21:45:54.321945Z",
           "updated_at": "2025-10-11T21:47:04.856744Z"
+        },
+        {
+          "id": "72ffc5f8-df27-4dd5-bc13-36e5c105f367",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Vim Motions",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 29,
+          "due_date": null,
+          "points": null,
+          "card_number": 30,
+          "created_at": "2025-10-11T21:56:16.454189Z",
+          "updated_at": "2025-10-11T21:56:16.454189Z"
         }
       ]
     }
