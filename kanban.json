@@ -6,9 +6,9 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 20,
+        "next_card_number": 22,
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T18:48:48.962877Z"
+        "updated_at": "2025-10-11T19:25:07.465579Z"
       },
       "columns": [
         {
@@ -287,6 +287,34 @@
           "card_number": 19,
           "created_at": "2025-10-11T18:45:47.488818Z",
           "updated_at": "2025-10-11T19:01:45.403042Z"
+        },
+        {
+          "id": "8ecc1849-bde7-4f97-99f7-44b7d9158bbf",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Remove a card",
+          "description": "Be able to drop a card \n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 19,
+          "due_date": null,
+          "points": 2,
+          "card_number": 20,
+          "created_at": "2025-10-11T19:23:32.612472Z",
+          "updated_at": "2025-10-11T19:25:31.337766Z"
+        },
+        {
+          "id": "6c1e0ca7-22bb-49e5-86bc-8d1e2a55c9ee",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Archive a card",
+          "description": "Be able to archive a card.\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 20,
+          "due_date": null,
+          "points": 2,
+          "card_number": 21,
+          "created_at": "2025-10-11T19:25:07.465576Z",
+          "updated_at": "2025-10-11T19:25:26.875800Z"
         }
       ]
     }
