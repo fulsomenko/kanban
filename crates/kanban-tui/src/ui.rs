@@ -707,8 +707,8 @@ fn render_order_tasks_popup(app: &App, frame: &mut Frame) {
 
         let prefix = if is_selected { "> " } else { "  " };
         let field_name = match field {
-            SortField::Points => "Points",
             SortField::Priority => "Priority",
+            SortField::Points => "Points",
             SortField::CreatedAt => "Date Created",
             SortField::UpdatedAt => "Date Updated",
             SortField::Default => "Task Number",
