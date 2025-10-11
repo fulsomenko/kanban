@@ -5,7 +5,9 @@ use kanban_tui::App;
 #[command(name = "kanban")]
 #[command(about = "A terminal-based kanban board", long_about = None)]
 #[command(version, arg_required_else_help = false)]
-#[command(help_template = "{name} {version}\n{about-section}\n{usage-heading} {usage}\n\n{all-args}")]
+#[command(
+    help_template = "{name} {version}\n{about-section}\n{usage-heading} {usage}\n\n{all-args}"
+)]
 struct Cli {
     /// Optional file path to load and auto-save boards
     file: Option<String>,
