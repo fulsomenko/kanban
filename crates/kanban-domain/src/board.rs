@@ -4,6 +4,22 @@ use uuid::Uuid;
 
 pub type BoardId = Uuid;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SortField {
+    Points,
+    Priority,
+    CreatedAt,
+    UpdatedAt,
+    Status,
+    Default,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SortOrder {
+    Ascending,
+    Descending,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Board {
     pub id: BoardId,
@@ -13,12 +29,24 @@ pub struct Board {
     pub branch_prefix: Option<String>,
     #[serde(default = "default_next_card_number")]
     pub next_card_number: u32,
+    #[serde(default = "default_sort_field")]
+    pub task_sort_field: SortField,
+    #[serde(default = "default_sort_order")]
+    pub task_sort_order: SortOrder,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 fn default_next_card_number() -> u32 {
     1
+}
+
+fn default_sort_field() -> SortField {
+    SortField::Default
+}
+
+fn default_sort_order() -> SortOrder {
+    SortOrder::Ascending
 }
 
 impl Board {
@@ -30,6 +58,8 @@ impl Board {
             description,
             branch_prefix: None,
             next_card_number: 1,
+            task_sort_field: SortField::Default,
+            task_sort_order: SortOrder::Ascending,
             created_at: now,
             updated_at: now,
         }
@@ -59,6 +89,12 @@ impl Board {
 
     pub fn effective_branch_prefix<'a>(&'a self, default_prefix: &'a str) -> &'a str {
         self.branch_prefix.as_deref().unwrap_or(default_prefix)
+    }
+
+    pub fn update_task_sort(&mut self, field: SortField, order: SortOrder) {
+        self.task_sort_field = field;
+        self.task_sort_order = order;
+        self.updated_at = Utc::now();
     }
 }
 

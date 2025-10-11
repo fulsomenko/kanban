@@ -12,7 +12,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, KanbanResult};
-use kanban_domain::{Board, Card, CardStatus, Column};
+use kanban_domain::{Board, Card, CardStatus, Column, SortField, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use serde::Serialize;
 use std::io;
@@ -35,12 +35,15 @@ pub struct App {
     pub import_selection: SelectionState,
     pub save_file: Option<String>,
     pub app_config: AppConfig,
+    pub sort_field_selection: SelectionState,
+    pub current_sort_field: Option<SortField>,
+    pub current_sort_order: Option<SortOrder>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Focus {
-    Projects,
-    Tasks,
+    Boards,
+    Cards,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +83,7 @@ pub enum AppMode {
     ImportBoard,
     SetCardPoints,
     SetBranchPrefix,
+    OrderCards,
 }
 
 impl App {
@@ -96,13 +100,16 @@ impl App {
             active_card_index: None,
             columns: Vec::new(),
             cards: Vec::new(),
-            focus: Focus::Projects,
+            focus: Focus::Boards,
             card_focus: CardFocus::Title,
             board_focus: BoardFocus::Name,
             import_files: Vec::new(),
             import_selection: SelectionState::new(),
             save_file: save_file.clone(),
             app_config,
+            sort_field_selection: SelectionState::new(),
+            current_sort_field: None,
+            current_sort_order: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -138,11 +145,11 @@ impl App {
         match self.mode {
             AppMode::Normal => match key.code {
                 KeyCode::Char('n') => match self.focus {
-                    Focus::Projects => {
+                    Focus::Boards => {
                         self.mode = AppMode::CreateBoard;
                         self.input.clear();
                     }
-                    Focus::Tasks => {
+                    Focus::Cards => {
                         if self.active_board_index.is_some() {
                             self.mode = AppMode::CreateCard;
                             self.input.clear();
@@ -150,7 +157,7 @@ impl App {
                     }
                 },
                 KeyCode::Char('r') => {
-                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
                         if let Some(board_idx) = self.board_selection.get() {
                             if let Some(board) = self.boards.get(board_idx) {
                                 self.input.set(board.name.clone());
@@ -160,18 +167,18 @@ impl App {
                     }
                 }
                 KeyCode::Char('e') => {
-                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
                         self.mode = AppMode::BoardDetail;
                         self.board_focus = BoardFocus::Name;
                     }
                 }
                 KeyCode::Char('s') => {
-                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
                         self.mode = AppMode::BoardSettings;
                     }
                 }
                 KeyCode::Char('x') => {
-                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
                         if let Some(board_idx) = self.board_selection.get() {
                             if let Some(board) = self.boards.get(board_idx) {
                                 let filename = format!(
@@ -186,7 +193,7 @@ impl App {
                     }
                 }
                 KeyCode::Char('X') => {
-                    if self.focus == Focus::Projects && !self.boards.is_empty() {
+                    if self.focus == Focus::Boards && !self.boards.is_empty() {
                         let filename = format!(
                             "kanban-all-{}.json",
                             chrono::Utc::now().format("%Y%m%d-%H%M%S")
@@ -196,7 +203,7 @@ impl App {
                     }
                 }
                 KeyCode::Char('i') => {
-                    if self.focus == Focus::Projects {
+                    if self.focus == Focus::Boards {
                         self.scan_import_files();
                         if !self.import_files.is_empty() {
                             self.import_selection.set(Some(0));
@@ -205,66 +212,106 @@ impl App {
                     }
                 }
                 KeyCode::Char('c') => {
-                    if self.focus == Focus::Tasks && self.card_selection.get().is_some() {
+                    if self.focus == Focus::Cards && self.card_selection.get().is_some() {
                         self.toggle_card_completion();
                     }
                 }
-                KeyCode::Char('1') => self.focus = Focus::Projects,
+                KeyCode::Char('o') => {
+                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
+                        self.sort_field_selection.set(Some(0));
+                        self.mode = AppMode::OrderCards;
+                    }
+                }
+                KeyCode::Char('O') => {
+                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
+                        if let Some(current_order) = self.current_sort_order {
+                            let new_order = match current_order {
+                                SortOrder::Ascending => SortOrder::Descending,
+                                SortOrder::Descending => SortOrder::Ascending,
+                            };
+                            self.current_sort_order = Some(new_order);
+
+                            if let Some(board_idx) = self.active_board_index {
+                                if let Some(board) = self.boards.get_mut(board_idx) {
+                                    if let Some(field) = self.current_sort_field {
+                                        board.update_task_sort(field, new_order);
+                                    }
+                                }
+                            }
+
+                            tracing::info!("Toggled sort order to: {:?}", new_order);
+                        }
+                    }
+                }
+                KeyCode::Char('1') => self.focus = Focus::Boards,
                 KeyCode::Char('2') => {
                     if self.active_board_index.is_some() {
-                        self.focus = Focus::Tasks;
+                        self.focus = Focus::Cards;
                     }
                 }
                 KeyCode::Esc => {
                     if self.active_board_index.is_some() {
                         self.active_board_index = None;
                         self.card_selection.clear();
-                        self.focus = Focus::Projects;
+                        self.focus = Focus::Boards;
                     }
                 }
                 KeyCode::Char('j') | KeyCode::Down => match self.focus {
-                    Focus::Projects => {
+                    Focus::Boards => {
                         self.board_selection.next(self.boards.len());
                     }
-                    Focus::Tasks => {
+                    Focus::Cards => {
                         if let Some(board_idx) = self.active_board_index {
                             if let Some(board) = self.boards.get(board_idx) {
-                                let task_count = self.get_board_task_count(board.id);
-                                self.card_selection.next(task_count);
+                                let card_count = self.get_board_card_count(board.id);
+                                self.card_selection.next(card_count);
                             }
                         }
                     }
                 },
                 KeyCode::Char('k') | KeyCode::Up => match self.focus {
-                    Focus::Projects => {
+                    Focus::Boards => {
                         self.board_selection.prev();
                     }
-                    Focus::Tasks => {
+                    Focus::Cards => {
                         self.card_selection.prev();
                     }
                 },
                 KeyCode::Enter | KeyCode::Char(' ') => match self.focus {
-                    Focus::Projects => {
+                    Focus::Boards => {
                         if self.board_selection.get().is_some() {
                             self.active_board_index = self.board_selection.get();
                             self.card_selection.clear();
 
                             if let Some(board_idx) = self.active_board_index {
                                 if let Some(board) = self.boards.get(board_idx) {
-                                    let task_count = self.get_board_task_count(board.id);
-                                    if task_count > 0 {
+                                    self.current_sort_field = Some(board.task_sort_field);
+                                    self.current_sort_order = Some(board.task_sort_order);
+
+                                    let card_count = self.get_board_card_count(board.id);
+                                    if card_count > 0 {
                                         self.card_selection.set(Some(0));
                                     }
                                 }
                             }
 
-                            self.focus = Focus::Tasks;
+                            self.focus = Focus::Cards;
                         }
                     }
-                    Focus::Tasks => {
-                        if self.card_selection.get().is_some() {
-                            self.active_card_index = self.card_selection.get();
-                            self.mode = AppMode::CardDetail;
+                    Focus::Cards => {
+                        if let Some(sorted_idx) = self.card_selection.get() {
+                            if let Some(board_idx) = self.active_board_index {
+                                if let Some(board) = self.boards.get(board_idx) {
+                                    let sorted_cards = self.get_sorted_board_cards(board.id);
+                                    if let Some(selected_card) = sorted_cards.get(sorted_idx) {
+                                        let card_id = selected_card.id;
+                                        let actual_idx =
+                                            self.cards.iter().position(|c| c.id == card_id);
+                                        self.active_card_index = actual_idx;
+                                        self.mode = AppMode::CardDetail;
+                                    }
+                                }
+                            }
                         }
                     }
                 },
@@ -284,7 +331,7 @@ impl App {
             },
             AppMode::CreateCard => match handle_dialog_input(&mut self.input, key.code) {
                 DialogAction::Confirm => {
-                    self.create_task();
+                    self.create_card();
                     self.mode = AppMode::Normal;
                     self.input.clear();
                 }
@@ -379,10 +426,10 @@ impl App {
                         return should_restart_events;
                     };
 
-                    if let Some(task_idx) = self.active_card_index {
+                    if let Some(card_idx) = self.active_card_index {
                         if let Some(board_idx) = self.active_board_index {
                             if let Some(board) = self.boards.get(board_idx) {
-                                let board_tasks: Vec<_> = self
+                                let board_cards: Vec<_> = self
                                     .cards
                                     .iter()
                                     .filter(|card| {
@@ -392,10 +439,10 @@ impl App {
                                     })
                                     .collect();
 
-                                if let Some(task) = board_tasks.get(task_idx) {
-                                    let task_id = task.id;
+                                if let Some(card) = board_cards.get(card_idx) {
+                                    let card_id = card.id;
                                     if let Some(card) =
-                                        self.cards.iter_mut().find(|c| c.id == task_id)
+                                        self.cards.iter_mut().find(|c| c.id == card_id)
                                     {
                                         card.set_points(points);
                                         tracing::info!("Set points to: {:?}", points);
@@ -536,13 +583,68 @@ impl App {
                 }
                 DialogAction::None => {}
             },
+            AppMode::OrderCards => match key.code {
+                KeyCode::Esc => {
+                    self.mode = AppMode::Normal;
+                    self.sort_field_selection.clear();
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.sort_field_selection.next(6);
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.sort_field_selection.prev();
+                }
+                KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('a') | KeyCode::Char('d') => {
+                    if let Some(field_idx) = self.sort_field_selection.get() {
+                        let field = match field_idx {
+                            0 => SortField::Points,
+                            1 => SortField::Priority,
+                            2 => SortField::CreatedAt,
+                            3 => SortField::UpdatedAt,
+                            4 => SortField::Status,
+                            5 => SortField::Default,
+                            _ => return should_restart_events,
+                        };
+
+                        let order = if self.current_sort_field == Some(field)
+                            && matches!(key.code, KeyCode::Enter | KeyCode::Char(' '))
+                        {
+                            match self.current_sort_order {
+                                Some(SortOrder::Ascending) => SortOrder::Descending,
+                                Some(SortOrder::Descending) => SortOrder::Ascending,
+                                None => SortOrder::Ascending,
+                            }
+                        } else {
+                            match key.code {
+                                KeyCode::Char('d') => SortOrder::Descending,
+                                _ => SortOrder::Ascending,
+                            }
+                        };
+
+                        self.current_sort_field = Some(field);
+                        self.current_sort_order = Some(order);
+
+                        if let Some(board_idx) = self.active_board_index {
+                            if let Some(board) = self.boards.get_mut(board_idx) {
+                                board.update_task_sort(field, order);
+                            }
+                        }
+
+                        self.mode = AppMode::Normal;
+                        self.sort_field_selection.clear();
+
+                        tracing::info!("Sorting by {:?} ({:?})", field, order);
+                    }
+                }
+                _ => {}
+            },
         }
         should_restart_events
     }
 
     fn create_board(&mut self) {
         let board = Board::new(self.input.as_str().to_string(), None);
-        tracing::info!("Creating project: {} (id: {})", board.name, board.id);
+        tracing::info!("Creating board: {} (id: {})", board.name, board.id);
         self.boards.push(board);
         let new_index = self.boards.len() - 1;
         self.board_selection.set(Some(new_index));
@@ -552,37 +654,29 @@ impl App {
         if let Some(idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get_mut(idx) {
                 board.update_name(self.input.as_str().to_string());
-                tracing::info!("Renamed project to: {}", board.name);
+                tracing::info!("Renamed board to: {}", board.name);
             }
         }
     }
 
     fn toggle_card_completion(&mut self) {
-        if let Some(task_idx) = self.card_selection.get() {
+        if let Some(sorted_idx) = self.card_selection.get() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_tasks: Vec<_> = self
-                        .cards
-                        .iter()
-                        .filter(|card| {
-                            self.columns
-                                .iter()
-                                .any(|col| col.id == card.column_id && col.board_id == board.id)
-                        })
-                        .collect();
+                    let sorted_cards = self.get_sorted_board_cards(board.id);
 
-                    if let Some(task) = board_tasks.get(task_idx) {
-                        let task_id = task.id;
-                        let new_status = if task.status == CardStatus::Done {
+                    if let Some(card) = sorted_cards.get(sorted_idx) {
+                        let card_id = card.id;
+                        let new_status = if card.status == CardStatus::Done {
                             CardStatus::Todo
                         } else {
                             CardStatus::Done
                         };
 
-                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                             card.update_status(new_status);
                             tracing::info!(
-                                "Toggled task '{}' to status: {:?}",
+                                "Toggled card '{}' to status: {:?}",
                                 card.title,
                                 new_status
                             );
@@ -593,7 +687,7 @@ impl App {
         }
     }
 
-    fn create_task(&mut self) {
+    fn create_card(&mut self) {
         if let Some(idx) = self.active_board_index {
             if let Some(board) = self.boards.get_mut(idx) {
                 let column = self
@@ -618,17 +712,17 @@ impl App {
                     .count() as i32;
                 let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
                 let board_id = board.id;
-                tracing::info!("Creating task: {} (id: {})", card.title, card.id);
+                tracing::info!("Creating card: {} (id: {})", card.title, card.id);
                 self.cards.push(card);
 
-                let task_count = self.get_board_task_count(board_id);
-                let new_task_index = task_count.saturating_sub(1);
-                self.card_selection.set(Some(new_task_index));
+                let card_count = self.get_board_card_count(board_id);
+                let new_card_index = card_count.saturating_sub(1);
+                self.card_selection.set(Some(new_card_index));
             }
         }
     }
 
-    fn get_board_task_count(&self, board_id: uuid::Uuid) -> usize {
+    fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         self.cards
             .iter()
             .filter(|card| {
@@ -637,6 +731,74 @@ impl App {
                     .any(|col| col.id == card.column_id && col.board_id == board_id)
             })
             .count()
+    }
+
+    pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
+        let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
+        let sort_field = board.task_sort_field;
+        let sort_order = board.task_sort_order;
+
+        let mut cards: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|card| {
+                self.columns
+                    .iter()
+                    .any(|col| col.id == card.column_id && col.board_id == board_id)
+            })
+            .collect();
+
+        cards.sort_by(|a, b| {
+            use std::cmp::Ordering;
+            let cmp = match sort_field {
+                SortField::Points => match (a.points, b.points) {
+                    (Some(ap), Some(bp)) => ap.cmp(&bp),
+                    (Some(_), None) => Ordering::Less,
+                    (None, Some(_)) => Ordering::Greater,
+                    (None, None) => Ordering::Equal,
+                },
+                SortField::Priority => {
+                    let a_val = match a.priority {
+                        kanban_domain::CardPriority::Critical => 3,
+                        kanban_domain::CardPriority::High => 2,
+                        kanban_domain::CardPriority::Medium => 1,
+                        kanban_domain::CardPriority::Low => 0,
+                    };
+                    let b_val = match b.priority {
+                        kanban_domain::CardPriority::Critical => 3,
+                        kanban_domain::CardPriority::High => 2,
+                        kanban_domain::CardPriority::Medium => 1,
+                        kanban_domain::CardPriority::Low => 0,
+                    };
+                    a_val.cmp(&b_val)
+                }
+                SortField::CreatedAt => a.created_at.cmp(&b.created_at),
+                SortField::UpdatedAt => a.updated_at.cmp(&b.updated_at),
+                SortField::Status => {
+                    let a_val = match a.status {
+                        CardStatus::Done => 3,
+                        CardStatus::InProgress => 2,
+                        CardStatus::Blocked => 1,
+                        CardStatus::Todo => 0,
+                    };
+                    let b_val = match b.status {
+                        CardStatus::Done => 3,
+                        CardStatus::InProgress => 2,
+                        CardStatus::Blocked => 1,
+                        CardStatus::Todo => 0,
+                    };
+                    a_val.cmp(&b_val)
+                }
+                SortField::Default => a.card_number.cmp(&b.card_number),
+            };
+
+            match sort_order {
+                SortOrder::Ascending => cmp,
+                SortOrder::Descending => cmp.reverse(),
+            }
+        });
+
+        cards
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
@@ -847,10 +1009,10 @@ impl App {
         event_handler: &EventHandler,
         field: CardField,
     ) -> io::Result<()> {
-        if let Some(task_idx) = self.active_card_index {
+        if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_tasks: Vec<_> = self
+                    let board_cards: Vec<_> = self
                         .cards
                         .iter()
                         .filter(|card| {
@@ -860,18 +1022,18 @@ impl App {
                         })
                         .collect();
 
-                    if let Some(task) = board_tasks.get(task_idx) {
+                    if let Some(card) = board_cards.get(card_idx) {
                         let temp_dir = std::env::temp_dir();
                         let (temp_file, current_content) = match field {
                             CardField::Title => {
                                 let temp_file =
-                                    temp_dir.join(format!("kanban-task-{}-title.md", task.id));
-                                (temp_file, task.title.clone())
+                                    temp_dir.join(format!("kanban-card-{}-title.md", card.id));
+                                (temp_file, card.title.clone())
                             }
                             CardField::Description => {
                                 let temp_file = temp_dir
-                                    .join(format!("kanban-task-{}-description.md", task.id));
-                                let content = task.description.as_deref().unwrap_or("").to_string();
+                                    .join(format!("kanban-card-{}-description.md", card.id));
+                                let content = card.description.as_deref().unwrap_or("").to_string();
                                 (temp_file, content)
                             }
                         };
@@ -882,8 +1044,8 @@ impl App {
                             temp_file,
                             &current_content,
                         )? {
-                            let task_id = task.id;
-                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                            let card_id = card.id;
+                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                                 match field {
                                     CardField::Title => {
                                         if !new_content.trim().is_empty() {
@@ -1010,10 +1172,10 @@ impl App {
     }
 
     fn copy_branch_name(&mut self) {
-        if let Some(task_idx) = self.active_card_index {
+        if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_tasks: Vec<_> = self
+                    let board_cards: Vec<_> = self
                         .cards
                         .iter()
                         .filter(|card| {
@@ -1023,9 +1185,9 @@ impl App {
                         })
                         .collect();
 
-                    if let Some(task) = board_tasks.get(task_idx) {
+                    if let Some(card) = board_cards.get(card_idx) {
                         let branch_name =
-                            task.branch_name(board, self.app_config.effective_default_prefix());
+                            card.branch_name(board, self.app_config.effective_default_prefix());
                         if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
                             tracing::error!("Failed to copy to clipboard: {}", e);
                         } else {
@@ -1038,10 +1200,10 @@ impl App {
     }
 
     fn copy_git_checkout_command(&mut self) {
-        if let Some(task_idx) = self.active_card_index {
+        if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_tasks: Vec<_> = self
+                    let board_cards: Vec<_> = self
                         .cards
                         .iter()
                         .filter(|card| {
@@ -1051,8 +1213,8 @@ impl App {
                         })
                         .collect();
 
-                    if let Some(task) = board_tasks.get(task_idx) {
-                        let command = task.git_checkout_command(
+                    if let Some(card) = board_cards.get(card_idx) {
+                        let command = card.git_checkout_command(
                             board,
                             self.app_config.effective_default_prefix(),
                         );

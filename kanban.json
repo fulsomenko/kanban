@@ -6,9 +6,11 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 22,
+        "next_card_number": 31,
+        "task_sort_field": "Points",
+        "task_sort_order": "Descending",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T19:25:07.465579Z"
+        "updated_at": "2025-10-11T22:00:10.028574Z"
       },
       "columns": [
         {
@@ -34,7 +36,7 @@
           "points": 1,
           "card_number": 4,
           "created_at": "2025-10-10T08:47:57.834239Z",
-          "updated_at": "2025-10-10T08:50:57.752600Z"
+          "updated_at": "2025-10-11T20:30:23.290462Z"
         },
         {
           "id": "959a092f-61de-41de-ac4a-729d6e1fcadf",
@@ -48,7 +50,7 @@
           "points": 1,
           "card_number": 5,
           "created_at": "2025-10-10T09:08:28.861766Z",
-          "updated_at": "2025-10-10T09:09:13.709970Z"
+          "updated_at": "2025-10-11T20:30:20.829017Z"
         },
         {
           "id": "292e3f49-089b-40fb-8ea7-c693603904b2",
@@ -62,7 +64,7 @@
           "points": 5,
           "card_number": 1,
           "created_at": "2025-10-10T21:58:56.145240Z",
-          "updated_at": "2025-10-11T07:59:36.019371Z"
+          "updated_at": "2025-10-11T20:30:19.498471Z"
         },
         {
           "id": "f1a80abd-338c-4593-92d6-20c2db7dc093",
@@ -76,7 +78,7 @@
           "points": 4,
           "card_number": 2,
           "created_at": "2025-10-10T22:03:42.988557Z",
-          "updated_at": "2025-10-11T08:00:34.328075Z"
+          "updated_at": "2025-10-11T20:33:59.906332Z"
         },
         {
           "id": "e96684a5-4645-443e-8e2c-6bb646e248c6",
@@ -104,7 +106,7 @@
           "points": 2,
           "card_number": 7,
           "created_at": "2025-10-10T22:11:25.809290Z",
-          "updated_at": "2025-10-10T22:12:36.415713Z"
+          "updated_at": "2025-10-11T20:40:58.659416Z"
         },
         {
           "id": "86c1b649-03bc-4da8-87c3-e20a2c56a640",
@@ -132,7 +134,7 @@
           "points": 1,
           "card_number": 9,
           "created_at": "2025-10-10T22:14:31.293267Z",
-          "updated_at": "2025-10-10T22:36:31.344615Z"
+          "updated_at": "2025-10-11T20:41:09.462182Z"
         },
         {
           "id": "7cd165b0-6671-46d6-b837-4e73ada26333",
@@ -174,21 +176,21 @@
           "points": 5,
           "card_number": 12,
           "created_at": "2025-10-10T22:56:04.200355Z",
-          "updated_at": "2025-10-10T23:01:01.402918Z"
+          "updated_at": "2025-10-11T20:41:24.403599Z"
         },
         {
           "id": "6a0cbe1e-a05e-4aca-bd53-f0057215d671",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Add order tasks lists by",
-          "description": "Order tasks by\n\n- Points\n- Priority\n- Date created\n- Date due\n- Status\n\n",
+          "description": "Order tasks by\n\n- Points\n- Priority\n- Date created\n- Date due\n- Date updated\n- Status\n\nMVP\n---\n\nI think in the tasks panel. hit o (for order or organize) and then are presented with a dialogue where can choose one of the above options.\n\nThe dialogue should use the same selection mechanism as the projects and tasks lists do.\n\nAfter one of the options have been selected. The task list should be ordered according to the chosen option.\n\nFor now we leave out Date due from selection as we have not added this feature yet.\n\nOrder can be descending or ascending. a for ascending and d for descending after selecting an item. Taking suggestions on UX here..\n\n---\n\nFor the future. Keep in mind that I would also like to order the projects panel in the same way as the tasks panel but along a shorter list of options\n\n- Name\n- Date created\n- Date updated\n",
           "priority": "Medium",
-          "status": "Todo",
+          "status": "Done",
           "position": 11,
           "due_date": null,
           "points": 2,
           "card_number": 13,
           "created_at": "2025-10-10T23:01:18.553586Z",
-          "updated_at": "2025-10-11T07:58:56.105304Z"
+          "updated_at": "2025-10-11T22:26:20.802010Z"
         },
         {
           "id": "9e8f918f-3fde-4847-aca8-0ab7646256a8",
@@ -202,7 +204,7 @@
           "points": 5,
           "card_number": 14,
           "created_at": "2025-10-11T18:27:29.674825Z",
-          "updated_at": "2025-10-11T18:36:31.619081Z"
+          "updated_at": "2025-10-11T20:30:26.827479Z"
         },
         {
           "id": "1e257c13-f9ee-40e4-86b5-704a9649ea4e",
@@ -216,7 +218,7 @@
           "points": 3,
           "card_number": 15,
           "created_at": "2025-10-11T18:29:10.434614Z",
-          "updated_at": "2025-10-11T18:31:15.375129Z"
+          "updated_at": "2025-10-11T22:26:03.008952Z"
         },
         {
           "id": "9273b022-f7f8-4975-b9c5-7a57c55eba30",
@@ -252,19 +254,19 @@
           "title": "Give cards ID from the beginning",
           "description": "No need to explicitly generate IDS for cards.\n\nWe just give them IDs immediately\n",
           "priority": "Medium",
-          "status": "Todo",
+          "status": "Done",
           "position": 16,
           "due_date": null,
           "points": 1,
           "card_number": 17,
           "created_at": "2025-10-11T18:39:14.248330Z",
-          "updated_at": "2025-10-11T19:11:05.358308Z"
+          "updated_at": "2025-10-11T19:43:05.716699Z"
         },
         {
           "id": "1c0b1752-53f1-4240-be75-0706662156df",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Add sprints",
-          "description": "Be able to group cards by sprints. \nSet sprint duration and automatic starting of new sprints\n\nMVP\n\nBoard level defines sprint duration.\n\nIf duration is set, sprint init is possible.\n\nAdd Sprint, set start date, assign cards to it.\n",
+          "description": "Be able to group cards by sprints. \nSet sprint duration and automatic starting of new sprints\n\nMVP\n\nBoard level defines sprint duration.\n\nIf duration is set, sprint init is possible.\n\nAdd Sprint, set start date, assign cards to it.\n\n---\n\nThere should be a UI for sprints. On Project / Board edit\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 17,
@@ -272,7 +274,7 @@
           "points": 4,
           "card_number": 18,
           "created_at": "2025-10-11T18:42:39.943129Z",
-          "updated_at": "2025-10-11T18:44:54.114982Z"
+          "updated_at": "2025-10-11T19:52:50.287355Z"
         },
         {
           "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
@@ -314,7 +316,133 @@
           "points": 2,
           "card_number": 21,
           "created_at": "2025-10-11T19:25:07.465576Z",
-          "updated_at": "2025-10-11T19:25:26.875800Z"
+          "updated_at": "2025-10-11T21:19:20.961218Z"
+        },
+        {
+          "id": "27717d15-3e41-4558-8e6b-3bbdc7fe3762",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Hitting e on an item in the task list should open $EDITOR with that tasks description",
+          "description": "It would feel natural to me if the card description was opened when hitting the e button on an element in the cards list\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 21,
+          "due_date": null,
+          "points": 3,
+          "card_number": 22,
+          "created_at": "2025-10-11T19:50:58.400403Z",
+          "updated_at": "2025-10-11T21:44:24.678181Z"
+        },
+        {
+          "id": "76411161-8bcf-47a3-b917-cadc706c6079",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "When inputting in the dialogues. Text is cut when going out of bounds for the iput box",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 22,
+          "due_date": null,
+          "points": 3,
+          "card_number": 23,
+          "created_at": "2025-10-11T19:51:35.009507Z",
+          "updated_at": "2025-10-11T21:44:48.544417Z"
+        },
+        {
+          "id": "1c2f3096-823b-4eb7-9345-b80a4c5d8693",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add github ci",
+          "description": "In the stash somewhere there is a draft of CI\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 23,
+          "due_date": null,
+          "points": 4,
+          "card_number": 24,
+          "created_at": "2025-10-11T20:30:09.214394Z",
+          "updated_at": "2025-10-11T21:45:19.144896Z"
+        },
+        {
+          "id": "e3482cf7-c53a-4ce8-8c33-11e2cca3d87a",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add completed when time to task",
+          "description": "Add the date and time for when a task was marked as completed\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 24,
+          "due_date": null,
+          "points": 1,
+          "card_number": 25,
+          "created_at": "2025-10-11T20:53:06.269232Z",
+          "updated_at": "2025-10-11T21:45:30.599476Z"
+        },
+        {
+          "id": "5e247e41-efdf-43cc-aa0f-daf25830fd1c",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "When titles are too long. they don't fit the tasks list",
+          "description": "So for now we just cut them with ... at the in before they hit the wall\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 25,
+          "due_date": null,
+          "points": 2,
+          "card_number": 26,
+          "created_at": "2025-10-11T20:54:41.898524Z",
+          "updated_at": "2025-10-11T21:46:49.938657Z"
+        },
+        {
+          "id": "4cdf603d-2ba8-4bc0-9c19-a2a4531ccff6",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Refactor, hunt for abstractions",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 26,
+          "due_date": null,
+          "points": 4,
+          "card_number": 27,
+          "created_at": "2025-10-11T21:42:14.741535Z",
+          "updated_at": "2025-10-11T21:46:56.750936Z"
+        },
+        {
+          "id": "ed48cbd0-7488-4b61-afe5-71851ed565c0",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "When setting the priority, the card details are closed and the lists are shown",
+          "description": "This is apparently wrong\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 27,
+          "due_date": null,
+          "points": 4,
+          "card_number": 28,
+          "created_at": "2025-10-11T21:43:08.519830Z",
+          "updated_at": "2025-10-11T21:43:21.894906Z"
+        },
+        {
+          "id": "00a80b5e-f7c8-47e7-ba51-312a16a1618e",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Search in cards list",
+          "description": "Mvp, search by title use `/` to search\n\nLater for boards list also\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 28,
+          "due_date": null,
+          "points": 4,
+          "card_number": 29,
+          "created_at": "2025-10-11T21:45:54.321945Z",
+          "updated_at": "2025-10-11T21:47:04.856744Z"
+        },
+        {
+          "id": "72ffc5f8-df27-4dd5-bc13-36e5c105f367",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Vim Motions",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 29,
+          "due_date": null,
+          "points": 2,
+          "card_number": 30,
+          "created_at": "2025-10-11T21:56:16.454189Z",
+          "updated_at": "2025-10-11T22:25:21.168733Z"
         }
       ]
     }

@@ -10,7 +10,7 @@ A terminal-based kanban/project management tool inspired by [lazygit](https://gi
 - 💾 **File Persistence**: JSON import/export with auto-save support
 - ⌨️ **Keyboard-Driven**: Vim-like navigation and shortcuts
 - ✅ **Task Management**: Task completion tracking, priority levels, and story points
-- 📊 **Metadata**: Assign story points (1-5) with color-coded badges
+- 📊 **Metadata**: Assign story points (1-5)
 - 🔄 **Reproducible Builds**: Nix flakes for development environment
 
 ## Quick Start
@@ -77,7 +77,7 @@ cargo fmt
 
 ```bash
 kanban                # Launch interactive TUI
-kanban board.json     # Launch with import
+kanban boards.json    # Launch with import
 ```
 
 ### Keyboard Shortcuts
@@ -132,8 +132,6 @@ When providing a file path:
 - If file exists, boards are loaded on startup
 - If file doesn't exist, it's created with empty boards array: `{"boards":[]}`
 - Changes are automatically saved on exit (`q`)
-- Single board export: `{"boards": [...]}`  with one board
-- Multiple boards export: `{"boards": [...]}` with all boards
 
 ## Card Metadata
 
@@ -158,7 +156,7 @@ When editing titles or descriptions, Kanban opens an external editor. The editor
    - **Unix/Linux/macOS**: vi
    - **Windows**: notepad
 
-**Tip**: Set your preferred editor with `export EDITOR=nano` (or add to your shell profile)
+**Tip**: Set your preferred editor with `export EDITOR=vim` (or add to your shell profile)
 
 ## License
 

@@ -79,6 +79,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::ImportBoard => render_import_board_popup(app, frame),
                 AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
                 AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
+                AppMode::OrderCards => render_order_cards_popup(app, frame),
                 _ => {}
             }
         }
@@ -126,7 +127,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
         for (idx, board) in app.boards.iter().enumerate() {
             let is_selected = app.board_selection.get() == Some(idx);
             let is_active = app.active_board_index == Some(idx);
-            let is_focused = app.focus == Focus::Projects;
+            let is_focused = app.focus == Focus::Boards;
 
             let mut style = Style::default();
             let prefix;
@@ -150,7 +151,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
         }
     }
 
-    let is_focused = app.focus == Focus::Projects;
+    let is_focused = app.focus == Focus::Boards;
     let border_color = if is_focused {
         Color::Cyan
     } else {
@@ -195,17 +196,9 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     if let Some(idx) = board_idx {
         if let Some(board) = app.boards.get(idx) {
-            let board_tasks: Vec<_> = app
-                .cards
-                .iter()
-                .filter(|card| {
-                    app.columns
-                        .iter()
-                        .any(|col| col.id == card.column_id && col.board_id == board.id)
-                })
-                .collect();
+            let board_cards = app.get_sorted_board_cards(board.id);
 
-            if board_tasks.is_empty() {
+            if board_cards.is_empty() {
                 let message = if app.active_board_index.is_some() {
                     "  No tasks yet. Press 'n' to create one!"
                 } else {
@@ -216,10 +209,10 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     Style::default().fg(Color::Gray),
                 )));
             } else {
-                for (task_idx, task) in board_tasks.iter().enumerate() {
-                    let is_selected = app.card_selection.get() == Some(task_idx);
-                    let is_focused = app.focus == Focus::Tasks;
-                    let is_done = task.status == CardStatus::Done;
+                for (card_idx, card) in board_cards.iter().enumerate() {
+                    let is_selected = app.card_selection.get() == Some(card_idx);
+                    let is_focused = app.focus == Focus::Cards;
+                    let is_done = card.status == CardStatus::Done;
 
                     let (checkbox, text_color, text_modifier) = if is_done {
                         ("☑", Color::DarkGray, Modifier::CROSSED_OUT)
@@ -233,7 +226,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         style = style.bg(Color::Blue);
                     }
 
-                    let points_badge = if let Some(points) = task.points {
+                    let points_badge = if let Some(points) = card.points {
                         format!(" [{}]", points)
                     } else {
                         String::new()
@@ -241,11 +234,11 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
                     let line = if points_badge.is_empty() {
                         Line::from(Span::styled(
-                            format!("  {} {}", checkbox, task.title),
+                            format!("  {} {}", checkbox, card.title),
                             style,
                         ))
                     } else {
-                        let points_color = task
+                        let points_color = card
                             .points
                             .map(|p| match p {
                                 1 => Color::Cyan,
@@ -263,7 +256,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         }
 
                         Line::from(vec![
-                            Span::styled(format!("  {} {}", checkbox, task.title), style),
+                            Span::styled(format!("  {} {}", checkbox, card.title), style),
                             Span::styled(points_badge, points_style),
                         ])
                     };
@@ -279,7 +272,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
         )));
     }
 
-    let is_focused = app.focus == Focus::Tasks;
+    let is_focused = app.focus == Focus::Cards;
     let border_color = if is_focused {
         Color::Cyan
     } else {
@@ -298,7 +291,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | s: board settings | x: export | X: export all | i: import | c: toggle complete | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit project | s: project settings | x: export | X: export all | i: import | c: toggle complete | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateCard => "ESC: cancel | ENTER: confirm",
         AppMode::RenameBoard => "ESC: cancel | ENTER: confirm",
@@ -306,9 +299,9 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::ExportAll => "ESC: cancel | ENTER: export all",
         AppMode::ImportBoard => "ESC: cancel | j/k: navigate | ENTER/Space: import selected",
         AppMode::CardDetail => match app.card_focus {
-            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit title",
-            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit description",
-            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit points",
+            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit title",
+            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit description",
+            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit points",
         },
         AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm",
         AppMode::BoardDetail => match app.board_focus {
@@ -317,6 +310,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         },
         AppMode::BoardSettings => "q: quit | ESC: back | p: set branch prefix",
         AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)",
+        AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending",
     };
     let help = Paragraph::new(help_text)
         .style(Style::default().fg(Color::Gray))
@@ -337,20 +331,10 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
 }
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(task_idx) = app.active_card_index {
-        if let Some(board_idx) = app.active_board_index {
-            if let Some(board) = app.boards.get(board_idx) {
-                let board_tasks: Vec<_> = app
-                    .cards
-                    .iter()
-                    .filter(|card| {
-                        app.columns
-                            .iter()
-                            .any(|col| col.id == card.column_id && col.board_id == board.id)
-                    })
-                    .collect();
-
-                if let Some(task) = board_tasks.get(task_idx) {
+    if let Some(card_idx) = app.active_card_index {
+        if let Some(card) = app.cards.get(card_idx) {
+            if let Some(board_idx) = app.active_board_index {
+                if let Some(board) = app.boards.get(board_idx) {
                     let chunks = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints([
@@ -374,7 +358,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         })
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(title_border_color));
-                    let title = Paragraph::new(task.title.clone())
+                    let title = Paragraph::new(card.title.clone())
                         .style(
                             Style::default()
                                 .fg(Color::Yellow)
@@ -401,25 +385,25 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         Line::from(vec![
                             Span::styled("Priority: ", Style::default().fg(Color::Gray)),
                             Span::styled(
-                                format!("{:?}", task.priority),
+                                format!("{:?}", card.priority),
                                 Style::default().fg(Color::White),
                             ),
                             Span::raw("  "),
                             Span::styled("Status: ", Style::default().fg(Color::Gray)),
                             Span::styled(
-                                format!("{:?}", task.status),
+                                format!("{:?}", card.status),
                                 Style::default().fg(Color::White),
                             ),
                             Span::raw("  "),
                             Span::styled("Points: ", Style::default().fg(Color::Gray)),
                             Span::styled(
-                                task.points
+                                card.points
                                     .map(|p| p.to_string())
                                     .unwrap_or_else(|| "-".to_string()),
                                 Style::default().fg(Color::White),
                             ),
                         ]),
-                        Line::from(if let Some(due_date) = task.due_date {
+                        Line::from(if let Some(due_date) = card.due_date {
                             vec![
                                 Span::styled("Due: ", Style::default().fg(Color::Gray)),
                                 Span::styled(
@@ -436,7 +420,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     ];
 
                     let branch_name =
-                        task.branch_name(board, app.app_config.effective_default_prefix());
+                        card.branch_name(board, app.app_config.effective_default_prefix());
                     meta_lines.push(Line::from(vec![
                         Span::styled("Branch: ", Style::default().fg(Color::Gray)),
                         Span::styled(
@@ -463,7 +447,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         })
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(desc_border_color));
-                    let desc_text = if let Some(desc) = &task.description {
+                    let desc_text = if let Some(desc) = &card.description {
                         desc.clone()
                     } else {
                         "No description".to_string()
@@ -553,9 +537,9 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
             };
             let name_block = Block::default()
                 .title(if name_focused {
-                    "Board Name [1]"
+                    "Project Name [1]"
                 } else {
-                    "Board Name"
+                    "Project Name"
                 })
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(name_border_color));
@@ -646,7 +630,7 @@ fn render_board_settings_view(app: &App, frame: &mut Frame, area: Rect) {
                     ),
                 ]),
                 Line::from(vec![
-                    Span::styled("Next Card Number: ", Style::default().fg(Color::Gray)),
+                    Span::styled("Next Task Number: ", Style::default().fg(Color::Gray)),
                     Span::styled(
                         board.next_card_number.to_string(),
                         Style::default().fg(Color::White),
@@ -669,6 +653,83 @@ fn render_board_settings_view(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Set Branch Prefix", "Prefix (empty to clear):");
+}
+
+fn render_order_cards_popup(app: &App, frame: &mut Frame) {
+    use kanban_domain::{SortField, SortOrder};
+
+    let area = centered_rect(60, 50, frame.area());
+
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Order Tasks By")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner);
+
+    let label = Paragraph::new("Select sort field:").style(Style::default().fg(Color::Yellow));
+    frame.render_widget(label, chunks[0]);
+
+    let sort_fields = [
+        SortField::Points,
+        SortField::Priority,
+        SortField::CreatedAt,
+        SortField::UpdatedAt,
+        SortField::Status,
+        SortField::Default,
+    ];
+
+    let mut lines = vec![];
+    for (idx, field) in sort_fields.iter().enumerate() {
+        let is_selected = app.sort_field_selection.get() == Some(idx);
+        let is_active = app.current_sort_field == Some(*field);
+
+        let style = if is_selected {
+            Style::default().fg(Color::White).bg(Color::Blue)
+        } else if is_active {
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let prefix = if is_selected { "> " } else { "  " };
+        let field_name = match field {
+            SortField::Priority => "Priority",
+            SortField::Points => "Points",
+            SortField::CreatedAt => "Date Created",
+            SortField::UpdatedAt => "Date Updated",
+            SortField::Default => "Task Number",
+            SortField::Status => "Status",
+        };
+
+        let order_indicator = if is_active {
+            match app.current_sort_order {
+                Some(SortOrder::Ascending) => " (↑)",
+                Some(SortOrder::Descending) => " (↓)",
+                None => "",
+            }
+        } else {
+            ""
+        };
+
+        lines.push(Line::from(Span::styled(
+            format!("{}{}{}", prefix, field_name, order_indicator),
+            style,
+        )));
+    }
+    let list = Paragraph::new(lines);
+    frame.render_widget(list, chunks[1]);
 }
 
 fn render_input_popup(app: &App, frame: &mut Frame, title: &str, label: &str) {
