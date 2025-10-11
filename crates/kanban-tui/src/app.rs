@@ -42,7 +42,7 @@ pub struct App {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Focus {
-    Projects,
+    Boards,
     Cards,
 }
 
@@ -100,7 +100,7 @@ impl App {
             active_card_index: None,
             columns: Vec::new(),
             cards: Vec::new(),
-            focus: Focus::Projects,
+            focus: Focus::Boards,
             card_focus: CardFocus::Title,
             board_focus: BoardFocus::Name,
             import_files: Vec::new(),
@@ -145,7 +145,7 @@ impl App {
         match self.mode {
             AppMode::Normal => match key.code {
                 KeyCode::Char('n') => match self.focus {
-                    Focus::Projects => {
+                    Focus::Boards => {
                         self.mode = AppMode::CreateBoard;
                         self.input.clear();
                     }
@@ -157,7 +157,7 @@ impl App {
                     }
                 },
                 KeyCode::Char('r') => {
-                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
                         if let Some(board_idx) = self.board_selection.get() {
                             if let Some(board) = self.boards.get(board_idx) {
                                 self.input.set(board.name.clone());
@@ -167,18 +167,18 @@ impl App {
                     }
                 }
                 KeyCode::Char('e') => {
-                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
                         self.mode = AppMode::BoardDetail;
                         self.board_focus = BoardFocus::Name;
                     }
                 }
                 KeyCode::Char('s') => {
-                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
                         self.mode = AppMode::BoardSettings;
                     }
                 }
                 KeyCode::Char('x') => {
-                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
                         if let Some(board_idx) = self.board_selection.get() {
                             if let Some(board) = self.boards.get(board_idx) {
                                 let filename = format!(
@@ -193,7 +193,7 @@ impl App {
                     }
                 }
                 KeyCode::Char('X') => {
-                    if self.focus == Focus::Projects && !self.boards.is_empty() {
+                    if self.focus == Focus::Boards && !self.boards.is_empty() {
                         let filename = format!(
                             "kanban-all-{}.json",
                             chrono::Utc::now().format("%Y%m%d-%H%M%S")
@@ -203,7 +203,7 @@ impl App {
                     }
                 }
                 KeyCode::Char('i') => {
-                    if self.focus == Focus::Projects {
+                    if self.focus == Focus::Boards {
                         self.scan_import_files();
                         if !self.import_files.is_empty() {
                             self.import_selection.set(Some(0));
@@ -243,7 +243,7 @@ impl App {
                         }
                     }
                 }
-                KeyCode::Char('1') => self.focus = Focus::Projects,
+                KeyCode::Char('1') => self.focus = Focus::Boards,
                 KeyCode::Char('2') => {
                     if self.active_board_index.is_some() {
                         self.focus = Focus::Cards;
@@ -253,11 +253,11 @@ impl App {
                     if self.active_board_index.is_some() {
                         self.active_board_index = None;
                         self.card_selection.clear();
-                        self.focus = Focus::Projects;
+                        self.focus = Focus::Boards;
                     }
                 }
                 KeyCode::Char('j') | KeyCode::Down => match self.focus {
-                    Focus::Projects => {
+                    Focus::Boards => {
                         self.board_selection.next(self.boards.len());
                     }
                     Focus::Cards => {
@@ -270,7 +270,7 @@ impl App {
                     }
                 },
                 KeyCode::Char('k') | KeyCode::Up => match self.focus {
-                    Focus::Projects => {
+                    Focus::Boards => {
                         self.board_selection.prev();
                     }
                     Focus::Cards => {
@@ -278,7 +278,7 @@ impl App {
                     }
                 },
                 KeyCode::Enter | KeyCode::Char(' ') => match self.focus {
-                    Focus::Projects => {
+                    Focus::Boards => {
                         if self.board_selection.get().is_some() {
                             self.active_board_index = self.board_selection.get();
                             self.card_selection.clear();
@@ -644,7 +644,7 @@ impl App {
 
     fn create_board(&mut self) {
         let board = Board::new(self.input.as_str().to_string(), None);
-        tracing::info!("Creating project: {} (id: {})", board.name, board.id);
+        tracing::info!("Creating board: {} (id: {})", board.name, board.id);
         self.boards.push(board);
         let new_index = self.boards.len() - 1;
         self.board_selection.set(Some(new_index));
@@ -654,7 +654,7 @@ impl App {
         if let Some(idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get_mut(idx) {
                 board.update_name(self.input.as_str().to_string());
-                tracing::info!("Renamed project to: {}", board.name);
+                tracing::info!("Renamed board to: {}", board.name);
             }
         }
     }

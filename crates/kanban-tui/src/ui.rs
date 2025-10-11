@@ -127,7 +127,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
         for (idx, board) in app.boards.iter().enumerate() {
             let is_selected = app.board_selection.get() == Some(idx);
             let is_active = app.active_board_index == Some(idx);
-            let is_focused = app.focus == Focus::Projects;
+            let is_focused = app.focus == Focus::Boards;
 
             let mut style = Style::default();
             let prefix;
@@ -151,7 +151,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
         }
     }
 
-    let is_focused = app.focus == Focus::Projects;
+    let is_focused = app.focus == Focus::Boards;
     let border_color = if is_focused {
         Color::Cyan
     } else {
@@ -291,7 +291,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | s: board settings | x: export | X: export all | i: import | c: toggle complete | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit project | s: project settings | x: export | X: export all | i: import | c: toggle complete | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateCard => "ESC: cancel | ENTER: confirm",
         AppMode::RenameBoard => "ESC: cancel | ENTER: confirm",
@@ -299,9 +299,9 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::ExportAll => "ESC: cancel | ENTER: export all",
         AppMode::ImportBoard => "ESC: cancel | j/k: navigate | ENTER/Space: import selected",
         AppMode::CardDetail => match app.card_focus {
-            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit title",
-            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit description",
-            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit points",
+            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit title",
+            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit description",
+            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit points",
         },
         AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm",
         AppMode::BoardDetail => match app.board_focus {
@@ -537,9 +537,9 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
             };
             let name_block = Block::default()
                 .title(if name_focused {
-                    "Board Name [1]"
+                    "Project Name [1]"
                 } else {
-                    "Board Name"
+                    "Project Name"
                 })
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(name_border_color));
