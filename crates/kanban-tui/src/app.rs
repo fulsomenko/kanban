@@ -428,9 +428,6 @@ impl App {
                 KeyCode::Char('3') => {
                     self.card_focus = CardFocus::Description;
                 }
-                KeyCode::Char('b') => {
-                    self.assign_branch_to_card();
-                }
                 KeyCode::Char('y') => {
                     self.copy_branch_name();
                 }
@@ -598,7 +595,7 @@ impl App {
 
     fn create_task(&mut self) {
         if let Some(idx) = self.active_board_index {
-            if let Some(board) = self.boards.get(idx) {
+            if let Some(board) = self.boards.get_mut(idx) {
                 let column = self
                     .columns
                     .iter()
@@ -619,11 +616,12 @@ impl App {
                     .iter()
                     .filter(|c| c.column_id == column.id)
                     .count() as i32;
-                let card = Card::new(column.id, self.input.as_str().to_string(), position);
+                let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
+                let board_id = board.id;
                 tracing::info!("Creating task: {} (id: {})", card.title, card.id);
                 self.cards.push(card);
 
-                let task_count = self.get_board_task_count(board.id);
+                let task_count = self.get_board_task_count(board_id);
                 let new_task_index = task_count.saturating_sub(1);
                 self.card_selection.set(Some(new_task_index));
             }
@@ -1011,39 +1009,10 @@ impl App {
         Ok(())
     }
 
-    fn assign_branch_to_card(&mut self) {
-        if let Some(task_idx) = self.active_card_index {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get_mut(board_idx) {
-                    let board_tasks: Vec<_> = self
-                        .cards
-                        .iter()
-                        .filter(|card| {
-                            self.columns
-                                .iter()
-                                .any(|col| col.id == card.column_id && col.board_id == board.id)
-                        })
-                        .collect();
-
-                    if let Some(task) = board_tasks.get(task_idx) {
-                        let task_id = task.id;
-                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
-                            card.ensure_card_number(board);
-                            let branch_name = card
-                                .branch_name(board, self.app_config.effective_default_prefix())
-                                .unwrap_or_else(|| "unknown".to_string());
-                            tracing::info!("Assigned branch: {}", branch_name);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     fn copy_branch_name(&mut self) {
         if let Some(task_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get_mut(board_idx) {
+                if let Some(board) = self.boards.get(board_idx) {
                     let board_tasks: Vec<_> = self
                         .cards
                         .iter()
@@ -1055,18 +1024,12 @@ impl App {
                         .collect();
 
                     if let Some(task) = board_tasks.get(task_idx) {
-                        let task_id = task.id;
-                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
-                            card.ensure_card_number(board);
-                            if let Some(branch_name) =
-                                card.branch_name(board, self.app_config.effective_default_prefix())
-                            {
-                                if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
-                                    tracing::error!("Failed to copy to clipboard: {}", e);
-                                } else {
-                                    tracing::info!("Copied branch name: {}", branch_name);
-                                }
-                            }
+                        let branch_name =
+                            task.branch_name(board, self.app_config.effective_default_prefix());
+                        if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
+                            tracing::error!("Failed to copy to clipboard: {}", e);
+                        } else {
+                            tracing::info!("Copied branch name: {}", branch_name);
                         }
                     }
                 }
@@ -1077,7 +1040,7 @@ impl App {
     fn copy_git_checkout_command(&mut self) {
         if let Some(task_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get_mut(board_idx) {
+                if let Some(board) = self.boards.get(board_idx) {
                     let board_tasks: Vec<_> = self
                         .cards
                         .iter()
@@ -1089,19 +1052,14 @@ impl App {
                         .collect();
 
                     if let Some(task) = board_tasks.get(task_idx) {
-                        let task_id = task.id;
-                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
-                            card.ensure_card_number(board);
-                            if let Some(command) = card.git_checkout_command(
-                                board,
-                                self.app_config.effective_default_prefix(),
-                            ) {
-                                if let Err(e) = clipboard::copy_to_clipboard(&command) {
-                                    tracing::error!("Failed to copy to clipboard: {}", e);
-                                } else {
-                                    tracing::info!("Copied command: {}", command);
-                                }
-                            }
+                        let command = task.git_checkout_command(
+                            board,
+                            self.app_config.effective_default_prefix(),
+                        );
+                        if let Err(e) = clipboard::copy_to_clipboard(&command) {
+                            tracing::error!("Failed to copy to clipboard: {}", e);
+                        } else {
+                            tracing::info!("Copied command: {}", command);
                         }
                     }
                 }
