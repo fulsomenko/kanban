@@ -6,11 +6,11 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 27,
-        "task_sort_field": "UpdatedAt",
-        "task_sort_order": "Descending",
+        "next_card_number": 30,
+        "task_sort_field": "Points",
+        "task_sort_order": "Ascending",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T21:26:04.095776Z"
+        "updated_at": "2025-10-11T21:45:54.321947Z"
       },
       "columns": [
         {
@@ -322,15 +322,15 @@
           "id": "27717d15-3e41-4558-8e6b-3bbdc7fe3762",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Hitting e on an item in the task list should open $EDITOR with that tasks description",
-          "description": null,
+          "description": "It would feel natural to me if the card description was opened when hitting the e button on an element in the cards list\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 21,
           "due_date": null,
-          "points": null,
+          "points": 3,
           "card_number": 22,
           "created_at": "2025-10-11T19:50:58.400403Z",
-          "updated_at": "2025-10-11T21:18:30.761425Z"
+          "updated_at": "2025-10-11T21:44:24.678181Z"
         },
         {
           "id": "76411161-8bcf-47a3-b917-cadc706c6079",
@@ -341,24 +341,24 @@
           "status": "Todo",
           "position": 22,
           "due_date": null,
-          "points": null,
+          "points": 3,
           "card_number": 23,
           "created_at": "2025-10-11T19:51:35.009507Z",
-          "updated_at": "2025-10-11T20:30:16.730121Z"
+          "updated_at": "2025-10-11T21:44:48.544417Z"
         },
         {
           "id": "1c2f3096-823b-4eb7-9345-b80a4c5d8693",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Add github ci",
-          "description": null,
+          "description": "In the stash somewhere there is a draft of CI\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 23,
           "due_date": null,
-          "points": null,
+          "points": 4,
           "card_number": 24,
           "created_at": "2025-10-11T20:30:09.214394Z",
-          "updated_at": "2025-10-11T20:30:13.695354Z"
+          "updated_at": "2025-10-11T21:45:19.144896Z"
         },
         {
           "id": "e3482cf7-c53a-4ce8-8c33-11e2cca3d87a",
@@ -369,10 +369,10 @@
           "status": "Todo",
           "position": 24,
           "due_date": null,
-          "points": null,
+          "points": 1,
           "card_number": 25,
           "created_at": "2025-10-11T20:53:06.269232Z",
-          "updated_at": "2025-10-11T20:53:45.535859Z"
+          "updated_at": "2025-10-11T21:45:30.599476Z"
         },
         {
           "id": "5e247e41-efdf-43cc-aa0f-daf25830fd1c",
@@ -383,10 +383,52 @@
           "status": "Todo",
           "position": 25,
           "due_date": null,
-          "points": null,
+          "points": 2,
           "card_number": 26,
           "created_at": "2025-10-11T20:54:41.898524Z",
-          "updated_at": "2025-10-11T20:55:07.636242Z"
+          "updated_at": "2025-10-11T21:46:49.938657Z"
+        },
+        {
+          "id": "4cdf603d-2ba8-4bc0-9c19-a2a4531ccff6",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Refactor, hunt for abstractions",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 26,
+          "due_date": null,
+          "points": 4,
+          "card_number": 27,
+          "created_at": "2025-10-11T21:42:14.741535Z",
+          "updated_at": "2025-10-11T21:46:56.750936Z"
+        },
+        {
+          "id": "ed48cbd0-7488-4b61-afe5-71851ed565c0",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "When setting the priority, the card details are closed and the lists are shown",
+          "description": "This is apparently wrong\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 27,
+          "due_date": null,
+          "points": 4,
+          "card_number": 28,
+          "created_at": "2025-10-11T21:43:08.519830Z",
+          "updated_at": "2025-10-11T21:43:21.894906Z"
+        },
+        {
+          "id": "00a80b5e-f7c8-47e7-ba51-312a16a1618e",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Search in cards list",
+          "description": "Mvp, search by title use `/` to search\n\nLater for boards list also\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 28,
+          "due_date": null,
+          "points": 4,
+          "card_number": 29,
+          "created_at": "2025-10-11T21:45:54.321945Z",
+          "updated_at": "2025-10-11T21:47:04.856744Z"
         }
       ]
     }
