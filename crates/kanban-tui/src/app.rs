@@ -703,6 +703,10 @@ impl App {
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
+        let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
+        let sort_field = board.task_sort_field;
+        let sort_order = board.task_sort_order;
+
         let mut cards: Vec<&Card> = self
             .cards
             .iter()
@@ -713,10 +717,9 @@ impl App {
             })
             .collect();
 
-        if let (Some(field), Some(order)) = (self.current_sort_field, self.current_sort_order) {
-            cards.sort_by(|a, b| {
+        cards.sort_by(|a, b| {
                 use std::cmp::Ordering;
-                let cmp = match field {
+                let cmp = match sort_field {
                     SortField::Points => match (a.points, b.points) {
                         (Some(ap), Some(bp)) => ap.cmp(&bp),
                         (Some(_), None) => Ordering::Less,
@@ -758,12 +761,11 @@ impl App {
                     SortField::Default => a.card_number.cmp(&b.card_number),
                 };
 
-                match order {
+                match sort_order {
                     SortOrder::Ascending => cmp,
                     SortOrder::Descending => cmp.reverse(),
                 }
             });
-        }
 
         cards
     }
