@@ -180,7 +180,7 @@
           "id": "6a0cbe1e-a05e-4aca-bd53-f0057215d671",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Add order tasks lists by",
-          "description": "Order tasks by\n\n- Points\n- Priority\n- Date created\n- Date due\n- Status\n\n",
+          "description": "Order tasks by\n\n- Points\n- Priority\n- Date created\n- Date due\n- Date updated\n- Status\n\nMVP\n---\n\nI think in the tasks panel. hit o (for order or organize) and then are presented with a dialogue where can choose one of the above options.\n\nThe dialogue should use the same selection mechanism as the projects and tasks lists do.\n\nAfter one of the options have been selected. The task list should be ordered according to the chosen option.\n\nFor now we leave out Date due from selection as we have not added this feature yet.\n\nOrder can be descending or ascending. a for ascending and d for descending after selecting an item. Taking suggestions on UX here..\n\n---\n\nFor the future. Keep in mind that I would also like to order the projects panel in the same way as the tasks panel but along a shorter list of options\n\n- Name\n- Date created\n- Date updated\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 11,
@@ -188,7 +188,7 @@
           "points": 2,
           "card_number": 13,
           "created_at": "2025-10-10T23:01:18.553586Z",
-          "updated_at": "2025-10-11T07:58:56.105304Z"
+          "updated_at": "2025-10-11T19:49:17.985715Z"
         },
         {
           "id": "9e8f918f-3fde-4847-aca8-0ab7646256a8",
@@ -252,13 +252,13 @@
           "title": "Give cards ID from the beginning",
           "description": "No need to explicitly generate IDS for cards.\n\nWe just give them IDs immediately\n",
           "priority": "Medium",
-          "status": "Todo",
+          "status": "Done",
           "position": 16,
           "due_date": null,
           "points": 1,
           "card_number": 17,
           "created_at": "2025-10-11T18:39:14.248330Z",
-          "updated_at": "2025-10-11T19:11:05.358308Z"
+          "updated_at": "2025-10-11T19:43:05.716699Z"
         },
         {
           "id": "1c0b1752-53f1-4240-be75-0706662156df",
