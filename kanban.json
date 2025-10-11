@@ -278,7 +278,7 @@
           "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Link to pull request",
-          "description": "If a pull request is open for a card. Open a link to that pull\n",
+          "description": "If a pull request is open for a card. Open a link to that pull\n\nshow if a card has a pull request open (or in draft in the task list)\n\nExamples\n\nPR opem\n```\nA task name - [PR] (green)\n```\n\nDraft\n```\nA task name - [PR] (greyed out)\n```\n---\n\nI am getting the feeling that this would depend on having configuration for collaborative version control per board\n\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 18,
@@ -286,7 +286,7 @@
           "points": 3,
           "card_number": null,
           "created_at": "2025-10-11T18:45:47.488818Z",
-          "updated_at": "2025-10-11T18:46:48.682806Z"
+          "updated_at": "2025-10-11T19:01:45.403042Z"
         }
       ]
     }
