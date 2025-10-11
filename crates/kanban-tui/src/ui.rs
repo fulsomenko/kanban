@@ -196,9 +196,9 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     if let Some(idx) = board_idx {
         if let Some(board) = app.boards.get(idx) {
-            let board_tasks = app.get_sorted_board_cards(board.id);
+            let board_cards = app.get_sorted_board_cards(board.id);
 
-            if board_tasks.is_empty() {
+            if board_cards.is_empty() {
                 let message = if app.active_board_index.is_some() {
                     "  No tasks yet. Press 'n' to create one!"
                 } else {
@@ -209,7 +209,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     Style::default().fg(Color::Gray),
                 )));
             } else {
-                for (card_idx, card) in board_tasks.iter().enumerate() {
+                for (card_idx, card) in board_cards.iter().enumerate() {
                     let is_selected = app.card_selection.get() == Some(card_idx);
                     let is_focused = app.focus == Focus::Tasks;
                     let is_done = card.status == CardStatus::Done;
