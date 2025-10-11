@@ -12,7 +12,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, KanbanResult};
-use kanban_domain::{Board, Card, CardStatus, Column};
+use kanban_domain::{Board, Card, CardStatus, Column, SortField, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use serde::Serialize;
 use std::io;
@@ -35,6 +35,9 @@ pub struct App {
     pub import_selection: SelectionState,
     pub save_file: Option<String>,
     pub app_config: AppConfig,
+    pub sort_field_selection: SelectionState,
+    pub current_sort_field: Option<SortField>,
+    pub current_sort_order: Option<SortOrder>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +83,7 @@ pub enum AppMode {
     ImportBoard,
     SetCardPoints,
     SetBranchPrefix,
+    OrderTasks,
 }
 
 impl App {
@@ -103,6 +107,9 @@ impl App {
             import_selection: SelectionState::new(),
             save_file: save_file.clone(),
             app_config,
+            sort_field_selection: SelectionState::new(),
+            current_sort_field: None,
+            current_sort_order: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -209,6 +216,12 @@ impl App {
                         self.toggle_card_completion();
                     }
                 }
+                KeyCode::Char('o') => {
+                    if self.focus == Focus::Tasks && self.active_board_index.is_some() {
+                        self.sort_field_selection.set(Some(0));
+                        self.mode = AppMode::OrderTasks;
+                    }
+                }
                 KeyCode::Char('1') => self.focus = Focus::Projects,
                 KeyCode::Char('2') => {
                     if self.active_board_index.is_some() {
@@ -251,6 +264,9 @@ impl App {
 
                             if let Some(board_idx) = self.active_board_index {
                                 if let Some(board) = self.boards.get(board_idx) {
+                                    self.current_sort_field = Some(board.task_sort_field);
+                                    self.current_sort_order = Some(board.task_sort_order);
+
                                     let task_count = self.get_board_task_count(board.id);
                                     if task_count > 0 {
                                         self.card_selection.set(Some(0));
@@ -536,6 +552,51 @@ impl App {
                 }
                 DialogAction::None => {}
             },
+            AppMode::OrderTasks => match key.code {
+                KeyCode::Esc => {
+                    self.mode = AppMode::Normal;
+                    self.sort_field_selection.clear();
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.sort_field_selection.next(6);
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.sort_field_selection.prev();
+                }
+                KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('a') | KeyCode::Char('d') => {
+                    if let Some(field_idx) = self.sort_field_selection.get() {
+                        let field = match field_idx {
+                            0 => SortField::Points,
+                            1 => SortField::Priority,
+                            2 => SortField::CreatedAt,
+                            3 => SortField::UpdatedAt,
+                            4 => SortField::Status,
+                            5 => SortField::Default,
+                            _ => return should_restart_events,
+                        };
+
+                        let order = match key.code {
+                            KeyCode::Char('d') => SortOrder::Descending,
+                            _ => SortOrder::Ascending,
+                        };
+
+                        self.current_sort_field = Some(field);
+                        self.current_sort_order = Some(order);
+
+                        if let Some(board_idx) = self.active_board_index {
+                            if let Some(board) = self.boards.get_mut(board_idx) {
+                                board.update_task_sort(field, order);
+                            }
+                        }
+
+                        self.mode = AppMode::Normal;
+                        self.sort_field_selection.clear();
+
+                        tracing::info!("Sorting by {:?} ({:?})", field, order);
+                    }
+                }
+                _ => {}
+            },
         }
         should_restart_events
     }
@@ -637,6 +698,72 @@ impl App {
                     .any(|col| col.id == card.column_id && col.board_id == board_id)
             })
             .count()
+    }
+
+    pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
+        let mut cards: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|card| {
+                self.columns
+                    .iter()
+                    .any(|col| col.id == card.column_id && col.board_id == board_id)
+            })
+            .collect();
+
+        if let (Some(field), Some(order)) = (self.current_sort_field, self.current_sort_order) {
+            cards.sort_by(|a, b| {
+                use std::cmp::Ordering;
+                let cmp = match field {
+                    SortField::Points => match (a.points, b.points) {
+                        (Some(ap), Some(bp)) => ap.cmp(&bp),
+                        (Some(_), None) => Ordering::Less,
+                        (None, Some(_)) => Ordering::Greater,
+                        (None, None) => Ordering::Equal,
+                    },
+                    SortField::Priority => {
+                        let a_val = match a.priority {
+                            kanban_domain::CardPriority::Critical => 3,
+                            kanban_domain::CardPriority::High => 2,
+                            kanban_domain::CardPriority::Medium => 1,
+                            kanban_domain::CardPriority::Low => 0,
+                        };
+                        let b_val = match b.priority {
+                            kanban_domain::CardPriority::Critical => 3,
+                            kanban_domain::CardPriority::High => 2,
+                            kanban_domain::CardPriority::Medium => 1,
+                            kanban_domain::CardPriority::Low => 0,
+                        };
+                        a_val.cmp(&b_val)
+                    }
+                    SortField::CreatedAt => a.created_at.cmp(&b.created_at),
+                    SortField::UpdatedAt => a.updated_at.cmp(&b.updated_at),
+                    SortField::Status => {
+                        let a_val = match a.status {
+                            CardStatus::Done => 3,
+                            CardStatus::InProgress => 2,
+                            CardStatus::Blocked => 1,
+                            CardStatus::Todo => 0,
+                        };
+                        let b_val = match b.status {
+                            CardStatus::Done => 3,
+                            CardStatus::InProgress => 2,
+                            CardStatus::Blocked => 1,
+                            CardStatus::Todo => 0,
+                        };
+                        a_val.cmp(&b_val)
+                    }
+                    SortField::Default => a.card_number.cmp(&b.card_number),
+                };
+
+                match order {
+                    SortOrder::Ascending => cmp,
+                    SortOrder::Descending => cmp.reverse(),
+                }
+            });
+        }
+
+        cards
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
