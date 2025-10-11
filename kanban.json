@@ -6,11 +6,11 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 26,
+        "next_card_number": 27,
         "task_sort_field": "Priority",
         "task_sort_order": "Ascending",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T20:53:06.269236Z"
+        "updated_at": "2025-10-11T20:54:41.898529Z"
       },
       "columns": [
         {
@@ -364,7 +364,7 @@
           "id": "e3482cf7-c53a-4ce8-8c33-11e2cca3d87a",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Add completed when time to task",
-          "description": null,
+          "description": "Add the date and time for when a task was marked as completed\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 24,
@@ -372,7 +372,21 @@
           "points": null,
           "card_number": 25,
           "created_at": "2025-10-11T20:53:06.269232Z",
-          "updated_at": "2025-10-11T20:53:06.269232Z"
+          "updated_at": "2025-10-11T20:53:45.535859Z"
+        },
+        {
+          "id": "5e247e41-efdf-43cc-aa0f-daf25830fd1c",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "When titles are too long. they don't fit the tasks list",
+          "description": "So for now we just cut them with ... at the in before they hit the wall\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 25,
+          "due_date": null,
+          "points": null,
+          "card_number": 26,
+          "created_at": "2025-10-11T20:54:41.898524Z",
+          "updated_at": "2025-10-11T20:55:07.636242Z"
         }
       ]
     }
