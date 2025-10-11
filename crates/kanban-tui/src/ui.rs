@@ -79,7 +79,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::ImportBoard => render_import_board_popup(app, frame),
                 AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
                 AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
-                AppMode::OrderTasks => render_order_tasks_popup(app, frame),
+                AppMode::OrderCards => render_order_cards_popup(app, frame),
                 _ => {}
             }
         }
@@ -211,7 +211,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
             } else {
                 for (card_idx, card) in board_cards.iter().enumerate() {
                     let is_selected = app.card_selection.get() == Some(card_idx);
-                    let is_focused = app.focus == Focus::Tasks;
+                    let is_focused = app.focus == Focus::Cards;
                     let is_done = card.status == CardStatus::Done;
 
                     let (checkbox, text_color, text_modifier) = if is_done {
@@ -272,7 +272,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
         )));
     }
 
-    let is_focused = app.focus == Focus::Tasks;
+    let is_focused = app.focus == Focus::Cards;
     let border_color = if is_focused {
         Color::Cyan
     } else {
@@ -310,7 +310,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         },
         AppMode::BoardSettings => "q: quit | ESC: back | p: set branch prefix",
         AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)",
-        AppMode::OrderTasks => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending",
+        AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending",
     };
     let help = Paragraph::new(help_text)
         .style(Style::default().fg(Color::Gray))
@@ -655,7 +655,7 @@ fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Set Branch Prefix", "Prefix (empty to clear):");
 }
 
-fn render_order_tasks_popup(app: &App, frame: &mut Frame) {
+fn render_order_cards_popup(app: &App, frame: &mut Frame) {
     use kanban_domain::{SortField, SortOrder};
 
     let area = centered_rect(60, 50, frame.area());

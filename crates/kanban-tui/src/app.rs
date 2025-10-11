@@ -43,7 +43,7 @@ pub struct App {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Focus {
     Projects,
-    Tasks,
+    Cards,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,7 +83,7 @@ pub enum AppMode {
     ImportBoard,
     SetCardPoints,
     SetBranchPrefix,
-    OrderTasks,
+    OrderCards,
 }
 
 impl App {
@@ -149,7 +149,7 @@ impl App {
                         self.mode = AppMode::CreateBoard;
                         self.input.clear();
                     }
-                    Focus::Tasks => {
+                    Focus::Cards => {
                         if self.active_board_index.is_some() {
                             self.mode = AppMode::CreateCard;
                             self.input.clear();
@@ -212,18 +212,18 @@ impl App {
                     }
                 }
                 KeyCode::Char('c') => {
-                    if self.focus == Focus::Tasks && self.card_selection.get().is_some() {
+                    if self.focus == Focus::Cards && self.card_selection.get().is_some() {
                         self.toggle_card_completion();
                     }
                 }
                 KeyCode::Char('o') => {
-                    if self.focus == Focus::Tasks && self.active_board_index.is_some() {
+                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
                         self.sort_field_selection.set(Some(0));
-                        self.mode = AppMode::OrderTasks;
+                        self.mode = AppMode::OrderCards;
                     }
                 }
                 KeyCode::Char('O') => {
-                    if self.focus == Focus::Tasks && self.active_board_index.is_some() {
+                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
                         if let Some(current_order) = self.current_sort_order {
                             let new_order = match current_order {
                                 SortOrder::Ascending => SortOrder::Descending,
@@ -246,7 +246,7 @@ impl App {
                 KeyCode::Char('1') => self.focus = Focus::Projects,
                 KeyCode::Char('2') => {
                     if self.active_board_index.is_some() {
-                        self.focus = Focus::Tasks;
+                        self.focus = Focus::Cards;
                     }
                 }
                 KeyCode::Esc => {
@@ -260,7 +260,7 @@ impl App {
                     Focus::Projects => {
                         self.board_selection.next(self.boards.len());
                     }
-                    Focus::Tasks => {
+                    Focus::Cards => {
                         if let Some(board_idx) = self.active_board_index {
                             if let Some(board) = self.boards.get(board_idx) {
                                 let card_count = self.get_board_card_count(board.id);
@@ -273,7 +273,7 @@ impl App {
                     Focus::Projects => {
                         self.board_selection.prev();
                     }
-                    Focus::Tasks => {
+                    Focus::Cards => {
                         self.card_selection.prev();
                     }
                 },
@@ -295,10 +295,10 @@ impl App {
                                 }
                             }
 
-                            self.focus = Focus::Tasks;
+                            self.focus = Focus::Cards;
                         }
                     }
-                    Focus::Tasks => {
+                    Focus::Cards => {
                         if let Some(sorted_idx) = self.card_selection.get() {
                             if let Some(board_idx) = self.active_board_index {
                                 if let Some(board) = self.boards.get(board_idx) {
@@ -331,7 +331,7 @@ impl App {
             },
             AppMode::CreateCard => match handle_dialog_input(&mut self.input, key.code) {
                 DialogAction::Confirm => {
-                    self.create_task();
+                    self.create_card();
                     self.mode = AppMode::Normal;
                     self.input.clear();
                 }
@@ -583,7 +583,7 @@ impl App {
                 }
                 DialogAction::None => {}
             },
-            AppMode::OrderTasks => match key.code {
+            AppMode::OrderCards => match key.code {
                 KeyCode::Esc => {
                     self.mode = AppMode::Normal;
                     self.sort_field_selection.clear();
@@ -687,7 +687,7 @@ impl App {
         }
     }
 
-    fn create_task(&mut self) {
+    fn create_card(&mut self) {
         if let Some(idx) = self.active_board_index {
             if let Some(board) = self.boards.get_mut(idx) {
                 let column = self
