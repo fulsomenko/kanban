@@ -6,9 +6,9 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 3,
+        "next_card_number": 4,
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T08:00:14.613927Z"
+        "updated_at": "2025-10-11T18:48:48.962877Z"
       },
       "columns": [
         {
@@ -228,9 +228,9 @@
           "position": 14,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 3,
           "created_at": "2025-10-11T18:36:43.972262Z",
-          "updated_at": "2025-10-11T18:37:53.466503Z"
+          "updated_at": "2025-10-11T18:51:19.051133Z"
         },
         {
           "id": "a189ef1a-903c-4c43-924e-2194562237f6",
