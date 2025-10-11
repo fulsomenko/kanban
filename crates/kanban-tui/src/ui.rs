@@ -630,7 +630,7 @@ fn render_board_settings_view(app: &App, frame: &mut Frame, area: Rect) {
                     ),
                 ]),
                 Line::from(vec![
-                    Span::styled("Next Card Number: ", Style::default().fg(Color::Gray)),
+                    Span::styled("Next Task Number: ", Style::default().fg(Color::Gray)),
                     Span::styled(
                         board.next_card_number.to_string(),
                         Style::default().fg(Color::White),
