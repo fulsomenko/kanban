@@ -711,8 +711,8 @@ fn render_order_tasks_popup(app: &App, frame: &mut Frame) {
             SortField::Priority => "Priority",
             SortField::CreatedAt => "Date Created",
             SortField::UpdatedAt => "Date Updated",
+            SortField::Default => "Task Number",
             SortField::Status => "Status",
-            SortField::Default => "Default (Task Number)",
         };
 
         let order_indicator = if is_active {
