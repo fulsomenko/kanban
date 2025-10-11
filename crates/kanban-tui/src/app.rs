@@ -1,4 +1,5 @@
 use crate::{
+    clipboard,
     dialog::{handle_dialog_input, DialogAction},
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
@@ -10,7 +11,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::KanbanResult;
+use kanban_core::{AppConfig, KanbanResult};
 use kanban_domain::{Board, Card, CardStatus, Column};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use serde::Serialize;
@@ -33,6 +34,7 @@ pub struct App {
     pub import_files: Vec<String>,
     pub import_selection: SelectionState,
     pub save_file: Option<String>,
+    pub app_config: AppConfig,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,14 +74,17 @@ pub enum AppMode {
     CardDetail,
     RenameBoard,
     BoardDetail,
+    BoardSettings,
     ExportBoard,
     ExportAll,
     ImportBoard,
     SetCardPoints,
+    SetBranchPrefix,
 }
 
 impl App {
     pub fn new(save_file: Option<String>) -> Self {
+        let app_config = AppConfig::load();
         let mut app = Self {
             should_quit: false,
             mode: AppMode::Normal,
@@ -97,6 +102,7 @@ impl App {
             import_files: Vec::new(),
             import_selection: SelectionState::new(),
             save_file: save_file.clone(),
+            app_config,
         };
 
         if let Some(ref filename) = save_file {
@@ -157,6 +163,11 @@ impl App {
                     if self.focus == Focus::Projects && self.board_selection.get().is_some() {
                         self.mode = AppMode::BoardDetail;
                         self.board_focus = BoardFocus::Name;
+                    }
+                }
+                KeyCode::Char('s') => {
+                    if self.focus == Focus::Projects && self.board_selection.get().is_some() {
+                        self.mode = AppMode::BoardSettings;
                     }
                 }
                 KeyCode::Char('x') => {
@@ -417,6 +428,15 @@ impl App {
                 KeyCode::Char('3') => {
                     self.card_focus = CardFocus::Description;
                 }
+                KeyCode::Char('b') => {
+                    self.assign_branch_to_card();
+                }
+                KeyCode::Char('y') => {
+                    self.copy_branch_name();
+                }
+                KeyCode::Char('Y') => {
+                    self.copy_git_checkout_command();
+                }
                 KeyCode::Char('e') => match self.card_focus {
                     CardFocus::Title => {
                         if let Err(e) =
@@ -471,6 +491,53 @@ impl App {
                     }
                 },
                 _ => {}
+            },
+            AppMode::BoardSettings => match key.code {
+                KeyCode::Esc => {
+                    self.mode = AppMode::Normal;
+                }
+                KeyCode::Char('p') => {
+                    if let Some(board_idx) = self.board_selection.get() {
+                        if let Some(board) = self.boards.get(board_idx) {
+                            let current_prefix =
+                                board.branch_prefix.clone().unwrap_or_else(String::new);
+                            self.input.set(current_prefix);
+                            self.mode = AppMode::SetBranchPrefix;
+                        }
+                    }
+                }
+                _ => {}
+            },
+            AppMode::SetBranchPrefix => match handle_dialog_input(&mut self.input, key.code) {
+                DialogAction::Confirm => {
+                    let prefix_str = self.input.as_str().trim();
+                    if prefix_str.is_empty() {
+                        if let Some(board_idx) = self.board_selection.get() {
+                            if let Some(board) = self.boards.get_mut(board_idx) {
+                                board.update_branch_prefix(None);
+                                tracing::info!("Cleared branch prefix");
+                            }
+                        }
+                    } else if Card::validate_branch_prefix(prefix_str) {
+                        if let Some(board_idx) = self.board_selection.get() {
+                            if let Some(board) = self.boards.get_mut(board_idx) {
+                                board.update_branch_prefix(Some(prefix_str.to_string()));
+                                tracing::info!("Set branch prefix to: {}", prefix_str);
+                            }
+                        }
+                    } else {
+                        tracing::error!(
+                            "Invalid prefix: use alphanumeric, hyphens, underscores only"
+                        );
+                    }
+                    self.mode = AppMode::BoardSettings;
+                    self.input.clear();
+                }
+                DialogAction::Cancel => {
+                    self.mode = AppMode::BoardSettings;
+                    self.input.clear();
+                }
+                DialogAction::None => {}
             },
         }
         should_restart_events
@@ -942,6 +1009,104 @@ impl App {
 
         self.board_selection.set(Some(first_new_index));
         Ok(())
+    }
+
+    fn assign_branch_to_card(&mut self) {
+        if let Some(task_idx) = self.active_card_index {
+            if let Some(board_idx) = self.active_board_index {
+                if let Some(board) = self.boards.get_mut(board_idx) {
+                    let board_tasks: Vec<_> = self
+                        .cards
+                        .iter()
+                        .filter(|card| {
+                            self.columns
+                                .iter()
+                                .any(|col| col.id == card.column_id && col.board_id == board.id)
+                        })
+                        .collect();
+
+                    if let Some(task) = board_tasks.get(task_idx) {
+                        let task_id = task.id;
+                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                            card.ensure_card_number(board);
+                            let branch_name = card
+                                .branch_name(board, self.app_config.effective_default_prefix())
+                                .unwrap_or_else(|| "unknown".to_string());
+                            tracing::info!("Assigned branch: {}", branch_name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn copy_branch_name(&mut self) {
+        if let Some(task_idx) = self.active_card_index {
+            if let Some(board_idx) = self.active_board_index {
+                if let Some(board) = self.boards.get_mut(board_idx) {
+                    let board_tasks: Vec<_> = self
+                        .cards
+                        .iter()
+                        .filter(|card| {
+                            self.columns
+                                .iter()
+                                .any(|col| col.id == card.column_id && col.board_id == board.id)
+                        })
+                        .collect();
+
+                    if let Some(task) = board_tasks.get(task_idx) {
+                        let task_id = task.id;
+                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                            card.ensure_card_number(board);
+                            if let Some(branch_name) =
+                                card.branch_name(board, self.app_config.effective_default_prefix())
+                            {
+                                if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
+                                    tracing::error!("Failed to copy to clipboard: {}", e);
+                                } else {
+                                    tracing::info!("Copied branch name: {}", branch_name);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn copy_git_checkout_command(&mut self) {
+        if let Some(task_idx) = self.active_card_index {
+            if let Some(board_idx) = self.active_board_index {
+                if let Some(board) = self.boards.get_mut(board_idx) {
+                    let board_tasks: Vec<_> = self
+                        .cards
+                        .iter()
+                        .filter(|card| {
+                            self.columns
+                                .iter()
+                                .any(|col| col.id == card.column_id && col.board_id == board.id)
+                        })
+                        .collect();
+
+                    if let Some(task) = board_tasks.get(task_idx) {
+                        let task_id = task.id;
+                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                            card.ensure_card_number(board);
+                            if let Some(command) = card.git_checkout_command(
+                                board,
+                                self.app_config.effective_default_prefix(),
+                            ) {
+                                if let Err(e) = clipboard::copy_to_clipboard(&command) {
+                                    tracing::error!("Failed to copy to clipboard: {}", e);
+                                } else {
+                                    tracing::info!("Copied command: {}", command);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

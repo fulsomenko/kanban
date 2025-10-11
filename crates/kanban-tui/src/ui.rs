@@ -38,6 +38,24 @@ pub fn render(app: &App, frame: &mut Frame) {
             render_board_detail_view(app, frame, chunks[1]);
             render_footer(app, frame, chunks[2]);
         }
+        AppMode::BoardSettings => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3),
+                    Constraint::Min(0),
+                    Constraint::Length(3),
+                ])
+                .split(frame.area());
+
+            render_header(frame, chunks[0]);
+            render_board_settings_view(app, frame, chunks[1]);
+            render_footer(app, frame, chunks[2]);
+
+            if app.mode == AppMode::SetBranchPrefix {
+                render_set_branch_prefix_popup(app, frame);
+            }
+        }
         _ => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -60,6 +78,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::ExportAll => render_export_all_popup(app, frame),
                 AppMode::ImportBoard => render_import_board_popup(app, frame),
                 AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
+                AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
                 _ => {}
             }
         }
@@ -279,7 +298,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | x: export | X: export all | i: import | c: toggle complete | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit board | s: board settings | x: export | X: export all | i: import | c: toggle complete | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateCard => "ESC: cancel | ENTER: confirm",
         AppMode::RenameBoard => "ESC: cancel | ENTER: confirm",
@@ -287,15 +306,17 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::ExportAll => "ESC: cancel | ENTER: export all",
         AppMode::ImportBoard => "ESC: cancel | j/k: navigate | ENTER/Space: import selected",
         AppMode::CardDetail => match app.card_focus {
-            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | e: edit title",
-            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | e: edit description",
-            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | e: edit points",
+            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit title",
+            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit description",
+            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | b: assign branch | y: copy branch | Y: copy git cmd | e: edit points",
         },
         AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm",
         AppMode::BoardDetail => match app.board_focus {
             BoardFocus::Name => "q: quit | ESC: back | 1/2: select panel | e: edit name",
             BoardFocus::Description => "q: quit | ESC: back | 1/2: select panel | e: edit description",
         },
+        AppMode::BoardSettings => "q: quit | ESC: back | p: set branch prefix",
+        AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)",
     };
     let help = Paragraph::new(help_text)
         .style(Style::default().fg(Color::Gray))
@@ -376,7 +397,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         })
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(meta_border_color));
-                    let meta_lines = vec![
+                    let mut meta_lines = vec![
                         Line::from(vec![
                             Span::styled("Priority: ", Style::default().fg(Color::Gray)),
                             Span::styled(
@@ -413,6 +434,20 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             )]
                         }),
                     ];
+
+                    if let Some(branch_name) =
+                        task.branch_name(board, app.app_config.effective_default_prefix())
+                    {
+                        meta_lines.push(Line::from(vec![
+                            Span::styled("Branch: ", Style::default().fg(Color::Gray)),
+                            Span::styled(
+                                branch_name,
+                                Style::default()
+                                    .fg(Color::Green)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                        ]));
+                    }
                     let meta = Paragraph::new(meta_lines).block(meta_block);
                     frame.render_widget(meta, chunks[1]);
 
@@ -560,6 +595,82 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
             frame.render_widget(desc, chunks[1]);
         }
     }
+}
+
+fn render_board_settings_view(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(board_idx) = app.board_selection.get() {
+        if let Some(board) = app.boards.get(board_idx) {
+            let settings_block = Block::default()
+                .title("Board Settings")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan));
+
+            let effective_prefix =
+                board.effective_branch_prefix(app.app_config.effective_default_prefix());
+            let prefix_source = if board.branch_prefix.is_some() {
+                "board"
+            } else if app.app_config.default_branch_prefix.is_some() {
+                "app config"
+            } else {
+                "default"
+            };
+
+            let settings_lines = vec![
+                Line::from(vec![
+                    Span::styled("Board: ", Style::default().fg(Color::Gray)),
+                    Span::styled(
+                        &board.name,
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Branch Prefix: ", Style::default().fg(Color::Gray)),
+                    Span::styled(
+                        board.branch_prefix.as_deref().unwrap_or("(not set)"),
+                        Style::default().fg(Color::Green),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Effective Prefix: ", Style::default().fg(Color::Gray)),
+                    Span::styled(
+                        effective_prefix,
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(" "),
+                    Span::styled(
+                        format!("(from {})", prefix_source),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Next Card Number: ", Style::default().fg(Color::Gray)),
+                    Span::styled(
+                        board.next_card_number.to_string(),
+                        Style::default().fg(Color::White),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Press 'p' to set branch prefix",
+                    Style::default()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::ITALIC),
+                )),
+            ];
+
+            let settings = Paragraph::new(settings_lines).block(settings_block);
+            frame.render_widget(settings, area);
+        }
+    }
+}
+
+fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
+    render_input_popup(app, frame, "Set Branch Prefix", "Prefix (empty to clear):");
 }
 
 fn render_input_popup(app: &App, frame: &mut Frame, title: &str, label: &str) {
