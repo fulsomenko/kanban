@@ -259,6 +259,34 @@
           "card_number": null,
           "created_at": "2025-10-11T18:39:14.248330Z",
           "updated_at": "2025-10-11T18:39:44.081471Z"
+        },
+        {
+          "id": "1c0b1752-53f1-4240-be75-0706662156df",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add sprints",
+          "description": "Be able to group cards by sprints. \nSet sprint duration and automatic starting of new sprints\n\nMVP\n\nBoard level defines sprint duration.\n\nIf duration is set, sprint init is possible.\n\nAdd Sprint, set start date, assign cards to it.\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 17,
+          "due_date": null,
+          "points": 4,
+          "card_number": null,
+          "created_at": "2025-10-11T18:42:39.943129Z",
+          "updated_at": "2025-10-11T18:44:54.114982Z"
+        },
+        {
+          "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Link to pull request",
+          "description": "If a pull request is open for a card. Open a link to that pull\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 18,
+          "due_date": null,
+          "points": 3,
+          "card_number": null,
+          "created_at": "2025-10-11T18:45:47.488818Z",
+          "updated_at": "2025-10-11T18:46:48.682806Z"
         }
       ]
     }
