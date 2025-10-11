@@ -6,9 +6,9 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 4,
+        "next_card_number": 22,
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T18:48:48.962877Z"
+        "updated_at": "2025-10-11T19:25:07.465579Z"
       },
       "columns": [
         {
@@ -32,7 +32,7 @@
           "position": 0,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 4,
           "created_at": "2025-10-10T08:47:57.834239Z",
           "updated_at": "2025-10-10T08:50:57.752600Z"
         },
@@ -46,7 +46,7 @@
           "position": 1,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 5,
           "created_at": "2025-10-10T09:08:28.861766Z",
           "updated_at": "2025-10-10T09:09:13.709970Z"
         },
@@ -88,7 +88,7 @@
           "position": 4,
           "due_date": null,
           "points": 4,
-          "card_number": null,
+          "card_number": 6,
           "created_at": "2025-10-10T22:05:04.607714Z",
           "updated_at": "2025-10-10T22:44:01.235679Z"
         },
@@ -102,7 +102,7 @@
           "position": 5,
           "due_date": null,
           "points": 2,
-          "card_number": null,
+          "card_number": 7,
           "created_at": "2025-10-10T22:11:25.809290Z",
           "updated_at": "2025-10-10T22:12:36.415713Z"
         },
@@ -116,7 +116,7 @@
           "position": 6,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 8,
           "created_at": "2025-10-10T22:13:04.048521Z",
           "updated_at": "2025-10-10T22:14:15.622866Z"
         },
@@ -130,7 +130,7 @@
           "position": 7,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 9,
           "created_at": "2025-10-10T22:14:31.293267Z",
           "updated_at": "2025-10-10T22:36:31.344615Z"
         },
@@ -144,7 +144,7 @@
           "position": 8,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 10,
           "created_at": "2025-10-10T22:15:09.199792Z",
           "updated_at": "2025-10-10T22:16:05.956954Z"
         },
@@ -158,7 +158,7 @@
           "position": 9,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 11,
           "created_at": "2025-10-10T22:53:19.579898Z",
           "updated_at": "2025-10-10T22:54:22.387591Z"
         },
@@ -172,7 +172,7 @@
           "position": 10,
           "due_date": null,
           "points": 5,
-          "card_number": null,
+          "card_number": 12,
           "created_at": "2025-10-10T22:56:04.200355Z",
           "updated_at": "2025-10-10T23:01:01.402918Z"
         },
@@ -186,7 +186,7 @@
           "position": 11,
           "due_date": null,
           "points": 2,
-          "card_number": null,
+          "card_number": 13,
           "created_at": "2025-10-10T23:01:18.553586Z",
           "updated_at": "2025-10-11T07:58:56.105304Z"
         },
@@ -200,7 +200,7 @@
           "position": 12,
           "due_date": null,
           "points": 5,
-          "card_number": null,
+          "card_number": 14,
           "created_at": "2025-10-11T18:27:29.674825Z",
           "updated_at": "2025-10-11T18:36:31.619081Z"
         },
@@ -214,7 +214,7 @@
           "position": 13,
           "due_date": null,
           "points": 3,
-          "card_number": null,
+          "card_number": 15,
           "created_at": "2025-10-11T18:29:10.434614Z",
           "updated_at": "2025-10-11T18:31:15.375129Z"
         },
@@ -224,13 +224,13 @@
           "title": "add -v flag",
           "description": "It would be nice to be able to view the version of the program\n\nAlso add the version to the `--help` output\n",
           "priority": "Medium",
-          "status": "Todo",
+          "status": "Done",
           "position": 14,
           "due_date": null,
           "points": 1,
           "card_number": 3,
           "created_at": "2025-10-11T18:36:43.972262Z",
-          "updated_at": "2025-10-11T18:51:19.051133Z"
+          "updated_at": "2025-10-11T19:03:44.948745Z"
         },
         {
           "id": "a189ef1a-903c-4c43-924e-2194562237f6",
@@ -242,7 +242,7 @@
           "position": 15,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 16,
           "created_at": "2025-10-11T18:38:07.855746Z",
           "updated_at": "2025-10-11T18:38:31.637758Z"
         },
@@ -256,9 +256,9 @@
           "position": 16,
           "due_date": null,
           "points": 1,
-          "card_number": null,
+          "card_number": 17,
           "created_at": "2025-10-11T18:39:14.248330Z",
-          "updated_at": "2025-10-11T18:39:44.081471Z"
+          "updated_at": "2025-10-11T19:11:05.358308Z"
         },
         {
           "id": "1c0b1752-53f1-4240-be75-0706662156df",
@@ -270,7 +270,7 @@
           "position": 17,
           "due_date": null,
           "points": 4,
-          "card_number": null,
+          "card_number": 18,
           "created_at": "2025-10-11T18:42:39.943129Z",
           "updated_at": "2025-10-11T18:44:54.114982Z"
         },
@@ -284,9 +284,37 @@
           "position": 18,
           "due_date": null,
           "points": 3,
-          "card_number": null,
+          "card_number": 19,
           "created_at": "2025-10-11T18:45:47.488818Z",
           "updated_at": "2025-10-11T19:01:45.403042Z"
+        },
+        {
+          "id": "8ecc1849-bde7-4f97-99f7-44b7d9158bbf",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Remove a card",
+          "description": "Be able to drop a card \n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 19,
+          "due_date": null,
+          "points": 2,
+          "card_number": 20,
+          "created_at": "2025-10-11T19:23:32.612472Z",
+          "updated_at": "2025-10-11T19:25:31.337766Z"
+        },
+        {
+          "id": "6c1e0ca7-22bb-49e5-86bc-8d1e2a55c9ee",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Archive a card",
+          "description": "Be able to archive a card.\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 20,
+          "due_date": null,
+          "points": 2,
+          "card_number": 21,
+          "created_at": "2025-10-11T19:25:07.465576Z",
+          "updated_at": "2025-10-11T19:25:26.875800Z"
         }
       ]
     }

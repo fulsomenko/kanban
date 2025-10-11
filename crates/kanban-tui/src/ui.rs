@@ -435,19 +435,17 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         }),
                     ];
 
-                    if let Some(branch_name) =
-                        task.branch_name(board, app.app_config.effective_default_prefix())
-                    {
-                        meta_lines.push(Line::from(vec![
-                            Span::styled("Branch: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                branch_name,
-                                Style::default()
-                                    .fg(Color::Green)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ]));
-                    }
+                    let branch_name =
+                        task.branch_name(board, app.app_config.effective_default_prefix());
+                    meta_lines.push(Line::from(vec![
+                        Span::styled("Branch: ", Style::default().fg(Color::Gray)),
+                        Span::styled(
+                            branch_name,
+                            Style::default()
+                                .fg(Color::Green)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
                     let meta = Paragraph::new(meta_lines).block(meta_block);
                     frame.render_widget(meta, chunks[1]);
 

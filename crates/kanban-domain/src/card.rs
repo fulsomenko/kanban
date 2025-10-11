@@ -34,14 +34,15 @@ pub struct Card {
     pub due_date: Option<DateTime<Utc>>,
     pub points: Option<u8>,
     #[serde(default)]
-    pub card_number: Option<u32>,
+    pub card_number: u32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl Card {
-    pub fn new(column_id: ColumnId, title: String, position: i32) -> Self {
+    pub fn new(board: &mut Board, column_id: ColumnId, title: String, position: i32) -> Self {
         let now = Utc::now();
+        let card_number = board.allocate_card_number();
         Self {
             id: Uuid::new_v4(),
             column_id,
@@ -52,7 +53,7 @@ impl Card {
             position,
             due_date: None,
             points: None,
-            card_number: None,
+            card_number,
             created_at: now,
             updated_at: now,
         }
@@ -94,20 +95,11 @@ impl Card {
         self.updated_at = Utc::now();
     }
 
-    pub fn ensure_card_number(&mut self, board: &mut Board) {
-        if self.card_number.is_none() {
-            self.card_number = Some(board.allocate_card_number());
-            self.updated_at = Utc::now();
-        }
-    }
-
-    pub fn branch_name(&self, board: &Board, default_prefix: &str) -> Option<String> {
-        self.card_number.map(|number| {
-            let prefix = board.effective_branch_prefix(default_prefix);
-            let kebab_title = Self::to_kebab_case(&self.title);
-            let branch = format!("{}-{}/{}", prefix, number, kebab_title);
-            Self::truncate_branch_name(branch)
-        })
+    pub fn branch_name(&self, board: &Board, default_prefix: &str) -> String {
+        let prefix = board.effective_branch_prefix(default_prefix);
+        let kebab_title = Self::to_kebab_case(&self.title);
+        let branch = format!("{}-{}/{}", prefix, self.card_number, kebab_title);
+        Self::truncate_branch_name(branch)
     }
 
     fn to_kebab_case(s: &str) -> String {
@@ -135,9 +127,9 @@ impl Card {
         }
     }
 
-    pub fn git_checkout_command(&self, board: &Board, default_prefix: &str) -> Option<String> {
-        self.branch_name(board, default_prefix)
-            .map(|name| format!("git checkout -b {}", name))
+    pub fn git_checkout_command(&self, board: &Board, default_prefix: &str) -> String {
+        let name = self.branch_name(board, default_prefix);
+        format!("git checkout -b {}", name)
     }
 
     pub fn validate_branch_prefix(prefix: &str) -> bool {
@@ -159,41 +151,36 @@ mod tests {
     use crate::board::Board;
 
     #[test]
-    fn test_ensure_card_number() {
+    fn test_card_number_auto_assigned() {
         let column_id = uuid::Uuid::new_v4();
-        let mut card = Card::new(column_id, "Test Card".to_string(), 0);
         let mut board = Board::new("Test Board".to_string(), None);
 
-        assert_eq!(card.card_number, None);
         assert_eq!(board.next_card_number, 1);
 
-        card.ensure_card_number(&mut board);
-        assert_eq!(card.card_number, Some(1));
+        let card1 = Card::new(&mut board, column_id, "Test Card 1".to_string(), 0);
+        assert_eq!(card1.card_number, 1);
         assert_eq!(board.next_card_number, 2);
 
-        card.ensure_card_number(&mut board);
-        assert_eq!(card.card_number, Some(1));
-        assert_eq!(board.next_card_number, 2);
+        let card2 = Card::new(&mut board, column_id, "Test Card 2".to_string(), 1);
+        assert_eq!(card2.card_number, 2);
+        assert_eq!(board.next_card_number, 3);
     }
 
     #[test]
     fn test_branch_name() {
         let column_id = uuid::Uuid::new_v4();
-        let mut card = Card::new(column_id, "Test Card".to_string(), 0);
         let mut board = Board::new("Test Board".to_string(), None);
+        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
 
-        assert_eq!(card.branch_name(&board, "task"), None);
-
-        card.ensure_card_number(&mut board);
         assert_eq!(
             card.branch_name(&board, "task"),
-            Some("task-1/test-card".to_string())
+            "task-1/test-card".to_string()
         );
 
         board.update_branch_prefix(Some("feat".to_string()));
         assert_eq!(
             card.branch_name(&board, "task"),
-            Some("feat-1/test-card".to_string())
+            "feat-1/test-card".to_string()
         );
     }
 
@@ -218,11 +205,10 @@ mod tests {
     fn test_branch_name_truncation() {
         let column_id = uuid::Uuid::new_v4();
         let long_title = "a".repeat(300);
-        let mut card = Card::new(column_id, long_title, 0);
         let mut board = Board::new("Test Board".to_string(), None);
+        let card = Card::new(&mut board, column_id, long_title, 0);
 
-        card.ensure_card_number(&mut board);
-        let branch = card.branch_name(&board, "task").unwrap();
+        let branch = card.branch_name(&board, "task");
         assert!(branch.len() <= 250);
         assert!(branch.starts_with("task-1/"));
     }
@@ -230,15 +216,12 @@ mod tests {
     #[test]
     fn test_git_checkout_command() {
         let column_id = uuid::Uuid::new_v4();
-        let mut card = Card::new(column_id, "Test Card".to_string(), 0);
         let mut board = Board::new("Test Board".to_string(), None);
+        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
 
-        assert_eq!(card.git_checkout_command(&board, "task"), None);
-
-        card.ensure_card_number(&mut board);
         assert_eq!(
             card.git_checkout_command(&board, "task"),
-            Some("git checkout -b task-1/test-card".to_string())
+            "git checkout -b task-1/test-card".to_string()
         );
     }
 
