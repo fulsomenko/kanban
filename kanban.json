@@ -6,9 +6,11 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 22,
+        "next_card_number": 25,
+        "task_sort_field": "CreatedAt",
+        "task_sort_order": "Descending",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T19:25:07.465579Z"
+        "updated_at": "2025-10-11T20:30:09.214397Z"
       },
       "columns": [
         {
@@ -34,7 +36,7 @@
           "points": 1,
           "card_number": 4,
           "created_at": "2025-10-10T08:47:57.834239Z",
-          "updated_at": "2025-10-10T08:50:57.752600Z"
+          "updated_at": "2025-10-11T20:30:23.290462Z"
         },
         {
           "id": "959a092f-61de-41de-ac4a-729d6e1fcadf",
@@ -48,7 +50,7 @@
           "points": 1,
           "card_number": 5,
           "created_at": "2025-10-10T09:08:28.861766Z",
-          "updated_at": "2025-10-10T09:09:13.709970Z"
+          "updated_at": "2025-10-11T20:30:20.829017Z"
         },
         {
           "id": "292e3f49-089b-40fb-8ea7-c693603904b2",
@@ -62,7 +64,7 @@
           "points": 5,
           "card_number": 1,
           "created_at": "2025-10-10T21:58:56.145240Z",
-          "updated_at": "2025-10-11T07:59:36.019371Z"
+          "updated_at": "2025-10-11T20:30:19.498471Z"
         },
         {
           "id": "f1a80abd-338c-4593-92d6-20c2db7dc093",
@@ -188,7 +190,7 @@
           "points": 2,
           "card_number": 13,
           "created_at": "2025-10-10T23:01:18.553586Z",
-          "updated_at": "2025-10-11T19:49:17.985715Z"
+          "updated_at": "2025-10-11T20:30:25.768199Z"
         },
         {
           "id": "9e8f918f-3fde-4847-aca8-0ab7646256a8",
@@ -202,7 +204,7 @@
           "points": 5,
           "card_number": 14,
           "created_at": "2025-10-11T18:27:29.674825Z",
-          "updated_at": "2025-10-11T18:36:31.619081Z"
+          "updated_at": "2025-10-11T20:30:26.827479Z"
         },
         {
           "id": "1e257c13-f9ee-40e4-86b5-704a9649ea4e",
@@ -264,7 +266,7 @@
           "id": "1c0b1752-53f1-4240-be75-0706662156df",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Add sprints",
-          "description": "Be able to group cards by sprints. \nSet sprint duration and automatic starting of new sprints\n\nMVP\n\nBoard level defines sprint duration.\n\nIf duration is set, sprint init is possible.\n\nAdd Sprint, set start date, assign cards to it.\n",
+          "description": "Be able to group cards by sprints. \nSet sprint duration and automatic starting of new sprints\n\nMVP\n\nBoard level defines sprint duration.\n\nIf duration is set, sprint init is possible.\n\nAdd Sprint, set start date, assign cards to it.\n\n---\n\nThere should be a UI for sprints. On Project / Board edit\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 17,
@@ -272,7 +274,7 @@
           "points": 4,
           "card_number": 18,
           "created_at": "2025-10-11T18:42:39.943129Z",
-          "updated_at": "2025-10-11T18:44:54.114982Z"
+          "updated_at": "2025-10-11T19:52:50.287355Z"
         },
         {
           "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
@@ -315,6 +317,48 @@
           "card_number": 21,
           "created_at": "2025-10-11T19:25:07.465576Z",
           "updated_at": "2025-10-11T19:25:26.875800Z"
+        },
+        {
+          "id": "27717d15-3e41-4558-8e6b-3bbdc7fe3762",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Hitting e on an item in the task list should open $EDITOR with that tasks description",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 21,
+          "due_date": null,
+          "points": null,
+          "card_number": 22,
+          "created_at": "2025-10-11T19:50:58.400403Z",
+          "updated_at": "2025-10-11T19:51:40.504989Z"
+        },
+        {
+          "id": "76411161-8bcf-47a3-b917-cadc706c6079",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "When inputting in the dialogues. Text is cut when going out of bounds for the iput box",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 22,
+          "due_date": null,
+          "points": null,
+          "card_number": 23,
+          "created_at": "2025-10-11T19:51:35.009507Z",
+          "updated_at": "2025-10-11T20:30:16.730121Z"
+        },
+        {
+          "id": "1c2f3096-823b-4eb7-9345-b80a4c5d8693",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add github ci",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 23,
+          "due_date": null,
+          "points": null,
+          "card_number": 24,
+          "created_at": "2025-10-11T20:30:09.214394Z",
+          "updated_at": "2025-10-11T20:30:13.695354Z"
         }
       ]
     }
