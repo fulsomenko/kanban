@@ -585,9 +585,19 @@ impl App {
                             _ => return should_restart_events,
                         };
 
-                        let order = match key.code {
-                            KeyCode::Char('d') => SortOrder::Descending,
-                            _ => SortOrder::Ascending,
+                        let order = if self.current_sort_field == Some(field)
+                            && matches!(key.code, KeyCode::Enter | KeyCode::Char(' '))
+                        {
+                            match self.current_sort_order {
+                                Some(SortOrder::Ascending) => SortOrder::Descending,
+                                Some(SortOrder::Descending) => SortOrder::Ascending,
+                                None => SortOrder::Ascending,
+                            }
+                        } else {
+                            match key.code {
+                                KeyCode::Char('d') => SortOrder::Descending,
+                                _ => SortOrder::Ascending,
+                            }
                         };
 
                         self.current_sort_field = Some(field);
@@ -718,54 +728,54 @@ impl App {
             .collect();
 
         cards.sort_by(|a, b| {
-                use std::cmp::Ordering;
-                let cmp = match sort_field {
-                    SortField::Points => match (a.points, b.points) {
-                        (Some(ap), Some(bp)) => ap.cmp(&bp),
-                        (Some(_), None) => Ordering::Less,
-                        (None, Some(_)) => Ordering::Greater,
-                        (None, None) => Ordering::Equal,
-                    },
-                    SortField::Priority => {
-                        let a_val = match a.priority {
-                            kanban_domain::CardPriority::Critical => 3,
-                            kanban_domain::CardPriority::High => 2,
-                            kanban_domain::CardPriority::Medium => 1,
-                            kanban_domain::CardPriority::Low => 0,
-                        };
-                        let b_val = match b.priority {
-                            kanban_domain::CardPriority::Critical => 3,
-                            kanban_domain::CardPriority::High => 2,
-                            kanban_domain::CardPriority::Medium => 1,
-                            kanban_domain::CardPriority::Low => 0,
-                        };
-                        a_val.cmp(&b_val)
-                    }
-                    SortField::CreatedAt => a.created_at.cmp(&b.created_at),
-                    SortField::UpdatedAt => a.updated_at.cmp(&b.updated_at),
-                    SortField::Status => {
-                        let a_val = match a.status {
-                            CardStatus::Done => 3,
-                            CardStatus::InProgress => 2,
-                            CardStatus::Blocked => 1,
-                            CardStatus::Todo => 0,
-                        };
-                        let b_val = match b.status {
-                            CardStatus::Done => 3,
-                            CardStatus::InProgress => 2,
-                            CardStatus::Blocked => 1,
-                            CardStatus::Todo => 0,
-                        };
-                        a_val.cmp(&b_val)
-                    }
-                    SortField::Default => a.card_number.cmp(&b.card_number),
-                };
-
-                match sort_order {
-                    SortOrder::Ascending => cmp,
-                    SortOrder::Descending => cmp.reverse(),
+            use std::cmp::Ordering;
+            let cmp = match sort_field {
+                SortField::Points => match (a.points, b.points) {
+                    (Some(ap), Some(bp)) => ap.cmp(&bp),
+                    (Some(_), None) => Ordering::Less,
+                    (None, Some(_)) => Ordering::Greater,
+                    (None, None) => Ordering::Equal,
+                },
+                SortField::Priority => {
+                    let a_val = match a.priority {
+                        kanban_domain::CardPriority::Critical => 3,
+                        kanban_domain::CardPriority::High => 2,
+                        kanban_domain::CardPriority::Medium => 1,
+                        kanban_domain::CardPriority::Low => 0,
+                    };
+                    let b_val = match b.priority {
+                        kanban_domain::CardPriority::Critical => 3,
+                        kanban_domain::CardPriority::High => 2,
+                        kanban_domain::CardPriority::Medium => 1,
+                        kanban_domain::CardPriority::Low => 0,
+                    };
+                    a_val.cmp(&b_val)
                 }
-            });
+                SortField::CreatedAt => a.created_at.cmp(&b.created_at),
+                SortField::UpdatedAt => a.updated_at.cmp(&b.updated_at),
+                SortField::Status => {
+                    let a_val = match a.status {
+                        CardStatus::Done => 3,
+                        CardStatus::InProgress => 2,
+                        CardStatus::Blocked => 1,
+                        CardStatus::Todo => 0,
+                    };
+                    let b_val = match b.status {
+                        CardStatus::Done => 3,
+                        CardStatus::InProgress => 2,
+                        CardStatus::Blocked => 1,
+                        CardStatus::Todo => 0,
+                    };
+                    a_val.cmp(&b_val)
+                }
+                SortField::Default => a.card_number.cmp(&b.card_number),
+            };
+
+            match sort_order {
+                SortOrder::Ascending => cmp,
+                SortOrder::Descending => cmp.reverse(),
+            }
+        });
 
         cards
     }

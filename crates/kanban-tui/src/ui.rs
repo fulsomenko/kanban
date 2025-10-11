@@ -332,11 +332,9 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(task_idx) = app.active_card_index {
-        if let Some(board_idx) = app.active_board_index {
-            if let Some(board) = app.boards.get(board_idx) {
-                let board_tasks = app.get_sorted_board_cards(board.id);
-
-                if let Some(task) = board_tasks.get(task_idx) {
+        if let Some(task) = app.cards.get(task_idx) {
+            if let Some(board_idx) = app.active_board_index {
+                if let Some(board) = app.boards.get(board_idx) {
                     let chunks = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints([

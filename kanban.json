@@ -7,10 +7,10 @@
         "description": null,
         "branch_prefix": null,
         "next_card_number": 27,
-        "task_sort_field": "Priority",
-        "task_sort_order": "Ascending",
+        "task_sort_field": "UpdatedAt",
+        "task_sort_order": "Descending",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T20:54:41.898529Z"
+        "updated_at": "2025-10-11T21:26:04.095776Z"
       },
       "columns": [
         {
@@ -190,7 +190,7 @@
           "points": 2,
           "card_number": 13,
           "created_at": "2025-10-10T23:01:18.553586Z",
-          "updated_at": "2025-10-11T20:30:25.768199Z"
+          "updated_at": "2025-10-11T21:19:06.054082Z"
         },
         {
           "id": "9e8f918f-3fde-4847-aca8-0ab7646256a8",
@@ -316,7 +316,7 @@
           "points": 2,
           "card_number": 21,
           "created_at": "2025-10-11T19:25:07.465576Z",
-          "updated_at": "2025-10-11T19:25:26.875800Z"
+          "updated_at": "2025-10-11T21:19:20.961218Z"
         },
         {
           "id": "27717d15-3e41-4558-8e6b-3bbdc7fe3762",
@@ -330,7 +330,7 @@
           "points": null,
           "card_number": 22,
           "created_at": "2025-10-11T19:50:58.400403Z",
-          "updated_at": "2025-10-11T19:51:40.504989Z"
+          "updated_at": "2025-10-11T21:18:30.761425Z"
         },
         {
           "id": "76411161-8bcf-47a3-b917-cadc706c6079",
