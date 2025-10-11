@@ -242,8 +242,8 @@ impl App {
                     Focus::Tasks => {
                         if let Some(board_idx) = self.active_board_index {
                             if let Some(board) = self.boards.get(board_idx) {
-                                let task_count = self.get_board_task_count(board.id);
-                                self.card_selection.next(task_count);
+                                let card_count = self.get_board_card_count(board.id);
+                                self.card_selection.next(card_count);
                             }
                         }
                     }
@@ -267,8 +267,8 @@ impl App {
                                     self.current_sort_field = Some(board.task_sort_field);
                                     self.current_sort_order = Some(board.task_sort_order);
 
-                                    let task_count = self.get_board_task_count(board.id);
-                                    if task_count > 0 {
+                                    let card_count = self.get_board_card_count(board.id);
+                                    if card_count > 0 {
                                         self.card_selection.set(Some(0));
                                     }
                                 }
@@ -405,10 +405,10 @@ impl App {
                         return should_restart_events;
                     };
 
-                    if let Some(task_idx) = self.active_card_index {
+                    if let Some(card_idx) = self.active_card_index {
                         if let Some(board_idx) = self.active_board_index {
                             if let Some(board) = self.boards.get(board_idx) {
-                                let board_tasks: Vec<_> = self
+                                let board_cards: Vec<_> = self
                                     .cards
                                     .iter()
                                     .filter(|card| {
@@ -418,10 +418,10 @@ impl App {
                                     })
                                     .collect();
 
-                                if let Some(task) = board_tasks.get(task_idx) {
-                                    let task_id = task.id;
+                                if let Some(card) = board_cards.get(card_idx) {
+                                    let card_id = card.id;
                                     if let Some(card) =
-                                        self.cards.iter_mut().find(|c| c.id == task_id)
+                                        self.cards.iter_mut().find(|c| c.id == card_id)
                                     {
                                         card.set_points(points);
                                         tracing::info!("Set points to: {:?}", points);
@@ -644,18 +644,18 @@ impl App {
                 if let Some(board) = self.boards.get(board_idx) {
                     let sorted_cards = self.get_sorted_board_cards(board.id);
 
-                    if let Some(task) = sorted_cards.get(sorted_idx) {
-                        let task_id = task.id;
-                        let new_status = if task.status == CardStatus::Done {
+                    if let Some(card) = sorted_cards.get(sorted_idx) {
+                        let card_id = card.id;
+                        let new_status = if card.status == CardStatus::Done {
                             CardStatus::Todo
                         } else {
                             CardStatus::Done
                         };
 
-                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                             card.update_status(new_status);
                             tracing::info!(
-                                "Toggled task '{}' to status: {:?}",
+                                "Toggled card '{}' to status: {:?}",
                                 card.title,
                                 new_status
                             );
@@ -691,17 +691,17 @@ impl App {
                     .count() as i32;
                 let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
                 let board_id = board.id;
-                tracing::info!("Creating task: {} (id: {})", card.title, card.id);
+                tracing::info!("Creating card: {} (id: {})", card.title, card.id);
                 self.cards.push(card);
 
-                let task_count = self.get_board_task_count(board_id);
-                let new_task_index = task_count.saturating_sub(1);
-                self.card_selection.set(Some(new_task_index));
+                let card_count = self.get_board_card_count(board_id);
+                let new_card_index = card_count.saturating_sub(1);
+                self.card_selection.set(Some(new_card_index));
             }
         }
     }
 
-    fn get_board_task_count(&self, board_id: uuid::Uuid) -> usize {
+    fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         self.cards
             .iter()
             .filter(|card| {
@@ -988,10 +988,10 @@ impl App {
         event_handler: &EventHandler,
         field: CardField,
     ) -> io::Result<()> {
-        if let Some(task_idx) = self.active_card_index {
+        if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_tasks: Vec<_> = self
+                    let board_cards: Vec<_> = self
                         .cards
                         .iter()
                         .filter(|card| {
@@ -1001,18 +1001,18 @@ impl App {
                         })
                         .collect();
 
-                    if let Some(task) = board_tasks.get(task_idx) {
+                    if let Some(card) = board_cards.get(card_idx) {
                         let temp_dir = std::env::temp_dir();
                         let (temp_file, current_content) = match field {
                             CardField::Title => {
                                 let temp_file =
-                                    temp_dir.join(format!("kanban-task-{}-title.md", task.id));
-                                (temp_file, task.title.clone())
+                                    temp_dir.join(format!("kanban-card-{}-title.md", card.id));
+                                (temp_file, card.title.clone())
                             }
                             CardField::Description => {
                                 let temp_file = temp_dir
-                                    .join(format!("kanban-task-{}-description.md", task.id));
-                                let content = task.description.as_deref().unwrap_or("").to_string();
+                                    .join(format!("kanban-card-{}-description.md", card.id));
+                                let content = card.description.as_deref().unwrap_or("").to_string();
                                 (temp_file, content)
                             }
                         };
@@ -1023,8 +1023,8 @@ impl App {
                             temp_file,
                             &current_content,
                         )? {
-                            let task_id = task.id;
-                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == task_id) {
+                            let card_id = card.id;
+                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                                 match field {
                                     CardField::Title => {
                                         if !new_content.trim().is_empty() {
@@ -1151,10 +1151,10 @@ impl App {
     }
 
     fn copy_branch_name(&mut self) {
-        if let Some(task_idx) = self.active_card_index {
+        if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_tasks: Vec<_> = self
+                    let board_cards: Vec<_> = self
                         .cards
                         .iter()
                         .filter(|card| {
@@ -1164,9 +1164,9 @@ impl App {
                         })
                         .collect();
 
-                    if let Some(task) = board_tasks.get(task_idx) {
+                    if let Some(card) = board_cards.get(card_idx) {
                         let branch_name =
-                            task.branch_name(board, self.app_config.effective_default_prefix());
+                            card.branch_name(board, self.app_config.effective_default_prefix());
                         if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
                             tracing::error!("Failed to copy to clipboard: {}", e);
                         } else {
@@ -1179,10 +1179,10 @@ impl App {
     }
 
     fn copy_git_checkout_command(&mut self) {
-        if let Some(task_idx) = self.active_card_index {
+        if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_tasks: Vec<_> = self
+                    let board_cards: Vec<_> = self
                         .cards
                         .iter()
                         .filter(|card| {
@@ -1192,8 +1192,8 @@ impl App {
                         })
                         .collect();
 
-                    if let Some(task) = board_tasks.get(task_idx) {
-                        let command = task.git_checkout_command(
+                    if let Some(card) = board_cards.get(card_idx) {
+                        let command = card.git_checkout_command(
                             board,
                             self.app_config.effective_default_prefix(),
                         );

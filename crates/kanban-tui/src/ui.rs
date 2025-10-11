@@ -209,10 +209,10 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     Style::default().fg(Color::Gray),
                 )));
             } else {
-                for (task_idx, task) in board_tasks.iter().enumerate() {
-                    let is_selected = app.card_selection.get() == Some(task_idx);
+                for (card_idx, card) in board_tasks.iter().enumerate() {
+                    let is_selected = app.card_selection.get() == Some(card_idx);
                     let is_focused = app.focus == Focus::Tasks;
-                    let is_done = task.status == CardStatus::Done;
+                    let is_done = card.status == CardStatus::Done;
 
                     let (checkbox, text_color, text_modifier) = if is_done {
                         ("☑", Color::DarkGray, Modifier::CROSSED_OUT)
@@ -226,7 +226,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         style = style.bg(Color::Blue);
                     }
 
-                    let points_badge = if let Some(points) = task.points {
+                    let points_badge = if let Some(points) = card.points {
                         format!(" [{}]", points)
                     } else {
                         String::new()
@@ -234,11 +234,11 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
                     let line = if points_badge.is_empty() {
                         Line::from(Span::styled(
-                            format!("  {} {}", checkbox, task.title),
+                            format!("  {} {}", checkbox, card.title),
                             style,
                         ))
                     } else {
-                        let points_color = task
+                        let points_color = card
                             .points
                             .map(|p| match p {
                                 1 => Color::Cyan,
@@ -256,7 +256,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         }
 
                         Line::from(vec![
-                            Span::styled(format!("  {} {}", checkbox, task.title), style),
+                            Span::styled(format!("  {} {}", checkbox, card.title), style),
                             Span::styled(points_badge, points_style),
                         ])
                     };
@@ -331,8 +331,8 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
 }
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(task_idx) = app.active_card_index {
-        if let Some(task) = app.cards.get(task_idx) {
+    if let Some(card_idx) = app.active_card_index {
+        if let Some(card) = app.cards.get(card_idx) {
             if let Some(board_idx) = app.active_board_index {
                 if let Some(board) = app.boards.get(board_idx) {
                     let chunks = Layout::default()
@@ -358,7 +358,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         })
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(title_border_color));
-                    let title = Paragraph::new(task.title.clone())
+                    let title = Paragraph::new(card.title.clone())
                         .style(
                             Style::default()
                                 .fg(Color::Yellow)
@@ -385,25 +385,25 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         Line::from(vec![
                             Span::styled("Priority: ", Style::default().fg(Color::Gray)),
                             Span::styled(
-                                format!("{:?}", task.priority),
+                                format!("{:?}", card.priority),
                                 Style::default().fg(Color::White),
                             ),
                             Span::raw("  "),
                             Span::styled("Status: ", Style::default().fg(Color::Gray)),
                             Span::styled(
-                                format!("{:?}", task.status),
+                                format!("{:?}", card.status),
                                 Style::default().fg(Color::White),
                             ),
                             Span::raw("  "),
                             Span::styled("Points: ", Style::default().fg(Color::Gray)),
                             Span::styled(
-                                task.points
+                                card.points
                                     .map(|p| p.to_string())
                                     .unwrap_or_else(|| "-".to_string()),
                                 Style::default().fg(Color::White),
                             ),
                         ]),
-                        Line::from(if let Some(due_date) = task.due_date {
+                        Line::from(if let Some(due_date) = card.due_date {
                             vec![
                                 Span::styled("Due: ", Style::default().fg(Color::Gray)),
                                 Span::styled(
@@ -420,7 +420,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     ];
 
                     let branch_name =
-                        task.branch_name(board, app.app_config.effective_default_prefix());
+                        card.branch_name(board, app.app_config.effective_default_prefix());
                     meta_lines.push(Line::from(vec![
                         Span::styled("Branch: ", Style::default().fg(Color::Gray)),
                         Span::styled(
@@ -447,7 +447,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         })
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(desc_border_color));
-                    let desc_text = if let Some(desc) = &task.description {
+                    let desc_text = if let Some(desc) = &card.description {
                         desc.clone()
                     } else {
                         "No description".to_string()
