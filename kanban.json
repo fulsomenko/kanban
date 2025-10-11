@@ -6,11 +6,11 @@
         "name": "Kanban",
         "description": null,
         "branch_prefix": null,
-        "next_card_number": 25,
-        "task_sort_field": "CreatedAt",
-        "task_sort_order": "Descending",
+        "next_card_number": 26,
+        "task_sort_field": "Priority",
+        "task_sort_order": "Ascending",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T20:30:09.214397Z"
+        "updated_at": "2025-10-11T20:53:06.269236Z"
       },
       "columns": [
         {
@@ -78,7 +78,7 @@
           "points": 4,
           "card_number": 2,
           "created_at": "2025-10-10T22:03:42.988557Z",
-          "updated_at": "2025-10-11T08:00:34.328075Z"
+          "updated_at": "2025-10-11T20:33:59.906332Z"
         },
         {
           "id": "e96684a5-4645-443e-8e2c-6bb646e248c6",
@@ -106,7 +106,7 @@
           "points": 2,
           "card_number": 7,
           "created_at": "2025-10-10T22:11:25.809290Z",
-          "updated_at": "2025-10-10T22:12:36.415713Z"
+          "updated_at": "2025-10-11T20:40:58.659416Z"
         },
         {
           "id": "86c1b649-03bc-4da8-87c3-e20a2c56a640",
@@ -134,7 +134,7 @@
           "points": 1,
           "card_number": 9,
           "created_at": "2025-10-10T22:14:31.293267Z",
-          "updated_at": "2025-10-10T22:36:31.344615Z"
+          "updated_at": "2025-10-11T20:41:09.462182Z"
         },
         {
           "id": "7cd165b0-6671-46d6-b837-4e73ada26333",
@@ -176,7 +176,7 @@
           "points": 5,
           "card_number": 12,
           "created_at": "2025-10-10T22:56:04.200355Z",
-          "updated_at": "2025-10-10T23:01:01.402918Z"
+          "updated_at": "2025-10-11T20:41:24.403599Z"
         },
         {
           "id": "6a0cbe1e-a05e-4aca-bd53-f0057215d671",
@@ -359,6 +359,20 @@
           "card_number": 24,
           "created_at": "2025-10-11T20:30:09.214394Z",
           "updated_at": "2025-10-11T20:30:13.695354Z"
+        },
+        {
+          "id": "e3482cf7-c53a-4ce8-8c33-11e2cca3d87a",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add completed when time to task",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 24,
+          "due_date": null,
+          "points": null,
+          "card_number": 25,
+          "created_at": "2025-10-11T20:53:06.269232Z",
+          "updated_at": "2025-10-11T20:53:06.269232Z"
         }
       ]
     }
