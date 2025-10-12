@@ -740,7 +740,7 @@
           "id": "5d31ae81-75a7-47c7-a6d1-5a9b0f06a5b7",
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Remove projects projects and kanban green text",
-          "description": null,
+          "description": "in the projects panel there is a green text with `Projects` we can drop this as the panel header itself shows projects too.\n\nin the task list there is a green text of the current project. we can drop this and rely on the highlighted item in the projects list instead\n",
           "priority": "Medium",
           "status": "Todo",
           "position": 42,
@@ -749,7 +749,7 @@
           "card_number": 43,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-12T16:45:41.135171Z",
-          "updated_at": "2025-10-12T16:46:20.354842Z",
+          "updated_at": "2025-10-12T16:51:11.859124Z",
           "completed_at": null
         }
       ],
