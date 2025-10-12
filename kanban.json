@@ -6,7 +6,7 @@
         "name": "Kanban",
         "description": "Management of the **Kanban** project\n",
         "branch_prefix": "KAN",
-        "next_card_number": 41,
+        "next_card_number": 42,
         "task_sort_field": "Points",
         "task_sort_order": "Descending",
         "sprint_duration_days": 7,
@@ -18,7 +18,7 @@
         "next_sprint_number": 6,
         "active_sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T15:45:29.530130Z"
+        "updated_at": "2025-10-12T15:48:23.468343Z"
       },
       "columns": [
         {
@@ -300,7 +300,7 @@
           "card_number": 18,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-11T18:42:39.943129Z",
-          "updated_at": "2025-10-12T14:52:37.675773Z"
+          "updated_at": "2025-10-12T15:47:46.399067Z"
         },
         {
           "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
@@ -631,6 +631,21 @@
           "sprint_id": null,
           "created_at": "2025-10-12T15:45:29.530124Z",
           "updated_at": "2025-10-12T15:46:31.166006Z"
+        },
+        {
+          "id": "21ef5706-4393-458e-93c2-a8ca7792afa8",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "It would be cool if we could add some retrospective note where we either pull in the github pr description or write thoughts on the task or both",
+          "description": "It would be cool if we could add some retrospective note when completing a task\n\nWe could pull in the github pr description or write thoughts on the task or both\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 40,
+          "due_date": null,
+          "points": 2,
+          "card_number": 41,
+          "sprint_id": null,
+          "created_at": "2025-10-12T15:48:23.468340Z",
+          "updated_at": "2025-10-12T15:49:23.462777Z"
         }
       ],
       "sprints": [
