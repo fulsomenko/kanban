@@ -5,18 +5,20 @@
         "id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
         "name": "Kanban",
         "description": "Management of the **Kanban** project\n",
-        "branch_prefix": null,
-        "next_card_number": 32,
+        "branch_prefix": "KAN",
+        "next_card_number": 33,
         "task_sort_field": "Points",
         "task_sort_order": "Descending",
-        "sprint_duration_days": null,
-        "sprint_prefix": null,
-        "sprint_names": [],
-        "sprint_name_used_count": 0,
-        "next_sprint_number": 2,
-        "active_sprint_id": null,
+        "sprint_duration_days": 7,
+        "sprint_prefix": "MVP",
+        "sprint_names": [
+          "an-eventful-october"
+        ],
+        "sprint_name_used_count": 1,
+        "next_sprint_number": 6,
+        "active_sprint_id": "41c3e156-64e7-4bf9-9631-eb828b5c28b2",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T00:14:17.034427Z"
+        "updated_at": "2025-10-12T12:35:09.928592Z"
       },
       "columns": [
         {
@@ -296,9 +298,9 @@
           "due_date": null,
           "points": 4,
           "card_number": 18,
-          "sprint_id": null,
+          "sprint_id": "41c3e156-64e7-4bf9-9631-eb828b5c28b2",
           "created_at": "2025-10-11T18:42:39.943129Z",
-          "updated_at": "2025-10-11T23:56:28.942632Z"
+          "updated_at": "2025-10-12T08:24:57.240672Z"
         },
         {
           "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
@@ -494,6 +496,21 @@
           "sprint_id": null,
           "created_at": "2025-10-12T00:14:17.034422Z",
           "updated_at": "2025-10-12T00:14:57.400292Z"
+        },
+        {
+          "id": "0ae3776c-38cc-4b22-8e89-ed9ac767b512",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Add cli",
+          "description": "I want to besides the tui add a cli interface to the application also\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 31,
+          "due_date": null,
+          "points": null,
+          "card_number": 32,
+          "sprint_id": null,
+          "created_at": "2025-10-12T08:23:41.175901Z",
+          "updated_at": "2025-10-12T08:24:27.584862Z"
         }
       ]
     }
