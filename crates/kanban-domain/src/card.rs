@@ -261,7 +261,7 @@ mod tests {
 
         let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
 
-        let sprint = Sprint::new(board.id, 1, Some("Alpha".to_string()), None);
+        let sprint = Sprint::new(board.id, 1, Some(0), None);
         card.sprint_id = Some(sprint.id);
 
         let sprints = vec![sprint];
@@ -275,7 +275,7 @@ mod tests {
             id: card.sprint_id.unwrap(),
             board_id: board.id,
             sprint_number: 1,
-            name: Some("Alpha".to_string()),
+            name_index: Some(0),
             prefix_override: Some("hotfix".to_string()),
             status: SprintStatus::Planning,
             start_date: None,
