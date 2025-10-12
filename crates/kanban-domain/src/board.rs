@@ -126,15 +126,23 @@ impl Board {
         number
     }
 
-    pub fn consume_sprint_name(&mut self) -> Option<String> {
+    pub fn consume_sprint_name(&mut self) -> Option<usize> {
         if self.sprint_name_used_count < self.sprint_names.len() {
-            let name = self.sprint_names.get(self.sprint_name_used_count).cloned();
+            let index = self.sprint_name_used_count;
             self.sprint_name_used_count += 1;
             self.updated_at = Utc::now();
-            name
+            Some(index)
         } else {
             None
         }
+    }
+
+    pub fn add_sprint_name_at_used_index(&mut self, name: String) -> usize {
+        let index = self.sprint_name_used_count;
+        self.sprint_names.insert(index, name);
+        self.sprint_name_used_count += 1;
+        self.updated_at = Utc::now();
+        index
     }
 }
 

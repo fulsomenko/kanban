@@ -1,11 +1,11 @@
 use crate::input::InputState;
 use crossterm::event::KeyCode;
 
-pub fn handle_dialog_input(input: &mut InputState, key_code: KeyCode) -> DialogAction {
+pub fn handle_dialog_input(input: &mut InputState, key_code: KeyCode, allow_empty: bool) -> DialogAction {
     match key_code {
         KeyCode::Esc => DialogAction::Cancel,
         KeyCode::Enter => {
-            if !input.is_empty() {
+            if allow_empty || !input.is_empty() {
                 DialogAction::Confirm
             } else {
                 DialogAction::None
