@@ -12,13 +12,14 @@
         "sprint_duration_days": 7,
         "sprint_prefix": "MVP",
         "sprint_names": [
-          "an-eventful-october"
+          "an-eventful-october",
+          "an-experience-to-remember"
         ],
-        "sprint_name_used_count": 1,
-        "next_sprint_number": 6,
+        "sprint_name_used_count": 2,
+        "next_sprint_number": 7,
         "active_sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T17:15:57.532853Z"
+        "updated_at": "2025-10-12T17:32:56.610132Z"
       },
       "columns": [
         {
@@ -45,8 +46,8 @@
           "card_number": 4,
           "sprint_id": null,
           "created_at": "2025-10-10T08:47:57.834239Z",
-          "updated_at": "2025-10-11T20:30:23.290462Z",
-          "completed_at": null
+          "updated_at": "2025-10-12T17:36:08.452384Z",
+          "completed_at": "2025-10-12T17:36:08.452384Z"
         },
         {
           "id": "959a092f-61de-41de-ac4a-729d6e1fcadf",
@@ -61,8 +62,8 @@
           "card_number": 5,
           "sprint_id": null,
           "created_at": "2025-10-10T09:08:28.861766Z",
-          "updated_at": "2025-10-11T20:30:20.829017Z",
-          "completed_at": null
+          "updated_at": "2025-10-12T17:36:58.071278Z",
+          "completed_at": "2025-10-12T17:36:58.071278Z"
         },
         {
           "id": "292e3f49-089b-40fb-8ea7-c693603904b2",
@@ -109,7 +110,7 @@
           "card_number": 6,
           "sprint_id": null,
           "created_at": "2025-10-10T22:05:04.607714Z",
-          "updated_at": "2025-10-10T22:44:01.235679Z",
+          "updated_at": "2025-10-12T17:21:31.495335Z",
           "completed_at": null
         },
         {
@@ -149,16 +150,16 @@
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Change priority",
           "description": "- Be able to change the priority of a task\n\n",
-          "priority": "Medium",
-          "status": "Todo",
+          "priority": "Critical",
+          "status": "Done",
           "position": 7,
           "due_date": null,
           "points": 1,
           "card_number": 9,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-10T22:14:31.293267Z",
-          "updated_at": "2025-10-11T20:41:09.462182Z",
-          "completed_at": null
+          "updated_at": "2025-10-12T17:36:18.254781Z",
+          "completed_at": "2025-10-12T17:36:18.254781Z"
         },
         {
           "id": "7cd165b0-6671-46d6-b837-4e73ada26333",
@@ -166,15 +167,15 @@
           "title": "Add or update priorities",
           "description": "On the board level. \n\nBe able to configure priorities and change their names. \n\nWe should start with only medium?\n",
           "priority": "Medium",
-          "status": "Todo",
+          "status": "Done",
           "position": 8,
           "due_date": null,
           "points": 1,
           "card_number": 10,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-10T22:15:09.199792Z",
-          "updated_at": "2025-10-10T22:16:05.956954Z",
-          "completed_at": null
+          "updated_at": "2025-10-12T17:36:24.580951Z",
+          "completed_at": "2025-10-12T17:36:24.580951Z"
         },
         {
           "id": "454144d2-27ac-4abf-8632-407908fa8f80",
@@ -221,8 +222,8 @@
           "card_number": 13,
           "sprint_id": null,
           "created_at": "2025-10-10T23:01:18.553586Z",
-          "updated_at": "2025-10-11T22:26:20.802010Z",
-          "completed_at": null
+          "updated_at": "2025-10-12T17:37:18.838895Z",
+          "completed_at": "2025-10-12T17:37:18.838895Z"
         },
         {
           "id": "9e8f918f-3fde-4847-aca8-0ab7646256a8",
@@ -347,9 +348,9 @@
           "due_date": null,
           "points": 2,
           "card_number": 20,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-11T19:23:32.612472Z",
-          "updated_at": "2025-10-11T19:25:31.337766Z",
+          "updated_at": "2025-10-12T17:34:42.755476Z",
           "completed_at": null
         },
         {
@@ -363,9 +364,9 @@
           "due_date": null,
           "points": 2,
           "card_number": 21,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-11T19:25:07.465576Z",
-          "updated_at": "2025-10-11T21:19:20.961218Z",
+          "updated_at": "2025-10-12T17:34:42.755475Z",
           "completed_at": null
         },
         {
@@ -379,7 +380,7 @@
           "due_date": null,
           "points": 3,
           "card_number": 22,
-          "sprint_id": null,
+          "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-11T19:50:58.400403Z",
           "updated_at": "2025-10-11T21:44:24.678181Z",
           "completed_at": null
@@ -395,9 +396,9 @@
           "due_date": null,
           "points": 3,
           "card_number": 23,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-11T19:51:35.009507Z",
-          "updated_at": "2025-10-11T21:44:48.544417Z",
+          "updated_at": "2025-10-12T17:34:42.755475Z",
           "completed_at": null
         },
         {
@@ -443,9 +444,9 @@
           "due_date": null,
           "points": 2,
           "card_number": 26,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-11T20:54:41.898524Z",
-          "updated_at": "2025-10-11T21:46:49.938657Z",
+          "updated_at": "2025-10-12T17:34:42.755476Z",
           "completed_at": null
         },
         {
@@ -491,7 +492,7 @@
           "due_date": null,
           "points": 4,
           "card_number": 29,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-11T21:45:54.321945Z",
           "updated_at": "2025-10-11T21:47:04.856744Z",
           "completed_at": null
@@ -555,9 +556,9 @@
           "due_date": null,
           "points": 3,
           "card_number": 33,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-12T13:35:39.923005Z",
-          "updated_at": "2025-10-12T13:37:27.456Z",
+          "updated_at": "2025-10-12T17:34:42.755477Z",
           "completed_at": null
         },
         {
@@ -571,7 +572,7 @@
           "due_date": null,
           "points": 1,
           "card_number": 34,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-12T13:37:00.520483Z",
           "updated_at": "2025-10-12T13:37:20.209400Z",
           "completed_at": null
@@ -587,9 +588,9 @@
           "due_date": null,
           "points": 2,
           "card_number": 35,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-12T13:39:14.336658Z",
-          "updated_at": "2025-10-12T13:42:20.921129Z",
+          "updated_at": "2025-10-12T17:34:42.755477Z",
           "completed_at": null
         },
         {
@@ -667,9 +668,9 @@
           "due_date": null,
           "points": 3,
           "card_number": 40,
-          "sprint_id": null,
+          "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
           "created_at": "2025-10-12T15:45:29.530124Z",
-          "updated_at": "2025-10-12T15:46:31.166006Z",
+          "updated_at": "2025-10-12T17:34:42.755470Z",
           "completed_at": null
         },
         {
@@ -693,7 +694,7 @@
           "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
           "title": "Assign task to sprint if created in sprint task list",
           "description": null,
-          "priority": "High",
+          "priority": "Low",
           "status": "Todo",
           "position": 41,
           "due_date": null,
@@ -701,7 +702,7 @@
           "card_number": 42,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-12T16:45:24.828497Z",
-          "updated_at": "2025-10-12T17:07:08.154323Z",
+          "updated_at": "2025-10-12T17:34:42.755474Z",
           "completed_at": null
         },
         {
@@ -797,6 +798,18 @@
           "end_date": "2025-10-19T13:49:57.439840Z",
           "created_at": "2025-10-12T13:46:50.902284Z",
           "updated_at": "2025-10-12T13:49:57.439845Z"
+        },
+        {
+          "id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
+          "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
+          "sprint_number": 6,
+          "name_index": 1,
+          "prefix_override": null,
+          "status": "Planning",
+          "start_date": null,
+          "end_date": null,
+          "created_at": "2025-10-12T17:32:56.610133Z",
+          "updated_at": "2025-10-12T17:32:56.610133Z"
         }
       ]
     }

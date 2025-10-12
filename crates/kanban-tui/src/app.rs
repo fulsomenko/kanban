@@ -239,6 +239,30 @@ impl App {
                         }
                     }
                 }
+                KeyCode::Char('a') => {
+                    if self.focus == Focus::Cards {
+                        if !self.selected_cards.is_empty() {
+                            self.sprint_assign_selection.clear();
+                            self.mode = AppMode::AssignMultipleCardsToSprint;
+                        } else if let Some(sorted_idx) = self.card_selection.get() {
+                            if let Some(board_idx) = self.active_board_index {
+                                if let Some(board) = self.boards.get(board_idx) {
+                                    let sprint_count = self.sprints.iter().filter(|s| s.board_id == board.id).count();
+                                    if sprint_count > 0 {
+                                        let sorted_cards = self.get_sorted_board_cards(board.id);
+                                        if let Some(selected_card) = sorted_cards.get(sorted_idx) {
+                                            let card_id = selected_card.id;
+                                            let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                                            self.active_card_index = actual_idx;
+                                        }
+                                        self.sprint_assign_selection.set(Some(0));
+                                        self.mode = AppMode::AssignCardToSprint;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 KeyCode::Char('c') => {
                     if self.focus == Focus::Cards {
                         if !self.selected_cards.is_empty() {
@@ -341,12 +365,6 @@ impl App {
                                 }
                             }
                         }
-                    }
-                }
-                KeyCode::Char('a') => {
-                    if self.focus == Focus::Cards && !self.selected_cards.is_empty() {
-                        self.sprint_assign_selection.clear();
-                        self.mode = AppMode::AssignMultipleCardsToSprint;
                     }
                 }
                 KeyCode::Char('1') => self.focus = Focus::Boards,
@@ -839,7 +857,7 @@ impl App {
             },
             AppMode::AssignCardToSprint => match key.code {
                 KeyCode::Esc => {
-                    self.mode = AppMode::CardDetail;
+                    self.mode = AppMode::Normal;
                     self.sprint_assign_selection.clear();
                 }
                 KeyCode::Char('j') | KeyCode::Down => {
@@ -872,7 +890,7 @@ impl App {
                             }
                         }
                     }
-                    self.mode = AppMode::CardDetail;
+                    self.mode = AppMode::Normal;
                     self.sprint_assign_selection.clear();
                 }
                 _ => {}
