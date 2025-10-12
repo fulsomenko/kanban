@@ -4,9 +4,14 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Domain models and business logic for the kanban project management tool"
+keywords = ["kanban", "project-management", "domain", "models", "business-logic"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-kanban-core = { path = "../kanban-core" }
+kanban-core = { path = "../kanban-core", version = "0.1.0" }
 anyhow.workspace = true
 thiserror.workspace = true
 serde.workspace = true
