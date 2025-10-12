@@ -179,7 +179,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     let (checkbox, text_color) = if is_done {
                         ("☑", Color::DarkGray)
                     } else {
-                        ("☐", Color::White)
+                        ("□", Color::White)
                     };
 
                     let mut base_style = Style::default().fg(text_color);
