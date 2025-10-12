@@ -6,7 +6,7 @@
         "name": "Kanban",
         "description": "Management of the **Kanban** project\n",
         "branch_prefix": "KAN",
-        "next_card_number": 33,
+        "next_card_number": 36,
         "task_sort_field": "Points",
         "task_sort_order": "Descending",
         "sprint_duration_days": 7,
@@ -15,10 +15,10 @@
           "an-eventful-october"
         ],
         "sprint_name_used_count": 1,
-        "next_sprint_number": 2,
-        "active_sprint_id": "41c3e156-64e7-4bf9-9631-eb828b5c28b2",
+        "next_sprint_number": 6,
+        "active_sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T13:31:06.811565Z"
+        "updated_at": "2025-10-12T14:31:10.038049Z"
       },
       "columns": [
         {
@@ -68,14 +68,14 @@
           "title": "Add git branches to card meta data",
           "description": "We want to be able to create git branches and tie them to specific tasks so that we can trace the history.\n\nBe able to specify a prefix for use in the project\n\n- Set prefix in Board settings\n- Assign prefix + autoincremented number to card\n- From a card. Copy branch name\n- From a card. Copy `git checkout -b prefix+id`\n\nShould the id be autoincrement or uuid?\n\nReadability says it should be autoincremented. So we go with that for now.\n\n- If no prefix fallback to a default.\n- Customize default. Requires application configuration file feature?\n\n╭────────────────────────────────────────────────────────────────╮\n│ Git Branch Integration Implementation Plan                     │\n│                                                                │\n│ Core Design Decisions                                          │\n│                                                                │\n│ - Branch ID: Auto-incremented u32 per board (decided:          │\n│ readability over UUIDs)                                        │\n│ - Prefix Hierarchy: Board prefix → App config default → \"task\" │\n│  fallback                                                      │\n│ - ID Assignment: Lazy (on first request) to avoid assigning    │\n│ IDs to cards that never need branches                          │\n│ - Branch Format: {prefix}-{id} (e.g., feature-42, task-17)     │\n│                                                                │\n│ ---                                                            │\n│ 1. Domain Layer (kanban-domain)                                │\n│                                                                │\n│ Board model (board.rs):                                        │\n│ - Add branch_prefix: Option<String> field                      │\n│ - Add next_card_id: u32 field (default: 1)                   │\n│ - Add update_branch_prefix(&mut self, prefix: Option<String>)  │\n│ method                                                         │\n│ - Add allocate_card_id(&mut self) -> u32 method              │\n│                                                                │\n│ Card model (card.rs):                                          │\n│ - Add card_id: Option<u32> field                             │\n│ - Add ensure_card_id(&mut self, board: &mut Board) method    │\n│ - Add branch_name(&self, board: &Board, default_prefix: &str)  │\n│ -> Option<String> method                                       │\n│ - Add git_checkout_command(&self, board: &Board,               │\n│ default_prefix: &str) -> Option<String> method                 │\n│ - Add prefix validation (no spaces, git-safe characters)       │\n│                                                                │\n│ ---                                                            │\n│ 2. Application Configuration (kanban-core)                     │\n│                                                                │\n│ Create new config.rs module:                                   │\n│ - Define AppConfig struct with default_branch_prefix:          │\n│ Option<String>                                                 │\n│ - Use config crate or simple TOML parsing                      │\n│ - Config file location: ~/.config/kanban/config.toml           │\n│ - Load config on app startup in kanban-cli                     │\n│ - Thread through to TUI via App struct                         │\n│                                                                │\n│ ---                                                            │\n│ 3. Clipboard Integration (kanban-tui)                          │\n│                                                                │\n│ Add dependencies to kanban-tui/Cargo.toml:                     │\n│ - arboard = \"3.4\" (cross-platform clipboard)                   │\n│                                                                │\n│ Create new clipboard.rs module:                                │\n│ - copy_to_clipboard(text: &str) -> io::Result<()>              │\n│ - Handle errors gracefully (e.g., headless environments)       │\n│                                                                │\n│ ---                                                            │\n│ 4. TUI Layer (kanban-tui)                                      │\n│                                                                │\n│ App struct (app.rs):                                           │\n│ - Add app_config: AppConfig field                              │\n│ - Add clipboard operations to card detail mode                 │\n│                                                                │\n│ Board settings (new mode AppMode::BoardSettings):              │\n│ - Add focus state for navigating board settings                │\n│ - Edit branch prefix with external editor or inline input      │\n│ - Show current prefix, effective prefix (with fallback chain)  │\n│                                                                │\n│ Card detail view (ui.rs):                                      │\n│ - Show branch ID (if assigned)                                 │\n│ - Show computed branch name                                    │\n│ - Show git checkout command                                    │\n│                                                                │\n│ Key bindings (in CardDetail mode):                             │\n│ - b - Assign branch ID (if not already assigned)               │\n│ - y - Copy branch name to clipboard                            │\n│ - Y - Copy git checkout -b {branch} to clipboard               │\n│ - Add to help text                                             │\n│                                                                │\n│ New AppMode variants:                                          │\n│ - BoardSettings - for editing board-level settings             │\n│ - SetBranchPrefix - dialog for setting prefix                  │\n│                                                                │\n│ ---                                                            │\n│ 5. Persistence                                                 │\n│                                                                │\n│ Update serialization/deserialization:                          │\n│ - Board export/import already uses serde                       │\n│ - New fields automatically included                            │\n│ - Migration: existing boards get branch_prefix: None,          │\n│ next_card_id: 1                                              │\n│ - Existing cards get card_id: None                           │\n│                                                                │\n│ ---                                                            │\n│ 6. Testing Strategy                                            │\n│                                                                │\n│ Unit tests:                                                    │\n│ - Branch ID allocation (sequential, no gaps)                   │\n│ - Branch name generation with different prefix scenarios       │\n│ - Prefix validation (reject invalid git characters)            │\n│ - Clipboard operations (mock if needed)                        │\n│                                                                │\n│ Integration tests:                                             │\n│ - Round-trip serialization with new fields                     │\n│ - Multiple cards getting sequential IDs                        │\n│                                                                │\n│ ---                                                            │\n│ 7. Implementation Order                                        │\n│                                                                │\n│ 1. Add AppConfig in kanban-core                                │\n│ 2. Update Board domain model with prefix + next_card_id      │\n│ 3. Update Card domain model with card_id + methods           │\n│ 4. Add clipboard module to kanban-tui                          │\n│ 5. Update App struct to hold config                            │\n│ 6. Add board settings mode in TUI                              │\n│ 7. Add card detail branch operations                           │\n│ 8. Update help text and key bindings                           │\n│ 9. Add tests                                                   │\n│ 10. Update CLAUDE.md with new features                         │\n│                                                                │\n│ ---                                                            │\n│ 8. Edge Cases & Validation                                     │\n│                                                                │\n│ - Validate prefix: alphanumeric + hyphens only, no             │\n│ leading/trailing hyphens                                       │\n│ - Max branch name length: git supports ~255 chars, warn if     │\n│ prefix + ID exceeds reasonable length                          │\n│ - Clipboard unavailable: show friendly error, fallback to      │\n│ displaying text                                                │\n│ - Board without prefix: use app config default or \"task\"       │\n│ - Cards created before feature: assign IDs on demand           │\n│                                                                │\n│ ---                                                            │\n│ Example Usage Flow                                             │\n│                                                                │\n│ 1. User opens board settings (s in projects view)              │\n│ 2. Sets prefix to \"feat\"                                       │\n│ 3. Navigates to card, presses b to assign branch ID → card     │\n│ gets card_id=1                                               │\n│ 4. Board's next_card_id increments to 2                      │\n│ 5. User presses y → copies \"feat-1\" to clipboard               │\n│ 6. User presses Y → copies \"git checkout -b feat-1\" to         │\n│ clipboard                                                      │\n│ 7. Next card gets card_id=2, branch name \"feat-2\"            │\n│                                                                │\n│ ---                                                            │\n│ Dependencies to add:                                           │\n│ - arboard = \"3.4\" (clipboard)                                  │\n│ - config = \"0.14\" (optional, for TOML config parsing)          │\n│ - OR use simple std::fs::read_to_string + toml = \"0.8\" for     │\n│ lightweight config     \n",
           "priority": "Medium",
-          "status": "Done",
+          "status": "Todo",
           "position": 2,
           "due_date": null,
           "points": 5,
           "card_number": 1,
           "sprint_id": null,
           "created_at": "2025-10-10T21:58:56.145240Z",
-          "updated_at": "2025-10-11T20:30:19.498471Z"
+          "updated_at": "2025-10-12T13:44:06.716541Z"
         },
         {
           "id": "f1a80abd-338c-4593-92d6-20c2db7dc093",
@@ -298,7 +298,7 @@
           "due_date": null,
           "points": 4,
           "card_number": 18,
-          "sprint_id": "41c3e156-64e7-4bf9-9631-eb828b5c28b2",
+          "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-11T18:42:39.943129Z",
           "updated_at": "2025-10-12T13:02:31.730618Z"
         },
@@ -405,7 +405,7 @@
           "card_number": 25,
           "sprint_id": null,
           "created_at": "2025-10-11T20:53:06.269232Z",
-          "updated_at": "2025-10-11T21:45:30.599476Z"
+          "updated_at": "2025-10-12T13:35:48.795670Z"
         },
         {
           "id": "5e247e41-efdf-43cc-aa0f-daf25830fd1c",
@@ -491,11 +491,11 @@
           "status": "Todo",
           "position": 30,
           "due_date": null,
-          "points": null,
+          "points": 5,
           "card_number": 31,
           "sprint_id": null,
           "created_at": "2025-10-12T00:14:17.034422Z",
-          "updated_at": "2025-10-12T00:14:57.400292Z"
+          "updated_at": "2025-10-12T13:37:49.331892Z"
         },
         {
           "id": "0ae3776c-38cc-4b22-8e89-ed9ac767b512",
@@ -506,25 +506,70 @@
           "status": "Todo",
           "position": 31,
           "due_date": null,
-          "points": null,
+          "points": 4,
           "card_number": 32,
           "sprint_id": null,
           "created_at": "2025-10-12T08:23:41.175901Z",
-          "updated_at": "2025-10-12T08:24:27.584862Z"
+          "updated_at": "2025-10-12T13:37:36.229199Z"
+        },
+        {
+          "id": "8e3a543e-86b0-405f-994e-515e013990b7",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "add ? binding",
+          "description": "in different contexts it would be beneficial to press `?` to see a dialog detailing the different commands possible\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 32,
+          "due_date": null,
+          "points": 3,
+          "card_number": 33,
+          "sprint_id": null,
+          "created_at": "2025-10-12T13:35:39.923005Z",
+          "updated_at": "2025-10-12T13:37:27.456Z"
+        },
+        {
+          "id": "475bde99-0a3f-457c-9ea6-2fd51d1d7e73",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "when creating a task. set the cursor/selected task to the new task",
+          "description": "it currently does something else\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 33,
+          "due_date": null,
+          "points": 1,
+          "card_number": 34,
+          "sprint_id": null,
+          "created_at": "2025-10-12T13:37:00.520483Z",
+          "updated_at": "2025-10-12T13:37:20.209400Z"
+        },
+        {
+          "id": "4e3ecb8a-476f-4f65-8060-5577eb32c192",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "make j/k work for changing panels",
+          "description": "using 1/2/3 etc is cool and all but I would also like to step through the panels using hjkl\n\nin the board details view, sprint section we use a list to show sprints.\n\nI think we just use 0 index of lists to change panel up and list.length - 1 index to change panel down. \n\nSo for when a panel contains a list and we hit j/k step through the list until we reach the end or the beginning and then change the panel\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 34,
+          "due_date": null,
+          "points": 2,
+          "card_number": 35,
+          "sprint_id": null,
+          "created_at": "2025-10-12T13:39:14.336658Z",
+          "updated_at": "2025-10-12T13:42:20.921129Z"
         }
       ],
       "sprints": [
         {
-          "id": "72912ed0-4c80-4734-b8fd-859176349e75",
+          "id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
           "sprint_number": 1,
-          "name": "test",
+          "name_index": 0,
           "prefix_override": null,
-          "status": "Planning",
-          "start_date": null,
-          "end_date": null,
-          "created_at": "2025-10-12T13:31:06.811570Z",
-          "updated_at": "2025-10-12T13:31:06.811570Z"
+          "status": "Active",
+          "start_date": "2025-10-12T13:49:57.439840Z",
+          "end_date": "2025-10-19T13:49:57.439840Z",
+          "created_at": "2025-10-12T13:46:50.902284Z",
+          "updated_at": "2025-10-12T13:49:57.439845Z"
         }
       ]
     }
