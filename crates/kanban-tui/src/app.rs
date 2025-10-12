@@ -1060,6 +1060,7 @@ impl App {
             board: Board,
             columns: Vec<Column>,
             cards: Vec<Card>,
+            sprints: Vec<Sprint>,
         }
 
         #[derive(Serialize)]
@@ -1085,10 +1086,18 @@ impl App {
                     .cloned()
                     .collect();
 
+                let board_sprints: Vec<Sprint> = self
+                    .sprints
+                    .iter()
+                    .filter(|s| s.board_id == board.id)
+                    .cloned()
+                    .collect();
+
                 let board_export = BoardExport {
                     board: board.clone(),
                     columns: board_columns,
                     cards: board_cards,
+                    sprints: board_sprints,
                 };
 
                 let export = AllBoardsExport {
@@ -1110,6 +1119,7 @@ impl App {
             board: Board,
             columns: Vec<Column>,
             cards: Vec<Card>,
+            sprints: Vec<Sprint>,
         }
 
         #[derive(Serialize)]
@@ -1136,10 +1146,18 @@ impl App {
                 .cloned()
                 .collect();
 
+            let board_sprints: Vec<Sprint> = self
+                .sprints
+                .iter()
+                .filter(|s| s.board_id == board.id)
+                .cloned()
+                .collect();
+
             board_exports.push(BoardExport {
                 board: board.clone(),
                 columns: board_columns,
                 cards: board_cards,
+                sprints: board_sprints,
             });
         }
 
