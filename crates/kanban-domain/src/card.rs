@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{board::Board, column::ColumnId};
+use crate::{board::Board, column::ColumnId, sprint::Sprint};
 
 pub type CardId = Uuid;
 
@@ -35,6 +35,8 @@ pub struct Card {
     pub points: Option<u8>,
     #[serde(default)]
     pub card_number: u32,
+    #[serde(default)]
+    pub sprint_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -54,6 +56,7 @@ impl Card {
             due_date: None,
             points: None,
             card_number,
+            sprint_id: None,
             created_at: now,
             updated_at: now,
         }
@@ -95,8 +98,19 @@ impl Card {
         self.updated_at = Utc::now();
     }
 
-    pub fn branch_name(&self, board: &Board, default_prefix: &str) -> String {
-        let prefix = board.effective_branch_prefix(default_prefix);
+    pub fn branch_name(&self, board: &Board, sprints: &[Sprint], default_prefix: &str) -> String {
+        let prefix = if let Some(sprint_id) = self.sprint_id {
+            sprints
+                .iter()
+                .find(|s| s.id == sprint_id)
+                .and_then(|sprint| {
+                    sprint.prefix_override.as_ref().or(board.sprint_prefix.as_ref())
+                })
+                .map(|s| s.as_str())
+                .unwrap_or_else(|| board.effective_branch_prefix(default_prefix))
+        } else {
+            board.effective_branch_prefix(default_prefix)
+        };
         let kebab_title = Self::to_kebab_case(&self.title);
         let branch = format!("{}-{}/{}", prefix, self.card_number, kebab_title);
         Self::truncate_branch_name(branch)
@@ -127,8 +141,8 @@ impl Card {
         }
     }
 
-    pub fn git_checkout_command(&self, board: &Board, default_prefix: &str) -> String {
-        let name = self.branch_name(board, default_prefix);
+    pub fn git_checkout_command(&self, board: &Board, sprints: &[Sprint], default_prefix: &str) -> String {
+        let name = self.branch_name(board, sprints, default_prefix);
         format!("git checkout -b {}", name)
     }
 
@@ -171,15 +185,16 @@ mod tests {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
         let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let sprints = vec![];
 
         assert_eq!(
-            card.branch_name(&board, "task"),
+            card.branch_name(&board, &sprints, "task"),
             "task-1/test-card".to_string()
         );
 
         board.update_branch_prefix(Some("feat".to_string()));
         assert_eq!(
-            card.branch_name(&board, "task"),
+            card.branch_name(&board, &sprints, "task"),
             "feat-1/test-card".to_string()
         );
     }
@@ -207,8 +222,9 @@ mod tests {
         let long_title = "a".repeat(300);
         let mut board = Board::new("Test Board".to_string(), None);
         let card = Card::new(&mut board, column_id, long_title, 0);
+        let sprints = vec![];
 
-        let branch = card.branch_name(&board, "task");
+        let branch = card.branch_name(&board, &sprints, "task");
         assert!(branch.len() <= 250);
         assert!(branch.starts_with("task-1/"));
     }
@@ -218,10 +234,51 @@ mod tests {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
         let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let sprints = vec![];
 
         assert_eq!(
-            card.git_checkout_command(&board, "task"),
+            card.git_checkout_command(&board, &sprints, "task"),
             "git checkout -b task-1/test-card".to_string()
+        );
+    }
+
+    #[test]
+    fn test_branch_name_with_sprint_prefix() {
+        use crate::sprint::{Sprint, SprintStatus};
+
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        board.sprint_prefix = Some("sprint".to_string());
+
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+
+        let sprint = Sprint::new(board.id, 1, Some("Alpha".to_string()), None);
+        card.sprint_id = Some(sprint.id);
+
+        let sprints = vec![sprint];
+
+        assert_eq!(
+            card.branch_name(&board, &sprints, "task"),
+            "sprint-1/test-card".to_string()
+        );
+
+        let sprint_with_override = Sprint {
+            id: card.sprint_id.unwrap(),
+            board_id: board.id,
+            sprint_number: 1,
+            name: Some("Alpha".to_string()),
+            prefix_override: Some("hotfix".to_string()),
+            status: SprintStatus::Planning,
+            start_date: None,
+            end_date: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        let sprints_with_override = vec![sprint_with_override];
+
+        assert_eq!(
+            card.branch_name(&board, &sprints_with_override, "task"),
+            "hotfix-1/test-card".to_string()
         );
     }
 
