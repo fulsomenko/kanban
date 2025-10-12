@@ -6,7 +6,7 @@
         "name": "Kanban",
         "description": "Management of the **Kanban** project\n",
         "branch_prefix": "KAN",
-        "next_card_number": 44,
+        "next_card_number": 45,
         "task_sort_field": "Points",
         "task_sort_order": "Descending",
         "sprint_duration_days": 7,
@@ -18,7 +18,7 @@
         "next_sprint_number": 6,
         "active_sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T16:45:41.135177Z"
+        "updated_at": "2025-10-12T17:15:57.532853Z"
       },
       "columns": [
         {
@@ -205,7 +205,7 @@
           "card_number": 12,
           "sprint_id": null,
           "created_at": "2025-10-10T22:56:04.200355Z",
-          "updated_at": "2025-10-11T20:41:24.403599Z",
+          "updated_at": "2025-10-12T17:09:48.297167Z",
           "completed_at": null
         },
         {

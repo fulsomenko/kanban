@@ -188,12 +188,6 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         style = style.bg(Color::Blue);
                     }
 
-                    let points_badge = if let Some(points) = card.points {
-                        format!(" [{}]", points)
-                    } else {
-                        String::new()
-                    };
-
                     let sprint_name = if let Some(sprint_id) = card.sprint_id {
                         app.sprints
                             .iter()
@@ -215,6 +209,23 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     let is_multi_selected = app.selected_cards.contains(&card.id);
                     let select_indicator = if is_multi_selected { "► " } else { "  " };
 
+                    let points_color = card
+                        .points
+                        .map(|p| match p {
+                            1 => Color::Cyan,
+                            2 => Color::Green,
+                            3 => Color::Yellow,
+                            4 => Color::LightMagenta,
+                            5 => Color::Red,
+                            _ => Color::White,
+                        })
+                        .unwrap_or(Color::White);
+
+                    let mut points_style = Style::default().fg(points_color);
+                    if is_selected && is_focused {
+                        points_style = points_style.bg(Color::Blue);
+                    }
+
                     let priority_color = match card.priority {
                         kanban_domain::CardPriority::Critical => Color::Red,
                         kanban_domain::CardPriority::High => Color::LightRed,
@@ -227,30 +238,18 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         priority_style = priority_style.bg(Color::Blue);
                     }
 
+                    let points_text = if let Some(points) = card.points {
+                        format!("[{}]", points)
+                    } else {
+                        "   ".to_string()
+                    };
+
                     let mut spans = vec![
                         Span::styled("● ", priority_style),
+                        Span::styled(points_text, points_style),
+                        Span::raw(" "),
                         Span::styled(format!("{}{} {}", select_indicator, checkbox, card.title), style)
                     ];
-
-                    if !points_badge.is_empty() {
-                        let points_color = card
-                            .points
-                            .map(|p| match p {
-                                1 => Color::Cyan,
-                                2 => Color::Green,
-                                3 => Color::Yellow,
-                                4 => Color::LightMagenta,
-                                5 => Color::Red,
-                                _ => Color::White,
-                            })
-                            .unwrap_or(Color::White);
-
-                        let mut points_style = Style::default().fg(points_color);
-                        if is_selected && is_focused {
-                            points_style = points_style.bg(Color::Blue);
-                        }
-                        spans.push(Span::styled(points_badge, points_style));
-                    }
 
                     if !sprint_name.is_empty() {
                         let mut sprint_style = Style::default().fg(Color::DarkGray);
