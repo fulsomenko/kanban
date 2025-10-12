@@ -356,7 +356,7 @@ impl App {
                 },
                 _ => {}
             },
-            AppMode::CreateBoard => match handle_dialog_input(&mut self.input, key.code) {
+            AppMode::CreateBoard => match handle_dialog_input(&mut self.input, key.code, false) {
                 DialogAction::Confirm => {
                     self.create_board();
                     self.mode = AppMode::Normal;
@@ -368,7 +368,7 @@ impl App {
                 }
                 DialogAction::None => {}
             },
-            AppMode::CreateCard => match handle_dialog_input(&mut self.input, key.code) {
+            AppMode::CreateCard => match handle_dialog_input(&mut self.input, key.code, false) {
                 DialogAction::Confirm => {
                     self.create_card();
                     self.mode = AppMode::Normal;
@@ -380,7 +380,7 @@ impl App {
                 }
                 DialogAction::None => {}
             },
-            AppMode::CreateSprint => match handle_dialog_input(&mut self.input, key.code) {
+            AppMode::CreateSprint => match handle_dialog_input(&mut self.input, key.code, true) {
                 DialogAction::Confirm => {
                     self.create_sprint();
                     self.mode = AppMode::BoardDetail;
@@ -394,7 +394,7 @@ impl App {
                 }
                 DialogAction::None => {}
             },
-            AppMode::RenameBoard => match handle_dialog_input(&mut self.input, key.code) {
+            AppMode::RenameBoard => match handle_dialog_input(&mut self.input, key.code, false) {
                 DialogAction::Confirm => {
                     self.rename_board();
                     self.mode = AppMode::Normal;
@@ -406,7 +406,7 @@ impl App {
                 }
                 DialogAction::None => {}
             },
-            AppMode::ExportBoard => match handle_dialog_input(&mut self.input, key.code) {
+            AppMode::ExportBoard => match handle_dialog_input(&mut self.input, key.code, false) {
                 DialogAction::Confirm => {
                     if let Err(e) = self.export_board_with_filename() {
                         tracing::error!("Failed to export board: {}", e);
@@ -420,7 +420,7 @@ impl App {
                 }
                 DialogAction::None => {}
             },
-            AppMode::ExportAll => match handle_dialog_input(&mut self.input, key.code) {
+            AppMode::ExportAll => match handle_dialog_input(&mut self.input, key.code, false) {
                 DialogAction::Confirm => {
                     if let Err(e) = self.export_all_boards_with_filename() {
                         tracing::error!("Failed to export all boards: {}", e);
@@ -458,7 +458,7 @@ impl App {
                 }
                 _ => {}
             },
-            AppMode::SetCardPoints => match handle_dialog_input(&mut self.input, key.code) {
+            AppMode::SetCardPoints => match handle_dialog_input(&mut self.input, key.code, true) {
                 DialogAction::Confirm => {
                     let input_str = self.input.as_str().trim();
                     let points = if input_str.is_empty() {
@@ -684,9 +684,12 @@ impl App {
                                 if let Some(board_idx) = board_idx {
                                     if let Some(board) = self.boards.get_mut(board_idx) {
                                         let duration = board.sprint_duration_days.unwrap_or(14);
+                                        let sprint_id = sprint.id;
                                         sprint.activate(duration);
-                                        board.active_sprint_id = Some(sprint.id);
-                                        tracing::info!("Activated sprint: {}", sprint.formatted_name("sprint"));
+                                        board.active_sprint_id = Some(sprint_id);
+                                    }
+                                    if let Some(board) = self.boards.get(board_idx) {
+                                        tracing::info!("Activated sprint: {}", sprint.formatted_name(board, "sprint"));
                                     }
                                 }
                             }
@@ -701,7 +704,12 @@ impl App {
                             {
                                 let sprint_id = sprint.id;
                                 sprint.complete();
-                                tracing::info!("Completed sprint: {}", sprint.formatted_name("sprint"));
+                                let board_idx = self.active_board_index.or(self.board_selection.get());
+                                if let Some(board_idx) = board_idx {
+                                    if let Some(board) = self.boards.get(board_idx) {
+                                        tracing::info!("Completed sprint: {}", sprint.formatted_name(board, "sprint"));
+                                    }
+                                }
 
                                 for card in self.cards.iter_mut() {
                                     if card.sprint_id == Some(sprint_id) {
@@ -756,7 +764,7 @@ impl App {
                                         let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board.id).collect();
                                         if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                             card.sprint_id = Some(sprint.id);
-                                            tracing::info!("Assigned card to sprint: {}", sprint.formatted_name("sprint"));
+                                            tracing::info!("Assigned card to sprint: {}", sprint.formatted_name(board, "sprint"));
                                         }
                                     }
                                 }
@@ -768,7 +776,7 @@ impl App {
                 }
                 _ => {}
             },
-            AppMode::SetBranchPrefix => match handle_dialog_input(&mut self.input, key.code) {
+            AppMode::SetBranchPrefix => match handle_dialog_input(&mut self.input, key.code, true) {
                 DialogAction::Confirm => {
                     let prefix_str = self.input.as_str().trim();
                     if prefix_str.is_empty() {
@@ -880,25 +888,30 @@ impl App {
     fn create_sprint(&mut self) {
         let board_idx = self.active_board_index.or(self.board_selection.get());
         if let Some(board_idx) = board_idx {
-            if let Some(board) = self.boards.get_mut(board_idx) {
-                let sprint_number = board.allocate_sprint_number();
-                let auto_name = board.consume_sprint_name();
-
-                let input_text = self.input.as_str().trim();
-                let sprint_name = if input_text.is_empty() {
-                    auto_name
+            let (sprint_number, name_index, board_id) = {
+                if let Some(board) = self.boards.get_mut(board_idx) {
+                    let sprint_number = board.allocate_sprint_number();
+                    let input_text = self.input.as_str().trim();
+                    let name_index = if input_text.is_empty() {
+                        board.consume_sprint_name()
+                    } else {
+                        Some(board.add_sprint_name_at_used_index(input_text.to_string()))
+                    };
+                    (sprint_number, name_index, board.id)
                 } else {
-                    Some(input_text.to_string())
-                };
+                    return;
+                }
+            };
 
-                let sprint = Sprint::new(board.id, sprint_number, sprint_name, None);
-                tracing::info!("Creating sprint: {} (id: {})", sprint.formatted_name("sprint"), sprint.id);
-                self.sprints.push(sprint);
-
-                let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board.id).collect();
-                let new_index = board_sprints.len() - 1;
-                self.sprint_selection.set(Some(new_index));
+            let sprint = Sprint::new(board_id, sprint_number, name_index, None);
+            if let Some(board) = self.boards.get(board_idx) {
+                tracing::info!("Creating sprint: {} (id: {})", sprint.formatted_name(board, "sprint"), sprint.id);
             }
+            self.sprints.push(sprint);
+
+            let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board_id).collect();
+            let new_index = board_sprints.len() - 1;
+            self.sprint_selection.set(Some(new_index));
         }
     }
 
@@ -1250,7 +1263,7 @@ impl App {
                 if let Some(board) = self.boards.iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
-                        sprint.formatted_name(board.sprint_prefix.as_deref().unwrap_or("sprint")),
+                        sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint")),
                         sprint
                             .end_date
                             .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())
