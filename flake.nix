@@ -22,12 +22,24 @@
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = ["rust-src" "rust-analyzer" "clippy" "rustfmt"];
         };
+
+        bumpVersion = pkgs.writeShellScriptBin "bump-version" ''
+          ${builtins.readFile ./scripts/bump-version.sh}
+        '';
+
+        publishCrates = pkgs.writeShellScriptBin "publish-crates" ''
+          ${builtins.readFile ./scripts/publish-crates.sh}
+        '';
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
         };
 
-        packages.default = pkgs.callPackage ./default.nix {};
+        packages = {
+          default = pkgs.callPackage ./default.nix {};
+          bump-version = bumpVersion;
+          publish-crates = publishCrates;
+        };
       }
     );
 }
