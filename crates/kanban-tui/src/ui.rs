@@ -215,7 +215,20 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     let is_multi_selected = app.selected_cards.contains(&card.id);
                     let select_indicator = if is_multi_selected { "► " } else { "  " };
 
+                    let priority_color = match card.priority {
+                        kanban_domain::CardPriority::Critical => Color::Red,
+                        kanban_domain::CardPriority::High => Color::LightRed,
+                        kanban_domain::CardPriority::Medium => Color::Yellow,
+                        kanban_domain::CardPriority::Low => Color::White,
+                    };
+
+                    let mut priority_style = Style::default().fg(priority_color);
+                    if is_selected && is_focused {
+                        priority_style = priority_style.bg(Color::Blue);
+                    }
+
                     let mut spans = vec![
+                        Span::styled("● ", priority_style),
                         Span::styled(format!("{}{} {}", select_indicator, checkbox, card.title), style)
                     ];
 
