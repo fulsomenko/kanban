@@ -245,9 +245,9 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     }
 
                     let points_text = if let Some(points) = card.points {
-                        format!("[{}]", points)
+                        format!("{}", points)
                     } else {
-                        "   ".to_string()
+                        " ".to_string()
                     };
 
                     let mut spans = vec![
