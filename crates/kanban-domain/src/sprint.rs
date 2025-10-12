@@ -1,0 +1,92 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SprintStatus {
+    Planning,
+    Active,
+    Completed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Sprint {
+    pub id: Uuid,
+    pub board_id: Uuid,
+    pub sprint_number: u32,
+    pub name: Option<String>,
+    pub prefix_override: Option<String>,
+    pub status: SprintStatus,
+    pub start_date: Option<DateTime<Utc>>,
+    pub end_date: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+pub type SprintId = Uuid;
+
+impl Sprint {
+    pub fn new(
+        board_id: Uuid,
+        sprint_number: u32,
+        name: Option<String>,
+        prefix_override: Option<String>,
+    ) -> Self {
+        let now = Utc::now();
+        Self {
+            id: Uuid::new_v4(),
+            board_id,
+            sprint_number,
+            name,
+            prefix_override,
+            status: SprintStatus::Planning,
+            start_date: None,
+            end_date: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    pub fn formatted_name(&self, default_prefix: &str) -> String {
+        let prefix = self.prefix_override.as_deref().unwrap_or(default_prefix);
+        match &self.name {
+            Some(name) => format!("{}-{}/{}", prefix, self.sprint_number, name),
+            None => format!("{}-{}", prefix, self.sprint_number),
+        }
+    }
+
+    pub fn activate(&mut self, duration_days: u32) {
+        self.status = SprintStatus::Active;
+        let start = Utc::now();
+        self.start_date = Some(start);
+        self.end_date = Some(start + chrono::Duration::days(duration_days as i64));
+        self.updated_at = Utc::now();
+    }
+
+    pub fn complete(&mut self) {
+        self.status = SprintStatus::Completed;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn cancel(&mut self) {
+        self.status = SprintStatus::Cancelled;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn update_name(&mut self, name: Option<String>) {
+        self.name = name;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn is_ended(&self) -> bool {
+        if self.status != SprintStatus::Active {
+            return false;
+        }
+        if let Some(end_date) = self.end_date {
+            Utc::now() > end_date
+        } else {
+            false
+        }
+    }
+}
