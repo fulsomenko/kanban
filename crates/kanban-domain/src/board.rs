@@ -138,6 +138,9 @@ impl Board {
     }
 
     pub fn add_sprint_name_at_used_index(&mut self, name: String) -> usize {
+        if self.sprint_name_used_count > self.sprint_names.len() {
+            self.sprint_name_used_count = self.sprint_names.len();
+        }
         let index = self.sprint_name_used_count;
         self.sprint_names.insert(index, name);
         self.sprint_name_used_count += 1;
