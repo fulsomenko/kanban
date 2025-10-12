@@ -44,6 +44,7 @@ pub struct App {
     pub current_sort_field: Option<SortField>,
     pub current_sort_order: Option<SortOrder>,
     pub selected_cards: std::collections::HashSet<uuid::Uuid>,
+    pub priority_selection: SelectionState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,6 +99,7 @@ pub enum AppMode {
     ExportAll,
     ImportBoard,
     SetCardPoints,
+    SetCardPriority,
     SetBranchPrefix,
     OrderCards,
     SprintDetail,
@@ -136,6 +138,7 @@ impl App {
             current_sort_field: None,
             current_sort_order: None,
             selected_cards: std::collections::HashSet::new(),
+            priority_selection: SelectionState::new(),
         };
 
         if let Some(ref filename) = save_file {
@@ -557,6 +560,36 @@ impl App {
                 }
                 DialogAction::None => {}
             },
+            AppMode::SetCardPriority => match key.code {
+                KeyCode::Esc => {
+                    self.mode = AppMode::CardDetail;
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.priority_selection.next(4);
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.priority_selection.prev();
+                }
+                KeyCode::Enter => {
+                    if let Some(priority_idx) = self.priority_selection.get() {
+                        if let Some(card_idx) = self.active_card_index {
+                            if let Some(card) = self.cards.get_mut(card_idx) {
+                                use kanban_domain::CardPriority;
+                                let priority = match priority_idx {
+                                    0 => CardPriority::Low,
+                                    1 => CardPriority::Medium,
+                                    2 => CardPriority::High,
+                                    3 => CardPriority::Critical,
+                                    _ => CardPriority::Medium,
+                                };
+                                card.update_priority(priority);
+                            }
+                        }
+                    }
+                    self.mode = AppMode::CardDetail;
+                }
+                _ => {}
+            },
             AppMode::CardDetail => match key.code {
                 KeyCode::Esc => {
                     self.mode = AppMode::Normal;
@@ -610,6 +643,10 @@ impl App {
                             }
                         }
                     }
+                }
+                KeyCode::Char('p') => {
+                    self.priority_selection.set(Some(0));
+                    self.mode = AppMode::SetCardPriority;
                 }
                 _ => {}
             },

@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -75,6 +75,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::ExportAll => render_export_all_popup(app, frame),
                 AppMode::ImportBoard => render_import_board_popup(app, frame),
                 AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
+                AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
                 AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
                 AppMode::OrderCards => render_order_cards_popup(app, frame),
                 _ => {}
@@ -432,6 +433,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit points | s: assign sprint",
         },
         AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm",
+        AppMode::SetCardPriority => "ESC: cancel | j/k: navigate | ENTER: confirm",
         AppMode::BoardDetail => match app.board_focus {
             BoardFocus::Name => "q: quit | ESC: back | 1/2/3/4: select panel | e: edit name",
             BoardFocus::Description => "q: quit | ESC: back | 1/2/3/4: select panel | e: edit description",
@@ -464,6 +466,44 @@ fn render_create_sprint_popup(app: &App, frame: &mut Frame) {
 
 fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Set Points", "Points (1-5 or empty):");
+}
+
+fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
+    use kanban_domain::CardPriority;
+
+    let priorities = [
+        CardPriority::Low,
+        CardPriority::Medium,
+        CardPriority::High,
+        CardPriority::Critical,
+    ];
+
+    let selected = app.priority_selection.get().unwrap_or(0);
+
+    let items: Vec<ListItem> = priorities
+        .iter()
+        .enumerate()
+        .map(|(idx, priority)| {
+            let style = if idx == selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            ListItem::new(format!("{:?}", priority)).style(style)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title("Set Priority")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+
+    let area = centered_rect(30, 40, frame.area());
+    frame.render_widget(Clear, area);
+    frame.render_widget(list, area);
 }
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {

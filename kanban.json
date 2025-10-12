@@ -710,7 +710,7 @@
           "title": "Remove projects projects and kanban green text",
           "description": "in the projects panel there is a green text with `Projects` we can drop this as the panel header itself shows projects too.\n\nin the task list there is a green text of the current project. we can drop this and rely on the highlighted item in the projects list instead\n",
           "priority": "Medium",
-          "status": "Todo",
+          "status": "Done",
           "position": 42,
           "due_date": null,
           "points": 1,
