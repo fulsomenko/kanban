@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -75,6 +75,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::ExportAll => render_export_all_popup(app, frame),
                 AppMode::ImportBoard => render_import_board_popup(app, frame),
                 AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
+                AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
                 AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
                 AppMode::OrderCards => render_order_cards_popup(app, frame),
                 _ => {}
@@ -175,23 +176,23 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     let is_focused = app.focus == Focus::Cards;
                     let is_done = card.status == CardStatus::Done;
 
-                    let (checkbox, text_color, text_modifier) = if is_done {
-                        ("☑", Color::DarkGray, Modifier::CROSSED_OUT)
+                    let (checkbox, text_color) = if is_done {
+                        ("[x]", Color::DarkGray)
                     } else {
-                        ("☐", Color::White, Modifier::empty())
+                        ("[ ]", Color::White)
                     };
 
-                    let mut style = Style::default().fg(text_color).add_modifier(text_modifier);
+                    let mut base_style = Style::default().fg(text_color);
+                    let mut title_style = Style::default().fg(text_color);
 
-                    if is_selected && is_focused {
-                        style = style.bg(Color::Blue);
+                    if is_done {
+                        title_style = title_style.add_modifier(Modifier::CROSSED_OUT);
                     }
 
-                    let points_badge = if let Some(points) = card.points {
-                        format!(" [{}]", points)
-                    } else {
-                        String::new()
-                    };
+                    if is_selected && is_focused {
+                        base_style = base_style.bg(Color::Blue);
+                        title_style = title_style.bg(Color::Blue);
+                    }
 
                     let sprint_name = if let Some(sprint_id) = card.sprint_id {
                         app.sprints
@@ -214,29 +215,50 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     let is_multi_selected = app.selected_cards.contains(&card.id);
                     let select_indicator = if is_multi_selected { "► " } else { "  " };
 
-                    let mut spans = vec![
-                        Span::styled(format!("{}{} {}", select_indicator, checkbox, card.title), style)
-                    ];
+                    let points_color = card
+                        .points
+                        .map(|p| match p {
+                            1 => Color::Cyan,
+                            2 => Color::Green,
+                            3 => Color::Yellow,
+                            4 => Color::LightMagenta,
+                            5 => Color::Red,
+                            _ => Color::White,
+                        })
+                        .unwrap_or(Color::White);
 
-                    if !points_badge.is_empty() {
-                        let points_color = card
-                            .points
-                            .map(|p| match p {
-                                1 => Color::Cyan,
-                                2 => Color::Green,
-                                3 => Color::Yellow,
-                                4 => Color::LightMagenta,
-                                5 => Color::Red,
-                                _ => Color::White,
-                            })
-                            .unwrap_or(Color::White);
-
-                        let mut points_style = Style::default().fg(points_color);
-                        if is_selected && is_focused {
-                            points_style = points_style.bg(Color::Blue);
-                        }
-                        spans.push(Span::styled(points_badge, points_style));
+                    let mut points_style = Style::default()
+                        .fg(points_color)
+                        .add_modifier(Modifier::BOLD);
+                    if is_selected && is_focused {
+                        points_style = points_style.bg(Color::Blue);
                     }
+
+                    let priority_color = match card.priority {
+                        kanban_domain::CardPriority::Critical => Color::Red,
+                        kanban_domain::CardPriority::High => Color::LightRed,
+                        kanban_domain::CardPriority::Medium => Color::Yellow,
+                        kanban_domain::CardPriority::Low => Color::White,
+                    };
+
+                    let mut priority_style = Style::default().fg(priority_color);
+                    if is_selected && is_focused {
+                        priority_style = priority_style.bg(Color::Blue);
+                    }
+
+                    let points_text = if let Some(points) = card.points {
+                        format!("{}", points)
+                    } else {
+                        " ".to_string()
+                    };
+
+                    let mut spans = vec![
+                        Span::styled("● ", priority_style),
+                        Span::styled(points_text, points_style),
+                        Span::raw(" "),
+                        Span::styled(format!("{}{} ", select_indicator, checkbox), base_style),
+                        Span::styled(&card.title, title_style)
+                    ];
 
                     if !sprint_name.is_empty() {
                         let mut sprint_style = Style::default().fg(Color::DarkGray);
@@ -432,6 +454,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit points | s: assign sprint",
         },
         AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm",
+        AppMode::SetCardPriority => "ESC: cancel | j/k: navigate | ENTER: confirm",
         AppMode::BoardDetail => match app.board_focus {
             BoardFocus::Name => "q: quit | ESC: back | 1/2/3/4: select panel | e: edit name",
             BoardFocus::Description => "q: quit | ESC: back | 1/2/3/4: select panel | e: edit description",
@@ -464,6 +487,44 @@ fn render_create_sprint_popup(app: &App, frame: &mut Frame) {
 
 fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
     render_input_popup(app, frame, "Set Points", "Points (1-5 or empty):");
+}
+
+fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
+    use kanban_domain::CardPriority;
+
+    let priorities = [
+        CardPriority::Low,
+        CardPriority::Medium,
+        CardPriority::High,
+        CardPriority::Critical,
+    ];
+
+    let selected = app.priority_selection.get().unwrap_or(0);
+
+    let items: Vec<ListItem> = priorities
+        .iter()
+        .enumerate()
+        .map(|(idx, priority)| {
+            let style = if idx == selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            ListItem::new(format!("{:?}", priority)).style(style)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title("Set Priority")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+
+    let area = centered_rect(30, 40, frame.area());
+    frame.render_widget(Clear, area);
+    frame.render_widget(list, area);
 }
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {

@@ -32,6 +32,7 @@ pub struct App {
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
     pub active_sprint_filter: Option<uuid::Uuid>,
+    pub hide_assigned_cards: bool,
     pub sprint_assign_selection: SelectionState,
     pub focus: Focus,
     pub card_focus: CardFocus,
@@ -44,6 +45,7 @@ pub struct App {
     pub current_sort_field: Option<SortField>,
     pub current_sort_order: Option<SortOrder>,
     pub selected_cards: std::collections::HashSet<uuid::Uuid>,
+    pub priority_selection: SelectionState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,6 +100,7 @@ pub enum AppMode {
     ExportAll,
     ImportBoard,
     SetCardPoints,
+    SetCardPriority,
     SetBranchPrefix,
     OrderCards,
     SprintDetail,
@@ -124,6 +127,7 @@ impl App {
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
             active_sprint_filter: None,
+            hide_assigned_cards: false,
             sprint_assign_selection: SelectionState::new(),
             focus: Focus::Boards,
             card_focus: CardFocus::Title,
@@ -136,6 +140,7 @@ impl App {
             current_sort_field: None,
             current_sort_order: None,
             selected_cards: std::collections::HashSet::new(),
+            priority_selection: SelectionState::new(),
         };
 
         if let Some(ref filename) = save_file {
@@ -234,6 +239,30 @@ impl App {
                         }
                     }
                 }
+                KeyCode::Char('a') => {
+                    if self.focus == Focus::Cards {
+                        if !self.selected_cards.is_empty() {
+                            self.sprint_assign_selection.clear();
+                            self.mode = AppMode::AssignMultipleCardsToSprint;
+                        } else if let Some(sorted_idx) = self.card_selection.get() {
+                            if let Some(board_idx) = self.active_board_index {
+                                if let Some(board) = self.boards.get(board_idx) {
+                                    let sprint_count = self.sprints.iter().filter(|s| s.board_id == board.id).count();
+                                    if sprint_count > 0 {
+                                        let sorted_cards = self.get_sorted_board_cards(board.id);
+                                        if let Some(selected_card) = sorted_cards.get(sorted_idx) {
+                                            let card_id = selected_card.id;
+                                            let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                                            self.active_card_index = actual_idx;
+                                        }
+                                        self.sprint_assign_selection.set(Some(0));
+                                        self.mode = AppMode::AssignCardToSprint;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 KeyCode::Char('c') => {
                     if self.focus == Focus::Cards {
                         if !self.selected_cards.is_empty() {
@@ -267,6 +296,24 @@ impl App {
                             }
 
                             tracing::info!("Toggled sort order to: {:?}", new_order);
+                        }
+                    }
+                }
+                KeyCode::Char('T') => {
+                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
+                        self.hide_assigned_cards = !self.hide_assigned_cards;
+                        let status = if self.hide_assigned_cards { "enabled" } else { "disabled" };
+                        tracing::info!("Hide assigned cards: {}", status);
+
+                        if let Some(board_idx) = self.active_board_index {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                let card_count = self.get_board_card_count(board.id);
+                                if card_count > 0 {
+                                    self.card_selection.set(Some(0));
+                                } else {
+                                    self.card_selection.clear();
+                                }
+                            }
                         }
                     }
                 }
@@ -318,12 +365,6 @@ impl App {
                                 }
                             }
                         }
-                    }
-                }
-                KeyCode::Char('a') => {
-                    if self.focus == Focus::Cards && !self.selected_cards.is_empty() {
-                        self.sprint_assign_selection.clear();
-                        self.mode = AppMode::AssignMultipleCardsToSprint;
                     }
                 }
                 KeyCode::Char('1') => self.focus = Focus::Boards,
@@ -557,6 +598,36 @@ impl App {
                 }
                 DialogAction::None => {}
             },
+            AppMode::SetCardPriority => match key.code {
+                KeyCode::Esc => {
+                    self.mode = AppMode::CardDetail;
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.priority_selection.next(4);
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.priority_selection.prev();
+                }
+                KeyCode::Enter => {
+                    if let Some(priority_idx) = self.priority_selection.get() {
+                        if let Some(card_idx) = self.active_card_index {
+                            if let Some(card) = self.cards.get_mut(card_idx) {
+                                use kanban_domain::CardPriority;
+                                let priority = match priority_idx {
+                                    0 => CardPriority::Low,
+                                    1 => CardPriority::Medium,
+                                    2 => CardPriority::High,
+                                    3 => CardPriority::Critical,
+                                    _ => CardPriority::Medium,
+                                };
+                                card.update_priority(priority);
+                            }
+                        }
+                    }
+                    self.mode = AppMode::CardDetail;
+                }
+                _ => {}
+            },
             AppMode::CardDetail => match key.code {
                 KeyCode::Esc => {
                     self.mode = AppMode::Normal;
@@ -610,6 +681,10 @@ impl App {
                             }
                         }
                     }
+                }
+                KeyCode::Char('p') => {
+                    self.priority_selection.set(Some(0));
+                    self.mode = AppMode::SetCardPriority;
                 }
                 _ => {}
             },
@@ -782,7 +857,7 @@ impl App {
             },
             AppMode::AssignCardToSprint => match key.code {
                 KeyCode::Esc => {
-                    self.mode = AppMode::CardDetail;
+                    self.mode = AppMode::Normal;
                     self.sprint_assign_selection.clear();
                 }
                 KeyCode::Char('j') | KeyCode::Down => {
@@ -815,7 +890,7 @@ impl App {
                             }
                         }
                     }
-                    self.mode = AppMode::CardDetail;
+                    self.mode = AppMode::Normal;
                     self.sprint_assign_selection.clear();
                 }
                 _ => {}
@@ -1107,7 +1182,13 @@ impl App {
                 }
 
                 if let Some(filter_sprint_id) = self.active_sprint_filter {
-                    card.sprint_id == Some(filter_sprint_id)
+                    if card.sprint_id != Some(filter_sprint_id) {
+                        return false;
+                    }
+                }
+
+                if self.hide_assigned_cards {
+                    card.sprint_id.is_none()
                 } else {
                     true
                 }
@@ -1133,7 +1214,13 @@ impl App {
                 }
 
                 if let Some(filter_sprint_id) = self.active_sprint_filter {
-                    card.sprint_id == Some(filter_sprint_id)
+                    if card.sprint_id != Some(filter_sprint_id) {
+                        return false;
+                    }
+                }
+
+                if self.hide_assigned_cards {
+                    card.sprint_id.is_none()
                 } else {
                     true
                 }
