@@ -176,16 +176,22 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     let is_focused = app.focus == Focus::Cards;
                     let is_done = card.status == CardStatus::Done;
 
-                    let (checkbox, text_color, text_modifier) = if is_done {
-                        ("☑", Color::DarkGray, Modifier::CROSSED_OUT)
+                    let (checkbox, text_color) = if is_done {
+                        ("☑", Color::DarkGray)
                     } else {
-                        ("☐", Color::White, Modifier::empty())
+                        ("☐", Color::White)
                     };
 
-                    let mut style = Style::default().fg(text_color).add_modifier(text_modifier);
+                    let mut base_style = Style::default().fg(text_color);
+                    let mut title_style = Style::default().fg(text_color);
+
+                    if is_done {
+                        title_style = title_style.add_modifier(Modifier::CROSSED_OUT);
+                    }
 
                     if is_selected && is_focused {
-                        style = style.bg(Color::Blue);
+                        base_style = base_style.bg(Color::Blue);
+                        title_style = title_style.bg(Color::Blue);
                     }
 
                     let sprint_name = if let Some(sprint_id) = card.sprint_id {
@@ -248,7 +254,8 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         Span::styled("● ", priority_style),
                         Span::styled(points_text, points_style),
                         Span::raw(" "),
-                        Span::styled(format!("{}{} {}", select_indicator, checkbox, card.title), style)
+                        Span::styled(format!("{}{} ", select_indicator, checkbox), base_style),
+                        Span::styled(&card.title, title_style)
                     ];
 
                     if !sprint_name.is_empty() {
