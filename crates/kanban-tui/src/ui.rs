@@ -241,6 +241,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                                 format!(
                                     " ({})",
                                     s.formatted_name(
+                                        board,
                                         board.sprint_prefix.as_deref().unwrap_or("sprint")
                                     )
                                 )
@@ -326,6 +327,7 @@ fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
             if let Some(board_idx) = app.active_board_index {
                 if let Some(board) = app.boards.get(board_idx) {
                     let sprint_name = sprint.formatted_name(
+                        board,
                         board.sprint_prefix.as_deref().unwrap_or("sprint"),
                     );
 
@@ -361,10 +363,10 @@ fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         ]),
                     ];
 
-                    if let Some(name) = &sprint.name {
+                    if let Some(name) = sprint.get_name(board) {
                         lines.push(Line::from(vec![
                             Span::styled("Name: ", Style::default().fg(Color::Gray)),
-                            Span::styled(name.clone(), Style::default().fg(Color::White)),
+                            Span::styled(name.to_string(), Style::default().fg(Color::White)),
                         ]));
                     }
 
@@ -795,11 +797,17 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 ]),
             ];
 
-            if !board.sprint_names.is_empty() {
+            let available_names: Vec<&str> = board.sprint_names
+                .iter()
+                .skip(board.sprint_name_used_count)
+                .map(|s| s.as_str())
+                .collect();
+
+            if !available_names.is_empty() {
                 settings_lines.push(Line::from(vec![
                     Span::styled("Sprint Names: ", Style::default().fg(Color::Gray)),
                     Span::styled(
-                        board.sprint_names.join(", "),
+                        available_names.join(", "),
                         Style::default().fg(Color::White),
                     ),
                 ]));
@@ -853,6 +861,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     };
 
                     let sprint_name = sprint.formatted_name(
+                        board,
                         board.sprint_prefix.as_deref().unwrap_or("sprint"),
                     );
 
@@ -1048,7 +1057,7 @@ fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
                 let current_indicator = if is_current { " (current)" } else { "" };
 
                 let sprint_name = if let Some(sprint) = sprint_option {
-                    sprint.formatted_name(board.sprint_prefix.as_deref().unwrap_or("sprint"))
+                    sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"))
                 } else {
                     "(None)".to_string()
                 };
