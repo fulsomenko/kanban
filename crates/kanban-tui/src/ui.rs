@@ -177,9 +177,9 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                     let is_done = card.status == CardStatus::Done;
 
                     let (checkbox, text_color) = if is_done {
-                        ("☑", Color::DarkGray)
+                        ("[x]", Color::DarkGray)
                     } else {
-                        ("□", Color::White)
+                        ("[ ]", Color::White)
                     };
 
                     let mut base_style = Style::default().fg(text_color);
