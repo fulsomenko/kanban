@@ -4,19 +4,19 @@
       "board": {
         "id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
         "name": "Kanban",
-        "description": null,
+        "description": "Management of the **Kanban** project\n",
         "branch_prefix": null,
-        "next_card_number": 31,
+        "next_card_number": 32,
         "task_sort_field": "Points",
         "task_sort_order": "Descending",
         "sprint_duration_days": null,
         "sprint_prefix": null,
         "sprint_names": [],
         "sprint_name_used_count": 0,
-        "next_sprint_number": 1,
+        "next_sprint_number": 2,
         "active_sprint_id": null,
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-11T23:56:48.196179Z"
+        "updated_at": "2025-10-12T00:14:17.034427Z"
       },
       "columns": [
         {
@@ -479,6 +479,21 @@
           "sprint_id": null,
           "created_at": "2025-10-11T21:56:16.454189Z",
           "updated_at": "2025-10-11T22:25:21.168733Z"
+        },
+        {
+          "id": "6f66b041-2592-4e78-b348-cbc34c00c548",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Update status of a card - Board Columns",
+          "description": "Specifically needed. in progress\n\nWe want to start working on board columns\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 30,
+          "due_date": null,
+          "points": null,
+          "card_number": 31,
+          "sprint_id": null,
+          "created_at": "2025-10-12T00:14:17.034422Z",
+          "updated_at": "2025-10-12T00:14:57.400292Z"
         }
       ]
     }
