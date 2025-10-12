@@ -10,7 +10,7 @@ use ratatui::{
 
 pub fn render(app: &App, frame: &mut Frame) {
     match app.mode {
-        AppMode::CardDetail | AppMode::AssignCardToSprint => {
+        AppMode::CardDetail | AppMode::AssignCardToSprint | AppMode::AssignMultipleCardsToSprint => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -26,6 +26,10 @@ pub fn render(app: &App, frame: &mut Frame) {
 
             if app.mode == AppMode::AssignCardToSprint {
                 render_assign_sprint_popup(app, frame);
+            }
+
+            if app.mode == AppMode::AssignMultipleCardsToSprint {
+                render_assign_multiple_cards_popup(app, frame);
             }
         }
         AppMode::BoardDetail => {
@@ -251,8 +255,11 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         String::new()
                     };
 
+                    let is_multi_selected = app.selected_cards.contains(&card.id);
+                    let select_indicator = if is_multi_selected { "► " } else { "  " };
+
                     let mut spans = vec![
-                        Span::styled(format!("  {} {}", checkbox, card.title), style)
+                        Span::styled(format!("{}{} {}", select_indicator, checkbox, card.title), style)
                     ];
 
                     if !points_badge.is_empty() {
@@ -455,7 +462,7 @@ fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Normal => "q: quit | n: new | r: rename | e: edit project | x: export | X: export all | i: import | c: toggle complete | t: toggle sprint filter | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
+        AppMode::Normal => "q: quit | n: new | r: rename | e: edit project | x: export | X: export all | i: import | c: toggle complete | t: toggle sprint filter | v: select card | a: assign selected | 1/2: switch panel | j/k: navigate | Enter/Space: activate",
         AppMode::CreateBoard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateCard => "ESC: cancel | ENTER: confirm",
         AppMode::CreateSprint => "ESC: cancel | ENTER: confirm",
@@ -479,6 +486,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending",
         AppMode::SprintDetail => "q: quit | ESC: back | a: activate sprint | c: complete sprint",
         AppMode::AssignCardToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign",
+        AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign",
     };
     let help = Paragraph::new(help_text)
         .style(Style::default().fg(Color::Gray))
@@ -1071,6 +1079,70 @@ fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
 
                 lines.push(Line::from(Span::styled(
                     format!("{}{}{}", prefix, sprint_name, current_indicator),
+                    style,
+                )));
+            }
+        }
+    }
+
+    let list = Paragraph::new(lines);
+    frame.render_widget(list, chunks[1]);
+}
+
+fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
+    let area = centered_rect(60, 50, frame.area());
+
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(format!("Assign {} Cards to Sprint", app.selected_cards.len()))
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner);
+
+    let label = Paragraph::new("Select sprint:").style(Style::default().fg(Color::Yellow));
+    frame.render_widget(label, chunks[0]);
+
+    let mut lines = vec![];
+
+    if let Some(board_idx) = app.active_board_index {
+        if let Some(board) = app.boards.get(board_idx) {
+            let board_sprints: Vec<_> = app
+                .sprints
+                .iter()
+                .filter(|s| s.board_id == board.id)
+                .collect();
+
+            for (idx, sprint_option) in std::iter::once(None)
+                .chain(board_sprints.iter().map(|s| Some(*s)))
+                .enumerate()
+            {
+                let is_selected = app.sprint_assign_selection.get() == Some(idx);
+
+                let style = if is_selected {
+                    Style::default().fg(Color::White).bg(Color::Blue)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+
+                let prefix = if is_selected { "> " } else { "  " };
+
+                let sprint_name = if let Some(sprint) = sprint_option {
+                    sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"))
+                } else {
+                    "(None)".to_string()
+                };
+
+                lines.push(Line::from(Span::styled(
+                    format!("{}{}", prefix, sprint_name),
                     style,
                 )));
             }
