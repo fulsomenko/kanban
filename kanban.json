@@ -6,7 +6,7 @@
         "name": "Kanban",
         "description": "Management of the **Kanban** project\n",
         "branch_prefix": "KAN",
-        "next_card_number": 42,
+        "next_card_number": 44,
         "task_sort_field": "Points",
         "task_sort_order": "Descending",
         "sprint_duration_days": 7,
@@ -18,7 +18,7 @@
         "next_sprint_number": 6,
         "active_sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T16:35:31.999770Z"
+        "updated_at": "2025-10-12T16:45:41.135177Z"
       },
       "columns": [
         {
@@ -278,15 +278,15 @@
           "title": "drop the Header in the UI",
           "description": "The \"Kanban Board\" header of the interface can go away.\n",
           "priority": "Medium",
-          "status": "Todo",
+          "status": "Done",
           "position": 15,
           "due_date": null,
           "points": 1,
           "card_number": 16,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-11T18:38:07.855746Z",
-          "updated_at": "2025-10-11T18:38:31.637758Z",
-          "completed_at": null
+          "updated_at": "2025-10-12T16:45:07.630022Z",
+          "completed_at": "2025-10-12T16:45:07.630022Z"
         },
         {
           "id": "ed0ead2b-6da9-4889-83b7-e4c60ab11032",
@@ -686,6 +686,38 @@
           "sprint_id": null,
           "created_at": "2025-10-12T15:48:23.468340Z",
           "updated_at": "2025-10-12T15:49:23.462777Z",
+          "completed_at": null
+        },
+        {
+          "id": "5b43a7e3-b056-4370-882a-bdad4bb9e0ed",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Assign task to sprint if created in sprint task list",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 41,
+          "due_date": null,
+          "points": 2,
+          "card_number": 42,
+          "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+          "created_at": "2025-10-12T16:45:24.828497Z",
+          "updated_at": "2025-10-12T16:46:10.916807Z",
+          "completed_at": null
+        },
+        {
+          "id": "5d31ae81-75a7-47c7-a6d1-5a9b0f06a5b7",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "Remove projects projects and kanban green text",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 42,
+          "due_date": null,
+          "points": 1,
+          "card_number": 43,
+          "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+          "created_at": "2025-10-12T16:45:41.135171Z",
+          "updated_at": "2025-10-12T16:46:20.354842Z",
           "completed_at": null
         }
       ],
