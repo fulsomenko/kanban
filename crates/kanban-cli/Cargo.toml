@@ -4,15 +4,20 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Command-line interface for the kanban project management tool"
+keywords = ["kanban", "cli", "terminal", "project-management", "productivity"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "kanban"
 path = "src/main.rs"
 
 [dependencies]
-kanban-core = { path = "../kanban-core" }
-kanban-domain = { path = "../kanban-domain" }
-kanban-tui = { path = "../kanban-tui" }
+kanban-core = { path = "../kanban-core", version = "0.1.0" }
+kanban-domain = { path = "../kanban-domain", version = "0.1.0" }
+kanban-tui = { path = "../kanban-tui", version = "0.1.0" }
 clap.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
