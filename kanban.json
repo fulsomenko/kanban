@@ -6,7 +6,7 @@
         "name": "Kanban",
         "description": "Management of the **Kanban** project\n",
         "branch_prefix": "KAN",
-        "next_card_number": 45,
+        "next_card_number": 46,
         "task_sort_field": "Points",
         "task_sort_order": "Descending",
         "sprint_duration_days": 7,
@@ -19,7 +19,7 @@
         "next_sprint_number": 7,
         "active_sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T17:32:56.610132Z"
+        "updated_at": "2025-10-12T21:11:47.061998Z"
       },
       "columns": [
         {
@@ -783,6 +783,22 @@
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-12T16:45:41.135171Z",
           "updated_at": "2025-10-12T16:51:11.859124Z",
+          "completed_at": null
+        },
+        {
+          "id": "17d374eb-62fc-463b-9612-8d36b069c7c7",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "publish to crates.io",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 47,
+          "due_date": null,
+          "points": 5,
+          "card_number": 45,
+          "sprint_id": null,
+          "created_at": "2025-10-12T21:11:47.061988Z",
+          "updated_at": "2025-10-12T21:12:01.662694Z",
           "completed_at": null
         }
       ],
