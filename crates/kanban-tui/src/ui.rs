@@ -227,7 +227,9 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         })
                         .unwrap_or(Color::White);
 
-                    let mut points_style = Style::default().fg(points_color);
+                    let mut points_style = Style::default()
+                        .fg(points_color)
+                        .add_modifier(Modifier::BOLD);
                     if is_selected && is_focused {
                         points_style = points_style.bg(Color::Blue);
                     }
