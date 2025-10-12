@@ -14,15 +14,13 @@ pub fn render(app: &App, frame: &mut Frame) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(3),
                     Constraint::Min(0),
                     Constraint::Length(3),
                 ])
                 .split(frame.area());
 
-            render_header(frame, chunks[0]);
-            render_card_detail_view(app, frame, chunks[1]);
-            render_footer(app, frame, chunks[2]);
+            render_card_detail_view(app, frame, chunks[0]);
+            render_footer(app, frame, chunks[1]);
 
             if app.mode == AppMode::AssignCardToSprint {
                 render_assign_sprint_popup(app, frame);
@@ -36,43 +34,37 @@ pub fn render(app: &App, frame: &mut Frame) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(3),
                     Constraint::Min(0),
                     Constraint::Length(3),
                 ])
                 .split(frame.area());
 
-            render_header(frame, chunks[0]);
-            render_board_detail_view(app, frame, chunks[1]);
-            render_footer(app, frame, chunks[2]);
+            render_board_detail_view(app, frame, chunks[0]);
+            render_footer(app, frame, chunks[1]);
         }
         AppMode::SprintDetail => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(3),
                     Constraint::Min(0),
                     Constraint::Length(3),
                 ])
                 .split(frame.area());
 
-            render_header(frame, chunks[0]);
-            render_sprint_detail_view(app, frame, chunks[1]);
-            render_footer(app, frame, chunks[2]);
+            render_sprint_detail_view(app, frame, chunks[0]);
+            render_footer(app, frame, chunks[1]);
         }
         _ => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(3),
                     Constraint::Min(0),
                     Constraint::Length(3),
                 ])
                 .split(frame.area());
 
-            render_header(frame, chunks[0]);
-            render_main(app, frame, chunks[1]);
-            render_footer(app, frame, chunks[2]);
+            render_main(app, frame, chunks[0]);
+            render_footer(app, frame, chunks[1]);
 
             match app.mode {
                 AppMode::CreateBoard => render_create_board_popup(app, frame),
@@ -89,17 +81,6 @@ pub fn render(app: &App, frame: &mut Frame) {
             }
         }
     }
-}
-
-fn render_header(frame: &mut Frame, area: Rect) {
-    let title = Paragraph::new("Kanban Board")
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(title, area);
 }
 
 fn render_main(app: &App, frame: &mut Frame, area: Rect) {
