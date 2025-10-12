@@ -282,6 +282,13 @@ impl App {
                                         self.active_sprint_filter = Some(active_sprint_id);
                                         tracing::info!("Enabled sprint filter - showing active sprint only");
                                     }
+
+                                    let card_count = self.get_board_card_count(board.id);
+                                    if card_count > 0 {
+                                        self.card_selection.set(Some(0));
+                                    } else {
+                                        self.card_selection.clear();
+                                    }
                                 } else {
                                     tracing::warn!("No active sprint set for filtering");
                                 }
