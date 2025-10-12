@@ -16,24 +16,21 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    container:
-      image: nixos/nix:latest
-      options: --user root
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
       - name: Configure Git
         run: |
-          nix-env -iA nixpkgs.git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Enable experimental features
-        run: |
-          mkdir -p ~/.config/nix
-          echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 
       - name: Bump version
         run: |
@@ -58,8 +55,7 @@ jobs:
           nix run .#publish-crates
 
       - name: Create GitHub Release
-        run: |
-          nix-env -iA nixpkgs.gh
-          gh release create "v${{ steps.version.outputs.version }}" --generate-notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
