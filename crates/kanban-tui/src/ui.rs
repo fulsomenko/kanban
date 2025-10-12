@@ -307,8 +307,15 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
         "Tasks".to_string()
     };
 
-    if app.active_sprint_filter.is_some() {
-        title.push_str(" [FILTERED]");
+    if let Some(sprint_id) = app.active_sprint_filter {
+        if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
+            if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
+                if let Some(board) = app.boards.get(board_idx) {
+                    let sprint_name = sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    title.push_str(&format!(" - {}", sprint_name));
+                }
+            }
+        }
     }
 
     let content = Paragraph::new(lines).block(
@@ -887,7 +894,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         if is_selected && is_focused {
                             active_style = active_style.bg(Color::Blue);
                         }
-                        spans.push(Span::styled(" [ACTIVE]", active_style));
+                        spans.push(Span::styled(" Active", active_style));
                     }
 
                     if is_ended {
@@ -895,7 +902,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         if is_selected && is_focused {
                             ended_style = ended_style.bg(Color::Blue);
                         }
-                        spans.push(Span::styled(" [ENDED]", ended_style));
+                        spans.push(Span::styled(" Ended", ended_style));
                     }
 
                     sprint_lines.push(Line::from(spans));
