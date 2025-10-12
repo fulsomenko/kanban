@@ -1098,9 +1098,19 @@ impl App {
         self.cards
             .iter()
             .filter(|card| {
-                self.columns
+                let in_board = self.columns
                     .iter()
-                    .any(|col| col.id == card.column_id && col.board_id == board_id)
+                    .any(|col| col.id == card.column_id && col.board_id == board_id);
+
+                if !in_board {
+                    return false;
+                }
+
+                if let Some(filter_sprint_id) = self.active_sprint_filter {
+                    card.sprint_id == Some(filter_sprint_id)
+                } else {
+                    true
+                }
             })
             .count()
     }
