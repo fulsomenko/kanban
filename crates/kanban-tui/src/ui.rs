@@ -94,15 +94,7 @@ fn render_main(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
-    let mut lines = vec![
-        Line::from(Span::styled(
-            "Projects",
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::raw("")),
-    ];
+    let mut lines = vec![];
 
     if app.boards.is_empty() {
         lines.push(Line::from(Span::styled(
@@ -161,24 +153,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
     let board_idx = app.active_board_index.or(app.board_selection.get());
 
-    let project_name = if let Some(idx) = board_idx {
-        app.boards
-            .get(idx)
-            .map(|b| b.name.as_str())
-            .unwrap_or("Unknown")
-    } else {
-        "No Project"
-    };
-
-    let mut lines = vec![
-        Line::from(Span::styled(
-            project_name.to_string(),
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::raw("")),
-    ];
+    let mut lines = vec![];
 
     if let Some(idx) = board_idx {
         if let Some(board) = app.boards.get(idx) {
