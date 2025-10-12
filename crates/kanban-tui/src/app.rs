@@ -43,6 +43,7 @@ pub struct App {
     pub sort_field_selection: SelectionState,
     pub current_sort_field: Option<SortField>,
     pub current_sort_order: Option<SortOrder>,
+    pub selected_cards: std::collections::HashSet<uuid::Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,6 +103,7 @@ pub enum AppMode {
     SprintDetail,
     CreateSprint,
     AssignCardToSprint,
+    AssignMultipleCardsToSprint,
 }
 
 impl App {
@@ -133,6 +135,7 @@ impl App {
             sort_field_selection: SelectionState::new(),
             current_sort_field: None,
             current_sort_order: None,
+            selected_cards: std::collections::HashSet::new(),
         };
 
         if let Some(ref filename) = save_file {
@@ -280,6 +283,36 @@ impl App {
                                 }
                             }
                         }
+                    }
+                }
+                KeyCode::Char('v') => {
+                    if self.focus == Focus::Cards && self.card_selection.get().is_some() {
+                        if let Some(board_idx) = self.active_board_index {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                let card_id = {
+                                    let sorted_cards = self.get_sorted_board_cards(board.id);
+                                    if let Some(sorted_idx) = self.card_selection.get() {
+                                        sorted_cards.get(sorted_idx).map(|c| c.id)
+                                    } else {
+                                        None
+                                    }
+                                };
+
+                                if let Some(id) = card_id {
+                                    if self.selected_cards.contains(&id) {
+                                        self.selected_cards.remove(&id);
+                                    } else {
+                                        self.selected_cards.insert(id);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                KeyCode::Char('a') => {
+                    if self.focus == Focus::Cards && !self.selected_cards.is_empty() {
+                        self.sprint_assign_selection.clear();
+                        self.mode = AppMode::AssignMultipleCardsToSprint;
                     }
                 }
                 KeyCode::Char('1') => self.focus = Focus::Boards,
@@ -773,6 +806,58 @@ impl App {
                     }
                     self.mode = AppMode::CardDetail;
                     self.sprint_assign_selection.clear();
+                }
+                _ => {}
+            },
+            AppMode::AssignMultipleCardsToSprint => match key.code {
+                KeyCode::Esc => {
+                    self.mode = AppMode::Normal;
+                    self.sprint_assign_selection.clear();
+                    self.selected_cards.clear();
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    if let Some(board_idx) = self.active_board_index {
+                        if let Some(board) = self.boards.get(board_idx) {
+                            let sprint_count = self.sprints.iter().filter(|s| s.board_id == board.id).count();
+                            self.sprint_assign_selection.next(sprint_count + 1);
+                        }
+                    }
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.sprint_assign_selection.prev();
+                }
+                KeyCode::Enter | KeyCode::Char(' ') => {
+                    if let Some(selection_idx) = self.sprint_assign_selection.get() {
+                        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+                        for card_id in card_ids {
+                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                                if selection_idx == 0 {
+                                    card.sprint_id = None;
+                                } else if let Some(board_idx) = self.active_board_index {
+                                    if let Some(board) = self.boards.get(board_idx) {
+                                        let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board.id).collect();
+                                        if let Some(sprint) = board_sprints.get(selection_idx - 1) {
+                                            card.sprint_id = Some(sprint.id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(board_idx) = self.active_board_index {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board.id).collect();
+                                if selection_idx == 0 {
+                                    tracing::info!("Unassigned {} cards from sprint", self.selected_cards.len());
+                                } else if let Some(sprint) = board_sprints.get(selection_idx - 1) {
+                                    tracing::info!("Assigned {} cards to sprint: {}", self.selected_cards.len(), sprint.formatted_name(board, "sprint"));
+                                }
+                            }
+                        }
+                    }
+                    self.mode = AppMode::Normal;
+                    self.sprint_assign_selection.clear();
+                    self.selected_cards.clear();
                 }
                 _ => {}
             },
