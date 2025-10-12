@@ -32,6 +32,7 @@ pub struct App {
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
     pub active_sprint_filter: Option<uuid::Uuid>,
+    pub hide_assigned_cards: bool,
     pub sprint_assign_selection: SelectionState,
     pub focus: Focus,
     pub card_focus: CardFocus,
@@ -126,6 +127,7 @@ impl App {
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
             active_sprint_filter: None,
+            hide_assigned_cards: false,
             sprint_assign_selection: SelectionState::new(),
             focus: Focus::Boards,
             card_focus: CardFocus::Title,
@@ -270,6 +272,24 @@ impl App {
                             }
 
                             tracing::info!("Toggled sort order to: {:?}", new_order);
+                        }
+                    }
+                }
+                KeyCode::Char('T') => {
+                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
+                        self.hide_assigned_cards = !self.hide_assigned_cards;
+                        let status = if self.hide_assigned_cards { "enabled" } else { "disabled" };
+                        tracing::info!("Hide assigned cards: {}", status);
+
+                        if let Some(board_idx) = self.active_board_index {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                let card_count = self.get_board_card_count(board.id);
+                                if card_count > 0 {
+                                    self.card_selection.set(Some(0));
+                                } else {
+                                    self.card_selection.clear();
+                                }
+                            }
                         }
                     }
                 }
@@ -1144,7 +1164,13 @@ impl App {
                 }
 
                 if let Some(filter_sprint_id) = self.active_sprint_filter {
-                    card.sprint_id == Some(filter_sprint_id)
+                    if card.sprint_id != Some(filter_sprint_id) {
+                        return false;
+                    }
+                }
+
+                if self.hide_assigned_cards {
+                    card.sprint_id.is_none()
                 } else {
                     true
                 }
@@ -1170,7 +1196,13 @@ impl App {
                 }
 
                 if let Some(filter_sprint_id) = self.active_sprint_filter {
-                    card.sprint_id == Some(filter_sprint_id)
+                    if card.sprint_id != Some(filter_sprint_id) {
+                        return false;
+                    }
+                }
+
+                if self.hide_assigned_cards {
+                    card.sprint_id.is_none()
                 } else {
                     true
                 }
