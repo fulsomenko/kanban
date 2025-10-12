@@ -1180,6 +1180,7 @@ impl App {
                 board: Board,
                 columns: Vec<Column>,
                 cards: Vec<Card>,
+                sprints: Vec<Sprint>,
             }
 
             #[derive(Serialize)]
@@ -1206,10 +1207,18 @@ impl App {
                     .cloned()
                     .collect();
 
+                let board_sprints: Vec<Sprint> = self
+                    .sprints
+                    .iter()
+                    .filter(|s| s.board_id == board.id)
+                    .cloned()
+                    .collect();
+
                 board_exports.push(BoardExport {
                     board: board.clone(),
                     columns: board_columns,
                     cards: board_cards,
+                    sprints: board_sprints,
                 });
             }
 
@@ -1460,6 +1469,8 @@ impl App {
             board: Board,
             columns: Vec<Column>,
             cards: Vec<Card>,
+            #[serde(default)]
+            sprints: Vec<Sprint>,
         }
 
         #[derive(Deserialize)]
@@ -1477,6 +1488,7 @@ impl App {
                     self.boards.push(board_data.board);
                     self.columns.extend(board_data.columns);
                     self.cards.extend(board_data.cards);
+                    self.sprints.extend(board_data.sprints);
                 }
                 tracing::info!("Imported {} boards from: {}", count, filename);
             }
