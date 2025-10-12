@@ -282,6 +282,13 @@ impl App {
                                         self.active_sprint_filter = Some(active_sprint_id);
                                         tracing::info!("Enabled sprint filter - showing active sprint only");
                                     }
+
+                                    let card_count = self.get_board_card_count(board.id);
+                                    if card_count > 0 {
+                                        self.card_selection.set(Some(0));
+                                    } else {
+                                        self.card_selection.clear();
+                                    }
                                 } else {
                                     tracing::warn!("No active sprint set for filtering");
                                 }
@@ -1091,9 +1098,19 @@ impl App {
         self.cards
             .iter()
             .filter(|card| {
-                self.columns
+                let in_board = self.columns
                     .iter()
-                    .any(|col| col.id == card.column_id && col.board_id == board_id)
+                    .any(|col| col.id == card.column_id && col.board_id == board_id);
+
+                if !in_board {
+                    return false;
+                }
+
+                if let Some(filter_sprint_id) = self.active_sprint_filter {
+                    card.sprint_id == Some(filter_sprint_id)
+                } else {
+                    true
+                }
             })
             .count()
     }

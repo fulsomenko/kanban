@@ -18,7 +18,7 @@
         "next_sprint_number": 6,
         "active_sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T15:48:23.468343Z"
+        "updated_at": "2025-10-12T16:35:31.999770Z"
       },
       "columns": [
         {
@@ -45,7 +45,8 @@
           "card_number": 4,
           "sprint_id": null,
           "created_at": "2025-10-10T08:47:57.834239Z",
-          "updated_at": "2025-10-11T20:30:23.290462Z"
+          "updated_at": "2025-10-11T20:30:23.290462Z",
+          "completed_at": null
         },
         {
           "id": "959a092f-61de-41de-ac4a-729d6e1fcadf",
@@ -60,7 +61,8 @@
           "card_number": 5,
           "sprint_id": null,
           "created_at": "2025-10-10T09:08:28.861766Z",
-          "updated_at": "2025-10-11T20:30:20.829017Z"
+          "updated_at": "2025-10-11T20:30:20.829017Z",
+          "completed_at": null
         },
         {
           "id": "292e3f49-089b-40fb-8ea7-c693603904b2",
@@ -75,7 +77,8 @@
           "card_number": 1,
           "sprint_id": null,
           "created_at": "2025-10-10T21:58:56.145240Z",
-          "updated_at": "2025-10-12T14:44:13.680351Z"
+          "updated_at": "2025-10-12T14:44:13.680351Z",
+          "completed_at": null
         },
         {
           "id": "f1a80abd-338c-4593-92d6-20c2db7dc093",
@@ -90,7 +93,8 @@
           "card_number": 2,
           "sprint_id": null,
           "created_at": "2025-10-10T22:03:42.988557Z",
-          "updated_at": "2025-10-12T15:09:11.118477Z"
+          "updated_at": "2025-10-12T15:09:11.118477Z",
+          "completed_at": null
         },
         {
           "id": "e96684a5-4645-443e-8e2c-6bb646e248c6",
@@ -105,7 +109,8 @@
           "card_number": 6,
           "sprint_id": null,
           "created_at": "2025-10-10T22:05:04.607714Z",
-          "updated_at": "2025-10-10T22:44:01.235679Z"
+          "updated_at": "2025-10-10T22:44:01.235679Z",
+          "completed_at": null
         },
         {
           "id": "90f8121a-045f-47fd-b8fe-bb0e5b7662b1",
@@ -120,7 +125,8 @@
           "card_number": 7,
           "sprint_id": null,
           "created_at": "2025-10-10T22:11:25.809290Z",
-          "updated_at": "2025-10-11T20:40:58.659416Z"
+          "updated_at": "2025-10-11T20:40:58.659416Z",
+          "completed_at": null
         },
         {
           "id": "86c1b649-03bc-4da8-87c3-e20a2c56a640",
@@ -135,7 +141,8 @@
           "card_number": 8,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-10T22:13:04.048521Z",
-          "updated_at": "2025-10-10T22:14:15.622866Z"
+          "updated_at": "2025-10-10T22:14:15.622866Z",
+          "completed_at": null
         },
         {
           "id": "eceed2ce-de5e-4166-95e7-7fb9c7e65b20",
@@ -150,7 +157,8 @@
           "card_number": 9,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-10T22:14:31.293267Z",
-          "updated_at": "2025-10-11T20:41:09.462182Z"
+          "updated_at": "2025-10-11T20:41:09.462182Z",
+          "completed_at": null
         },
         {
           "id": "7cd165b0-6671-46d6-b837-4e73ada26333",
@@ -165,7 +173,8 @@
           "card_number": 10,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-10T22:15:09.199792Z",
-          "updated_at": "2025-10-10T22:16:05.956954Z"
+          "updated_at": "2025-10-10T22:16:05.956954Z",
+          "completed_at": null
         },
         {
           "id": "454144d2-27ac-4abf-8632-407908fa8f80",
@@ -180,7 +189,8 @@
           "card_number": 11,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-10T22:53:19.579898Z",
-          "updated_at": "2025-10-10T22:54:22.387591Z"
+          "updated_at": "2025-10-10T22:54:22.387591Z",
+          "completed_at": null
         },
         {
           "id": "d48f9085-57ff-42c5-9f42-3cbb3cafde93",
@@ -195,7 +205,8 @@
           "card_number": 12,
           "sprint_id": null,
           "created_at": "2025-10-10T22:56:04.200355Z",
-          "updated_at": "2025-10-11T20:41:24.403599Z"
+          "updated_at": "2025-10-11T20:41:24.403599Z",
+          "completed_at": null
         },
         {
           "id": "6a0cbe1e-a05e-4aca-bd53-f0057215d671",
@@ -210,7 +221,8 @@
           "card_number": 13,
           "sprint_id": null,
           "created_at": "2025-10-10T23:01:18.553586Z",
-          "updated_at": "2025-10-11T22:26:20.802010Z"
+          "updated_at": "2025-10-11T22:26:20.802010Z",
+          "completed_at": null
         },
         {
           "id": "9e8f918f-3fde-4847-aca8-0ab7646256a8",
@@ -225,7 +237,8 @@
           "card_number": 14,
           "sprint_id": null,
           "created_at": "2025-10-11T18:27:29.674825Z",
-          "updated_at": "2025-10-12T15:09:11.118477Z"
+          "updated_at": "2025-10-12T15:09:11.118477Z",
+          "completed_at": null
         },
         {
           "id": "1e257c13-f9ee-40e4-86b5-704a9649ea4e",
@@ -240,7 +253,8 @@
           "card_number": 15,
           "sprint_id": null,
           "created_at": "2025-10-11T18:29:10.434614Z",
-          "updated_at": "2025-10-11T22:26:03.008952Z"
+          "updated_at": "2025-10-11T22:26:03.008952Z",
+          "completed_at": null
         },
         {
           "id": "9273b022-f7f8-4975-b9c5-7a57c55eba30",
@@ -255,7 +269,8 @@
           "card_number": 3,
           "sprint_id": null,
           "created_at": "2025-10-11T18:36:43.972262Z",
-          "updated_at": "2025-10-11T19:03:44.948745Z"
+          "updated_at": "2025-10-11T19:03:44.948745Z",
+          "completed_at": null
         },
         {
           "id": "a189ef1a-903c-4c43-924e-2194562237f6",
@@ -270,7 +285,8 @@
           "card_number": 16,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-11T18:38:07.855746Z",
-          "updated_at": "2025-10-11T18:38:31.637758Z"
+          "updated_at": "2025-10-11T18:38:31.637758Z",
+          "completed_at": null
         },
         {
           "id": "ed0ead2b-6da9-4889-83b7-e4c60ab11032",
@@ -285,7 +301,8 @@
           "card_number": 17,
           "sprint_id": null,
           "created_at": "2025-10-11T18:39:14.248330Z",
-          "updated_at": "2025-10-11T19:43:05.716699Z"
+          "updated_at": "2025-10-11T19:43:05.716699Z",
+          "completed_at": null
         },
         {
           "id": "1c0b1752-53f1-4240-be75-0706662156df",
@@ -300,7 +317,8 @@
           "card_number": 18,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-11T18:42:39.943129Z",
-          "updated_at": "2025-10-12T15:47:46.399067Z"
+          "updated_at": "2025-10-12T15:47:46.399067Z",
+          "completed_at": null
         },
         {
           "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
@@ -315,7 +333,8 @@
           "card_number": 19,
           "sprint_id": null,
           "created_at": "2025-10-11T18:45:47.488818Z",
-          "updated_at": "2025-10-11T19:01:45.403042Z"
+          "updated_at": "2025-10-11T19:01:45.403042Z",
+          "completed_at": null
         },
         {
           "id": "8ecc1849-bde7-4f97-99f7-44b7d9158bbf",
@@ -330,7 +349,8 @@
           "card_number": 20,
           "sprint_id": null,
           "created_at": "2025-10-11T19:23:32.612472Z",
-          "updated_at": "2025-10-11T19:25:31.337766Z"
+          "updated_at": "2025-10-11T19:25:31.337766Z",
+          "completed_at": null
         },
         {
           "id": "6c1e0ca7-22bb-49e5-86bc-8d1e2a55c9ee",
@@ -345,7 +365,8 @@
           "card_number": 21,
           "sprint_id": null,
           "created_at": "2025-10-11T19:25:07.465576Z",
-          "updated_at": "2025-10-11T21:19:20.961218Z"
+          "updated_at": "2025-10-11T21:19:20.961218Z",
+          "completed_at": null
         },
         {
           "id": "27717d15-3e41-4558-8e6b-3bbdc7fe3762",
@@ -360,7 +381,8 @@
           "card_number": 22,
           "sprint_id": null,
           "created_at": "2025-10-11T19:50:58.400403Z",
-          "updated_at": "2025-10-11T21:44:24.678181Z"
+          "updated_at": "2025-10-11T21:44:24.678181Z",
+          "completed_at": null
         },
         {
           "id": "76411161-8bcf-47a3-b917-cadc706c6079",
@@ -375,7 +397,8 @@
           "card_number": 23,
           "sprint_id": null,
           "created_at": "2025-10-11T19:51:35.009507Z",
-          "updated_at": "2025-10-11T21:44:48.544417Z"
+          "updated_at": "2025-10-11T21:44:48.544417Z",
+          "completed_at": null
         },
         {
           "id": "1c2f3096-823b-4eb7-9345-b80a4c5d8693",
@@ -390,7 +413,8 @@
           "card_number": 24,
           "sprint_id": null,
           "created_at": "2025-10-11T20:30:09.214394Z",
-          "updated_at": "2025-10-11T21:45:19.144896Z"
+          "updated_at": "2025-10-11T21:45:19.144896Z",
+          "completed_at": null
         },
         {
           "id": "e3482cf7-c53a-4ce8-8c33-11e2cca3d87a",
@@ -398,14 +422,15 @@
           "title": "Add completed when time to task",
           "description": "Add the date and time for when a task was marked as completed\n",
           "priority": "Medium",
-          "status": "Todo",
+          "status": "Done",
           "position": 24,
           "due_date": null,
           "points": 1,
           "card_number": 25,
           "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
           "created_at": "2025-10-11T20:53:06.269232Z",
-          "updated_at": "2025-10-12T13:35:48.795670Z"
+          "updated_at": "2025-10-12T16:40:38.483152Z",
+          "completed_at": "2025-10-12T16:40:38.483152Z"
         },
         {
           "id": "5e247e41-efdf-43cc-aa0f-daf25830fd1c",
@@ -420,7 +445,8 @@
           "card_number": 26,
           "sprint_id": null,
           "created_at": "2025-10-11T20:54:41.898524Z",
-          "updated_at": "2025-10-11T21:46:49.938657Z"
+          "updated_at": "2025-10-11T21:46:49.938657Z",
+          "completed_at": null
         },
         {
           "id": "4cdf603d-2ba8-4bc0-9c19-a2a4531ccff6",
@@ -435,7 +461,8 @@
           "card_number": 27,
           "sprint_id": null,
           "created_at": "2025-10-11T21:42:14.741535Z",
-          "updated_at": "2025-10-12T14:55:06.382978Z"
+          "updated_at": "2025-10-12T14:55:06.382978Z",
+          "completed_at": null
         },
         {
           "id": "ed48cbd0-7488-4b61-afe5-71851ed565c0",
@@ -450,7 +477,8 @@
           "card_number": 28,
           "sprint_id": null,
           "created_at": "2025-10-11T21:43:08.519830Z",
-          "updated_at": "2025-10-12T14:58:29.087702Z"
+          "updated_at": "2025-10-12T14:58:29.087702Z",
+          "completed_at": null
         },
         {
           "id": "00a80b5e-f7c8-47e7-ba51-312a16a1618e",
@@ -465,7 +493,8 @@
           "card_number": 29,
           "sprint_id": null,
           "created_at": "2025-10-11T21:45:54.321945Z",
-          "updated_at": "2025-10-11T21:47:04.856744Z"
+          "updated_at": "2025-10-11T21:47:04.856744Z",
+          "completed_at": null
         },
         {
           "id": "72ffc5f8-df27-4dd5-bc13-36e5c105f367",
@@ -480,7 +509,8 @@
           "card_number": 30,
           "sprint_id": null,
           "created_at": "2025-10-11T21:56:16.454189Z",
-          "updated_at": "2025-10-11T22:25:21.168733Z"
+          "updated_at": "2025-10-11T22:25:21.168733Z",
+          "completed_at": null
         },
         {
           "id": "6f66b041-2592-4e78-b348-cbc34c00c548",
@@ -495,7 +525,8 @@
           "card_number": 31,
           "sprint_id": null,
           "created_at": "2025-10-12T00:14:17.034422Z",
-          "updated_at": "2025-10-12T15:09:11.118477Z"
+          "updated_at": "2025-10-12T15:09:11.118477Z",
+          "completed_at": null
         },
         {
           "id": "0ae3776c-38cc-4b22-8e89-ed9ac767b512",
@@ -510,7 +541,8 @@
           "card_number": 32,
           "sprint_id": null,
           "created_at": "2025-10-12T08:23:41.175901Z",
-          "updated_at": "2025-10-12T13:37:36.229199Z"
+          "updated_at": "2025-10-12T13:37:36.229199Z",
+          "completed_at": null
         },
         {
           "id": "8e3a543e-86b0-405f-994e-515e013990b7",
@@ -525,7 +557,8 @@
           "card_number": 33,
           "sprint_id": null,
           "created_at": "2025-10-12T13:35:39.923005Z",
-          "updated_at": "2025-10-12T13:37:27.456Z"
+          "updated_at": "2025-10-12T13:37:27.456Z",
+          "completed_at": null
         },
         {
           "id": "475bde99-0a3f-457c-9ea6-2fd51d1d7e73",
@@ -540,7 +573,8 @@
           "card_number": 34,
           "sprint_id": null,
           "created_at": "2025-10-12T13:37:00.520483Z",
-          "updated_at": "2025-10-12T13:37:20.209400Z"
+          "updated_at": "2025-10-12T13:37:20.209400Z",
+          "completed_at": null
         },
         {
           "id": "4e3ecb8a-476f-4f65-8060-5577eb32c192",
@@ -555,7 +589,8 @@
           "card_number": 35,
           "sprint_id": null,
           "created_at": "2025-10-12T13:39:14.336658Z",
-          "updated_at": "2025-10-12T13:42:20.921129Z"
+          "updated_at": "2025-10-12T13:42:20.921129Z",
+          "completed_at": null
         },
         {
           "id": "cdaed89e-ddb8-4a99-9567-b1096f6aaca2",
@@ -570,7 +605,8 @@
           "card_number": 36,
           "sprint_id": null,
           "created_at": "2025-10-12T14:44:43.936971Z",
-          "updated_at": "2025-10-12T15:09:11.118474Z"
+          "updated_at": "2025-10-12T15:09:11.118474Z",
+          "completed_at": null
         },
         {
           "id": "3b771805-ec2a-4b6a-bc3d-57b1528e3742",
@@ -585,7 +621,8 @@
           "card_number": 37,
           "sprint_id": null,
           "created_at": "2025-10-12T14:49:41.587356Z",
-          "updated_at": "2025-10-12T14:51:08.328546Z"
+          "updated_at": "2025-10-12T14:51:08.328546Z",
+          "completed_at": null
         },
         {
           "id": "8099e29b-21d9-404c-a716-47c659773f69",
@@ -600,7 +637,8 @@
           "card_number": 38,
           "sprint_id": null,
           "created_at": "2025-10-12T15:43:38.123195Z",
-          "updated_at": "2025-10-12T15:44:21.664477Z"
+          "updated_at": "2025-10-12T15:44:21.664477Z",
+          "completed_at": null
         },
         {
           "id": "8be94a1d-a915-46d1-a7f1-020da9307cd9",
@@ -615,7 +653,8 @@
           "card_number": 39,
           "sprint_id": null,
           "created_at": "2025-10-12T15:44:28.371016Z",
-          "updated_at": "2025-10-12T15:45:04.057629Z"
+          "updated_at": "2025-10-12T15:45:04.057629Z",
+          "completed_at": null
         },
         {
           "id": "ff2085d5-9304-423d-8169-6d3fb2a509d9",
@@ -630,7 +669,8 @@
           "card_number": 40,
           "sprint_id": null,
           "created_at": "2025-10-12T15:45:29.530124Z",
-          "updated_at": "2025-10-12T15:46:31.166006Z"
+          "updated_at": "2025-10-12T15:46:31.166006Z",
+          "completed_at": null
         },
         {
           "id": "21ef5706-4393-458e-93c2-a8ca7792afa8",
@@ -645,7 +685,8 @@
           "card_number": 41,
           "sprint_id": null,
           "created_at": "2025-10-12T15:48:23.468340Z",
-          "updated_at": "2025-10-12T15:49:23.462777Z"
+          "updated_at": "2025-10-12T15:49:23.462777Z",
+          "completed_at": null
         }
       ],
       "sprints": [
