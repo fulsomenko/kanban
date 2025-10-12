@@ -235,8 +235,12 @@ impl App {
                     }
                 }
                 KeyCode::Char('c') => {
-                    if self.focus == Focus::Cards && self.card_selection.get().is_some() {
-                        self.toggle_card_completion();
+                    if self.focus == Focus::Cards {
+                        if !self.selected_cards.is_empty() {
+                            self.toggle_selected_cards_completion();
+                        } else if self.card_selection.get().is_some() {
+                            self.toggle_card_completion();
+                        }
                     }
                 }
                 KeyCode::Char('o') => {
@@ -1026,6 +1030,26 @@ impl App {
                 }
             }
         }
+    }
+
+    fn toggle_selected_cards_completion(&mut self) {
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let mut toggled_count = 0;
+
+        for card_id in card_ids {
+            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                let new_status = if card.status == CardStatus::Done {
+                    CardStatus::Todo
+                } else {
+                    CardStatus::Done
+                };
+                card.update_status(new_status);
+                toggled_count += 1;
+            }
+        }
+
+        tracing::info!("Toggled {} cards completion status", toggled_count);
+        self.selected_cards.clear();
     }
 
     fn create_card(&mut self) {
