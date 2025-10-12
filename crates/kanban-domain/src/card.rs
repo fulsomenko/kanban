@@ -39,6 +39,8 @@ pub struct Card {
     pub sprint_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 impl Card {
@@ -59,6 +61,7 @@ impl Card {
             sprint_id: None,
             created_at: now,
             updated_at: now,
+            completed_at: None,
         }
     }
 
@@ -69,8 +72,14 @@ impl Card {
     }
 
     pub fn update_status(&mut self, status: CardStatus) {
+        let now = Utc::now();
+        if status == CardStatus::Done && self.status != CardStatus::Done {
+            self.completed_at = Some(now);
+        } else if status != CardStatus::Done && self.status == CardStatus::Done {
+            self.completed_at = None;
+        }
         self.status = status;
-        self.updated_at = Utc::now();
+        self.updated_at = now;
     }
 
     pub fn update_priority(&mut self, priority: CardPriority) {
