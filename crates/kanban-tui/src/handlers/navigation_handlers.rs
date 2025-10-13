@@ -1,5 +1,4 @@
 use crate::app::{App, AppMode, Focus};
-use crossterm::event::KeyCode;
 
 impl App {
     pub fn handle_focus_switch(&mut self, focus_target: Focus) {

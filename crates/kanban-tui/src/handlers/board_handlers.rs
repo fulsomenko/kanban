@@ -1,5 +1,4 @@
 use crate::app::{App, AppMode, BoardFocus, Focus};
-use std::io;
 
 impl App {
     pub fn handle_create_board_key(&mut self) {

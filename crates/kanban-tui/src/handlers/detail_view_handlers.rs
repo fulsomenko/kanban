@@ -1,5 +1,4 @@
 use crate::app::{App, AppMode, BoardField, BoardFocus, CardField, CardFocus};
-use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
 use ratatui::{backend::CrosstermBackend, Terminal};
