@@ -194,9 +194,25 @@ mod tests {
 - [ ] Update README.md if adding user-facing features
 - [ ] Update CLAUDE.md if changing architecture/conventions
 
+### PR Title
+
+Use format: `<branch-name>`
+
 ### PR Description
 
-Include:
+Include concise list of changes:
+
+**Example:**
+```
+Fixes task filtering behavior:
+
+- Add sprint filter toggle to task view
+- Update UI to show active sprint indicator
+- Fix filter persistence across sessions
+```
+
+And include concisely
+
 - **What**: Brief description of changes
 - **Why**: Motivation and context
 - **How**: Implementation approach
