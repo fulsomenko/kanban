@@ -1,0 +1,28 @@
+name: Changeset Check
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for changeset
+        run: |
+          if [ -z "$(ls -A .changeset/*.md 2>/dev/null)" ]; then
+            echo "❌ No changeset found!"
+            echo "Please add a changeset file to .changeset/ directory"
+            echo ""
+            echo "Example: .changeset/my-feature.md"
+            echo "---"
+            echo "bump: patch"
+            echo "---"
+            echo ""
+            echo "Description of your changes"
+            exit 1
+          fi
+          echo "✅ Changeset found"
