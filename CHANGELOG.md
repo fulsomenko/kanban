@@ -9,5 +9,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 - Terminal-based kanban board interface
-- PostgreSQL database backend
 - Nix development environment
