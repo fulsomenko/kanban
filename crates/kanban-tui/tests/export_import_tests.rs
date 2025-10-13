@@ -122,7 +122,8 @@ fn test_import_valid_format() {
                 "points": null,
                 "created_at": "2025-01-01T00:00:00Z",
                 "updated_at": "2025-01-01T00:00:00Z"
-            }]
+            }],
+            "sprints": []
         }]
     }"#;
 
