@@ -1,0 +1,39 @@
+name: Changeset Check
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for changeset
+        run: |
+          CHANGESETS=$(ls .changeset/*.md 2>/dev/null | grep -v "README.md" || true)
+          if [ -z "$CHANGESETS" ]; then
+            echo "❌ No changeset found!"
+            echo "Please add a changeset file to .changeset/ directory"
+            echo ""
+            echo "Example: .changeset/my-feature.md"
+            echo "---"
+            echo "bump: patch"
+            echo "---"
+            echo ""
+            echo "Description of your changes"
+            exit 1
+          fi
+
+          for changeset in $CHANGESETS; do
+            bump=$(grep -A1 "^---$" "$changeset" | grep "^bump:" | cut -d' ' -f2 | tr -d '\r\n')
+            if [[ ! "$bump" =~ ^(patch|minor|major)$ ]]; then
+              echo "❌ Invalid bump type in $changeset: '$bump'"
+              echo "Must be one of: patch, minor, major"
+              exit 1
+            fi
+          done
+
+          echo "✅ Changeset found and validated: $CHANGESETS"
