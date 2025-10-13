@@ -13,7 +13,8 @@ jobs:
 
       - name: Check for changeset
         run: |
-          if [ -z "$(ls -A .changeset/*.md 2>/dev/null)" ]; then
+          CHANGESETS=$(ls .changeset/*.md 2>/dev/null | grep -v "README.md" || true)
+          if [ -z "$CHANGESETS" ]; then
             echo "❌ No changeset found!"
             echo "Please add a changeset file to .changeset/ directory"
             echo ""
@@ -25,4 +26,14 @@ jobs:
             echo "Description of your changes"
             exit 1
           fi
-          echo "✅ Changeset found"
+
+          for changeset in $CHANGESETS; do
+            bump=$(grep -A1 "^---$" "$changeset" | grep "^bump:" | cut -d' ' -f2 | tr -d '\r\n')
+            if [[ ! "$bump" =~ ^(patch|minor|major)$ ]]; then
+              echo "❌ Invalid bump type in $changeset: '$bump'"
+              echo "Must be one of: patch, minor, major"
+              exit 1
+            fi
+          done
+
+          echo "✅ Changeset found and validated: $CHANGESETS"
