@@ -1,10 +1,11 @@
 use crate::{
     clipboard,
-    dialog::{handle_dialog_input, DialogAction},
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
+    export::{BoardExporter, BoardImporter},
     input::InputState,
     selection::SelectionState,
+    services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     ui,
 };
 use crossterm::{
@@ -12,7 +13,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, KanbanResult};
-use kanban_domain::{Board, Card, CardStatus, Column, SortField, SortOrder, Sprint};
+use kanban_domain::{Board, Card, Column, SortField, SortOrder, Sprint};
 use serde::{Deserialize, Serialize};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -235,292 +236,96 @@ impl App {
 
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
-        self.cards
-            .iter()
-            .filter(|card| {
-                let in_board = self.columns
-                    .iter()
-                    .any(|col| col.id == card.column_id && col.board_id == board_id);
+        let board_filter = BoardFilter::new(board_id, &self.columns);
+        let cards: Vec<_> = self.cards.iter().filter(|c| board_filter.matches(c)).collect();
 
-                if !in_board {
-                    return false;
-                }
+        if self.active_sprint_filter.is_none() && !self.hide_assigned_cards {
+            return cards.len();
+        }
 
-                if let Some(filter_sprint_id) = self.active_sprint_filter {
-                    if card.sprint_id != Some(filter_sprint_id) {
+        cards.iter()
+            .filter(|c| {
+                if let Some(sprint_id) = self.active_sprint_filter {
+                    if c.sprint_id != Some(sprint_id) {
                         return false;
                     }
                 }
-
-                if self.hide_assigned_cards {
-                    card.sprint_id.is_none()
-                } else {
-                    true
+                if self.hide_assigned_cards && c.sprint_id.is_some() {
+                    return false;
                 }
+                true
             })
             .count()
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
         let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
-        let sort_field = board.task_sort_field;
-        let sort_order = board.task_sort_order;
+        let board_filter = BoardFilter::new(board_id, &self.columns);
 
-        let mut cards: Vec<&Card> = self
-            .cards
-            .iter()
-            .filter(|card| {
-                let in_board = self.columns
-                    .iter()
-                    .any(|col| col.id == card.column_id && col.board_id == board_id);
-
-                if !in_board {
+        let mut cards: Vec<&Card> = self.cards.iter()
+            .filter(|c| {
+                if !board_filter.matches(c) {
                     return false;
                 }
-
-                if let Some(filter_sprint_id) = self.active_sprint_filter {
-                    if card.sprint_id != Some(filter_sprint_id) {
+                if let Some(sprint_id) = self.active_sprint_filter {
+                    if c.sprint_id != Some(sprint_id) {
                         return false;
                     }
                 }
-
-                if self.hide_assigned_cards {
-                    card.sprint_id.is_none()
-                } else {
-                    true
+                if self.hide_assigned_cards && c.sprint_id.is_some() {
+                    return false;
                 }
+                true
             })
             .collect();
 
-        cards.sort_by(|a, b| {
-            use std::cmp::Ordering;
-            let cmp = match sort_field {
-                SortField::Points => match (a.points, b.points) {
-                    (Some(ap), Some(bp)) => ap.cmp(&bp),
-                    (Some(_), None) => Ordering::Less,
-                    (None, Some(_)) => Ordering::Greater,
-                    (None, None) => Ordering::Equal,
-                },
-                SortField::Priority => {
-                    let a_val = match a.priority {
-                        kanban_domain::CardPriority::Critical => 3,
-                        kanban_domain::CardPriority::High => 2,
-                        kanban_domain::CardPriority::Medium => 1,
-                        kanban_domain::CardPriority::Low => 0,
-                    };
-                    let b_val = match b.priority {
-                        kanban_domain::CardPriority::Critical => 3,
-                        kanban_domain::CardPriority::High => 2,
-                        kanban_domain::CardPriority::Medium => 1,
-                        kanban_domain::CardPriority::Low => 0,
-                    };
-                    a_val.cmp(&b_val)
-                }
-                SortField::CreatedAt => a.created_at.cmp(&b.created_at),
-                SortField::UpdatedAt => a.updated_at.cmp(&b.updated_at),
-                SortField::Status => {
-                    let a_val = match a.status {
-                        CardStatus::Done => 3,
-                        CardStatus::InProgress => 2,
-                        CardStatus::Blocked => 1,
-                        CardStatus::Todo => 0,
-                    };
-                    let b_val = match b.status {
-                        CardStatus::Done => 3,
-                        CardStatus::InProgress => 2,
-                        CardStatus::Blocked => 1,
-                        CardStatus::Todo => 0,
-                    };
-                    a_val.cmp(&b_val)
-                }
-                SortField::Default => a.card_number.cmp(&b.card_number),
-            };
-
-            match sort_order {
-                SortOrder::Ascending => cmp,
-                SortOrder::Descending => cmp.reverse(),
-            }
-        });
+        let sorter = get_sorter_for_field(board.task_sort_field);
+        let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
+        ordered_sorter.sort(&mut cards);
 
         cards
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
-        #[derive(Serialize)]
-        struct BoardExport {
-            board: Board,
-            columns: Vec<Column>,
-            cards: Vec<Card>,
-            sprints: Vec<Sprint>,
-        }
-
-        #[derive(Serialize)]
-        struct AllBoardsExport {
-            boards: Vec<BoardExport>,
-        }
-
         if let Some(board_idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get(board_idx) {
-                let board_columns: Vec<Column> = self
-                    .columns
-                    .iter()
-                    .filter(|col| col.board_id == board.id)
-                    .cloned()
-                    .collect();
+                let board_export = BoardExporter::export_board(
+                    board,
+                    &self.columns,
+                    &self.cards,
+                    &self.sprints,
+                );
 
-                let column_ids: Vec<uuid::Uuid> = board_columns.iter().map(|c| c.id).collect();
-
-                let board_cards: Vec<Card> = self
-                    .cards
-                    .iter()
-                    .filter(|card| column_ids.contains(&card.column_id))
-                    .cloned()
-                    .collect();
-
-                let board_sprints: Vec<Sprint> = self
-                    .sprints
-                    .iter()
-                    .filter(|s| s.board_id == board.id)
-                    .cloned()
-                    .collect();
-
-                let board_export = BoardExport {
-                    board: board.clone(),
-                    columns: board_columns,
-                    cards: board_cards,
-                    sprints: board_sprints,
-                };
-
-                let export = AllBoardsExport {
+                let export = crate::export::AllBoardsExport {
                     boards: vec![board_export],
                 };
 
-                let json = serde_json::to_string_pretty(&export).map_err(io::Error::other)?;
-
-                std::fs::write(self.input.as_str(), json)?;
-                tracing::info!("Exported board to: {}", self.input.as_str());
+                BoardExporter::export_to_file(&export, self.input.as_str())?;
             }
         }
         Ok(())
     }
 
     pub fn export_all_boards_with_filename(&self) -> io::Result<()> {
-        #[derive(Serialize)]
-        struct BoardExport {
-            board: Board,
-            columns: Vec<Column>,
-            cards: Vec<Card>,
-            sprints: Vec<Sprint>,
-        }
-
-        #[derive(Serialize)]
-        struct AllBoardsExport {
-            boards: Vec<BoardExport>,
-        }
-
-        let mut board_exports = Vec::new();
-
-        for board in &self.boards {
-            let board_columns: Vec<Column> = self
-                .columns
-                .iter()
-                .filter(|col| col.board_id == board.id)
-                .cloned()
-                .collect();
-
-            let column_ids: Vec<uuid::Uuid> = board_columns.iter().map(|c| c.id).collect();
-
-            let board_cards: Vec<Card> = self
-                .cards
-                .iter()
-                .filter(|card| column_ids.contains(&card.column_id))
-                .cloned()
-                .collect();
-
-            let board_sprints: Vec<Sprint> = self
-                .sprints
-                .iter()
-                .filter(|s| s.board_id == board.id)
-                .cloned()
-                .collect();
-
-            board_exports.push(BoardExport {
-                board: board.clone(),
-                columns: board_columns,
-                cards: board_cards,
-                sprints: board_sprints,
-            });
-        }
-
-        let export = AllBoardsExport {
-            boards: board_exports,
-        };
-
-        let json = serde_json::to_string_pretty(&export).map_err(io::Error::other)?;
-
-        std::fs::write(self.input.as_str(), json)?;
-        tracing::info!("Exported all boards to: {}", self.input.as_str());
-
+        let export = BoardExporter::export_all_boards(
+            &self.boards,
+            &self.columns,
+            &self.cards,
+            &self.sprints,
+        );
+        BoardExporter::export_to_file(&export, self.input.as_str())?;
         Ok(())
     }
 
     pub fn auto_save(&self) -> io::Result<()> {
         if let Some(ref filename) = self.save_file {
-            #[derive(Serialize)]
-            struct BoardExport {
-                board: Board,
-                columns: Vec<Column>,
-                cards: Vec<Card>,
-                sprints: Vec<Sprint>,
-            }
-
-            #[derive(Serialize)]
-            struct AllBoardsExport {
-                boards: Vec<BoardExport>,
-            }
-
-            let mut board_exports = Vec::new();
-
-            for board in &self.boards {
-                let board_columns: Vec<Column> = self
-                    .columns
-                    .iter()
-                    .filter(|col| col.board_id == board.id)
-                    .cloned()
-                    .collect();
-
-                let column_ids: Vec<uuid::Uuid> = board_columns.iter().map(|c| c.id).collect();
-
-                let board_cards: Vec<Card> = self
-                    .cards
-                    .iter()
-                    .filter(|card| column_ids.contains(&card.column_id))
-                    .cloned()
-                    .collect();
-
-                let board_sprints: Vec<Sprint> = self
-                    .sprints
-                    .iter()
-                    .filter(|s| s.board_id == board.id)
-                    .cloned()
-                    .collect();
-
-                board_exports.push(BoardExport {
-                    board: board.clone(),
-                    columns: board_columns,
-                    cards: board_cards,
-                    sprints: board_sprints,
-                });
-            }
-
-            let export = AllBoardsExport {
-                boards: board_exports,
-            };
-
-            let json = serde_json::to_string_pretty(&export).map_err(io::Error::other)?;
-
-            std::fs::write(filename, json)?;
-            tracing::info!("Auto-saved {} boards to: {}", self.boards.len(), filename);
+            let export = BoardExporter::export_all_boards(
+                &self.boards,
+                &self.columns,
+                &self.cards,
+                &self.sprints,
+            );
+            BoardExporter::export_to_file(&export, filename)?;
         }
         Ok(())
     }
@@ -736,47 +541,14 @@ impl App {
 
 
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
-        use serde::Deserialize;
-
-        #[derive(Deserialize)]
-        struct BoardImport {
-            board: Board,
-            columns: Vec<Column>,
-            cards: Vec<Card>,
-            #[serde(default)]
-            sprints: Vec<Sprint>,
-        }
-
-        #[derive(Deserialize)]
-        struct AllBoardsImport {
-            boards: Vec<BoardImport>,
-        }
-
-        let content = std::fs::read_to_string(filename)?;
         let first_new_index = self.boards.len();
+        let import = BoardImporter::import_from_file(filename)?;
+        let (boards, columns, cards, sprints) = BoardImporter::extract_entities(import);
 
-        match serde_json::from_str::<AllBoardsImport>(&content) {
-            Ok(import) => {
-                let count = import.boards.len();
-                for board_data in import.boards {
-                    self.boards.push(board_data.board);
-                    self.columns.extend(board_data.columns);
-                    self.cards.extend(board_data.cards);
-                    self.sprints.extend(board_data.sprints);
-                }
-                tracing::info!("Imported {} boards from: {}", count, filename);
-            }
-            Err(err) => {
-                tracing::error!("Import error: {}", err);
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "Invalid JSON format. Expected {{\"boards\": [...]}} structure. Error: {}",
-                        err
-                    ),
-                ));
-            }
-        }
+        self.boards.extend(boards);
+        self.columns.extend(columns);
+        self.cards.extend(cards);
+        self.sprints.extend(sprints);
 
         self.board_selection.set(Some(first_new_index));
         Ok(())
