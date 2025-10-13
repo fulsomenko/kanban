@@ -9,7 +9,6 @@ This is a **terminal-based kanban/project management tool** written in **Rust**,
 **Tech Stack**:
 - Language: Rust (2021 edition)
 - TUI Framework: ratatui + crossterm
-- Database: PostgreSQL with Diesel ORM
 - Async Runtime: Tokio
 - Development Environment: Nix
 
@@ -29,7 +28,6 @@ This is a **terminal-based kanban/project management tool** written in **Rust**,
 crates/
 ├── kanban-core/        # Core traits, errors, and result types
 ├── kanban-domain/      # Domain models (Board, Card, Column, Tag)
-├── kanban-db/          # Database layer with Diesel
 ├── kanban-tui/         # Terminal UI with ratatui
 └── kanban-cli/         # CLI entry point
 ```
@@ -50,16 +48,7 @@ nix develop            # Enter development shell
 The shell provides:
 - Rust toolchain (stable, rust-analyzer, rust-src)
 - cargo-watch, cargo-edit, cargo-audit, cargo-tarpaulin
-- PostgreSQL 15, pgcli, diesel-cli
 - bacon (background compiler)
-
-### Database Management
-```bash
-pg-start               # Start PostgreSQL server
-pg-stop                # Stop PostgreSQL server
-```
-
-Database URL: `postgresql://kanban:kanban_dev@localhost:5432/kanban_dev`
 
 ## Common Commands
 
@@ -93,14 +82,6 @@ cargo test --package kanban-domain  # Test specific crate
 cargo tarpaulin        # Code coverage
 ```
 
-### Database
-```bash
-diesel setup           # Create database and run migrations
-diesel migration generate <name>  # Create new migration
-diesel migration run   # Apply migrations
-diesel migration revert  # Rollback migration
-```
-
 ## Crate Descriptions
 
 ### kanban-core
@@ -123,16 +104,6 @@ diesel migration revert  # Rollback migration
 - `Tag` - Categorization tags
 
 **Design Pattern**: Rich domain models with behavior, no infrastructure dependencies
-
-### kanban-db
-**Purpose**: Database persistence layer
-
-- `schema` - Diesel schema (generated)
-- `models` - Database models mapping domain ↔ tables
-- `repositories` - Repository implementations
-- `connection` - Database connection management
-
-**Design Pattern**: Repository pattern, DTO mapping
 
 ### kanban-tui
 **Purpose**: Terminal UI implementation
@@ -168,7 +139,6 @@ diesel migration revert  # Rollback migration
 ### Async Patterns
 - Use `async-trait` for async trait methods
 - Tokio runtime for async execution
-- Database operations are async with diesel-async
 
 ### Testing
 - Unit tests in same file as implementation
@@ -187,7 +157,6 @@ diesel migration revert  # Rollback migration
 ## Development Workflow
 
 1. **Domain First**: Define models in `kanban-domain`
-2. **Database Schema**: Create migrations with Diesel
 3. **Repository Layer**: Implement persistence in `kanban-db`
 4. **TUI Components**: Build UI in `kanban-tui`
 5. **Integration**: Wire up in `kanban-cli`
