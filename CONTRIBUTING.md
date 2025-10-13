@@ -194,9 +194,25 @@ mod tests {
 - [ ] Update README.md if adding user-facing features
 - [ ] Update CLAUDE.md if changing architecture/conventions
 
+### PR Title
+
+Use format: `<branch-name>`
+
 ### PR Description
 
-Include:
+Include concise list of changes:
+
+**Example:**
+```
+Fixes task filtering behavior:
+
+- Add sprint filter toggle to task view
+- Update UI to show active sprint indicator
+- Fix filter persistence across sessions
+```
+
+And include concisely
+
 - **What**: Brief description of changes
 - **Why**: Motivation and context
 - **How**: Implementation approach
@@ -204,9 +220,55 @@ Include:
 
 ### Commit Messages
 
-- Use present tense: "Add feature" not "Added feature"
-- Be concise but descriptive
-- Reference issues: "Fix #123: Handle empty board state"
+Use semantic commit format:
+
+```
+<type>: <description>
+
+[optional body]
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `refactor`: Code refactoring
+- `test`: Adding/updating tests
+- `chore`: Maintenance tasks
+- `ci`: CI/CD changes
+
+**Examples:**
+- `feat: add sprint filtering to task view`
+- `fix: handle empty board state correctly`
+- `docs: update keyboard shortcuts in README`
+- `refactor: extract dialog rendering logic`
+
+### Changesets
+
+When submitting a PR, add a changeset file to describe your changes:
+
+1. Create `.changeset/<descriptive-name>.md`:
+
+```md
+---
+bump: patch
+---
+
+Description of changes
+
+- List of changes
+```
+
+2. **Bump types**:
+   - `patch` - Bug fixes, small changes (0.1.0 → 0.1.1)
+   - `minor` - New features, backwards compatible (0.1.0 → 0.2.0)
+   - `major` - Breaking changes (0.1.0 → 1.0.0)
+
+3. On merge to master:
+   - Version automatically bumps based on changeset
+   - CHANGELOG.md updates with your description
+   - New version publishes to crates.io
+   - GitHub release created with tag
 
 ## Code Review Process
 
@@ -233,3 +295,4 @@ Include:
 ## License
 
 By contributing, you agree that your contributions will be licensed under the Apache 2.0 License.
+
