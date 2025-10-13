@@ -36,13 +36,22 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Setup SSH deploy key
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
       - name: Configure Git
         if: steps.check.outputs.has_changesets == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin git@github.com:fulsomenko/kanban.git
 
-      - name: Bump version
+      - name: Bump version and update changelog
         if: steps.check.outputs.has_changesets == 'true'
         run: |
           nix run .#bump-version -- ${{ github.event.pull_request.number }}
@@ -52,18 +61,18 @@ jobs:
         id: version
         run: echo "version=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)" >> $GITHUB_OUTPUT
 
-      - name: Commit and push
+      - name: Commit and push version bump
         if: steps.check.outputs.has_changesets == 'true'
         run: |
           git add .
           git commit -m "chore: bump version to ${{ steps.version.outputs.version }} [skip ci]"
-          git push origin master
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" git push origin master
 
       - name: Tag version
         if: steps.check.outputs.has_changesets == 'true'
         run: |
           git tag "v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Publish to crates.io
         if: steps.check.outputs.has_changesets == 'true'
