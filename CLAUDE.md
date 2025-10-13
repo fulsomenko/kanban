@@ -35,7 +35,6 @@ crates/
 **Dependency Flow** (respecting dependency inversion):
 ```
 kanban-cli → kanban-tui → kanban-domain → kanban-core
-          ↘ kanban-db  ↗
 ```
 
 ## Development Environment
