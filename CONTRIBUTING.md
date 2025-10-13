@@ -204,9 +204,28 @@ Include:
 
 ### Commit Messages
 
-- Use present tense: "Add feature" not "Added feature"
-- Be concise but descriptive
-- Reference issues: "Fix #123: Handle empty board state"
+Use semantic commit format:
+
+```
+<type>: <description>
+
+[optional body]
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `refactor`: Code refactoring
+- `test`: Adding/updating tests
+- `chore`: Maintenance tasks
+- `ci`: CI/CD changes
+
+**Examples:**
+- `feat: add sprint filtering to task view`
+- `fix: handle empty board state correctly`
+- `docs: update keyboard shortcuts in README`
+- `refactor: extract dialog rendering logic`
 
 ### Changesets
 
