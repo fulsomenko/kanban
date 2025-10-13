@@ -69,12 +69,12 @@ pub enum BoardFocus {
     Sprints,
 }
 
-enum CardField {
+pub enum CardField {
     Title,
     Description,
 }
 
-enum BoardField {
+pub enum BoardField {
     Name,
     Description,
     Settings,
@@ -178,998 +178,63 @@ impl App {
         match self.mode {
             AppMode::Normal => match key.code {
                 KeyCode::Char('n') => match self.focus {
-                    Focus::Boards => {
-                        self.mode = AppMode::CreateBoard;
-                        self.input.clear();
-                    }
-                    Focus::Cards => {
-                        if self.active_board_index.is_some() {
-                            self.mode = AppMode::CreateCard;
-                            self.input.clear();
-                        }
-                    }
+                    Focus::Boards => self.handle_create_board_key(),
+                    Focus::Cards => self.handle_create_card_key(),
                 },
-                KeyCode::Char('r') => {
-                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
-                        if let Some(board_idx) = self.board_selection.get() {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                self.input.set(board.name.clone());
-                                self.mode = AppMode::RenameBoard;
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('e') => {
-                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
-                        self.mode = AppMode::BoardDetail;
-                        self.board_focus = BoardFocus::Name;
-                    }
-                }
-                KeyCode::Char('x') => {
-                    if self.focus == Focus::Boards && self.board_selection.get().is_some() {
-                        if let Some(board_idx) = self.board_selection.get() {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                let filename = format!(
-                                    "{}-{}.json",
-                                    board.name.replace(" ", "-").to_lowercase(),
-                                    chrono::Utc::now().format("%Y%m%d-%H%M%S")
-                                );
-                                self.input.set(filename);
-                                self.mode = AppMode::ExportBoard;
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('X') => {
-                    if self.focus == Focus::Boards && !self.boards.is_empty() {
-                        let filename = format!(
-                            "kanban-all-{}.json",
-                            chrono::Utc::now().format("%Y%m%d-%H%M%S")
-                        );
-                        self.input.set(filename);
-                        self.mode = AppMode::ExportAll;
-                    }
-                }
-                KeyCode::Char('i') => {
-                    if self.focus == Focus::Boards {
-                        self.scan_import_files();
-                        if !self.import_files.is_empty() {
-                            self.import_selection.set(Some(0));
-                            self.mode = AppMode::ImportBoard;
-                        }
-                    }
-                }
-                KeyCode::Char('a') => {
-                    if self.focus == Focus::Cards {
-                        if !self.selected_cards.is_empty() {
-                            self.sprint_assign_selection.clear();
-                            self.mode = AppMode::AssignMultipleCardsToSprint;
-                        } else if let Some(sorted_idx) = self.card_selection.get() {
-                            if let Some(board_idx) = self.active_board_index {
-                                if let Some(board) = self.boards.get(board_idx) {
-                                    let sprint_count = self.sprints.iter().filter(|s| s.board_id == board.id).count();
-                                    if sprint_count > 0 {
-                                        let sorted_cards = self.get_sorted_board_cards(board.id);
-                                        if let Some(selected_card) = sorted_cards.get(sorted_idx) {
-                                            let card_id = selected_card.id;
-                                            let actual_idx = self.cards.iter().position(|c| c.id == card_id);
-                                            self.active_card_index = actual_idx;
-                                        }
-                                        self.sprint_assign_selection.set(Some(0));
-                                        self.mode = AppMode::AssignCardToSprint;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('c') => {
-                    if self.focus == Focus::Cards {
-                        if !self.selected_cards.is_empty() {
-                            self.toggle_selected_cards_completion();
-                        } else if self.card_selection.get().is_some() {
-                            self.toggle_card_completion();
-                        }
-                    }
-                }
-                KeyCode::Char('o') => {
-                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
-                        self.sort_field_selection.set(Some(0));
-                        self.mode = AppMode::OrderCards;
-                    }
-                }
-                KeyCode::Char('O') => {
-                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
-                        if let Some(current_order) = self.current_sort_order {
-                            let new_order = match current_order {
-                                SortOrder::Ascending => SortOrder::Descending,
-                                SortOrder::Descending => SortOrder::Ascending,
-                            };
-                            self.current_sort_order = Some(new_order);
-
-                            if let Some(board_idx) = self.active_board_index {
-                                if let Some(board) = self.boards.get_mut(board_idx) {
-                                    if let Some(field) = self.current_sort_field {
-                                        board.update_task_sort(field, new_order);
-                                    }
-                                }
-                            }
-
-                            tracing::info!("Toggled sort order to: {:?}", new_order);
-                        }
-                    }
-                }
-                KeyCode::Char('T') => {
-                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
-                        self.hide_assigned_cards = !self.hide_assigned_cards;
-                        let status = if self.hide_assigned_cards { "enabled" } else { "disabled" };
-                        tracing::info!("Hide assigned cards: {}", status);
-
-                        if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                let card_count = self.get_board_card_count(board.id);
-                                if card_count > 0 {
-                                    self.card_selection.set(Some(0));
-                                } else {
-                                    self.card_selection.clear();
-                                }
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('t') => {
-                    if self.focus == Focus::Cards && self.active_board_index.is_some() {
-                        if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                if let Some(active_sprint_id) = board.active_sprint_id {
-                                    if self.active_sprint_filter == Some(active_sprint_id) {
-                                        self.active_sprint_filter = None;
-                                        tracing::info!("Disabled sprint filter - showing all cards");
-                                    } else {
-                                        self.active_sprint_filter = Some(active_sprint_id);
-                                        tracing::info!("Enabled sprint filter - showing active sprint only");
-                                    }
-
-                                    let card_count = self.get_board_card_count(board.id);
-                                    if card_count > 0 {
-                                        self.card_selection.set(Some(0));
-                                    } else {
-                                        self.card_selection.clear();
-                                    }
-                                } else {
-                                    tracing::warn!("No active sprint set for filtering");
-                                }
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('v') => {
-                    if self.focus == Focus::Cards && self.card_selection.get().is_some() {
-                        if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                let card_id = {
-                                    let sorted_cards = self.get_sorted_board_cards(board.id);
-                                    if let Some(sorted_idx) = self.card_selection.get() {
-                                        sorted_cards.get(sorted_idx).map(|c| c.id)
-                                    } else {
-                                        None
-                                    }
-                                };
-
-                                if let Some(id) = card_id {
-                                    if self.selected_cards.contains(&id) {
-                                        self.selected_cards.remove(&id);
-                                    } else {
-                                        self.selected_cards.insert(id);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('1') => self.focus = Focus::Boards,
-                KeyCode::Char('2') => {
-                    if self.active_board_index.is_some() {
-                        self.focus = Focus::Cards;
-                    }
-                }
-                KeyCode::Esc => {
-                    if self.active_board_index.is_some() {
-                        self.active_board_index = None;
-                        self.card_selection.clear();
-                        self.focus = Focus::Boards;
-                    }
-                }
-                KeyCode::Char('j') | KeyCode::Down => match self.focus {
-                    Focus::Boards => {
-                        self.board_selection.next(self.boards.len());
-                    }
-                    Focus::Cards => {
-                        if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                let card_count = self.get_board_card_count(board.id);
-                                self.card_selection.next(card_count);
-                            }
-                        }
-                    }
-                },
-                KeyCode::Char('k') | KeyCode::Up => match self.focus {
-                    Focus::Boards => {
-                        self.board_selection.prev();
-                    }
-                    Focus::Cards => {
-                        self.card_selection.prev();
-                    }
-                },
-                KeyCode::Enter | KeyCode::Char(' ') => match self.focus {
-                    Focus::Boards => {
-                        if self.board_selection.get().is_some() {
-                            self.active_board_index = self.board_selection.get();
-                            self.card_selection.clear();
-
-                            if let Some(board_idx) = self.active_board_index {
-                                if let Some(board) = self.boards.get(board_idx) {
-                                    self.current_sort_field = Some(board.task_sort_field);
-                                    self.current_sort_order = Some(board.task_sort_order);
-
-                                    let card_count = self.get_board_card_count(board.id);
-                                    if card_count > 0 {
-                                        self.card_selection.set(Some(0));
-                                    }
-                                }
-                            }
-
-                            self.focus = Focus::Cards;
-                        }
-                    }
-                    Focus::Cards => {
-                        if let Some(sorted_idx) = self.card_selection.get() {
-                            if let Some(board_idx) = self.active_board_index {
-                                if let Some(board) = self.boards.get(board_idx) {
-                                    let sorted_cards = self.get_sorted_board_cards(board.id);
-                                    if let Some(selected_card) = sorted_cards.get(sorted_idx) {
-                                        let card_id = selected_card.id;
-                                        let actual_idx =
-                                            self.cards.iter().position(|c| c.id == card_id);
-                                        self.active_card_index = actual_idx;
-                                        self.mode = AppMode::CardDetail;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
+                KeyCode::Char('r') => self.handle_rename_board_key(),
+                KeyCode::Char('e') => self.handle_edit_board_key(),
+                KeyCode::Char('x') => self.handle_export_board_key(),
+                KeyCode::Char('X') => self.handle_export_all_key(),
+                KeyCode::Char('i') => self.handle_import_board_key(),
+                KeyCode::Char('a') => self.handle_assign_to_sprint_key(),
+                KeyCode::Char('c') => self.handle_toggle_card_completion(),
+                KeyCode::Char('o') => self.handle_order_cards_key(),
+                KeyCode::Char('O') => self.handle_toggle_sort_order_key(),
+                KeyCode::Char('T') => self.handle_toggle_hide_assigned(),
+                KeyCode::Char('t') => self.handle_toggle_sprint_filter(),
+                KeyCode::Char('v') => self.handle_card_selection_toggle(),
+                KeyCode::Char('1') => self.handle_focus_switch(Focus::Boards),
+                KeyCode::Char('2') => self.handle_focus_switch(Focus::Cards),
+                KeyCode::Esc => self.handle_escape_key(),
+                KeyCode::Char('j') | KeyCode::Down => self.handle_navigation_down(),
+                KeyCode::Char('k') | KeyCode::Up => self.handle_navigation_up(),
+                KeyCode::Enter | KeyCode::Char(' ') => self.handle_selection_activate(),
                 _ => {}
             },
-            AppMode::CreateBoard => match handle_dialog_input(&mut self.input, key.code, false) {
-                DialogAction::Confirm => {
-                    self.create_board();
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::Cancel => {
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::None => {}
-            },
-            AppMode::CreateCard => match handle_dialog_input(&mut self.input, key.code, false) {
-                DialogAction::Confirm => {
-                    self.create_card();
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::Cancel => {
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::None => {}
-            },
-            AppMode::CreateSprint => match handle_dialog_input(&mut self.input, key.code, true) {
-                DialogAction::Confirm => {
-                    self.create_sprint();
-                    self.mode = AppMode::BoardDetail;
-                    self.board_focus = BoardFocus::Sprints;
-                    self.input.clear();
-                }
-                DialogAction::Cancel => {
-                    self.mode = AppMode::BoardDetail;
-                    self.board_focus = BoardFocus::Sprints;
-                    self.input.clear();
-                }
-                DialogAction::None => {}
-            },
-            AppMode::RenameBoard => match handle_dialog_input(&mut self.input, key.code, false) {
-                DialogAction::Confirm => {
-                    self.rename_board();
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::Cancel => {
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::None => {}
-            },
-            AppMode::ExportBoard => match handle_dialog_input(&mut self.input, key.code, false) {
-                DialogAction::Confirm => {
-                    if let Err(e) = self.export_board_with_filename() {
-                        tracing::error!("Failed to export board: {}", e);
-                    }
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::Cancel => {
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::None => {}
-            },
-            AppMode::ExportAll => match handle_dialog_input(&mut self.input, key.code, false) {
-                DialogAction::Confirm => {
-                    if let Err(e) = self.export_all_boards_with_filename() {
-                        tracing::error!("Failed to export all boards: {}", e);
-                    }
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::Cancel => {
-                    self.mode = AppMode::Normal;
-                    self.input.clear();
-                }
-                DialogAction::None => {}
-            },
-            AppMode::ImportBoard => match key.code {
-                KeyCode::Esc => {
-                    self.mode = AppMode::Normal;
-                    self.import_selection.clear();
-                }
-                KeyCode::Char('j') | KeyCode::Down => {
-                    self.import_selection.next(self.import_files.len());
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    self.import_selection.prev();
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    if let Some(idx) = self.import_selection.get() {
-                        if let Some(filename) = self.import_files.get(idx).cloned() {
-                            if let Err(e) = self.import_board_from_file(&filename) {
-                                tracing::error!("Failed to import board: {}", e);
-                            }
-                        }
-                    }
-                    self.mode = AppMode::Normal;
-                    self.import_selection.clear();
-                }
-                _ => {}
-            },
-            AppMode::SetCardPoints => match handle_dialog_input(&mut self.input, key.code, true) {
-                DialogAction::Confirm => {
-                    let input_str = self.input.as_str().trim();
-                    let points = if input_str.is_empty() {
-                        None
-                    } else if let Ok(p) = input_str.parse::<u8>() {
-                        if (1..=5).contains(&p) {
-                            Some(p)
-                        } else {
-                            tracing::error!("Points must be between 1-5");
-                            self.mode = AppMode::CardDetail;
-                            self.input.clear();
-                            return should_restart_events;
-                        }
-                    } else {
-                        tracing::error!("Invalid points value");
-                        self.mode = AppMode::CardDetail;
-                        self.input.clear();
-                        return should_restart_events;
-                    };
-
-                    if let Some(card_idx) = self.active_card_index {
-                        if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                let board_cards: Vec<_> = self
-                                    .cards
-                                    .iter()
-                                    .filter(|card| {
-                                        self.columns.iter().any(|col| {
-                                            col.id == card.column_id && col.board_id == board.id
-                                        })
-                                    })
-                                    .collect();
-
-                                if let Some(card) = board_cards.get(card_idx) {
-                                    let card_id = card.id;
-                                    if let Some(card) =
-                                        self.cards.iter_mut().find(|c| c.id == card_id)
-                                    {
-                                        card.set_points(points);
-                                        tracing::info!("Set points to: {:?}", points);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    self.mode = AppMode::CardDetail;
-                    self.input.clear();
-                }
-                DialogAction::Cancel => {
-                    self.mode = AppMode::CardDetail;
-                    self.input.clear();
-                }
-                DialogAction::None => {}
-            },
-            AppMode::SetCardPriority => match key.code {
-                KeyCode::Esc => {
-                    self.mode = AppMode::CardDetail;
-                }
-                KeyCode::Char('j') | KeyCode::Down => {
-                    self.priority_selection.next(4);
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    self.priority_selection.prev();
-                }
-                KeyCode::Enter => {
-                    if let Some(priority_idx) = self.priority_selection.get() {
-                        if let Some(card_idx) = self.active_card_index {
-                            if let Some(card) = self.cards.get_mut(card_idx) {
-                                use kanban_domain::CardPriority;
-                                let priority = match priority_idx {
-                                    0 => CardPriority::Low,
-                                    1 => CardPriority::Medium,
-                                    2 => CardPriority::High,
-                                    3 => CardPriority::Critical,
-                                    _ => CardPriority::Medium,
-                                };
-                                card.update_priority(priority);
-                            }
-                        }
-                    }
-                    self.mode = AppMode::CardDetail;
-                }
-                _ => {}
-            },
-            AppMode::CardDetail => match key.code {
-                KeyCode::Esc => {
-                    self.mode = AppMode::Normal;
-                    self.active_card_index = None;
-                    self.card_focus = CardFocus::Title;
-                }
-                KeyCode::Char('1') => {
-                    self.card_focus = CardFocus::Title;
-                }
-                KeyCode::Char('2') => {
-                    self.card_focus = CardFocus::Metadata;
-                }
-                KeyCode::Char('3') => {
-                    self.card_focus = CardFocus::Description;
-                }
-                KeyCode::Char('y') => {
-                    self.copy_branch_name();
-                }
-                KeyCode::Char('Y') => {
-                    self.copy_git_checkout_command();
-                }
-                KeyCode::Char('e') => match self.card_focus {
-                    CardFocus::Title => {
-                        if let Err(e) =
-                            self.edit_card_field(terminal, event_handler, CardField::Title)
-                        {
-                            tracing::error!("Failed to edit title: {}", e);
-                        }
-                        should_restart_events = true;
-                    }
-                    CardFocus::Description => {
-                        if let Err(e) =
-                            self.edit_card_field(terminal, event_handler, CardField::Description)
-                        {
-                            tracing::error!("Failed to edit description: {}", e);
-                        }
-                        should_restart_events = true;
-                    }
-                    CardFocus::Metadata => {
-                        self.input.clear();
-                        self.mode = AppMode::SetCardPoints;
-                    }
-                },
-                KeyCode::Char('s') => {
-                    if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            let sprint_count = self.sprints.iter().filter(|s| s.board_id == board.id).count();
-                            if sprint_count > 0 {
-                                self.sprint_assign_selection.set(Some(0));
-                                self.mode = AppMode::AssignCardToSprint;
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('p') => {
-                    self.priority_selection.set(Some(0));
-                    self.mode = AppMode::SetCardPriority;
-                }
-                _ => {}
-            },
-            AppMode::BoardDetail => match key.code {
-                KeyCode::Esc => {
-                    self.mode = AppMode::Normal;
-                    self.board_focus = BoardFocus::Name;
-                }
-                KeyCode::Char('1') => {
-                    self.board_focus = BoardFocus::Name;
-                }
-                KeyCode::Char('2') => {
-                    self.board_focus = BoardFocus::Description;
-                }
-                KeyCode::Char('3') => {
-                    self.board_focus = BoardFocus::Settings;
-                }
-                KeyCode::Char('4') => {
-                    self.board_focus = BoardFocus::Sprints;
-                }
-                KeyCode::Char('e') => match self.board_focus {
-                    BoardFocus::Name => {
-                        if let Err(e) =
-                            self.edit_board_field(terminal, event_handler, BoardField::Name)
-                        {
-                            tracing::error!("Failed to edit board name: {}", e);
-                        }
-                        should_restart_events = true;
-                    }
-                    BoardFocus::Description => {
-                        if let Err(e) =
-                            self.edit_board_field(terminal, event_handler, BoardField::Description)
-                        {
-                            tracing::error!("Failed to edit board description: {}", e);
-                        }
-                        should_restart_events = true;
-                    }
-                    BoardFocus::Settings => {
-                        if let Err(e) =
-                            self.edit_board_field(terminal, event_handler, BoardField::Settings)
-                        {
-                            tracing::error!("Failed to edit board settings: {}", e);
-                        }
-                        should_restart_events = true;
-                    }
-                    BoardFocus::Sprints => {}
-                },
-                KeyCode::Char('n') => {
-                    if self.board_focus == BoardFocus::Sprints {
-                        if self.board_selection.get().is_some() {
-                            self.mode = AppMode::CreateSprint;
-                            self.input.clear();
-                        }
-                    }
-                }
-                KeyCode::Char('j') | KeyCode::Down => {
-                    if self.board_focus == BoardFocus::Sprints {
-                        if let Some(board_idx) = self.board_selection.get() {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                let sprint_count = self.sprints.iter().filter(|s| s.board_id == board.id).count();
-                                self.sprint_selection.next(sprint_count);
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    if self.board_focus == BoardFocus::Sprints {
-                        self.sprint_selection.prev();
-                    }
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    if self.board_focus == BoardFocus::Sprints {
-                        if let Some(sprint_idx) = self.sprint_selection.get() {
-                            if let Some(board_idx) = self.board_selection.get() {
-                                if let Some(board) = self.boards.get(board_idx) {
-                                    let board_sprints: Vec<_> = self
-                                        .sprints
-                                        .iter()
-                                        .enumerate()
-                                        .filter(|(_, s)| s.board_id == board.id)
-                                        .collect();
-                                    if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
-                                        self.active_sprint_index = Some(*actual_idx);
-                                        self.mode = AppMode::SprintDetail;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('p') => {
-                    if self.board_focus == BoardFocus::Settings {
-                        if let Some(board_idx) = self.board_selection.get() {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                let current_prefix =
-                                    board.branch_prefix.clone().unwrap_or_else(String::new);
-                                self.input.set(current_prefix);
-                                self.mode = AppMode::SetBranchPrefix;
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            },
-            AppMode::SprintDetail => match key.code {
-                KeyCode::Esc => {
-                    self.mode = AppMode::BoardDetail;
-                    self.board_focus = BoardFocus::Sprints;
-                    self.active_sprint_index = None;
-                }
-                KeyCode::Char('a') => {
-                    if let Some(sprint_idx) = self.active_sprint_index {
-                        if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                            if sprint.status == kanban_domain::SprintStatus::Planning {
-                                let board_idx = self.active_board_index.or(self.board_selection.get());
-                                if let Some(board_idx) = board_idx {
-                                    if let Some(board) = self.boards.get_mut(board_idx) {
-                                        let duration = board.sprint_duration_days.unwrap_or(14);
-                                        let sprint_id = sprint.id;
-                                        sprint.activate(duration);
-                                        board.active_sprint_id = Some(sprint_id);
-                                    }
-                                    if let Some(board) = self.boards.get(board_idx) {
-                                        tracing::info!("Activated sprint: {}", sprint.formatted_name(board, "sprint"));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                KeyCode::Char('c') => {
-                    if let Some(sprint_idx) = self.active_sprint_index {
-                        if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                            if sprint.status == kanban_domain::SprintStatus::Active
-                                || sprint.status == kanban_domain::SprintStatus::Planning
-                            {
-                                let sprint_id = sprint.id;
-                                sprint.complete();
-                                let board_idx = self.active_board_index.or(self.board_selection.get());
-                                if let Some(board_idx) = board_idx {
-                                    if let Some(board) = self.boards.get(board_idx) {
-                                        tracing::info!("Completed sprint: {}", sprint.formatted_name(board, "sprint"));
-                                    }
-                                }
-
-                                for card in self.cards.iter_mut() {
-                                    if card.sprint_id == Some(sprint_id) {
-                                        card.sprint_id = None;
-                                    }
-                                }
-
-                                let board_idx = self.active_board_index.or(self.board_selection.get());
-                                if let Some(board_idx) = board_idx {
-                                    if let Some(board) = self.boards.get_mut(board_idx) {
-                                        if board.active_sprint_id == Some(sprint_id) {
-                                            board.active_sprint_id = None;
-                                            self.active_sprint_filter = None;
-                                        }
-                                    }
-                                }
-
-                                self.mode = AppMode::BoardDetail;
-                                self.board_focus = BoardFocus::Sprints;
-                                self.active_sprint_index = None;
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            },
-            AppMode::AssignCardToSprint => match key.code {
-                KeyCode::Esc => {
-                    self.mode = AppMode::Normal;
-                    self.sprint_assign_selection.clear();
-                }
-                KeyCode::Char('j') | KeyCode::Down => {
-                    if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            let sprint_count = self.sprints.iter().filter(|s| s.board_id == board.id).count();
-                            self.sprint_assign_selection.next(sprint_count + 1);
-                        }
-                    }
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    self.sprint_assign_selection.prev();
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    if let Some(selection_idx) = self.sprint_assign_selection.get() {
-                        if let Some(card_idx) = self.active_card_index {
-                            if let Some(card) = self.cards.get_mut(card_idx) {
-                                if selection_idx == 0 {
-                                    card.sprint_id = None;
-                                    tracing::info!("Unassigned card from sprint");
-                                } else if let Some(board_idx) = self.active_board_index {
-                                    if let Some(board) = self.boards.get(board_idx) {
-                                        let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board.id).collect();
-                                        if let Some(sprint) = board_sprints.get(selection_idx - 1) {
-                                            card.sprint_id = Some(sprint.id);
-                                            tracing::info!("Assigned card to sprint: {}", sprint.formatted_name(board, "sprint"));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    self.mode = AppMode::Normal;
-                    self.sprint_assign_selection.clear();
-                }
-                _ => {}
-            },
-            AppMode::AssignMultipleCardsToSprint => match key.code {
-                KeyCode::Esc => {
-                    self.mode = AppMode::Normal;
-                    self.sprint_assign_selection.clear();
-                    self.selected_cards.clear();
-                }
-                KeyCode::Char('j') | KeyCode::Down => {
-                    if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            let sprint_count = self.sprints.iter().filter(|s| s.board_id == board.id).count();
-                            self.sprint_assign_selection.next(sprint_count + 1);
-                        }
-                    }
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    self.sprint_assign_selection.prev();
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    if let Some(selection_idx) = self.sprint_assign_selection.get() {
-                        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
-                        for card_id in card_ids {
-                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                                if selection_idx == 0 {
-                                    card.sprint_id = None;
-                                } else if let Some(board_idx) = self.active_board_index {
-                                    if let Some(board) = self.boards.get(board_idx) {
-                                        let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board.id).collect();
-                                        if let Some(sprint) = board_sprints.get(selection_idx - 1) {
-                                            card.sprint_id = Some(sprint.id);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board.id).collect();
-                                if selection_idx == 0 {
-                                    tracing::info!("Unassigned {} cards from sprint", self.selected_cards.len());
-                                } else if let Some(sprint) = board_sprints.get(selection_idx - 1) {
-                                    tracing::info!("Assigned {} cards to sprint: {}", self.selected_cards.len(), sprint.formatted_name(board, "sprint"));
-                                }
-                            }
-                        }
-                    }
-                    self.mode = AppMode::Normal;
-                    self.sprint_assign_selection.clear();
-                    self.selected_cards.clear();
-                }
-                _ => {}
-            },
-            AppMode::SetBranchPrefix => match handle_dialog_input(&mut self.input, key.code, true) {
-                DialogAction::Confirm => {
-                    let prefix_str = self.input.as_str().trim();
-                    if prefix_str.is_empty() {
-                        if let Some(board_idx) = self.board_selection.get() {
-                            if let Some(board) = self.boards.get_mut(board_idx) {
-                                board.update_branch_prefix(None);
-                                tracing::info!("Cleared branch prefix");
-                            }
-                        }
-                    } else if Card::validate_branch_prefix(prefix_str) {
-                        if let Some(board_idx) = self.board_selection.get() {
-                            if let Some(board) = self.boards.get_mut(board_idx) {
-                                board.update_branch_prefix(Some(prefix_str.to_string()));
-                                tracing::info!("Set branch prefix to: {}", prefix_str);
-                            }
-                        }
-                    } else {
-                        tracing::error!(
-                            "Invalid prefix: use alphanumeric, hyphens, underscores only"
-                        );
-                    }
-                    self.mode = AppMode::BoardDetail;
-                    self.board_focus = BoardFocus::Settings;
-                    self.input.clear();
-                }
-                DialogAction::Cancel => {
-                    self.mode = AppMode::BoardDetail;
-                    self.board_focus = BoardFocus::Settings;
-                    self.input.clear();
-                }
-                DialogAction::None => {}
-            },
-            AppMode::OrderCards => match key.code {
-                KeyCode::Esc => {
-                    self.mode = AppMode::Normal;
-                    self.sort_field_selection.clear();
-                }
-                KeyCode::Char('j') | KeyCode::Down => {
-                    self.sort_field_selection.next(6);
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    self.sort_field_selection.prev();
-                }
-                KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('a') | KeyCode::Char('d') => {
-                    if let Some(field_idx) = self.sort_field_selection.get() {
-                        let field = match field_idx {
-                            0 => SortField::Points,
-                            1 => SortField::Priority,
-                            2 => SortField::CreatedAt,
-                            3 => SortField::UpdatedAt,
-                            4 => SortField::Status,
-                            5 => SortField::Default,
-                            _ => return should_restart_events,
-                        };
-
-                        let order = if self.current_sort_field == Some(field)
-                            && matches!(key.code, KeyCode::Enter | KeyCode::Char(' '))
-                        {
-                            match self.current_sort_order {
-                                Some(SortOrder::Ascending) => SortOrder::Descending,
-                                Some(SortOrder::Descending) => SortOrder::Ascending,
-                                None => SortOrder::Ascending,
-                            }
-                        } else {
-                            match key.code {
-                                KeyCode::Char('d') => SortOrder::Descending,
-                                _ => SortOrder::Ascending,
-                            }
-                        };
-
-                        self.current_sort_field = Some(field);
-                        self.current_sort_order = Some(order);
-
-                        if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get_mut(board_idx) {
-                                board.update_task_sort(field, order);
-                            }
-                        }
-
-                        self.mode = AppMode::Normal;
-                        self.sort_field_selection.clear();
-
-                        tracing::info!("Sorting by {:?} ({:?})", field, order);
-                    }
-                }
-                _ => {}
-            },
+            AppMode::CreateBoard => self.handle_create_board_dialog(key.code),
+            AppMode::CreateCard => self.handle_create_card_dialog(key.code),
+            AppMode::CreateSprint => self.handle_create_sprint_dialog(key.code),
+            AppMode::RenameBoard => self.handle_rename_board_dialog(key.code),
+            AppMode::ExportBoard => self.handle_export_board_dialog(key.code),
+            AppMode::ExportAll => self.handle_export_all_dialog(key.code),
+            AppMode::ImportBoard => self.handle_import_board_popup(key.code),
+            AppMode::SetCardPoints => {
+                should_restart_events = self.handle_set_card_points_dialog(key.code);
+            }
+            AppMode::SetCardPriority => self.handle_set_card_priority_popup(key.code),
+            AppMode::CardDetail => {
+                should_restart_events =
+                    self.handle_card_detail_key(key.code, terminal, event_handler);
+            }
+            AppMode::BoardDetail => {
+                should_restart_events =
+                    self.handle_board_detail_key(key.code, terminal, event_handler);
+            }
+            AppMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
+            AppMode::OrderCards => {
+                should_restart_events = self.handle_order_cards_popup(key.code);
+            }
+            AppMode::SprintDetail => self.handle_sprint_detail_key(key.code),
+            AppMode::AssignCardToSprint => self.handle_assign_card_to_sprint_popup(key.code),
+            AppMode::AssignMultipleCardsToSprint => {
+                self.handle_assign_multiple_cards_to_sprint_popup(key.code)
+            }
         }
         should_restart_events
     }
 
-    fn create_board(&mut self) {
-        let board = Board::new(self.input.as_str().to_string(), None);
-        tracing::info!("Creating board: {} (id: {})", board.name, board.id);
-        self.boards.push(board);
-        let new_index = self.boards.len() - 1;
-        self.board_selection.set(Some(new_index));
-    }
 
-    fn rename_board(&mut self) {
-        if let Some(idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get_mut(idx) {
-                board.update_name(self.input.as_str().to_string());
-                tracing::info!("Renamed board to: {}", board.name);
-            }
-        }
-    }
-
-    fn create_sprint(&mut self) {
-        let board_idx = self.active_board_index.or(self.board_selection.get());
-        if let Some(board_idx) = board_idx {
-            let (sprint_number, name_index, board_id) = {
-                if let Some(board) = self.boards.get_mut(board_idx) {
-                    let sprint_number = board.allocate_sprint_number();
-                    let input_text = self.input.as_str().trim();
-                    let name_index = if input_text.is_empty() {
-                        board.consume_sprint_name()
-                    } else {
-                        Some(board.add_sprint_name_at_used_index(input_text.to_string()))
-                    };
-                    (sprint_number, name_index, board.id)
-                } else {
-                    return;
-                }
-            };
-
-            let sprint = Sprint::new(board_id, sprint_number, name_index, None);
-            if let Some(board) = self.boards.get(board_idx) {
-                tracing::info!("Creating sprint: {} (id: {})", sprint.formatted_name(board, "sprint"), sprint.id);
-            }
-            self.sprints.push(sprint);
-
-            let board_sprints: Vec<_> = self.sprints.iter().filter(|s| s.board_id == board_id).collect();
-            let new_index = board_sprints.len() - 1;
-            self.sprint_selection.set(Some(new_index));
-        }
-    }
-
-    fn toggle_card_completion(&mut self) {
-        if let Some(sorted_idx) = self.card_selection.get() {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    let sorted_cards = self.get_sorted_board_cards(board.id);
-
-                    if let Some(card) = sorted_cards.get(sorted_idx) {
-                        let card_id = card.id;
-                        let new_status = if card.status == CardStatus::Done {
-                            CardStatus::Todo
-                        } else {
-                            CardStatus::Done
-                        };
-
-                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                            card.update_status(new_status);
-                            tracing::info!(
-                                "Toggled card '{}' to status: {:?}",
-                                card.title,
-                                new_status
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn toggle_selected_cards_completion(&mut self) {
-        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
-        let mut toggled_count = 0;
-
-        for card_id in card_ids {
-            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                let new_status = if card.status == CardStatus::Done {
-                    CardStatus::Todo
-                } else {
-                    CardStatus::Done
-                };
-                card.update_status(new_status);
-                toggled_count += 1;
-            }
-        }
-
-        tracing::info!("Toggled {} cards completion status", toggled_count);
-        self.selected_cards.clear();
-    }
-
-    fn create_card(&mut self) {
-        if let Some(idx) = self.active_board_index {
-            if let Some(board) = self.boards.get_mut(idx) {
-                let column = self
-                    .columns
-                    .iter()
-                    .find(|col| col.board_id == board.id)
-                    .cloned();
-
-                let column = match column {
-                    Some(col) => col,
-                    None => {
-                        let new_column = Column::new(board.id, "Todo".to_string(), 0);
-                        self.columns.push(new_column.clone());
-                        new_column
-                    }
-                };
-
-                let position = self
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == column.id)
-                    .count() as i32;
-                let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
-                let board_id = board.id;
-                tracing::info!("Creating card: {} (id: {})", card.title, card.id);
-                self.cards.push(card);
-
-                let card_count = self.get_board_card_count(board_id);
-                let new_card_index = card_count.saturating_sub(1);
-                self.card_selection.set(Some(new_card_index));
-            }
-        }
-    }
-
-    fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
+    pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         self.cards
             .iter()
             .filter(|card| {
@@ -1487,7 +552,7 @@ impl App {
         }
     }
 
-    fn edit_board_field(
+    pub fn edit_board_field(
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
         event_handler: &EventHandler,
@@ -1563,7 +628,7 @@ impl App {
         Ok(())
     }
 
-    fn edit_card_field(
+    pub fn edit_card_field(
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
         event_handler: &EventHandler,
@@ -1669,23 +734,6 @@ impl App {
         Ok(())
     }
 
-    fn scan_import_files(&mut self) {
-        self.import_files.clear();
-        if let Ok(entries) = std::fs::read_dir(".") {
-            for entry in entries.flatten() {
-                if let Ok(metadata) = entry.metadata() {
-                    if metadata.is_file() {
-                        if let Some(filename) = entry.file_name().to_str() {
-                            if filename.ends_with(".json") {
-                                self.import_files.push(filename.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        self.import_files.sort();
-    }
 
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         use serde::Deserialize;
@@ -1734,7 +782,7 @@ impl App {
         Ok(())
     }
 
-    fn copy_branch_name(&mut self) {
+    pub fn copy_branch_name(&mut self) {
         if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
@@ -1762,7 +810,7 @@ impl App {
         }
     }
 
-    fn copy_git_checkout_command(&mut self) {
+    pub fn copy_git_checkout_command(&mut self) {
         if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
