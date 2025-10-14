@@ -1,3 +1,13 @@
+## [0.1.3] - 2025-10-14 ([#22](https://github.com/fulsomenko/kanban/pull/22))
+
+- Extract theme system and reusable UI components
+- Add theme module with semantic colors and style functions
+- Create composable components (ListItem, Panel, Popup, DetailView, CardListItem, SelectionList)
+- Refactor ui.rs using new components (1227→869 lines, 29% reduction)
+- Improve code reusability and maintainability through composition
+- CardListItem provides reusable task list rendering for board and sprint views
+
+
 ## [0.1.2] - 2025-10-13 ([#20](https://github.com/fulsomenko/kanban/pull/20))
 
 - KAN-45: Automated release workflow with changeset-based versioning
