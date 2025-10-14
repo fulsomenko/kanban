@@ -56,12 +56,20 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
             String::new()
         }
     } else {
-        let branch_name = config.card.branch_name(
-            config.board,
-            config.sprints,
+        let prefix = if let Some(sprint_id) = config.card.sprint_id {
+            config
+                .sprints
+                .iter()
+                .find(|s| s.id == sprint_id)
+                .and_then(|sprint| {
+                    sprint.prefix_override.as_ref().or(config.board.sprint_prefix.as_ref())
+                })
+                .map(|s| s.as_str())
+                .unwrap_or_else(|| config.board.sprint_prefix.as_deref().unwrap_or("task"))
+        } else {
             config.board.sprint_prefix.as_deref().unwrap_or("task")
-        );
-        format!(" ({})", branch_name)
+        };
+        format!(" ({}-{})", prefix, config.card.card_number)
     };
 
     let select_indicator = if config.is_multi_selected {
