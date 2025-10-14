@@ -1,3 +1,11 @@
+## [0.1.4] - 2025-10-14 ([#23](https://github.com/fulsomenko/kanban/pull/23))
+
+- Show branch name in sprint-filtered task list and fix UI issues
+- Show branch name instead of redundant sprint name when task list filtered by sprint
+- Fix duplicate title rendering in tasks panel (removed redundant title call)
+- Change LABEL_TEXT color from Gray to DarkGray for better visual separation
+
+
 ## [0.1.3] - 2025-10-14 ([#22](https://github.com/fulsomenko/kanban/pull/22))
 
 - Extract theme system and reusable UI components
