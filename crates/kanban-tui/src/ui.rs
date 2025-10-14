@@ -1,10 +1,12 @@
 use crate::app::{App, AppMode, BoardFocus, CardFocus, Focus};
-use kanban_domain::{CardStatus, Sprint, SprintStatus};
+use crate::components::*;
+use crate::theme::*;
+use kanban_domain::{Sprint, SprintStatus};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Clear, ListItem, Paragraph},
     Frame,
 };
 
@@ -100,55 +102,25 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     if app.boards.is_empty() {
         lines.push(Line::from(Span::styled(
             "No projects yet. Press 'n' to create one!",
-            Style::default().fg(Color::Gray),
+            label_text(),
         )));
     } else {
         for (idx, board) in app.boards.iter().enumerate() {
-            let is_selected = app.board_selection.get() == Some(idx);
-            let is_active = app.active_board_index == Some(idx);
-            let is_focused = app.focus == Focus::Boards;
+            let config = ListItemConfig::new()
+                .selected(app.board_selection.get() == Some(idx))
+                .focused(app.focus == Focus::Boards)
+                .active(app.active_board_index == Some(idx));
 
-            let mut style = Style::default();
-            let prefix;
-
-            if is_active {
-                style = style.fg(Color::Green).add_modifier(Modifier::BOLD);
-                prefix = "● ";
-            } else {
-                style = style.fg(Color::White);
-                prefix = "  ";
-            }
-
-            if is_selected && is_focused {
-                style = style.bg(Color::Blue);
-            }
-
-            lines.push(Line::from(Span::styled(
-                format!("{}{}", prefix, board.name),
-                style,
-            )));
+            lines.push(styled_list_item(&board.name, &config));
         }
     }
 
-    let is_focused = app.focus == Focus::Boards;
-    let border_color = if is_focused {
-        Color::Cyan
-    } else {
-        Color::White
-    };
-    let title = if is_focused {
-        "Projects [1]"
-    } else {
-        "Projects"
-    };
+    let panel_config = PanelConfig::new("Projects")
+        .with_focus_indicator("Projects [1]")
+        .focused(app.focus == Focus::Boards);
 
-    let content = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(border_color))
-            .title(title),
-    );
-    frame.render_widget(content, area);
+    let content = Paragraph::new(lines);
+    render_panel(frame, area, &panel_config, content);
 }
 
 fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
@@ -166,127 +138,29 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                 } else {
                     "  (Enter/Space) to add tasks"
                 };
-                lines.push(Line::from(Span::styled(
-                    message,
-                    Style::default().fg(Color::Gray),
-                )));
+                lines.push(Line::from(Span::styled(message, label_text())));
             } else {
                 for (card_idx, card) in board_cards.iter().enumerate() {
-                    let is_selected = app.card_selection.get() == Some(card_idx);
-                    let is_focused = app.focus == Focus::Cards;
-                    let is_done = card.status == CardStatus::Done;
-
-                    let (checkbox, text_color) = if is_done {
-                        ("[x]", Color::DarkGray)
-                    } else {
-                        ("[ ]", Color::White)
-                    };
-
-                    let mut base_style = Style::default().fg(text_color);
-                    let mut title_style = Style::default().fg(text_color);
-
-                    if is_done {
-                        title_style = title_style.add_modifier(Modifier::CROSSED_OUT);
-                    }
-
-                    if is_selected && is_focused {
-                        base_style = base_style.bg(Color::Blue);
-                        title_style = title_style.bg(Color::Blue);
-                    }
-
-                    let sprint_name = if let Some(sprint_id) = card.sprint_id {
-                        app.sprints
-                            .iter()
-                            .find(|s| s.id == sprint_id)
-                            .map(|s| {
-                                format!(
-                                    " ({})",
-                                    s.formatted_name(
-                                        board,
-                                        board.sprint_prefix.as_deref().unwrap_or("sprint")
-                                    )
-                                )
-                            })
-                            .unwrap_or_default()
-                    } else {
-                        String::new()
-                    };
-
-                    let is_multi_selected = app.selected_cards.contains(&card.id);
-                    let select_indicator = if is_multi_selected { "► " } else { "  " };
-
-                    let points_color = card
-                        .points
-                        .map(|p| match p {
-                            1 => Color::Cyan,
-                            2 => Color::Green,
-                            3 => Color::Yellow,
-                            4 => Color::LightMagenta,
-                            5 => Color::Red,
-                            _ => Color::White,
-                        })
-                        .unwrap_or(Color::White);
-
-                    let mut points_style = Style::default()
-                        .fg(points_color)
-                        .add_modifier(Modifier::BOLD);
-                    if is_selected && is_focused {
-                        points_style = points_style.bg(Color::Blue);
-                    }
-
-                    let priority_color = match card.priority {
-                        kanban_domain::CardPriority::Critical => Color::Red,
-                        kanban_domain::CardPriority::High => Color::LightRed,
-                        kanban_domain::CardPriority::Medium => Color::Yellow,
-                        kanban_domain::CardPriority::Low => Color::White,
-                    };
-
-                    let mut priority_style = Style::default().fg(priority_color);
-                    if is_selected && is_focused {
-                        priority_style = priority_style.bg(Color::Blue);
-                    }
-
-                    let points_text = if let Some(points) = card.points {
-                        format!("{}", points)
-                    } else {
-                        " ".to_string()
-                    };
-
-                    let mut spans = vec![
-                        Span::styled("● ", priority_style),
-                        Span::styled(points_text, points_style),
-                        Span::raw(" "),
-                        Span::styled(format!("{}{} ", select_indicator, checkbox), base_style),
-                        Span::styled(&card.title, title_style)
-                    ];
-
-                    if !sprint_name.is_empty() {
-                        let mut sprint_style = Style::default().fg(Color::DarkGray);
-                        if is_selected && is_focused {
-                            sprint_style = sprint_style.bg(Color::Blue);
-                        }
-                        spans.push(Span::styled(sprint_name, sprint_style));
-                    }
-
-                    lines.push(Line::from(spans));
+                    let line = render_card_list_item(CardListItemConfig {
+                        card,
+                        board,
+                        sprints: &app.sprints,
+                        is_selected: app.card_selection.get() == Some(card_idx),
+                        is_focused: app.focus == Focus::Cards,
+                        is_multi_selected: app.selected_cards.contains(&card.id),
+                    });
+                    lines.push(line);
                 }
             }
         }
     } else {
         lines.push(Line::from(Span::styled(
             "  Select a project to preview tasks",
-            Style::default().fg(Color::Gray),
+            label_text(),
         )));
     }
 
-    let is_focused = app.focus == Focus::Cards;
-    let border_color = if is_focused {
-        Color::Cyan
-    } else {
-        Color::White
-    };
-
-    let mut title = if is_focused {
+    let mut title = if app.focus == Focus::Cards {
         "Tasks [2]".to_string()
     } else {
         "Tasks".to_string()
@@ -296,19 +170,21 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
         if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
             if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
                 if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    let sprint_name = sprint.formatted_name(
+                        board,
+                        board.sprint_prefix.as_deref().unwrap_or("sprint"),
+                    );
                     title.push_str(&format!(" - {}", sprint_name));
                 }
             }
         }
     }
 
-    let content = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(border_color))
-            .title(title),
-    );
+    let panel_config = PanelConfig::new("Tasks")
+        .with_focus_indicator("Tasks [2]")
+        .focused(app.focus == Focus::Cards);
+
+    let content = Paragraph::new(lines).block(panel_config.block().title(title));
     frame.render_widget(content, area);
 }
 
@@ -323,112 +199,78 @@ fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         board.sprint_prefix.as_deref().unwrap_or("sprint"),
                     );
 
-                    let status_text = format!("{:?}", sprint.status);
-                    let status_color = match sprint.status {
-                        SprintStatus::Planning => Color::Yellow,
-                        SprintStatus::Active => Color::Green,
-                        SprintStatus::Completed => Color::Blue,
-                        SprintStatus::Cancelled => Color::Red,
-                    };
-
                     let mut lines = vec![
-                        Line::from(vec![
-                            Span::styled("Sprint: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                sprint_name,
-                                Style::default()
-                                    .fg(Color::Yellow)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ]),
+                        metadata_line_styled("Sprint", sprint_name, bold_highlight()),
                         Line::from(""),
-                        Line::from(vec![
-                            Span::styled("Status: ", Style::default().fg(Color::Gray)),
-                            Span::styled(status_text, Style::default().fg(status_color)),
-                        ]),
-                        Line::from(vec![
-                            Span::styled("Sprint Number: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                sprint.sprint_number.to_string(),
-                                Style::default().fg(Color::White),
-                            ),
-                        ]),
+                        metadata_line_styled(
+                            "Status",
+                            format!("{:?}", sprint.status),
+                            sprint_status_style(sprint.status),
+                        ),
+                        metadata_line("Sprint Number", sprint.sprint_number.to_string()),
                     ];
 
                     if let Some(name) = sprint.get_name(board) {
-                        lines.push(Line::from(vec![
-                            Span::styled("Name: ", Style::default().fg(Color::Gray)),
-                            Span::styled(name.to_string(), Style::default().fg(Color::White)),
-                        ]));
+                        lines.push(metadata_line("Name", name));
                     }
 
                     if let Some(start) = sprint.start_date {
-                        lines.push(Line::from(vec![
-                            Span::styled("Start Date: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                start.format("%Y-%m-%d %H:%M UTC").to_string(),
-                                Style::default().fg(Color::White),
-                            ),
-                        ]));
+                        lines.push(metadata_line(
+                            "Start Date",
+                            start.format("%Y-%m-%d %H:%M UTC").to_string(),
+                        ));
                     }
 
                     if let Some(end) = sprint.end_date {
-                        let end_color = if sprint.is_ended() {
-                            Color::Red
+                        let end_style = if sprint.is_ended() {
+                            Style::default().fg(Color::Red)
                         } else {
-                            Color::White
+                            normal_text()
                         };
-                        lines.push(Line::from(vec![
-                            Span::styled("End Date: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                end.format("%Y-%m-%d %H:%M UTC").to_string(),
-                                Style::default().fg(end_color),
-                            ),
-                        ]));
+                        lines.push(metadata_line_styled(
+                            "End Date",
+                            end.format("%Y-%m-%d %H:%M UTC").to_string(),
+                            end_style,
+                        ));
                     }
 
                     lines.push(Line::from(""));
 
-                    let card_count = app.cards.iter().filter(|c| c.sprint_id == Some(sprint.id)).count();
-                    lines.push(Line::from(vec![
-                        Span::styled("Cards Assigned: ", Style::default().fg(Color::Gray)),
-                        Span::styled(
-                            card_count.to_string(),
-                            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                        ),
-                    ]));
+                    let card_count = app
+                        .cards
+                        .iter()
+                        .filter(|c| c.sprint_id == Some(sprint.id))
+                        .count();
+                    lines.push(metadata_line_styled(
+                        "Cards Assigned",
+                        card_count.to_string(),
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    ));
 
-                    let is_active = board.active_sprint_id == Some(sprint.id);
-                    if is_active {
-                        lines.push(Line::from(vec![
-                            Span::styled("Active Sprint: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                "Yes (used for filtering)",
-                                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-                            ),
-                        ]));
+                    if board.active_sprint_id == Some(sprint.id) {
+                        lines.push(metadata_line_styled(
+                            "Active Sprint",
+                            "Yes (used for filtering)",
+                            active_item(),
+                        ));
                     }
 
                     lines.push(Line::from(""));
-                    lines.push(Line::from(vec![
-                        Span::styled("Created: ", Style::default().fg(Color::Gray)),
-                        Span::styled(
-                            sprint.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                    ]));
-                    lines.push(Line::from(vec![
-                        Span::styled("Updated: ", Style::default().fg(Color::Gray)),
-                        Span::styled(
-                            sprint.updated_at.format("%Y-%m-%d %H:%M UTC").to_string(),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                    ]));
+                    lines.push(metadata_line_styled(
+                        "Created",
+                        sprint.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+                        label_text(),
+                    ));
+                    lines.push(metadata_line_styled(
+                        "Updated",
+                        sprint.updated_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+                        label_text(),
+                    ));
 
                     let content = Paragraph::new(lines).block(
                         Block::default()
                             .borders(Borders::ALL)
-                            .border_style(Style::default().fg(Color::Cyan))
+                            .border_style(focused_border())
                             .title("Sprint Details"),
                     );
                     frame.render_widget(content, area);
@@ -468,25 +310,49 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign",
     };
     let help = Paragraph::new(help_text)
-        .style(Style::default().fg(Color::Gray))
+        .style(label_text())
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(help, area);
 }
 
 fn render_create_board_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(app, frame, "Create New Project", "Project Name:");
+    render_input_popup(
+        frame,
+        "Create New Project",
+        "Project Name:",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
 }
 
 fn render_create_card_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(app, frame, "Create New Task", "Task Title:");
+    render_input_popup(
+        frame,
+        "Create New Task",
+        "Task Title:",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
 }
 
 fn render_create_sprint_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(app, frame, "Create New Sprint", "Sprint Name (optional):");
+    render_input_popup(
+        frame,
+        "Create New Sprint",
+        "Sprint Name (optional):",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
 }
 
 fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(app, frame, "Set Points", "Points (1-5 or empty):");
+    render_input_popup(
+        frame,
+        "Set Points",
+        "Points (1-5 or empty):",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
 }
 
 fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
@@ -499,32 +365,22 @@ fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
         CardPriority::Critical,
     ];
 
-    let selected = app.priority_selection.get().unwrap_or(0);
+    let selected = app.priority_selection.get();
 
     let items: Vec<ListItem> = priorities
         .iter()
         .enumerate()
         .map(|(idx, priority)| {
-            let style = if idx == selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            let style = if Some(idx) == selected {
+                bold_highlight()
             } else {
-                Style::default().fg(Color::White)
+                normal_text()
             };
             ListItem::new(format!("{:?}", priority)).style(style)
         })
         .collect();
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title("Set Priority")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
-        );
-
-    let area = centered_rect(30, 40, frame.area());
-    frame.render_widget(Clear, area);
-    frame.render_widget(list, area);
+    render_selection_popup_with_list_items(frame, "Set Priority", items, 30, 40);
 }
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
@@ -541,117 +397,46 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         ])
                         .split(area);
 
-                    let title_focused = app.card_focus == CardFocus::Title;
-                    let title_border_color = if title_focused {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    };
-                    let title_block = Block::default()
-                        .title(if title_focused {
-                            "Task Title [1]"
-                        } else {
-                            "Task Title"
-                        })
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(title_border_color));
+                    let title_config = FieldSectionConfig::new("Task Title")
+                        .with_focus_indicator("Task Title [1]")
+                        .focused(app.card_focus == CardFocus::Title);
                     let title = Paragraph::new(card.title.clone())
-                        .style(
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD),
-                        )
-                        .block(title_block);
+                        .style(bold_highlight())
+                        .block(title_config.block());
                     frame.render_widget(title, chunks[0]);
 
-                    let meta_focused = app.card_focus == CardFocus::Metadata;
-                    let meta_border_color = if meta_focused {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    };
-                    let meta_block = Block::default()
-                        .title(if meta_focused {
-                            "Metadata [2]"
-                        } else {
-                            "Metadata"
-                        })
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(meta_border_color));
-                    let mut meta_lines = vec![
-                        Line::from(vec![
-                            Span::styled("Priority: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                format!("{:?}", card.priority),
-                                Style::default().fg(Color::White),
-                            ),
-                            Span::raw("  "),
-                            Span::styled("Status: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                format!("{:?}", card.status),
-                                Style::default().fg(Color::White),
-                            ),
-                            Span::raw("  "),
-                            Span::styled("Points: ", Style::default().fg(Color::Gray)),
-                            Span::styled(
-                                card.points
-                                    .map(|p| p.to_string())
-                                    .unwrap_or_else(|| "-".to_string()),
-                                Style::default().fg(Color::White),
-                            ),
+                    let meta_config = FieldSectionConfig::new("Metadata")
+                        .with_focus_indicator("Metadata [2]")
+                        .focused(app.card_focus == CardFocus::Metadata);
+
+                    let meta_lines = vec![
+                        metadata_line_multi(vec![
+                            ("Priority", format!("{:?}", card.priority), normal_text()),
+                            ("Status", format!("{:?}", card.status), normal_text()),
+                            ("Points", card.points.map(|p| p.to_string()).unwrap_or_else(|| "-".to_string()), normal_text()),
                         ]),
-                        Line::from(if let Some(due_date) = card.due_date {
-                            vec![
-                                Span::styled("Due: ", Style::default().fg(Color::Gray)),
-                                Span::styled(
-                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
-                                    Style::default().fg(Color::Red),
-                                ),
-                            ]
+                        if let Some(due_date) = card.due_date {
+                            metadata_line_styled("Due", due_date.format("%Y-%m-%d %H:%M").to_string(), Style::default().fg(Color::Red))
                         } else {
-                            vec![Span::styled(
-                                "No due date",
-                                Style::default().fg(Color::Gray),
-                            )]
-                        }),
+                            Line::from(Span::styled("No due date", label_text()))
+                        },
+                        metadata_line_styled(
+                            "Branch",
+                            card.branch_name(board, &app.sprints, app.app_config.effective_default_prefix()),
+                            active_item()
+                        ),
                     ];
 
-                    let branch_name =
-                        card.branch_name(board, &app.sprints, app.app_config.effective_default_prefix());
-                    meta_lines.push(Line::from(vec![
-                        Span::styled("Branch: ", Style::default().fg(Color::Gray)),
-                        Span::styled(
-                            branch_name,
-                            Style::default()
-                                .fg(Color::Green)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ]));
-                    let meta = Paragraph::new(meta_lines).block(meta_block);
+                    let meta = Paragraph::new(meta_lines).block(meta_config.block());
                     frame.render_widget(meta, chunks[1]);
 
-                    let desc_focused = app.card_focus == CardFocus::Description;
-                    let desc_border_color = if desc_focused {
-                        Color::Cyan
-                    } else {
-                        Color::White
-                    };
-                    let desc_block = Block::default()
-                        .title(if desc_focused {
-                            "Description [3]"
-                        } else {
-                            "Description"
-                        })
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(desc_border_color));
-                    let desc_text = if let Some(desc) = &card.description {
-                        desc.clone()
-                    } else {
-                        "No description".to_string()
-                    };
+                    let desc_config = FieldSectionConfig::new("Description")
+                        .with_focus_indicator("Description [3]")
+                        .focused(app.card_focus == CardFocus::Description);
+                    let desc_text = card.description.as_deref().unwrap_or("No description");
                     let desc = Paragraph::new(desc_text)
-                        .style(Style::default().fg(Color::White))
-                        .block(desc_block);
+                        .style(normal_text())
+                        .block(desc_config.block());
                     frame.render_widget(desc, chunks[2]);
                 }
             }
@@ -660,29 +445,37 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_rename_board_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(app, frame, "Rename Project", "Project Name:");
+    render_input_popup(
+        frame,
+        "Rename Project",
+        "New Project Name:",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
 }
 
 fn render_export_board_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(app, frame, "Export Board", "Filename:");
+    render_input_popup(
+        frame,
+        "Export Project",
+        "Filename:",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
 }
 
 fn render_export_all_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(app, frame, "Export All Boards", "Filename:");
+    render_input_popup(
+        frame,
+        "Export All Projects",
+        "Filename:",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
 }
 
 fn render_import_board_popup(app: &App, frame: &mut Frame) {
-    let area = centered_rect(60, 50, frame.area());
-
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title("Import Board")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Black));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    let inner = render_popup_with_block(frame, "Import Projects", 60, 50);
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -690,28 +483,20 @@ fn render_import_board_popup(app: &App, frame: &mut Frame) {
         .constraints([Constraint::Length(1), Constraint::Min(0)])
         .split(inner);
 
-    let label =
-        Paragraph::new("Select a JSON file to import:").style(Style::default().fg(Color::Yellow));
+    let label = Paragraph::new("Select a JSON file to import:").style(highlight_text());
     frame.render_widget(label, chunks[0]);
 
     if app.import_files.is_empty() {
         let empty_msg = Paragraph::new("No JSON files found in current directory")
-            .style(Style::default().fg(Color::Gray));
+            .style(label_text());
         frame.render_widget(empty_msg, chunks[1]);
     } else {
         let mut lines = vec![];
         for (idx, filename) in app.import_files.iter().enumerate() {
-            let is_selected = app.import_selection.get() == Some(idx);
-            let style = if is_selected {
-                Style::default().fg(Color::White).bg(Color::Blue)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            let prefix = if is_selected { "> " } else { "  " };
-            lines.push(Line::from(Span::styled(
-                format!("{}{}", prefix, filename),
-                style,
-            )));
+            let config = ListItemConfig::new()
+                .selected(app.import_selection.get() == Some(idx))
+                .focused(true);
+            lines.push(styled_list_item(filename, &config));
         }
         let list = Paragraph::new(lines);
         frame.render_widget(list, chunks[1]);
@@ -731,134 +516,71 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 ])
                 .split(area);
 
-            let name_focused = app.board_focus == BoardFocus::Name;
-            let name_border_color = if name_focused {
-                Color::Cyan
-            } else {
-                Color::White
-            };
-            let name_block = Block::default()
-                .title(if name_focused {
-                    "Project Name [1]"
-                } else {
-                    "Project Name"
-                })
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(name_border_color));
+            let name_config = FieldSectionConfig::new("Project Name")
+                .with_focus_indicator("Project Name [1]")
+                .focused(app.board_focus == BoardFocus::Name);
             let name = Paragraph::new(board.name.clone())
-                .style(
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
-                .block(name_block);
+                .style(bold_highlight())
+                .block(name_config.block());
             frame.render_widget(name, chunks[0]);
 
-            let desc_focused = app.board_focus == BoardFocus::Description;
-            let desc_border_color = if desc_focused {
-                Color::Cyan
-            } else {
-                Color::White
-            };
-            let desc_block = Block::default()
-                .title(if desc_focused {
-                    "Description [2]"
-                } else {
-                    "Description"
-                })
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(desc_border_color));
-            let desc_text = if let Some(desc) = &board.description {
-                desc.clone()
-            } else {
-                "No description".to_string()
-            };
+            let desc_config = FieldSectionConfig::new("Description")
+                .with_focus_indicator("Description [2]")
+                .focused(app.board_focus == BoardFocus::Description);
+            let desc_text = board.description.as_deref().unwrap_or("No description");
             let desc = Paragraph::new(desc_text)
-                .style(Style::default().fg(Color::White))
-                .block(desc_block);
+                .style(normal_text())
+                .block(desc_config.block());
             frame.render_widget(desc, chunks[1]);
 
-            let settings_focused = app.board_focus == BoardFocus::Settings;
-            let settings_border_color = if settings_focused {
-                Color::Cyan
-            } else {
-                Color::White
-            };
-            let settings_block = Block::default()
-                .title(if settings_focused {
-                    "Settings [3]"
-                } else {
-                    "Settings"
-                })
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(settings_border_color));
+            let settings_config = FieldSectionConfig::new("Settings")
+                .with_focus_indicator("Settings [3]")
+                .focused(app.board_focus == BoardFocus::Settings);
 
             let mut settings_lines = vec![
-                Line::from(if let Some(prefix) = &board.branch_prefix {
-                    vec![
-                        Span::styled("Branch Prefix: ", Style::default().fg(Color::Gray)),
-                        Span::styled(prefix.clone(), Style::default().fg(Color::Green)),
-                    ]
+                if let Some(prefix) = &board.branch_prefix {
+                    metadata_line_styled("Branch Prefix", prefix, active_item())
                 } else {
-                    vec![
-                        Span::styled("Branch Prefix: ", Style::default().fg(Color::Gray)),
+                    Line::from(vec![
+                        Span::styled("Branch Prefix: ", label_text()),
                         Span::styled(
                             app.app_config.effective_default_prefix().to_string(),
-                            Style::default().fg(Color::White),
+                            normal_text(),
                         ),
-                        Span::styled(" (default)", Style::default().fg(Color::DarkGray)),
-                    ]
-                }),
+                        Span::styled(" (default)", label_text()),
+                    ])
+                },
                 Line::from(""),
-                Line::from(vec![
-                    Span::styled("Sprint Duration: ", Style::default().fg(Color::Gray)),
-                    Span::styled(
-                        board
-                            .sprint_duration_days
-                            .map(|d| format!("{} days", d))
-                            .unwrap_or_else(|| "(not set)".to_string()),
-                        Style::default().fg(Color::White),
-                    ),
-                ]),
-                Line::from(vec![
-                    Span::styled("Sprint Prefix: ", Style::default().fg(Color::Gray)),
-                    Span::styled(
-                        board.sprint_prefix.as_deref().unwrap_or("(not set)"),
-                        Style::default().fg(Color::White),
-                    ),
-                ]),
+                metadata_line(
+                    "Sprint Duration",
+                    board
+                        .sprint_duration_days
+                        .map(|d| format!("{} days", d))
+                        .unwrap_or_else(|| "(not set)".to_string()),
+                ),
+                metadata_line(
+                    "Sprint Prefix",
+                    board.sprint_prefix.as_deref().unwrap_or("(not set)"),
+                ),
             ];
 
-            let available_names: Vec<&str> = board.sprint_names
+            let available_names: Vec<&str> = board
+                .sprint_names
                 .iter()
                 .skip(board.sprint_name_used_count)
                 .map(|s| s.as_str())
                 .collect();
 
             if !available_names.is_empty() {
-                settings_lines.push(Line::from(vec![
-                    Span::styled("Sprint Names: ", Style::default().fg(Color::Gray)),
-                    Span::styled(
-                        available_names.join(", "),
-                        Style::default().fg(Color::White),
-                    ),
-                ]));
+                settings_lines.push(metadata_line("Sprint Names", available_names.join(", ")));
             }
 
-            let settings = Paragraph::new(settings_lines).block(settings_block);
+            let settings = Paragraph::new(settings_lines).block(settings_config.block());
             frame.render_widget(settings, chunks[2]);
 
-            let sprints_focused = app.board_focus == BoardFocus::Sprints;
-            let sprints_border_color = if sprints_focused {
-                Color::Cyan
-            } else {
-                Color::White
-            };
-            let sprints_title = if sprints_focused {
-                "Sprints [4]"
-            } else {
-                "Sprints"
-            };
+            let sprints_config = FieldSectionConfig::new("Sprints")
+                .with_focus_indicator("Sprints [4]")
+                .focused(app.board_focus == BoardFocus::Sprints);
 
             let board_sprints: Vec<&Sprint> = app
                 .sprints
@@ -871,7 +593,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
             if board_sprints.is_empty() {
                 sprint_lines.push(Line::from(Span::styled(
                     "  No sprints yet. Press 'n' to create one!",
-                    Style::default().fg(Color::Gray),
+                    label_text(),
                 )));
             } else {
                 for (sprint_idx, sprint) in board_sprints.iter().enumerate() {
@@ -885,47 +607,47 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         SprintStatus::Cancelled => "✗",
                     };
 
-                    let status_color = match sprint.status {
-                        SprintStatus::Planning => Color::Yellow,
-                        SprintStatus::Active => Color::Green,
-                        SprintStatus::Completed => Color::Blue,
-                        SprintStatus::Cancelled => Color::Red,
-                    };
-
                     let sprint_name = sprint.formatted_name(
                         board,
                         board.sprint_prefix.as_deref().unwrap_or("sprint"),
                     );
 
-                    let card_count = app.cards.iter().filter(|c| c.sprint_id == Some(sprint.id)).count();
+                    let card_count = app
+                        .cards
+                        .iter()
+                        .filter(|c| c.sprint_id == Some(sprint.id))
+                        .count();
 
                     let is_active_sprint = board.active_sprint_id == Some(sprint.id);
                     let is_ended = sprint.is_ended();
 
-                    let mut style = Style::default().fg(Color::White);
-
+                    let mut base_style = normal_text();
                     if is_selected && is_focused {
-                        style = style.bg(Color::Blue);
+                        base_style = base_style.bg(SELECTED_BG);
                     }
 
                     let mut spans = vec![
-                        Span::styled(format!("{} ", status_symbol), Style::default().fg(status_color)),
-                        Span::styled(sprint_name, style),
-                        Span::styled(format!(" ({})", card_count), Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{} ", status_symbol),
+                            sprint_status_style(sprint.status),
+                        ),
+                        Span::styled(sprint_name, base_style),
+                        Span::styled(format!(" ({})", card_count), label_text()),
                     ];
 
                     if is_active_sprint {
-                        let mut active_style = Style::default().fg(Color::Green).add_modifier(Modifier::BOLD);
+                        let mut active_style = active_item();
                         if is_selected && is_focused {
-                            active_style = active_style.bg(Color::Blue);
+                            active_style = active_style.bg(SELECTED_BG);
                         }
                         spans.push(Span::styled(" Active", active_style));
                     }
 
                     if is_ended {
-                        let mut ended_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+                        let mut ended_style =
+                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
                         if is_selected && is_focused {
-                            ended_style = ended_style.bg(Color::Blue);
+                            ended_style = ended_style.bg(SELECTED_BG);
                         }
                         spans.push(Span::styled(" Ended", ended_style));
                     }
@@ -934,11 +656,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 }
             }
 
-            let sprints_block = Block::default()
-                .title(sprints_title)
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(sprints_border_color));
-            let sprints = Paragraph::new(sprint_lines).block(sprints_block);
+            let sprints = Paragraph::new(sprint_lines).block(sprints_config.block());
             frame.render_widget(sprints, chunks[3]);
         }
     }
@@ -946,32 +664,17 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
 
 fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(app, frame, "Set Branch Prefix", "Prefix (empty to clear):");
+    render_input_popup(
+        frame,
+        "Set Branch Prefix",
+        "Branch Prefix:",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
 }
 
 fn render_order_cards_popup(app: &App, frame: &mut Frame) {
     use kanban_domain::{SortField, SortOrder};
-
-    let area = centered_rect(60, 50, frame.area());
-
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title("Order Tasks By")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Black));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([Constraint::Length(1), Constraint::Min(0)])
-        .split(inner);
-
-    let label = Paragraph::new("Select sort field:").style(Style::default().fg(Color::Yellow));
-    frame.render_widget(label, chunks[0]);
 
     let sort_fields = [
         SortField::Points,
@@ -982,48 +685,42 @@ fn render_order_cards_popup(app: &App, frame: &mut Frame) {
         SortField::Default,
     ];
 
-    let mut lines = vec![];
-    for (idx, field) in sort_fields.iter().enumerate() {
-        let is_selected = app.sort_field_selection.get() == Some(idx);
-        let is_active = app.current_sort_field == Some(*field);
+    let active_idx = sort_fields
+        .iter()
+        .position(|f| Some(*f) == app.current_sort_field);
 
-        let style = if is_selected {
-            Style::default().fg(Color::White).bg(Color::Blue)
-        } else if is_active {
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
+    render_selection_popup_with_lines(
+        frame,
+        "Order Tasks By",
+        Some("Select sort field:"),
+        sort_fields.iter().enumerate(),
+        |_idx, (_, field), _is_selected, is_active| {
+            let field_name = match field {
+                SortField::Priority => "Priority",
+                SortField::Points => "Points",
+                SortField::CreatedAt => "Date Created",
+                SortField::UpdatedAt => "Date Updated",
+                SortField::Default => "Task Number",
+                SortField::Status => "Status",
+            };
 
-        let prefix = if is_selected { "> " } else { "  " };
-        let field_name = match field {
-            SortField::Priority => "Priority",
-            SortField::Points => "Points",
-            SortField::CreatedAt => "Date Created",
-            SortField::UpdatedAt => "Date Updated",
-            SortField::Default => "Task Number",
-            SortField::Status => "Status",
-        };
+            let order_indicator = if is_active {
+                match app.current_sort_order {
+                    Some(SortOrder::Ascending) => Some(" (↑)".to_string()),
+                    Some(SortOrder::Descending) => Some(" (↓)".to_string()),
+                    None => None,
+                }
+            } else {
+                None
+            };
 
-        let order_indicator = if is_active {
-            match app.current_sort_order {
-                Some(SortOrder::Ascending) => " (↑)",
-                Some(SortOrder::Descending) => " (↓)",
-                None => "",
-            }
-        } else {
-            ""
-        };
-
-        lines.push(Line::from(Span::styled(
-            format!("{}{}{}", prefix, field_name, order_indicator),
-            style,
-        )));
-    }
-    let list = Paragraph::new(lines);
-    frame.render_widget(list, chunks[1]);
+            (field_name.to_string(), order_indicator)
+        },
+        app.sort_field_selection.get(),
+        active_idx,
+        60,
+        50,
+    );
 }
 
 fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
@@ -1170,58 +867,3 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     frame.render_widget(list, chunks[1]);
 }
 
-fn render_input_popup(app: &App, frame: &mut Frame, title: &str, label: &str) {
-    let area = centered_rect(60, 30, frame.area());
-
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Black));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
-        .split(inner);
-
-    let label_widget = Paragraph::new(label).style(Style::default().fg(Color::Yellow));
-    frame.render_widget(label_widget, chunks[0]);
-
-    let input = Paragraph::new(app.input.as_str())
-        .style(Style::default().fg(Color::White))
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(input, chunks[1]);
-
-    let cursor_x = chunks[1].x + app.input.cursor_pos() as u16 + 1;
-    let cursor_y = chunks[1].y + 1;
-    frame.set_cursor_position((cursor_x, cursor_y));
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}

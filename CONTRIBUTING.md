@@ -243,6 +243,46 @@ Use semantic commit format:
 - `docs: update keyboard shortcuts in README`
 - `refactor: extract dialog rendering logic`
 
+**Commit Strategy:**
+
+Make **small, atomic commits** that contain one functionally related change:
+
+✅ **Good - Refactoring:**
+```
+refactor: add handlers module
+refactor: extract navigation handlers
+refactor: extract board handlers
+refactor: simplify handle_key_event to use handlers
+```
+
+✅ **Good - Features:**
+```
+feat: add sprint domain model
+feat: add sprint UI rendering
+feat: wire up sprint keyboard shortcuts
+```
+
+✅ **Good - Fixes:**
+```
+fix: validate card title before creation
+fix: handle empty board state in renderer
+fix: prevent duplicate card IDs on import
+```
+
+❌ **Bad:**
+```
+refactor: extract all handlers and simplify app.rs (giant commit)
+feat: add complete sprint feature with UI and tests (too large)
+fix: fix bugs (vague, multiple unrelated fixes)
+```
+
+**Guidelines:**
+- One logical change per commit
+- Each commit should compile and pass tests
+- Keep commits focused and reviewable
+- Group related file additions together
+- Separate creation from refactoring
+
 ### Changesets
 
 When submitting a PR, add a changeset file to describe your changes:
