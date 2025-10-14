@@ -1,3 +1,8 @@
+## [0.1.5] - 2025-10-14 ([#24](https://github.com/fulsomenko/kanban/pull/24))
+
+- - only show prefix+number as task label on filtered by sprint task list
+
+
 ## [0.1.4] - 2025-10-14 ([#23](https://github.com/fulsomenko/kanban/pull/23))
 
 - Show branch name in sprint-filtered task list and fix UI issues
