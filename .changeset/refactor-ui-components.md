@@ -1,5 +1,5 @@
 ---
-bump: minor
+bump: patch
 ---
 
 Extract theme system and reusable UI components
