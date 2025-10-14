@@ -148,6 +148,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                         is_selected: app.card_selection.get() == Some(card_idx),
                         is_focused: app.focus == Focus::Cards,
                         is_multi_selected: app.selected_cards.contains(&card.id),
+                        show_sprint_name: app.active_sprint_filter.is_none(),
                     });
                     lines.push(line);
                 }
