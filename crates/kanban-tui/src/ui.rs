@@ -181,11 +181,11 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
         }
     }
 
-    let panel_config = PanelConfig::new("Tasks")
-        .with_focus_indicator("Tasks [2]")
+    let panel_config = PanelConfig::new(&title)
+        .with_focus_indicator(&title)
         .focused(app.focus == Focus::Cards);
 
-    let content = Paragraph::new(lines).block(panel_config.block().title(title));
+    let content = Paragraph::new(lines).block(panel_config.block());
     frame.render_widget(content, area);
 }
 
