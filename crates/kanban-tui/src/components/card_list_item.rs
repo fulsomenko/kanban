@@ -12,6 +12,7 @@ pub struct CardListItemConfig<'a> {
     pub is_selected: bool,
     pub is_focused: bool,
     pub is_multi_selected: bool,
+    pub show_sprint_name: bool,
 }
 
 pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
@@ -35,23 +36,32 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
         title_style = title_style.bg(SELECTED_BG);
     }
 
-    let sprint_name = if let Some(sprint_id) = config.card.sprint_id {
-        config
-            .sprints
-            .iter()
-            .find(|s| s.id == sprint_id)
-            .map(|s| {
-                format!(
-                    " ({})",
-                    s.formatted_name(
-                        config.board,
-                        config.board.sprint_prefix.as_deref().unwrap_or("sprint")
+    let suffix_text = if config.show_sprint_name {
+        if let Some(sprint_id) = config.card.sprint_id {
+            config
+                .sprints
+                .iter()
+                .find(|s| s.id == sprint_id)
+                .map(|s| {
+                    format!(
+                        " ({})",
+                        s.formatted_name(
+                            config.board,
+                            config.board.sprint_prefix.as_deref().unwrap_or("sprint")
+                        )
                     )
-                )
-            })
-            .unwrap_or_default()
+                })
+                .unwrap_or_default()
+        } else {
+            String::new()
+        }
     } else {
-        String::new()
+        let branch_name = config.card.branch_name(
+            config.board,
+            config.sprints,
+            config.board.sprint_prefix.as_deref().unwrap_or("task")
+        );
+        format!(" ({})", branch_name)
     };
 
     let select_indicator = if config.is_multi_selected {
@@ -92,12 +102,12 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
         Span::styled(config.card.title.clone(), title_style),
     ];
 
-    if !sprint_name.is_empty() {
-        let mut sprint_style = label_text();
+    if !suffix_text.is_empty() {
+        let mut suffix_style = label_text();
         if config.is_selected && config.is_focused {
-            sprint_style = sprint_style.bg(SELECTED_BG);
+            suffix_style = suffix_style.bg(SELECTED_BG);
         }
-        spans.push(Span::styled(sprint_name, sprint_style));
+        spans.push(Span::styled(suffix_text, suffix_style));
     }
 
     Line::from(spans)

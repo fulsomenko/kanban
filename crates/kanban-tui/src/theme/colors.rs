@@ -7,7 +7,7 @@ pub const SELECTED_BG: Color = Color::Blue;
 pub const ACTIVE_ITEM: Color = Color::Green;
 pub const DONE_TEXT: Color = Color::DarkGray;
 pub const NORMAL_TEXT: Color = Color::White;
-pub const LABEL_TEXT: Color = Color::Gray;
+pub const LABEL_TEXT: Color = Color::DarkGray;
 pub const HIGHLIGHT_TEXT: Color = Color::Yellow;
 
 pub const PRIORITY_CRITICAL: Color = Color::Red;
