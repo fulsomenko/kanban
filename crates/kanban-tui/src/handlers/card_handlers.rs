@@ -1,5 +1,8 @@
-use crate::app::{App, AppMode, Focus};
+use crate::app::{App, AppMode, CardField, Focus};
+use crate::events::EventHandler;
 use kanban_domain::{Card, CardStatus, Column, SortOrder};
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::io;
 
 impl App {
     pub fn handle_create_card_key(&mut self) {
@@ -154,6 +157,34 @@ impl App {
                 }
             }
         }
+    }
+
+    pub fn handle_edit_card_key(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        event_handler: &EventHandler,
+    ) -> bool {
+        let mut should_restart = false;
+        if self.focus == Focus::Cards && self.card_selection.get().is_some() {
+            if let Some(sorted_idx) = self.card_selection.get() {
+                if let Some(board_idx) = self.active_board_index {
+                    if let Some(board) = self.boards.get(board_idx) {
+                        let sorted_cards = self.get_sorted_board_cards(board.id);
+                        if let Some(selected_card) = sorted_cards.get(sorted_idx) {
+                            let card_id = selected_card.id;
+                            let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                            self.active_card_index = actual_idx;
+
+                            if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Description) {
+                                tracing::error!("Failed to edit card description: {}", e);
+                            }
+                            should_restart = true;
+                        }
+                    }
+                }
+            }
+        }
+        should_restart
     }
 
     fn toggle_card_completion(&mut self) {

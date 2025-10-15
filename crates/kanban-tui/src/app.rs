@@ -183,7 +183,12 @@ impl App {
                     Focus::Cards => self.handle_create_card_key(),
                 },
                 KeyCode::Char('r') => self.handle_rename_board_key(),
-                KeyCode::Char('e') => self.handle_edit_board_key(),
+                KeyCode::Char('e') => match self.focus {
+                    Focus::Boards => self.handle_edit_board_key(),
+                    Focus::Cards => {
+                        should_restart_events = self.handle_edit_card_key(terminal, event_handler);
+                    }
+                },
                 KeyCode::Char('x') => self.handle_export_board_key(),
                 KeyCode::Char('X') => self.handle_export_all_key(),
                 KeyCode::Char('i') => self.handle_import_board_key(),
