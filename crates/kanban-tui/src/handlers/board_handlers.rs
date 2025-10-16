@@ -65,8 +65,23 @@ impl App {
 
     pub fn create_board(&mut self) {
         let board = kanban_domain::Board::new(self.input.as_str().to_string(), None);
+        let board_id = board.id;
         tracing::info!("Creating board: {} (id: {})", board.name, board.id);
+
         self.boards.push(board);
+
+        let default_columns = vec![
+            ("TODO", 0),
+            ("Doing", 1),
+            ("Complete", 2),
+        ];
+
+        for (name, position) in default_columns {
+            let column = kanban_domain::Column::new(board_id, name.to_string(), position);
+            tracing::info!("Creating default column: {} (position: {})", column.name, column.position);
+            self.columns.push(column);
+        }
+
         let new_index = self.boards.len() - 1;
         self.board_selection.set(Some(new_index));
     }

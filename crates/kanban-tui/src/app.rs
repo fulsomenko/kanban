@@ -47,6 +47,9 @@ pub struct App {
     pub current_sort_order: Option<SortOrder>,
     pub selected_cards: std::collections::HashSet<uuid::Uuid>,
     pub priority_selection: SelectionState,
+    pub column_selection: SelectionState,
+    pub active_column_index: Option<usize>,
+    pub task_list_view_selection: SelectionState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +71,7 @@ pub enum BoardFocus {
     Description,
     Settings,
     Sprints,
+    Columns,
 }
 
 pub enum CardField {
@@ -108,6 +112,10 @@ pub enum AppMode {
     CreateSprint,
     AssignCardToSprint,
     AssignMultipleCardsToSprint,
+    CreateColumn,
+    RenameColumn,
+    DeleteColumnConfirm,
+    SelectTaskListView,
 }
 
 impl App {
@@ -142,6 +150,9 @@ impl App {
             current_sort_order: None,
             selected_cards: std::collections::HashSet::new(),
             priority_selection: SelectionState::new(),
+            column_selection: SelectionState::new(),
+            active_column_index: None,
+            task_list_view_selection: SelectionState::new(),
         };
 
         if let Some(ref filename) = save_file {
@@ -199,8 +210,20 @@ impl App {
                 KeyCode::Char('T') => self.handle_toggle_hide_assigned(),
                 KeyCode::Char('t') => self.handle_toggle_sprint_filter(),
                 KeyCode::Char('v') => self.handle_card_selection_toggle(),
-                KeyCode::Char('1') => self.handle_focus_switch(Focus::Boards),
-                KeyCode::Char('2') => self.handle_focus_switch(Focus::Cards),
+                KeyCode::Char('V') => self.handle_toggle_task_list_view(),
+                KeyCode::Char('H') => self.handle_move_card_left(),
+                KeyCode::Char('L') => self.handle_move_card_right(),
+                KeyCode::Char('h') => self.handle_kanban_column_left(),
+                KeyCode::Char('l') => self.handle_kanban_column_right(),
+                KeyCode::Char('1') => self.handle_column_or_focus_switch(0),
+                KeyCode::Char('2') => self.handle_column_or_focus_switch(1),
+                KeyCode::Char('3') => self.handle_column_or_focus_switch(2),
+                KeyCode::Char('4') => self.handle_column_or_focus_switch(3),
+                KeyCode::Char('5') => self.handle_column_or_focus_switch(4),
+                KeyCode::Char('6') => self.handle_column_or_focus_switch(5),
+                KeyCode::Char('7') => self.handle_column_or_focus_switch(6),
+                KeyCode::Char('8') => self.handle_column_or_focus_switch(7),
+                KeyCode::Char('9') => self.handle_column_or_focus_switch(8),
                 KeyCode::Esc => self.handle_escape_key(),
                 KeyCode::Char('j') | KeyCode::Down => self.handle_navigation_down(),
                 KeyCode::Char('k') | KeyCode::Up => self.handle_navigation_up(),
@@ -235,6 +258,10 @@ impl App {
             AppMode::AssignMultipleCardsToSprint => {
                 self.handle_assign_multiple_cards_to_sprint_popup(key.code)
             }
+            AppMode::CreateColumn => self.handle_create_column_dialog(key.code),
+            AppMode::RenameColumn => self.handle_rename_column_dialog(key.code),
+            AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
+            AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
         }
         should_restart_events
     }

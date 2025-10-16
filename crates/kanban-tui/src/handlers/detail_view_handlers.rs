@@ -102,6 +102,9 @@ impl App {
             KeyCode::Char('4') => {
                 self.board_focus = BoardFocus::Sprints;
             }
+            KeyCode::Char('5') => {
+                self.board_focus = BoardFocus::Columns;
+            }
             KeyCode::Char('e') => match self.board_focus {
                 BoardFocus::Name => {
                     if let Err(e) = self.edit_board_field(terminal, event_handler, BoardField::Name)
@@ -127,9 +130,34 @@ impl App {
                     should_restart = true;
                 }
                 BoardFocus::Sprints => {}
+                BoardFocus::Columns => {}
             },
             KeyCode::Char('n') => {
-                self.handle_create_sprint_key();
+                if self.board_focus == BoardFocus::Sprints {
+                    self.handle_create_sprint_key();
+                } else if self.board_focus == BoardFocus::Columns {
+                    self.handle_create_column_key();
+                }
+            }
+            KeyCode::Char('r') => {
+                if self.board_focus == BoardFocus::Columns {
+                    self.handle_rename_column_key();
+                }
+            }
+            KeyCode::Char('d') => {
+                if self.board_focus == BoardFocus::Columns {
+                    self.handle_delete_column_key();
+                }
+            }
+            KeyCode::Char('J') => {
+                if self.board_focus == BoardFocus::Columns {
+                    self.handle_move_column_down();
+                }
+            }
+            KeyCode::Char('K') => {
+                if self.board_focus == BoardFocus::Columns {
+                    self.handle_move_column_up();
+                }
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if self.board_focus == BoardFocus::Sprints {
@@ -143,11 +171,24 @@ impl App {
                             self.sprint_selection.next(sprint_count);
                         }
                     }
+                } else if self.board_focus == BoardFocus::Columns {
+                    if let Some(board_idx) = self.board_selection.get() {
+                        if let Some(board) = self.boards.get(board_idx) {
+                            let column_count = self
+                                .columns
+                                .iter()
+                                .filter(|col| col.board_id == board.id)
+                                .count();
+                            self.column_selection.next(column_count);
+                        }
+                    }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 if self.board_focus == BoardFocus::Sprints {
                     self.sprint_selection.prev();
+                } else if self.board_focus == BoardFocus::Columns {
+                    self.column_selection.prev();
                 }
             }
             KeyCode::Enter | KeyCode::Char(' ') => {

@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::task_list_view::TaskListView;
+
 pub type BoardId = Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +47,8 @@ pub struct Board {
     pub next_sprint_number: u32,
     #[serde(default)]
     pub active_sprint_id: Option<Uuid>,
+    #[serde(default)]
+    pub task_list_view: TaskListView,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -82,6 +86,7 @@ impl Board {
             sprint_name_used_count: 0,
             next_sprint_number: 1,
             active_sprint_id: None,
+            task_list_view: TaskListView::default(),
             created_at: now,
             updated_at: now,
         }
@@ -146,6 +151,11 @@ impl Board {
         self.sprint_name_used_count += 1;
         self.updated_at = Utc::now();
         index
+    }
+
+    pub fn update_task_list_view(&mut self, view: TaskListView) {
+        self.task_list_view = view;
+        self.updated_at = Utc::now();
     }
 }
 

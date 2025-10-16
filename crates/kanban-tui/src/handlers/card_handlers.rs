@@ -201,13 +201,54 @@ impl App {
                             CardStatus::Done
                         };
 
+                        let last_column_id = if new_status == CardStatus::Done {
+                            let mut board_columns: Vec<_> = self
+                                .columns
+                                .iter()
+                                .filter(|col| col.board_id == board.id)
+                                .collect();
+                            board_columns.sort_by_key(|col| col.position);
+                            board_columns.last().map(|col| col.id)
+                        } else {
+                            None
+                        };
+
+                        let new_position = if let Some(target_column_id) = last_column_id {
+                            Some(self
+                                .cards
+                                .iter()
+                                .filter(|c| c.column_id == target_column_id)
+                                .count() as i32)
+                        } else {
+                            None
+                        };
+
                         if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                            let old_column_id = card.column_id;
                             card.update_status(new_status);
-                            tracing::info!(
-                                "Toggled card '{}' to status: {:?}",
-                                card.title,
-                                new_status
-                            );
+
+                            if let (Some(target_column_id), Some(position)) = (last_column_id, new_position) {
+                                if old_column_id != target_column_id {
+                                    card.move_to_column(target_column_id, position);
+                                    tracing::info!(
+                                        "Moved card '{}' to last column (status: {:?})",
+                                        card.title,
+                                        new_status
+                                    );
+                                } else {
+                                    tracing::info!(
+                                        "Toggled card '{}' to status: {:?}",
+                                        card.title,
+                                        new_status
+                                    );
+                                }
+                            } else {
+                                tracing::info!(
+                                    "Toggled card '{}' to status: {:?}",
+                                    card.title,
+                                    new_status
+                                );
+                            }
                         }
                     }
                 }
@@ -219,14 +260,50 @@ impl App {
         let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
         let mut toggled_count = 0;
 
+        let last_column_id = if let Some(board_idx) = self.active_board_index {
+            if let Some(board) = self.boards.get(board_idx) {
+                let mut board_columns: Vec<_> = self
+                    .columns
+                    .iter()
+                    .filter(|col| col.board_id == board.id)
+                    .collect();
+                board_columns.sort_by_key(|col| col.position);
+                board_columns.last().map(|col| col.id)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         for card_id in card_ids {
+            let new_position = if let Some(target_column_id) = last_column_id {
+                Some(self
+                    .cards
+                    .iter()
+                    .filter(|c| c.column_id == target_column_id)
+                    .count() as i32)
+            } else {
+                None
+            };
+
             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                let old_column_id = card.column_id;
                 let new_status = if card.status == CardStatus::Done {
                     CardStatus::Todo
                 } else {
                     CardStatus::Done
                 };
                 card.update_status(new_status);
+
+                if new_status == CardStatus::Done {
+                    if let (Some(target_column_id), Some(position)) = (last_column_id, new_position) {
+                        if old_column_id != target_column_id {
+                            card.move_to_column(target_column_id, position);
+                        }
+                    }
+                }
+
                 toggled_count += 1;
             }
         }
@@ -267,6 +344,120 @@ impl App {
                 let sorted_cards = self.get_sorted_board_cards(board_id);
                 if let Some(pos) = sorted_cards.iter().position(|c| c.id == new_card_id) {
                     self.card_selection.set(Some(pos));
+                }
+            }
+        }
+    }
+
+    pub fn handle_move_card_left(&mut self) {
+        if self.focus != Focus::Cards {
+            return;
+        }
+
+        if let Some(sorted_idx) = self.card_selection.get() {
+            if let Some(board_idx) = self.active_board_index {
+                if let Some(board) = self.boards.get(board_idx) {
+                    let sorted_cards = self.get_sorted_board_cards(board.id);
+
+                    if let Some(card) = sorted_cards.get(sorted_idx) {
+                        let card_id = card.id;
+                        let current_column_id = card.column_id;
+
+                        let mut board_columns: Vec<_> = self
+                            .columns
+                            .iter()
+                            .filter(|col| col.board_id == board.id)
+                            .collect();
+                        board_columns.sort_by_key(|col| col.position);
+
+                        let current_position = board_columns
+                            .iter()
+                            .position(|col| col.id == current_column_id);
+
+                        if let Some(pos) = current_position {
+                            if pos > 0 {
+                                let target_column_id = board_columns[pos - 1].id;
+
+                                let new_position = self
+                                    .cards
+                                    .iter()
+                                    .filter(|c| c.column_id == target_column_id)
+                                    .count() as i32;
+
+                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                                    card.move_to_column(target_column_id, new_position);
+                                    tracing::info!(
+                                        "Moved card '{}' to previous column",
+                                        card.title
+                                    );
+                                }
+
+                                let sorted_cards = self.get_sorted_board_cards(board.id);
+                                if let Some(new_idx) = sorted_cards.iter().position(|c| c.id == card_id) {
+                                    self.card_selection.set(Some(new_idx));
+                                }
+                            } else {
+                                tracing::warn!("Card is already in the first column");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn handle_move_card_right(&mut self) {
+        if self.focus != Focus::Cards {
+            return;
+        }
+
+        if let Some(sorted_idx) = self.card_selection.get() {
+            if let Some(board_idx) = self.active_board_index {
+                if let Some(board) = self.boards.get(board_idx) {
+                    let sorted_cards = self.get_sorted_board_cards(board.id);
+
+                    if let Some(card) = sorted_cards.get(sorted_idx) {
+                        let card_id = card.id;
+                        let current_column_id = card.column_id;
+
+                        let mut board_columns: Vec<_> = self
+                            .columns
+                            .iter()
+                            .filter(|col| col.board_id == board.id)
+                            .collect();
+                        board_columns.sort_by_key(|col| col.position);
+
+                        let current_position = board_columns
+                            .iter()
+                            .position(|col| col.id == current_column_id);
+
+                        if let Some(pos) = current_position {
+                            if pos < board_columns.len() - 1 {
+                                let target_column_id = board_columns[pos + 1].id;
+
+                                let new_position = self
+                                    .cards
+                                    .iter()
+                                    .filter(|c| c.column_id == target_column_id)
+                                    .count() as i32;
+
+                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                                    card.move_to_column(target_column_id, new_position);
+                                    tracing::info!(
+                                        "Moved card '{}' to next column",
+                                        card.title
+                                    );
+                                }
+
+                                let sorted_cards = self.get_sorted_board_cards(board.id);
+                                if let Some(new_idx) = sorted_cards.iter().position(|c| c.id == card_id) {
+                                    self.card_selection.set(Some(new_idx));
+                                }
+                            } else {
+                                tracing::warn!("Card is already in the last column");
+                            }
+                        }
+                    }
                 }
             }
         }
