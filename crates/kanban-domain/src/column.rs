@@ -40,4 +40,9 @@ impl Column {
         self.position = position;
         self.updated_at = Utc::now();
     }
+
+    pub fn update_name(&mut self, name: String) {
+        self.name = name;
+        self.updated_at = Utc::now();
+    }
 }
