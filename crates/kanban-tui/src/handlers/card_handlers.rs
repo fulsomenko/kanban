@@ -258,11 +258,12 @@ impl App {
 
         for card_id in card_ids {
             let new_position = if let Some(target_column_id) = last_column_id {
-                Some(self
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == target_column_id)
-                    .count() as i32)
+                Some(
+                    self.cards
+                        .iter()
+                        .filter(|c| c.column_id == target_column_id)
+                        .count() as i32,
+                )
             } else {
                 None
             };
@@ -277,7 +278,8 @@ impl App {
                 card.update_status(new_status);
 
                 if new_status == CardStatus::Done {
-                    if let (Some(target_column_id), Some(position)) = (last_column_id, new_position) {
+                    if let (Some(target_column_id), Some(position)) = (last_column_id, new_position)
+                    {
                         if old_column_id != target_column_id {
                             card.move_to_column(target_column_id, position);
                         }
@@ -377,7 +379,9 @@ impl App {
                                 }
                             } else {
                                 let sorted_cards = self.get_sorted_board_cards(board.id);
-                                if let Some(new_idx) = sorted_cards.iter().position(|c| c.id == card_id) {
+                                if let Some(new_idx) =
+                                    sorted_cards.iter().position(|c| c.id == card_id)
+                                {
                                     self.card_selection.set(Some(new_idx));
                                 }
                             }
@@ -439,7 +443,9 @@ impl App {
                                 }
                             } else {
                                 let sorted_cards = self.get_sorted_board_cards(board.id);
-                                if let Some(new_idx) = sorted_cards.iter().position(|c| c.id == card_id) {
+                                if let Some(new_idx) =
+                                    sorted_cards.iter().position(|c| c.id == card_id)
+                                {
                                     self.card_selection.set(Some(new_idx));
                                 }
                             }
