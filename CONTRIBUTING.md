@@ -183,6 +183,52 @@ mod tests {
 }
 ```
 
+## Branching and Release Workflow
+
+### Branch Strategy
+
+**develop → master** release workflow:
+
+- **Feature branches** → merge to `develop`
+- **develop** → accumulates features for next release
+- **master** → production releases only
+
+### Development Workflow
+
+1. **Create feature branch** from `develop`:
+   ```bash
+   git checkout develop
+   git pull origin develop
+   git checkout -b MVP-123/my-feature
+   ```
+
+2. **Make changes** and commit regularly (atomic commits)
+
+3. **Create changeset** before submitting PR:
+   ```bash
+   # Auto-generate from commits (default: patch)
+   ./scripts/create-changeset.sh
+
+   # Or specify bump type and description
+   ./scripts/create-changeset.sh minor "Add sprint support"
+   ```
+
+4. **Submit PR to develop**:
+   - PR will check for changeset presence
+   - Changesets accumulate in `develop` (not consumed yet)
+
+5. **Periodic releases** from `develop` → `master`:
+   - All accumulated changesets consumed
+   - Single version bump (highest precedence wins: patch < minor < major)
+   - Automatic publish to crates.io
+   - GitHub release created
+
+### Release Cadence
+
+- Features merge to `develop` continuously
+- `develop` → `master` releases at the end of the sprint
+- One version bump per release, not per feature
+
 ## Pull Request Guidelines
 
 ### Before Submitting
@@ -190,7 +236,8 @@ mod tests {
 - [ ] Run `cargo fmt` to format code
 - [ ] Run `cargo clippy` and address all warnings
 - [ ] Run `cargo test` and ensure all tests pass
-- [ ] Test manually with `cargo run -- -f test.json`
+- [ ] Test manually with `cargo run`
+- [ ] Create changeset with `./scripts/create-changeset.sh`
 - [ ] Update README.md if adding user-facing features
 - [ ] Update CLAUDE.md if changing architecture/conventions
 
@@ -211,7 +258,7 @@ Fixes task filtering behavior:
 - Fix filter persistence across sessions
 ```
 
-And include concisely
+And include concisely:
 
 - **What**: Brief description of changes
 - **Why**: Motivation and context
