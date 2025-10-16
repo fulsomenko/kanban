@@ -28,6 +28,27 @@ jobs:
             exit 1
           fi
 
+          # Extract ticket ID from branch name (e.g., KAN-24 from KAN-24/add-github-ci)
+          BRANCH_NAME="${{ github.head_ref }}"
+          TICKET_ID=$(echo "$BRANCH_NAME" | grep -oE '^[A-Z]+-[0-9]+' | tr '[:upper:]' '[:lower:]')
+
+          if [ -n "$TICKET_ID" ]; then
+            # Check if there's a changeset file matching the ticket ID
+            MATCHING_CHANGESET=$(ls .changeset/${TICKET_ID}-*.md 2>/dev/null || true)
+
+            if [ -z "$MATCHING_CHANGESET" ]; then
+              echo "❌ No changeset found matching branch ticket ID!"
+              echo "Branch: $BRANCH_NAME"
+              echo "Expected changeset: .changeset/${TICKET_ID}-*.md"
+              echo ""
+              echo "Found changesets:"
+              ls .changeset/*.md 2>/dev/null | grep -v "README.md" || echo "  (none)"
+              exit 1
+            fi
+
+            echo "✅ Found matching changeset: $MATCHING_CHANGESET"
+          fi
+
           for changeset in $CHANGESETS; do
             bump=$(grep -A1 "^---$" "$changeset" | grep "^bump:" | cut -d' ' -f2 | tr -d '\r\n')
             if [[ ! "$bump" =~ ^(patch|minor|major)$ ]]; then
@@ -37,4 +58,4 @@ jobs:
             fi
           done
 
-          echo "✅ Changeset found and validated: $CHANGESETS"
+          echo "✅ Changeset validated successfully"
