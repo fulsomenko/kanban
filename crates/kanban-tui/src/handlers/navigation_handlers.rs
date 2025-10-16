@@ -33,7 +33,8 @@ impl App {
                             board_columns.sort_by_key(|col| col.position);
 
                             if let Some(focused_column) = board_columns.get(focused_col_idx) {
-                                let column_card_count = self.get_sorted_board_cards(board.id)
+                                let column_card_count = self
+                                    .get_sorted_board_cards(board.id)
                                     .iter()
                                     .filter(|card| card.column_id == focused_column.id)
                                     .count();
