@@ -26,24 +26,12 @@ impl App {
 
     pub fn handle_card_selection_toggle(&mut self) {
         if self.focus == Focus::Cards && self.card_selection.get().is_some() {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    let card_id = {
-                        let sorted_cards = self.get_sorted_board_cards(board.id);
-                        if let Some(sorted_idx) = self.card_selection.get() {
-                            sorted_cards.get(sorted_idx).map(|c| c.id)
-                        } else {
-                            None
-                        }
-                    };
-
-                    if let Some(id) = card_id {
-                        if self.selected_cards.contains(&id) {
-                            self.selected_cards.remove(&id);
-                        } else {
-                            self.selected_cards.insert(id);
-                        }
-                    }
+            if let Some(card) = self.get_selected_card_in_context() {
+                let card_id = card.id;
+                if self.selected_cards.contains(&card_id) {
+                    self.selected_cards.remove(&card_id);
+                } else {
+                    self.selected_cards.insert(card_id);
                 }
             }
         }
@@ -57,7 +45,7 @@ impl App {
         if !self.selected_cards.is_empty() {
             self.sprint_assign_selection.clear();
             self.mode = AppMode::AssignMultipleCardsToSprint;
-        } else if let Some(sorted_idx) = self.card_selection.get() {
+        } else if self.card_selection.get().is_some() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
                     let sprint_count = self
@@ -66,8 +54,7 @@ impl App {
                         .filter(|s| s.board_id == board.id)
                         .count();
                     if sprint_count > 0 {
-                        let sorted_cards = self.get_sorted_board_cards(board.id);
-                        if let Some(selected_card) = sorted_cards.get(sorted_idx) {
+                        if let Some(selected_card) = self.get_selected_card_in_context() {
                             let card_id = selected_card.id;
                             let actual_idx = self.cards.iter().position(|c| c.id == card_id);
                             self.active_card_index = actual_idx;
@@ -166,91 +153,84 @@ impl App {
     ) -> bool {
         let mut should_restart = false;
         if self.focus == Focus::Cards && self.card_selection.get().is_some() {
-            if let Some(sorted_idx) = self.card_selection.get() {
-                if let Some(board_idx) = self.active_board_index {
-                    if let Some(board) = self.boards.get(board_idx) {
-                        let sorted_cards = self.get_sorted_board_cards(board.id);
-                        if let Some(selected_card) = sorted_cards.get(sorted_idx) {
-                            let card_id = selected_card.id;
-                            let actual_idx = self.cards.iter().position(|c| c.id == card_id);
-                            self.active_card_index = actual_idx;
+            if let Some(selected_card) = self.get_selected_card_in_context() {
+                let card_id = selected_card.id;
+                let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                self.active_card_index = actual_idx;
 
-                            if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Description) {
-                                tracing::error!("Failed to edit card description: {}", e);
-                            }
-                            should_restart = true;
-                        }
-                    }
+                if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Description) {
+                    tracing::error!("Failed to edit card description: {}", e);
                 }
+                should_restart = true;
             }
         }
         should_restart
     }
 
     fn toggle_card_completion(&mut self) {
-        if let Some(sorted_idx) = self.card_selection.get() {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    let sorted_cards = self.get_sorted_board_cards(board.id);
+        if let Some(card) = self.get_selected_card_in_context() {
+            let card_id = card.id;
+            let new_status = if card.status == CardStatus::Done {
+                CardStatus::Todo
+            } else {
+                CardStatus::Done
+            };
 
-                    if let Some(card) = sorted_cards.get(sorted_idx) {
-                        let card_id = card.id;
-                        let new_status = if card.status == CardStatus::Done {
-                            CardStatus::Todo
-                        } else {
-                            CardStatus::Done
-                        };
-
-                        let last_column_id = if new_status == CardStatus::Done {
-                            let mut board_columns: Vec<_> = self
-                                .columns
-                                .iter()
-                                .filter(|col| col.board_id == board.id)
-                                .collect();
-                            board_columns.sort_by_key(|col| col.position);
-                            board_columns.last().map(|col| col.id)
-                        } else {
-                            None
-                        };
-
-                        let new_position = if let Some(target_column_id) = last_column_id {
-                            Some(self
-                                .cards
-                                .iter()
-                                .filter(|c| c.column_id == target_column_id)
-                                .count() as i32)
-                        } else {
-                            None
-                        };
-
-                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                            let old_column_id = card.column_id;
-                            card.update_status(new_status);
-
-                            if let (Some(target_column_id), Some(position)) = (last_column_id, new_position) {
-                                if old_column_id != target_column_id {
-                                    card.move_to_column(target_column_id, position);
-                                    tracing::info!(
-                                        "Moved card '{}' to last column (status: {:?})",
-                                        card.title,
-                                        new_status
-                                    );
-                                } else {
-                                    tracing::info!(
-                                        "Toggled card '{}' to status: {:?}",
-                                        card.title,
-                                        new_status
-                                    );
-                                }
-                            } else {
-                                tracing::info!(
-                                    "Toggled card '{}' to status: {:?}",
-                                    card.title,
-                                    new_status
-                                );
-                            }
-                        }
+            let last_column_id = if new_status == CardStatus::Done {
+                if let Some(board_idx) = self.active_board_index {
+                    if let Some(board) = self.boards.get(board_idx) {
+                        let mut board_columns: Vec<_> = self
+                            .columns
+                            .iter()
+                            .filter(|col| col.board_id == board.id)
+                            .collect();
+                        board_columns.sort_by_key(|col| col.position);
+                        board_columns.last().map(|col| col.id)
+                    } else {
+                        None
                     }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let new_position = if let Some(target_column_id) = last_column_id {
+                Some(self
+                    .cards
+                    .iter()
+                    .filter(|c| c.column_id == target_column_id)
+                    .count() as i32)
+            } else {
+                None
+            };
+
+            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                let old_column_id = card.column_id;
+                card.update_status(new_status);
+
+                if let (Some(target_column_id), Some(position)) = (last_column_id, new_position) {
+                    if old_column_id != target_column_id {
+                        card.move_to_column(target_column_id, position);
+                        tracing::info!(
+                            "Moved card '{}' to last column (status: {:?})",
+                            card.title,
+                            new_status
+                        );
+                    } else {
+                        tracing::info!(
+                            "Toggled card '{}' to status: {:?}",
+                            card.title,
+                            new_status
+                        );
+                    }
+                } else {
+                    tracing::info!(
+                        "Toggled card '{}' to status: {:?}",
+                        card.title,
+                        new_status
+                    );
                 }
             }
         }
@@ -354,51 +334,55 @@ impl App {
             return;
         }
 
-        if let Some(sorted_idx) = self.card_selection.get() {
+        if let Some(card) = self.get_selected_card_in_context() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let sorted_cards = self.get_sorted_board_cards(board.id);
+                    let card_id = card.id;
+                    let current_column_id = card.column_id;
 
-                    if let Some(card) = sorted_cards.get(sorted_idx) {
-                        let card_id = card.id;
-                        let current_column_id = card.column_id;
+                    let mut board_columns: Vec<_> = self
+                        .columns
+                        .iter()
+                        .filter(|col| col.board_id == board.id)
+                        .collect();
+                    board_columns.sort_by_key(|col| col.position);
 
-                        let mut board_columns: Vec<_> = self
-                            .columns
-                            .iter()
-                            .filter(|col| col.board_id == board.id)
-                            .collect();
-                        board_columns.sort_by_key(|col| col.position);
+                    let current_position = board_columns
+                        .iter()
+                        .position(|col| col.id == current_column_id);
 
-                        let current_position = board_columns
-                            .iter()
-                            .position(|col| col.id == current_column_id);
+                    if let Some(pos) = current_position {
+                        if pos > 0 {
+                            let target_column_id = board_columns[pos - 1].id;
 
-                        if let Some(pos) = current_position {
-                            if pos > 0 {
-                                let target_column_id = board_columns[pos - 1].id;
+                            let new_position = self
+                                .cards
+                                .iter()
+                                .filter(|c| c.column_id == target_column_id)
+                                .count() as i32;
 
-                                let new_position = self
-                                    .cards
-                                    .iter()
-                                    .filter(|c| c.column_id == target_column_id)
-                                    .count() as i32;
+                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                                card.move_to_column(target_column_id, new_position);
+                                tracing::info!(
+                                    "Moved card '{}' to previous column",
+                                    card.title
+                                );
+                            }
 
-                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                                    card.move_to_column(target_column_id, new_position);
-                                    tracing::info!(
-                                        "Moved card '{}' to previous column",
-                                        card.title
-                                    );
+                            if self.is_kanban_view() {
+                                if let Some(current_col_idx) = self.column_selection.get() {
+                                    if current_col_idx > 0 {
+                                        self.column_selection.set(Some(current_col_idx - 1));
+                                    }
                                 }
-
+                            } else {
                                 let sorted_cards = self.get_sorted_board_cards(board.id);
                                 if let Some(new_idx) = sorted_cards.iter().position(|c| c.id == card_id) {
                                     self.card_selection.set(Some(new_idx));
                                 }
-                            } else {
-                                tracing::warn!("Card is already in the first column");
                             }
+                        } else {
+                            tracing::warn!("Card is already in the first column");
                         }
                     }
                 }
@@ -411,51 +395,56 @@ impl App {
             return;
         }
 
-        if let Some(sorted_idx) = self.card_selection.get() {
+        if let Some(card) = self.get_selected_card_in_context() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let sorted_cards = self.get_sorted_board_cards(board.id);
+                    let card_id = card.id;
+                    let current_column_id = card.column_id;
 
-                    if let Some(card) = sorted_cards.get(sorted_idx) {
-                        let card_id = card.id;
-                        let current_column_id = card.column_id;
+                    let mut board_columns: Vec<_> = self
+                        .columns
+                        .iter()
+                        .filter(|col| col.board_id == board.id)
+                        .collect();
+                    board_columns.sort_by_key(|col| col.position);
 
-                        let mut board_columns: Vec<_> = self
-                            .columns
-                            .iter()
-                            .filter(|col| col.board_id == board.id)
-                            .collect();
-                        board_columns.sort_by_key(|col| col.position);
+                    let current_position = board_columns
+                        .iter()
+                        .position(|col| col.id == current_column_id);
 
-                        let current_position = board_columns
-                            .iter()
-                            .position(|col| col.id == current_column_id);
+                    if let Some(pos) = current_position {
+                        if pos < board_columns.len() - 1 {
+                            let target_column_id = board_columns[pos + 1].id;
 
-                        if let Some(pos) = current_position {
-                            if pos < board_columns.len() - 1 {
-                                let target_column_id = board_columns[pos + 1].id;
+                            let new_position = self
+                                .cards
+                                .iter()
+                                .filter(|c| c.column_id == target_column_id)
+                                .count() as i32;
 
-                                let new_position = self
-                                    .cards
-                                    .iter()
-                                    .filter(|c| c.column_id == target_column_id)
-                                    .count() as i32;
+                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                                card.move_to_column(target_column_id, new_position);
+                                tracing::info!(
+                                    "Moved card '{}' to next column",
+                                    card.title
+                                );
+                            }
 
-                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                                    card.move_to_column(target_column_id, new_position);
-                                    tracing::info!(
-                                        "Moved card '{}' to next column",
-                                        card.title
-                                    );
+                            if self.is_kanban_view() {
+                                let column_count = board_columns.len();
+                                if let Some(current_col_idx) = self.column_selection.get() {
+                                    if current_col_idx < column_count - 1 {
+                                        self.column_selection.set(Some(current_col_idx + 1));
+                                    }
                                 }
-
+                            } else {
                                 let sorted_cards = self.get_sorted_board_cards(board.id);
                                 if let Some(new_idx) = sorted_cards.iter().position(|c| c.id == card_id) {
                                     self.card_selection.set(Some(new_idx));
                                 }
-                            } else {
-                                tracing::warn!("Card is already in the last column");
                             }
+                        } else {
+                            tracing::warn!("Card is already in the last column");
                         }
                     }
                 }
