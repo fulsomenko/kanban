@@ -1,3 +1,10 @@
+## [0.1.6] - 2025-10-16 ([#25](https://github.com/fulsomenko/kanban/pull/25))
+
+- Enable direct card description editing from task list
+- Add 'e' key binding to edit card description when focus is on Cards
+- Previously required entering CardDetail mode first (Enter then 'e')
+
+
 ## [0.1.5] - 2025-10-14 ([#24](https://github.com/fulsomenko/kanban/pull/24))
 
 - - only show prefix+number as task label on filtered by sprint task list
