@@ -14,8 +14,8 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, KanbanResult};
 use kanban_domain::{Board, Card, Column, SortField, SortOrder, Sprint};
-use serde::{Deserialize, Serialize};
 use ratatui::{backend::CrosstermBackend, Terminal};
+use serde::{Deserialize, Serialize};
 use std::io;
 
 pub struct App {
@@ -266,16 +266,20 @@ impl App {
         should_restart_events
     }
 
-
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.columns);
-        let cards: Vec<_> = self.cards.iter().filter(|c| board_filter.matches(c)).collect();
+        let cards: Vec<_> = self
+            .cards
+            .iter()
+            .filter(|c| board_filter.matches(c))
+            .collect();
 
         if self.active_sprint_filter.is_none() && !self.hide_assigned_cards {
             return cards.len();
         }
 
-        cards.iter()
+        cards
+            .iter()
             .filter(|c| {
                 if let Some(sprint_id) = self.active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
@@ -294,7 +298,9 @@ impl App {
         let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.columns);
 
-        let mut cards: Vec<&Card> = self.cards.iter()
+        let mut cards: Vec<&Card> = self
+            .cards
+            .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
@@ -351,12 +357,8 @@ impl App {
     pub fn export_board_with_filename(&self) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get(board_idx) {
-                let board_export = BoardExporter::export_board(
-                    board,
-                    &self.columns,
-                    &self.cards,
-                    &self.sprints,
-                );
+                let board_export =
+                    BoardExporter::export_board(board, &self.columns, &self.cards, &self.sprints);
 
                 let export = crate::export::AllBoardsExport {
                     boards: vec![board_export],
@@ -393,11 +395,7 @@ impl App {
     }
 
     fn check_ended_sprints(&self) {
-        let ended_sprints: Vec<_> = self
-            .sprints
-            .iter()
-            .filter(|s| s.is_ended())
-            .collect();
+        let ended_sprints: Vec<_> = self.sprints.iter().filter(|s| s.is_ended()).collect();
 
         if !ended_sprints.is_empty() {
             tracing::warn!(
@@ -408,7 +406,10 @@ impl App {
                 if let Some(board) = self.boards.iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
-                        sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint")),
+                        sprint.formatted_name(
+                            board,
+                            board.sprint_prefix.as_deref().unwrap_or("sprint")
+                        ),
                         sprint
                             .end_date
                             .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())
@@ -440,7 +441,8 @@ impl App {
                         (temp_file, content)
                     }
                     BoardField::Settings => {
-                        let temp_file = temp_dir.join(format!("kanban-board-{}-settings.json", board.id));
+                        let temp_file =
+                            temp_dir.join(format!("kanban-board-{}-settings.json", board.id));
                         let settings = BoardSettings {
                             branch_prefix: board.branch_prefix.clone(),
                             sprint_duration_days: board.sprint_duration_days,
@@ -502,57 +504,39 @@ impl App {
         field: CardField,
     ) -> io::Result<()> {
         if let Some(card_idx) = self.active_card_index {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    let board_cards: Vec<_> = self
-                        .cards
-                        .iter()
-                        .filter(|card| {
-                            self.columns
-                                .iter()
-                                .any(|col| col.id == card.column_id && col.board_id == board.id)
-                        })
-                        .collect();
+            if let Some(card) = self.cards.get(card_idx) {
+                let temp_dir = std::env::temp_dir();
+                let (temp_file, current_content) = match field {
+                    CardField::Title => {
+                        let temp_file = temp_dir.join(format!("kanban-card-{}-title.md", card.id));
+                        (temp_file, card.title.clone())
+                    }
+                    CardField::Description => {
+                        let temp_file =
+                            temp_dir.join(format!("kanban-card-{}-description.md", card.id));
+                        let content = card.description.as_deref().unwrap_or("").to_string();
+                        (temp_file, content)
+                    }
+                };
 
-                    if let Some(card) = board_cards.get(card_idx) {
-                        let temp_dir = std::env::temp_dir();
-                        let (temp_file, current_content) = match field {
+                if let Some(new_content) =
+                    edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
+                {
+                    let card_id = card.id;
+                    if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                        match field {
                             CardField::Title => {
-                                let temp_file =
-                                    temp_dir.join(format!("kanban-card-{}-title.md", card.id));
-                                (temp_file, card.title.clone())
+                                if !new_content.trim().is_empty() {
+                                    card.update_title(new_content.trim().to_string());
+                                }
                             }
                             CardField::Description => {
-                                let temp_file = temp_dir
-                                    .join(format!("kanban-card-{}-description.md", card.id));
-                                let content = card.description.as_deref().unwrap_or("").to_string();
-                                (temp_file, content)
-                            }
-                        };
-
-                        if let Some(new_content) = edit_in_external_editor(
-                            terminal,
-                            event_handler,
-                            temp_file,
-                            &current_content,
-                        )? {
-                            let card_id = card.id;
-                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                                match field {
-                                    CardField::Title => {
-                                        if !new_content.trim().is_empty() {
-                                            card.update_title(new_content.trim().to_string());
-                                        }
-                                    }
-                                    CardField::Description => {
-                                        let desc = if new_content.trim().is_empty() {
-                                            None
-                                        } else {
-                                            Some(new_content)
-                                        };
-                                        card.update_description(desc);
-                                    }
-                                }
+                                let desc = if new_content.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(new_content)
+                                };
+                                card.update_description(desc);
                             }
                         }
                     }
@@ -601,7 +585,6 @@ impl App {
         Ok(())
     }
 
-
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         let first_new_index = self.boards.len();
         let import = BoardImporter::import_from_file(filename)?;
@@ -620,19 +603,12 @@ impl App {
         if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_cards: Vec<_> = self
-                        .cards
-                        .iter()
-                        .filter(|card| {
-                            self.columns
-                                .iter()
-                                .any(|col| col.id == card.column_id && col.board_id == board.id)
-                        })
-                        .collect();
-
-                    if let Some(card) = board_cards.get(card_idx) {
-                        let branch_name =
-                            card.branch_name(board, &self.sprints, self.app_config.effective_default_prefix());
+                    if let Some(card) = self.cards.get(card_idx) {
+                        let branch_name = card.branch_name(
+                            board,
+                            &self.sprints,
+                            self.app_config.effective_default_prefix(),
+                        );
                         if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
                             tracing::error!("Failed to copy to clipboard: {}", e);
                         } else {
@@ -648,17 +624,7 @@ impl App {
         if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let board_cards: Vec<_> = self
-                        .cards
-                        .iter()
-                        .filter(|card| {
-                            self.columns
-                                .iter()
-                                .any(|col| col.id == card.column_id && col.board_id == board.id)
-                        })
-                        .collect();
-
-                    if let Some(card) = board_cards.get(card_idx) {
+                    if let Some(card) = self.cards.get(card_idx) {
                         let command = card.git_checkout_command(
                             board,
                             &self.sprints,
