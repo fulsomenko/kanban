@@ -83,17 +83,12 @@ impl App {
                 }
             }
             Focus::Cards => {
-                if let Some(sorted_idx) = self.card_selection.get() {
-                    if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            let sorted_cards = self.get_sorted_board_cards(board.id);
-                            if let Some(selected_card) = sorted_cards.get(sorted_idx) {
-                                let card_id = selected_card.id;
-                                let actual_idx = self.cards.iter().position(|c| c.id == card_id);
-                                self.active_card_index = actual_idx;
-                                self.mode = AppMode::CardDetail;
-                            }
-                        }
+                if self.card_selection.get().is_some() {
+                    if let Some(selected_card) = self.get_selected_card_in_context() {
+                        let card_id = selected_card.id;
+                        let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                        self.active_card_index = actual_idx;
+                        self.mode = AppMode::CardDetail;
                     }
                 }
             }
@@ -108,7 +103,7 @@ impl App {
         }
     }
 
-    fn is_kanban_view(&self) -> bool {
+    pub fn is_kanban_view(&self) -> bool {
         if let Some(board_idx) = self.active_board_index.or(self.board_selection.get()) {
             if let Some(board) = self.boards.get(board_idx) {
                 return board.task_list_view == TaskListView::ColumnView;
