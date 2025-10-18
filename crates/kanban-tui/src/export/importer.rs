@@ -22,7 +22,9 @@ impl BoardImporter {
         Self::import_from_json(&content)
     }
 
-    pub fn extract_entities(import: AllBoardsExport) -> (Vec<Board>, Vec<Column>, Vec<Card>, Vec<Sprint>) {
+    pub fn extract_entities(
+        import: AllBoardsExport,
+    ) -> (Vec<Board>, Vec<Column>, Vec<Card>, Vec<Sprint>) {
         let mut boards = Vec::new();
         let mut columns = Vec::new();
         let mut cards = Vec::new();

@@ -23,6 +23,10 @@
           extensions = ["rust-src" "rust-analyzer" "clippy" "rustfmt"];
         };
 
+        changeset = pkgs.writeShellScriptBin "changeset" ''
+          ${builtins.readFile ./scripts/create-changeset.sh}
+        '';
+
         bumpVersion = pkgs.writeShellScriptBin "bump-version" ''
           ${builtins.readFile ./scripts/bump-version.sh}
         '';

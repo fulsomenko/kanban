@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct SelectionState {
     selected_index: Option<usize>,
 }
