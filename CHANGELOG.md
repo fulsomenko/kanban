@@ -1,3 +1,8 @@
+## [0.1.8] - 2025-10-18 ([#36](https://github.com/fulsomenko/kanban/pull/36))
+
+- Fix CI workflow and publish workflow issues
+
+
 ## [0.1.7] - 2025-10-18 ([#32](https://github.com/fulsomenko/kanban/pull/32))
 
 - - update CONTRIBUTING.md with branching and release workflow
