@@ -25,7 +25,7 @@ impl App {
     }
 
     pub fn handle_card_selection_toggle(&mut self) {
-        if self.focus == Focus::Cards && self.card_selection.get().is_some() {
+        if self.focus == Focus::Cards {
             if let Some(card) = self.get_selected_card_in_context() {
                 let card_id = card.id;
                 if self.selected_cards.contains(&card_id) {
@@ -45,7 +45,7 @@ impl App {
         if !self.selected_cards.is_empty() {
             self.sprint_assign_selection.clear();
             self.mode = AppMode::AssignMultipleCardsToSprint;
-        } else if self.card_selection.get().is_some() {
+        } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
                     let sprint_count = self
@@ -138,13 +138,15 @@ impl App {
         event_handler: &EventHandler,
     ) -> bool {
         let mut should_restart = false;
-        if self.focus == Focus::Cards && self.card_selection.get().is_some() {
+        if self.focus == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
                 let card_id = selected_card.id;
                 let actual_idx = self.cards.iter().position(|c| c.id == card_id);
                 self.active_card_index = actual_idx;
 
-                if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Description) {
+                if let Err(e) =
+                    self.edit_card_field(terminal, event_handler, CardField::Description)
+                {
                     tracing::error!("Failed to edit card description: {}", e);
                 }
                 should_restart = true;
@@ -183,11 +185,12 @@ impl App {
             };
 
             let new_position = if let Some(target_column_id) = last_column_id {
-                Some(self
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == target_column_id)
-                    .count() as i32)
+                Some(
+                    self.cards
+                        .iter()
+                        .filter(|c| c.column_id == target_column_id)
+                        .count() as i32,
+                )
             } else {
                 None
             };
@@ -205,18 +208,10 @@ impl App {
                             new_status
                         );
                     } else {
-                        tracing::info!(
-                            "Toggled card '{}' to status: {:?}",
-                            card.title,
-                            new_status
-                        );
+                        tracing::info!("Toggled card '{}' to status: {:?}", card.title, new_status);
                     }
                 } else {
-                    tracing::info!(
-                        "Toggled card '{}' to status: {:?}",
-                        card.title,
-                        new_status
-                    );
+                    tracing::info!("Toggled card '{}' to status: {:?}", card.title, new_status);
                 }
             }
         }
@@ -348,10 +343,7 @@ impl App {
 
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                                 card.move_to_column(target_column_id, new_position);
-                                tracing::info!(
-                                    "Moved card '{}' to previous column",
-                                    card.title
-                                );
+                                tracing::info!("Moved card '{}' to previous column", card.title);
                             }
 
                             if self.is_kanban_view() {
@@ -361,12 +353,8 @@ impl App {
                                     }
                                 }
                             } else {
-                                let sorted_cards = self.get_sorted_board_cards(board.id);
-                                if let Some(new_idx) =
-                                    sorted_cards.iter().position(|c| c.id == card_id)
-                                {
-                                    self.card_selection.set(Some(new_idx));
-                                }
+                                self.refresh_view();
+                                self.select_card_by_id(card_id);
                             }
                         } else {
                             tracing::warn!("Card is already in the first column");
@@ -411,10 +399,7 @@ impl App {
 
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                                 card.move_to_column(target_column_id, new_position);
-                                tracing::info!(
-                                    "Moved card '{}' to next column",
-                                    card.title
-                                );
+                                tracing::info!("Moved card '{}' to next column", card.title);
                             }
 
                             if self.is_kanban_view() {
@@ -425,12 +410,8 @@ impl App {
                                     }
                                 }
                             } else {
-                                let sorted_cards = self.get_sorted_board_cards(board.id);
-                                if let Some(new_idx) =
-                                    sorted_cards.iter().position(|c| c.id == card_id)
-                                {
-                                    self.card_selection.set(Some(new_idx));
-                                }
+                                self.refresh_view();
+                                self.select_card_by_id(card_id);
                             }
                         } else {
                             tracing::warn!("Card is already in the last column");

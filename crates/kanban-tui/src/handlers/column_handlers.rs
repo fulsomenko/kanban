@@ -39,7 +39,11 @@ impl App {
         if self.board_focus == BoardFocus::Columns && self.column_selection.get().is_some() {
             if let Some(board_idx) = self.board_selection.get() {
                 if let Some(board) = self.boards.get(board_idx) {
-                    let column_count = self.columns.iter().filter(|col| col.board_id == board.id).count();
+                    let column_count = self
+                        .columns
+                        .iter()
+                        .filter(|col| col.board_id == board.id)
+                        .count();
 
                     if column_count > 1 {
                         self.mode = AppMode::DeleteColumnConfirm;
@@ -140,13 +144,22 @@ impl App {
                     .filter(|col| col.board_id == board.id)
                     .map(|col| col.position)
                     .max()
-                    .unwrap_or(-1) + 1;
+                    .unwrap_or(-1)
+                    + 1;
 
                 let column = Column::new(board.id, column_name.clone(), position);
-                tracing::info!("Creating column: {} (position: {})", column.name, column.position);
+                tracing::info!(
+                    "Creating column: {} (position: {})",
+                    column.name,
+                    column.position
+                );
                 self.columns.push(column);
 
-                let board_column_count = self.columns.iter().filter(|col| col.board_id == board.id).count();
+                let board_column_count = self
+                    .columns
+                    .iter()
+                    .filter(|col| col.board_id == board.id)
+                    .count();
                 let new_column_index = board_column_count.saturating_sub(1);
                 self.column_selection.set(Some(new_column_index));
             }
@@ -214,7 +227,9 @@ impl App {
 
                                 let card_count = cards_to_move.len();
                                 for card_id in cards_to_move {
-                                    if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                                    if let Some(card) =
+                                        self.cards.iter_mut().find(|c| c.id == card_id)
+                                    {
                                         card.move_to_column(target_column_id, card.position);
                                     }
                                 }
@@ -226,7 +241,11 @@ impl App {
                         self.columns.retain(|col| col.id != column_id);
                         tracing::info!("Deleted column: {}", column_name);
 
-                        let remaining_columns = self.columns.iter().filter(|col| col.board_id == board.id).count();
+                        let remaining_columns = self
+                            .columns
+                            .iter()
+                            .filter(|col| col.board_id == board.id)
+                            .count();
                         if remaining_columns > 0 {
                             if column_idx >= remaining_columns {
                                 self.column_selection.set(Some(remaining_columns - 1));

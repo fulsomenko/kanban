@@ -12,13 +12,12 @@ use ratatui::{
 
 pub fn render(app: &App, frame: &mut Frame) {
     match app.mode {
-        AppMode::CardDetail | AppMode::AssignCardToSprint | AppMode::AssignMultipleCardsToSprint => {
+        AppMode::CardDetail
+        | AppMode::AssignCardToSprint
+        | AppMode::AssignMultipleCardsToSprint => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Min(0),
-                    Constraint::Length(3),
-                ])
+                .constraints([Constraint::Min(0), Constraint::Length(3)])
                 .split(frame.area());
 
             render_card_detail_view(app, frame, chunks[0]);
@@ -35,10 +34,7 @@ pub fn render(app: &App, frame: &mut Frame) {
         AppMode::BoardDetail => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Min(0),
-                    Constraint::Length(3),
-                ])
+                .constraints([Constraint::Min(0), Constraint::Length(3)])
                 .split(frame.area());
 
             render_board_detail_view(app, frame, chunks[0]);
@@ -47,10 +43,7 @@ pub fn render(app: &App, frame: &mut Frame) {
         AppMode::SprintDetail => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Min(0),
-                    Constraint::Length(3),
-                ])
+                .constraints([Constraint::Min(0), Constraint::Length(3)])
                 .split(frame.area());
 
             render_sprint_detail_view(app, frame, chunks[0]);
@@ -59,10 +52,7 @@ pub fn render(app: &App, frame: &mut Frame) {
         _ => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Min(0),
-                    Constraint::Length(3),
-                ])
+                .constraints([Constraint::Min(0), Constraint::Length(3)])
                 .split(frame.area());
 
             render_main(app, frame, chunks[0]);
@@ -231,10 +221,8 @@ fn render_tasks_flat(app: &App, frame: &mut Frame, area: Rect) {
         if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
             if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
                 if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint.formatted_name(
-                        board,
-                        board.sprint_prefix.as_deref().unwrap_or("sprint"),
-                    );
+                    let sprint_name = sprint
+                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
                     title.push_str(&format!(" - {}", sprint_name));
                 }
             }
@@ -268,8 +256,11 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
                     "  No columns yet. Add columns in board settings.",
                     label_text(),
                 )));
-            } else if let Some(task_list) = app.view_strategy.get_active_task_list() {
-                if task_list.is_empty() {
+            } else {
+                let task_lists = app.view_strategy.get_all_task_lists();
+                let active_task_list = app.view_strategy.get_active_task_list();
+
+                if task_lists.is_empty() {
                     let message = if app.active_board_index.is_some() {
                         "  No tasks yet. Press 'n' to create one!"
                     } else {
@@ -277,46 +268,52 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
                     };
                     lines.push(Line::from(Span::styled(message, label_text())));
                 } else {
-                    let mut card_idx = 0;
+                    for (col_idx, task_list) in task_lists.iter().enumerate() {
+                        if let Some(column) = board_columns.get(col_idx) {
+                            let card_count = task_list.len();
+                            let is_active_column = active_task_list
+                                .map(|active| std::ptr::eq(*task_list, active))
+                                .unwrap_or(false);
 
-                    for column in board_columns.iter() {
-                        let column_cards: Vec<_> = task_list
-                            .cards
-                            .iter()
-                            .filter_map(|card_id| app.cards.iter().find(|c| c.id == *card_id))
-                            .filter(|card| card.column_id == column.id)
-                            .collect();
-
-                        let card_count = column_cards.len();
-                        lines.push(Line::from(Span::styled(
-                            format!("── {} ({}) ──", column.name, card_count),
-                            Style::default()
-                                .fg(Color::Cyan)
-                                .add_modifier(Modifier::BOLD),
-                        )));
-
-                        if column_cards.is_empty() {
                             lines.push(Line::from(Span::styled(
-                                "  (no tasks)",
-                                label_text(),
+                                format!("── {} ({}) ──", column.name, card_count),
+                                Style::default()
+                                    .fg(Color::Cyan)
+                                    .add_modifier(Modifier::BOLD),
                             )));
-                        } else {
-                            for card in column_cards {
-                                let line = render_card_list_item(CardListItemConfig {
-                                    card,
-                                    board,
-                                    sprints: &app.sprints,
-                                    is_selected: task_list.get_selected_index() == Some(card_idx),
-                                    is_focused: app.focus == Focus::Cards,
-                                    is_multi_selected: app.selected_cards.contains(&card.id),
-                                    show_sprint_name: app.active_sprint_filter.is_none(),
-                                });
-                                lines.push(line);
-                                card_idx += 1;
-                            }
-                        }
 
-                        lines.push(Line::from(""));
+                            if task_list.is_empty() {
+                                lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
+                            } else {
+                                for (local_card_idx, card_id) in task_list.cards.iter().enumerate()
+                                {
+                                    if let Some(card) = app.cards.iter().find(|c| c.id == *card_id)
+                                    {
+                                        let is_selected = if is_active_column {
+                                            task_list.get_selected_index() == Some(local_card_idx)
+                                        } else {
+                                            false
+                                        };
+
+                                        let line = render_card_list_item(CardListItemConfig {
+                                            card,
+                                            board,
+                                            sprints: &app.sprints,
+                                            is_selected,
+                                            is_focused: app.focus == Focus::Cards
+                                                && is_active_column,
+                                            is_multi_selected: app
+                                                .selected_cards
+                                                .contains(&card.id),
+                                            show_sprint_name: app.active_sprint_filter.is_none(),
+                                        });
+                                        lines.push(line);
+                                    }
+                                }
+                            }
+
+                            lines.push(Line::from(""));
+                        }
                     }
                 }
             }
@@ -338,10 +335,8 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
         if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
             if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
                 if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint.formatted_name(
-                        board,
-                        board.sprint_prefix.as_deref().unwrap_or("sprint"),
-                    );
+                    let sprint_name = sprint
+                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
                     title.push_str(&format!(" - {}", sprint_name));
                 }
             }
@@ -364,11 +359,10 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
             let task_lists = app.view_strategy.get_all_task_lists();
 
             if task_lists.is_empty() {
-                let mut lines = vec![];
-                lines.push(Line::from(Span::styled(
+                let lines = vec![Line::from(Span::styled(
                     "  No columns yet. Add columns in board settings.",
                     label_text(),
-                )));
+                ))];
 
                 let panel_config = PanelConfig::new("Tasks")
                     .with_focus_indicator("Tasks [2]")
@@ -403,10 +397,7 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                     .unwrap_or(false);
 
                 if task_list.is_empty() {
-                    lines.push(Line::from(Span::styled(
-                        "  (no tasks)",
-                        label_text(),
-                    )));
+                    lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
                 } else {
                     for (local_card_idx, card_id) in task_list.cards.iter().enumerate() {
                         if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
@@ -430,15 +421,16 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                     }
                 }
 
-                let column_name = if let crate::task_list::TaskListId::Column(column_id) = task_list.id {
-                    app.columns
-                        .iter()
-                        .find(|c| c.id == column_id)
-                        .map(|c| c.name.clone())
-                        .unwrap_or_else(|| "Unknown".to_string())
-                } else {
-                    "All".to_string()
-                };
+                let column_name =
+                    if let crate::task_list::TaskListId::Column(column_id) = task_list.id {
+                        app.columns
+                            .iter()
+                            .find(|c| c.id == column_id)
+                            .map(|c| c.name.clone())
+                            .unwrap_or_else(|| "Unknown".to_string())
+                    } else {
+                        "All".to_string()
+                    };
 
                 let title = if col_idx < 9 {
                     format!("{} ({}) [{}]", column_name, card_count, col_idx + 1)
@@ -455,11 +447,10 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
             }
         }
     } else {
-        let mut lines = vec![];
-        lines.push(Line::from(Span::styled(
+        let lines = vec![Line::from(Span::styled(
             "  Select a project to preview tasks",
             label_text(),
-        )));
+        ))];
 
         let panel_config = PanelConfig::new("Tasks")
             .with_focus_indicator("Tasks [2]")
@@ -470,16 +461,13 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
     }
 }
 
-
 fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(sprint_idx) = app.active_sprint_index {
         if let Some(sprint) = app.sprints.get(sprint_idx) {
             if let Some(board_idx) = app.active_board_index {
                 if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint.formatted_name(
-                        board,
-                        board.sprint_prefix.as_deref().unwrap_or("sprint"),
-                    );
+                    let sprint_name = sprint
+                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
 
                     let mut lines = vec![
                         metadata_line_styled("Sprint", sprint_name, bold_highlight()),
@@ -526,7 +514,9 @@ fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     lines.push(metadata_line_styled(
                         "Cards Assigned",
                         card_count.to_string(),
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
                     ));
 
                     if board.active_sprint_id == Some(sprint.id) {
@@ -563,15 +553,16 @@ fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
-    let is_kanban_view = if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-        if let Some(board) = app.boards.get(board_idx) {
-            board.task_list_view == kanban_domain::TaskListView::ColumnView
+    let is_kanban_view =
+        if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
+            if let Some(board) = app.boards.get(board_idx) {
+                board.task_list_view == kanban_domain::TaskListView::ColumnView
+            } else {
+                false
+            }
         } else {
             false
-        }
-    } else {
-        false
-    };
+        };
 
     let help_text = match app.mode {
         AppMode::Normal => {
@@ -716,17 +707,31 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         metadata_line_multi(vec![
                             ("Priority", format!("{:?}", card.priority), normal_text()),
                             ("Status", format!("{:?}", card.status), normal_text()),
-                            ("Points", card.points.map(|p| p.to_string()).unwrap_or_else(|| "-".to_string()), normal_text()),
+                            (
+                                "Points",
+                                card.points
+                                    .map(|p| p.to_string())
+                                    .unwrap_or_else(|| "-".to_string()),
+                                normal_text(),
+                            ),
                         ]),
                         if let Some(due_date) = card.due_date {
-                            metadata_line_styled("Due", due_date.format("%Y-%m-%d %H:%M").to_string(), Style::default().fg(Color::Red))
+                            metadata_line_styled(
+                                "Due",
+                                due_date.format("%Y-%m-%d %H:%M").to_string(),
+                                Style::default().fg(Color::Red),
+                            )
                         } else {
                             Line::from(Span::styled("No due date", label_text()))
                         },
                         metadata_line_styled(
                             "Branch",
-                            card.branch_name(board, &app.sprints, app.app_config.effective_default_prefix()),
-                            active_item()
+                            card.branch_name(
+                                board,
+                                &app.sprints,
+                                app.app_config.effective_default_prefix(),
+                            ),
+                            active_item(),
                         ),
                     ];
 
@@ -790,8 +795,8 @@ fn render_import_board_popup(app: &App, frame: &mut Frame) {
     frame.render_widget(label, chunks[0]);
 
     if app.import_files.is_empty() {
-        let empty_msg = Paragraph::new("No JSON files found in current directory")
-            .style(label_text());
+        let empty_msg =
+            Paragraph::new("No JSON files found in current directory").style(label_text());
         frame.render_widget(empty_msg, chunks[1]);
     } else {
         let mut lines = vec![];
@@ -911,10 +916,8 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         SprintStatus::Cancelled => "✗",
                     };
 
-                    let sprint_name = sprint.formatted_name(
-                        board,
-                        board.sprint_prefix.as_deref().unwrap_or("sprint"),
-                    );
+                    let sprint_name = sprint
+                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
 
                     let card_count = app
                         .cards
@@ -1012,7 +1015,6 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
         }
     }
 }
-
 
 fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
     render_input_popup(
@@ -1160,7 +1162,10 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(format!("Assign {} Cards to Sprint", app.selected_cards.len()))
+        .title(format!(
+            "Assign {} Cards to Sprint",
+            app.selected_cards.len()
+        ))
         .borders(Borders::ALL)
         .style(Style::default().bg(Color::Black));
 
@@ -1260,8 +1265,8 @@ fn render_delete_column_confirm_popup(_app: &App, frame: &mut Frame) {
         .style(Style::default().fg(Color::Yellow));
     frame.render_widget(message, chunks[0]);
 
-    let confirm_text = Paragraph::new("Press ENTER/y to delete, n/ESC to cancel")
-        .style(label_text());
+    let confirm_text =
+        Paragraph::new("Press ENTER/y to delete, n/ESC to cancel").style(label_text());
     frame.render_widget(confirm_text, chunks[1]);
 }
 
@@ -1276,7 +1281,8 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
 
     let selected = app.task_list_view_selection.get();
 
-    let current_view = app.active_board_index
+    let current_view = app
+        .active_board_index
         .and_then(|idx| app.boards.get(idx))
         .map(|board| board.task_list_view);
 
@@ -1291,9 +1297,27 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
             };
             let is_current = current_view == Some(*view);
             let view_name = match view {
-                TaskListView::Flat => if is_current { "Flat (current)" } else { "Flat" },
-                TaskListView::GroupedByColumn => if is_current { "Grouped by Column (current)" } else { "Grouped by Column" },
-                TaskListView::ColumnView => if is_current { "Column View (kanban board) (current)" } else { "Column View (kanban board)" },
+                TaskListView::Flat => {
+                    if is_current {
+                        "Flat (current)"
+                    } else {
+                        "Flat"
+                    }
+                }
+                TaskListView::GroupedByColumn => {
+                    if is_current {
+                        "Grouped by Column (current)"
+                    } else {
+                        "Grouped by Column"
+                    }
+                }
+                TaskListView::ColumnView => {
+                    if is_current {
+                        "Column View (kanban board) (current)"
+                    } else {
+                        "Column View (kanban board)"
+                    }
+                }
             };
             ListItem::new(view_name).style(style)
         })

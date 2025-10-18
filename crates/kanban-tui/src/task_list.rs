@@ -62,12 +62,19 @@ impl TaskList {
         }
     }
 
-    pub fn navigate_up(&mut self) {
+    pub fn navigate_up(&mut self) -> bool {
+        let was_at_top = self.selection.get() == Some(0) || self.selection.get().is_none();
         self.selection.prev();
+        was_at_top && !self.cards.is_empty()
     }
 
-    pub fn navigate_down(&mut self) {
+    pub fn navigate_down(&mut self) -> bool {
+        if self.cards.is_empty() {
+            return false;
+        }
+        let was_at_bottom = self.selection.get() == Some(self.cards.len() - 1);
         self.selection.next(self.cards.len());
+        was_at_bottom
     }
 
     pub fn clear(&mut self) {
