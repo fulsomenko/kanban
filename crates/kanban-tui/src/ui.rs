@@ -152,19 +152,29 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
                 .filter(|col| col.board_id == board.id)
                 .count();
 
-            match board.task_list_view {
-                kanban_domain::TaskListView::Flat => {
-                    if column_count > 1 {
-                        render_tasks_grouped_by_column(app, frame, area);
-                    } else {
-                        render_tasks_flat(app, frame, area);
-                    }
-                }
-                kanban_domain::TaskListView::GroupedByColumn => {
+            let is_preview = app.active_board_index.is_none();
+
+            if is_preview {
+                if column_count > 1 {
                     render_tasks_grouped_by_column(app, frame, area);
+                } else {
+                    render_tasks_flat(app, frame, area);
                 }
-                kanban_domain::TaskListView::ColumnView => {
-                    render_tasks_kanban_view(app, frame, area);
+            } else {
+                match board.task_list_view {
+                    kanban_domain::TaskListView::Flat => {
+                        if column_count > 1 {
+                            render_tasks_grouped_by_column(app, frame, area);
+                        } else {
+                            render_tasks_flat(app, frame, area);
+                        }
+                    }
+                    kanban_domain::TaskListView::GroupedByColumn => {
+                        render_tasks_grouped_by_column(app, frame, area);
+                    }
+                    kanban_domain::TaskListView::ColumnView => {
+                        render_tasks_kanban_view(app, frame, area);
+                    }
                 }
             }
         } else {
