@@ -19,7 +19,7 @@ impl App {
 
         if !self.selected_cards.is_empty() {
             self.toggle_selected_cards_completion();
-        } else if self.card_selection.get().is_some() {
+        } else {
             self.toggle_card_completion();
         }
     }

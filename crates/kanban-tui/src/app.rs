@@ -26,7 +26,6 @@ pub struct App {
     pub boards: Vec<Board>,
     pub board_selection: SelectionState,
     pub active_board_index: Option<usize>,
-    pub card_selection: SelectionState,
     pub active_card_index: Option<usize>,
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
@@ -49,7 +48,6 @@ pub struct App {
     pub selected_cards: std::collections::HashSet<uuid::Uuid>,
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
-    pub active_column_index: Option<usize>,
     pub task_list_view_selection: SelectionState,
     pub view_strategy: Box<dyn ViewStrategy>,
 }
@@ -130,7 +128,6 @@ impl App {
             boards: Vec::new(),
             board_selection: SelectionState::new(),
             active_board_index: None,
-            card_selection: SelectionState::new(),
             active_card_index: None,
             columns: Vec::new(),
             cards: Vec::new(),
@@ -153,7 +150,6 @@ impl App {
             selected_cards: std::collections::HashSet::new(),
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
-            active_column_index: None,
             task_list_view_selection: SelectionState::new(),
             view_strategy: Box::new(GroupedViewStrategy::new()),
         };

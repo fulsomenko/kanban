@@ -48,7 +48,6 @@ impl App {
             Focus::Boards => {
                 if self.board_selection.get().is_some() {
                     self.active_board_index = self.board_selection.get();
-                    self.card_selection.clear();
 
                     if let Some(board_idx) = self.active_board_index {
                         let (task_list_view, task_sort_field, task_sort_order) = {
@@ -89,7 +88,6 @@ impl App {
     pub fn handle_escape_key(&mut self) {
         if self.active_board_index.is_some() {
             self.active_board_index = None;
-            self.card_selection.clear();
             self.focus = Focus::Boards;
 
             self.switch_view_strategy(TaskListView::GroupedByColumn);
