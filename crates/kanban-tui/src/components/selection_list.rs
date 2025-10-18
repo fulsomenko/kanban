@@ -1,4 +1,4 @@
-use crate::components::{centered_rect, render_popup_with_block, ListItemConfig, styled_list_item};
+use crate::components::{centered_rect, render_popup_with_block, styled_list_item, ListItemConfig};
 use crate::theme::*;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -25,6 +25,7 @@ pub fn render_selection_popup_with_list_items(
     frame.render_widget(list, area);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_selection_popup_with_lines<'a, I, F>(
     frame: &mut Frame,
     title: &str,
@@ -61,7 +62,11 @@ pub fn render_selection_popup_with_lines<'a, I, F>(
         frame.render_widget(label_widget, chunks[0]);
     }
 
-    let list_chunk = if label.is_some() { chunks[1] } else { chunks[0] };
+    let list_chunk = if label.is_some() {
+        chunks[1]
+    } else {
+        chunks[0]
+    };
 
     let mut lines = vec![];
     for (idx, item) in items.into_iter().enumerate() {

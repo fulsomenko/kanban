@@ -62,7 +62,10 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
                 .iter()
                 .find(|s| s.id == sprint_id)
                 .and_then(|sprint| {
-                    sprint.prefix_override.as_ref().or(config.board.sprint_prefix.as_ref())
+                    sprint
+                        .prefix_override
+                        .as_ref()
+                        .or(config.board.sprint_prefix.as_ref())
                 })
                 .map(|s| s.as_str())
                 .unwrap_or_else(|| config.board.sprint_prefix.as_deref().unwrap_or("task"))
@@ -103,10 +106,7 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
         Span::styled("● ", priority_style_val),
         Span::styled(points_text, points_style),
         Span::raw(" "),
-        Span::styled(
-            format!("{}{} ", select_indicator, checkbox),
-            base_style,
-        ),
+        Span::styled(format!("{}{} ", select_indicator, checkbox), base_style),
         Span::styled(config.card.title.clone(), title_style),
     ];
 
