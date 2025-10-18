@@ -25,7 +25,7 @@ impl App {
     }
 
     pub fn handle_card_selection_toggle(&mut self) {
-        if self.focus == Focus::Cards && self.card_selection.get().is_some() {
+        if self.focus == Focus::Cards {
             if let Some(card) = self.get_selected_card_in_context() {
                 let card_id = card.id;
                 if self.selected_cards.contains(&card_id) {
@@ -45,7 +45,7 @@ impl App {
         if !self.selected_cards.is_empty() {
             self.sprint_assign_selection.clear();
             self.mode = AppMode::AssignMultipleCardsToSprint;
-        } else if self.card_selection.get().is_some() {
+        } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
                     let sprint_count = self
@@ -138,7 +138,7 @@ impl App {
         event_handler: &EventHandler,
     ) -> bool {
         let mut should_restart = false;
-        if self.focus == Focus::Cards && self.card_selection.get().is_some() {
+        if self.focus == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
                 let card_id = selected_card.id;
                 let actual_idx = self.cards.iter().position(|c| c.id == card_id);
@@ -361,12 +361,8 @@ impl App {
                                     }
                                 }
                             } else {
-                                let sorted_cards = self.get_sorted_board_cards(board.id);
-                                if let Some(new_idx) =
-                                    sorted_cards.iter().position(|c| c.id == card_id)
-                                {
-                                    self.card_selection.set(Some(new_idx));
-                                }
+                                self.refresh_view();
+                                self.select_card_by_id(card_id);
                             }
                         } else {
                             tracing::warn!("Card is already in the first column");
@@ -425,12 +421,8 @@ impl App {
                                     }
                                 }
                             } else {
-                                let sorted_cards = self.get_sorted_board_cards(board.id);
-                                if let Some(new_idx) =
-                                    sorted_cards.iter().position(|c| c.id == card_id)
-                                {
-                                    self.card_selection.set(Some(new_idx));
-                                }
+                                self.refresh_view();
+                                self.select_card_by_id(card_id);
                             }
                         } else {
                             tracing::warn!("Card is already in the last column");
