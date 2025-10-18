@@ -71,14 +71,10 @@ impl App {
                         self.current_sort_order = Some(task_sort_order);
                         self.switch_view_strategy(task_list_view);
 
-                        let card_count = if let Some(board) = self.boards.get(board_idx) {
-                            self.get_board_card_count(board.id)
-                        } else {
-                            0
-                        };
-
-                        if card_count > 0 {
-                            self.card_selection.set(Some(0));
+                        if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                            if !list.is_empty() {
+                                list.set_selected_index(Some(0));
+                            }
                         }
                     }
 
