@@ -1280,6 +1280,10 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
 
     let selected = app.task_list_view_selection.get();
 
+    let current_view = app.active_board_index
+        .and_then(|idx| app.boards.get(idx))
+        .map(|board| board.task_list_view);
+
     let items: Vec<ListItem> = views
         .iter()
         .enumerate()
@@ -1289,10 +1293,11 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
             } else {
                 normal_text()
             };
+            let is_current = current_view == Some(*view);
             let view_name = match view {
-                TaskListView::Flat => "Flat (current behavior)",
-                TaskListView::GroupedByColumn => "Grouped by Column",
-                TaskListView::ColumnView => "Column View (kanban board)",
+                TaskListView::Flat => if is_current { "Flat (current)" } else { "Flat" },
+                TaskListView::GroupedByColumn => if is_current { "Grouped by Column (current)" } else { "Grouped by Column" },
+                TaskListView::ColumnView => if is_current { "Column View (kanban board) (current)" } else { "Column View (kanban board)" },
             };
             ListItem::new(view_name).style(style)
         })
