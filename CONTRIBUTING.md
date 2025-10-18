@@ -381,6 +381,64 @@ Description of changes
 - **Performance**: Optimize rendering, reduce allocations
 - **Refactoring**: Extract common patterns, improve modularity
 
+## CI/CD and GitHub Secrets
+
+### Required Secrets
+
+To enable automated publishing and releases, configure these secrets in GitHub repository settings:
+
+**CARGO_REGISTRY_TOKEN**
+- Required for: Publishing to crates.io
+- How to obtain:
+  1. Login to crates.io with GitHub account
+  2. Go to Account Settings → API Tokens
+  3. Create new token with "publish-update" scope
+  4. Add to GitHub: Settings → Secrets → Actions → New repository secret
+
+**DEPLOY_KEY**
+- Required for: Automated git commits and tag pushes
+- How to generate:
+  ```bash
+  ssh-keygen -t ed25519 -C "github-actions@kanban" -f deploy_key -N ""
+  ```
+- Add public key (deploy_key.pub) to GitHub: Settings → Deploy keys → Add (with write access)
+- Add private key (deploy_key) to GitHub: Settings → Secrets → Actions → New repository secret
+
+### CI/CD Workflows
+
+**ci.yml** - Runs on all PRs
+- Format check (cargo fmt)
+- Linter (cargo clippy)
+- Tests (cargo test)
+- Build validation
+
+**changeset-check.yml** - Runs on PRs to develop/master
+- Validates changeset presence
+- Checks ticket ID naming convention
+- Verifies bump type validity
+
+**publish.yml** - Runs on merge to master
+- Bumps version based on changesets
+- Updates CHANGELOG.md
+- Publishes to crates.io
+- Creates GitHub release with tag
+
+**sync-develop.yml** - Runs after successful publish
+- Merges master back to develop
+- Keeps branches in sync
+
+### Workflow Architecture
+
+```
+Feature Branch → develop (via PR + changeset)
+                    ↓
+                 (accumulate features)
+                    ↓
+              develop → master (release PR)
+                    ↓
+            [CI checks] → [Publish] → [Sync develop]
+```
+
 ## Questions?
 
 - Open an issue for bugs or feature requests
