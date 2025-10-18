@@ -330,6 +330,14 @@ fix: fix bugs (vague, multiple unrelated fixes)
 - Group related file additions together
 - Separate creation from refactoring
 
+**Quality Criteria - Each commit should be:**
+- **Independent**: Can be understood on its own
+- **Atomic**: Contains one logical change
+- **Descriptive**: Clear commit message following conventional commits format
+- **Buildable**: Each commit compiles successfully
+
+The commits should tell a clear story of the feature or refactoring from start to finish.
+
 ### Changesets
 
 When submitting a PR, add a changeset file to describe your changes:

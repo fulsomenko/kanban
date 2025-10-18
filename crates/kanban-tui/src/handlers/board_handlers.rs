@@ -66,6 +66,7 @@ impl App {
     pub fn create_board(&mut self) {
         let board = kanban_domain::Board::new(self.input.as_str().to_string(), None);
         let board_id = board.id;
+        let task_list_view = board.task_list_view;
         tracing::info!("Creating board: {} (id: {})", board.name, board.id);
 
         self.boards.push(board);
@@ -84,6 +85,7 @@ impl App {
 
         let new_index = self.boards.len() - 1;
         self.board_selection.set(Some(new_index));
+        self.switch_view_strategy(task_list_view);
     }
 
     pub fn rename_board(&mut self) {
