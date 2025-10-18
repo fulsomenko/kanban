@@ -41,11 +41,11 @@ cargo check
 # Run tests
 cargo test
 
-# Linting
-cargo clippy
+# Linting (with warnings as errors)
+cargo clippy --all-targets --all-features -- -D warnings
 
 # Format code
-cargo fmt
+cargo fmt --all
 ```
 
 ## Code Style
@@ -233,8 +233,8 @@ mod tests {
 
 ### Before Submitting
 
-- [ ] Run `cargo fmt` to format code
-- [ ] Run `cargo clippy` and address all warnings
+- [ ] Run `cargo fmt --all` to format code
+- [ ] Run `cargo clippy --all-targets --all-features -- -D warnings` and address all warnings
 - [ ] Run `cargo test` and ensure all tests pass
 - [ ] Test manually with `cargo run`
 - [ ] Create changeset with `./scripts/create-changeset.sh`
