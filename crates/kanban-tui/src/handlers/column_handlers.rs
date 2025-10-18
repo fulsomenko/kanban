@@ -107,9 +107,18 @@ impl App {
     }
 
     pub fn handle_toggle_task_list_view(&mut self) {
-        if let Some(board_idx) = self.board_selection.get() {
-            if self.boards.get(board_idx).is_some() {
-                self.task_list_view_selection.set(Some(0));
+        if self.focus != crate::app::Focus::Cards {
+            return;
+        }
+
+        if let Some(board_idx) = self.active_board_index {
+            if let Some(board) = self.boards.get(board_idx) {
+                let current_view_idx = match board.task_list_view {
+                    TaskListView::Flat => 0,
+                    TaskListView::GroupedByColumn => 1,
+                    TaskListView::ColumnView => 2,
+                };
+                self.task_list_view_selection.set(Some(current_view_idx));
                 self.mode = AppMode::SelectTaskListView;
             }
         }
