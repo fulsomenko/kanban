@@ -113,7 +113,10 @@ impl Card {
                 .iter()
                 .find(|s| s.id == sprint_id)
                 .and_then(|sprint| {
-                    sprint.prefix_override.as_ref().or(board.sprint_prefix.as_ref())
+                    sprint
+                        .prefix_override
+                        .as_ref()
+                        .or(board.sprint_prefix.as_ref())
                 })
                 .map(|s| s.as_str())
                 .unwrap_or_else(|| board.effective_branch_prefix(default_prefix))
@@ -150,7 +153,12 @@ impl Card {
         }
     }
 
-    pub fn git_checkout_command(&self, board: &Board, sprints: &[Sprint], default_prefix: &str) -> String {
+    pub fn git_checkout_command(
+        &self,
+        board: &Board,
+        sprints: &[Sprint],
+        default_prefix: &str,
+    ) -> String {
         let name = self.branch_name(board, sprints, default_prefix);
         format!("git checkout -b {}", name)
     }

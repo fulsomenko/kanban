@@ -46,7 +46,14 @@ jobs:
               exit 1
             fi
 
-            echo "✅ Found matching changeset: $MATCHING_CHANGESET"
+            echo "✅ Found matching changeset for $TICKET_ID: $MATCHING_CHANGESET"
+
+            # Show changeset contents for visibility
+            echo ""
+            echo "📝 Changeset contents:"
+            echo "---"
+            cat "$MATCHING_CHANGESET"
+            echo "---"
           fi
 
           for changeset in $CHANGESETS; do

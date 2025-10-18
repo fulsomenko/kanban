@@ -22,8 +22,14 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_down();
+                let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.navigate_down()
+                } else {
+                    false
+                };
+
+                if hit_bottom {
+                    self.view_strategy.navigate_right(false);
                 }
             }
         }
@@ -36,8 +42,14 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_up();
+                let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.navigate_up()
+                } else {
+                    false
+                };
+
+                if hit_top {
+                    self.view_strategy.navigate_left(true);
                 }
             }
         }
@@ -52,9 +64,17 @@ impl App {
                     if let Some(board_idx) = self.active_board_index {
                         let (task_list_view, task_sort_field, task_sort_order) = {
                             if let Some(board) = self.boards.get(board_idx) {
-                                (board.task_list_view, board.task_sort_field, board.task_sort_order)
+                                (
+                                    board.task_list_view,
+                                    board.task_sort_field,
+                                    board.task_sort_order,
+                                )
                             } else {
-                                (kanban_domain::TaskListView::Flat, kanban_domain::SortField::Default, kanban_domain::SortOrder::Ascending)
+                                (
+                                    kanban_domain::TaskListView::Flat,
+                                    kanban_domain::SortField::Default,
+                                    kanban_domain::SortOrder::Ascending,
+                                )
                             }
                         };
 
@@ -73,13 +93,11 @@ impl App {
                 }
             }
             Focus::Cards => {
-                if self.card_selection.get().is_some() {
-                    if let Some(selected_card) = self.get_selected_card_in_context() {
-                        let card_id = selected_card.id;
-                        let actual_idx = self.cards.iter().position(|c| c.id == card_id);
-                        self.active_card_index = actual_idx;
-                        self.mode = AppMode::CardDetail;
-                    }
+                if let Some(selected_card) = self.get_selected_card_in_context() {
+                    let card_id = selected_card.id;
+                    let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                    self.active_card_index = actual_idx;
+                    self.mode = AppMode::CardDetail;
                 }
             }
         }
@@ -108,7 +126,7 @@ impl App {
             return;
         }
 
-        if self.view_strategy.navigate_left() {
+        if self.view_strategy.navigate_left(false) {
             tracing::info!("Moved to previous column");
         }
     }
@@ -118,7 +136,7 @@ impl App {
             return;
         }
 
-        if self.view_strategy.navigate_right() {
+        if self.view_strategy.navigate_right(false) {
             tracing::info!("Moved to next column");
         }
     }
@@ -128,10 +146,10 @@ impl App {
             let column_count = self.view_strategy.get_all_task_lists().len();
 
             if index < column_count {
-                if let Some(kanban_strategy) = self
-                    .view_strategy
-                    .as_any_mut()
-                    .downcast_mut::<crate::view_strategy::KanbanViewStrategy>()
+                if let Some(kanban_strategy) =
+                    self.view_strategy
+                        .as_any_mut()
+                        .downcast_mut::<crate::view_strategy::KanbanViewStrategy>()
                 {
                     kanban_strategy.set_active_column_index(index);
                 }
