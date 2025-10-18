@@ -356,6 +356,20 @@ impl App {
         }
     }
 
+    pub fn refresh_preview(&mut self) {
+        if let Some(board_idx) = self.board_selection.get() {
+            if let Some(board) = self.boards.get(board_idx) {
+                self.view_strategy.refresh_task_lists(
+                    board,
+                    &self.cards,
+                    &self.columns,
+                    self.active_sprint_filter,
+                    self.hide_assigned_cards,
+                );
+            }
+        }
+    }
+
     pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
         let new_strategy: Box<dyn ViewStrategy> = match task_list_view {
             kanban_domain::TaskListView::Flat => Box::new(FlatViewStrategy::new()),
@@ -366,7 +380,12 @@ impl App {
         };
 
         self.view_strategy = new_strategy;
-        self.refresh_view();
+
+        if self.active_board_index.is_some() {
+            self.refresh_view();
+        } else {
+            self.refresh_preview();
+        }
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
@@ -611,6 +630,11 @@ impl App {
         self.sprints.extend(sprints);
 
         self.board_selection.set(Some(first_new_index));
+
+        if let Some(board) = self.boards.get(first_new_index) {
+            self.switch_view_strategy(board.task_list_view);
+        }
+
         Ok(())
     }
 
