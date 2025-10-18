@@ -334,6 +334,7 @@ impl App {
                     if let Some(board_idx) = self.active_board_index {
                         if let Some(board) = self.boards.get_mut(board_idx) {
                             board.update_task_list_view(view);
+                            self.switch_view_strategy(view);
                             tracing::info!("Updated task list view to: {:?}", view);
                         }
                     }
