@@ -106,16 +106,7 @@ impl App {
             };
             tracing::info!("Hide assigned cards: {}", status);
 
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    let card_count = self.get_board_card_count(board.id);
-                    if card_count > 0 {
-                        self.card_selection.set(Some(0));
-                    } else {
-                        self.card_selection.clear();
-                    }
-                }
-            }
+            self.refresh_view();
         }
     }
 
@@ -132,12 +123,7 @@ impl App {
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
 
-                        let card_count = self.get_board_card_count(board.id);
-                        if card_count > 0 {
-                            self.card_selection.set(Some(0));
-                        } else {
-                            self.card_selection.clear();
-                        }
+                        self.refresh_view();
                     } else {
                         tracing::warn!("No active sprint set for filtering");
                     }
