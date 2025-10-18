@@ -375,9 +375,7 @@ impl App {
     pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
         let new_strategy: Box<dyn ViewStrategy> = match task_list_view {
             kanban_domain::TaskListView::Flat => Box::new(FlatViewStrategy::new()),
-            kanban_domain::TaskListView::GroupedByColumn => {
-                Box::new(GroupedViewStrategy::new())
-            }
+            kanban_domain::TaskListView::GroupedByColumn => Box::new(GroupedViewStrategy::new()),
             kanban_domain::TaskListView::ColumnView => Box::new(KanbanViewStrategy::new()),
         };
 

@@ -61,7 +61,11 @@ pub fn metadata_line<'a>(label: &'a str, value: impl Into<String>) -> Line<'a> {
     ])
 }
 
-pub fn metadata_line_styled<'a>(label: &'a str, value: impl Into<String>, style: Style) -> Line<'a> {
+pub fn metadata_line_styled<'a>(
+    label: &'a str,
+    value: impl Into<String>,
+    style: Style,
+) -> Line<'a> {
     Line::from(vec![
         Span::styled(format!("{}: ", label), label_text()),
         Span::styled(value.into(), style),

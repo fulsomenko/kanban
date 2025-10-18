@@ -144,7 +144,9 @@ impl App {
                 let actual_idx = self.cards.iter().position(|c| c.id == card_id);
                 self.active_card_index = actual_idx;
 
-                if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Description) {
+                if let Err(e) =
+                    self.edit_card_field(terminal, event_handler, CardField::Description)
+                {
                     tracing::error!("Failed to edit card description: {}", e);
                 }
                 should_restart = true;
@@ -183,11 +185,12 @@ impl App {
             };
 
             let new_position = if let Some(target_column_id) = last_column_id {
-                Some(self
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == target_column_id)
-                    .count() as i32)
+                Some(
+                    self.cards
+                        .iter()
+                        .filter(|c| c.column_id == target_column_id)
+                        .count() as i32,
+                )
             } else {
                 None
             };
@@ -205,18 +208,10 @@ impl App {
                             new_status
                         );
                     } else {
-                        tracing::info!(
-                            "Toggled card '{}' to status: {:?}",
-                            card.title,
-                            new_status
-                        );
+                        tracing::info!("Toggled card '{}' to status: {:?}", card.title, new_status);
                     }
                 } else {
-                    tracing::info!(
-                        "Toggled card '{}' to status: {:?}",
-                        card.title,
-                        new_status
-                    );
+                    tracing::info!("Toggled card '{}' to status: {:?}", card.title, new_status);
                 }
             }
         }
@@ -348,10 +343,7 @@ impl App {
 
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                                 card.move_to_column(target_column_id, new_position);
-                                tracing::info!(
-                                    "Moved card '{}' to previous column",
-                                    card.title
-                                );
+                                tracing::info!("Moved card '{}' to previous column", card.title);
                             }
 
                             if self.is_kanban_view() {
@@ -407,10 +399,7 @@ impl App {
 
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                                 card.move_to_column(target_column_id, new_position);
-                                tracing::info!(
-                                    "Moved card '{}' to next column",
-                                    card.title
-                                );
+                                tracing::info!("Moved card '{}' to next column", card.title);
                             }
 
                             if self.is_kanban_view() {

@@ -215,7 +215,8 @@ impl App {
                 if self.board_focus == BoardFocus::Settings {
                     if let Some(board_idx) = self.board_selection.get() {
                         if let Some(board) = self.boards.get(board_idx) {
-                            let current_prefix = board.branch_prefix.clone().unwrap_or_else(String::new);
+                            let current_prefix =
+                                board.branch_prefix.clone().unwrap_or_else(String::new);
                             self.input.set(current_prefix);
                             self.mode = AppMode::SetBranchPrefix;
                         }

@@ -64,9 +64,17 @@ impl App {
                     if let Some(board_idx) = self.active_board_index {
                         let (task_list_view, task_sort_field, task_sort_order) = {
                             if let Some(board) = self.boards.get(board_idx) {
-                                (board.task_list_view, board.task_sort_field, board.task_sort_order)
+                                (
+                                    board.task_list_view,
+                                    board.task_sort_field,
+                                    board.task_sort_order,
+                                )
                             } else {
-                                (kanban_domain::TaskListView::Flat, kanban_domain::SortField::Default, kanban_domain::SortOrder::Ascending)
+                                (
+                                    kanban_domain::TaskListView::Flat,
+                                    kanban_domain::SortField::Default,
+                                    kanban_domain::SortOrder::Ascending,
+                                )
                             }
                         };
 
@@ -138,10 +146,10 @@ impl App {
             let column_count = self.view_strategy.get_all_task_lists().len();
 
             if index < column_count {
-                if let Some(kanban_strategy) = self
-                    .view_strategy
-                    .as_any_mut()
-                    .downcast_mut::<crate::view_strategy::KanbanViewStrategy>()
+                if let Some(kanban_strategy) =
+                    self.view_strategy
+                        .as_any_mut()
+                        .downcast_mut::<crate::view_strategy::KanbanViewStrategy>()
                 {
                     kanban_strategy.set_active_column_index(index);
                 }

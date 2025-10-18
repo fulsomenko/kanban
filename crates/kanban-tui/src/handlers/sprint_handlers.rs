@@ -22,7 +22,10 @@ impl App {
                             board.active_sprint_id = Some(sprint_id);
                         }
                         if let Some(board) = self.boards.get(board_idx) {
-                            tracing::info!("Activated sprint: {}", sprint.formatted_name(board, "sprint"));
+                            tracing::info!(
+                                "Activated sprint: {}",
+                                sprint.formatted_name(board, "sprint")
+                            );
                         }
                     }
                 }
@@ -33,8 +36,7 @@ impl App {
     pub fn handle_complete_sprint_key(&mut self) {
         if let Some(sprint_idx) = self.active_sprint_index {
             if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                if sprint.status == SprintStatus::Active
-                    || sprint.status == SprintStatus::Planning
+                if sprint.status == SprintStatus::Active || sprint.status == SprintStatus::Planning
                 {
                     let sprint_id = sprint.id;
                     sprint.complete();
