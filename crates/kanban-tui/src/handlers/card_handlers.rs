@@ -19,7 +19,7 @@ impl App {
 
         if !self.selected_cards.is_empty() {
             self.toggle_selected_cards_completion();
-        } else if self.card_selection.get().is_some() {
+        } else {
             self.toggle_card_completion();
         }
     }
@@ -106,16 +106,7 @@ impl App {
             };
             tracing::info!("Hide assigned cards: {}", status);
 
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    let card_count = self.get_board_card_count(board.id);
-                    if card_count > 0 {
-                        self.card_selection.set(Some(0));
-                    } else {
-                        self.card_selection.clear();
-                    }
-                }
-            }
+            self.refresh_view();
         }
     }
 
@@ -132,12 +123,7 @@ impl App {
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
 
-                        let card_count = self.get_board_card_count(board.id);
-                        if card_count > 0 {
-                            self.card_selection.set(Some(0));
-                        } else {
-                            self.card_selection.clear();
-                        }
+                        self.refresh_view();
                     } else {
                         tracing::warn!("No active sprint set for filtering");
                     }
@@ -258,11 +244,12 @@ impl App {
 
         for card_id in card_ids {
             let new_position = if let Some(target_column_id) = last_column_id {
-                Some(self
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == target_column_id)
-                    .count() as i32)
+                Some(
+                    self.cards
+                        .iter()
+                        .filter(|c| c.column_id == target_column_id)
+                        .count() as i32,
+                )
             } else {
                 None
             };
@@ -277,7 +264,8 @@ impl App {
                 card.update_status(new_status);
 
                 if new_status == CardStatus::Done {
-                    if let (Some(target_column_id), Some(position)) = (last_column_id, new_position) {
+                    if let (Some(target_column_id), Some(position)) = (last_column_id, new_position)
+                    {
                         if old_column_id != target_column_id {
                             card.move_to_column(target_column_id, position);
                         }
@@ -317,14 +305,11 @@ impl App {
                     .count() as i32;
                 let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
                 let new_card_id = card.id;
-                let board_id = board.id;
                 tracing::info!("Creating card: {} (id: {})", card.title, card.id);
                 self.cards.push(card);
 
-                let sorted_cards = self.get_sorted_board_cards(board_id);
-                if let Some(pos) = sorted_cards.iter().position(|c| c.id == new_card_id) {
-                    self.card_selection.set(Some(pos));
-                }
+                self.refresh_view();
+                self.select_card_by_id(new_card_id);
             }
         }
     }
@@ -377,7 +362,9 @@ impl App {
                                 }
                             } else {
                                 let sorted_cards = self.get_sorted_board_cards(board.id);
-                                if let Some(new_idx) = sorted_cards.iter().position(|c| c.id == card_id) {
+                                if let Some(new_idx) =
+                                    sorted_cards.iter().position(|c| c.id == card_id)
+                                {
                                     self.card_selection.set(Some(new_idx));
                                 }
                             }
@@ -439,7 +426,9 @@ impl App {
                                 }
                             } else {
                                 let sorted_cards = self.get_sorted_board_cards(board.id);
-                                if let Some(new_idx) = sorted_cards.iter().position(|c| c.id == card_id) {
+                                if let Some(new_idx) =
+                                    sorted_cards.iter().position(|c| c.id == card_id)
+                                {
                                     self.card_selection.set(Some(new_idx));
                                 }
                             }
