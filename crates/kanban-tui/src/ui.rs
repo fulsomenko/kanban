@@ -163,11 +163,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
             } else {
                 match board.task_list_view {
                     kanban_domain::TaskListView::Flat => {
-                        if column_count > 1 {
-                            render_tasks_grouped_by_column(app, frame, area);
-                        } else {
-                            render_tasks_flat(app, frame, area);
-                        }
+                        render_tasks_flat(app, frame, area);
                     }
                     kanban_domain::TaskListView::GroupedByColumn => {
                         render_tasks_grouped_by_column(app, frame, area);
