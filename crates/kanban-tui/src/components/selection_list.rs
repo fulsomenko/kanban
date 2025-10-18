@@ -25,6 +25,7 @@ pub fn render_selection_popup_with_list_items(
     frame.render_widget(list, area);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_selection_popup_with_lines<'a, I, F>(
     frame: &mut Frame,
     title: &str,

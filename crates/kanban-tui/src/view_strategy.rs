@@ -25,6 +25,12 @@ pub struct FlatViewStrategy {
     task_list: TaskList,
 }
 
+impl Default for FlatViewStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FlatViewStrategy {
     pub fn new() -> Self {
         Self {
@@ -98,6 +104,12 @@ impl ViewStrategy for FlatViewStrategy {
 pub struct GroupedViewStrategy {
     column_lists: Vec<TaskList>,
     active_column_index: usize,
+}
+
+impl Default for GroupedViewStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GroupedViewStrategy {
@@ -250,6 +262,12 @@ impl ViewStrategy for GroupedViewStrategy {
 pub struct KanbanViewStrategy {
     column_lists: Vec<TaskList>,
     active_column_index: usize,
+}
+
+impl Default for KanbanViewStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl KanbanViewStrategy {

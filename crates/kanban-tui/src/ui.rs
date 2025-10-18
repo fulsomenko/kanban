@@ -359,11 +359,10 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
             let task_lists = app.view_strategy.get_all_task_lists();
 
             if task_lists.is_empty() {
-                let mut lines = vec![];
-                lines.push(Line::from(Span::styled(
+                let lines = vec![Line::from(Span::styled(
                     "  No columns yet. Add columns in board settings.",
                     label_text(),
-                )));
+                ))];
 
                 let panel_config = PanelConfig::new("Tasks")
                     .with_focus_indicator("Tasks [2]")
@@ -448,11 +447,10 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
             }
         }
     } else {
-        let mut lines = vec![];
-        lines.push(Line::from(Span::styled(
+        let lines = vec![Line::from(Span::styled(
             "  Select a project to preview tasks",
             label_text(),
-        )));
+        ))];
 
         let panel_config = PanelConfig::new("Tasks")
             .with_focus_indicator("Tasks [2]")
