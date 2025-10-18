@@ -7,6 +7,7 @@ use crate::{
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     ui,
+    view_strategy::{FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewStrategy},
 };
 use crossterm::{
     execute,
@@ -50,6 +51,7 @@ pub struct App {
     pub column_selection: SelectionState,
     pub active_column_index: Option<usize>,
     pub task_list_view_selection: SelectionState,
+    pub view_strategy: Box<dyn ViewStrategy>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,6 +155,7 @@ impl App {
             column_selection: SelectionState::new(),
             active_column_index: None,
             task_list_view_selection: SelectionState::new(),
+            view_strategy: Box::new(FlatViewStrategy::new()),
         };
 
         if let Some(ref filename) = save_file {
@@ -351,7 +354,19 @@ impl App {
                 }
             }
         }
-        None
+    }
+
+    pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
+        let new_strategy: Box<dyn ViewStrategy> = match task_list_view {
+            kanban_domain::TaskListView::Flat => Box::new(FlatViewStrategy::new()),
+            kanban_domain::TaskListView::GroupedByColumn => {
+                Box::new(GroupedViewStrategy::new())
+            }
+            kanban_domain::TaskListView::ColumnView => Box::new(KanbanViewStrategy::new()),
+        };
+
+        self.view_strategy = new_strategy;
+        self.refresh_view();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
