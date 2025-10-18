@@ -155,7 +155,7 @@ impl App {
             column_selection: SelectionState::new(),
             active_column_index: None,
             task_list_view_selection: SelectionState::new(),
-            view_strategy: Box::new(FlatViewStrategy::new()),
+            view_strategy: Box::new(GroupedViewStrategy::new()),
         };
 
         if let Some(ref filename) = save_file {
@@ -631,9 +631,7 @@ impl App {
 
         self.board_selection.set(Some(first_new_index));
 
-        if let Some(board) = self.boards.get(first_new_index) {
-            self.switch_view_strategy(board.task_list_view);
-        }
+        self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
         Ok(())
     }

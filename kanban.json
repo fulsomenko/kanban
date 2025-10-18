@@ -18,8 +18,9 @@
         "sprint_name_used_count": 2,
         "next_sprint_number": 7,
         "active_sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "task_list_view": "ColumnView",
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-10-12T21:11:47.061998Z"
+        "updated_at": "2025-10-18T19:37:59.716297Z"
       },
       "columns": [
         {
@@ -30,6 +31,24 @@
           "wip_limit": null,
           "created_at": "2025-10-10T08:47:57.834219Z",
           "updated_at": "2025-10-10T08:47:57.834219Z"
+        },
+        {
+          "id": "66db3ad8-cc5d-4541-9145-9172664cc7e0",
+          "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
+          "name": "In Progress",
+          "position": 1,
+          "wip_limit": null,
+          "created_at": "2025-10-18T15:07:17.600233Z",
+          "updated_at": "2025-10-18T15:07:17.600233Z"
+        },
+        {
+          "id": "72f85086-d05d-42e7-a5f6-8dcd8a633920",
+          "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
+          "name": "Complete",
+          "position": 2,
+          "wip_limit": null,
+          "created_at": "2025-10-18T15:07:20.790565Z",
+          "updated_at": "2025-10-18T15:07:20.790565Z"
         }
       ],
       "cards": [
@@ -526,7 +545,7 @@
           "card_number": 31,
           "sprint_id": null,
           "created_at": "2025-10-12T00:14:17.034422Z",
-          "updated_at": "2025-10-12T15:09:11.118477Z",
+          "updated_at": "2025-10-18T15:10:50.489870Z",
           "completed_at": null
         },
         {

@@ -19,11 +19,7 @@ impl App {
         match self.focus {
             Focus::Boards => {
                 self.board_selection.next(self.boards.len());
-                if let Some(board_idx) = self.board_selection.get() {
-                    if let Some(board) = self.boards.get(board_idx) {
-                        self.switch_view_strategy(board.task_list_view);
-                    }
-                }
+                self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
@@ -37,11 +33,7 @@ impl App {
         match self.focus {
             Focus::Boards => {
                 self.board_selection.prev();
-                if let Some(board_idx) = self.board_selection.get() {
-                    if let Some(board) = self.boards.get(board_idx) {
-                        self.switch_view_strategy(board.task_list_view);
-                    }
-                }
+                self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
@@ -99,6 +91,8 @@ impl App {
             self.active_board_index = None;
             self.card_selection.clear();
             self.focus = Focus::Boards;
+
+            self.switch_view_strategy(TaskListView::GroupedByColumn);
         }
     }
 
