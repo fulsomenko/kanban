@@ -268,8 +268,11 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
                     "  No columns yet. Add columns in board settings.",
                     label_text(),
                 )));
-            } else if let Some(task_list) = app.view_strategy.get_active_task_list() {
-                if task_list.is_empty() {
+            } else {
+                let task_lists = app.view_strategy.get_all_task_lists();
+                let active_task_list = app.view_strategy.get_active_task_list();
+
+                if task_lists.is_empty() {
                     let message = if app.active_board_index.is_some() {
                         "  No tasks yet. Press 'n' to create one!"
                     } else {
@@ -277,46 +280,50 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
                     };
                     lines.push(Line::from(Span::styled(message, label_text())));
                 } else {
-                    let mut card_idx = 0;
+                    for (col_idx, task_list) in task_lists.iter().enumerate() {
+                        if let Some(column) = board_columns.get(col_idx) {
+                            let card_count = task_list.len();
+                            let is_active_column = active_task_list
+                                .map(|active| std::ptr::eq(*task_list, active))
+                                .unwrap_or(false);
 
-                    for column in board_columns.iter() {
-                        let column_cards: Vec<_> = task_list
-                            .cards
-                            .iter()
-                            .filter_map(|card_id| app.cards.iter().find(|c| c.id == *card_id))
-                            .filter(|card| card.column_id == column.id)
-                            .collect();
-
-                        let card_count = column_cards.len();
-                        lines.push(Line::from(Span::styled(
-                            format!("── {} ({}) ──", column.name, card_count),
-                            Style::default()
-                                .fg(Color::Cyan)
-                                .add_modifier(Modifier::BOLD),
-                        )));
-
-                        if column_cards.is_empty() {
                             lines.push(Line::from(Span::styled(
-                                "  (no tasks)",
-                                label_text(),
+                                format!("── {} ({}) ──", column.name, card_count),
+                                Style::default()
+                                    .fg(Color::Cyan)
+                                    .add_modifier(Modifier::BOLD),
                             )));
-                        } else {
-                            for card in column_cards {
-                                let line = render_card_list_item(CardListItemConfig {
-                                    card,
-                                    board,
-                                    sprints: &app.sprints,
-                                    is_selected: task_list.get_selected_index() == Some(card_idx),
-                                    is_focused: app.focus == Focus::Cards,
-                                    is_multi_selected: app.selected_cards.contains(&card.id),
-                                    show_sprint_name: app.active_sprint_filter.is_none(),
-                                });
-                                lines.push(line);
-                                card_idx += 1;
-                            }
-                        }
 
-                        lines.push(Line::from(""));
+                            if task_list.is_empty() {
+                                lines.push(Line::from(Span::styled(
+                                    "  (no tasks)",
+                                    label_text(),
+                                )));
+                            } else {
+                                for (local_card_idx, card_id) in task_list.cards.iter().enumerate() {
+                                    if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                        let is_selected = if is_active_column {
+                                            task_list.get_selected_index() == Some(local_card_idx)
+                                        } else {
+                                            false
+                                        };
+
+                                        let line = render_card_list_item(CardListItemConfig {
+                                            card,
+                                            board,
+                                            sprints: &app.sprints,
+                                            is_selected,
+                                            is_focused: app.focus == Focus::Cards && is_active_column,
+                                            is_multi_selected: app.selected_cards.contains(&card.id),
+                                            show_sprint_name: app.active_sprint_filter.is_none(),
+                                        });
+                                        lines.push(line);
+                                    }
+                                }
+                            }
+
+                            lines.push(Line::from(""));
+                        }
                     }
                 }
             }
