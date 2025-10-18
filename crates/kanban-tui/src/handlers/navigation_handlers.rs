@@ -21,30 +21,8 @@ impl App {
                 self.board_selection.next(self.boards.len());
             }
             Focus::Cards => {
-                if let Some(board_idx) = self.active_board_index {
-                    if let Some(board) = self.boards.get(board_idx) {
-                        if self.is_kanban_view() {
-                            let focused_col_idx = self.column_selection.get().unwrap_or(0);
-                            let mut board_columns: Vec<_> = self
-                                .columns
-                                .iter()
-                                .filter(|col| col.board_id == board.id)
-                                .collect();
-                            board_columns.sort_by_key(|col| col.position);
-
-                            if let Some(focused_column) = board_columns.get(focused_col_idx) {
-                                let column_card_count = self
-                                    .get_sorted_board_cards(board.id)
-                                    .iter()
-                                    .filter(|card| card.column_id == focused_column.id)
-                                    .count();
-                                self.card_selection.next(column_card_count);
-                            }
-                        } else {
-                            let card_count = self.get_board_card_count(board.id);
-                            self.card_selection.next(card_count);
-                        }
-                    }
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.navigate_down();
                 }
             }
         }
@@ -56,7 +34,9 @@ impl App {
                 self.board_selection.prev();
             }
             Focus::Cards => {
-                self.card_selection.prev();
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.navigate_up();
+                }
             }
         }
     }
@@ -69,14 +49,26 @@ impl App {
                     self.card_selection.clear();
 
                     if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            self.current_sort_field = Some(board.task_sort_field);
-                            self.current_sort_order = Some(board.task_sort_order);
-
-                            let card_count = self.get_board_card_count(board.id);
-                            if card_count > 0 {
-                                self.card_selection.set(Some(0));
+                        let (task_list_view, task_sort_field, task_sort_order) = {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                (board.task_list_view, board.task_sort_field, board.task_sort_order)
+                            } else {
+                                (kanban_domain::TaskListView::Flat, kanban_domain::SortField::Default, kanban_domain::SortOrder::Ascending)
                             }
+                        };
+
+                        self.current_sort_field = Some(task_sort_field);
+                        self.current_sort_order = Some(task_sort_order);
+                        self.switch_view_strategy(task_list_view);
+
+                        let card_count = if let Some(board) = self.boards.get(board_idx) {
+                            self.get_board_card_count(board.id)
+                        } else {
+                            0
+                        };
+
+                        if card_count > 0 {
+                            self.card_selection.set(Some(0));
                         }
                     }
 
@@ -118,29 +110,8 @@ impl App {
             return;
         }
 
-        if let Some(board_idx) = self.active_board_index {
-            if let Some(board) = self.boards.get(board_idx) {
-                let column_count = self
-                    .columns
-                    .iter()
-                    .filter(|col| col.board_id == board.id)
-                    .count();
-
-                if column_count == 0 {
-                    return;
-                }
-
-                if let Some(current_col_idx) = self.column_selection.get() {
-                    if current_col_idx > 0 {
-                        self.column_selection.set(Some(current_col_idx - 1));
-                        self.card_selection.set(Some(0));
-                        tracing::info!("Moved to column {}", current_col_idx - 1);
-                    }
-                } else {
-                    self.column_selection.set(Some(0));
-                    self.card_selection.set(Some(0));
-                }
-            }
+        if self.view_strategy.navigate_left() {
+            tracing::info!("Moved to previous column");
         }
     }
 
@@ -149,44 +120,32 @@ impl App {
             return;
         }
 
-        if let Some(board_idx) = self.active_board_index {
-            if let Some(board) = self.boards.get(board_idx) {
-                let column_count = self
-                    .columns
-                    .iter()
-                    .filter(|col| col.board_id == board.id)
-                    .count();
-
-                if column_count == 0 {
-                    return;
-                }
-
-                let current_col_idx = self.column_selection.get().unwrap_or(0);
-                if current_col_idx < column_count - 1 {
-                    self.column_selection.set(Some(current_col_idx + 1));
-                    self.card_selection.set(Some(0));
-                    tracing::info!("Moved to column {}", current_col_idx + 1);
-                }
-            }
+        if self.view_strategy.navigate_right() {
+            tracing::info!("Moved to next column");
         }
     }
 
     pub fn handle_column_or_focus_switch(&mut self, index: usize) {
         if self.is_kanban_view() && self.focus == Focus::Cards {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    let column_count = self
-                        .columns
-                        .iter()
-                        .filter(|col| col.board_id == board.id)
-                        .count();
+            let column_count = self.view_strategy.get_all_task_lists().len();
 
-                    if index < column_count {
-                        self.column_selection.set(Some(index));
-                        self.card_selection.set(Some(0));
-                        tracing::info!("Switched to column {}", index);
+            if index < column_count {
+                if let Some(kanban_strategy) = self
+                    .view_strategy
+                    .as_any_mut()
+                    .downcast_mut::<crate::view_strategy::KanbanViewStrategy>()
+                {
+                    kanban_strategy.set_active_column_index(index);
+                }
+
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    if list.is_empty() {
+                        list.clear();
+                    } else if list.get_selected_index().is_none() {
+                        list.set_selected_index(Some(0));
                     }
                 }
+                tracing::info!("Switched to column {}", index);
             }
         } else {
             match index {
