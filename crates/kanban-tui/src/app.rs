@@ -324,30 +324,36 @@ impl App {
     }
 
     pub fn get_selected_card_in_context(&self) -> Option<&Card> {
-        if let Some(sorted_idx) = self.card_selection.get() {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    if self.is_kanban_view() {
-                        let focused_col_idx = self.column_selection.get().unwrap_or(0);
-                        let mut board_columns: Vec<_> = self
-                            .columns
-                            .iter()
-                            .filter(|col| col.board_id == board.id)
-                            .collect();
-                        board_columns.sort_by_key(|col| col.position);
+        if let Some(task_list) = self.view_strategy.get_active_task_list() {
+            if let Some(card_id) = task_list.get_selected_card_id() {
+                return self.cards.iter().find(|c| c.id == card_id);
+            }
+        }
+        None
+    }
 
-                        if let Some(focused_column) = board_columns.get(focused_col_idx) {
-                            let column_cards: Vec<&Card> = self.get_sorted_board_cards(board.id)
-                                .into_iter()
-                                .filter(|card| card.column_id == focused_column.id)
-                                .collect();
-                            return column_cards.get(sorted_idx).copied();
-                        }
-                    } else {
-                        let sorted_cards = self.get_sorted_board_cards(board.id);
-                        return sorted_cards.get(sorted_idx).copied();
-                    }
-                }
+    pub fn get_selected_card_id(&self) -> Option<uuid::Uuid> {
+        self.view_strategy
+            .get_active_task_list()
+            .and_then(|list| list.get_selected_card_id())
+    }
+
+    pub fn select_card_by_id(&mut self, card_id: uuid::Uuid) {
+        if let Some(task_list) = self.view_strategy.get_active_task_list_mut() {
+            task_list.select_card(card_id);
+        }
+    }
+
+    pub fn refresh_view(&mut self) {
+        if let Some(board_idx) = self.active_board_index {
+            if let Some(board) = self.boards.get(board_idx) {
+                self.view_strategy.refresh_task_lists(
+                    board,
+                    &self.cards,
+                    &self.columns,
+                    self.active_sprint_filter,
+                    self.hide_assigned_cards,
+                );
             }
         }
     }
