@@ -11,7 +11,7 @@ keywords = ["kanban", "project-management", "domain", "models", "business-logic"
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-kanban-core = { path = "../kanban-core", version = "0.1.0" }
+kanban-core = { path = "../kanban-core" }
 anyhow.workspace = true
 thiserror.workspace = true
 serde.workspace = true
