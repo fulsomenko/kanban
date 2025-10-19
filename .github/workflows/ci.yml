@@ -79,7 +79,53 @@ jobs:
 
       - name: Check for changeset
         run: |
-          nix develop --command cargo build --release --all-features --workspace
+          CHANGESETS=$(ls .changeset/*.md 2>/dev/null | grep -v "README.md" || true)
+
+          if [ -z "$CHANGESETS" ]; then
+            echo "❌ No changeset found!"
+            echo ""
+            echo "Please add a changeset file: .changeset/<ticket-id>-<description>.md"
+            echo ""
+            echo "Example: .changeset/kan-123-add-feature.md"
+            echo "---"
+            echo "bump: patch"
+            echo "---"
+            echo ""
+            echo "Description of your changes"
+            exit 1
+          fi
+
+          BRANCH_NAME="${{ github.head_ref }}"
+          TICKET_ID=$(echo "$BRANCH_NAME" | grep -oE '^[A-Z]+-[0-9]+' | tr '[:upper:]' '[:lower:]')
+
+          if [ -n "$TICKET_ID" ]; then
+            MATCHING_CHANGESET=$(ls .changeset/${TICKET_ID}-*.md 2>/dev/null || true)
+
+            if [ -z "$MATCHING_CHANGESET" ]; then
+              echo "❌ No changeset matching ticket ID: $TICKET_ID"
+              echo "Expected: .changeset/${TICKET_ID}-*.md"
+              echo ""
+              echo "Found changesets:"
+              ls .changeset/*.md 2>/dev/null | grep -v "README.md" || echo "  (none)"
+              exit 1
+            fi
+
+            echo "✅ Found changeset: $MATCHING_CHANGESET"
+            echo ""
+            echo "📝 Contents:"
+            cat "$MATCHING_CHANGESET"
+          fi
+
+          for changeset in $CHANGESETS; do
+            bump=$(grep -A1 "^---$" "$changeset" | grep "^bump:" | cut -d' ' -f2 | tr -d '\r\n')
+            if [[ ! "$bump" =~ ^(patch|minor|major)$ ]]; then
+              echo "❌ Invalid bump type in $changeset: '$bump'"
+              echo "Must be one of: patch, minor, major"
+              exit 1
+            fi
+          done
+
+          echo "✅ Changeset validated successfully"
 
   release-validation:
     name: Release Validation
