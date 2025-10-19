@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  push:
+    branches:
+      - '**'
   pull_request:
     branches:
-      - master
       - develop
+      - master
 
 jobs:
   format:
@@ -20,11 +23,10 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Check formatting
-        run: |
-          nix develop --command cargo fmt --all -- --check
+        run: nix develop --command cargo fmt --all -- --check
 
   clippy:
-    name: Clippy
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,11 +38,10 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Run clippy
-        run: |
-          nix develop --command cargo clippy --all-targets --all-features -- -D warnings
+        run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
 
   test:
-    name: Tests
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +53,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Run tests
-        run: |
-          nix develop --command cargo test --all-features --workspace
+        run: nix develop --command cargo test --all-features --workspace
 
   build:
     name: Build
@@ -67,11 +67,17 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Build all crates
-        run: |
-          nix develop --command cargo build --all-features --workspace
+      - name: Build workspace
+        run: nix develop --command cargo build --all-features --workspace
 
-      - name: Build release
+  changeset:
+    name: Validate Changeset
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for changeset
         run: |
           nix develop --command cargo build --release --all-features --workspace
 
