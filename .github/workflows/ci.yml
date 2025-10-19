@@ -74,3 +74,19 @@ jobs:
       - name: Build release
         run: |
           nix develop --command cargo build --release --all-features --workspace
+
+  release-validation:
+    name: Release Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Validate release build
+        run: |
+          nix develop --command bash scripts/validate-release.sh

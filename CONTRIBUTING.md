@@ -229,6 +229,49 @@ mod tests {
 - `develop` → `master` releases at the end of the sprint
 - One version bump per release, not per feature
 
+### Monorepo Versioning Strategy
+
+**All crates in this workspace maintain synchronized versions:**
+
+- Root `Cargo.toml` defines workspace version via `[workspace.package] version = "X.Y.Z"`
+- All crates reference this via `version.workspace = true`
+- Cross-crate dependencies use path-only references: `{ path = "../kanban-core" }` (no version)
+- This prevents version skew between interdependent crates during publishing
+
+**Why this matters:**
+
+When publishing:
+1. `kanban-core` publishes first (no internal dependencies)
+2. `kanban-domain` publishes second (depends on kanban-core)
+3. `kanban-tui` publishes third (depends on kanban-domain)
+4. `kanban-cli` publishes last (depends on all others)
+
+If versions diverge between crates, the published versions on crates.io won't resolve dependencies correctly, causing build failures for users.
+
+### Release Validation
+
+Before publishing, the `validate-release.sh` script automatically:
+
+1. Checks all crates use workspace versioning
+2. Verifies no hardcoded versions in path dependencies
+3. Validates entire workspace builds correctly
+4. Runs dry-run publish for each crate
+5. Confirms dependency resolution will work when published
+
+**Run locally before release:**
+```bash
+# Using Nix
+nix run .#validate-release
+
+# Or directly
+bash scripts/validate-release.sh
+```
+
+**Automated in CI:**
+- Runs on every PR to `develop` and `master`
+- Blocks merge if validation fails
+- Ensures no broken releases reach crates.io
+
 ## Pull Request Guidelines
 
 ### Before Submitting

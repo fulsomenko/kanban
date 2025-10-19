@@ -51,11 +51,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin git@github.com:fulsomenko/kanban.git
 
-      - name: Verify workspace dependencies
+      - name: Validate release build
         if: steps.check.outputs.has_changesets == 'true'
         run: |
-          echo "🔍 Verifying workspace dependencies..."
-          nix develop --command cargo check --workspace --all-features
+          nix develop --command bash scripts/validate-release.sh
 
       - name: Bump version and update changelog
         if: steps.check.outputs.has_changesets == 'true'

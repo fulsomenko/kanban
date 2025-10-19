@@ -34,6 +34,10 @@
         publishCrates = pkgs.writeShellScriptBin "publish-crates" ''
           ${builtins.readFile ./scripts/publish-crates.sh}
         '';
+
+        validateRelease = pkgs.writeShellScriptBin "validate-release" ''
+          ${builtins.readFile ./scripts/validate-release.sh}
+        '';
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
@@ -43,6 +47,8 @@
           default = pkgs.callPackage ./default.nix {};
           bump-version = bumpVersion;
           publish-crates = publishCrates;
+          validate-release = validateRelease;
+          changset = changeset;
         };
       }
     );
