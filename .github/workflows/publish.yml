@@ -51,11 +51,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin git@github.com:fulsomenko/kanban.git
 
-      - name: Verify workspace dependencies
+      - name: Validate release build
         if: steps.check.outputs.has_changesets == 'true'
         run: |
-          echo "🔍 Verifying workspace dependencies..."
-          nix develop --command cargo check --workspace --all-features
+          nix develop --command bash scripts/validate-release.sh
 
       - name: Bump version and update changelog
         if: steps.check.outputs.has_changesets == 'true'
@@ -79,18 +78,6 @@ jobs:
         run: |
           git tag "v${{ steps.version.outputs.version }}"
           GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" git push origin "v${{ steps.version.outputs.version }}"
-
-      - name: Dry-run publish validation
-        if: steps.check.outputs.has_changesets == 'true'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          echo "📦 Running dry-run publish validation..."
-          for crate in crates/kanban-core crates/kanban-domain crates/kanban-tui crates/kanban-cli; do
-            echo "Validating $crate..."
-            nix develop --command cargo publish --dry-run --manifest-path "$crate/Cargo.toml"
-          done
-          echo "✅ All crates passed dry-run validation"
 
       - name: Publish to crates.io
         if: steps.check.outputs.has_changesets == 'true'
