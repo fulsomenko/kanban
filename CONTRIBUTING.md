@@ -449,26 +449,19 @@ To enable automated publishing and releases, configure these secrets in GitHub r
 
 ### CI/CD Workflows
 
-**ci.yml** - Runs on all PRs
+**ci.yml** - Runs on all pushes and PRs
 - Format check (cargo fmt)
 - Linter (cargo clippy)
 - Tests (cargo test)
 - Build validation
+- Changeset validation (only on PRs to develop)
 
-**changeset-check.yml** - Runs on PRs to develop/master
-- Validates changeset presence
-- Checks ticket ID naming convention
-- Verifies bump type validity
-
-**publish.yml** - Runs on merge to master
+**release.yml** - Runs on push to master
+- Checks for changesets (skips if none found)
 - Bumps version based on changesets
 - Updates CHANGELOG.md
 - Publishes to crates.io
 - Creates GitHub release with tag
-
-**sync-develop.yml** - Runs after successful publish
-- Merges master back to develop
-- Keeps branches in sync
 
 ### Workflow Architecture
 
@@ -477,9 +470,9 @@ Feature Branch → develop (via PR + changeset)
                     ↓
                  (accumulate features)
                     ↓
-              develop → master (release PR)
+              develop → master (weekly release PR)
                     ↓
-            [CI checks] → [Publish] → [Sync develop]
+            [CI checks] → [Release workflow]
 ```
 
 ## Questions?
