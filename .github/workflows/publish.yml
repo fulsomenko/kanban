@@ -79,6 +79,18 @@ jobs:
           git tag "v${{ steps.version.outputs.version }}"
           GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" git push origin "v${{ steps.version.outputs.version }}"
 
+      - name: Dry-run publish validation
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          echo "📦 Running dry-run publish validation..."
+          for crate in crates/kanban-core crates/kanban-domain crates/kanban-tui crates/kanban-cli; do
+            echo "Validating $crate..."
+            nix develop --command cargo publish --dry-run --manifest-path "$crate/Cargo.toml"
+          done
+          echo "✅ All crates passed dry-run validation"
+
       - name: Publish to crates.io
         if: steps.check.outputs.has_changesets == 'true'
         env:
