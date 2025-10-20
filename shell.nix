@@ -1,5 +1,11 @@
 { pkgs ? import <nixpkgs> {}, rustToolchain ? pkgs.rustc }:
 
+let
+  changeset = pkgs.writeShellScriptBin "changeset" ''
+    ${builtins.readFile ./scripts/create-changeset.sh}
+  '';
+in
+
 pkgs.mkShell {
   name = "kanban-rust-shell";
 
@@ -13,6 +19,7 @@ pkgs.mkShell {
 
     # Development utilities
     bacon
+    changeset
   ];
 
   shellHook = ''
