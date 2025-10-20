@@ -11,8 +11,8 @@ keywords = ["kanban", "tui", "terminal", "ratatui", "project-management"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-kanban-core = { path = "../kanban-core" }
-kanban-domain = { path = "../kanban-domain" }
+kanban-core = { path = "../kanban-core", version = "0.2" }
+kanban-domain = { path = "../kanban-domain", version = "0.2" }
 ratatui.workspace = true
 crossterm.workspace = true
 anyhow.workspace = true
