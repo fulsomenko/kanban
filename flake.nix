@@ -48,7 +48,7 @@
           bump-version = bumpVersion;
           publish-crates = publishCrates;
           validate-release = validateRelease;
-          changset = changeset;
+          changeset = changeset;
         };
       }
     );
