@@ -72,7 +72,7 @@ jobs:
           echo "📦 Validating crates with dry-run..."
           for crate in crates/kanban-core crates/kanban-domain crates/kanban-tui crates/kanban-cli; do
             echo "Validating $crate..."
-            nix develop --command cargo publish --dry-run --no-verify --manifest-path "$crate/Cargo.toml"
+            nix develop --command cargo publish --dry-run --no-verify --offline --manifest-path "$crate/Cargo.toml"
           done
           echo "✅ All crates validated"
 
