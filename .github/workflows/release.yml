@@ -63,16 +63,21 @@ jobs:
 
       - name: Commit and push version bump
         if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
           git add .
           git commit -m "chore: bump version to ${{ steps.version.outputs.version }} [skip ci]"
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" git push origin master
+          git pull --rebase origin master
+          git push origin master
 
       - name: Tag version
         if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
           git tag "v${{ steps.version.outputs.version }}"
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" git push origin "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Validate with dry-run
         if: steps.check.outputs.has_changesets == 'true'
