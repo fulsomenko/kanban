@@ -23,8 +23,7 @@ jobs:
       - name: Aggregate changesets
         id: aggregate
         run: |
-          bash scripts/aggregate-changesets.sh > /tmp/aggregate.json || exit 0
-          cat /tmp/aggregate.json >> $GITHUB_OUTPUT
+          bash scripts/aggregate-changesets.sh >> $GITHUB_OUTPUT || exit 0
 
       - uses: cachix/install-nix-action@v27
         if: success()
