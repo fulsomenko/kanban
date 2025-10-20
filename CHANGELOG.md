@@ -1,3 +1,10 @@
+## [0.2.2] - 2025-10-20 ([#44](https://github.com/fulsomenko/kanban/pull/44))
+
+- Fix CI workflow and publish workflow issues
+- Implement monorepo versioning and release validation to prevent cross-crate API mismatches during publishing. Adds validate-release.sh script that runs in CI to catch version skew and dependency resolution issues before they reach crates.io.
+- Fix cross-crate dependency version specifications to enable crates.io publishing. All workspace dependencies now include required version specs.
+
+
 ## [0.2.1] - 2025-10-19 ([#43](https://github.com/fulsomenko/kanban/pull/43))
 
 - Fix CI workflow and publish workflow issues
