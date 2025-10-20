@@ -71,7 +71,7 @@ echo "  (Using --no-verify since workspace crates aren't yet on crates.io)"
 for crate in "${CRATES[@]}"; do
   echo "  Validating $crate..."
   cd "$crate"
-  cargo publish --dry-run --no-verify --quiet --allow-dirty 2>&1 | grep -v "warning:" || true
+  cargo publish --dry-run --no-verify --offline --quiet --allow-dirty 2>&1 | grep -v "warning:" || true
   cd - > /dev/null
 done
 echo "✓ All crates passed dry-run validation"
