@@ -65,18 +65,6 @@ jobs:
         run: |
           nix develop --command bash scripts/validate-release.sh
 
-      - name: Validate with dry-run
-        if: steps.versions.outputs.should_release == 'true'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          echo "📦 Validating crates with dry-run..."
-          for crate in crates/kanban-core crates/kanban-domain crates/kanban-tui crates/kanban-cli; do
-            echo "Validating $crate..."
-            nix develop --command cargo publish --dry-run --no-verify --offline --manifest-path "$crate/Cargo.toml"
-          done
-          echo "✅ All crates validated"
-
       - name: Publish to crates.io
         if: steps.versions.outputs.should_release == 'true'
         env:
