@@ -37,28 +37,28 @@ echo ""
 echo "Step 3: Checking cross-crate dependencies..."
 for crate in "${CRATES[@]}"; do
   if grep -q 'kanban-core = { path = ' "$crate/Cargo.toml" 2>/dev/null; then
-    if grep 'kanban-core = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
-      echo "❌ Error: $crate has hardcoded version for kanban-core"
-      echo "   Use: kanban-core = { path = \"../kanban-core\" }"
+    if ! grep 'kanban-core = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
+      echo "❌ Error: $crate is missing version spec for kanban-core"
+      echo "   Use: kanban-core = { path = \"../kanban-core\", version = \"^0.1\" }"
       exit 1
     fi
   fi
   if grep -q 'kanban-domain = { path = ' "$crate/Cargo.toml" 2>/dev/null; then
-    if grep 'kanban-domain = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
-      echo "❌ Error: $crate has hardcoded version for kanban-domain"
-      echo "   Use: kanban-domain = { path = \"../kanban-domain\" }"
+    if ! grep 'kanban-domain = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
+      echo "❌ Error: $crate is missing version spec for kanban-domain"
+      echo "   Use: kanban-domain = { path = \"../kanban-domain\", version = \"^0.1\" }"
       exit 1
     fi
   fi
   if grep -q 'kanban-tui = { path = ' "$crate/Cargo.toml" 2>/dev/null; then
-    if grep 'kanban-tui = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
-      echo "❌ Error: $crate has hardcoded version for kanban-tui"
-      echo "   Use: kanban-tui = { path = \"../kanban-tui\" }"
+    if ! grep 'kanban-tui = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
+      echo "❌ Error: $crate is missing version spec for kanban-tui"
+      echo "   Use: kanban-tui = { path = \"../kanban-tui\", version = \"^0.1\" }"
       exit 1
     fi
   fi
 done
-echo "✓ Cross-crate dependencies are clean"
+echo "✓ Cross-crate dependencies have proper version specs"
 
 echo ""
 echo "Step 4: Running cargo check on entire workspace..."
