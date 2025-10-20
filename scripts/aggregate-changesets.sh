@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # Aggregate all changesets in .changeset/ and determine the highest bump type
-# Outputs JSON with bump_type and changeset files
+# Outputs key=value format for GitHub Actions
 # Exit 0 if changesets found, exit 1 if none
 
 CHANGESET_DIR=".changeset"
 
 # Find all changeset files (excluding README.md)
-CHANGESETS=$(find "$CHANGESET_DIR" -maxdepth 1 -name "*.md" ! -name "README.md" 2>/dev/null || true)
+CHANGESETS=$(find "$CHANGESET_DIR" -maxdepth 1 -name "*.md" ! -name "README.md" 2>/dev/null | sort || true)
 
 if [ -z "$CHANGESETS" ]; then
   echo "No changesets found"
@@ -30,5 +30,6 @@ elif echo "$BUMP_TYPES" | grep -q "minor"; then
   HIGHEST_BUMP="minor"
 fi
 
-# Output as JSON
-echo "{\"bump_type\": \"$HIGHEST_BUMP\", \"files\": [$(echo "$CHANGESETS" | sed 's/^/"/; s/$/"/' | paste -sd ',' -)]}"
+# Output in GitHub Actions format
+echo "bump_type=$HIGHEST_BUMP"
+echo "files=$CHANGESETS"
