@@ -63,13 +63,12 @@ jobs:
         run: |
           nix develop --command bash scripts/bump-version.sh "${{ steps.aggregate.outputs.bump_type }}"
 
-      - name: Clean and commit
+      - name: Clean changesets and push
         if: success()
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
-          rm -rf .changeset/*.md
-          git add CHANGELOG.md Cargo.toml crates/*/Cargo.toml
-          git commit -m "chore: aggregate changesets and bump version [skip ci]" || echo "No changes to commit"
+          # Changesets already deleted by bump-version.sh
+          # Pull and push the commits made by the scripts
           git pull --rebase origin develop
           git push origin develop
