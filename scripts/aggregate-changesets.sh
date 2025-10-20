@@ -32,4 +32,3 @@ fi
 
 # Output in GitHub Actions format
 echo "bump_type=$HIGHEST_BUMP"
-echo "files=$CHANGESETS"
