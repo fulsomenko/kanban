@@ -79,3 +79,7 @@ rm -f .changeset/*.md
 echo "Version bumped to $NEW_VERSION"
 echo "CHANGELOG.md updated"
 echo "Changesets processed and deleted"
+
+# Commit the version bump
+git add Cargo.toml crates/*/Cargo.toml
+git commit -m "chore: bump version to $NEW_VERSION"

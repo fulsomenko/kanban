@@ -56,3 +56,7 @@ else
 fi
 
 echo "Updated $CHANGELOG with version $VERSION"
+
+# Commit the changelog update
+git add "$CHANGELOG"
+git commit -m "chore: update changelog for version $VERSION"
