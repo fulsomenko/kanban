@@ -35,7 +35,14 @@ if [ -z "$DESCRIPTION" ]; then
 fi
 
 SANITIZED_BRANCH=$(echo "$BRANCH" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-CHANGESET_FILE=".changeset/${SANITIZED_BRANCH}.md"
+
+# Extract issue ID (kan-XX) from branch name if present
+if [[ "$SANITIZED_BRANCH" =~ ^(kan-[0-9]+) ]]; then
+  ISSUE_ID="${BASH_REMATCH[1]}"
+  CHANGESET_FILE=".changeset/${ISSUE_ID}-${SANITIZED_BRANCH#${ISSUE_ID}-}.md"
+else
+  CHANGESET_FILE=".changeset/${SANITIZED_BRANCH}.md"
+fi
 
 mkdir -p .changeset
 
