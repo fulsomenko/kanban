@@ -1,9 +1,11 @@
 name: Release
 
 on:
-  push:
+  pull_request:
     branches:
       - master
+    types:
+      - closed
 
 jobs:
   release:
@@ -11,10 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    if: github.event.pull_request.merged == true
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: master
 
       - name: Check for changesets
         id: check
@@ -50,34 +54,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin git@github.com:fulsomenko/kanban.git
 
-      - name: Bump version and update changelog
-        if: steps.check.outputs.has_changesets == 'true'
-        run: |
-          PR_NUMBER=$(git log -1 --format=%B | grep -oE '#[0-9]+' | head -1 | tr -d '#')
-          nix run .#bump-version -- "$PR_NUMBER"
-
-      - name: Get new version
+      - name: Get current version
         if: steps.check.outputs.has_changesets == 'true'
         id: version
         run: echo "version=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)" >> $GITHUB_OUTPUT
 
-      - name: Commit and push version bump
+      - name: Validate release build
         if: steps.check.outputs.has_changesets == 'true'
-        env:
-          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
-          git add .
-          git commit -m "chore: bump version to ${{ steps.version.outputs.version }} [skip ci]"
-          git pull --rebase origin master
-          git push origin master
-
-      - name: Tag version
-        if: steps.check.outputs.has_changesets == 'true'
-        env:
-          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
-        run: |
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          nix develop --command bash scripts/validate-release.sh
 
       - name: Validate with dry-run
         if: steps.check.outputs.has_changesets == 'true'
@@ -99,6 +84,14 @@ jobs:
           echo "🚀 Publishing to crates.io..."
           nix run .#publish-crates
           echo "✅ Published successfully"
+
+      - name: Tag version
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+        run: |
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub Release
         if: steps.check.outputs.has_changesets == 'true'
