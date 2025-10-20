@@ -8,15 +8,20 @@ if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "main" ]; then
   exit 1
 fi
 
-BUMP_TYPE="${1:-patch}"
+# Determine bump type and description based on arguments
+BUMP_TYPE="patch"
+DESCRIPTION=""
 
-if [[ ! "$BUMP_TYPE" =~ ^(patch|minor|major)$ ]]; then
-  echo "Error: Invalid bump type '$BUMP_TYPE'"
-  echo "Usage: $0 [patch|minor|major]"
-  exit 1
+if [ $# -gt 0 ]; then
+  # Check if first argument is a valid bump type
+  if [[ "$1" =~ ^(patch|minor|major)$ ]]; then
+    BUMP_TYPE="$1"
+    DESCRIPTION="${2:-}"
+  else
+    # First argument is treated as description, bump type defaults to patch
+    DESCRIPTION="$1"
+  fi
 fi
-
-DESCRIPTION="${2:-}"
 
 if [ -z "$DESCRIPTION" ]; then
   BASE_BRANCH="${BASE_BRANCH:-master}"
