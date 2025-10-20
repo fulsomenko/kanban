@@ -1,3 +1,8 @@
+## [0.2.3] - 2025-10-20 ([#47](https://github.com/fulsomenko/kanban/pull/47))
+
+- Testing the release flow
+
+
 ## [0.2.2] - 2025-10-20 ([#44](https://github.com/fulsomenko/kanban/pull/44))
 
 - Fix CI workflow and publish workflow issues
