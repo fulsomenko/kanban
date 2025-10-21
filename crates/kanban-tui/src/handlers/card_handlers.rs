@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode, CardField, Focus};
 use crate::events::EventHandler;
-use crate::view_strategy::{GroupedViewStrategy, KanbanViewStrategy, ViewStrategy};
 use crate::task_list::TaskListId;
+use crate::view_strategy::{GroupedViewStrategy, KanbanViewStrategy, ViewStrategy};
 use kanban_domain::{Card, CardStatus, Column, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -393,7 +393,8 @@ impl App {
                         .iter()
                         .filter(|c| c.column_id == column.id)
                         .count() as i32;
-                    let mut card = Card::new(board, column.id, self.input.as_str().to_string(), position);
+                    let mut card =
+                        Card::new(board, column.id, self.input.as_str().to_string(), position);
                     let new_card_id = card.id;
                     let column_name = column.name.clone();
 
@@ -419,13 +420,28 @@ impl App {
                                     column_name
                                 );
                             } else {
-                                tracing::info!("Creating card: {} (id: {}) in column: {}", card.title, card.id, column_name);
+                                tracing::info!(
+                                    "Creating card: {} (id: {}) in column: {}",
+                                    card.title,
+                                    card.id,
+                                    column_name
+                                );
                             }
                         } else {
-                            tracing::info!("Creating card: {} (id: {}) in column: {}", card.title, card.id, column_name);
+                            tracing::info!(
+                                "Creating card: {} (id: {}) in column: {}",
+                                card.title,
+                                card.id,
+                                column_name
+                            );
                         }
                     } else {
-                        tracing::info!("Creating card: {} (id: {}) in column: {}", card.title, card.id, column_name);
+                        tracing::info!(
+                            "Creating card: {} (id: {}) in column: {}",
+                            card.title,
+                            card.id,
+                            column_name
+                        );
                     }
 
                     self.cards.push(card);
