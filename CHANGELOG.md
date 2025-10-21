@@ -1,4 +1,4 @@
-## [0.1.9] - 2025-10-21 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
+## [0.1.8] - 2025-10-21 && [0.1.9] - 2025-10-21 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
 - Fix critical release workflow issues that prevented successful publishing to crates.io:
 - Fix Nix script path resolution in publish-crates (validate-release now called directly)
@@ -9,31 +9,6 @@
 - Add concurrency control to aggregate workflow to prevent race conditions
 - Remove error suppression that was hiding failures
 - Extract repository URL from git remote instead of hardcoding
-
-
-## [0.1.8] - 2025-10-21
-
-Fix critical release workflow issues that prevented successful publishing to crates.io:
-- Fix Nix script path resolution in publish-crates (validate-release now called directly)
-- Use portable sed syntax compatible with both Linux and macOS
-- Preserve .changeset/README.md when cleaning up changesets
-- Correct changeset description parsing in update-changelog script
-- Add runtime dependencies (cargo, git, grep, sed, find) to Nix shell applications
-- Add concurrency control to aggregate workflow to prevent race conditions
-- Remove error suppression that was hiding failures
-- Extract repository URL from git remote instead of hardcoding
-
-
-## [0.1.8] - 2025-10-21 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
-
-- Testing the release flow
-
-
-## [0.1.7] - 2025-10-21
-
----
-Testing the release flow
-
 
 ## [0.2.1] - 2025-10-20 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 

@@ -1,17 +1,6 @@
 ## [0.1.8] - 2025-10-21 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
 - Testing the release flow
-
-
-## [0.1.7] - 2025-10-21
-
----
-Testing the release flow
-
-
-## [0.2.1] - 2025-10-20 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
-
-- Testing the release flow
 - Created aggregate-changesets.sh: collects all changesets and determines highest priority bump type
 - Created update-changelog.sh: merges changesets into CHANGELOG.md with version header and date
 - Modified aggregate-changesets.yml: aggregates all pending changesets into single version bump, updates changelog, cleans up changesets
