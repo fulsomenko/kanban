@@ -393,10 +393,41 @@ impl App {
                         .iter()
                         .filter(|c| c.column_id == column.id)
                         .count() as i32;
-                    let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
+                    let mut card = Card::new(board, column.id, self.input.as_str().to_string(), position);
                     let new_card_id = card.id;
                     let column_name = column.name.clone();
-                    tracing::info!("Creating card: {} (id: {}) in column: {}", card.title, card.id, column_name);
+
+                    let board_columns: Vec<_> = self
+                        .columns
+                        .iter()
+                        .filter(|col| col.board_id == bid)
+                        .collect();
+
+                    if board_columns.len() > 2 {
+                        let sorted_cols: Vec<_> = {
+                            let mut cols = board_columns.clone();
+                            cols.sort_by_key(|col| col.position);
+                            cols
+                        };
+                        if let Some(last_col) = sorted_cols.last() {
+                            if last_col.id == column.id {
+                                card.update_status(CardStatus::Done);
+                                tracing::info!(
+                                    "Creating card: {} (id: {}) in column: {} [marked as complete]",
+                                    card.title,
+                                    card.id,
+                                    column_name
+                                );
+                            } else {
+                                tracing::info!("Creating card: {} (id: {}) in column: {}", card.title, card.id, column_name);
+                            }
+                        } else {
+                            tracing::info!("Creating card: {} (id: {}) in column: {}", card.title, card.id, column_name);
+                        }
+                    } else {
+                        tracing::info!("Creating card: {} (id: {}) in column: {}", card.title, card.id, column_name);
+                    }
+
                     self.cards.push(card);
 
                     self.refresh_view();
