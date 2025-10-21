@@ -359,34 +359,49 @@ impl App {
 
     pub fn create_card(&mut self) {
         if let Some(idx) = self.active_board_index {
-            if let Some(board) = self.boards.get_mut(idx) {
-                let column = self
-                    .columns
-                    .iter()
-                    .find(|col| col.board_id == board.id)
-                    .cloned();
+            let focused_col_id = self.get_focused_column_id();
+            let board_id = self.boards.get(idx).map(|b| b.id);
 
-                let column = match column {
-                    Some(col) => col,
-                    None => {
-                        let new_column = Column::new(board.id, "Todo".to_string(), 0);
-                        self.columns.push(new_column.clone());
-                        new_column
-                    }
-                };
+            if let Some(bid) = board_id {
+                if let Some(board) = self.boards.get_mut(idx) {
+                    let target_column_id = if let Some(focused_col_id) = focused_col_id {
+                        Some(focused_col_id)
+                    } else {
+                        self.columns
+                            .iter()
+                            .find(|col| col.board_id == bid)
+                            .map(|col| col.id)
+                    };
 
-                let position = self
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == column.id)
-                    .count() as i32;
-                let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
-                let new_card_id = card.id;
-                tracing::info!("Creating card: {} (id: {})", card.title, card.id);
-                self.cards.push(card);
+                    let column = if let Some(col_id) = target_column_id {
+                        self.columns.iter().find(|col| col.id == col_id).cloned()
+                    } else {
+                        None
+                    };
 
-                self.refresh_view();
-                self.select_card_by_id(new_card_id);
+                    let column = match column {
+                        Some(col) => col,
+                        None => {
+                            let new_column = Column::new(bid, "Todo".to_string(), 0);
+                            self.columns.push(new_column.clone());
+                            new_column
+                        }
+                    };
+
+                    let position = self
+                        .cards
+                        .iter()
+                        .filter(|c| c.column_id == column.id)
+                        .count() as i32;
+                    let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
+                    let new_card_id = card.id;
+                    let column_name = column.name.clone();
+                    tracing::info!("Creating card: {} (id: {}) in column: {}", card.title, card.id, column_name);
+                    self.cards.push(card);
+
+                    self.refresh_view();
+                    self.select_card_by_id(new_card_id);
+                }
             }
         }
     }
