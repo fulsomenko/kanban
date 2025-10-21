@@ -352,6 +352,8 @@ impl App {
                                         self.column_selection.set(Some(current_col_idx - 1));
                                     }
                                 }
+                                self.refresh_view();
+                                self.select_card_by_id(card_id);
                             } else {
                                 self.refresh_view();
                                 self.select_card_by_id(card_id);
@@ -409,6 +411,8 @@ impl App {
                                         self.column_selection.set(Some(current_col_idx + 1));
                                     }
                                 }
+                                self.refresh_view();
+                                self.select_card_by_id(card_id);
                             } else {
                                 self.refresh_view();
                                 self.select_card_by_id(card_id);
