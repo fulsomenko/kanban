@@ -214,12 +214,15 @@ impl App {
                     tracing::info!("Toggled card '{}' to status: {:?}", card.title, new_status);
                 }
             }
+            self.refresh_view();
+            self.select_card_by_id(card_id);
         }
     }
 
     fn toggle_selected_cards_completion(&mut self) {
         let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
         let mut toggled_count = 0;
+        let first_card_id = card_ids.first().copied();
 
         let last_column_id = if let Some(board_idx) = self.active_board_index {
             if let Some(board) = self.boards.get(board_idx) {
@@ -273,6 +276,10 @@ impl App {
 
         tracing::info!("Toggled {} cards completion status", toggled_count);
         self.selected_cards.clear();
+        self.refresh_view();
+        if let Some(card_id) = first_card_id {
+            self.select_card_by_id(card_id);
+        }
     }
 
     pub fn create_card(&mut self) {
