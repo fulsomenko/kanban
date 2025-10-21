@@ -164,18 +164,53 @@ impl App {
                 CardStatus::Done
             };
 
-            let last_column_id = if new_status == CardStatus::Done {
-                if let Some(board_idx) = self.active_board_index {
-                    if let Some(board) = self.boards.get(board_idx) {
-                        let mut board_columns: Vec<_> = self
-                            .columns
-                            .iter()
-                            .filter(|col| col.board_id == board.id)
-                            .collect();
-                        board_columns.sort_by_key(|col| col.position);
-                        board_columns.last().map(|col| col.id)
+            let target_column_and_position = if let Some(board_idx) = self.active_board_index {
+                if let Some(board) = self.boards.get(board_idx) {
+                    let mut board_columns: Vec<_> = self
+                        .columns
+                        .iter()
+                        .filter(|col| col.board_id == board.id)
+                        .collect();
+                    board_columns.sort_by_key(|col| col.position);
+
+                    let old_column_id = card.column_id;
+                    let current_column_pos =
+                        board_columns.iter().position(|col| col.id == old_column_id);
+
+                    if new_status == CardStatus::Done {
+                        // Moving to Done: move to last column
+                        if let Some(last_col) = board_columns.last() {
+                            if last_col.id != old_column_id {
+                                let position = self
+                                    .cards
+                                    .iter()
+                                    .filter(|c| c.column_id == last_col.id)
+                                    .count() as i32;
+                                Some((last_col.id, position, "last"))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     } else {
-                        None
+                        // Moving from Done to Todo: move to second-to-last column if in last column
+                        if let Some(pos) = current_column_pos {
+                            if pos == board_columns.len() - 1 && board_columns.len() > 1 {
+                                // Currently in last column, move to second-to-last
+                                let target_col = &board_columns[board_columns.len() - 2];
+                                let position = self
+                                    .cards
+                                    .iter()
+                                    .filter(|c| c.column_id == target_col.id)
+                                    .count() as i32;
+                                Some((target_col.id, position, "second-to-last"))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     }
                 } else {
                     None
@@ -184,87 +219,98 @@ impl App {
                 None
             };
 
-            let new_position = if let Some(target_column_id) = last_column_id {
-                Some(
-                    self.cards
-                        .iter()
-                        .filter(|c| c.column_id == target_column_id)
-                        .count() as i32,
-                )
-            } else {
-                None
-            };
-
             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                let old_column_id = card.column_id;
                 card.update_status(new_status);
 
-                if let (Some(target_column_id), Some(position)) = (last_column_id, new_position) {
-                    if old_column_id != target_column_id {
-                        card.move_to_column(target_column_id, position);
-                        tracing::info!(
-                            "Moved card '{}' to last column (status: {:?})",
-                            card.title,
-                            new_status
-                        );
-                    } else {
-                        tracing::info!("Toggled card '{}' to status: {:?}", card.title, new_status);
-                    }
+                if let Some((target_column_id, position, column_desc)) = target_column_and_position
+                {
+                    card.move_to_column(target_column_id, position);
+                    tracing::info!(
+                        "Moved card '{}' to {} column (status: {:?})",
+                        card.title,
+                        column_desc,
+                        new_status
+                    );
                 } else {
                     tracing::info!("Toggled card '{}' to status: {:?}", card.title, new_status);
                 }
             }
+            self.refresh_view();
+            self.select_card_by_id(card_id);
         }
     }
 
     fn toggle_selected_cards_completion(&mut self) {
         let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
         let mut toggled_count = 0;
+        let first_card_id = card_ids.first().copied();
 
-        let last_column_id = if let Some(board_idx) = self.active_board_index {
+        let board_columns: Vec<_> = if let Some(board_idx) = self.active_board_index {
             if let Some(board) = self.boards.get(board_idx) {
-                let mut board_columns: Vec<_> = self
+                let mut cols: Vec<_> = self
                     .columns
                     .iter()
                     .filter(|col| col.board_id == board.id)
                     .collect();
-                board_columns.sort_by_key(|col| col.position);
-                board_columns.last().map(|col| col.id)
+                cols.sort_by_key(|col| col.position);
+                cols
             } else {
-                None
+                Vec::new()
             }
         } else {
-            None
+            Vec::new()
         };
 
         for card_id in card_ids {
-            let new_position = if let Some(target_column_id) = last_column_id {
-                Some(
-                    self.cards
-                        .iter()
-                        .filter(|c| c.column_id == target_column_id)
-                        .count() as i32,
-                )
+            // First, get card info without mutable borrow
+            let (old_column_id, old_status) =
+                if let Some(card) = self.cards.iter().find(|c| c.id == card_id) {
+                    (card.column_id, card.status)
+                } else {
+                    continue;
+                };
+
+            let new_status = if old_status == CardStatus::Done {
+                CardStatus::Todo
             } else {
-                None
+                CardStatus::Done
             };
 
-            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                let old_column_id = card.column_id;
-                let new_status = if card.status == CardStatus::Done {
-                    CardStatus::Todo
+            let current_column_pos = board_columns.iter().position(|col| col.id == old_column_id);
+
+            // Determine target column
+            let target_column_id = if new_status == CardStatus::Done {
+                // Moving to Done: move to last column
+                board_columns.last().and_then(|last_col| {
+                    if last_col.id != old_column_id {
+                        Some(last_col.id)
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                // Moving from Done to Todo: move to second-to-last column if in last column
+                if let Some(pos) = current_column_pos {
+                    if pos == board_columns.len() - 1 && board_columns.len() > 1 {
+                        Some(board_columns[board_columns.len() - 2].id)
+                    } else {
+                        None
+                    }
                 } else {
-                    CardStatus::Done
-                };
+                    None
+                }
+            };
+
+            // Calculate position in target column before mutable borrow
+            let target_position = target_column_id
+                .map(|col_id| self.cards.iter().filter(|c| c.column_id == col_id).count() as i32);
+
+            // Now mutate the card with calculated values
+            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                 card.update_status(new_status);
 
-                if new_status == CardStatus::Done {
-                    if let (Some(target_column_id), Some(position)) = (last_column_id, new_position)
-                    {
-                        if old_column_id != target_column_id {
-                            card.move_to_column(target_column_id, position);
-                        }
-                    }
+                if let (Some(target_col_id), Some(position)) = (target_column_id, target_position) {
+                    card.move_to_column(target_col_id, position);
                 }
 
                 toggled_count += 1;
@@ -273,6 +319,10 @@ impl App {
 
         tracing::info!("Toggled {} cards completion status", toggled_count);
         self.selected_cards.clear();
+        self.refresh_view();
+        if let Some(card_id) = first_card_id {
+            self.select_card_by_id(card_id);
+        }
     }
 
     pub fn create_card(&mut self) {
@@ -352,6 +402,8 @@ impl App {
                                         self.column_selection.set(Some(current_col_idx - 1));
                                     }
                                 }
+                                self.refresh_view();
+                                self.select_card_by_id(card_id);
                             } else {
                                 self.refresh_view();
                                 self.select_card_by_id(card_id);
@@ -409,6 +461,8 @@ impl App {
                                         self.column_selection.set(Some(current_col_idx + 1));
                                     }
                                 }
+                                self.refresh_view();
+                                self.select_card_by_id(card_id);
                             } else {
                                 self.refresh_view();
                                 self.select_card_by_id(card_id);
