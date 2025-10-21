@@ -1,3 +1,9 @@
+## [0.1.7] - 2025-10-21
+
+---
+Testing the release flow
+
+
 ## [0.2.1] - 2025-10-20 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
 - Testing the release flow
