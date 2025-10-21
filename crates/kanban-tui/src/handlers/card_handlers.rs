@@ -174,9 +174,8 @@ impl App {
                     board_columns.sort_by_key(|col| col.position);
 
                     let old_column_id = card.column_id;
-                    let current_column_pos = board_columns
-                        .iter()
-                        .position(|col| col.id == old_column_id);
+                    let current_column_pos =
+                        board_columns.iter().position(|col| col.id == old_column_id);
 
                     if new_status == CardStatus::Done {
                         // Moving to Done: move to last column
@@ -223,7 +222,8 @@ impl App {
             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                 card.update_status(new_status);
 
-                if let Some((target_column_id, position, column_desc)) = target_column_and_position {
+                if let Some((target_column_id, position, column_desc)) = target_column_and_position
+                {
                     card.move_to_column(target_column_id, position);
                     tracing::info!(
                         "Moved card '{}' to {} column (status: {:?})",
@@ -263,11 +263,12 @@ impl App {
 
         for card_id in card_ids {
             // First, get card info without mutable borrow
-            let (old_column_id, old_status) = if let Some(card) = self.cards.iter().find(|c| c.id == card_id) {
-                (card.column_id, card.status)
-            } else {
-                continue;
-            };
+            let (old_column_id, old_status) =
+                if let Some(card) = self.cards.iter().find(|c| c.id == card_id) {
+                    (card.column_id, card.status)
+                } else {
+                    continue;
+                };
 
             let new_status = if old_status == CardStatus::Done {
                 CardStatus::Todo
@@ -275,9 +276,7 @@ impl App {
                 CardStatus::Done
             };
 
-            let current_column_pos = board_columns
-                .iter()
-                .position(|col| col.id == old_column_id);
+            let current_column_pos = board_columns.iter().position(|col| col.id == old_column_id);
 
             // Determine target column
             let target_column_id = if new_status == CardStatus::Done {
@@ -303,12 +302,8 @@ impl App {
             };
 
             // Calculate position in target column before mutable borrow
-            let target_position = target_column_id.map(|col_id| {
-                self.cards
-                    .iter()
-                    .filter(|c| c.column_id == col_id)
-                    .count() as i32
-            });
+            let target_position = target_column_id
+                .map(|col_id| self.cards.iter().filter(|c| c.column_id == col_id).count() as i32);
 
             // Now mutate the card with calculated values
             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
