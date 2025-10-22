@@ -579,31 +579,94 @@ fn render_sprint_detail_with_tasks(
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
-    let uncompleted_cards = app.get_sprint_uncompleted_cards(sprint.id);
-    let completed_cards = app.get_sprint_completed_cards(sprint.id);
-    tracing::info!("render_sprint_detail_with_tasks: sprint_id={}, uncompleted={}, completed={}, total_cards_in_app={}", sprint.id, uncompleted_cards.len(), completed_cards.len(), app.cards.len());
-
-    render_sprint_task_panel(
+    render_sprint_task_panel_with_selection(
         app,
         frame,
         chunks[0],
         sprint,
         board,
-        &uncompleted_cards,
+        &app.sprint_uncompleted_cards,
         "Uncompleted",
         app.sprint_task_panel == crate::app::SprintTaskPanel::Uncompleted,
     );
 
-    render_sprint_task_panel(
+    render_sprint_task_panel_with_selection(
         app,
         frame,
         chunks[1],
         sprint,
         board,
-        &completed_cards,
+        &app.sprint_completed_cards,
         "Completed",
         app.sprint_task_panel == crate::app::SprintTaskPanel::Completed,
     );
+}
+
+fn render_sprint_task_panel_with_selection(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    sprint: &Sprint,
+    board: &kanban_domain::Board,
+    task_list: &crate::task_list::TaskList,
+    title_suffix: &str,
+    is_focused: bool,
+) {
+    let mut lines = vec![];
+    let selected_idx = task_list.get_selected_index();
+
+    if task_list.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  (no tasks)",
+            label_text(),
+        )));
+    } else {
+        for (idx, card_id) in task_list.cards.iter().enumerate() {
+            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                let is_selected = selected_idx == Some(idx) && is_focused;
+                let line = render_card_list_item(CardListItemConfig {
+                    card,
+                    board,
+                    sprints: &app.sprints,
+                    is_selected,
+                    is_focused,
+                    is_multi_selected: false,
+                    show_sprint_name: false,
+                });
+                lines.push(line);
+            }
+        }
+    }
+
+    // Calculate points from cards in this panel
+    let cards: Vec<&kanban_domain::Card> = task_list
+        .cards
+        .iter()
+        .filter_map(|card_id| app.cards.iter().find(|c| c.id == *card_id))
+        .collect();
+    let points = App::calculate_points(&cards);
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        format!("Points: {}", points),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )));
+
+    let border_style = if is_focused {
+        focused_border()
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let content = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(border_style)
+            .title(format!("{} ({})", title_suffix, task_list.len())),
+    );
+    frame.render_widget(content, area);
 }
 
 fn render_sprint_task_panel(
