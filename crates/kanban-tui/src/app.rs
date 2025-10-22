@@ -1,5 +1,6 @@
 use crate::{
     card_list::{CardList, CardListId},
+    card_list_component::{CardListComponent, CardListComponentConfig, CardListActionType},
     clipboard,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
@@ -54,6 +55,7 @@ pub struct App {
     pub sprint_uncompleted_cards: CardList,
     pub sprint_completed_cards: CardList,
     pub view_strategy: Box<dyn ViewStrategy>,
+    pub card_list_component: CardListComponent,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -165,6 +167,10 @@ impl App {
             sprint_uncompleted_cards: CardList::new(CardListId::All),
             sprint_completed_cards: CardList::new(CardListId::All),
             view_strategy: Box::new(GroupedViewStrategy::new()),
+            card_list_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new(),
+            ),
         };
 
         if let Some(ref filename) = save_file {
@@ -452,6 +458,13 @@ impl App {
                 );
             }
         }
+        self.sync_card_list_component();
+    }
+
+    pub fn sync_card_list_component(&mut self) {
+        if let Some(active_list) = self.view_strategy.get_active_task_list() {
+            self.card_list_component.update_cards(active_list.cards.clone());
+        }
     }
 
     pub fn refresh_preview(&mut self) {
@@ -467,6 +480,7 @@ impl App {
                 );
             }
         }
+        self.sync_card_list_component();
     }
 
     pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
@@ -483,6 +497,7 @@ impl App {
         } else {
             self.refresh_preview();
         }
+        self.sync_card_list_component();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
