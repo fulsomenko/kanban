@@ -741,10 +741,12 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let desc_config = FieldSectionConfig::new("Description")
                         .with_focus_indicator("Description [3]")
                         .focused(app.card_focus == CardFocus::Description);
-                    let desc_text = card.description.as_deref().unwrap_or("No description");
-                    let desc = Paragraph::new(desc_text)
-                        .style(normal_text())
-                        .block(desc_config.block());
+                    let desc_lines = if let Some(desc_text) = &card.description {
+                        crate::markdown_renderer::render_markdown(desc_text)
+                    } else {
+                        vec![Line::from(Span::styled("No description", label_text()))]
+                    };
+                    let desc = Paragraph::new(desc_lines).block(desc_config.block());
                     frame.render_widget(desc, chunks[2]);
                 }
             }
