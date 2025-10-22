@@ -2,7 +2,6 @@ use pulldown_cmark::{CowStr, Event, Parser, Tag, TagEnd};
 use ratatui::prelude::Stylize;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use syntect::parsing::SyntaxSet;
 
 pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let parser = Parser::new(text);
@@ -151,13 +150,7 @@ impl MarkdownRenderer {
     }
 }
 
-fn highlight_code(language: &str, code: &str) -> Vec<Vec<Span<'static>>> {
-    let syntax_set = SyntaxSet::load_defaults_newlines();
-    let syntax = syntax_set
-        .find_syntax_by_token(language)
-        .or_else(|| syntax_set.find_syntax_by_extension(language))
-        .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
-
+fn highlight_code(_language: &str, code: &str) -> Vec<Vec<Span<'static>>> {
     let mut result = Vec::new();
     for line in code.lines() {
         let mut line_spans = Vec::new();
