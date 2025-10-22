@@ -351,6 +351,7 @@ impl App {
                     board,
                     &self.cards,
                     &self.columns,
+                    &self.sprints,
                     self.active_sprint_filter,
                     self.hide_assigned_cards,
                 );
@@ -365,6 +366,7 @@ impl App {
                     board,
                     &self.cards,
                     &self.columns,
+                    &self.sprints,
                     self.active_sprint_filter,
                     self.hide_assigned_cards,
                 );
