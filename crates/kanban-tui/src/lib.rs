@@ -7,6 +7,7 @@ pub mod events;
 pub mod export;
 pub mod handlers;
 pub mod input;
+pub mod markdown_renderer;
 pub mod selection;
 pub mod services;
 pub mod task_list;
