@@ -1,7 +1,7 @@
 use crate::services::filter::CardFilter;
 use crate::services::{get_sorter_for_field, BoardFilter, OrderedSorter};
 use crate::task_list::{TaskList, TaskListId};
-use kanban_domain::{Board, Card, Column};
+use kanban_domain::{Board, Card, Column, Sprint, SprintStatus};
 use uuid::Uuid;
 
 pub trait ViewStrategy {
@@ -15,6 +15,7 @@ pub trait ViewStrategy {
         board: &Board,
         all_cards: &[Card],
         all_columns: &[Column],
+        all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
     );
@@ -65,16 +66,28 @@ impl ViewStrategy for FlatViewStrategy {
         board: &Board,
         all_cards: &[Card],
         all_columns: &[Column],
+        all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
     ) {
         let board_filter = BoardFilter::new(board.id, all_columns);
+
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
 
         let mut filtered_cards: Vec<&Card> = all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
                 }
                 if let Some(sprint_id) = active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
@@ -185,6 +198,7 @@ impl ViewStrategy for GroupedViewStrategy {
         board: &Board,
         all_cards: &[Card],
         all_columns: &[Column],
+        all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
     ) {
@@ -196,11 +210,22 @@ impl ViewStrategy for GroupedViewStrategy {
 
         let board_filter = BoardFilter::new(board.id, all_columns);
 
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
         let filtered_cards: Vec<&Card> = all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
                 }
                 if let Some(sprint_id) = active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
@@ -343,6 +368,7 @@ impl ViewStrategy for KanbanViewStrategy {
         board: &Board,
         all_cards: &[Card],
         all_columns: &[Column],
+        all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
     ) {
@@ -354,11 +380,22 @@ impl ViewStrategy for KanbanViewStrategy {
 
         let board_filter = BoardFilter::new(board.id, all_columns);
 
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
         let filtered_cards: Vec<&Card> = all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
                 }
                 if let Some(sprint_id) = active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
