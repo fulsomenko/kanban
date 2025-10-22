@@ -49,6 +49,7 @@ pub struct App {
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
+    pub sprint_task_panel: SprintTaskPanel,
     pub view_strategy: Box<dyn ViewStrategy>,
 }
 
@@ -72,6 +73,12 @@ pub enum BoardFocus {
     Settings,
     Sprints,
     Columns,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SprintTaskPanel {
+    Uncompleted,
+    Completed,
 }
 
 pub enum CardField {
@@ -151,6 +158,7 @@ impl App {
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
+            sprint_task_panel: SprintTaskPanel::Uncompleted,
             view_strategy: Box::new(GroupedViewStrategy::new()),
         };
 
@@ -371,6 +379,31 @@ impl App {
         if let Some(task_list) = self.view_strategy.get_active_task_list_mut() {
             task_list.select_card(card_id);
         }
+    }
+
+    pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        self.cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id))
+            .collect()
+    }
+
+    pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        self.cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
+            .collect()
+    }
+
+    pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        self.cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
+            .collect()
+    }
+
+    pub fn calculate_points(cards: &[&Card]) -> u32 {
+        cards.iter().filter_map(|card| card.points.map(|p| p as u32)).sum()
     }
 
     pub fn refresh_view(&mut self) {
