@@ -742,6 +742,7 @@ dependencies = [
  "crossterm",
  "kanban-core",
  "kanban-domain",
+ "once_cell",
  "pulldown-cmark",
  "ratatui",
  "serde",
