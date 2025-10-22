@@ -27,6 +27,20 @@ impl App {
             KeyCode::Char('3') => {
                 self.card_focus = CardFocus::Description;
             }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.card_focus = match self.card_focus {
+                    CardFocus::Title => CardFocus::Metadata,
+                    CardFocus::Metadata => CardFocus::Description,
+                    CardFocus::Description => CardFocus::Title,
+                };
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.card_focus = match self.card_focus {
+                    CardFocus::Title => CardFocus::Description,
+                    CardFocus::Description => CardFocus::Metadata,
+                    CardFocus::Metadata => CardFocus::Title,
+                };
+            }
             KeyCode::Char('y') => {
                 self.copy_branch_name();
             }
@@ -159,8 +173,8 @@ impl App {
                     self.handle_move_column_up();
                 }
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                if self.board_focus == BoardFocus::Sprints {
+            KeyCode::Char('j') | KeyCode::Down => match self.board_focus {
+                BoardFocus::Sprints => {
                     if let Some(board_idx) = self.board_selection.get() {
                         if let Some(board) = self.boards.get(board_idx) {
                             let sprint_count = self
@@ -168,10 +182,17 @@ impl App {
                                 .iter()
                                 .filter(|s| s.board_id == board.id)
                                 .count();
-                            self.sprint_selection.next(sprint_count);
+                            let current_idx = self.sprint_selection.get().unwrap_or(0);
+                            if current_idx >= sprint_count - 1 && sprint_count > 0 {
+                                self.board_focus = BoardFocus::Columns;
+                                self.column_selection.set(Some(0));
+                            } else {
+                                self.sprint_selection.next(sprint_count);
+                            }
                         }
                     }
-                } else if self.board_focus == BoardFocus::Columns {
+                }
+                BoardFocus::Columns => {
                     if let Some(board_idx) = self.board_selection.get() {
                         if let Some(board) = self.boards.get(board_idx) {
                             let column_count = self
@@ -179,18 +200,62 @@ impl App {
                                 .iter()
                                 .filter(|col| col.board_id == board.id)
                                 .count();
-                            self.column_selection.next(column_count);
+                            let current_idx = self.column_selection.get().unwrap_or(0);
+                            if current_idx >= column_count - 1 && column_count > 0 {
+                                self.board_focus = BoardFocus::Name;
+                                self.sprint_selection.set(Some(0));
+                            } else {
+                                self.column_selection.next(column_count);
+                            }
                         }
                     }
                 }
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                if self.board_focus == BoardFocus::Sprints {
-                    self.sprint_selection.prev();
-                } else if self.board_focus == BoardFocus::Columns {
-                    self.column_selection.prev();
+                _ => {
+                    self.board_focus = match self.board_focus {
+                        BoardFocus::Name => BoardFocus::Description,
+                        BoardFocus::Description => BoardFocus::Settings,
+                        BoardFocus::Settings => BoardFocus::Sprints,
+                        BoardFocus::Sprints => BoardFocus::Columns,
+                        BoardFocus::Columns => BoardFocus::Name,
+                    };
+                    if self.board_focus == BoardFocus::Sprints {
+                        self.sprint_selection.set(Some(0));
+                    } else if self.board_focus == BoardFocus::Columns {
+                        self.column_selection.set(Some(0));
+                    }
                 }
-            }
+            },
+            KeyCode::Char('k') | KeyCode::Up => match self.board_focus {
+                BoardFocus::Sprints => {
+                    let current_idx = self.sprint_selection.get().unwrap_or(0);
+                    if current_idx == 0 {
+                        self.board_focus = BoardFocus::Settings;
+                    } else {
+                        self.sprint_selection.prev();
+                    }
+                }
+                BoardFocus::Columns => {
+                    let current_idx = self.column_selection.get().unwrap_or(0);
+                    if current_idx == 0 {
+                        self.board_focus = BoardFocus::Sprints;
+                        self.sprint_selection.set(Some(0));
+                    } else {
+                        self.column_selection.prev();
+                    }
+                }
+                _ => {
+                    self.board_focus = match self.board_focus {
+                        BoardFocus::Name => BoardFocus::Columns,
+                        BoardFocus::Description => BoardFocus::Name,
+                        BoardFocus::Settings => BoardFocus::Description,
+                        BoardFocus::Sprints => BoardFocus::Settings,
+                        BoardFocus::Columns => BoardFocus::Sprints,
+                    };
+                    if self.board_focus == BoardFocus::Columns {
+                        self.column_selection.set(Some(0));
+                    }
+                }
+            },
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if self.board_focus == BoardFocus::Sprints {
                     if let Some(sprint_idx) = self.sprint_selection.get() {
