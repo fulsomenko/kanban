@@ -183,7 +183,13 @@ impl App {
                                     .iter()
                                     .filter(|s| s.board_id == board.id)
                                     .count();
-                                self.sprint_selection.next(sprint_count);
+                                let current_idx = self.sprint_selection.get().unwrap_or(0);
+                                if current_idx >= sprint_count - 1 && sprint_count > 0 {
+                                    self.board_focus = BoardFocus::Columns;
+                                    self.column_selection.set(Some(0));
+                                } else {
+                                    self.sprint_selection.next(sprint_count);
+                                }
                             }
                         }
                     }
@@ -195,7 +201,13 @@ impl App {
                                     .iter()
                                     .filter(|col| col.board_id == board.id)
                                     .count();
-                                self.column_selection.next(column_count);
+                                let current_idx = self.column_selection.get().unwrap_or(0);
+                                if current_idx >= column_count - 1 && column_count > 0 {
+                                    self.board_focus = BoardFocus::Name;
+                                    self.sprint_selection.set(Some(0));
+                                } else {
+                                    self.column_selection.next(column_count);
+                                }
                             }
                         }
                     }
@@ -207,16 +219,32 @@ impl App {
                             BoardFocus::Sprints => BoardFocus::Columns,
                             BoardFocus::Columns => BoardFocus::Name,
                         };
+                        if self.board_focus == BoardFocus::Sprints {
+                            self.sprint_selection.set(Some(0));
+                        } else if self.board_focus == BoardFocus::Columns {
+                            self.column_selection.set(Some(0));
+                        }
                     }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 match self.board_focus {
                     BoardFocus::Sprints => {
-                        self.sprint_selection.prev();
+                        let current_idx = self.sprint_selection.get().unwrap_or(0);
+                        if current_idx == 0 {
+                            self.board_focus = BoardFocus::Settings;
+                        } else {
+                            self.sprint_selection.prev();
+                        }
                     }
                     BoardFocus::Columns => {
-                        self.column_selection.prev();
+                        let current_idx = self.column_selection.get().unwrap_or(0);
+                        if current_idx == 0 {
+                            self.board_focus = BoardFocus::Sprints;
+                            self.sprint_selection.set(Some(0));
+                        } else {
+                            self.column_selection.prev();
+                        }
                     }
                     _ => {
                         self.board_focus = match self.board_focus {
@@ -226,6 +254,9 @@ impl App {
                             BoardFocus::Sprints => BoardFocus::Settings,
                             BoardFocus::Columns => BoardFocus::Sprints,
                         };
+                        if self.board_focus == BoardFocus::Columns {
+                            self.column_selection.set(Some(0));
+                        }
                     }
                 }
             }
