@@ -1,4 +1,5 @@
 use pulldown_cmark::{CowStr, Event, Parser, Tag, TagEnd};
+use ratatui::prelude::Stylize;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use syntect::parsing::SyntaxSet;
@@ -44,7 +45,6 @@ impl MarkdownRenderer {
             Event::Text(text) => self.handle_text(text),
             Event::Code(code) => self.handle_inline_code(code),
             Event::SoftBreak | Event::HardBreak => self.handle_break(),
-            Event::SuspiciousUrl(_) => {}
             _ => {}
         }
     }
