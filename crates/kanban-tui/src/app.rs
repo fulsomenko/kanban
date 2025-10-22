@@ -389,17 +389,23 @@ impl App {
     }
 
     pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        self.cards
+        let cards: Vec<&Card> = self
+            .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
-            .collect()
+            .collect();
+        tracing::debug!("get_sprint_completed_cards({}): found {} cards", sprint_id, cards.len());
+        cards
     }
 
     pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        self.cards
+        let cards: Vec<&Card> = self
+            .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
-            .collect()
+            .collect();
+        tracing::debug!("get_sprint_uncompleted_cards({}): found {} cards", sprint_id, cards.len());
+        cards
     }
 
     pub fn calculate_points(cards: &[&Card]) -> u32 {

@@ -581,6 +581,7 @@ fn render_sprint_detail_with_tasks(
 
     let uncompleted_cards = app.get_sprint_uncompleted_cards(sprint.id);
     let completed_cards = app.get_sprint_completed_cards(sprint.id);
+    tracing::info!("render_sprint_detail_with_tasks: sprint_id={}, uncompleted={}, completed={}, total_cards_in_app={}", sprint.id, uncompleted_cards.len(), completed_cards.len(), app.cards.len());
 
     render_sprint_task_panel(
         app,
