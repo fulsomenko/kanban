@@ -270,6 +270,9 @@ impl App {
                                 if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
                                     self.active_sprint_index = Some(*actual_idx);
                                     self.active_board_index = Some(board_idx);
+                                    if let Some(sprint) = self.sprints.get(*actual_idx) {
+                                        self.populate_sprint_task_lists(sprint.id);
+                                    }
                                     self.mode = AppMode::SprintDetail;
                                 }
                             }
@@ -322,6 +325,35 @@ impl App {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
                             self.sprint_task_panel = SprintTaskPanel::Completed;
                         }
+                    }
+                }
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.sprint_task_panel == SprintTaskPanel::Uncompleted {
+                    self.sprint_uncompleted_cards.navigate_down();
+                } else {
+                    self.sprint_completed_cards.navigate_down();
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.sprint_task_panel == SprintTaskPanel::Uncompleted {
+                    self.sprint_uncompleted_cards.navigate_up();
+                } else {
+                    self.sprint_completed_cards.navigate_up();
+                }
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                let selected_card_id = if self.sprint_task_panel == SprintTaskPanel::Uncompleted {
+                    self.sprint_uncompleted_cards.get_selected_card_id()
+                } else {
+                    self.sprint_completed_cards.get_selected_card_id()
+                };
+
+                if let Some(card_id) = selected_card_id {
+                    if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                        self.active_card_index = Some(card_idx);
+                        self.mode = AppMode::CardDetail;
+                        self.card_focus = CardFocus::Title;
                     }
                 }
             }
