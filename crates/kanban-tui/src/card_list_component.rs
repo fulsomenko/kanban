@@ -1,4 +1,5 @@
 use crate::card_list::{CardList, CardListId};
+use crossterm::event::KeyCode;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -223,5 +224,114 @@ impl CardListComponent {
 
     pub fn help_text(&self) -> String {
         self.config.help_text()
+    }
+
+    pub fn handle_key(&mut self, key: KeyCode) -> Option<CardListAction> {
+        match key {
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.config.is_action_enabled(&CardListActionType::Navigation) {
+                    self.navigate_down();
+                }
+                None
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.config.is_action_enabled(&CardListActionType::Navigation) {
+                    self.navigate_up();
+                }
+                None
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                if self.config.is_action_enabled(&CardListActionType::Selection) {
+                    self.get_selected_card_id().map(CardListAction::Select)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('e') => {
+                if self.config.is_action_enabled(&CardListActionType::Editing) {
+                    self.get_selected_card_id().map(CardListAction::Edit)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('c') => {
+                if self.config.is_action_enabled(&CardListActionType::Completion) {
+                    self.get_selected_card_id().map(CardListAction::Complete)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('p') => {
+                if self.config.is_action_enabled(&CardListActionType::Priority) {
+                    self.get_selected_card_id().map(CardListAction::TogglePriority)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('s') => {
+                if self.config.is_action_enabled(&CardListActionType::Sprint) {
+                    self.get_selected_card_id().map(CardListAction::AssignSprint)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('S') => {
+                if self.config.is_action_enabled(&CardListActionType::Sprint) {
+                    self.get_selected_card_id().map(CardListAction::ReassignSprint)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('o') => {
+                if self.config.is_action_enabled(&CardListActionType::Sorting) {
+                    Some(CardListAction::Sort)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('O') => {
+                if self.config.is_action_enabled(&CardListActionType::Sorting) {
+                    Some(CardListAction::OrderCards)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('H') => {
+                if self.config.is_action_enabled(&CardListActionType::Movement) && self.config.allow_movement {
+                    self.get_selected_card_id().map(|id| CardListAction::MoveColumn(id, false))
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('L') => {
+                if self.config.is_action_enabled(&CardListActionType::Movement) && self.config.allow_movement {
+                    self.get_selected_card_id().map(|id| CardListAction::MoveColumn(id, true))
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('n') => {
+                if self.config.is_action_enabled(&CardListActionType::Creation) {
+                    Some(CardListAction::Create)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('v') => {
+                if self.config.is_action_enabled(&CardListActionType::MultiSelect) {
+                    self.get_selected_card_id().map(CardListAction::ToggleMultiSelect)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('V') => {
+                if self.config.is_action_enabled(&CardListActionType::MultiSelect) && self.config.allow_multi_select {
+                    Some(CardListAction::SelectAll)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 }
