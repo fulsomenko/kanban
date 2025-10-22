@@ -6,6 +6,7 @@ use crate::{
     input::InputState,
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
+    task_list::{TaskList, TaskListId},
     ui,
     view_strategy::{FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewStrategy},
 };
@@ -50,6 +51,8 @@ pub struct App {
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
     pub sprint_task_panel: SprintTaskPanel,
+    pub sprint_uncompleted_cards: TaskList,
+    pub sprint_completed_cards: TaskList,
     pub view_strategy: Box<dyn ViewStrategy>,
 }
 
@@ -159,6 +162,8 @@ impl App {
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
             sprint_task_panel: SprintTaskPanel::Uncompleted,
+            sprint_uncompleted_cards: TaskList::new(TaskListId::All),
+            sprint_completed_cards: TaskList::new(TaskListId::All),
             view_strategy: Box::new(GroupedViewStrategy::new()),
         };
 
@@ -406,6 +411,28 @@ impl App {
             .collect();
         tracing::debug!("get_sprint_uncompleted_cards({}): found {} cards", sprint_id, cards.len());
         cards
+    }
+
+    pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
+        let uncompleted_ids: Vec<uuid::Uuid> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
+            .map(|card| card.id)
+            .collect();
+
+        let completed_ids: Vec<uuid::Uuid> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
+            .map(|card| card.id)
+            .collect();
+
+        self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
+        self.sprint_completed_cards.update_cards(completed_ids);
+
+        // Default to uncompleted panel
+        self.sprint_task_panel = SprintTaskPanel::Uncompleted;
     }
 
     pub fn calculate_points(cards: &[&Card]) -> u32 {
