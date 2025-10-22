@@ -27,6 +27,20 @@ impl App {
             KeyCode::Char('3') => {
                 self.card_focus = CardFocus::Description;
             }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.card_focus = match self.card_focus {
+                    CardFocus::Title => CardFocus::Metadata,
+                    CardFocus::Metadata => CardFocus::Description,
+                    CardFocus::Description => CardFocus::Title,
+                };
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.card_focus = match self.card_focus {
+                    CardFocus::Title => CardFocus::Description,
+                    CardFocus::Description => CardFocus::Metadata,
+                    CardFocus::Metadata => CardFocus::Title,
+                };
+            }
             KeyCode::Char('y') => {
                 self.copy_branch_name();
             }
@@ -160,35 +174,59 @@ impl App {
                 }
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                if self.board_focus == BoardFocus::Sprints {
-                    if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            let sprint_count = self
-                                .sprints
-                                .iter()
-                                .filter(|s| s.board_id == board.id)
-                                .count();
-                            self.sprint_selection.next(sprint_count);
+                match self.board_focus {
+                    BoardFocus::Sprints => {
+                        if let Some(board_idx) = self.board_selection.get() {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                let sprint_count = self
+                                    .sprints
+                                    .iter()
+                                    .filter(|s| s.board_id == board.id)
+                                    .count();
+                                self.sprint_selection.next(sprint_count);
+                            }
                         }
                     }
-                } else if self.board_focus == BoardFocus::Columns {
-                    if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            let column_count = self
-                                .columns
-                                .iter()
-                                .filter(|col| col.board_id == board.id)
-                                .count();
-                            self.column_selection.next(column_count);
+                    BoardFocus::Columns => {
+                        if let Some(board_idx) = self.board_selection.get() {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                let column_count = self
+                                    .columns
+                                    .iter()
+                                    .filter(|col| col.board_id == board.id)
+                                    .count();
+                                self.column_selection.next(column_count);
+                            }
                         }
+                    }
+                    _ => {
+                        self.board_focus = match self.board_focus {
+                            BoardFocus::Name => BoardFocus::Description,
+                            BoardFocus::Description => BoardFocus::Settings,
+                            BoardFocus::Settings => BoardFocus::Sprints,
+                            BoardFocus::Sprints => BoardFocus::Columns,
+                            BoardFocus::Columns => BoardFocus::Name,
+                        };
                     }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                if self.board_focus == BoardFocus::Sprints {
-                    self.sprint_selection.prev();
-                } else if self.board_focus == BoardFocus::Columns {
-                    self.column_selection.prev();
+                match self.board_focus {
+                    BoardFocus::Sprints => {
+                        self.sprint_selection.prev();
+                    }
+                    BoardFocus::Columns => {
+                        self.column_selection.prev();
+                    }
+                    _ => {
+                        self.board_focus = match self.board_focus {
+                            BoardFocus::Name => BoardFocus::Columns,
+                            BoardFocus::Description => BoardFocus::Name,
+                            BoardFocus::Settings => BoardFocus::Description,
+                            BoardFocus::Sprints => BoardFocus::Settings,
+                            BoardFocus::Columns => BoardFocus::Sprints,
+                        };
+                    }
                 }
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
