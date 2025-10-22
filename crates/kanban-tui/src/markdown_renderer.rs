@@ -151,11 +151,7 @@ impl MarkdownRenderer {
 }
 
 fn highlight_code(_language: &str, code: &str) -> Vec<Vec<Span<'static>>> {
-    let mut result = Vec::new();
-    for line in code.lines() {
-        let mut line_spans = Vec::new();
-        line_spans.push(Span::raw(line.to_string()));
-        result.push(line_spans);
-    }
-    result
+    code.lines()
+        .map(|line| vec![Span::raw(line.to_string())])
+        .collect()
 }
