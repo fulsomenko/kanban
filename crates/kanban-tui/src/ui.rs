@@ -422,7 +422,7 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                 }
 
                 let column_name =
-                    if let crate::task_list::TaskListId::Column(column_id) = task_list.id {
+                    if let crate::card_list::CardListId::Column(column_id) = task_list.id {
                         app.columns
                             .iter()
                             .find(|c| c.id == column_id)
@@ -606,9 +606,9 @@ fn render_sprint_task_panel_with_selection(
     app: &App,
     frame: &mut Frame,
     area: Rect,
-    sprint: &Sprint,
+    _sprint: &Sprint,
     board: &kanban_domain::Board,
-    task_list: &crate::task_list::TaskList,
+    task_list: &crate::card_list::CardList,
     title_suffix: &str,
     is_focused: bool,
 ) {

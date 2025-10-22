@@ -1,4 +1,5 @@
 use crate::{
+    card_list::{CardList, CardListId},
     clipboard,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
@@ -6,7 +7,6 @@ use crate::{
     input::InputState,
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
-    task_list::{TaskList, TaskListId},
     ui,
     view_strategy::{FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewStrategy},
 };
@@ -51,8 +51,8 @@ pub struct App {
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
     pub sprint_task_panel: SprintTaskPanel,
-    pub sprint_uncompleted_cards: TaskList,
-    pub sprint_completed_cards: TaskList,
+    pub sprint_uncompleted_cards: CardList,
+    pub sprint_completed_cards: CardList,
     pub view_strategy: Box<dyn ViewStrategy>,
 }
 
@@ -162,8 +162,8 @@ impl App {
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
             sprint_task_panel: SprintTaskPanel::Uncompleted,
-            sprint_uncompleted_cards: TaskList::new(TaskListId::All),
-            sprint_completed_cards: TaskList::new(TaskListId::All),
+            sprint_uncompleted_cards: CardList::new(CardListId::All),
+            sprint_completed_cards: CardList::new(CardListId::All),
             view_strategy: Box::new(GroupedViewStrategy::new()),
         };
 
