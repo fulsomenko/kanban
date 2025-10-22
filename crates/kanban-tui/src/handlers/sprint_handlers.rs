@@ -50,12 +50,6 @@ impl App {
                         }
                     }
 
-                    for card in self.cards.iter_mut() {
-                        if card.sprint_id == Some(sprint_id) {
-                            card.sprint_id = None;
-                        }
-                    }
-
                     let board_idx = self.active_board_index.or(self.board_selection.get());
                     if let Some(board_idx) = board_idx {
                         if let Some(board) = self.boards.get_mut(board_idx) {
