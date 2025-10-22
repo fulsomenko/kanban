@@ -768,7 +768,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         },
         AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)",
         AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending",
-        AppMode::SprintDetail => "q: quit | ESC: back | a: activate sprint | c: complete sprint | h/l: switch panel (completed sprints only)",
+        AppMode::SprintDetail => "q: quit | ESC: back | a: activate sprint | c: complete sprint | h/l: switch panel | j/k: navigate | Enter/Space: open card (completed sprints)",
         AppMode::AssignCardToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign",
         AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign",
         AppMode::CreateColumn => "ESC: cancel | ENTER: confirm",
