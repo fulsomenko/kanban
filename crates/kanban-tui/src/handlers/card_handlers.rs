@@ -1,5 +1,7 @@
 use crate::app::{App, AppMode, CardField, Focus};
 use crate::events::EventHandler;
+use crate::task_list::TaskListId;
+use crate::view_strategy::{GroupedViewStrategy, KanbanViewStrategy, ViewStrategy};
 use kanban_domain::{Card, CardStatus, Column, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -10,6 +12,36 @@ impl App {
             self.mode = AppMode::CreateCard;
             self.input.clear();
         }
+    }
+
+    fn get_focused_column_id(&mut self) -> Option<uuid::Uuid> {
+        let grouped_strategy = self
+            .view_strategy
+            .as_any_mut()
+            .downcast_mut::<GroupedViewStrategy>();
+
+        if let Some(grouped) = grouped_strategy {
+            if let Some(task_list) = grouped.get_active_task_list() {
+                if let TaskListId::Column(column_id) = task_list.id {
+                    return Some(column_id);
+                }
+            }
+        }
+
+        let kanban_strategy = self
+            .view_strategy
+            .as_any_mut()
+            .downcast_mut::<KanbanViewStrategy>();
+
+        if let Some(kanban) = kanban_strategy {
+            if let Some(task_list) = kanban.get_active_task_list() {
+                if let TaskListId::Column(column_id) = task_list.id {
+                    return Some(column_id);
+                }
+            }
+        }
+
+        None
     }
 
     pub fn handle_toggle_card_completion(&mut self) {
@@ -327,34 +359,96 @@ impl App {
 
     pub fn create_card(&mut self) {
         if let Some(idx) = self.active_board_index {
-            if let Some(board) = self.boards.get_mut(idx) {
-                let column = self
-                    .columns
-                    .iter()
-                    .find(|col| col.board_id == board.id)
-                    .cloned();
+            let focused_col_id = self.get_focused_column_id();
+            let board_id = self.boards.get(idx).map(|b| b.id);
 
-                let column = match column {
-                    Some(col) => col,
-                    None => {
-                        let new_column = Column::new(board.id, "Todo".to_string(), 0);
-                        self.columns.push(new_column.clone());
-                        new_column
+            if let Some(bid) = board_id {
+                if let Some(board) = self.boards.get_mut(idx) {
+                    let target_column_id = if let Some(focused_col_id) = focused_col_id {
+                        Some(focused_col_id)
+                    } else {
+                        self.columns
+                            .iter()
+                            .find(|col| col.board_id == bid)
+                            .map(|col| col.id)
+                    };
+
+                    let column = if let Some(col_id) = target_column_id {
+                        self.columns.iter().find(|col| col.id == col_id).cloned()
+                    } else {
+                        None
+                    };
+
+                    let column = match column {
+                        Some(col) => col,
+                        None => {
+                            let new_column = Column::new(bid, "Todo".to_string(), 0);
+                            self.columns.push(new_column.clone());
+                            new_column
+                        }
+                    };
+
+                    let position = self
+                        .cards
+                        .iter()
+                        .filter(|c| c.column_id == column.id)
+                        .count() as i32;
+                    let mut card =
+                        Card::new(board, column.id, self.input.as_str().to_string(), position);
+                    let new_card_id = card.id;
+                    let column_name = column.name.clone();
+
+                    let board_columns: Vec<_> = self
+                        .columns
+                        .iter()
+                        .filter(|col| col.board_id == bid)
+                        .collect();
+
+                    if board_columns.len() > 2 {
+                        let sorted_cols: Vec<_> = {
+                            let mut cols = board_columns.clone();
+                            cols.sort_by_key(|col| col.position);
+                            cols
+                        };
+                        if let Some(last_col) = sorted_cols.last() {
+                            if last_col.id == column.id {
+                                card.update_status(CardStatus::Done);
+                                tracing::info!(
+                                    "Creating card: {} (id: {}) in column: {} [marked as complete]",
+                                    card.title,
+                                    card.id,
+                                    column_name
+                                );
+                            } else {
+                                tracing::info!(
+                                    "Creating card: {} (id: {}) in column: {}",
+                                    card.title,
+                                    card.id,
+                                    column_name
+                                );
+                            }
+                        } else {
+                            tracing::info!(
+                                "Creating card: {} (id: {}) in column: {}",
+                                card.title,
+                                card.id,
+                                column_name
+                            );
+                        }
+                    } else {
+                        tracing::info!(
+                            "Creating card: {} (id: {}) in column: {}",
+                            card.title,
+                            card.id,
+                            column_name
+                        );
                     }
-                };
 
-                let position = self
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == column.id)
-                    .count() as i32;
-                let card = Card::new(board, column.id, self.input.as_str().to_string(), position);
-                let new_card_id = card.id;
-                tracing::info!("Creating card: {} (id: {})", card.title, card.id);
-                self.cards.push(card);
+                    self.cards.push(card);
 
-                self.refresh_view();
-                self.select_card_by_id(new_card_id);
+                    self.refresh_view();
+                    self.select_card_by_id(new_card_id);
+                }
             }
         }
     }
