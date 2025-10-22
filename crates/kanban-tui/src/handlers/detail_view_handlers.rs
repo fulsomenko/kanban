@@ -269,6 +269,7 @@ impl App {
                                     .collect();
                                 if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
                                     self.active_sprint_index = Some(*actual_idx);
+                                    self.active_board_index = Some(board_idx);
                                     self.mode = AppMode::SprintDetail;
                                 }
                             }
