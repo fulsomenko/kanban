@@ -466,90 +466,199 @@ fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
         if let Some(sprint) = app.sprints.get(sprint_idx) {
             if let Some(board_idx) = app.active_board_index {
                 if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint
-                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    let is_completed = sprint.status == SprintStatus::Completed;
 
-                    let mut lines = vec![
-                        metadata_line_styled("Sprint", sprint_name, bold_highlight()),
-                        Line::from(""),
-                        metadata_line_styled(
-                            "Status",
-                            format!("{:?}", sprint.status),
-                            sprint_status_style(sprint.status),
-                        ),
-                        metadata_line("Sprint Number", sprint.sprint_number.to_string()),
-                    ];
-
-                    if let Some(name) = sprint.get_name(board) {
-                        lines.push(metadata_line("Name", name));
+                    if is_completed {
+                        render_sprint_detail_with_tasks(app, frame, area, sprint, board);
+                    } else {
+                        render_sprint_detail_metadata(app, frame, area, sprint, board);
                     }
-
-                    if let Some(start) = sprint.start_date {
-                        lines.push(metadata_line(
-                            "Start Date",
-                            start.format("%Y-%m-%d %H:%M UTC").to_string(),
-                        ));
-                    }
-
-                    if let Some(end) = sprint.end_date {
-                        let end_style = if sprint.is_ended() {
-                            Style::default().fg(Color::Red)
-                        } else {
-                            normal_text()
-                        };
-                        lines.push(metadata_line_styled(
-                            "End Date",
-                            end.format("%Y-%m-%d %H:%M UTC").to_string(),
-                            end_style,
-                        ));
-                    }
-
-                    lines.push(Line::from(""));
-
-                    let card_count = app
-                        .cards
-                        .iter()
-                        .filter(|c| c.sprint_id == Some(sprint.id))
-                        .count();
-                    lines.push(metadata_line_styled(
-                        "Cards Assigned",
-                        card_count.to_string(),
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ));
-
-                    if board.active_sprint_id == Some(sprint.id) {
-                        lines.push(metadata_line_styled(
-                            "Active Sprint",
-                            "Yes (used for filtering)",
-                            active_item(),
-                        ));
-                    }
-
-                    lines.push(Line::from(""));
-                    lines.push(metadata_line_styled(
-                        "Created",
-                        sprint.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
-                        label_text(),
-                    ));
-                    lines.push(metadata_line_styled(
-                        "Updated",
-                        sprint.updated_at.format("%Y-%m-%d %H:%M UTC").to_string(),
-                        label_text(),
-                    ));
-
-                    let content = Paragraph::new(lines).block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .border_style(focused_border())
-                            .title("Sprint Details"),
-                    );
-                    frame.render_widget(content, area);
                 }
             }
         }
     }
+}
+
+fn render_sprint_detail_metadata(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    sprint: &Sprint,
+    board: &kanban_domain::Board,
+) {
+    let sprint_name = sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+
+    let mut lines = vec![
+        metadata_line_styled("Sprint", sprint_name, bold_highlight()),
+        Line::from(""),
+        metadata_line_styled(
+            "Status",
+            format!("{:?}", sprint.status),
+            sprint_status_style(sprint.status),
+        ),
+        metadata_line("Sprint Number", sprint.sprint_number.to_string()),
+    ];
+
+    if let Some(name) = sprint.get_name(board) {
+        lines.push(metadata_line("Name", name));
+    }
+
+    if let Some(start) = sprint.start_date {
+        lines.push(metadata_line(
+            "Start Date",
+            start.format("%Y-%m-%d %H:%M UTC").to_string(),
+        ));
+    }
+
+    if let Some(end) = sprint.end_date {
+        let end_style = if sprint.is_ended() {
+            Style::default().fg(Color::Red)
+        } else {
+            normal_text()
+        };
+        lines.push(metadata_line_styled(
+            "End Date",
+            end.format("%Y-%m-%d %H:%M UTC").to_string(),
+            end_style,
+        ));
+    }
+
+    lines.push(Line::from(""));
+
+    let card_count = app
+        .cards
+        .iter()
+        .filter(|c| c.sprint_id == Some(sprint.id))
+        .count();
+    lines.push(metadata_line_styled(
+        "Cards Assigned",
+        card_count.to_string(),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    ));
+
+    if board.active_sprint_id == Some(sprint.id) {
+        lines.push(metadata_line_styled(
+            "Active Sprint",
+            "Yes (used for filtering)",
+            active_item(),
+        ));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(metadata_line_styled(
+        "Created",
+        sprint.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+        label_text(),
+    ));
+    lines.push(metadata_line_styled(
+        "Updated",
+        sprint.updated_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+        label_text(),
+    ));
+
+    let content = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(focused_border())
+            .title("Sprint Details"),
+    );
+    frame.render_widget(content, area);
+}
+
+fn render_sprint_detail_with_tasks(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    sprint: &Sprint,
+    board: &kanban_domain::Board,
+) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(area);
+
+    let uncompleted_cards = app.get_sprint_uncompleted_cards(sprint.id);
+    let completed_cards = app.get_sprint_completed_cards(sprint.id);
+
+    render_sprint_task_panel(
+        app,
+        frame,
+        chunks[0],
+        sprint,
+        board,
+        &uncompleted_cards,
+        "Uncompleted",
+        app.sprint_task_panel == crate::app::SprintTaskPanel::Uncompleted,
+    );
+
+    render_sprint_task_panel(
+        app,
+        frame,
+        chunks[1],
+        sprint,
+        board,
+        &completed_cards,
+        "Completed",
+        app.sprint_task_panel == crate::app::SprintTaskPanel::Completed,
+    );
+}
+
+fn render_sprint_task_panel(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    _sprint: &Sprint,
+    board: &kanban_domain::Board,
+    cards: &[&kanban_domain::Card],
+    title_suffix: &str,
+    is_focused: bool,
+) {
+    let mut lines = vec![];
+
+    if cards.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  (no tasks)",
+            label_text(),
+        )));
+    } else {
+        for card in cards {
+            let line = render_card_list_item(CardListItemConfig {
+                card,
+                board,
+                sprints: &app.sprints,
+                is_selected: false,
+                is_focused,
+                is_multi_selected: false,
+                show_sprint_name: false,
+            });
+            lines.push(line);
+        }
+    }
+
+    let points = App::calculate_points(cards);
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        format!("Points: {}", points),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )));
+
+    let border_style = if is_focused {
+        focused_border()
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let content = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(border_style)
+            .title(format!("{} ({})", title_suffix, cards.len())),
+    );
+    frame.render_widget(content, area);
 }
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
@@ -595,7 +704,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         },
         AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)",
         AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending",
-        AppMode::SprintDetail => "q: quit | ESC: back | a: activate sprint | c: complete sprint",
+        AppMode::SprintDetail => "q: quit | ESC: back | a: activate sprint | c: complete sprint | h/l: switch panel (completed sprints only)",
         AppMode::AssignCardToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign",
         AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign",
         AppMode::CreateColumn => "ESC: cancel | ENTER: confirm",

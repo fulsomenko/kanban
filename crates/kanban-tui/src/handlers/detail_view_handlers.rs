@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode, BoardField, BoardFocus, CardField, CardFocus};
+use crate::app::{App, AppMode, BoardField, BoardFocus, CardField, CardFocus, SprintTaskPanel};
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
 use ratatui::{backend::CrosstermBackend, Terminal};
@@ -305,6 +305,24 @@ impl App {
             }
             KeyCode::Char('c') => {
                 self.handle_complete_sprint_key();
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                if let Some(sprint_idx) = self.active_sprint_index {
+                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                        if sprint.status == kanban_domain::SprintStatus::Completed {
+                            self.sprint_task_panel = SprintTaskPanel::Uncompleted;
+                        }
+                    }
+                }
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                if let Some(sprint_idx) = self.active_sprint_index {
+                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                        if sprint.status == kanban_domain::SprintStatus::Completed {
+                            self.sprint_task_panel = SprintTaskPanel::Completed;
+                        }
+                    }
+                }
             }
             _ => {}
         }
