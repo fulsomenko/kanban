@@ -1,5 +1,6 @@
 pub mod app;
 pub mod card_list;
+pub mod card_list_component;
 pub mod clipboard;
 pub mod components;
 pub mod dialog;
