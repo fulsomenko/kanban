@@ -128,12 +128,17 @@ impl MarkdownRenderer {
             return;
         }
 
+        self.lines.push(Line::from(""));
+
         let highlighted_lines = highlight_code(&self.code_block_lang, &self.code_block_content);
 
         for line_spans in highlighted_lines {
-            self.lines.push(Line::from(line_spans));
+            let mut indented_spans = vec![Span::raw("  ")];
+            indented_spans.extend(line_spans);
+            self.lines.push(Line::from(indented_spans));
         }
 
+        self.lines.push(Line::from(""));
         self.code_block_content.clear();
     }
 
