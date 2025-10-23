@@ -1,6 +1,6 @@
 use crate::{
     card_list::{CardList, CardListId},
-    card_list_component::{CardListComponent, CardListComponentConfig, CardListActionType},
+    card_list_component::{CardListComponent, CardListComponentConfig},
     clipboard,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},

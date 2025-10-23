@@ -124,6 +124,7 @@ impl App {
                 }
 
                 tracing::info!("Toggled sort order to: {:?}", new_order);
+                self.refresh_view();
             }
         }
     }
