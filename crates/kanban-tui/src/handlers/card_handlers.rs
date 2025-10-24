@@ -489,20 +489,8 @@ impl App {
                                 .count() as i32;
 
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                                let was_in_last_column = pos == board_columns.len() - 1;
-
                                 card.move_to_column(target_column_id, new_position);
-
-                                // If moved from last column and board has more than 1 column, mark as incomplete
-                                if was_in_last_column && board_columns.len() > 1 && card.status == CardStatus::Done {
-                                    card.update_status(CardStatus::Todo);
-                                    tracing::info!(
-                                        "Moved card '{}' from last column to previous column (marked as incomplete)",
-                                        card.title
-                                    );
-                                } else {
-                                    tracing::info!("Moved card '{}' to previous column", card.title);
-                                }
+                                tracing::info!("Moved card '{}' to previous column", card.title);
                             }
 
                             if self.is_kanban_view() {
@@ -551,6 +539,7 @@ impl App {
                     if let Some(pos) = current_position {
                         if pos < board_columns.len() - 1 {
                             let target_column_id = board_columns[pos + 1].id;
+                            let is_moving_to_last = pos + 1 == board_columns.len() - 1;
 
                             let new_position = self
                                 .cards
@@ -560,7 +549,17 @@ impl App {
 
                             if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
                                 card.move_to_column(target_column_id, new_position);
-                                tracing::info!("Moved card '{}' to next column", card.title);
+
+                                // If moving to last column and board has more than 1 column, mark as complete
+                                if is_moving_to_last && board_columns.len() > 1 && card.status != CardStatus::Done {
+                                    card.update_status(CardStatus::Done);
+                                    tracing::info!(
+                                        "Moved card '{}' to last column (marked as complete)",
+                                        card.title
+                                    );
+                                } else {
+                                    tracing::info!("Moved card '{}' to next column", card.title);
+                                }
                             }
 
                             if self.is_kanban_view() {
