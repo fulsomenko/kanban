@@ -551,7 +551,10 @@ impl App {
                                 card.move_to_column(target_column_id, new_position);
 
                                 // If moving to last column and board has more than 1 column, mark as complete
-                                if is_moving_to_last && board_columns.len() > 1 && card.status != CardStatus::Done {
+                                if is_moving_to_last
+                                    && board_columns.len() > 1
+                                    && card.status != CardStatus::Done
+                                {
                                     card.update_status(CardStatus::Done);
                                     tracing::info!(
                                         "Moved card '{}' to last column (marked as complete)",
