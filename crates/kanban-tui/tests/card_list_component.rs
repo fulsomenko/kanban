@@ -139,6 +139,36 @@ fn test_navigation_up_key() {
 }
 
 #[test]
+fn test_navigation_up_on_empty_list() {
+    let mut component = CardListComponent::new(CardListId::All, CardListComponentConfig::new());
+    // Don't set any cards - list is empty
+    assert_eq!(component.get_selected_index(), None);
+
+    // Pressing k (up) on empty list should signal to navigate to adjacent column
+    // but not modify the selection state
+    component.handle_key(KeyCode::Char('k'));
+    assert_eq!(component.get_selected_index(), None);
+
+    component.handle_key(KeyCode::Up);
+    assert_eq!(component.get_selected_index(), None);
+}
+
+#[test]
+fn test_navigation_down_on_empty_list() {
+    let mut component = CardListComponent::new(CardListId::All, CardListComponentConfig::new());
+    // Don't set any cards - list is empty
+    assert_eq!(component.get_selected_index(), None);
+
+    // Pressing j (down) on empty list should signal to navigate to adjacent column
+    // but not modify the selection state
+    component.handle_key(KeyCode::Char('j'));
+    assert_eq!(component.get_selected_index(), None);
+
+    component.handle_key(KeyCode::Down);
+    assert_eq!(component.get_selected_index(), None);
+}
+
+#[test]
 fn test_navigation_disabled() {
     let config = CardListComponentConfig::new().with_actions(vec![CardListActionType::Selection]);
     let mut component = create_test_component_with_config(config);
