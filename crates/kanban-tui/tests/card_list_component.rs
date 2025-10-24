@@ -1,5 +1,5 @@
 use crossterm::event::KeyCode;
-use kanban_tui::card_list::{CardList, CardListId};
+use kanban_tui::card_list::CardListId;
 use kanban_tui::card_list_component::{
     CardListAction, CardListActionType, CardListComponent, CardListComponentConfig,
 };
