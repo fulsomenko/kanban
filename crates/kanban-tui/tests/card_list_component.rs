@@ -144,7 +144,8 @@ fn test_navigation_up_on_empty_list() {
     // Don't set any cards - list is empty
     assert_eq!(component.get_selected_index(), None);
 
-    // Pressing k (up) should not panic and should not select anything
+    // Pressing k (up) on empty list should signal to navigate to adjacent column
+    // but not modify the selection state
     component.handle_key(KeyCode::Char('k'));
     assert_eq!(component.get_selected_index(), None);
 
@@ -158,7 +159,8 @@ fn test_navigation_down_on_empty_list() {
     // Don't set any cards - list is empty
     assert_eq!(component.get_selected_index(), None);
 
-    // Pressing j (down) should not panic and should not select anything
+    // Pressing j (down) on empty list should signal to navigate to adjacent column
+    // but not modify the selection state
     component.handle_key(KeyCode::Char('j'));
     assert_eq!(component.get_selected_index(), None);
 
