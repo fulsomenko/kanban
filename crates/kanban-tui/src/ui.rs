@@ -769,7 +769,14 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         },
         AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
         AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending".to_string(),
-        AppMode::SprintDetail => "q: quit | ESC: back | a: activate sprint | c: complete sprint | h/l: switch panel | j/k: navigate | Enter/Space: open card (completed sprints)".to_string(),
+        AppMode::SprintDetail => {
+            let component = match app.sprint_task_panel {
+                crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
+                crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,
+            };
+            let component_help = component.help_text();
+            format!("q: quit | ESC: back | a: activate sprint | c: complete sprint | o: sort | O: toggle order | h/l: switch panel | {}", component_help)
+        },
         AppMode::AssignCardToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
         AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
         AppMode::CreateColumn => "ESC: cancel | ENTER: confirm".to_string(),
