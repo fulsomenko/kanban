@@ -603,6 +603,7 @@ fn render_sprint_detail_with_tasks(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_sprint_task_panel_with_selection(
     app: &App,
     frame: &mut Frame,
@@ -667,7 +668,7 @@ fn render_sprint_task_panel_with_selection(
     frame.render_widget(content, area);
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 fn render_sprint_task_panel(
     app: &App,
     frame: &mut Frame,
