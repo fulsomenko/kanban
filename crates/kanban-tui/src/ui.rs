@@ -667,6 +667,7 @@ fn render_sprint_task_panel_with_selection(
     frame.render_widget(content, area);
 }
 
+#[allow(dead_code)]
 fn render_sprint_task_panel(
     app: &App,
     frame: &mut Frame,
@@ -721,7 +722,7 @@ fn render_sprint_task_panel(
 }
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
-    let is_kanban_view =
+    let _is_kanban_view =
         if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
             if let Some(board) = app.boards.get(board_idx) {
                 board.task_list_view == kanban_domain::TaskListView::ColumnView
