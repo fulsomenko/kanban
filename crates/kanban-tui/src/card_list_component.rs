@@ -229,19 +229,28 @@ impl CardListComponent {
     pub fn handle_key(&mut self, key: KeyCode) -> Option<CardListAction> {
         match key {
             KeyCode::Char('j') | KeyCode::Down => {
-                if self.config.is_action_enabled(&CardListActionType::Navigation) {
+                if self
+                    .config
+                    .is_action_enabled(&CardListActionType::Navigation)
+                {
                     self.navigate_down();
                 }
                 None
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                if self.config.is_action_enabled(&CardListActionType::Navigation) {
+                if self
+                    .config
+                    .is_action_enabled(&CardListActionType::Navigation)
+                {
                     self.navigate_up();
                 }
                 None
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                if self.config.is_action_enabled(&CardListActionType::Selection) {
+                if self
+                    .config
+                    .is_action_enabled(&CardListActionType::Selection)
+                {
                     self.get_selected_card_id().map(CardListAction::Select)
                 } else {
                     None
@@ -255,7 +264,10 @@ impl CardListComponent {
                 }
             }
             KeyCode::Char('c') => {
-                if self.config.is_action_enabled(&CardListActionType::Completion) {
+                if self
+                    .config
+                    .is_action_enabled(&CardListActionType::Completion)
+                {
                     self.get_selected_card_id().map(CardListAction::Complete)
                 } else {
                     None
@@ -263,21 +275,24 @@ impl CardListComponent {
             }
             KeyCode::Char('p') => {
                 if self.config.is_action_enabled(&CardListActionType::Priority) {
-                    self.get_selected_card_id().map(CardListAction::TogglePriority)
+                    self.get_selected_card_id()
+                        .map(CardListAction::TogglePriority)
                 } else {
                     None
                 }
             }
             KeyCode::Char('s') => {
                 if self.config.is_action_enabled(&CardListActionType::Sprint) {
-                    self.get_selected_card_id().map(CardListAction::AssignSprint)
+                    self.get_selected_card_id()
+                        .map(CardListAction::AssignSprint)
                 } else {
                     None
                 }
             }
             KeyCode::Char('S') => {
                 if self.config.is_action_enabled(&CardListActionType::Sprint) {
-                    self.get_selected_card_id().map(CardListAction::ReassignSprint)
+                    self.get_selected_card_id()
+                        .map(CardListAction::ReassignSprint)
                 } else {
                     None
                 }
@@ -297,15 +312,21 @@ impl CardListComponent {
                 }
             }
             KeyCode::Char('H') => {
-                if self.config.is_action_enabled(&CardListActionType::Movement) && self.config.allow_movement {
-                    self.get_selected_card_id().map(|id| CardListAction::MoveColumn(id, false))
+                if self.config.is_action_enabled(&CardListActionType::Movement)
+                    && self.config.allow_movement
+                {
+                    self.get_selected_card_id()
+                        .map(|id| CardListAction::MoveColumn(id, false))
                 } else {
                     None
                 }
             }
             KeyCode::Char('L') => {
-                if self.config.is_action_enabled(&CardListActionType::Movement) && self.config.allow_movement {
-                    self.get_selected_card_id().map(|id| CardListAction::MoveColumn(id, true))
+                if self.config.is_action_enabled(&CardListActionType::Movement)
+                    && self.config.allow_movement
+                {
+                    self.get_selected_card_id()
+                        .map(|id| CardListAction::MoveColumn(id, true))
                 } else {
                     None
                 }
@@ -318,14 +339,22 @@ impl CardListComponent {
                 }
             }
             KeyCode::Char('v') => {
-                if self.config.is_action_enabled(&CardListActionType::MultiSelect) {
-                    self.get_selected_card_id().map(CardListAction::ToggleMultiSelect)
+                if self
+                    .config
+                    .is_action_enabled(&CardListActionType::MultiSelect)
+                {
+                    self.get_selected_card_id()
+                        .map(CardListAction::ToggleMultiSelect)
                 } else {
                     None
                 }
             }
             KeyCode::Char('V') => {
-                if self.config.is_action_enabled(&CardListActionType::MultiSelect) && self.config.allow_multi_select {
+                if self
+                    .config
+                    .is_action_enabled(&CardListActionType::MultiSelect)
+                    && self.config.allow_multi_select
+                {
                     Some(CardListAction::SelectAll)
                 } else {
                     None

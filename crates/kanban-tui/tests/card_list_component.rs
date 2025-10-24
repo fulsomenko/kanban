@@ -38,8 +38,10 @@ fn test_default_config_has_all_actions_enabled() {
 
 #[test]
 fn test_config_builder_with_actions() {
-    let config = CardListComponentConfig::new()
-        .with_actions(vec![CardListActionType::Navigation, CardListActionType::Selection]);
+    let config = CardListComponentConfig::new().with_actions(vec![
+        CardListActionType::Navigation,
+        CardListActionType::Selection,
+    ]);
     assert_eq!(config.enabled_actions.len(), 2);
     assert!(config.is_action_enabled(&CardListActionType::Navigation));
     assert!(config.is_action_enabled(&CardListActionType::Selection));
@@ -76,8 +78,10 @@ fn test_config_help_text_all_actions() {
 
 #[test]
 fn test_config_help_text_limited_actions() {
-    let config = CardListComponentConfig::new()
-        .with_actions(vec![CardListActionType::Navigation, CardListActionType::Selection]);
+    let config = CardListComponentConfig::new().with_actions(vec![
+        CardListActionType::Navigation,
+        CardListActionType::Selection,
+    ]);
     let help = config.help_text();
     assert!(help.contains("j/k: navigate"));
     assert!(help.contains("Enter/Space: select"));
@@ -136,8 +140,7 @@ fn test_navigation_up_key() {
 
 #[test]
 fn test_navigation_disabled() {
-    let config = CardListComponentConfig::new()
-        .with_actions(vec![CardListActionType::Selection]);
+    let config = CardListComponentConfig::new().with_actions(vec![CardListActionType::Selection]);
     let mut component = create_test_component_with_config(config);
     let card1 = Uuid::new_v4();
     let card2 = Uuid::new_v4();
@@ -172,8 +175,7 @@ fn test_select_action_with_space() {
 
 #[test]
 fn test_select_action_disabled() {
-    let config = CardListComponentConfig::new()
-        .with_actions(vec![CardListActionType::Navigation]);
+    let config = CardListComponentConfig::new().with_actions(vec![CardListActionType::Navigation]);
     let mut component = create_test_component_with_config(config);
     let card_id = Uuid::new_v4();
     component.update_cards(vec![card_id]);
@@ -195,8 +197,7 @@ fn test_edit_action() {
 
 #[test]
 fn test_edit_action_disabled() {
-    let config = CardListComponentConfig::new()
-        .with_actions(vec![CardListActionType::Navigation]);
+    let config = CardListComponentConfig::new().with_actions(vec![CardListActionType::Navigation]);
     let mut component = create_test_component_with_config(config);
     let card_id = Uuid::new_v4();
     component.update_cards(vec![card_id]);
@@ -263,8 +264,7 @@ fn test_order_cards_action() {
 
 #[test]
 fn test_sort_action_disabled() {
-    let config = CardListComponentConfig::new()
-        .with_actions(vec![CardListActionType::Navigation]);
+    let config = CardListComponentConfig::new().with_actions(vec![CardListActionType::Navigation]);
     let mut component = create_test_component_with_config(config);
 
     let action = component.handle_key(KeyCode::Char('o'));
@@ -312,8 +312,7 @@ fn test_create_action() {
 
 #[test]
 fn test_create_action_disabled() {
-    let config = CardListComponentConfig::new()
-        .with_actions(vec![CardListActionType::Navigation]);
+    let config = CardListComponentConfig::new().with_actions(vec![CardListActionType::Navigation]);
     let mut component = create_test_component_with_config(config);
 
     let action = component.handle_key(KeyCode::Char('n'));

@@ -360,14 +360,16 @@ impl App {
 
                     match action {
                         CardListAction::Select(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            {
                                 self.active_card_index = Some(card_idx);
                                 self.mode = AppMode::CardDetail;
                                 self.card_focus = CardFocus::Title;
                             }
                         }
                         CardListAction::Edit(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            {
                                 self.active_card_index = Some(card_idx);
                                 self.mode = AppMode::CardDetail;
                                 self.card_focus = CardFocus::Title;
@@ -386,14 +388,16 @@ impl App {
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            {
                                 self.active_card_index = Some(card_idx);
                                 self.priority_selection.set(Some(0));
                                 self.mode = AppMode::SetCardPriority;
                             }
                         }
                         CardListAction::AssignSprint(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            {
                                 self.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.active_board_index {
                                     if let Some(board) = self.boards.get(board_idx) {
@@ -411,7 +415,8 @@ impl App {
                             }
                         }
                         CardListAction::ReassignSprint(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            {
                                 self.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.active_board_index {
                                     if let Some(board) = self.boards.get(board_idx) {
@@ -435,8 +440,12 @@ impl App {
                         CardListAction::OrderCards => {
                             if let Some(current_order) = self.current_sort_order {
                                 let new_order = match current_order {
-                                    kanban_domain::SortOrder::Ascending => kanban_domain::SortOrder::Descending,
-                                    kanban_domain::SortOrder::Descending => kanban_domain::SortOrder::Ascending,
+                                    kanban_domain::SortOrder::Ascending => {
+                                        kanban_domain::SortOrder::Descending
+                                    }
+                                    kanban_domain::SortOrder::Descending => {
+                                        kanban_domain::SortOrder::Ascending
+                                    }
                                 };
                                 self.current_sort_order = Some(new_order);
 
@@ -447,7 +456,8 @@ impl App {
                             }
                         }
                         CardListAction::MoveColumn(card_id, is_right) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            {
                                 if let Some(card) = self.cards.get_mut(card_idx) {
                                     if let Some(board_idx) = self.active_board_index {
                                         if let Some(board) = self.boards.get(board_idx) {
@@ -458,7 +468,9 @@ impl App {
                                                 .filter(|c| c.board_id == board.id)
                                                 .collect();
 
-                                            if let Some(current_idx) = columns.iter().position(|c| c.id == current_col) {
+                                            if let Some(current_idx) =
+                                                columns.iter().position(|c| c.id == current_col)
+                                            {
                                                 let new_idx = if is_right {
                                                     (current_idx + 1).min(columns.len() - 1)
                                                 } else {
@@ -467,8 +479,13 @@ impl App {
 
                                                 if let Some(new_col) = columns.get(new_idx) {
                                                     card.column_id = new_col.id;
-                                                    let direction = if is_right { "right" } else { "left" };
-                                                    tracing::info!("Moved card {} to {}", card.title, direction);
+                                                    let direction =
+                                                        if is_right { "right" } else { "left" };
+                                                    tracing::info!(
+                                                        "Moved card {} to {}",
+                                                        card.title,
+                                                        direction
+                                                    );
                                                 }
                                             }
                                         }
@@ -482,21 +499,27 @@ impl App {
                         }
                         CardListAction::ToggleMultiSelect(card_id) => {
                             let component = match self.sprint_task_panel {
-                                SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
+                                SprintTaskPanel::Uncompleted => {
+                                    &mut self.sprint_uncompleted_component
+                                }
                                 SprintTaskPanel::Completed => &mut self.sprint_completed_component,
                             };
                             component.toggle_multi_select(card_id);
                         }
                         CardListAction::ClearMultiSelect => {
                             let component = match self.sprint_task_panel {
-                                SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
+                                SprintTaskPanel::Uncompleted => {
+                                    &mut self.sprint_uncompleted_component
+                                }
                                 SprintTaskPanel::Completed => &mut self.sprint_completed_component,
                             };
                             component.clear_multi_select();
                         }
                         CardListAction::SelectAll => {
                             let component = match self.sprint_task_panel {
-                                SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
+                                SprintTaskPanel::Uncompleted => {
+                                    &mut self.sprint_uncompleted_component
+                                }
                                 SprintTaskPanel::Completed => &mut self.sprint_completed_component,
                             };
                             component.select_all();

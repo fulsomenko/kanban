@@ -430,7 +430,11 @@ impl App {
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
             .collect();
-        tracing::debug!("get_sprint_completed_cards({}): found {} cards", sprint_id, cards.len());
+        tracing::debug!(
+            "get_sprint_completed_cards({}): found {} cards",
+            sprint_id,
+            cards.len()
+        );
         cards
     }
 
@@ -440,7 +444,11 @@ impl App {
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
             .collect();
-        tracing::debug!("get_sprint_uncompleted_cards({}): found {} cards", sprint_id, cards.len());
+        tracing::debug!(
+            "get_sprint_uncompleted_cards({}): found {} cards",
+            sprint_id,
+            cards.len()
+        );
         cards
     }
 
@@ -462,8 +470,10 @@ impl App {
         self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
         self.sprint_completed_cards.update_cards(completed_ids);
 
-        self.sprint_uncompleted_component.update_cards(self.sprint_uncompleted_cards.cards.clone());
-        self.sprint_completed_component.update_cards(self.sprint_completed_cards.cards.clone());
+        self.sprint_uncompleted_component
+            .update_cards(self.sprint_uncompleted_cards.cards.clone());
+        self.sprint_completed_component
+            .update_cards(self.sprint_completed_cards.cards.clone());
 
         // Default to uncompleted panel
         self.sprint_task_panel = SprintTaskPanel::Uncompleted;
@@ -489,18 +499,26 @@ impl App {
         ordered_sorter.sort(&mut uncompleted_cards);
         ordered_sorter.sort(&mut completed_cards);
 
-        let sorted_uncompleted_ids: Vec<uuid::Uuid> = uncompleted_cards.iter().map(|c| c.id).collect();
+        let sorted_uncompleted_ids: Vec<uuid::Uuid> =
+            uncompleted_cards.iter().map(|c| c.id).collect();
         let sorted_completed_ids: Vec<uuid::Uuid> = completed_cards.iter().map(|c| c.id).collect();
 
-        self.sprint_uncompleted_cards.update_cards(sorted_uncompleted_ids);
-        self.sprint_completed_cards.update_cards(sorted_completed_ids);
+        self.sprint_uncompleted_cards
+            .update_cards(sorted_uncompleted_ids);
+        self.sprint_completed_cards
+            .update_cards(sorted_completed_ids);
 
-        self.sprint_uncompleted_component.update_cards(self.sprint_uncompleted_cards.cards.clone());
-        self.sprint_completed_component.update_cards(self.sprint_completed_cards.cards.clone());
+        self.sprint_uncompleted_component
+            .update_cards(self.sprint_uncompleted_cards.cards.clone());
+        self.sprint_completed_component
+            .update_cards(self.sprint_completed_cards.cards.clone());
     }
 
     pub fn calculate_points(cards: &[&Card]) -> u32 {
-        cards.iter().filter_map(|card| card.points.map(|p| p as u32)).sum()
+        cards
+            .iter()
+            .filter_map(|card| card.points.map(|p| p as u32))
+            .sum()
     }
 
     pub fn refresh_view(&mut self) {
@@ -521,7 +539,8 @@ impl App {
 
     pub fn sync_card_list_component(&mut self) {
         if let Some(active_list) = self.view_strategy.get_active_task_list() {
-            self.card_list_component.update_cards(active_list.cards.clone());
+            self.card_list_component
+                .update_cards(active_list.cards.clone());
         }
     }
 

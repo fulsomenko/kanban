@@ -486,7 +486,8 @@ fn render_sprint_detail_metadata(
     sprint: &Sprint,
     board: &kanban_domain::Board,
 ) {
-    let sprint_name = sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+    let sprint_name =
+        sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
 
     let mut lines = vec![
         metadata_line_styled("Sprint", sprint_name, bold_highlight()),
@@ -616,10 +617,7 @@ fn render_sprint_task_panel_with_selection(
     let selected_idx = task_list.get_selected_index();
 
     if task_list.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  (no tasks)",
-            label_text(),
-        )));
+        lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
     } else {
         for (idx, card_id) in task_list.cards.iter().enumerate() {
             if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
@@ -682,10 +680,7 @@ fn render_sprint_task_panel(
     let mut lines = vec![];
 
     if cards.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  (no tasks)",
-            label_text(),
-        )));
+        lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
     } else {
         for card in cards {
             let line = render_card_list_item(CardListItemConfig {
