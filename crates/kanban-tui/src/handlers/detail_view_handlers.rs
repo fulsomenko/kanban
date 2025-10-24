@@ -77,14 +77,16 @@ impl App {
                             .filter(|s| s.board_id == board.id)
                             .count();
                         if sprint_count > 0 {
-                            self.sprint_assign_selection.set(Some(0));
+                            let selection_idx = self.get_current_sprint_selection_index();
+                            self.sprint_assign_selection.set(Some(selection_idx));
                             self.mode = AppMode::AssignCardToSprint;
                         }
                     }
                 }
             }
             KeyCode::Char('p') => {
-                self.priority_selection.set(Some(0));
+                let priority_idx = self.get_current_priority_selection_index();
+                self.priority_selection.set(Some(priority_idx));
                 self.mode = AppMode::SetCardPriority;
             }
             _ => {}
@@ -311,7 +313,8 @@ impl App {
                 self.handle_complete_sprint_key();
             }
             KeyCode::Char('o') => {
-                self.sort_field_selection.set(Some(0));
+                let sort_idx = self.get_current_sort_field_selection_index();
+                self.sort_field_selection.set(Some(sort_idx));
                 self.mode = AppMode::OrderCards;
             }
             KeyCode::Char('O') => {
@@ -391,7 +394,8 @@ impl App {
                             if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
-                                self.priority_selection.set(Some(0));
+                                let priority_idx = self.get_current_priority_selection_index();
+                                self.priority_selection.set(Some(priority_idx));
                                 self.mode = AppMode::SetCardPriority;
                             }
                         }
@@ -407,7 +411,9 @@ impl App {
                                             .filter(|s| s.board_id == board.id)
                                             .count();
                                         if sprint_count > 0 {
-                                            self.sprint_assign_selection.set(Some(0));
+                                            let selection_idx =
+                                                self.get_current_sprint_selection_index();
+                                            self.sprint_assign_selection.set(Some(selection_idx));
                                             self.mode = AppMode::AssignCardToSprint;
                                         }
                                     }
@@ -426,7 +432,9 @@ impl App {
                                             .filter(|s| s.board_id == board.id)
                                             .count();
                                         if sprint_count > 0 {
-                                            self.sprint_assign_selection.set(Some(0));
+                                            let selection_idx =
+                                                self.get_current_sprint_selection_index();
+                                            self.sprint_assign_selection.set(Some(selection_idx));
                                             self.mode = AppMode::AssignCardToSprint;
                                         }
                                     }
@@ -434,7 +442,8 @@ impl App {
                             }
                         }
                         CardListAction::Sort => {
-                            self.sort_field_selection.set(Some(0));
+                            let sort_idx = self.get_current_sort_field_selection_index();
+                            self.sort_field_selection.set(Some(sort_idx));
                             self.mode = AppMode::OrderCards;
                         }
                         CardListAction::OrderCards => {

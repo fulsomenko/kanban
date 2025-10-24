@@ -866,6 +866,59 @@ impl App {
             }
         }
     }
+
+    pub fn get_current_priority_selection_index(&self) -> usize {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.cards.get(card_idx) {
+                use kanban_domain::CardPriority;
+                return match card.priority {
+                    CardPriority::Low => 0,
+                    CardPriority::Medium => 1,
+                    CardPriority::High => 2,
+                    CardPriority::Critical => 3,
+                };
+            }
+        }
+        0
+    }
+
+    pub fn get_current_sprint_selection_index(&self) -> usize {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.cards.get(card_idx) {
+                if let Some(card_sprint_id) = card.sprint_id {
+                    if let Some(board_idx) = self.active_board_index {
+                        if let Some(board) = self.boards.get(board_idx) {
+                            let board_sprints: Vec<_> = self
+                                .sprints
+                                .iter()
+                                .filter(|s| s.board_id == board.id)
+                                .collect();
+                            for (idx, sprint) in board_sprints.iter().enumerate() {
+                                if sprint.id == card_sprint_id {
+                                    return idx + 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        0
+    }
+
+    pub fn get_current_sort_field_selection_index(&self) -> usize {
+        if let Some(sort_field) = self.current_sort_field {
+            return match sort_field {
+                SortField::Points => 0,
+                SortField::Priority => 1,
+                SortField::CreatedAt => 2,
+                SortField::UpdatedAt => 3,
+                SortField::Status => 4,
+                SortField::Default => 5,
+            };
+        }
+        0
+    }
 }
 
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>, io::Error> {

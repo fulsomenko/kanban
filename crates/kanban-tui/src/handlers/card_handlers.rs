@@ -91,7 +91,8 @@ impl App {
                             let actual_idx = self.cards.iter().position(|c| c.id == card_id);
                             self.active_card_index = actual_idx;
                         }
-                        self.sprint_assign_selection.set(Some(0));
+                        let selection_idx = self.get_current_sprint_selection_index();
+                        self.sprint_assign_selection.set(Some(selection_idx));
                         self.mode = AppMode::AssignCardToSprint;
                     }
                 }
@@ -101,7 +102,8 @@ impl App {
 
     pub fn handle_order_cards_key(&mut self) {
         if self.focus == Focus::Cards && self.active_board_index.is_some() {
-            self.sort_field_selection.set(Some(0));
+            let sort_idx = self.get_current_sort_field_selection_index();
+            self.sort_field_selection.set(Some(sort_idx));
             self.mode = AppMode::OrderCards;
         }
     }
