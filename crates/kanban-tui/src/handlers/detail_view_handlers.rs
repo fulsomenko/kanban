@@ -347,18 +347,15 @@ impl App {
                 }
             }
             _ => {
-                let (active_component, active_card_list) = match self.sprint_task_panel {
-                    SprintTaskPanel::Uncompleted => (
-                        &mut self.sprint_uncompleted_component,
-                        &mut self.sprint_uncompleted_cards,
-                    ),
-                    SprintTaskPanel::Completed => (
-                        &mut self.sprint_completed_component,
-                        &mut self.sprint_completed_cards,
-                    ),
+                let action = {
+                    let active_component = match self.sprint_task_panel {
+                        SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
+                        SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                    };
+                    active_component.handle_key(key_code)
                 };
 
-                if let Some(action) = active_component.handle_key(key_code) {
+                if let Some(action) = action {
                     use crate::card_list_component::CardListAction;
 
                     match action {
@@ -369,13 +366,155 @@ impl App {
                                 self.card_focus = CardFocus::Title;
                             }
                         }
-                        _ => {
-                            // Other actions will be handled in phase 3
+                        CardListAction::Edit(card_id) => {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                                self.active_card_index = Some(card_idx);
+                                self.mode = AppMode::CardDetail;
+                                self.card_focus = CardFocus::Title;
+                            }
+                        }
+                        CardListAction::Complete(card_id) => {
+                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                                use kanban_domain::CardStatus;
+                                let new_status = if card.status == CardStatus::Done {
+                                    CardStatus::Todo
+                                } else {
+                                    CardStatus::Done
+                                };
+                                card.update_status(new_status);
+                                tracing::info!("Card status updated to: {:?}", new_status);
+                            }
+                        }
+                        CardListAction::TogglePriority(card_id) => {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                                self.active_card_index = Some(card_idx);
+                                self.priority_selection.set(Some(0));
+                                self.mode = AppMode::SetCardPriority;
+                            }
+                        }
+                        CardListAction::AssignSprint(card_id) => {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                                self.active_card_index = Some(card_idx);
+                                if let Some(board_idx) = self.active_board_index {
+                                    if let Some(board) = self.boards.get(board_idx) {
+                                        let sprint_count = self
+                                            .sprints
+                                            .iter()
+                                            .filter(|s| s.board_id == board.id)
+                                            .count();
+                                        if sprint_count > 0 {
+                                            self.sprint_assign_selection.set(Some(0));
+                                            self.mode = AppMode::AssignCardToSprint;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        CardListAction::ReassignSprint(card_id) => {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                                self.active_card_index = Some(card_idx);
+                                if let Some(board_idx) = self.active_board_index {
+                                    if let Some(board) = self.boards.get(board_idx) {
+                                        let sprint_count = self
+                                            .sprints
+                                            .iter()
+                                            .filter(|s| s.board_id == board.id)
+                                            .count();
+                                        if sprint_count > 0 {
+                                            self.sprint_assign_selection.set(Some(0));
+                                            self.mode = AppMode::AssignCardToSprint;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        CardListAction::Sort => {
+                            self.sort_field_selection.set(Some(0));
+                            self.mode = AppMode::OrderCards;
+                        }
+                        CardListAction::OrderCards => {
+                            if let Some(current_order) = self.current_sort_order {
+                                let new_order = match current_order {
+                                    kanban_domain::SortOrder::Ascending => kanban_domain::SortOrder::Descending,
+                                    kanban_domain::SortOrder::Descending => kanban_domain::SortOrder::Ascending,
+                                };
+                                self.current_sort_order = Some(new_order);
+
+                                if let Some(field) = self.current_sort_field {
+                                    self.apply_sort_to_sprint_lists(field, new_order);
+                                    tracing::info!("Toggled sort order to: {:?}", new_order);
+                                }
+                            }
+                        }
+                        CardListAction::MoveColumn(card_id, is_right) => {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                                if let Some(card) = self.cards.get_mut(card_idx) {
+                                    if let Some(board_idx) = self.active_board_index {
+                                        if let Some(board) = self.boards.get(board_idx) {
+                                            let current_col = card.column_id;
+                                            let columns: Vec<_> = self
+                                                .columns
+                                                .iter()
+                                                .filter(|c| c.board_id == board.id)
+                                                .collect();
+
+                                            if let Some(current_idx) = columns.iter().position(|c| c.id == current_col) {
+                                                let new_idx = if is_right {
+                                                    (current_idx + 1).min(columns.len() - 1)
+                                                } else {
+                                                    current_idx.saturating_sub(1)
+                                                };
+
+                                                if let Some(new_col) = columns.get(new_idx) {
+                                                    card.column_id = new_col.id;
+                                                    let direction = if is_right { "right" } else { "left" };
+                                                    tracing::info!("Moved card {} to {}", card.title, direction);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        CardListAction::Create => {
+                            self.mode = AppMode::CreateCard;
+                            self.input.clear();
+                        }
+                        CardListAction::ToggleMultiSelect(card_id) => {
+                            let component = match self.sprint_task_panel {
+                                SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
+                                SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                            };
+                            component.toggle_multi_select(card_id);
+                        }
+                        CardListAction::ClearMultiSelect => {
+                            let component = match self.sprint_task_panel {
+                                SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
+                                SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                            };
+                            component.clear_multi_select();
+                        }
+                        CardListAction::SelectAll => {
+                            let component = match self.sprint_task_panel {
+                                SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
+                                SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                            };
+                            component.select_all();
                         }
                     }
                 }
 
                 // Sync component selection back to CardList for rendering
+                let (active_component, active_card_list) = match self.sprint_task_panel {
+                    SprintTaskPanel::Uncompleted => (
+                        &self.sprint_uncompleted_component,
+                        &mut self.sprint_uncompleted_cards,
+                    ),
+                    SprintTaskPanel::Completed => (
+                        &self.sprint_completed_component,
+                        &mut self.sprint_completed_cards,
+                    ),
+                };
                 active_card_list.set_selected_index(active_component.get_selected_index());
             }
         }
