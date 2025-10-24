@@ -347,9 +347,15 @@ impl App {
                 }
             }
             _ => {
-                let active_component = match self.sprint_task_panel {
-                    SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
-                    SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                let (active_component, active_card_list) = match self.sprint_task_panel {
+                    SprintTaskPanel::Uncompleted => (
+                        &mut self.sprint_uncompleted_component,
+                        &mut self.sprint_uncompleted_cards,
+                    ),
+                    SprintTaskPanel::Completed => (
+                        &mut self.sprint_completed_component,
+                        &mut self.sprint_completed_cards,
+                    ),
                 };
 
                 if let Some(action) = active_component.handle_key(key_code) {
@@ -368,6 +374,9 @@ impl App {
                         }
                     }
                 }
+
+                // Sync component selection back to CardList for rendering
+                active_card_list.set_selected_index(active_component.get_selected_index());
             }
         }
     }
