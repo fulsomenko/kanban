@@ -1,4 +1,6 @@
 use crate::{
+    card_list::{CardList, CardListId},
+    card_list_component::{CardListComponent, CardListComponentConfig},
     clipboard,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
@@ -49,7 +51,13 @@ pub struct App {
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
+    pub sprint_task_panel: SprintTaskPanel,
+    pub sprint_uncompleted_cards: CardList,
+    pub sprint_completed_cards: CardList,
+    pub sprint_uncompleted_component: CardListComponent,
+    pub sprint_completed_component: CardListComponent,
     pub view_strategy: Box<dyn ViewStrategy>,
+    pub card_list_component: CardListComponent,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,6 +80,12 @@ pub enum BoardFocus {
     Settings,
     Sprints,
     Columns,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SprintTaskPanel {
+    Uncompleted,
+    Completed,
 }
 
 pub enum CardField {
@@ -151,7 +165,37 @@ impl App {
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
+            sprint_task_panel: SprintTaskPanel::Uncompleted,
+            sprint_uncompleted_cards: CardList::new(CardListId::All),
+            sprint_completed_cards: CardList::new(CardListId::All),
+            sprint_uncompleted_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new()
+                    .with_actions(vec![
+                        crate::card_list_component::CardListActionType::Navigation,
+                        crate::card_list_component::CardListActionType::Selection,
+                        crate::card_list_component::CardListActionType::Editing,
+                        crate::card_list_component::CardListActionType::Completion,
+                        crate::card_list_component::CardListActionType::Priority,
+                        crate::card_list_component::CardListActionType::Sorting,
+                    ])
+                    .with_movement(false),
+            ),
+            sprint_completed_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new()
+                    .with_actions(vec![
+                        crate::card_list_component::CardListActionType::Navigation,
+                        crate::card_list_component::CardListActionType::Selection,
+                        crate::card_list_component::CardListActionType::Sorting,
+                    ])
+                    .with_multi_select(false),
+            ),
             view_strategy: Box::new(GroupedViewStrategy::new()),
+            card_list_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new(),
+            ),
         };
 
         if let Some(ref filename) = save_file {
@@ -267,10 +311,27 @@ impl App {
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.columns);
+        let completed_sprint_ids: std::collections::HashSet<uuid::Uuid> = self
+            .sprints
+            .iter()
+            .filter(|s| s.status == kanban_domain::SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
         let cards: Vec<_> = self
             .cards
             .iter()
-            .filter(|c| board_filter.matches(c))
+            .filter(|c| {
+                if !board_filter.matches(c) {
+                    return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
+                }
+                true
+            })
             .collect();
 
         if self.active_sprint_filter.is_none() && !self.hide_assigned_cards {
@@ -297,12 +358,24 @@ impl App {
         let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.columns);
 
+        let completed_sprint_ids: std::collections::HashSet<uuid::Uuid> = self
+            .sprints
+            .iter()
+            .filter(|s| s.status == kanban_domain::SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
         let mut cards: Vec<&Card> = self
             .cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
                 }
                 if let Some(sprint_id) = self.active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
@@ -344,6 +417,110 @@ impl App {
         }
     }
 
+    pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        self.cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id))
+            .collect()
+    }
+
+    pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        let cards: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
+            .collect();
+        tracing::debug!(
+            "get_sprint_completed_cards({}): found {} cards",
+            sprint_id,
+            cards.len()
+        );
+        cards
+    }
+
+    pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        let cards: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
+            .collect();
+        tracing::debug!(
+            "get_sprint_uncompleted_cards({}): found {} cards",
+            sprint_id,
+            cards.len()
+        );
+        cards
+    }
+
+    pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
+        let uncompleted_ids: Vec<uuid::Uuid> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
+            .map(|card| card.id)
+            .collect();
+
+        let completed_ids: Vec<uuid::Uuid> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
+            .map(|card| card.id)
+            .collect();
+
+        self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
+        self.sprint_completed_cards.update_cards(completed_ids);
+
+        self.sprint_uncompleted_component
+            .update_cards(self.sprint_uncompleted_cards.cards.clone());
+        self.sprint_completed_component
+            .update_cards(self.sprint_completed_cards.cards.clone());
+
+        // Default to uncompleted panel
+        self.sprint_task_panel = SprintTaskPanel::Uncompleted;
+    }
+
+    pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
+        let uncompleted_card_ids: Vec<uuid::Uuid> = self.sprint_uncompleted_cards.cards.clone();
+        let completed_card_ids: Vec<uuid::Uuid> = self.sprint_completed_cards.cards.clone();
+
+        let mut uncompleted_cards: Vec<&Card> = uncompleted_card_ids
+            .iter()
+            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .collect();
+
+        let mut completed_cards: Vec<&Card> = completed_card_ids
+            .iter()
+            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .collect();
+
+        let sorter = get_sorter_for_field(sort_field);
+        let ordered_sorter = OrderedSorter::new(sorter, sort_order);
+
+        ordered_sorter.sort(&mut uncompleted_cards);
+        ordered_sorter.sort(&mut completed_cards);
+
+        let sorted_uncompleted_ids: Vec<uuid::Uuid> =
+            uncompleted_cards.iter().map(|c| c.id).collect();
+        let sorted_completed_ids: Vec<uuid::Uuid> = completed_cards.iter().map(|c| c.id).collect();
+
+        self.sprint_uncompleted_cards
+            .update_cards(sorted_uncompleted_ids);
+        self.sprint_completed_cards
+            .update_cards(sorted_completed_ids);
+
+        self.sprint_uncompleted_component
+            .update_cards(self.sprint_uncompleted_cards.cards.clone());
+        self.sprint_completed_component
+            .update_cards(self.sprint_completed_cards.cards.clone());
+    }
+
+    pub fn calculate_points(cards: &[&Card]) -> u32 {
+        cards
+            .iter()
+            .filter_map(|card| card.points.map(|p| p as u32))
+            .sum()
+    }
+
     pub fn refresh_view(&mut self) {
         if let Some(board_idx) = self.active_board_index {
             if let Some(board) = self.boards.get(board_idx) {
@@ -351,10 +528,19 @@ impl App {
                     board,
                     &self.cards,
                     &self.columns,
+                    &self.sprints,
                     self.active_sprint_filter,
                     self.hide_assigned_cards,
                 );
             }
+        }
+        self.sync_card_list_component();
+    }
+
+    pub fn sync_card_list_component(&mut self) {
+        if let Some(active_list) = self.view_strategy.get_active_task_list() {
+            self.card_list_component
+                .update_cards(active_list.cards.clone());
         }
     }
 
@@ -365,11 +551,13 @@ impl App {
                     board,
                     &self.cards,
                     &self.columns,
+                    &self.sprints,
                     self.active_sprint_filter,
                     self.hide_assigned_cards,
                 );
             }
         }
+        self.sync_card_list_component();
     }
 
     pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
@@ -386,6 +574,7 @@ impl App {
         } else {
             self.refresh_preview();
         }
+        self.sync_card_list_component();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {

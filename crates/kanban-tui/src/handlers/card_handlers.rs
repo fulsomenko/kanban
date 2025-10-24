@@ -1,6 +1,6 @@
 use crate::app::{App, AppMode, CardField, Focus};
+use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use crate::task_list::TaskListId;
 use crate::view_strategy::{GroupedViewStrategy, KanbanViewStrategy, ViewStrategy};
 use kanban_domain::{Card, CardStatus, Column, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
@@ -22,7 +22,7 @@ impl App {
 
         if let Some(grouped) = grouped_strategy {
             if let Some(task_list) = grouped.get_active_task_list() {
-                if let TaskListId::Column(column_id) = task_list.id {
+                if let CardListId::Column(column_id) = task_list.id {
                     return Some(column_id);
                 }
             }
@@ -35,7 +35,7 @@ impl App {
 
         if let Some(kanban) = kanban_strategy {
             if let Some(task_list) = kanban.get_active_task_list() {
-                if let TaskListId::Column(column_id) = task_list.id {
+                if let CardListId::Column(column_id) = task_list.id {
                     return Some(column_id);
                 }
             }
@@ -124,6 +124,7 @@ impl App {
                 }
 
                 tracing::info!("Toggled sort order to: {:?}", new_order);
+                self.refresh_view();
             }
         }
     }

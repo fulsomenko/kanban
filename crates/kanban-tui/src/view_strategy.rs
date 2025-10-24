@@ -1,13 +1,13 @@
+use crate::card_list::{CardList, CardListId};
 use crate::services::filter::CardFilter;
 use crate::services::{get_sorter_for_field, BoardFilter, OrderedSorter};
-use crate::task_list::{TaskList, TaskListId};
-use kanban_domain::{Board, Card, Column};
+use kanban_domain::{Board, Card, Column, Sprint, SprintStatus};
 use uuid::Uuid;
 
 pub trait ViewStrategy {
-    fn get_active_task_list(&self) -> Option<&TaskList>;
-    fn get_active_task_list_mut(&mut self) -> Option<&mut TaskList>;
-    fn get_all_task_lists(&self) -> Vec<&TaskList>;
+    fn get_active_task_list(&self) -> Option<&CardList>;
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList>;
+    fn get_all_task_lists(&self) -> Vec<&CardList>;
     fn navigate_left(&mut self, select_last: bool) -> bool;
     fn navigate_right(&mut self, select_last: bool) -> bool;
     fn refresh_task_lists(
@@ -15,6 +15,7 @@ pub trait ViewStrategy {
         board: &Board,
         all_cards: &[Card],
         all_columns: &[Column],
+        all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
     );
@@ -22,7 +23,7 @@ pub trait ViewStrategy {
 }
 
 pub struct FlatViewStrategy {
-    task_list: TaskList,
+    task_list: CardList,
 }
 
 impl Default for FlatViewStrategy {
@@ -34,21 +35,21 @@ impl Default for FlatViewStrategy {
 impl FlatViewStrategy {
     pub fn new() -> Self {
         Self {
-            task_list: TaskList::new(TaskListId::All),
+            task_list: CardList::new(CardListId::All),
         }
     }
 }
 
 impl ViewStrategy for FlatViewStrategy {
-    fn get_active_task_list(&self) -> Option<&TaskList> {
+    fn get_active_task_list(&self) -> Option<&CardList> {
         Some(&self.task_list)
     }
 
-    fn get_active_task_list_mut(&mut self) -> Option<&mut TaskList> {
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList> {
         Some(&mut self.task_list)
     }
 
-    fn get_all_task_lists(&self) -> Vec<&TaskList> {
+    fn get_all_task_lists(&self) -> Vec<&CardList> {
         vec![&self.task_list]
     }
 
@@ -65,16 +66,28 @@ impl ViewStrategy for FlatViewStrategy {
         board: &Board,
         all_cards: &[Card],
         all_columns: &[Column],
+        all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
     ) {
         let board_filter = BoardFilter::new(board.id, all_columns);
+
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
 
         let mut filtered_cards: Vec<&Card> = all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
                 }
                 if let Some(sprint_id) = active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
@@ -102,7 +115,7 @@ impl ViewStrategy for FlatViewStrategy {
 }
 
 pub struct GroupedViewStrategy {
-    column_lists: Vec<TaskList>,
+    column_lists: Vec<CardList>,
     active_column_index: usize,
 }
 
@@ -132,15 +145,15 @@ impl GroupedViewStrategy {
 }
 
 impl ViewStrategy for GroupedViewStrategy {
-    fn get_active_task_list(&self) -> Option<&TaskList> {
+    fn get_active_task_list(&self) -> Option<&CardList> {
         self.column_lists.get(self.active_column_index)
     }
 
-    fn get_active_task_list_mut(&mut self) -> Option<&mut TaskList> {
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList> {
         self.column_lists.get_mut(self.active_column_index)
     }
 
-    fn get_all_task_lists(&self) -> Vec<&TaskList> {
+    fn get_all_task_lists(&self) -> Vec<&CardList> {
         self.column_lists.iter().collect()
     }
 
@@ -185,6 +198,7 @@ impl ViewStrategy for GroupedViewStrategy {
         board: &Board,
         all_cards: &[Card],
         all_columns: &[Column],
+        all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
     ) {
@@ -196,11 +210,22 @@ impl ViewStrategy for GroupedViewStrategy {
 
         let board_filter = BoardFilter::new(board.id, all_columns);
 
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
         let filtered_cards: Vec<&Card> = all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
                 }
                 if let Some(sprint_id) = active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
@@ -233,14 +258,14 @@ impl ViewStrategy for GroupedViewStrategy {
             let existing_list = self
                 .column_lists
                 .iter()
-                .find(|list| list.id == TaskListId::Column(column.id));
+                .find(|list| list.id == CardListId::Column(column.id));
 
             let mut task_list = if let Some(existing) = existing_list {
-                let mut list = TaskList::new(TaskListId::Column(column.id));
+                let mut list = CardList::new(CardListId::Column(column.id));
                 list.selection = existing.selection.clone();
                 list
             } else {
-                TaskList::new(TaskListId::Column(column.id))
+                CardList::new(CardListId::Column(column.id))
             };
 
             task_list.update_cards(card_ids);
@@ -260,7 +285,7 @@ impl ViewStrategy for GroupedViewStrategy {
 }
 
 pub struct KanbanViewStrategy {
-    column_lists: Vec<TaskList>,
+    column_lists: Vec<CardList>,
     active_column_index: usize,
 }
 
@@ -290,15 +315,15 @@ impl KanbanViewStrategy {
 }
 
 impl ViewStrategy for KanbanViewStrategy {
-    fn get_active_task_list(&self) -> Option<&TaskList> {
+    fn get_active_task_list(&self) -> Option<&CardList> {
         self.column_lists.get(self.active_column_index)
     }
 
-    fn get_active_task_list_mut(&mut self) -> Option<&mut TaskList> {
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList> {
         self.column_lists.get_mut(self.active_column_index)
     }
 
-    fn get_all_task_lists(&self) -> Vec<&TaskList> {
+    fn get_all_task_lists(&self) -> Vec<&CardList> {
         self.column_lists.iter().collect()
     }
 
@@ -343,6 +368,7 @@ impl ViewStrategy for KanbanViewStrategy {
         board: &Board,
         all_cards: &[Card],
         all_columns: &[Column],
+        all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
     ) {
@@ -354,11 +380,22 @@ impl ViewStrategy for KanbanViewStrategy {
 
         let board_filter = BoardFilter::new(board.id, all_columns);
 
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
         let filtered_cards: Vec<&Card> = all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
                 }
                 if let Some(sprint_id) = active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
@@ -391,14 +428,14 @@ impl ViewStrategy for KanbanViewStrategy {
             let existing_list = self
                 .column_lists
                 .iter()
-                .find(|list| list.id == TaskListId::Column(column.id));
+                .find(|list| list.id == CardListId::Column(column.id));
 
             let mut task_list = if let Some(existing) = existing_list {
-                let mut list = TaskList::new(TaskListId::Column(column.id));
+                let mut list = CardList::new(CardListId::Column(column.id));
                 list.selection = existing.selection.clone();
                 list
             } else {
-                TaskList::new(TaskListId::Column(column.id))
+                CardList::new(CardListId::Column(column.id))
             };
 
             task_list.update_cards(card_ids);

@@ -1,4 +1,6 @@
 pub mod app;
+pub mod card_list;
+pub mod card_list_component;
 pub mod clipboard;
 pub mod components;
 pub mod dialog;
@@ -10,7 +12,6 @@ pub mod input;
 pub mod markdown_renderer;
 pub mod selection;
 pub mod services;
-pub mod task_list;
 pub mod theme;
 pub mod ui;
 pub mod view_strategy;
