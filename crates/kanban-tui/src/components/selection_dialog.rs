@@ -24,9 +24,9 @@ impl SelectionDialog for PriorityDialog {
     }
 
     fn render(&self, app: &App, frame: &mut Frame) {
-        use kanban_domain::CardPriority;
         use crate::components::render_selection_popup_with_list_items;
         use crate::theme::*;
+        use kanban_domain::CardPriority;
         use ratatui::widgets::ListItem;
 
         let priorities = [
@@ -71,8 +71,8 @@ impl SelectionDialog for SortFieldDialog {
     }
 
     fn render(&self, app: &App, frame: &mut Frame) {
-        use kanban_domain::{SortField, SortOrder};
         use crate::components::render_selection_popup_with_lines;
+        use kanban_domain::{SortField, SortOrder};
 
         let sort_fields = [
             SortField::Points,
@@ -151,13 +151,13 @@ impl SelectionDialog for SprintAssignDialog {
     }
 
     fn render(&self, app: &App, frame: &mut Frame) {
+        use crate::components::centered_rect;
         use ratatui::{
             layout::{Constraint, Direction, Layout},
             style::{Color, Modifier, Style},
             text::{Line, Span},
             widgets::{Block, Borders, Clear, Paragraph},
         };
-        use crate::components::centered_rect;
 
         let area = centered_rect(60, 50, frame.area());
         frame.render_widget(Clear, area);

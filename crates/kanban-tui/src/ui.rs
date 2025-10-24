@@ -1187,13 +1187,13 @@ fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
 }
 
 fn render_order_cards_popup(app: &App, frame: &mut Frame) {
-    use crate::components::{SortFieldDialog, SelectionDialog};
+    use crate::components::{SelectionDialog, SortFieldDialog};
     let dialog = SortFieldDialog;
     dialog.render(app, frame);
 }
 
 fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
-    use crate::components::{SprintAssignDialog, SelectionDialog};
+    use crate::components::{SelectionDialog, SprintAssignDialog};
     let dialog = SprintAssignDialog;
     dialog.render(app, frame);
 }

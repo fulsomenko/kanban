@@ -411,7 +411,8 @@ impl App {
                                             .filter(|s| s.board_id == board.id)
                                             .count();
                                         if sprint_count > 0 {
-                                            let selection_idx = self.get_current_sprint_selection_index();
+                                            let selection_idx =
+                                                self.get_current_sprint_selection_index();
                                             self.sprint_assign_selection.set(Some(selection_idx));
                                             self.mode = AppMode::AssignCardToSprint;
                                         }
@@ -431,7 +432,8 @@ impl App {
                                             .filter(|s| s.board_id == board.id)
                                             .count();
                                         if sprint_count > 0 {
-                                            let selection_idx = self.get_current_sprint_selection_index();
+                                            let selection_idx =
+                                                self.get_current_sprint_selection_index();
                                             self.sprint_assign_selection.set(Some(selection_idx));
                                             self.mode = AppMode::AssignCardToSprint;
                                         }
