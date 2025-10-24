@@ -471,11 +471,12 @@ impl App {
                                     if let Some(board_idx) = self.active_board_index {
                                         if let Some(board) = self.boards.get(board_idx) {
                                             let current_col = card.column_id;
-                                            let columns: Vec<_> = self
+                                            let mut columns: Vec<_> = self
                                                 .columns
                                                 .iter()
                                                 .filter(|c| c.board_id == board.id)
                                                 .collect();
+                                            columns.sort_by_key(|col| col.position);
 
                                             if let Some(current_idx) =
                                                 columns.iter().position(|c| c.id == current_col)
@@ -487,14 +488,51 @@ impl App {
                                                 };
 
                                                 if let Some(new_col) = columns.get(new_idx) {
+                                                    let was_in_last =
+                                                        current_idx == columns.len() - 1;
+                                                    let moving_to_last =
+                                                        new_idx == columns.len() - 1;
+
                                                     card.column_id = new_col.id;
-                                                    let direction =
-                                                        if is_right { "right" } else { "left" };
-                                                    tracing::info!(
-                                                        "Moved card {} to {}",
-                                                        card.title,
-                                                        direction
-                                                    );
+
+                                                    // Update status based on movement
+                                                    if !is_right
+                                                        && was_in_last
+                                                        && columns.len() > 1
+                                                        && card.status
+                                                            == kanban_domain::CardStatus::Done
+                                                    {
+                                                        // Moving left from last column: uncomplete
+                                                        card.update_status(
+                                                            kanban_domain::CardStatus::Todo,
+                                                        );
+                                                        tracing::info!(
+                                                            "Moved card {} left from last column (marked as incomplete)",
+                                                            card.title
+                                                        );
+                                                    } else if is_right
+                                                        && moving_to_last
+                                                        && columns.len() > 1
+                                                        && card.status
+                                                            != kanban_domain::CardStatus::Done
+                                                    {
+                                                        // Moving right to last column: complete
+                                                        card.update_status(
+                                                            kanban_domain::CardStatus::Done,
+                                                        );
+                                                        tracing::info!(
+                                                            "Moved card {} to last column (marked as complete)",
+                                                            card.title
+                                                        );
+                                                    } else {
+                                                        let direction =
+                                                            if is_right { "right" } else { "left" };
+                                                        tracing::info!(
+                                                            "Moved card {} to {}",
+                                                            card.title,
+                                                            direction
+                                                        );
+                                                    }
                                                 }
                                             }
                                         }
