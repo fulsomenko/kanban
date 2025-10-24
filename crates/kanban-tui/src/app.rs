@@ -54,6 +54,8 @@ pub struct App {
     pub sprint_task_panel: SprintTaskPanel,
     pub sprint_uncompleted_cards: CardList,
     pub sprint_completed_cards: CardList,
+    pub sprint_uncompleted_component: CardListComponent,
+    pub sprint_completed_component: CardListComponent,
     pub view_strategy: Box<dyn ViewStrategy>,
     pub card_list_component: CardListComponent,
 }
@@ -166,6 +168,29 @@ impl App {
             sprint_task_panel: SprintTaskPanel::Uncompleted,
             sprint_uncompleted_cards: CardList::new(CardListId::All),
             sprint_completed_cards: CardList::new(CardListId::All),
+            sprint_uncompleted_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new()
+                    .with_actions(vec![
+                        crate::card_list_component::CardListActionType::Navigation,
+                        crate::card_list_component::CardListActionType::Selection,
+                        crate::card_list_component::CardListActionType::Editing,
+                        crate::card_list_component::CardListActionType::Completion,
+                        crate::card_list_component::CardListActionType::Priority,
+                        crate::card_list_component::CardListActionType::Sorting,
+                    ])
+                    .with_movement(false),
+            ),
+            sprint_completed_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new()
+                    .with_actions(vec![
+                        crate::card_list_component::CardListActionType::Navigation,
+                        crate::card_list_component::CardListActionType::Selection,
+                        crate::card_list_component::CardListActionType::Sorting,
+                    ])
+                    .with_multi_select(false),
+            ),
             view_strategy: Box::new(GroupedViewStrategy::new()),
             card_list_component: CardListComponent::new(
                 CardListId::All,
@@ -437,8 +462,41 @@ impl App {
         self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
         self.sprint_completed_cards.update_cards(completed_ids);
 
+        self.sprint_uncompleted_component.update_cards(self.sprint_uncompleted_cards.cards.clone());
+        self.sprint_completed_component.update_cards(self.sprint_completed_cards.cards.clone());
+
         // Default to uncompleted panel
         self.sprint_task_panel = SprintTaskPanel::Uncompleted;
+    }
+
+    pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
+        let uncompleted_card_ids: Vec<uuid::Uuid> = self.sprint_uncompleted_cards.cards.clone();
+        let completed_card_ids: Vec<uuid::Uuid> = self.sprint_completed_cards.cards.clone();
+
+        let mut uncompleted_cards: Vec<&Card> = uncompleted_card_ids
+            .iter()
+            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .collect();
+
+        let mut completed_cards: Vec<&Card> = completed_card_ids
+            .iter()
+            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .collect();
+
+        let sorter = get_sorter_for_field(sort_field);
+        let ordered_sorter = OrderedSorter::new(sorter, sort_order);
+
+        ordered_sorter.sort(&mut uncompleted_cards);
+        ordered_sorter.sort(&mut completed_cards);
+
+        let sorted_uncompleted_ids: Vec<uuid::Uuid> = uncompleted_cards.iter().map(|c| c.id).collect();
+        let sorted_completed_ids: Vec<uuid::Uuid> = completed_cards.iter().map(|c| c.id).collect();
+
+        self.sprint_uncompleted_cards.update_cards(sorted_uncompleted_ids);
+        self.sprint_completed_cards.update_cards(sorted_completed_ids);
+
+        self.sprint_uncompleted_component.update_cards(self.sprint_uncompleted_cards.cards.clone());
+        self.sprint_completed_component.update_cards(self.sprint_completed_cards.cards.clone());
     }
 
     pub fn calculate_points(cards: &[&Card]) -> u32 {

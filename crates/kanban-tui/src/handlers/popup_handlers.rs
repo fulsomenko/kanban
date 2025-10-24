@@ -114,11 +114,24 @@ impl App {
                         }
                     }
 
-                    self.mode = AppMode::Normal;
+                    // Return to the appropriate mode based on where we came from
+                    let is_sprint_detail = self.active_sprint_index.is_some();
+                    let prev_mode = if is_sprint_detail {
+                        AppMode::SprintDetail
+                    } else {
+                        AppMode::Normal
+                    };
+                    self.mode = prev_mode;
                     self.sort_field_selection.clear();
 
                     tracing::info!("Sorting by {:?} ({:?})", field, order);
-                    self.refresh_view();
+
+                    // Apply sorting to the appropriate context
+                    if is_sprint_detail {
+                        self.apply_sort_to_sprint_lists(field, order);
+                    } else {
+                        self.refresh_view();
+                    }
                 }
                 false
             }

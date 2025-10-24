@@ -310,6 +310,24 @@ impl App {
             KeyCode::Char('c') => {
                 self.handle_complete_sprint_key();
             }
+            KeyCode::Char('o') => {
+                self.sort_field_selection.set(Some(0));
+                self.mode = AppMode::OrderCards;
+            }
+            KeyCode::Char('O') => {
+                if let Some(current_order) = self.current_sort_order {
+                    let new_order = match current_order {
+                        kanban_domain::SortOrder::Ascending => kanban_domain::SortOrder::Descending,
+                        kanban_domain::SortOrder::Descending => kanban_domain::SortOrder::Ascending,
+                    };
+                    self.current_sort_order = Some(new_order);
+
+                    if let Some(field) = self.current_sort_field {
+                        self.apply_sort_to_sprint_lists(field, new_order);
+                        tracing::info!("Toggled sort order to: {:?}", new_order);
+                    }
+                }
+            }
             KeyCode::Char('h') | KeyCode::Left => {
                 if let Some(sprint_idx) = self.active_sprint_index {
                     if let Some(sprint) = self.sprints.get(sprint_idx) {
@@ -328,36 +346,29 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                if self.sprint_task_panel == SprintTaskPanel::Uncompleted {
-                    self.sprint_uncompleted_cards.navigate_down();
-                } else {
-                    self.sprint_completed_cards.navigate_down();
-                }
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                if self.sprint_task_panel == SprintTaskPanel::Uncompleted {
-                    self.sprint_uncompleted_cards.navigate_up();
-                } else {
-                    self.sprint_completed_cards.navigate_up();
-                }
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                let selected_card_id = if self.sprint_task_panel == SprintTaskPanel::Uncompleted {
-                    self.sprint_uncompleted_cards.get_selected_card_id()
-                } else {
-                    self.sprint_completed_cards.get_selected_card_id()
+            _ => {
+                let active_component = match self.sprint_task_panel {
+                    SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
+                    SprintTaskPanel::Completed => &mut self.sprint_completed_component,
                 };
 
-                if let Some(card_id) = selected_card_id {
-                    if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
-                        self.active_card_index = Some(card_idx);
-                        self.mode = AppMode::CardDetail;
-                        self.card_focus = CardFocus::Title;
+                if let Some(action) = active_component.handle_key(key_code) {
+                    use crate::card_list_component::CardListAction;
+
+                    match action {
+                        CardListAction::Select(card_id) => {
+                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id) {
+                                self.active_card_index = Some(card_idx);
+                                self.mode = AppMode::CardDetail;
+                                self.card_focus = CardFocus::Title;
+                            }
+                        }
+                        _ => {
+                            // Other actions will be handled in phase 3
+                        }
                     }
                 }
             }
-            _ => {}
         }
     }
 }
