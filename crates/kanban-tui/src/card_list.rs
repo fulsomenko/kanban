@@ -63,9 +63,12 @@ impl CardList {
     }
 
     pub fn navigate_up(&mut self) -> bool {
+        if self.cards.is_empty() {
+            return false;
+        }
         let was_at_top = self.selection.get() == Some(0) || self.selection.get().is_none();
         self.selection.prev();
-        was_at_top && !self.cards.is_empty()
+        was_at_top
     }
 
     pub fn navigate_down(&mut self) -> bool {
