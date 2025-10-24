@@ -118,6 +118,7 @@ impl App {
                     self.sort_field_selection.clear();
 
                     tracing::info!("Sorting by {:?} ({:?})", field, order);
+                    self.refresh_view();
                 }
                 false
             }
