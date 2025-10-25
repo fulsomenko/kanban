@@ -503,7 +503,10 @@ impl App {
                                         card.title
                                     );
                                 } else {
-                                    tracing::info!("Moved card '{}' to previous column", card.title);
+                                    tracing::info!(
+                                        "Moved card '{}' to previous column",
+                                        card.title
+                                    );
                                 }
                             }
 
