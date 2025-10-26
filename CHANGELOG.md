@@ -1,3 +1,21 @@
+## [0.2.2-unified-test] - 2025-10-26
+
+### KAN-81 J K Doesnt Work On Empty Columns (2025-10-25 23:27)
+
+Fix j/k navigation on empty card lists. Pressing j/k on an empty column now correctly navigates to adjacent columns instead of doing nothing.
+
+### MVP-29 Search In Cards List (2025-10-26 12:40)
+
+- style: make search query text white for better visibility
+- feat: add vim-style search query display in footer
+- refactor: consolidate refresh_view and refresh_preview functions
+- Add Search mode help text to footer
+- Integrate search functionality into App
+- Add search query parameter to view strategies
+- Add search module to crate exports
+- Add search module with trait-based architecture
+
+
 ## [0.1.8] - 2025-10-21 && [0.1.9] - 2025-10-21 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
 - Fix critical release workflow issues that prevented successful publishing to crates.io:
