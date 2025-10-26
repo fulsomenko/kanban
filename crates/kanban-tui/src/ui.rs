@@ -373,6 +373,18 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                 return;
             }
 
+            let sprint_filter_suffix = if let Some(sprint_id) = app.active_sprint_filter {
+                if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
+                    let sprint_name = sprint
+                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    Some(format!(" - {}", sprint_name))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             let column_count = task_lists.len();
             let column_width = 100 / column_count as u16;
 
@@ -432,11 +444,17 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                         "All".to_string()
                     };
 
-                let title = if col_idx < 9 {
+                let mut title = if col_idx < 9 {
                     format!("{} ({}) [{}]", column_name, card_count, col_idx + 1)
                 } else {
                     format!("{} ({})", column_name, card_count)
                 };
+
+                if col_idx == 0 {
+                    if let Some(ref suffix) = sprint_filter_suffix {
+                        title.push_str(suffix);
+                    }
+                }
 
                 let panel_config = PanelConfig::new(&title)
                     .with_focus_indicator(&title)
