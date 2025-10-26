@@ -10,7 +10,10 @@ use crate::{
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     ui,
-    view_strategy::{FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewStrategy},
+    view_strategy::{
+        FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewRefreshContext,
+        ViewStrategy,
+    },
 };
 use crossterm::{
     execute,
@@ -575,15 +578,16 @@ impl App {
                 } else {
                     None
                 };
-                self.view_strategy.refresh_task_lists(
+                let ctx = ViewRefreshContext {
                     board,
-                    &self.cards,
-                    &self.columns,
-                    &self.sprints,
-                    self.active_sprint_filter,
-                    self.hide_assigned_cards,
+                    all_cards: &self.cards,
+                    all_columns: &self.columns,
+                    all_sprints: &self.sprints,
+                    active_sprint_filter: self.active_sprint_filter,
+                    hide_assigned_cards: self.hide_assigned_cards,
                     search_query,
-                );
+                };
+                self.view_strategy.refresh_task_lists(&ctx);
             }
         }
         self.sync_card_list_component();

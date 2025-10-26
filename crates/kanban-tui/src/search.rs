@@ -81,12 +81,12 @@ impl CardBranchNameSearcher {
         let sprint_prefix = card
             .sprint_id
             .and_then(|sid| sprints.iter().find(|s| s.id == sid))
-            .and_then(|sprint| {
-                Some(format!(
+            .map(|sprint| {
+                format!(
                     "{}-{}/",
                     board.sprint_prefix.as_deref().unwrap_or("sprint"),
                     sprint.sprint_number
-                ))
+                )
             });
 
         let card_number = card.card_number;
