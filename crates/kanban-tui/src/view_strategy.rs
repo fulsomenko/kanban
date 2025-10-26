@@ -1,28 +1,32 @@
+use crate::card_list::{CardList, CardListId};
+use crate::search::{CardSearcher, CompositeCardSearcher};
 use crate::services::filter::CardFilter;
 use crate::services::{get_sorter_for_field, BoardFilter, OrderedSorter};
-use crate::task_list::{TaskList, TaskListId};
-use kanban_domain::{Board, Card, Column};
+use kanban_domain::{Board, Card, Column, Sprint, SprintStatus};
 use uuid::Uuid;
 
+pub struct ViewRefreshContext<'a> {
+    pub board: &'a Board,
+    pub all_cards: &'a [Card],
+    pub all_columns: &'a [Column],
+    pub all_sprints: &'a [Sprint],
+    pub active_sprint_filter: Option<Uuid>,
+    pub hide_assigned_cards: bool,
+    pub search_query: Option<&'a str>,
+}
+
 pub trait ViewStrategy {
-    fn get_active_task_list(&self) -> Option<&TaskList>;
-    fn get_active_task_list_mut(&mut self) -> Option<&mut TaskList>;
-    fn get_all_task_lists(&self) -> Vec<&TaskList>;
+    fn get_active_task_list(&self) -> Option<&CardList>;
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList>;
+    fn get_all_task_lists(&self) -> Vec<&CardList>;
     fn navigate_left(&mut self, select_last: bool) -> bool;
     fn navigate_right(&mut self, select_last: bool) -> bool;
-    fn refresh_task_lists(
-        &mut self,
-        board: &Board,
-        all_cards: &[Card],
-        all_columns: &[Column],
-        active_sprint_filter: Option<Uuid>,
-        hide_assigned_cards: bool,
-    );
+    fn refresh_task_lists(&mut self, ctx: &ViewRefreshContext);
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 pub struct FlatViewStrategy {
-    task_list: TaskList,
+    task_list: CardList,
 }
 
 impl Default for FlatViewStrategy {
@@ -34,21 +38,21 @@ impl Default for FlatViewStrategy {
 impl FlatViewStrategy {
     pub fn new() -> Self {
         Self {
-            task_list: TaskList::new(TaskListId::All),
+            task_list: CardList::new(CardListId::All),
         }
     }
 }
 
 impl ViewStrategy for FlatViewStrategy {
-    fn get_active_task_list(&self) -> Option<&TaskList> {
+    fn get_active_task_list(&self) -> Option<&CardList> {
         Some(&self.task_list)
     }
 
-    fn get_active_task_list_mut(&mut self) -> Option<&mut TaskList> {
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList> {
         Some(&mut self.task_list)
     }
 
-    fn get_all_task_lists(&self) -> Vec<&TaskList> {
+    fn get_all_task_lists(&self) -> Vec<&CardList> {
         vec![&self.task_list]
     }
 
@@ -60,36 +64,51 @@ impl ViewStrategy for FlatViewStrategy {
         false
     }
 
-    fn refresh_task_lists(
-        &mut self,
-        board: &Board,
-        all_cards: &[Card],
-        all_columns: &[Column],
-        active_sprint_filter: Option<Uuid>,
-        hide_assigned_cards: bool,
-    ) {
-        let board_filter = BoardFilter::new(board.id, all_columns);
+    fn refresh_task_lists(&mut self, ctx: &ViewRefreshContext) {
+        let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
 
-        let mut filtered_cards: Vec<&Card> = all_cards
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = ctx
+            .all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
+        let search_filter = ctx
+            .search_query
+            .map(|q| CompositeCardSearcher::new(q.to_string()));
+
+        let mut filtered_cards: Vec<&Card> = ctx
+            .all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
                 }
-                if let Some(sprint_id) = active_sprint_filter {
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
+                }
+                if let Some(sprint_id) = ctx.active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
                         return false;
                     }
                 }
-                if hide_assigned_cards && c.sprint_id.is_some() {
+                if ctx.hide_assigned_cards && c.sprint_id.is_some() {
                     return false;
+                }
+                if let Some(ref searcher) = search_filter {
+                    if !searcher.matches(c, ctx.board, ctx.all_sprints) {
+                        return false;
+                    }
                 }
                 true
             })
             .collect();
 
-        let sorter = get_sorter_for_field(board.task_sort_field);
-        let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
+        let sorter = get_sorter_for_field(ctx.board.task_sort_field);
+        let ordered_sorter = OrderedSorter::new(sorter, ctx.board.task_sort_order);
         ordered_sorter.sort(&mut filtered_cards);
 
         let card_ids: Vec<Uuid> = filtered_cards.iter().map(|c| c.id).collect();
@@ -102,7 +121,7 @@ impl ViewStrategy for FlatViewStrategy {
 }
 
 pub struct GroupedViewStrategy {
-    column_lists: Vec<TaskList>,
+    column_lists: Vec<CardList>,
     active_column_index: usize,
 }
 
@@ -132,15 +151,15 @@ impl GroupedViewStrategy {
 }
 
 impl ViewStrategy for GroupedViewStrategy {
-    fn get_active_task_list(&self) -> Option<&TaskList> {
+    fn get_active_task_list(&self) -> Option<&CardList> {
         self.column_lists.get(self.active_column_index)
     }
 
-    fn get_active_task_list_mut(&mut self) -> Option<&mut TaskList> {
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList> {
         self.column_lists.get_mut(self.active_column_index)
     }
 
-    fn get_all_task_lists(&self) -> Vec<&TaskList> {
+    fn get_all_task_lists(&self) -> Vec<&CardList> {
         self.column_lists.iter().collect()
     }
 
@@ -180,42 +199,58 @@ impl ViewStrategy for GroupedViewStrategy {
         }
     }
 
-    fn refresh_task_lists(
-        &mut self,
-        board: &Board,
-        all_cards: &[Card],
-        all_columns: &[Column],
-        active_sprint_filter: Option<Uuid>,
-        hide_assigned_cards: bool,
-    ) {
-        let mut board_columns: Vec<_> = all_columns
+    fn refresh_task_lists(&mut self, ctx: &ViewRefreshContext) {
+        let mut board_columns: Vec<_> = ctx
+            .all_columns
             .iter()
-            .filter(|col| col.board_id == board.id)
+            .filter(|col| col.board_id == ctx.board.id)
             .collect();
         board_columns.sort_by_key(|col| col.position);
 
-        let board_filter = BoardFilter::new(board.id, all_columns);
+        let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
 
-        let filtered_cards: Vec<&Card> = all_cards
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = ctx
+            .all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
+        let search_filter = ctx
+            .search_query
+            .map(|q| CompositeCardSearcher::new(q.to_string()));
+
+        let filtered_cards: Vec<&Card> = ctx
+            .all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
                 }
-                if let Some(sprint_id) = active_sprint_filter {
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
+                }
+                if let Some(sprint_id) = ctx.active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
                         return false;
                     }
                 }
-                if hide_assigned_cards && c.sprint_id.is_some() {
+                if ctx.hide_assigned_cards && c.sprint_id.is_some() {
                     return false;
+                }
+                if let Some(ref searcher) = search_filter {
+                    if !searcher.matches(c, ctx.board, ctx.all_sprints) {
+                        return false;
+                    }
                 }
                 true
             })
             .collect();
 
-        let sorter = get_sorter_for_field(board.task_sort_field);
-        let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
+        let sorter = get_sorter_for_field(ctx.board.task_sort_field);
+        let ordered_sorter = OrderedSorter::new(sorter, ctx.board.task_sort_order);
 
         let mut new_column_lists = Vec::new();
 
@@ -233,14 +268,14 @@ impl ViewStrategy for GroupedViewStrategy {
             let existing_list = self
                 .column_lists
                 .iter()
-                .find(|list| list.id == TaskListId::Column(column.id));
+                .find(|list| list.id == CardListId::Column(column.id));
 
             let mut task_list = if let Some(existing) = existing_list {
-                let mut list = TaskList::new(TaskListId::Column(column.id));
+                let mut list = CardList::new(CardListId::Column(column.id));
                 list.selection = existing.selection.clone();
                 list
             } else {
-                TaskList::new(TaskListId::Column(column.id))
+                CardList::new(CardListId::Column(column.id))
             };
 
             task_list.update_cards(card_ids);
@@ -260,7 +295,7 @@ impl ViewStrategy for GroupedViewStrategy {
 }
 
 pub struct KanbanViewStrategy {
-    column_lists: Vec<TaskList>,
+    column_lists: Vec<CardList>,
     active_column_index: usize,
 }
 
@@ -290,15 +325,15 @@ impl KanbanViewStrategy {
 }
 
 impl ViewStrategy for KanbanViewStrategy {
-    fn get_active_task_list(&self) -> Option<&TaskList> {
+    fn get_active_task_list(&self) -> Option<&CardList> {
         self.column_lists.get(self.active_column_index)
     }
 
-    fn get_active_task_list_mut(&mut self) -> Option<&mut TaskList> {
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList> {
         self.column_lists.get_mut(self.active_column_index)
     }
 
-    fn get_all_task_lists(&self) -> Vec<&TaskList> {
+    fn get_all_task_lists(&self) -> Vec<&CardList> {
         self.column_lists.iter().collect()
     }
 
@@ -338,42 +373,58 @@ impl ViewStrategy for KanbanViewStrategy {
         }
     }
 
-    fn refresh_task_lists(
-        &mut self,
-        board: &Board,
-        all_cards: &[Card],
-        all_columns: &[Column],
-        active_sprint_filter: Option<Uuid>,
-        hide_assigned_cards: bool,
-    ) {
-        let mut board_columns: Vec<_> = all_columns
+    fn refresh_task_lists(&mut self, ctx: &ViewRefreshContext) {
+        let mut board_columns: Vec<_> = ctx
+            .all_columns
             .iter()
-            .filter(|col| col.board_id == board.id)
+            .filter(|col| col.board_id == ctx.board.id)
             .collect();
         board_columns.sort_by_key(|col| col.position);
 
-        let board_filter = BoardFilter::new(board.id, all_columns);
+        let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
 
-        let filtered_cards: Vec<&Card> = all_cards
+        let completed_sprint_ids: std::collections::HashSet<Uuid> = ctx
+            .all_sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
+        let search_filter = ctx
+            .search_query
+            .map(|q| CompositeCardSearcher::new(q.to_string()));
+
+        let filtered_cards: Vec<&Card> = ctx
+            .all_cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
                 }
-                if let Some(sprint_id) = active_sprint_filter {
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
+                }
+                if let Some(sprint_id) = ctx.active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
                         return false;
                     }
                 }
-                if hide_assigned_cards && c.sprint_id.is_some() {
+                if ctx.hide_assigned_cards && c.sprint_id.is_some() {
                     return false;
+                }
+                if let Some(ref searcher) = search_filter {
+                    if !searcher.matches(c, ctx.board, ctx.all_sprints) {
+                        return false;
+                    }
                 }
                 true
             })
             .collect();
 
-        let sorter = get_sorter_for_field(board.task_sort_field);
-        let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
+        let sorter = get_sorter_for_field(ctx.board.task_sort_field);
+        let ordered_sorter = OrderedSorter::new(sorter, ctx.board.task_sort_order);
 
         let mut new_column_lists = Vec::new();
 
@@ -391,14 +442,14 @@ impl ViewStrategy for KanbanViewStrategy {
             let existing_list = self
                 .column_lists
                 .iter()
-                .find(|list| list.id == TaskListId::Column(column.id));
+                .find(|list| list.id == CardListId::Column(column.id));
 
             let mut task_list = if let Some(existing) = existing_list {
-                let mut list = TaskList::new(TaskListId::Column(column.id));
+                let mut list = CardList::new(CardListId::Column(column.id));
                 list.selection = existing.selection.clone();
                 list
             } else {
-                TaskList::new(TaskListId::Column(column.id))
+                CardList::new(CardListId::Column(column.id))
             };
 
             task_list.update_cards(card_ids);

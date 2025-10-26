@@ -174,6 +174,10 @@ impl Card {
             .chars()
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     }
+
+    pub fn is_completed(&self) -> bool {
+        self.status == CardStatus::Done
+    }
 }
 
 #[cfg(test)]

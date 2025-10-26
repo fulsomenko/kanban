@@ -1,13 +1,18 @@
 use crate::{
+    card_list::{CardList, CardListId},
+    card_list_component::{CardListComponent, CardListComponentConfig},
     clipboard,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
     export::{BoardExporter, BoardImporter},
     input::InputState,
+    search::SearchState,
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     ui,
-    view_strategy::{FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewStrategy},
+    view_strategy::{
+        FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewRefreshContext, ViewStrategy,
+    },
 };
 use crossterm::{
     execute,
@@ -49,7 +54,14 @@ pub struct App {
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
+    pub sprint_task_panel: SprintTaskPanel,
+    pub sprint_uncompleted_cards: CardList,
+    pub sprint_completed_cards: CardList,
+    pub sprint_uncompleted_component: CardListComponent,
+    pub sprint_completed_component: CardListComponent,
     pub view_strategy: Box<dyn ViewStrategy>,
+    pub card_list_component: CardListComponent,
+    pub search: SearchState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,6 +84,12 @@ pub enum BoardFocus {
     Settings,
     Sprints,
     Columns,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SprintTaskPanel {
+    Uncompleted,
+    Completed,
 }
 
 pub enum CardField {
@@ -116,6 +134,7 @@ pub enum AppMode {
     RenameColumn,
     DeleteColumnConfirm,
     SelectTaskListView,
+    Search,
 }
 
 impl App {
@@ -151,7 +170,38 @@ impl App {
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
+            sprint_task_panel: SprintTaskPanel::Uncompleted,
+            sprint_uncompleted_cards: CardList::new(CardListId::All),
+            sprint_completed_cards: CardList::new(CardListId::All),
+            sprint_uncompleted_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new()
+                    .with_actions(vec![
+                        crate::card_list_component::CardListActionType::Navigation,
+                        crate::card_list_component::CardListActionType::Selection,
+                        crate::card_list_component::CardListActionType::Editing,
+                        crate::card_list_component::CardListActionType::Completion,
+                        crate::card_list_component::CardListActionType::Priority,
+                        crate::card_list_component::CardListActionType::Sorting,
+                    ])
+                    .with_movement(false),
+            ),
+            sprint_completed_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new()
+                    .with_actions(vec![
+                        crate::card_list_component::CardListActionType::Navigation,
+                        crate::card_list_component::CardListActionType::Selection,
+                        crate::card_list_component::CardListActionType::Sorting,
+                    ])
+                    .with_multi_select(false),
+            ),
             view_strategy: Box::new(GroupedViewStrategy::new()),
+            card_list_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new(),
+            ),
+            search: SearchState::new(),
         };
 
         if let Some(ref filename) = save_file {
@@ -181,13 +231,34 @@ impl App {
         use crossterm::event::KeyCode;
         let mut should_restart_events = false;
 
-        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) {
+        let is_input_mode = matches!(
+            self.mode,
+            AppMode::CreateBoard
+                | AppMode::CreateCard
+                | AppMode::CreateSprint
+                | AppMode::RenameBoard
+                | AppMode::ExportBoard
+                | AppMode::ExportAll
+                | AppMode::SetCardPoints
+                | AppMode::SetBranchPrefix
+                | AppMode::CreateColumn
+                | AppMode::RenameColumn
+                | AppMode::Search
+        );
+
+        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
             self.quit();
             return false;
         }
 
         match self.mode {
             AppMode::Normal => match key.code {
+                KeyCode::Char('/') => {
+                    if self.focus == Focus::Cards {
+                        self.search.activate();
+                        self.mode = AppMode::Search;
+                    }
+                }
                 KeyCode::Char('n') => match self.focus {
                     Focus::Boards => self.handle_create_board_key(),
                     Focus::Cards => self.handle_create_card_key(),
@@ -261,16 +332,53 @@ impl App {
             AppMode::RenameColumn => self.handle_rename_column_dialog(key.code),
             AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
             AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
+            AppMode::Search => self.handle_search_mode(key.code),
         }
         should_restart_events
     }
 
+    fn handle_search_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Char(c) => {
+                self.search.input.insert_char(c);
+                self.refresh_view();
+            }
+            KeyCode::Backspace => {
+                self.search.input.backspace();
+                self.refresh_view();
+            }
+            KeyCode::Esc | KeyCode::Enter => {
+                self.search.deactivate();
+                self.mode = AppMode::Normal;
+            }
+            _ => {}
+        }
+    }
+
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.columns);
+        let completed_sprint_ids: std::collections::HashSet<uuid::Uuid> = self
+            .sprints
+            .iter()
+            .filter(|s| s.status == kanban_domain::SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
         let cards: Vec<_> = self
             .cards
             .iter()
-            .filter(|c| board_filter.matches(c))
+            .filter(|c| {
+                if !board_filter.matches(c) {
+                    return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
+                }
+                true
+            })
             .collect();
 
         if self.active_sprint_filter.is_none() && !self.hide_assigned_cards {
@@ -297,12 +405,24 @@ impl App {
         let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.columns);
 
+        let completed_sprint_ids: std::collections::HashSet<uuid::Uuid> = self
+            .sprints
+            .iter()
+            .filter(|s| s.status == kanban_domain::SprintStatus::Completed)
+            .map(|s| s.id)
+            .collect();
+
         let mut cards: Vec<&Card> = self
             .cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
+                }
+                if let Some(sprint_id) = c.sprint_id {
+                    if completed_sprint_ids.contains(&sprint_id) {
+                        return false;
+                    }
                 }
                 if let Some(sprint_id) = self.active_sprint_filter {
                     if c.sprint_id != Some(sprint_id) {
@@ -344,31 +464,138 @@ impl App {
         }
     }
 
-    pub fn refresh_view(&mut self) {
-        if let Some(board_idx) = self.active_board_index {
-            if let Some(board) = self.boards.get(board_idx) {
-                self.view_strategy.refresh_task_lists(
-                    board,
-                    &self.cards,
-                    &self.columns,
-                    self.active_sprint_filter,
-                    self.hide_assigned_cards,
-                );
-            }
-        }
+    pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        self.cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id))
+            .collect()
     }
 
-    pub fn refresh_preview(&mut self) {
-        if let Some(board_idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get(board_idx) {
-                self.view_strategy.refresh_task_lists(
+    pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        let cards: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
+            .collect();
+        tracing::debug!(
+            "get_sprint_completed_cards({}): found {} cards",
+            sprint_id,
+            cards.len()
+        );
+        cards
+    }
+
+    pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
+        let cards: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
+            .collect();
+        tracing::debug!(
+            "get_sprint_uncompleted_cards({}): found {} cards",
+            sprint_id,
+            cards.len()
+        );
+        cards
+    }
+
+    pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
+        let uncompleted_ids: Vec<uuid::Uuid> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
+            .map(|card| card.id)
+            .collect();
+
+        let completed_ids: Vec<uuid::Uuid> = self
+            .cards
+            .iter()
+            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
+            .map(|card| card.id)
+            .collect();
+
+        self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
+        self.sprint_completed_cards.update_cards(completed_ids);
+
+        self.sprint_uncompleted_component
+            .update_cards(self.sprint_uncompleted_cards.cards.clone());
+        self.sprint_completed_component
+            .update_cards(self.sprint_completed_cards.cards.clone());
+
+        // Default to uncompleted panel
+        self.sprint_task_panel = SprintTaskPanel::Uncompleted;
+    }
+
+    pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
+        let uncompleted_card_ids: Vec<uuid::Uuid> = self.sprint_uncompleted_cards.cards.clone();
+        let completed_card_ids: Vec<uuid::Uuid> = self.sprint_completed_cards.cards.clone();
+
+        let mut uncompleted_cards: Vec<&Card> = uncompleted_card_ids
+            .iter()
+            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .collect();
+
+        let mut completed_cards: Vec<&Card> = completed_card_ids
+            .iter()
+            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .collect();
+
+        let sorter = get_sorter_for_field(sort_field);
+        let ordered_sorter = OrderedSorter::new(sorter, sort_order);
+
+        ordered_sorter.sort(&mut uncompleted_cards);
+        ordered_sorter.sort(&mut completed_cards);
+
+        let sorted_uncompleted_ids: Vec<uuid::Uuid> =
+            uncompleted_cards.iter().map(|c| c.id).collect();
+        let sorted_completed_ids: Vec<uuid::Uuid> = completed_cards.iter().map(|c| c.id).collect();
+
+        self.sprint_uncompleted_cards
+            .update_cards(sorted_uncompleted_ids);
+        self.sprint_completed_cards
+            .update_cards(sorted_completed_ids);
+
+        self.sprint_uncompleted_component
+            .update_cards(self.sprint_uncompleted_cards.cards.clone());
+        self.sprint_completed_component
+            .update_cards(self.sprint_completed_cards.cards.clone());
+    }
+
+    pub fn calculate_points(cards: &[&Card]) -> u32 {
+        cards
+            .iter()
+            .filter_map(|card| card.points.map(|p| p as u32))
+            .sum()
+    }
+
+    pub fn refresh_view(&mut self) {
+        let board_idx = self.active_board_index.or(self.board_selection.get());
+        if let Some(idx) = board_idx {
+            if let Some(board) = self.boards.get(idx) {
+                let search_query = if self.search.is_active {
+                    Some(self.search.query())
+                } else {
+                    None
+                };
+                let ctx = ViewRefreshContext {
                     board,
-                    &self.cards,
-                    &self.columns,
-                    self.active_sprint_filter,
-                    self.hide_assigned_cards,
-                );
+                    all_cards: &self.cards,
+                    all_columns: &self.columns,
+                    all_sprints: &self.sprints,
+                    active_sprint_filter: self.active_sprint_filter,
+                    hide_assigned_cards: self.hide_assigned_cards,
+                    search_query,
+                };
+                self.view_strategy.refresh_task_lists(&ctx);
             }
+        }
+        self.sync_card_list_component();
+    }
+
+    pub fn sync_card_list_component(&mut self) {
+        if let Some(active_list) = self.view_strategy.get_active_task_list() {
+            self.card_list_component
+                .update_cards(active_list.cards.clone());
         }
     }
 
@@ -380,12 +607,7 @@ impl App {
         };
 
         self.view_strategy = new_strategy;
-
-        if self.active_board_index.is_some() {
-            self.refresh_view();
-        } else {
-            self.refresh_preview();
-        }
+        self.refresh_view();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
@@ -676,6 +898,59 @@ impl App {
                 }
             }
         }
+    }
+
+    pub fn get_current_priority_selection_index(&self) -> usize {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.cards.get(card_idx) {
+                use kanban_domain::CardPriority;
+                return match card.priority {
+                    CardPriority::Low => 0,
+                    CardPriority::Medium => 1,
+                    CardPriority::High => 2,
+                    CardPriority::Critical => 3,
+                };
+            }
+        }
+        0
+    }
+
+    pub fn get_current_sprint_selection_index(&self) -> usize {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.cards.get(card_idx) {
+                if let Some(card_sprint_id) = card.sprint_id {
+                    if let Some(board_idx) = self.active_board_index {
+                        if let Some(board) = self.boards.get(board_idx) {
+                            let board_sprints: Vec<_> = self
+                                .sprints
+                                .iter()
+                                .filter(|s| s.board_id == board.id)
+                                .collect();
+                            for (idx, sprint) in board_sprints.iter().enumerate() {
+                                if sprint.id == card_sprint_id {
+                                    return idx + 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        0
+    }
+
+    pub fn get_current_sort_field_selection_index(&self) -> usize {
+        if let Some(sort_field) = self.current_sort_field {
+            return match sort_field {
+                SortField::Points => 0,
+                SortField::Priority => 1,
+                SortField::CreatedAt => 2,
+                SortField::UpdatedAt => 3,
+                SortField::Status => 4,
+                SortField::Default => 5,
+            };
+        }
+        0
     }
 }
 

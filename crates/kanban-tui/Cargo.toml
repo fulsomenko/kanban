@@ -25,6 +25,7 @@ chrono.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
 arboard = "3.4"
+pulldown-cmark = "0.13"
 
 [dev-dependencies]
 tempfile = "3.13"
