@@ -10,6 +10,7 @@ pub mod export;
 pub mod handlers;
 pub mod input;
 pub mod markdown_renderer;
+pub mod search;
 pub mod selection;
 pub mod services;
 pub mod theme;
