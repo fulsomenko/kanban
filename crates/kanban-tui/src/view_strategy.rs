@@ -1,4 +1,5 @@
 use crate::card_list::{CardList, CardListId};
+use crate::search::{CardSearcher, CompositeCardSearcher};
 use crate::services::filter::CardFilter;
 use crate::services::{get_sorter_for_field, BoardFilter, OrderedSorter};
 use kanban_domain::{Board, Card, Column, Sprint, SprintStatus};
@@ -18,6 +19,7 @@ pub trait ViewStrategy {
         all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
+        search_query: Option<&str>,
     );
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
@@ -69,6 +71,7 @@ impl ViewStrategy for FlatViewStrategy {
         all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
+        search_query: Option<&str>,
     ) {
         let board_filter = BoardFilter::new(board.id, all_columns);
 
@@ -77,6 +80,8 @@ impl ViewStrategy for FlatViewStrategy {
             .filter(|s| s.status == SprintStatus::Completed)
             .map(|s| s.id)
             .collect();
+
+        let search_filter = search_query.map(|q| CompositeCardSearcher::new(q.to_string()));
 
         let mut filtered_cards: Vec<&Card> = all_cards
             .iter()
@@ -96,6 +101,11 @@ impl ViewStrategy for FlatViewStrategy {
                 }
                 if hide_assigned_cards && c.sprint_id.is_some() {
                     return false;
+                }
+                if let Some(ref searcher) = search_filter {
+                    if !searcher.matches(c, board, all_sprints) {
+                        return false;
+                    }
                 }
                 true
             })
@@ -201,6 +211,7 @@ impl ViewStrategy for GroupedViewStrategy {
         all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
+        search_query: Option<&str>,
     ) {
         let mut board_columns: Vec<_> = all_columns
             .iter()
@@ -215,6 +226,8 @@ impl ViewStrategy for GroupedViewStrategy {
             .filter(|s| s.status == SprintStatus::Completed)
             .map(|s| s.id)
             .collect();
+
+        let search_filter = search_query.map(|q| CompositeCardSearcher::new(q.to_string()));
 
         let filtered_cards: Vec<&Card> = all_cards
             .iter()
@@ -234,6 +247,11 @@ impl ViewStrategy for GroupedViewStrategy {
                 }
                 if hide_assigned_cards && c.sprint_id.is_some() {
                     return false;
+                }
+                if let Some(ref searcher) = search_filter {
+                    if !searcher.matches(c, board, all_sprints) {
+                        return false;
+                    }
                 }
                 true
             })
@@ -371,6 +389,7 @@ impl ViewStrategy for KanbanViewStrategy {
         all_sprints: &[Sprint],
         active_sprint_filter: Option<Uuid>,
         hide_assigned_cards: bool,
+        search_query: Option<&str>,
     ) {
         let mut board_columns: Vec<_> = all_columns
             .iter()
@@ -385,6 +404,8 @@ impl ViewStrategy for KanbanViewStrategy {
             .filter(|s| s.status == SprintStatus::Completed)
             .map(|s| s.id)
             .collect();
+
+        let search_filter = search_query.map(|q| CompositeCardSearcher::new(q.to_string()));
 
         let filtered_cards: Vec<&Card> = all_cards
             .iter()
@@ -404,6 +425,11 @@ impl ViewStrategy for KanbanViewStrategy {
                 }
                 if hide_assigned_cards && c.sprint_id.is_some() {
                     return false;
+                }
+                if let Some(ref searcher) = search_filter {
+                    if !searcher.matches(c, board, all_sprints) {
+                        return false;
+                    }
                 }
                 true
             })
