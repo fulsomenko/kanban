@@ -567,8 +567,9 @@ impl App {
     }
 
     pub fn refresh_view(&mut self) {
-        if let Some(board_idx) = self.active_board_index {
-            if let Some(board) = self.boards.get(board_idx) {
+        let board_idx = self.active_board_index.or(self.board_selection.get());
+        if let Some(idx) = board_idx {
+            if let Some(board) = self.boards.get(idx) {
                 let search_query = if self.search.is_active {
                     Some(self.search.query())
                 } else {
@@ -595,28 +596,6 @@ impl App {
         }
     }
 
-    pub fn refresh_preview(&mut self) {
-        if let Some(board_idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get(board_idx) {
-                let search_query = if self.search.is_active {
-                    Some(self.search.query())
-                } else {
-                    None
-                };
-                self.view_strategy.refresh_task_lists(
-                    board,
-                    &self.cards,
-                    &self.columns,
-                    &self.sprints,
-                    self.active_sprint_filter,
-                    self.hide_assigned_cards,
-                    search_query,
-                );
-            }
-        }
-        self.sync_card_list_component();
-    }
-
     pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
         let new_strategy: Box<dyn ViewStrategy> = match task_list_view {
             kanban_domain::TaskListView::Flat => Box::new(FlatViewStrategy::new()),
@@ -625,13 +604,7 @@ impl App {
         };
 
         self.view_strategy = new_strategy;
-
-        if self.active_board_index.is_some() {
-            self.refresh_view();
-        } else {
-            self.refresh_preview();
-        }
-        self.sync_card_list_component();
+        self.refresh_view();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
