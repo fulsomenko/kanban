@@ -225,7 +225,21 @@ impl App {
         use crossterm::event::KeyCode;
         let mut should_restart_events = false;
 
-        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) {
+        let is_input_mode = matches!(
+            self.mode,
+            AppMode::CreateBoard
+                | AppMode::CreateCard
+                | AppMode::CreateSprint
+                | AppMode::RenameBoard
+                | AppMode::ExportBoard
+                | AppMode::ExportAll
+                | AppMode::SetCardPoints
+                | AppMode::SetBranchPrefix
+                | AppMode::CreateColumn
+                | AppMode::RenameColumn
+        );
+
+        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
             self.quit();
             return false;
         }
