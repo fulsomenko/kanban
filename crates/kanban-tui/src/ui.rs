@@ -148,6 +148,22 @@ fn build_filter_title_suffix(app: &App) -> Option<String> {
     None
 }
 
+fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
+    let mut title = if app.focus == Focus::Cards {
+        "Tasks [2]".to_string()
+    } else {
+        "Tasks".to_string()
+    };
+
+    if with_filter_suffix {
+        if let Some(suffix) = build_filter_title_suffix(app) {
+            title.push_str(&suffix);
+        }
+    }
+
+    title
+}
+
 fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
     let board_idx = app.active_board_index.or(app.board_selection.get());
 
@@ -228,15 +244,7 @@ fn render_tasks_flat(app: &App, frame: &mut Frame, area: Rect) {
         )));
     }
 
-    let mut title = if app.focus == Focus::Cards {
-        "Tasks [2]".to_string()
-    } else {
-        "Tasks".to_string()
-    };
-
-    if let Some(suffix) = build_filter_title_suffix(app) {
-        title.push_str(&suffix);
-    }
+    let title = build_tasks_panel_title(app, true);
 
     let panel_config = PanelConfig::new(&title)
         .with_focus_indicator(&title)
@@ -334,15 +342,7 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
         )));
     }
 
-    let mut title = if app.focus == Focus::Cards {
-        "Tasks [2]".to_string()
-    } else {
-        "Tasks".to_string()
-    };
-
-    if let Some(suffix) = build_filter_title_suffix(app) {
-        title.push_str(&suffix);
-    }
+    let title = build_tasks_panel_title(app, true);
 
     let panel_config = PanelConfig::new(&title)
         .with_focus_indicator(&title)
