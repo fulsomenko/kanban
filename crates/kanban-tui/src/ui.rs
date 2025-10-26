@@ -131,6 +131,23 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     render_panel(frame, area, &panel_config, content);
 }
 
+fn build_filter_title_suffix(app: &App) -> Option<String> {
+    if let Some(sprint_id) = app.active_sprint_filter {
+        if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
+            if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
+                if let Some(board) = app.boards.get(board_idx) {
+                    let sprint_name = sprint
+                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    return Some(format!(" - {}", sprint_name));
+                }
+            }
+        }
+    } else if app.hide_assigned_cards {
+        return Some(" - Unassigned Cards".to_string());
+    }
+    None
+}
+
 fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
     let board_idx = app.active_board_index.or(app.board_selection.get());
 
@@ -217,18 +234,8 @@ fn render_tasks_flat(app: &App, frame: &mut Frame, area: Rect) {
         "Tasks".to_string()
     };
 
-    if let Some(sprint_id) = app.active_sprint_filter {
-        if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
-            if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-                if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint
-                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
-                    title.push_str(&format!(" - {}", sprint_name));
-                }
-            }
-        }
-    } else if app.hide_assigned_cards {
-        title.push_str(" - Unassigned Cards");
+    if let Some(suffix) = build_filter_title_suffix(app) {
+        title.push_str(&suffix);
     }
 
     let panel_config = PanelConfig::new(&title)
@@ -333,18 +340,8 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
         "Tasks".to_string()
     };
 
-    if let Some(sprint_id) = app.active_sprint_filter {
-        if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
-            if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-                if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint
-                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
-                    title.push_str(&format!(" - {}", sprint_name));
-                }
-            }
-        }
-    } else if app.hide_assigned_cards {
-        title.push_str(" - Unassigned Cards");
+    if let Some(suffix) = build_filter_title_suffix(app) {
+        title.push_str(&suffix);
     }
 
     let panel_config = PanelConfig::new(&title)
@@ -377,19 +374,7 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                 return;
             }
 
-            let sprint_filter_suffix = if let Some(sprint_id) = app.active_sprint_filter {
-                if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
-                    let sprint_name = sprint
-                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
-                    Some(format!(" - {}", sprint_name))
-                } else {
-                    None
-                }
-            } else if app.hide_assigned_cards {
-                Some(" - Unassigned Cards".to_string())
-            } else {
-                None
-            };
+            let sprint_filter_suffix = build_filter_title_suffix(app);
 
             let column_count = task_lists.len();
             let column_width = 100 / column_count as u16;
