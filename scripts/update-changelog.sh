@@ -29,13 +29,7 @@ fi
 # Function to get file timestamp (cross-platform)
 get_file_timestamp() {
   local file="$1"
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS: use date -r
-    date -r "$file" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "unknown"
-  else
-    # Linux: use stat
-    stat -c "%y" "$file" 2>/dev/null | cut -d"." -f1 | cut -d":" -f1,2 || echo "unknown"
-  fi
+  ls -l --time-style='+%Y-%m-%d %H:%M' "$file" 2>/dev/null | awk '{print $6, $7}' || echo "unknown"
 }
 
 # Declare associative arrays for grouping by card
