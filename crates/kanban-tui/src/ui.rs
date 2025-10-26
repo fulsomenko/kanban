@@ -227,6 +227,8 @@ fn render_tasks_flat(app: &App, frame: &mut Frame, area: Rect) {
                 }
             }
         }
+    } else if app.hide_assigned_cards {
+        title.push_str(" - Unassigned Cards");
     }
 
     let panel_config = PanelConfig::new(&title)
@@ -341,6 +343,8 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
                 }
             }
         }
+    } else if app.hide_assigned_cards {
+        title.push_str(" - Unassigned Cards");
     }
 
     let panel_config = PanelConfig::new(&title)
@@ -381,6 +385,8 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                 } else {
                     None
                 }
+            } else if app.hide_assigned_cards {
+                Some(" - Unassigned Cards".to_string())
             } else {
                 None
             };
