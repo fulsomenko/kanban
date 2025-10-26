@@ -1,3 +1,76 @@
+## [0.1.10] - 2025-10-26 ([#75](https://github.com/fulsomenko/kanban/pull/75))
+
+### MVP-77 Changeset Script To Add Timestamp Of Changeset Creation And Card Name (2025-10-26)
+- feat: group changelog entries by card with timestamps and branch names
+
+### MVP-101 Add Column Header For Non-Assigned Filter (2025-10-26)
+- refactor: extract tasks panel title builder
+- refactor: extract filter title suffix helper
+- feat: add unassigned cards header to filter view
+
+### MVP-29 Search In Cards List (2025-10-26)
+- style: make search query text white for better visibility
+- feat: add vim-style search query display in footer
+- refactor: consolidate refresh_view and refresh_preview functions
+- Add Search mode help text to footer
+- Integrate search functionality into App
+- Add search query parameter to view strategies
+- Add search module to crate exports
+- Add search module with trait-based architecture
+
+### MVP-49 Hitting 'Q' In Dialogue Quits The Program (2025-10-26)
+- fix: exclude AppModes with text input form the `q` to quit binding
+
+### MVP-86 Missing Sprint Header For Sprint Filter In Kanban View (2025-10-26)
+- feat: add sprint filter indicator to kanban view
+
+### MVP-90 Moving Cards From Last Column Doesn't Uncomplete (2025-10-26)
+- Update CardListAction::MoveColumn handler to reflect card status changes
+- Fix handle_move_card_right to complete cards moved to last column
+- Fix handle_move_card_left to uncomplete cards moved from last column
+
+### KAN-81 J K Doesn't Work On Empty Columns (2025-10-26)
+- Fix j/k navigation on empty card lists. Pressing j/k on an empty column now correctly navigates to adjacent columns instead of doing nothing.
+
+### MVP-60 Move Card Out Of Completed Column Doesn't Unmark As Complete (2025-10-26)
+- fix: moving cards from the last column should uncomplete said card
+
+### KAN-94 When Opening A Dialogue Put Selector On The Currently Selected Item (2025-10-26)
+- refactor: delegate dialog rendering to SelectionDialog components
+- refactor: use dialog selection state helpers in event handlers
+- refactor: export SelectionDialog component from components module
+- refactor: create SelectionDialog trait and implementations
+- refactor: add dialog selection state helpers to app
+- Implement CardListComponent for reusable card list interactions (#65)
+
+### MVP-35 Make J K Work For Changing Panels (2025-10-26)
+- Add vim-style j/k navigation for panel changes in detail views
+- Enable j/k keys to navigate between panels in CardDetail view (Title, Metadata, Description)
+- Enable j/k keys to navigate between panels in BoardDetail view (Name, Description, Settings, Sprints, Columns)
+- Wrap navigation at list boundaries: reaching the end of Sprints/Columns lists transitions to next panel
+- Both arrow keys and vim-style j/k keys work consistently across all views
+
+### MVP-68 Treesitter For Syntax Highlighting (2025-10-26)
+- Add markdown rendering support for task and board descriptions
+- Integrate pulldown-cmark for markdown parsing
+- Support bold, italic, inline code, and code blocks with proper spacing
+- Code blocks render as plain text with top/bottom margins and left indent for readability
+- Enhance card detail view with formatted markdown descriptions
+- Enhance board detail view with formatted markdown descriptions
+- Add comprehensive integration tests for markdown renderer (9 tests)
+- Note: Chose markdown-only approach over syntax highlighting to maintain simplicity and performance
+
+### MVP-64 Create Task In The Focused Column (2025-10-26)
+- feat: auto-complete cards created in last column when >2 columns exist
+- feat: create cards in focused column of grouped and kanban views
+- feat: add helper method to get focused column ID from view strategy
+- KAN-59/fix card movement and completion display (#61)
+
+### KAN-59 Fix Card Movement And Completion Display (2025-10-26)
+- Add view refresh for card movement (H/L keys) in all view modes
+- Add view refresh for card completion (c key) in all view modes
+- Add smart column navigation: cards move to last column when marked Done, and to second-to-last column when unmarked from Done
+
 ## [0.1.8] - 2025-10-21 && [0.1.9] - 2025-10-21 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
 - Fix critical release workflow issues that prevented successful publishing to crates.io:
