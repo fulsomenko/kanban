@@ -6,10 +6,13 @@ use crate::{
     events::{Event, EventHandler},
     export::{BoardExporter, BoardImporter},
     input::InputState,
+    search::SearchState,
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     ui,
-    view_strategy::{FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewStrategy},
+    view_strategy::{
+        FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewRefreshContext, ViewStrategy,
+    },
 };
 use crossterm::{
     execute,
@@ -58,6 +61,7 @@ pub struct App {
     pub sprint_completed_component: CardListComponent,
     pub view_strategy: Box<dyn ViewStrategy>,
     pub card_list_component: CardListComponent,
+    pub search: SearchState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -130,6 +134,7 @@ pub enum AppMode {
     RenameColumn,
     DeleteColumnConfirm,
     SelectTaskListView,
+    Search,
 }
 
 impl App {
@@ -196,6 +201,7 @@ impl App {
                 CardListId::All,
                 CardListComponentConfig::new(),
             ),
+            search: SearchState::new(),
         };
 
         if let Some(ref filename) = save_file {
@@ -237,6 +243,7 @@ impl App {
                 | AppMode::SetBranchPrefix
                 | AppMode::CreateColumn
                 | AppMode::RenameColumn
+                | AppMode::Search
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
@@ -246,6 +253,12 @@ impl App {
 
         match self.mode {
             AppMode::Normal => match key.code {
+                KeyCode::Char('/') => {
+                    if self.focus == Focus::Cards {
+                        self.search.activate();
+                        self.mode = AppMode::Search;
+                    }
+                }
                 KeyCode::Char('n') => match self.focus {
                     Focus::Boards => self.handle_create_board_key(),
                     Focus::Cards => self.handle_create_card_key(),
@@ -319,8 +332,28 @@ impl App {
             AppMode::RenameColumn => self.handle_rename_column_dialog(key.code),
             AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
             AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
+            AppMode::Search => self.handle_search_mode(key.code),
         }
         should_restart_events
+    }
+
+    fn handle_search_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Char(c) => {
+                self.search.input.insert_char(c);
+                self.refresh_view();
+            }
+            KeyCode::Backspace => {
+                self.search.input.backspace();
+                self.refresh_view();
+            }
+            KeyCode::Esc | KeyCode::Enter => {
+                self.search.deactivate();
+                self.mode = AppMode::Normal;
+            }
+            _ => {}
+        }
     }
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
@@ -536,16 +569,24 @@ impl App {
     }
 
     pub fn refresh_view(&mut self) {
-        if let Some(board_idx) = self.active_board_index {
-            if let Some(board) = self.boards.get(board_idx) {
-                self.view_strategy.refresh_task_lists(
+        let board_idx = self.active_board_index.or(self.board_selection.get());
+        if let Some(idx) = board_idx {
+            if let Some(board) = self.boards.get(idx) {
+                let search_query = if self.search.is_active {
+                    Some(self.search.query())
+                } else {
+                    None
+                };
+                let ctx = ViewRefreshContext {
                     board,
-                    &self.cards,
-                    &self.columns,
-                    &self.sprints,
-                    self.active_sprint_filter,
-                    self.hide_assigned_cards,
-                );
+                    all_cards: &self.cards,
+                    all_columns: &self.columns,
+                    all_sprints: &self.sprints,
+                    active_sprint_filter: self.active_sprint_filter,
+                    hide_assigned_cards: self.hide_assigned_cards,
+                    search_query,
+                };
+                self.view_strategy.refresh_task_lists(&ctx);
             }
         }
         self.sync_card_list_component();
@@ -558,22 +599,6 @@ impl App {
         }
     }
 
-    pub fn refresh_preview(&mut self) {
-        if let Some(board_idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get(board_idx) {
-                self.view_strategy.refresh_task_lists(
-                    board,
-                    &self.cards,
-                    &self.columns,
-                    &self.sprints,
-                    self.active_sprint_filter,
-                    self.hide_assigned_cards,
-                );
-            }
-        }
-        self.sync_card_list_component();
-    }
-
     pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
         let new_strategy: Box<dyn ViewStrategy> = match task_list_view {
             kanban_domain::TaskListView::Flat => Box::new(FlatViewStrategy::new()),
@@ -582,13 +607,7 @@ impl App {
         };
 
         self.view_strategy = new_strategy;
-
-        if self.active_board_index.is_some() {
-            self.refresh_view();
-        } else {
-            self.refresh_preview();
-        }
-        self.sync_card_list_component();
+        self.refresh_view();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {

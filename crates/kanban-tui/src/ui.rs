@@ -752,6 +752,36 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             false
         };
 
+    if app.mode == AppMode::Search {
+        let search_text = format!("/{}", app.search.query());
+        let help_text = "ESC/ENTER: exit search";
+
+        let available_width = area.width.saturating_sub(4);
+        let help_len = help_text.len() as u16;
+        let search_len = search_text.len() as u16;
+
+        let padding = if available_width > search_len + help_len + 1 {
+            available_width
+                .saturating_sub(search_len)
+                .saturating_sub(help_len)
+        } else {
+            1
+        };
+
+        let footer_line = Line::from(vec![
+            Span::styled(search_text, Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{:width$}", "", width = padding as usize),
+                label_text(),
+            ),
+            Span::styled(help_text, label_text()),
+        ]);
+
+        let help = Paragraph::new(footer_line).block(Block::default().borders(Borders::ALL));
+        frame.render_widget(help, area);
+        return;
+    }
+
     let generated_help = app.card_list_component.help_text();
     let help_text: String = match app.mode {
         AppMode::Normal => {
@@ -798,6 +828,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::RenameColumn => "ESC: cancel | ENTER: confirm".to_string(),
         AppMode::DeleteColumnConfirm => "ESC: cancel | ENTER/y: delete | n: cancel".to_string(),
         AppMode::SelectTaskListView => "ESC: cancel | j/k: navigate | ENTER/Space: select".to_string(),
+        AppMode::Search => "ESC/ENTER: exit search | type to filter".to_string(),
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
