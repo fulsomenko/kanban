@@ -107,10 +107,7 @@ impl CardBranchNameSearcher {
             .unwrap_or_else(|| board.effective_branch_prefix("feature"));
 
         if let Some(prefix) = sprint_prefix {
-            format!(
-                "{}{}{}-{}",
-                prefix, branch_prefix, card_number, title_slug
-            )
+            format!("{}{}{}-{}", prefix, branch_prefix, card_number, title_slug)
         } else {
             format!("{}{}-{}", branch_prefix, card_number, title_slug)
         }

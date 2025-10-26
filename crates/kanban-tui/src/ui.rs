@@ -761,19 +761,23 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         let search_len = search_text.len() as u16;
 
         let padding = if available_width > search_len + help_len + 1 {
-            available_width.saturating_sub(search_len).saturating_sub(help_len)
+            available_width
+                .saturating_sub(search_len)
+                .saturating_sub(help_len)
         } else {
             1
         };
 
         let footer_line = Line::from(vec![
             Span::styled(search_text, Style::default().fg(Color::White)),
-            Span::styled(format!("{:width$}", "", width = padding as usize), label_text()),
+            Span::styled(
+                format!("{:width$}", "", width = padding as usize),
+                label_text(),
+            ),
             Span::styled(help_text, label_text()),
         ]);
 
-        let help = Paragraph::new(footer_line)
-            .block(Block::default().borders(Borders::ALL));
+        let help = Paragraph::new(footer_line).block(Block::default().borders(Borders::ALL));
         frame.render_widget(help, area);
         return;
     }

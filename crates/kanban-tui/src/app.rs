@@ -11,8 +11,7 @@ use crate::{
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     ui,
     view_strategy::{
-        FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewRefreshContext,
-        ViewStrategy,
+        FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewRefreshContext, ViewStrategy,
     },
 };
 use crossterm::{
