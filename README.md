@@ -4,7 +4,6 @@ A terminal-based kanban/project management tool inspired by [lazygit](https://gi
 
 ## Features
 
-- 🎯 **SOLID Architecture**: Clean separation of concerns with Cargo workspaces
 - ⚡ **Fast & Responsive**: Written in Rust with async/await
 - 🖥️ **Terminal UI**: Beautiful TUI powered by ratatui
 - 💾 **File Persistence**: JSON import/export with auto-save support
