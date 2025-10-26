@@ -752,6 +752,28 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             false
         };
 
+    if app.mode == AppMode::Search {
+        let search_text = format!("/{}", app.search.query());
+        let help_text = "ESC/ENTER: exit search";
+
+        let available_width = area.width.saturating_sub(4);
+        let help_len = help_text.len() as u16;
+        let search_len = search_text.len() as u16;
+
+        let padding = if available_width > search_len + help_len + 1 {
+            available_width.saturating_sub(search_len).saturating_sub(help_len)
+        } else {
+            1
+        };
+
+        let footer_text = format!("{}{:width$}{}", search_text, "", help_text, width = padding as usize);
+        let help = Paragraph::new(footer_text)
+            .style(label_text())
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(help, area);
+        return;
+    }
+
     let generated_help = app.card_list_component.help_text();
     let help_text: String = match app.mode {
         AppMode::Normal => {
