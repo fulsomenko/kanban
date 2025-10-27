@@ -70,19 +70,17 @@ impl Editable<Card> for CardMetadataDto {
 
     fn apply_to(self, card: &mut Card) {
         if let Some(canonical_priority) = parse_card_priority_case_insensitive(&self.priority) {
-            if let Ok(priority) =
-                serde_json::from_value::<crate::CardPriority>(serde_json::Value::String(
-                    canonical_priority,
-                ))
-            {
+            if let Ok(priority) = serde_json::from_value::<crate::CardPriority>(
+                serde_json::Value::String(canonical_priority),
+            ) {
                 card.priority = priority;
             }
         }
 
         if let Some(canonical_status) = parse_card_status_case_insensitive(&self.status) {
-            if let Ok(status) = serde_json::from_value::<crate::CardStatus>(serde_json::Value::String(
-                canonical_status,
-            )) {
+            if let Ok(status) = serde_json::from_value::<crate::CardStatus>(
+                serde_json::Value::String(canonical_status),
+            ) {
                 card.status = status;
             }
         }
