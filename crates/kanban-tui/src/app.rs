@@ -771,8 +771,8 @@ impl App {
         temp_file: std::path::PathBuf,
     ) -> io::Result<()> {
         let dto = T::from_entity(entity);
-        let current_content = serde_json::to_string_pretty(&dto)
-            .unwrap_or_else(|_| "{}".to_string());
+        let current_content =
+            serde_json::to_string_pretty(&dto).unwrap_or_else(|_| "{}".to_string());
 
         if let Some(new_content) =
             edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?

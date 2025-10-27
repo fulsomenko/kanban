@@ -48,9 +48,9 @@ impl Editable<Card> for CardMetadataDto {
     }
 
     fn apply_to(self, card: &mut Card) {
-        if let Ok(priority) = serde_json::from_value::<crate::CardPriority>(
-            serde_json::Value::String(self.priority),
-        ) {
+        if let Ok(priority) =
+            serde_json::from_value::<crate::CardPriority>(serde_json::Value::String(self.priority))
+        {
             card.priority = priority;
         }
 
