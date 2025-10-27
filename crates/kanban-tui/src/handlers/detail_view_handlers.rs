@@ -100,6 +100,9 @@ impl App {
                 }
             }
             KeyCode::Char('p') => {
+                self.mode = AppMode::SetCardPoints;
+            }
+            KeyCode::Char('P') => {
                 let priority_idx = self.get_current_priority_selection_index();
                 self.priority_selection.set(Some(priority_idx));
                 self.mode = AppMode::SetCardPriority;
