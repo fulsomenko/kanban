@@ -2,6 +2,27 @@ use crate::{Board, Card};
 use kanban_core::Editable;
 use serde::{Deserialize, Serialize};
 
+// Case-insensitive enum parsers that normalize to canonical format
+fn parse_card_priority_case_insensitive(s: &str) -> Option<String> {
+    match s.to_lowercase().as_str() {
+        "low" => Some("Low".to_string()),
+        "medium" => Some("Medium".to_string()),
+        "high" => Some("High".to_string()),
+        "critical" => Some("Critical".to_string()),
+        _ => None,
+    }
+}
+
+fn parse_card_status_case_insensitive(s: &str) -> Option<String> {
+    match s.to_lowercase().replace('_', "").as_str() {
+        "todo" => Some("Todo".to_string()),
+        "inprogress" => Some("InProgress".to_string()),
+        "blocked" => Some("Blocked".to_string()),
+        "done" => Some("Done".to_string()),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoardSettingsDto {
     pub branch_prefix: Option<String>,
@@ -48,16 +69,22 @@ impl Editable<Card> for CardMetadataDto {
     }
 
     fn apply_to(self, card: &mut Card) {
-        if let Ok(priority) =
-            serde_json::from_value::<crate::CardPriority>(serde_json::Value::String(self.priority))
-        {
-            card.priority = priority;
+        if let Some(canonical_priority) = parse_card_priority_case_insensitive(&self.priority) {
+            if let Ok(priority) =
+                serde_json::from_value::<crate::CardPriority>(serde_json::Value::String(
+                    canonical_priority,
+                ))
+            {
+                card.priority = priority;
+            }
         }
 
-        if let Ok(status) =
-            serde_json::from_value::<crate::CardStatus>(serde_json::Value::String(self.status))
-        {
-            card.status = status;
+        if let Some(canonical_status) = parse_card_status_case_insensitive(&self.status) {
+            if let Ok(status) = serde_json::from_value::<crate::CardStatus>(serde_json::Value::String(
+                canonical_status,
+            )) {
+                card.status = status;
+            }
         }
 
         if let Some(points) = self.points {
