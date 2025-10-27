@@ -19,7 +19,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
-use kanban_domain::{Board, BoardSettingsDto, Card, Column, SortField, SortOrder, Sprint};
+use kanban_domain::{Board, Card, Column, SortField, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -99,7 +99,6 @@ pub enum CardField {
 pub enum BoardField {
     Name,
     Description,
-    Settings,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -687,19 +686,6 @@ impl App {
                         let content = board.description.as_deref().unwrap_or("").to_string();
                         (temp_file, content)
                     }
-                    BoardField::Settings => {
-                        let temp_file =
-                            temp_dir.join(format!("kanban-board-{}-settings.json", board.id));
-                        let settings = BoardSettingsDto {
-                            branch_prefix: board.branch_prefix.clone(),
-                            sprint_duration_days: board.sprint_duration_days,
-                            sprint_prefix: board.sprint_prefix.clone(),
-                            sprint_names: board.sprint_names.clone(),
-                        };
-                        let content = serde_json::to_string_pretty(&settings)
-                            .unwrap_or_else(|_| "{}".to_string());
-                        (temp_file, content)
-                    }
                 };
 
                 if let Some(new_content) =
@@ -720,17 +706,6 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
-                            }
-                            BoardField::Settings => {
-                                match serde_json::from_str::<BoardSettingsDto>(&new_content) {
-                                    Ok(settings) => {
-                                        settings.apply_to(board);
-                                        tracing::info!("Updated board settings via JSON editor");
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("Failed to parse settings JSON: {}", e);
-                                    }
-                                }
                             }
                         }
                     }
