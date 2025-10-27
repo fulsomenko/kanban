@@ -1,6 +1,7 @@
 use crate::app::{App, AppMode, BoardField, BoardFocus, CardField, CardFocus, SprintTaskPanel};
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
+use kanban_domain::{BoardSettingsDto, CardMetadataDto};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -64,8 +65,22 @@ impl App {
                     should_restart = true;
                 }
                 CardFocus::Metadata => {
-                    self.input.clear();
-                    self.mode = AppMode::SetCardPoints;
+                    if let Some(card_idx) = self.active_card_index {
+                        if let Some(card) = self.cards.get_mut(card_idx) {
+                            let card_id = card.id;
+                            let temp_file = std::env::temp_dir()
+                                .join(format!("kanban-card-{}-metadata.json", card_id));
+                            if let Err(e) = App::edit_entity_json_impl::<CardMetadataDto, _>(
+                                card,
+                                terminal,
+                                event_handler,
+                                temp_file,
+                            ) {
+                                tracing::error!("Failed to edit metadata: {}", e);
+                            }
+                            should_restart = true;
+                        }
+                    }
                 }
             },
             KeyCode::Char('s') => {
@@ -85,6 +100,9 @@ impl App {
                 }
             }
             KeyCode::Char('p') => {
+                self.mode = AppMode::SetCardPoints;
+            }
+            KeyCode::Char('P') => {
                 let priority_idx = self.get_current_priority_selection_index();
                 self.priority_selection.set(Some(priority_idx));
                 self.mode = AppMode::SetCardPriority;
@@ -138,12 +156,22 @@ impl App {
                     should_restart = true;
                 }
                 BoardFocus::Settings => {
-                    if let Err(e) =
-                        self.edit_board_field(terminal, event_handler, BoardField::Settings)
-                    {
-                        tracing::error!("Failed to edit board settings: {}", e);
+                    if let Some(board_idx) = self.board_selection.get() {
+                        if let Some(board) = self.boards.get_mut(board_idx) {
+                            let board_id = board.id;
+                            let temp_file = std::env::temp_dir()
+                                .join(format!("kanban-board-{}-settings.json", board_id));
+                            if let Err(e) = App::edit_entity_json_impl::<BoardSettingsDto, _>(
+                                board,
+                                terminal,
+                                event_handler,
+                                temp_file,
+                            ) {
+                                tracing::error!("Failed to edit board settings: {}", e);
+                            }
+                            should_restart = true;
+                        }
                     }
-                    should_restart = true;
                 }
                 BoardFocus::Sprints => {}
                 BoardFocus::Columns => {}

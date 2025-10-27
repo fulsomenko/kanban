@@ -18,10 +18,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, KanbanResult};
+use kanban_core::{AppConfig, Editable, KanbanResult};
 use kanban_domain::{Board, Card, Column, SortField, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
-use serde::{Deserialize, Serialize};
 use std::io;
 
 pub struct App {
@@ -100,15 +99,6 @@ pub enum CardField {
 pub enum BoardField {
     Name,
     Description,
-    Settings,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct BoardSettings {
-    branch_prefix: Option<String>,
-    sprint_duration_days: Option<u32>,
-    sprint_prefix: Option<String>,
-    sprint_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -696,19 +686,6 @@ impl App {
                         let content = board.description.as_deref().unwrap_or("").to_string();
                         (temp_file, content)
                     }
-                    BoardField::Settings => {
-                        let temp_file =
-                            temp_dir.join(format!("kanban-board-{}-settings.json", board.id));
-                        let settings = BoardSettings {
-                            branch_prefix: board.branch_prefix.clone(),
-                            sprint_duration_days: board.sprint_duration_days,
-                            sprint_prefix: board.sprint_prefix.clone(),
-                            sprint_names: board.sprint_names.clone(),
-                        };
-                        let content = serde_json::to_string_pretty(&settings)
-                            .unwrap_or_else(|_| "{}".to_string());
-                        (temp_file, content)
-                    }
                 };
 
                 if let Some(new_content) =
@@ -729,21 +706,6 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
-                            }
-                            BoardField::Settings => {
-                                match serde_json::from_str::<BoardSettings>(&new_content) {
-                                    Ok(settings) => {
-                                        board.branch_prefix = settings.branch_prefix;
-                                        board.sprint_duration_days = settings.sprint_duration_days;
-                                        board.sprint_prefix = settings.sprint_prefix;
-                                        board.sprint_names = settings.sprint_names;
-                                        board.updated_at = chrono::Utc::now();
-                                        tracing::info!("Updated board settings via JSON editor");
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("Failed to parse settings JSON: {}", e);
-                                    }
-                                }
                             }
                         }
                     }
@@ -799,6 +761,33 @@ impl App {
                 }
             }
         }
+        Ok(())
+    }
+
+    pub fn edit_entity_json_impl<T: Editable<E>, E>(
+        entity: &mut E,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        event_handler: &EventHandler,
+        temp_file: std::path::PathBuf,
+    ) -> io::Result<()> {
+        let dto = T::from_entity(entity);
+        let current_content =
+            serde_json::to_string_pretty(&dto).unwrap_or_else(|_| "{}".to_string());
+
+        if let Some(new_content) =
+            edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
+        {
+            match serde_json::from_str::<T>(&new_content) {
+                Ok(updated_dto) => {
+                    updated_dto.apply_to(entity);
+                    tracing::info!("Updated entity via JSON editor");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to parse JSON: {}", e);
+                }
+            }
+        }
+
         Ok(())
     }
 
