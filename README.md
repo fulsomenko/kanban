@@ -2,6 +2,8 @@
 
 A terminal-based kanban/project management tool inspired by [lazygit](https://github.com/jesseduffield/lazygit), built with Rust.
 
+![Kanban Demo](demo.gif)
+
 ## Features
 
 - ⚡ **Fast & Responsive**: Written in Rust with async/await
