@@ -20,6 +20,9 @@ pkgs.mkShell {
     # Development utilities
     bacon
     changeset
+
+    asciinema_3
+    asciinema-agg
   ];
 
   shellHook = ''
