@@ -878,13 +878,17 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
         if let Some(card) = app.cards.get(card_idx) {
             if let Some(board_idx) = app.active_board_index {
                 if let Some(board) = app.boards.get(board_idx) {
+                    let has_sprint_logs = card.sprint_logs.len() > 1;
+
+                    let constraints = vec![
+                        Constraint::Length(5),
+                        Constraint::Length(5),
+                        Constraint::Min(0),
+                    ];
+
                     let chunks = Layout::default()
                         .direction(Direction::Vertical)
-                        .constraints([
-                            Constraint::Length(5),
-                            Constraint::Length(5),
-                            Constraint::Min(0),
-                        ])
+                        .constraints(constraints)
                         .split(area);
 
                     let title_config = FieldSectionConfig::new("Task Title")
@@ -895,55 +899,143 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         .block(title_config.block());
                     frame.render_widget(title, chunks[0]);
 
-                    let meta_config = FieldSectionConfig::new("Metadata")
-                        .with_focus_indicator("Metadata [2]")
-                        .focused(app.card_focus == CardFocus::Metadata);
+                    if has_sprint_logs {
+                        let meta_chunks = Layout::default()
+                            .direction(Direction::Horizontal)
+                            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                            .split(chunks[1]);
 
-                    let meta_lines = vec![
-                        metadata_line_multi(vec![
-                            ("Priority", format!("{:?}", card.priority), normal_text()),
-                            ("Status", format!("{:?}", card.status), normal_text()),
-                            (
-                                "Points",
-                                card.points
-                                    .map(|p| p.to_string())
-                                    .unwrap_or_else(|| "-".to_string()),
-                                normal_text(),
-                            ),
-                        ]),
-                        if let Some(due_date) = card.due_date {
+                        let meta_config = FieldSectionConfig::new("Metadata")
+                            .with_focus_indicator("Metadata [2]")
+                            .focused(app.card_focus == CardFocus::Metadata);
+
+                        let meta_lines = vec![
+                            metadata_line_multi(vec![
+                                ("Priority", format!("{:?}", card.priority), normal_text()),
+                                ("Status", format!("{:?}", card.status), normal_text()),
+                                (
+                                    "Points",
+                                    card.points
+                                        .map(|p| p.to_string())
+                                        .unwrap_or_else(|| "-".to_string()),
+                                    normal_text(),
+                                ),
+                            ]),
+                            if let Some(due_date) = card.due_date {
+                                metadata_line_styled(
+                                    "Due",
+                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
+                                    Style::default().fg(Color::Red),
+                                )
+                            } else {
+                                Line::from(Span::styled("No due date", label_text()))
+                            },
                             metadata_line_styled(
-                                "Due",
-                                due_date.format("%Y-%m-%d %H:%M").to_string(),
-                                Style::default().fg(Color::Red),
-                            )
-                        } else {
-                            Line::from(Span::styled("No due date", label_text()))
-                        },
-                        metadata_line_styled(
-                            "Branch",
-                            card.branch_name(
-                                board,
-                                &app.sprints,
-                                app.app_config.effective_default_prefix(),
+                                "Branch",
+                                card.branch_name(
+                                    board,
+                                    &app.sprints,
+                                    app.app_config.effective_default_prefix(),
+                                ),
+                                active_item(),
                             ),
-                            active_item(),
-                        ),
-                    ];
+                        ];
 
-                    let meta = Paragraph::new(meta_lines).block(meta_config.block());
-                    frame.render_widget(meta, chunks[1]);
+                        let meta = Paragraph::new(meta_lines).block(meta_config.block());
+                        frame.render_widget(meta, meta_chunks[0]);
 
-                    let desc_config = FieldSectionConfig::new("Description")
-                        .with_focus_indicator("Description [3]")
-                        .focused(app.card_focus == CardFocus::Description);
-                    let desc_lines = if let Some(desc_text) = &card.description {
-                        crate::markdown_renderer::render_markdown(desc_text)
+                        let sprint_logs_config = FieldSectionConfig::new("Sprint History");
+                        let mut sprint_log_lines = vec![];
+
+                        for (idx, log) in card.sprint_logs.iter().enumerate() {
+                            let sprint_name_str = log
+                                .sprint_name
+                                .as_deref()
+                                .unwrap_or(&log.sprint_number.to_string())
+                                .to_string();
+                            let started = log.started_at.format("%m-%d %H:%M").to_string();
+                            let status_str = if let Some(ended) = log.ended_at {
+                                let ended_fmt = ended.format("%m-%d %H:%M").to_string();
+                                format!("{} → {}", started, ended_fmt)
+                            } else {
+                                format!("{} → (current)", started)
+                            };
+
+                            sprint_log_lines.push(Line::from(vec![
+                                Span::styled(format!("{}. ", idx + 1), label_text()),
+                                Span::styled(
+                                    format!("{} ", sprint_name_str),
+                                    Style::default().fg(Color::Cyan),
+                                ),
+                                Span::styled(status_str, label_text()),
+                            ]));
+                        }
+
+                        let sprint_logs =
+                            Paragraph::new(sprint_log_lines).block(sprint_logs_config.block());
+                        frame.render_widget(sprint_logs, meta_chunks[1]);
+
+                        let desc_config = FieldSectionConfig::new("Description")
+                            .with_focus_indicator("Description [3]")
+                            .focused(app.card_focus == CardFocus::Description);
+                        let desc_lines = if let Some(desc_text) = &card.description {
+                            crate::markdown_renderer::render_markdown(desc_text)
+                        } else {
+                            vec![Line::from(Span::styled("No description", label_text()))]
+                        };
+                        let desc = Paragraph::new(desc_lines).block(desc_config.block());
+                        frame.render_widget(desc, chunks[2]);
                     } else {
-                        vec![Line::from(Span::styled("No description", label_text()))]
-                    };
-                    let desc = Paragraph::new(desc_lines).block(desc_config.block());
-                    frame.render_widget(desc, chunks[2]);
+                        let meta_config = FieldSectionConfig::new("Metadata")
+                            .with_focus_indicator("Metadata [2]")
+                            .focused(app.card_focus == CardFocus::Metadata);
+
+                        let meta_lines = vec![
+                            metadata_line_multi(vec![
+                                ("Priority", format!("{:?}", card.priority), normal_text()),
+                                ("Status", format!("{:?}", card.status), normal_text()),
+                                (
+                                    "Points",
+                                    card.points
+                                        .map(|p| p.to_string())
+                                        .unwrap_or_else(|| "-".to_string()),
+                                    normal_text(),
+                                ),
+                            ]),
+                            if let Some(due_date) = card.due_date {
+                                metadata_line_styled(
+                                    "Due",
+                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
+                                    Style::default().fg(Color::Red),
+                                )
+                            } else {
+                                Line::from(Span::styled("No due date", label_text()))
+                            },
+                            metadata_line_styled(
+                                "Branch",
+                                card.branch_name(
+                                    board,
+                                    &app.sprints,
+                                    app.app_config.effective_default_prefix(),
+                                ),
+                                active_item(),
+                            ),
+                        ];
+
+                        let meta = Paragraph::new(meta_lines).block(meta_config.block());
+                        frame.render_widget(meta, chunks[1]);
+
+                        let desc_config = FieldSectionConfig::new("Description")
+                            .with_focus_indicator("Description [3]")
+                            .focused(app.card_focus == CardFocus::Description);
+                        let desc_lines = if let Some(desc_text) = &card.description {
+                            crate::markdown_renderer::render_markdown(desc_text)
+                        } else {
+                            vec![Line::from(Span::styled("No description", label_text()))]
+                        };
+                        let desc = Paragraph::new(desc_lines).block(desc_config.block());
+                        frame.render_widget(desc, chunks[2]);
+                    }
                 }
             }
         }
