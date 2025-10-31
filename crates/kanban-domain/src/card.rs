@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{board::Board, column::ColumnId, sprint::Sprint};
+use crate::{board::Board, column::ColumnId, sprint::Sprint, SprintLog};
 
 pub type CardId = Uuid;
 
@@ -41,6 +41,8 @@ pub struct Card {
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
     pub completed_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub sprint_logs: Vec<SprintLog>,
 }
 
 impl Card {
@@ -62,6 +64,7 @@ impl Card {
             created_at: now,
             updated_at: now,
             completed_at: None,
+            sprint_logs: Vec::new(),
         }
     }
 
@@ -177,6 +180,32 @@ impl Card {
 
     pub fn is_completed(&self) -> bool {
         self.status == CardStatus::Done
+    }
+
+    pub fn assign_to_sprint(
+        &mut self,
+        sprint_id: Uuid,
+        sprint_number: u32,
+        sprint_name: Option<String>,
+        sprint_status: String,
+    ) {
+        self.sprint_id = Some(sprint_id);
+        let sprint_log = SprintLog::new(sprint_id, sprint_number, sprint_name, sprint_status);
+        self.sprint_logs.push(sprint_log);
+        self.updated_at = Utc::now();
+    }
+
+    pub fn end_current_sprint_log(&mut self) {
+        if let Some(last_log) = self.sprint_logs.last_mut() {
+            if last_log.ended_at.is_none() {
+                last_log.end_sprint();
+                self.updated_at = Utc::now();
+            }
+        }
+    }
+
+    pub fn get_sprint_history(&self) -> &[SprintLog] {
+        &self.sprint_logs
     }
 }
 
@@ -317,5 +346,67 @@ mod tests {
         assert!(!Card::validate_branch_prefix("feat/123"));
         assert!(!Card::validate_branch_prefix("feat 123"));
         assert!(!Card::validate_branch_prefix("feat@123"));
+    }
+
+    #[test]
+    fn test_sprint_logging() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+
+        assert_eq!(card.get_sprint_history().len(), 0);
+
+        let sprint_id_1 = uuid::Uuid::new_v4();
+        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1".to_string()), "Active".to_string());
+
+        assert_eq!(card.get_sprint_history().len(), 1);
+        assert_eq!(card.sprint_id, Some(sprint_id_1));
+
+        let first_log = &card.get_sprint_history()[0];
+        assert_eq!(first_log.sprint_id, sprint_id_1);
+        assert_eq!(first_log.sprint_number, 1);
+        assert_eq!(first_log.sprint_name, Some("Sprint 1".to_string()));
+        assert!(first_log.ended_at.is_none());
+    }
+
+    #[test]
+    fn test_sprint_log_ending() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+
+        let sprint_id_1 = uuid::Uuid::new_v4();
+        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1".to_string()), "Active".to_string());
+
+        card.end_current_sprint_log();
+
+        let first_log = &card.get_sprint_history()[0];
+        assert!(first_log.ended_at.is_some());
+    }
+
+    #[test]
+    fn test_multiple_sprint_logs() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+
+        let sprint_id_1 = uuid::Uuid::new_v4();
+        let sprint_id_2 = uuid::Uuid::new_v4();
+
+        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1".to_string()), "Active".to_string());
+        assert_eq!(card.sprint_id, Some(sprint_id_1));
+        assert_eq!(card.get_sprint_history().len(), 1);
+
+        card.end_current_sprint_log();
+        card.assign_to_sprint(sprint_id_2, 2, Some("Sprint 2".to_string()), "Active".to_string());
+
+        assert_eq!(card.sprint_id, Some(sprint_id_2));
+        assert_eq!(card.get_sprint_history().len(), 2);
+
+        let first_log = &card.get_sprint_history()[0];
+        assert!(first_log.ended_at.is_some());
+
+        let second_log = &card.get_sprint_history()[1];
+        assert!(second_log.ended_at.is_none());
     }
 }
