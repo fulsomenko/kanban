@@ -357,7 +357,12 @@ mod tests {
         assert_eq!(card.get_sprint_history().len(), 0);
 
         let sprint_id_1 = uuid::Uuid::new_v4();
-        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1".to_string()), "Active".to_string());
+        card.assign_to_sprint(
+            sprint_id_1,
+            1,
+            Some("Sprint 1".to_string()),
+            "Active".to_string(),
+        );
 
         assert_eq!(card.get_sprint_history().len(), 1);
         assert_eq!(card.sprint_id, Some(sprint_id_1));
@@ -376,7 +381,12 @@ mod tests {
         let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
 
         let sprint_id_1 = uuid::Uuid::new_v4();
-        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1".to_string()), "Active".to_string());
+        card.assign_to_sprint(
+            sprint_id_1,
+            1,
+            Some("Sprint 1".to_string()),
+            "Active".to_string(),
+        );
 
         card.end_current_sprint_log();
 
@@ -393,12 +403,22 @@ mod tests {
         let sprint_id_1 = uuid::Uuid::new_v4();
         let sprint_id_2 = uuid::Uuid::new_v4();
 
-        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1".to_string()), "Active".to_string());
+        card.assign_to_sprint(
+            sprint_id_1,
+            1,
+            Some("Sprint 1".to_string()),
+            "Active".to_string(),
+        );
         assert_eq!(card.sprint_id, Some(sprint_id_1));
         assert_eq!(card.get_sprint_history().len(), 1);
 
         card.end_current_sprint_log();
-        card.assign_to_sprint(sprint_id_2, 2, Some("Sprint 2".to_string()), "Active".to_string());
+        card.assign_to_sprint(
+            sprint_id_2,
+            2,
+            Some("Sprint 2".to_string()),
+            "Active".to_string(),
+        );
 
         assert_eq!(card.sprint_id, Some(sprint_id_2));
         assert_eq!(card.get_sprint_history().len(), 2);
