@@ -38,8 +38,6 @@ pub struct Board {
     #[serde(default)]
     pub sprint_duration_days: Option<u32>,
     #[serde(default)]
-    pub sprint_prefix: Option<String>,
-    #[serde(default)]
     pub sprint_names: Vec<String>,
     #[serde(default)]
     pub sprint_name_used_count: usize,
@@ -81,7 +79,6 @@ impl Board {
             task_sort_field: SortField::Default,
             task_sort_order: SortOrder::Ascending,
             sprint_duration_days: None,
-            sprint_prefix: None,
             sprint_names: Vec::new(),
             sprint_name_used_count: 0,
             next_sprint_number: 1,
