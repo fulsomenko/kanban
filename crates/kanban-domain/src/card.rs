@@ -189,10 +189,13 @@ impl Card {
         sprint_name: Option<String>,
         sprint_status: String,
     ) {
-        self.sprint_id = Some(sprint_id);
-        let sprint_log = SprintLog::new(sprint_id, sprint_number, sprint_name, sprint_status);
-        self.sprint_logs.push(sprint_log);
-        self.updated_at = Utc::now();
+        // Only create a sprint log entry if the sprint assignment actually changes
+        if self.sprint_id != Some(sprint_id) {
+            self.sprint_id = Some(sprint_id);
+            let sprint_log = SprintLog::new(sprint_id, sprint_number, sprint_name, sprint_status);
+            self.sprint_logs.push(sprint_log);
+            self.updated_at = Utc::now();
+        }
     }
 
     pub fn end_current_sprint_log(&mut self) {
@@ -428,5 +431,39 @@ mod tests {
 
         let second_log = &card.get_sprint_history()[1];
         assert!(second_log.ended_at.is_none());
+    }
+
+    #[test]
+    fn test_assign_same_sprint_no_duplicate() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+
+        let sprint_id = uuid::Uuid::new_v4();
+
+        card.assign_to_sprint(
+            sprint_id,
+            1,
+            Some("Sprint 1".to_string()),
+            "Active".to_string(),
+        );
+        assert_eq!(card.sprint_id, Some(sprint_id));
+        assert_eq!(card.get_sprint_history().len(), 1);
+
+        // Re-assign to the same sprint
+        card.assign_to_sprint(
+            sprint_id,
+            1,
+            Some("Sprint 1".to_string()),
+            "Active".to_string(),
+        );
+
+        // Should NOT create a duplicate entry
+        assert_eq!(card.sprint_id, Some(sprint_id));
+        assert_eq!(card.get_sprint_history().len(), 1);
+
+        let log = &card.get_sprint_history()[0];
+        assert_eq!(log.sprint_id, sprint_id);
+        assert!(log.ended_at.is_none());
     }
 }
