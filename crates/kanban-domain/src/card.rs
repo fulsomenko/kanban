@@ -320,7 +320,7 @@ mod tests {
             board_id: board.id,
             sprint_number: 1,
             name_index: Some(0),
-            prefix_override: Some("hotfix".to_string()),
+            prefix: Some("hotfix".to_string()),
             status: SprintStatus::Planning,
             start_date: None,
             end_date: None,

@@ -18,7 +18,8 @@ pub struct Sprint {
     pub board_id: Uuid,
     pub sprint_number: u32,
     pub name_index: Option<usize>,
-    pub prefix_override: Option<String>,
+    #[serde(alias = "prefix_override")]
+    pub prefix: Option<String>,
     pub status: SprintStatus,
     pub start_date: Option<DateTime<Utc>>,
     pub end_date: Option<DateTime<Utc>>,
@@ -33,7 +34,7 @@ impl Sprint {
         board_id: Uuid,
         sprint_number: u32,
         name_index: Option<usize>,
-        prefix_override: Option<String>,
+        prefix: Option<String>,
     ) -> Self {
         let now = Utc::now();
         Self {
@@ -41,7 +42,7 @@ impl Sprint {
             board_id,
             sprint_number,
             name_index,
-            prefix_override,
+            prefix,
             status: SprintStatus::Planning,
             start_date: None,
             end_date: None,
@@ -57,7 +58,7 @@ impl Sprint {
     }
 
     pub fn formatted_name(&self, board: &Board, default_prefix: &str) -> String {
-        let prefix = self.prefix_override.as_deref().unwrap_or(default_prefix);
+        let prefix = self.prefix.as_deref().unwrap_or(default_prefix);
         match self.get_name(board) {
             Some(name) => format!("{}-{}/{}", prefix, self.sprint_number, name),
             None => format!("{}-{}", prefix, self.sprint_number),
