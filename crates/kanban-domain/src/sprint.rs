@@ -60,7 +60,7 @@ impl Sprint {
     pub fn effective_prefix<'a>(&'a self, board: &'a Board, default_prefix: &'a str) -> &'a str {
         self.prefix
             .as_deref()
-            .or_else(|| board.branch_prefix.as_deref())
+            .or(board.branch_prefix.as_deref())
             .unwrap_or(default_prefix)
     }
 
