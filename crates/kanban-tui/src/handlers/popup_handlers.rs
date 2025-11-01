@@ -167,6 +167,7 @@ impl App {
                             if selection_idx == 0 {
                                 card.end_current_sprint_log();
                                 card.sprint_id = None;
+                                card.set_assigned_prefix(None);
                                 tracing::info!("Unassigned card from sprint");
                             } else if let Some(board_idx) = self.active_board_index {
                                 if let Some(board) = self.boards.get(board_idx) {
@@ -187,6 +188,9 @@ impl App {
                                             sprint.get_name(board).map(|s| s.to_string()),
                                             format!("{:?}", sprint.status),
                                         );
+                                        // Set the assigned prefix based on the sprint's effective prefix
+                                        let effective_prefix = sprint.effective_prefix(board, "task");
+                                        card.set_assigned_prefix(Some(effective_prefix.to_string()));
                                         tracing::info!(
                                             "Assigned card to sprint: {}",
                                             sprint.formatted_name(board, "sprint")
@@ -234,6 +238,7 @@ impl App {
                             if selection_idx == 0 {
                                 card.end_current_sprint_log();
                                 card.sprint_id = None;
+                                card.set_assigned_prefix(None);
                             } else if let Some(board_idx) = self.active_board_index {
                                 if let Some(board) = self.boards.get(board_idx) {
                                     let board_sprints: Vec<_> = self
@@ -253,6 +258,9 @@ impl App {
                                             sprint.get_name(board).map(|s| s.to_string()),
                                             format!("{:?}", sprint.status),
                                         );
+                                        // Set the assigned prefix based on the sprint's effective prefix
+                                        let effective_prefix = sprint.effective_prefix(board, "task");
+                                        card.set_assigned_prefix(Some(effective_prefix.to_string()));
                                     }
                                 }
                             }
