@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::task_list_view::TaskListView;
@@ -47,6 +48,8 @@ pub struct Board {
     pub active_sprint_id: Option<Uuid>,
     #[serde(default)]
     pub task_list_view: TaskListView,
+    #[serde(default)]
+    pub prefix_counters: HashMap<String, u32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -84,6 +87,7 @@ impl Board {
             next_sprint_number: 1,
             active_sprint_id: None,
             task_list_view: TaskListView::default(),
+            prefix_counters: HashMap::new(),
             created_at: now,
             updated_at: now,
         }
@@ -154,6 +158,30 @@ impl Board {
         self.task_list_view = view;
         self.updated_at = Utc::now();
     }
+
+    pub fn get_next_card_number(&mut self, prefix: &str) -> u32 {
+        let counter = self
+            .prefix_counters
+            .entry(prefix.to_string())
+            .or_insert(1);
+        let number = *counter;
+        *counter += 1;
+        self.updated_at = Utc::now();
+        number
+    }
+
+    pub fn initialize_prefix_counter(&mut self, prefix: &str, start: u32) {
+        self.prefix_counters.insert(prefix.to_string(), start);
+        self.updated_at = Utc::now();
+    }
+
+    pub fn get_prefix_counters(&self) -> &HashMap<String, u32> {
+        &self.prefix_counters
+    }
+
+    pub fn get_prefix_counter(&self, prefix: &str) -> Option<u32> {
+        self.prefix_counters.get(prefix).copied()
+    }
 }
 
 #[cfg(test)]
@@ -193,5 +221,56 @@ mod tests {
 
         board.update_branch_prefix(Some("custom".to_string()));
         assert_eq!(board.effective_branch_prefix("default"), "custom");
+    }
+
+    #[test]
+    fn test_prefix_counter_initialization() {
+        let mut board = Board::new("Test".to_string(), None);
+        assert_eq!(board.get_prefix_counter("test"), None);
+
+        let num = board.get_next_card_number("test");
+        assert_eq!(num, 1);
+        assert_eq!(board.get_prefix_counter("test"), Some(2));
+    }
+
+    #[test]
+    fn test_shared_prefix_sequence() {
+        let mut board = Board::new("Test".to_string(), None);
+
+        let num1 = board.get_next_card_number("TEST");
+        assert_eq!(num1, 1);
+
+        let num2 = board.get_next_card_number("TEST");
+        assert_eq!(num2, 2);
+
+        let num3 = board.get_next_card_number("TEST");
+        assert_eq!(num3, 3);
+
+        assert_eq!(board.get_prefix_counter("TEST"), Some(4));
+    }
+
+    #[test]
+    fn test_multiple_prefix_counters() {
+        let mut board = Board::new("Test".to_string(), None);
+
+        let test1 = board.get_next_card_number("TEST");
+        let bra1 = board.get_next_card_number("BRA");
+        let test2 = board.get_next_card_number("TEST");
+        let bra2 = board.get_next_card_number("BRA");
+
+        assert_eq!(test1, 1);
+        assert_eq!(bra1, 1);
+        assert_eq!(test2, 2);
+        assert_eq!(bra2, 2);
+    }
+
+    #[test]
+    fn test_initialize_prefix_counter() {
+        let mut board = Board::new("Test".to_string(), None);
+        board.initialize_prefix_counter("TEST", 10);
+
+        let num = board.get_next_card_number("TEST");
+        assert_eq!(num, 10);
+        assert_eq!(board.get_prefix_counter("TEST"), Some(11));
     }
 }
