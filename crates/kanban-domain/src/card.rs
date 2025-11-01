@@ -232,20 +232,20 @@ mod tests {
 
         assert_eq!(board.next_card_number, 1);
 
-        let card1 = Card::new(&mut board, column_id, "Test Card 1".to_string(), 0);
+        let card1 = Card::new(&mut board, column_id, "Test Card 1".to_string(), 0, "task");
         assert_eq!(card1.card_number, 1);
-        assert_eq!(board.next_card_number, 2);
+        assert_eq!(board.get_prefix_counter("task"), Some(2));
 
-        let card2 = Card::new(&mut board, column_id, "Test Card 2".to_string(), 1);
+        let card2 = Card::new(&mut board, column_id, "Test Card 2".to_string(), 1, "task");
         assert_eq!(card2.card_number, 2);
-        assert_eq!(board.next_card_number, 3);
+        assert_eq!(board.get_prefix_counter("task"), Some(3));
     }
 
     #[test]
     fn test_branch_name() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
         let sprints = vec![];
 
         assert_eq!(
@@ -282,7 +282,7 @@ mod tests {
         let column_id = uuid::Uuid::new_v4();
         let long_title = "a".repeat(300);
         let mut board = Board::new("Test Board".to_string(), None);
-        let card = Card::new(&mut board, column_id, long_title, 0);
+        let card = Card::new(&mut board, column_id, long_title, 0, "task");
         let sprints = vec![];
 
         let branch = card.branch_name(&board, &sprints, "task");
@@ -294,7 +294,7 @@ mod tests {
     fn test_git_checkout_command() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
         let sprints = vec![];
 
         assert_eq!(
@@ -310,7 +310,7 @@ mod tests {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
 
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         let sprint = Sprint::new(board.id, 1, Some(0), None);
         card.sprint_id = Some(sprint.id);
@@ -362,7 +362,7 @@ mod tests {
     fn test_sprint_logging() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         assert_eq!(card.get_sprint_history().len(), 0);
 
@@ -388,7 +388,7 @@ mod tests {
     fn test_sprint_log_ending() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         let sprint_id_1 = uuid::Uuid::new_v4();
         card.assign_to_sprint(
@@ -408,7 +408,7 @@ mod tests {
     fn test_multiple_sprint_logs() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         let sprint_id_1 = uuid::Uuid::new_v4();
         let sprint_id_2 = uuid::Uuid::new_v4();
@@ -444,7 +444,7 @@ mod tests {
     fn test_assign_same_sprint_no_duplicate() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         let sprint_id = uuid::Uuid::new_v4();
 
