@@ -48,9 +48,15 @@ pub struct Card {
 }
 
 impl Card {
-    pub fn new(board: &mut Board, column_id: ColumnId, title: String, position: i32) -> Self {
+    pub fn new(
+        board: &mut Board,
+        column_id: ColumnId,
+        title: String,
+        position: i32,
+        prefix: &str,
+    ) -> Self {
         let now = Utc::now();
-        let card_number = board.allocate_card_number();
+        let card_number = board.get_next_card_number(prefix);
         Self {
             id: Uuid::new_v4(),
             column_id,
@@ -63,6 +69,7 @@ impl Card {
             points: None,
             card_number,
             sprint_id: None,
+            assigned_prefix: Some(prefix.to_string()),
             created_at: now,
             updated_at: now,
             completed_at: None,
@@ -192,6 +199,11 @@ impl Card {
             self.sprint_logs.push(sprint_log);
             self.updated_at = Utc::now();
         }
+    }
+
+    pub fn set_assigned_prefix(&mut self, prefix: Option<String>) {
+        self.assigned_prefix = prefix;
+        self.updated_at = Utc::now();
     }
 
     pub fn end_current_sprint_log(&mut self) {
