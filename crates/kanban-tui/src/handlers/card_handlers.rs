@@ -396,8 +396,16 @@ impl App {
                         .iter()
                         .filter(|c| c.column_id == column.id)
                         .count() as i32;
-                    let mut card =
-                        Card::new(board, column.id, self.input.as_str().to_string(), position);
+                    let effective_prefix = board
+                        .effective_branch_prefix(self.app_config.effective_default_prefix())
+                        .to_string();
+                    let mut card = Card::new(
+                        board,
+                        column.id,
+                        self.input.as_str().to_string(),
+                        position,
+                        &effective_prefix,
+                    );
                     let new_card_id = card.id;
                     let column_name = column.name.clone();
 
