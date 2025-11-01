@@ -126,6 +126,7 @@ pub enum AppMode {
     SelectTaskListView,
     Search,
     SetSprintPrefix,
+    ConfirmSprintPrefixCollision,
 }
 
 impl App {
@@ -327,6 +328,9 @@ impl App {
             AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
             AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
             AppMode::Search => self.handle_search_mode(key.code),
+            AppMode::ConfirmSprintPrefixCollision => {
+                self.handle_confirm_sprint_prefix_collision_popup(key.code)
+            }
         }
         should_restart_events
     }

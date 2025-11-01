@@ -220,4 +220,23 @@ impl App {
             DialogAction::None => {}
         }
     }
+
+    pub fn handle_confirm_sprint_prefix_collision_popup(&mut self, key_code: KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Esc => {
+                self.mode = AppMode::SprintDetail;
+            }
+            KeyCode::Enter | KeyCode::Char('y') => {
+                // User confirmed they want to continue with the colliding prefix
+                // The actual prefix application should happen before this mode is entered
+                self.mode = AppMode::SprintDetail;
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') => {
+                // User declined, go back to prefix dialog
+                self.mode = AppMode::SetSprintPrefix;
+            }
+            _ => {}
+        }
+    }
 }
