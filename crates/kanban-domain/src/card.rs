@@ -37,6 +37,8 @@ pub struct Card {
     pub card_number: u32,
     #[serde(default)]
     pub sprint_id: Option<Uuid>,
+    #[serde(default)]
+    pub assigned_prefix: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
