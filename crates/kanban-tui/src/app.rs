@@ -125,6 +125,7 @@ pub enum AppMode {
     DeleteColumnConfirm,
     SelectTaskListView,
     Search,
+    SetSprintPrefix,
 }
 
 impl App {
@@ -235,6 +236,7 @@ impl App {
                 | AppMode::CreateColumn
                 | AppMode::RenameColumn
                 | AppMode::Search
+                | AppMode::SetSprintPrefix
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
@@ -311,6 +313,7 @@ impl App {
                     self.handle_board_detail_key(key.code, terminal, event_handler);
             }
             AppMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
+            AppMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
             AppMode::OrderCards => {
                 should_restart_events = self.handle_order_cards_popup(key.code);
             }

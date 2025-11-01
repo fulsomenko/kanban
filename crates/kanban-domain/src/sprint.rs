@@ -95,6 +95,11 @@ impl Sprint {
         self.updated_at = Utc::now();
     }
 
+    pub fn update_prefix(&mut self, prefix: Option<String>) {
+        self.prefix = prefix;
+        self.updated_at = Utc::now();
+    }
+
     pub fn is_ended(&self) -> bool {
         if self.status != SprintStatus::Active {
             return false;
