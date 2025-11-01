@@ -136,8 +136,7 @@ fn build_filter_title_suffix(app: &App) -> Option<String> {
         if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
             if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
                 if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint
-                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    let sprint_name = sprint.formatted_name(board, "sprint");
                     return Some(format!(" - {}", sprint_name));
                 }
             }
@@ -495,8 +494,7 @@ fn render_sprint_detail_metadata(
     sprint: &Sprint,
     board: &kanban_domain::Board,
 ) {
-    let sprint_name =
-        sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+    let sprint_name = sprint.formatted_name(board, "sprint");
 
     let mut lines = vec![
         metadata_line_styled("Sprint", sprint_name, bold_highlight()),
@@ -1174,10 +1172,6 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         .map(|d| format!("{} days", d))
                         .unwrap_or_else(|| "(not set)".to_string()),
                 ),
-                metadata_line(
-                    "Sprint Prefix",
-                    board.sprint_prefix.as_deref().unwrap_or("(not set)"),
-                ),
             ];
 
             let available_names: Vec<&str> = board
@@ -1223,8 +1217,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         SprintStatus::Cancelled => "✗",
                     };
 
-                    let sprint_name = sprint
-                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    let sprint_name = sprint.formatted_name(board, "sprint");
 
                     let card_count = app
                         .cards
@@ -1395,7 +1388,7 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
                 let prefix = if is_selected { "> " } else { "  " };
 
                 let sprint_name = if let Some(sprint) = sprint_option {
-                    sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"))
+                    sprint.formatted_name(board, "sprint")
                 } else {
                     "(None)".to_string()
                 };

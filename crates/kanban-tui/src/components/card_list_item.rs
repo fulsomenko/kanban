@@ -45,10 +45,7 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
                 .map(|s| {
                     format!(
                         " ({})",
-                        s.formatted_name(
-                            config.board,
-                            config.board.sprint_prefix.as_deref().unwrap_or("sprint")
-                        )
+                        s.formatted_name(config.board, "sprint")
                     )
                 })
                 .unwrap_or_default()
@@ -61,16 +58,10 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
                 .sprints
                 .iter()
                 .find(|s| s.id == sprint_id)
-                .and_then(|sprint| {
-                    sprint
-                        .prefix_override
-                        .as_ref()
-                        .or(config.board.sprint_prefix.as_ref())
-                })
-                .map(|s| s.as_str())
-                .unwrap_or_else(|| config.board.sprint_prefix.as_deref().unwrap_or("task"))
+                .map(|sprint| sprint.effective_prefix(config.board, "task"))
+                .unwrap_or("task")
         } else {
-            config.board.sprint_prefix.as_deref().unwrap_or("task")
+            "task"
         };
         format!(" ({}-{})", prefix, config.card.card_number)
     };

@@ -653,10 +653,7 @@ impl App {
                 if let Some(board) = self.boards.iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
-                        sprint.formatted_name(
-                            board,
-                            board.sprint_prefix.as_deref().unwrap_or("sprint")
-                        ),
+                        sprint.formatted_name(board, "sprint"),
                         sprint
                             .end_date
                             .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())
