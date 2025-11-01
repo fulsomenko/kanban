@@ -203,6 +203,7 @@ impl App {
             }
         }
 
+        app.migrate_sprint_logs();
         app.check_ended_sprints();
 
         app
@@ -845,6 +846,36 @@ impl App {
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
         Ok(())
+    }
+
+    fn migrate_sprint_logs(&mut self) {
+        let mut migrated_count = 0;
+
+        for card in &mut self.cards {
+            if let Some(sprint_id) = card.sprint_id {
+                if card.sprint_logs.is_empty() {
+                    if let Some(sprint) = self.sprints.iter().find(|s| s.id == sprint_id) {
+                        let sprint_log = kanban_domain::SprintLog::new(
+                            sprint_id,
+                            sprint.sprint_number,
+                            sprint.name_index.and_then(|idx| {
+                                self.boards
+                                    .iter()
+                                    .find(|b| b.id == sprint.board_id)
+                                    .and_then(|board| board.sprint_names.get(idx).cloned())
+                            }),
+                            format!("{:?}", sprint.status),
+                        );
+                        card.sprint_logs.push(sprint_log);
+                        migrated_count += 1;
+                    }
+                }
+            }
+        }
+
+        if migrated_count > 0 {
+            tracing::info!("Migrated sprint logs for {} cards", migrated_count);
+        }
     }
 
     pub fn copy_branch_name(&mut self) {
