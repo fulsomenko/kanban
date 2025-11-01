@@ -947,7 +947,16 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let sprint_logs_config = FieldSectionConfig::new("Sprint History");
                         let mut sprint_log_lines = vec![];
 
-                        for (idx, log) in card.sprint_logs.iter().enumerate() {
+                        let max_visible = 5;
+                        let total_logs = card.sprint_logs.len();
+                        let start_idx = if total_logs > max_visible {
+                            total_logs - max_visible
+                        } else {
+                            0
+                        };
+
+                        for (display_idx, log) in card.sprint_logs[start_idx..].iter().enumerate() {
+                            let absolute_idx = start_idx + display_idx;
                             let sprint_name_str = log
                                 .sprint_name
                                 .as_deref()
@@ -962,13 +971,23 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             };
 
                             sprint_log_lines.push(Line::from(vec![
-                                Span::styled(format!("{}. ", idx + 1), label_text()),
+                                Span::styled(format!("{}. ", absolute_idx + 1), label_text()),
                                 Span::styled(
                                     format!("{} ", sprint_name_str),
                                     Style::default().fg(Color::Cyan),
                                 ),
                                 Span::styled(status_str, label_text()),
                             ]));
+                        }
+
+                        if start_idx > 0 {
+                            sprint_log_lines.insert(
+                                0,
+                                Line::from(Span::styled(
+                                    format!("... ({} earlier entries)", start_idx),
+                                    label_text(),
+                                )),
+                            );
                         }
 
                         let sprint_logs =
