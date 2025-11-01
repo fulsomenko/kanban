@@ -189,8 +189,11 @@ impl App {
                                             format!("{:?}", sprint.status),
                                         );
                                         // Set the assigned prefix based on the sprint's effective prefix
-                                        let effective_prefix = sprint.effective_prefix(board, "task");
-                                        card.set_assigned_prefix(Some(effective_prefix.to_string()));
+                                        let effective_prefix =
+                                            sprint.effective_prefix(board, "task");
+                                        card.set_assigned_prefix(Some(
+                                            effective_prefix.to_string(),
+                                        ));
                                         tracing::info!(
                                             "Assigned card to sprint: {}",
                                             sprint.formatted_name(board, "sprint")
@@ -259,8 +262,11 @@ impl App {
                                             format!("{:?}", sprint.status),
                                         );
                                         // Set the assigned prefix based on the sprint's effective prefix
-                                        let effective_prefix = sprint.effective_prefix(board, "task");
-                                        card.set_assigned_prefix(Some(effective_prefix.to_string()));
+                                        let effective_prefix =
+                                            sprint.effective_prefix(board, "task");
+                                        card.set_assigned_prefix(Some(
+                                            effective_prefix.to_string(),
+                                        ));
                                     }
                                 }
                             }

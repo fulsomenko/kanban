@@ -206,7 +206,9 @@ impl App {
                             sprint.update_prefix(Some(prefix_str.to_string()));
                             tracing::info!("Set sprint prefix to: {}", prefix_str);
                         } else {
-                            tracing::error!("Invalid prefix: use alphanumeric, hyphens, underscores only");
+                            tracing::error!(
+                                "Invalid prefix: use alphanumeric, hyphens, underscores only"
+                            );
                         }
                     }
                 }

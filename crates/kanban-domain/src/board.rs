@@ -160,10 +160,7 @@ impl Board {
     }
 
     pub fn get_next_card_number(&mut self, prefix: &str) -> u32 {
-        let counter = self
-            .prefix_counters
-            .entry(prefix.to_string())
-            .or_insert(1);
+        let counter = self.prefix_counters.entry(prefix.to_string()).or_insert(1);
         let number = *counter;
         *counter += 1;
         self.updated_at = Utc::now();

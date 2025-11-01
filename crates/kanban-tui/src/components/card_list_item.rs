@@ -42,12 +42,7 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
                 .sprints
                 .iter()
                 .find(|s| s.id == sprint_id)
-                .map(|s| {
-                    format!(
-                        " ({})",
-                        s.formatted_name(config.board, "sprint")
-                    )
-                })
+                .map(|s| format!(" ({})", s.formatted_name(config.board, "sprint")))
                 .unwrap_or_default()
         } else {
             String::new()
