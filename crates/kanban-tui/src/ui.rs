@@ -820,6 +820,9 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::DeleteColumnConfirm => "ESC: cancel | ENTER/y: delete | n: cancel".to_string(),
         AppMode::SelectTaskListView => "ESC: cancel | j/k: navigate | ENTER/Space: select".to_string(),
         AppMode::Search => "ESC/ENTER: exit search | type to filter".to_string(),
+        AppMode::ConfirmSprintPrefixCollision => {
+            "ESC: cancel | j/k: navigate | ENTER: confirm".to_string()
+        }
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
