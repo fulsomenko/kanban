@@ -12,7 +12,7 @@ fn test_export_single_board() {
 
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
 
     app.boards.push(board.clone());
     app.columns.push(column.clone());
@@ -43,11 +43,11 @@ fn test_export_all_boards() {
 
     let mut board1 = Board::new("Board 1".to_string(), None);
     let column1 = Column::new(board1.id, "Todo".to_string(), 0);
-    let card1 = Card::new(&mut board1, column1.id, "Task 1".to_string(), 0);
+    let card1 = Card::new(&mut board1, column1.id, "Task 1".to_string(), 0, "task");
 
     let mut board2 = Board::new("Board 2".to_string(), None);
     let column2 = Column::new(board2.id, "Todo".to_string(), 0);
-    let card2 = Card::new(&mut board2, column2.id, "Task 2".to_string(), 0);
+    let card2 = Card::new(&mut board2, column2.id, "Task 2".to_string(), 0, "task");
 
     app.boards.push(board1);
     app.boards.push(board2);

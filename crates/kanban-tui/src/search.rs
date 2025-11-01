@@ -84,7 +84,7 @@ impl CardBranchNameSearcher {
             .map(|sprint| {
                 format!(
                     "{}-{}/",
-                    board.sprint_prefix.as_deref().unwrap_or("sprint"),
+                    sprint.effective_prefix(board, "sprint"),
                     sprint.sprint_number
                 )
             });

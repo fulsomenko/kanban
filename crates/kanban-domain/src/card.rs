@@ -37,6 +37,8 @@ pub struct Card {
     pub card_number: u32,
     #[serde(default)]
     pub sprint_id: Option<Uuid>,
+    #[serde(default)]
+    pub assigned_prefix: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
@@ -46,9 +48,15 @@ pub struct Card {
 }
 
 impl Card {
-    pub fn new(board: &mut Board, column_id: ColumnId, title: String, position: i32) -> Self {
+    pub fn new(
+        board: &mut Board,
+        column_id: ColumnId,
+        title: String,
+        position: i32,
+        prefix: &str,
+    ) -> Self {
         let now = Utc::now();
-        let card_number = board.allocate_card_number();
+        let card_number = board.get_next_card_number(prefix);
         Self {
             id: Uuid::new_v4(),
             column_id,
@@ -61,6 +69,7 @@ impl Card {
             points: None,
             card_number,
             sprint_id: None,
+            assigned_prefix: Some(prefix.to_string()),
             created_at: now,
             updated_at: now,
             completed_at: None,
@@ -115,13 +124,7 @@ impl Card {
             sprints
                 .iter()
                 .find(|s| s.id == sprint_id)
-                .and_then(|sprint| {
-                    sprint
-                        .prefix_override
-                        .as_ref()
-                        .or(board.sprint_prefix.as_ref())
-                })
-                .map(|s| s.as_str())
+                .map(|sprint| sprint.effective_prefix(board, default_prefix))
                 .unwrap_or_else(|| board.effective_branch_prefix(default_prefix))
         } else {
             board.effective_branch_prefix(default_prefix)
@@ -198,6 +201,11 @@ impl Card {
         }
     }
 
+    pub fn set_assigned_prefix(&mut self, prefix: Option<String>) {
+        self.assigned_prefix = prefix;
+        self.updated_at = Utc::now();
+    }
+
     pub fn end_current_sprint_log(&mut self) {
         if let Some(last_log) = self.sprint_logs.last_mut() {
             if last_log.ended_at.is_none() {
@@ -224,20 +232,20 @@ mod tests {
 
         assert_eq!(board.next_card_number, 1);
 
-        let card1 = Card::new(&mut board, column_id, "Test Card 1".to_string(), 0);
+        let card1 = Card::new(&mut board, column_id, "Test Card 1".to_string(), 0, "task");
         assert_eq!(card1.card_number, 1);
-        assert_eq!(board.next_card_number, 2);
+        assert_eq!(board.get_prefix_counter("task"), Some(2));
 
-        let card2 = Card::new(&mut board, column_id, "Test Card 2".to_string(), 1);
+        let card2 = Card::new(&mut board, column_id, "Test Card 2".to_string(), 1, "task");
         assert_eq!(card2.card_number, 2);
-        assert_eq!(board.next_card_number, 3);
+        assert_eq!(board.get_prefix_counter("task"), Some(3));
     }
 
     #[test]
     fn test_branch_name() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
         let sprints = vec![];
 
         assert_eq!(
@@ -274,7 +282,7 @@ mod tests {
         let column_id = uuid::Uuid::new_v4();
         let long_title = "a".repeat(300);
         let mut board = Board::new("Test Board".to_string(), None);
-        let card = Card::new(&mut board, column_id, long_title, 0);
+        let card = Card::new(&mut board, column_id, long_title, 0, "task");
         let sprints = vec![];
 
         let branch = card.branch_name(&board, &sprints, "task");
@@ -286,7 +294,7 @@ mod tests {
     fn test_git_checkout_command() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
         let sprints = vec![];
 
         assert_eq!(
@@ -301,9 +309,8 @@ mod tests {
 
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        board.sprint_prefix = Some("sprint".to_string());
 
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         let sprint = Sprint::new(board.id, 1, Some(0), None);
         card.sprint_id = Some(sprint.id);
@@ -312,25 +319,25 @@ mod tests {
 
         assert_eq!(
             card.branch_name(&board, &sprints, "task"),
-            "sprint-1/test-card".to_string()
+            "task-1/test-card".to_string()
         );
 
-        let sprint_with_override = Sprint {
+        let sprint_with_prefix = Sprint {
             id: card.sprint_id.unwrap(),
             board_id: board.id,
             sprint_number: 1,
             name_index: Some(0),
-            prefix_override: Some("hotfix".to_string()),
+            prefix: Some("hotfix".to_string()),
             status: SprintStatus::Planning,
             start_date: None,
             end_date: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };
-        let sprints_with_override = vec![sprint_with_override];
+        let sprints_with_prefix = vec![sprint_with_prefix];
 
         assert_eq!(
-            card.branch_name(&board, &sprints_with_override, "task"),
+            card.branch_name(&board, &sprints_with_prefix, "task"),
             "hotfix-1/test-card".to_string()
         );
     }
@@ -355,7 +362,7 @@ mod tests {
     fn test_sprint_logging() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         assert_eq!(card.get_sprint_history().len(), 0);
 
@@ -381,7 +388,7 @@ mod tests {
     fn test_sprint_log_ending() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         let sprint_id_1 = uuid::Uuid::new_v4();
         card.assign_to_sprint(
@@ -401,7 +408,7 @@ mod tests {
     fn test_multiple_sprint_logs() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         let sprint_id_1 = uuid::Uuid::new_v4();
         let sprint_id_2 = uuid::Uuid::new_v4();
@@ -437,7 +444,7 @@ mod tests {
     fn test_assign_same_sprint_no_duplicate() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
-        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
 
         let sprint_id = uuid::Uuid::new_v4();
 

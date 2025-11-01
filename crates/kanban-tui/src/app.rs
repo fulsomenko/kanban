@@ -125,6 +125,8 @@ pub enum AppMode {
     DeleteColumnConfirm,
     SelectTaskListView,
     Search,
+    SetSprintPrefix,
+    ConfirmSprintPrefixCollision,
 }
 
 impl App {
@@ -235,6 +237,7 @@ impl App {
                 | AppMode::CreateColumn
                 | AppMode::RenameColumn
                 | AppMode::Search
+                | AppMode::SetSprintPrefix
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
@@ -311,6 +314,7 @@ impl App {
                     self.handle_board_detail_key(key.code, terminal, event_handler);
             }
             AppMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
+            AppMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
             AppMode::OrderCards => {
                 should_restart_events = self.handle_order_cards_popup(key.code);
             }
@@ -324,6 +328,9 @@ impl App {
             AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
             AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
             AppMode::Search => self.handle_search_mode(key.code),
+            AppMode::ConfirmSprintPrefixCollision => {
+                self.handle_confirm_sprint_prefix_collision_popup(key.code)
+            }
         }
         should_restart_events
     }
@@ -653,10 +660,7 @@ impl App {
                 if let Some(board) = self.boards.iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
-                        sprint.formatted_name(
-                            board,
-                            board.sprint_prefix.as_deref().unwrap_or("sprint")
-                        ),
+                        sprint.formatted_name(board, "sprint"),
                         sprint
                             .end_date
                             .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())

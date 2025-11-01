@@ -79,7 +79,7 @@ mod tests {
         let columns = vec![column.clone()];
 
         let mut board_mut = board.clone();
-        let card = Card::new(&mut board_mut, column.id, "Task".to_string(), 0);
+        let card = Card::new(&mut board_mut, column.id, "Task".to_string(), 0, "task");
         let cards = vec![card];
 
         let sprints = vec![];

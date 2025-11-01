@@ -69,6 +69,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
                 AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
                 AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
+                AppMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
                 AppMode::OrderCards => render_order_cards_popup(app, frame),
                 AppMode::CreateColumn => render_create_column_popup(app, frame),
                 AppMode::RenameColumn => render_rename_column_popup(app, frame),
@@ -136,8 +137,7 @@ fn build_filter_title_suffix(app: &App) -> Option<String> {
         if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
             if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
                 if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint
-                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    let sprint_name = sprint.formatted_name(board, "sprint");
                     return Some(format!(" - {}", sprint_name));
                 }
             }
@@ -495,8 +495,7 @@ fn render_sprint_detail_metadata(
     sprint: &Sprint,
     board: &kanban_domain::Board,
 ) {
-    let sprint_name =
-        sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+    let sprint_name = sprint.formatted_name(board, "sprint");
 
     let mut lines = vec![
         metadata_line_styled("Sprint", sprint_name, bold_highlight()),
@@ -804,6 +803,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             BoardFocus::Columns => "q: quit | ESC: back | 1/2/3/4/5: select panel | n: new | r: rename | d: delete | J/K: reorder | j/k: navigate".to_string(),
         },
         AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
+        AppMode::SetSprintPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
         AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending".to_string(),
         AppMode::SprintDetail => {
             let component = match app.sprint_task_panel {
@@ -811,7 +811,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
                 crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,
             };
             let component_help = component.help_text();
-            format!("q: quit | ESC: back | a: activate sprint | c: complete sprint | o: sort | O: toggle order | h/l: switch panel | {}", component_help)
+            format!("q: quit | ESC: back | a: activate sprint | c: complete sprint | p: set prefix | o: sort | O: toggle order | h/l: switch panel | {}", component_help)
         },
         AppMode::AssignCardToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
         AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
@@ -820,6 +820,9 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::DeleteColumnConfirm => "ESC: cancel | ENTER/y: delete | n: cancel".to_string(),
         AppMode::SelectTaskListView => "ESC: cancel | j/k: navigate | ENTER/Space: select".to_string(),
         AppMode::Search => "ESC/ENTER: exit search | type to filter".to_string(),
+        AppMode::ConfirmSprintPrefixCollision => {
+            "ESC: cancel | j/k: navigate | ENTER: confirm".to_string()
+        }
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
@@ -1174,10 +1177,6 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         .map(|d| format!("{} days", d))
                         .unwrap_or_else(|| "(not set)".to_string()),
                 ),
-                metadata_line(
-                    "Sprint Prefix",
-                    board.sprint_prefix.as_deref().unwrap_or("(not set)"),
-                ),
             ];
 
             let available_names: Vec<&str> = board
@@ -1223,8 +1222,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         SprintStatus::Cancelled => "✗",
                     };
 
-                    let sprint_name = sprint
-                        .formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"));
+                    let sprint_name = sprint.formatted_name(board, "sprint");
 
                     let card_count = app
                         .cards
@@ -1333,6 +1331,16 @@ fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
     );
 }
 
+fn render_set_sprint_prefix_popup(app: &App, frame: &mut Frame) {
+    render_input_popup(
+        frame,
+        "Set Sprint Prefix",
+        "Sprint Prefix:",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
+}
+
 fn render_order_cards_popup(app: &App, frame: &mut Frame) {
     use crate::components::{SelectionDialog, SortFieldDialog};
     let dialog = SortFieldDialog;
@@ -1395,7 +1403,7 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
                 let prefix = if is_selected { "> " } else { "  " };
 
                 let sprint_name = if let Some(sprint) = sprint_option {
-                    sprint.formatted_name(board, board.sprint_prefix.as_deref().unwrap_or("sprint"))
+                    sprint.formatted_name(board, "sprint")
                 } else {
                     "(None)".to_string()
                 };
