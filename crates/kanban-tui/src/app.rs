@@ -862,7 +862,7 @@ impl App {
                                 self.boards
                                     .iter()
                                     .find(|b| b.id == sprint.board_id)
-                                    .and_then(|board| board.sprint_names.get(idx as usize).cloned())
+                                    .and_then(|board| board.sprint_names.get(idx).cloned())
                             }),
                             format!("{:?}", sprint.status),
                         );

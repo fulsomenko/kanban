@@ -949,11 +949,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
                         let max_visible = 3;
                         let total_logs = card.sprint_logs.len();
-                        let start_idx = if total_logs > max_visible {
-                            total_logs - max_visible
-                        } else {
-                            0
-                        };
+                        let start_idx = total_logs.saturating_sub(max_visible);
 
                         for (display_idx, log) in card.sprint_logs[start_idx..].iter().enumerate() {
                             let absolute_idx = start_idx + display_idx;
