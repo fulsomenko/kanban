@@ -57,8 +57,15 @@ impl Sprint {
             .map(|s| s.as_str())
     }
 
+    pub fn effective_prefix<'a>(&'a self, board: &'a Board, default_prefix: &'a str) -> &'a str {
+        self.prefix
+            .as_deref()
+            .or_else(|| board.branch_prefix.as_deref())
+            .unwrap_or(default_prefix)
+    }
+
     pub fn formatted_name(&self, board: &Board, default_prefix: &str) -> String {
-        let prefix = self.prefix.as_deref().unwrap_or(default_prefix);
+        let prefix = self.effective_prefix(board, default_prefix);
         match self.get_name(board) {
             Some(name) => format!("{}-{}/{}", prefix, self.sprint_number, name),
             None => format!("{}-{}", prefix, self.sprint_number),
