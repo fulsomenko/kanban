@@ -882,7 +882,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
                     let constraints = vec![
                         Constraint::Length(5),
-                        Constraint::Length(5),
+                        Constraint::Length(6),
                         Constraint::Min(0),
                     ];
 
@@ -947,7 +947,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let sprint_logs_config = FieldSectionConfig::new("Sprint History");
                         let mut sprint_log_lines = vec![];
 
-                        let max_visible = 5;
+                        let max_visible = 3;
                         let total_logs = card.sprint_logs.len();
                         let start_idx = if total_logs > max_visible {
                             total_logs - max_visible
