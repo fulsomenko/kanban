@@ -60,6 +60,28 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin git@github.com:fulsomenko/kanban.git
 
+      - name: Get bump type from changesets
+        if: steps.versions.outputs.should_release == 'true'
+        id: bump
+        run: |
+          bash scripts/aggregate-changesets.sh >> $GITHUB_OUTPUT || echo "bump_type=patch" >> $GITHUB_OUTPUT
+
+      - name: Bump version and update changelog
+        if: steps.versions.outputs.should_release == 'true'
+        id: new_version
+        run: |
+          nix develop --command bash scripts/bump-version.sh "${{ steps.bump.outputs.bump_type }}" >> $GITHUB_OUTPUT
+
+      - name: Commit version bump
+        if: steps.versions.outputs.should_release == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+        run: |
+          # bump-version.sh already commits, so this is just a safety net
+          git add Cargo.toml CHANGELOG.md || true
+          git commit -m "chore: bump version to ${{ steps.new_version.outputs.new_version }}" || true
+          git push origin master
+
       - name: Validate release build
         if: steps.versions.outputs.should_release == 'true'
         run: |
@@ -79,12 +101,12 @@ jobs:
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
-          git tag "v${{ steps.versions.outputs.current }}"
-          git push origin "v${{ steps.versions.outputs.current }}"
+          git tag "v${{ steps.new_version.outputs.new_version }}"
+          git push origin "v${{ steps.new_version.outputs.new_version }}"
 
       - name: Create GitHub Release
         if: steps.versions.outputs.should_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.versions.outputs.current }}
+          tag_name: v${{ steps.new_version.outputs.new_version }}
           generate_release_notes: true
