@@ -1,4 +1,5 @@
 pub mod app;
+pub mod board_context;
 pub mod card_list;
 pub mod card_list_component;
 pub mod clipboard;
