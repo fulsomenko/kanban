@@ -3,6 +3,16 @@ use crate::dialog::{handle_dialog_input, DialogAction};
 use crossterm::event::KeyCode;
 use kanban_domain::Card;
 
+/// Context for handling different types of prefix dialogs
+enum PrefixDialogContext {
+    /// Board-level sprint prefix
+    BoardSprint,
+    /// Sprint-level sprint prefix override
+    Sprint,
+    /// Sprint-level card prefix override
+    SprintCard,
+}
+
 impl App {
     pub fn handle_create_board_dialog(&mut self, key_code: KeyCode) {
         match handle_dialog_input(&mut self.input, key_code, false) {
@@ -159,37 +169,155 @@ impl App {
         }
     }
 
-    pub fn handle_set_branch_prefix_dialog(&mut self, key_code: KeyCode) {
+    /// Generic handler for prefix dialogs that handles common validation and state management
+    fn handle_prefix_dialog_impl(
+        &mut self,
+        key_code: KeyCode,
+        context: PrefixDialogContext,
+        next_mode: AppMode,
+        next_focus: Option<BoardFocus>,
+    ) {
         match handle_dialog_input(&mut self.input, key_code, true) {
             DialogAction::Confirm => {
                 let prefix_str = self.input.as_str().trim();
+
                 if prefix_str.is_empty() {
-                    if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get_mut(board_idx) {
-                            board.update_branch_prefix(None);
-                            tracing::info!("Cleared branch prefix");
+                    // Clear the prefix
+                    match context {
+                        PrefixDialogContext::BoardSprint => {
+                            if let Some(board_idx) = self.board_selection.get() {
+                                if let Some(board) = self.boards.get_mut(board_idx) {
+                                    board.update_sprint_prefix(None);
+                                    tracing::info!("Cleared sprint prefix");
+                                }
+                            }
+                        }
+                        PrefixDialogContext::Sprint => {
+                            if let Some(sprint_idx) = self.active_sprint_index {
+                                if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
+                                    sprint.update_prefix(None);
+                                    tracing::info!("Cleared sprint prefix");
+                                }
+                            }
+                        }
+                        PrefixDialogContext::SprintCard => {
+                            if let Some(sprint_idx) = self.active_sprint_index {
+                                if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
+                                    sprint.update_card_prefix(None);
+                                    tracing::info!("Cleared sprint card prefix override");
+                                }
+                            }
                         }
                     }
                 } else if Card::validate_branch_prefix(prefix_str) {
-                    if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get_mut(board_idx) {
-                            board.update_branch_prefix(Some(prefix_str.to_string()));
-                            tracing::info!("Set branch prefix to: {}", prefix_str);
+                    // Set the prefix
+                    match context {
+                        PrefixDialogContext::BoardSprint => {
+                            if let Some(board_idx) = self.board_selection.get() {
+                                if let Some(board) = self.boards.get_mut(board_idx) {
+                                    board.update_sprint_prefix(Some(prefix_str.to_string()));
+                                    tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                    board.ensure_sprint_counter_initialized(
+                                        prefix_str,
+                                        &self.sprints,
+                                    );
+                                }
+                            }
+                        }
+                        PrefixDialogContext::Sprint => {
+                            if let Some(sprint_idx) = self.active_sprint_index {
+                                if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
+                                    sprint.update_prefix(Some(prefix_str.to_string()));
+                                    tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                }
+                            }
+                            // Initialize counter for sprint-level prefix
+                            let board_idx = self.active_board_index.or(self.board_selection.get());
+                            if let Some(board_idx) = board_idx {
+                                if let Some(board) = self.boards.get_mut(board_idx) {
+                                    board.ensure_sprint_counter_initialized(
+                                        prefix_str,
+                                        &self.sprints,
+                                    );
+                                }
+                            }
+                        }
+                        PrefixDialogContext::SprintCard => {
+                            if let Some(sprint_idx) = self.active_sprint_index {
+                                if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
+                                    sprint.update_card_prefix(Some(prefix_str.to_string()));
+                                    tracing::info!(
+                                        "Set sprint card prefix override to: {}",
+                                        prefix_str
+                                    );
+                                }
+                            }
                         }
                     }
                 } else {
                     tracing::error!("Invalid prefix: use alphanumeric, hyphens, underscores only");
                 }
-                self.mode = AppMode::BoardDetail;
-                self.board_focus = BoardFocus::Settings;
+
+                self.mode = next_mode;
+                if let Some(focus) = next_focus {
+                    self.board_focus = focus;
+                }
                 self.input.clear();
             }
             DialogAction::Cancel => {
-                self.mode = AppMode::BoardDetail;
-                self.board_focus = BoardFocus::Settings;
+                self.mode = next_mode;
+                if let Some(focus) = next_focus {
+                    self.board_focus = focus;
+                }
                 self.input.clear();
             }
             DialogAction::None => {}
+        }
+    }
+
+    pub fn handle_set_branch_prefix_dialog(&mut self, key_code: KeyCode) {
+        self.handle_prefix_dialog_impl(
+            key_code,
+            PrefixDialogContext::BoardSprint,
+            AppMode::BoardDetail,
+            Some(BoardFocus::Settings),
+        );
+    }
+
+    pub fn handle_set_sprint_prefix_dialog(&mut self, key_code: KeyCode) {
+        self.handle_prefix_dialog_impl(
+            key_code,
+            PrefixDialogContext::Sprint,
+            AppMode::SprintDetail,
+            None,
+        );
+    }
+
+    pub fn handle_set_sprint_card_prefix_dialog(&mut self, key_code: KeyCode) {
+        self.handle_prefix_dialog_impl(
+            key_code,
+            PrefixDialogContext::SprintCard,
+            AppMode::SprintDetail,
+            None,
+        );
+    }
+
+    pub fn handle_confirm_sprint_prefix_collision_popup(&mut self, key_code: KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Esc => {
+                self.mode = AppMode::SprintDetail;
+            }
+            KeyCode::Enter | KeyCode::Char('y') => {
+                // User confirmed they want to continue with the colliding prefix
+                // The actual prefix application should happen before this mode is entered
+                self.mode = AppMode::SprintDetail;
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') => {
+                // User declined, go back to prefix dialog
+                self.mode = AppMode::SetSprintPrefix;
+            }
+            _ => {}
         }
     }
 }

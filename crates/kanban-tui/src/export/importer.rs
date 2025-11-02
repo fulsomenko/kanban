@@ -56,16 +56,18 @@ mod tests {
                         "description": null,
                         "created_at": "2024-01-01T00:00:00Z",
                         "updated_at": "2024-01-01T00:00:00Z",
-                        "next_card_number": 1,
-                        "branch_prefix": null,
+                        "sprint_prefix": null,
+                        "card_prefix": null,
                         "task_sort_field": "Default",
                         "task_sort_order": "Ascending",
                         "active_sprint_id": null,
                         "sprint_duration_days": null,
-                        "sprint_prefix": null,
                         "sprint_names": [],
                         "next_sprint_number": 1,
-                        "sprint_name_used_count": 0
+                        "sprint_name_used_count": 0,
+                        "prefix_counters": {},
+                        "sprint_counters": {},
+                        "task_list_view": "Flat"
                     },
                     "columns": [],
                     "cards": [],
@@ -95,7 +97,7 @@ mod tests {
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
-        let card = Card::new(&mut board_mut, column.id, "Task".to_string(), 0);
+        let card = Card::new(&mut board_mut, column.id, "Task".to_string(), 0, "task");
 
         let export = AllBoardsExport {
             boards: vec![super::super::models::BoardExport {

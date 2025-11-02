@@ -18,7 +18,10 @@ pub struct Sprint {
     pub board_id: Uuid,
     pub sprint_number: u32,
     pub name_index: Option<usize>,
-    pub prefix_override: Option<String>,
+    #[serde(alias = "prefix_override")]
+    pub prefix: Option<String>,
+    #[serde(default)]
+    pub card_prefix: Option<String>,
     pub status: SprintStatus,
     pub start_date: Option<DateTime<Utc>>,
     pub end_date: Option<DateTime<Utc>>,
@@ -33,7 +36,7 @@ impl Sprint {
         board_id: Uuid,
         sprint_number: u32,
         name_index: Option<usize>,
-        prefix_override: Option<String>,
+        prefix: Option<String>,
     ) -> Self {
         let now = Utc::now();
         Self {
@@ -41,7 +44,8 @@ impl Sprint {
             board_id,
             sprint_number,
             name_index,
-            prefix_override,
+            prefix,
+            card_prefix: None,
             status: SprintStatus::Planning,
             start_date: None,
             end_date: None,
@@ -56,8 +60,34 @@ impl Sprint {
             .map(|s| s.as_str())
     }
 
+    pub fn effective_sprint_prefix<'a>(
+        &'a self,
+        board: &'a Board,
+        default_prefix: &'a str,
+    ) -> &'a str {
+        self.prefix
+            .as_deref()
+            .or(board.sprint_prefix.as_deref())
+            .unwrap_or(default_prefix)
+    }
+
+    pub fn effective_prefix<'a>(&'a self, board: &'a Board, default_prefix: &'a str) -> &'a str {
+        self.effective_sprint_prefix(board, default_prefix)
+    }
+
+    pub fn effective_card_prefix<'a>(
+        &'a self,
+        board: &'a Board,
+        default_prefix: &'a str,
+    ) -> &'a str {
+        self.card_prefix
+            .as_deref()
+            .or(board.card_prefix.as_deref())
+            .unwrap_or(default_prefix)
+    }
+
     pub fn formatted_name(&self, board: &Board, default_prefix: &str) -> String {
-        let prefix = self.prefix_override.as_deref().unwrap_or(default_prefix);
+        let prefix = self.effective_sprint_prefix(board, default_prefix);
         match self.get_name(board) {
             Some(name) => format!("{}-{}/{}", prefix, self.sprint_number, name),
             None => format!("{}-{}", prefix, self.sprint_number),
@@ -84,6 +114,16 @@ impl Sprint {
 
     pub fn update_name_index(&mut self, name_index: Option<usize>) {
         self.name_index = name_index;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn update_prefix(&mut self, prefix: Option<String>) {
+        self.prefix = prefix;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn update_card_prefix(&mut self, card_prefix: Option<String>) {
+        self.card_prefix = card_prefix;
         self.updated_at = Utc::now();
     }
 

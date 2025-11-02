@@ -84,7 +84,7 @@ impl CardBranchNameSearcher {
             .map(|sprint| {
                 format!(
                     "{}-{}/",
-                    board.sprint_prefix.as_deref().unwrap_or("sprint"),
+                    sprint.effective_prefix(board, "sprint"),
                     sprint.sprint_number
                 )
             });
@@ -102,7 +102,7 @@ impl CardBranchNameSearcher {
             .join("-");
 
         let branch_prefix = board
-            .branch_prefix
+            .sprint_prefix
             .as_deref()
             .unwrap_or_else(|| board.effective_branch_prefix("feature"));
 

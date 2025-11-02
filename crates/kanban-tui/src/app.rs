@@ -125,6 +125,9 @@ pub enum AppMode {
     DeleteColumnConfirm,
     SelectTaskListView,
     Search,
+    SetSprintPrefix,
+    SetSprintCardPrefix,
+    ConfirmSprintPrefixCollision,
 }
 
 impl App {
@@ -235,6 +238,8 @@ impl App {
                 | AppMode::CreateColumn
                 | AppMode::RenameColumn
                 | AppMode::Search
+                | AppMode::SetSprintPrefix
+                | AppMode::SetSprintCardPrefix
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
@@ -311,6 +316,8 @@ impl App {
                     self.handle_board_detail_key(key.code, terminal, event_handler);
             }
             AppMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
+            AppMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
+            AppMode::SetSprintCardPrefix => self.handle_set_sprint_card_prefix_dialog(key.code),
             AppMode::OrderCards => {
                 should_restart_events = self.handle_order_cards_popup(key.code);
             }
@@ -324,6 +331,9 @@ impl App {
             AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
             AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
             AppMode::Search => self.handle_search_mode(key.code),
+            AppMode::ConfirmSprintPrefixCollision => {
+                self.handle_confirm_sprint_prefix_collision_popup(key.code)
+            }
         }
         should_restart_events
     }
@@ -653,10 +663,7 @@ impl App {
                 if let Some(board) = self.boards.iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
-                        sprint.formatted_name(
-                            board,
-                            board.sprint_prefix.as_deref().unwrap_or("sprint")
-                        ),
+                        sprint.formatted_name(board, "sprint"),
                         sprint
                             .end_date
                             .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())
@@ -878,20 +885,25 @@ impl App {
         }
     }
 
-    pub fn copy_branch_name(&mut self) {
+    /// Generic handler for copying card outputs to clipboard
+    fn copy_card_output<F>(&mut self, output_type: &str, get_output: F)
+    where
+        F: Fn(&Card, &Board, &[Sprint], &str) -> String,
+    {
         if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
                     if let Some(card) = self.cards.get(card_idx) {
-                        let branch_name = card.branch_name(
+                        let output = get_output(
+                            card,
                             board,
                             &self.sprints,
-                            self.app_config.effective_default_prefix(),
+                            self.app_config.effective_default_card_prefix(),
                         );
-                        if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
+                        if let Err(e) = clipboard::copy_to_clipboard(&output) {
                             tracing::error!("Failed to copy to clipboard: {}", e);
                         } else {
-                            tracing::info!("Copied branch name: {}", branch_name);
+                            tracing::info!("Copied {}: {}", output_type, output);
                         }
                     }
                 }
@@ -899,25 +911,16 @@ impl App {
         }
     }
 
+    pub fn copy_branch_name(&mut self) {
+        self.copy_card_output("branch name", |card, board, sprints, prefix| {
+            card.branch_name(board, sprints, prefix)
+        });
+    }
+
     pub fn copy_git_checkout_command(&mut self) {
-        if let Some(card_idx) = self.active_card_index {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    if let Some(card) = self.cards.get(card_idx) {
-                        let command = card.git_checkout_command(
-                            board,
-                            &self.sprints,
-                            self.app_config.effective_default_prefix(),
-                        );
-                        if let Err(e) = clipboard::copy_to_clipboard(&command) {
-                            tracing::error!("Failed to copy to clipboard: {}", e);
-                        } else {
-                            tracing::info!("Copied command: {}", command);
-                        }
-                    }
-                }
-            }
-        }
+        self.copy_card_output("command", |card, board, sprints, prefix| {
+            card.git_checkout_command(board, sprints, prefix)
+        });
     }
 
     pub fn get_current_priority_selection_index(&self) -> usize {
