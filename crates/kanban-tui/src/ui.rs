@@ -76,6 +76,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::RenameColumn => render_rename_column_popup(app, frame),
                 AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
                 AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
+                AppMode::FilterOptions => render_filter_options_popup(app, frame),
                 _ => {}
             }
         }
@@ -134,19 +135,32 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn build_filter_title_suffix(app: &App) -> Option<String> {
-    if let Some(sprint_id) = app.active_sprint_filter {
-        if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
-            if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-                if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint.formatted_name(board, "sprint");
-                    return Some(format!(" - {}", sprint_name));
-                }
+    let mut filters = vec![];
+
+    if app.hide_assigned_cards {
+        filters.push("Unassigned Cards".to_string());
+    }
+
+    if !app.active_sprint_filters.is_empty() {
+        if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
+            if let Some(board) = app.boards.get(board_idx) {
+                let mut sprint_names: Vec<String> = app
+                    .sprints
+                    .iter()
+                    .filter(|s| app.active_sprint_filters.contains(&s.id))
+                    .map(|s| s.formatted_name(board, "sprint"))
+                    .collect();
+                sprint_names.sort();
+                filters.extend(sprint_names);
             }
         }
-    } else if app.hide_assigned_cards {
-        return Some(" - Unassigned Cards".to_string());
     }
-    None
+
+    if filters.is_empty() {
+        None
+    } else {
+        Some(format!(" - {}", filters.join(" + ")))
+    }
 }
 
 fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
@@ -230,7 +244,7 @@ fn render_tasks_flat(app: &App, frame: &mut Frame, area: Rect) {
                                 is_selected: task_list.get_selected_index() == Some(card_idx),
                                 is_focused: app.focus == Focus::Cards,
                                 is_multi_selected: app.selected_cards.contains(&card.id),
-                                show_sprint_name: app.active_sprint_filter.is_none(),
+                                show_sprint_name: app.active_sprint_filters.is_empty(),
                             });
                             lines.push(line);
                         }
@@ -323,7 +337,7 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
                                             is_multi_selected: app
                                                 .selected_cards
                                                 .contains(&card.id),
-                                            show_sprint_name: app.active_sprint_filter.is_none(),
+                                            show_sprint_name: app.active_sprint_filters.is_empty(),
                                         });
                                         lines.push(line);
                                     }
@@ -418,7 +432,7 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                                 is_selected,
                                 is_focused: app.focus == Focus::Cards && is_focused_column,
                                 is_multi_selected: app.selected_cards.contains(&card.id),
-                                show_sprint_name: app.active_sprint_filter.is_none(),
+                                show_sprint_name: app.active_sprint_filters.is_empty(),
                             });
                             lines.push(line);
                         }
@@ -784,6 +798,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::ConfirmSprintPrefixCollision => {
             "ESC: cancel | j/k: navigate | ENTER: confirm".to_string()
         }
+        AppMode::FilterOptions => "ESC: cancel | j/k: navigate | Space: toggle | ENTER: apply".to_string(),
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
@@ -1516,4 +1531,160 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
         .collect();
 
     render_selection_popup_with_list_items(frame, "Select Task List View", items, 50, 40);
+}
+
+fn render_filter_options_popup(app: &App, frame: &mut Frame) {
+    let area = centered_rect(70, 75, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Filter Options")
+        .borders(Borders::ALL)
+        .border_style(focused_border());
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Min(8),
+            Constraint::Length(3),
+            Constraint::Length(3),
+        ])
+        .split(inner);
+
+    if let Some(ref dialog_state) = app.filter_dialog_state {
+        let section_index = dialog_state.section_index;
+
+        let mut sprint_lines = vec![Line::from(Span::styled(
+            "Sprints",
+            if section_index == 0 {
+                bold_highlight()
+            } else {
+                normal_text()
+            },
+        ))];
+
+        let unassigned_cursor = if section_index == 0 && dialog_state.item_selection == 0 {
+            "> "
+        } else {
+            "  "
+        };
+
+        sprint_lines.push(Line::from(vec![
+            Span::raw(unassigned_cursor),
+            Span::styled(
+                if dialog_state.filters.show_unassigned_sprints {
+                    "[✓]"
+                } else {
+                    "[ ]"
+                },
+                normal_text(),
+            ),
+            Span::raw(" "),
+            Span::styled("Show cards with unassigned sprints", normal_text()),
+        ]));
+
+        sprint_lines.push(Line::from(Span::styled(
+            "─────────────────────────",
+            label_text(),
+        )));
+
+        if let Some(board_idx) = app.active_board_index {
+            if let Some(board) = app.boards.get(board_idx) {
+                let board_sprints: Vec<_> = app
+                    .sprints
+                    .iter()
+                    .filter(|s| s.board_id == board.id)
+                    .collect();
+
+                if board_sprints.is_empty() {
+                    sprint_lines.push(Line::from(Span::styled(
+                        "  (no sprints available)",
+                        label_text(),
+                    )));
+                } else {
+                    for (idx, sprint) in board_sprints.iter().enumerate() {
+                        let is_selected = dialog_state
+                            .filters
+                            .selected_sprint_ids
+                            .contains(&sprint.id);
+                        let cursor = if section_index == 0 && dialog_state.item_selection == idx + 1
+                        {
+                            "> "
+                        } else {
+                            "  "
+                        };
+
+                        sprint_lines.push(Line::from(vec![
+                            Span::raw(cursor),
+                            Span::styled(if is_selected { "[✓]" } else { "[ ]" }, normal_text()),
+                            Span::raw(" "),
+                            Span::styled(sprint.formatted_name(board, "sprint"), normal_text()),
+                        ]));
+                    }
+                }
+            }
+        }
+
+        let section1 = Paragraph::new(sprint_lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(if section_index == 0 {
+                    focused_border()
+                } else {
+                    Style::default()
+                }),
+        );
+        frame.render_widget(section1, chunks[0]);
+
+        let date_lines = vec![
+            Line::from(Span::styled(
+                "Date Range (Future)",
+                if section_index == 1 {
+                    bold_highlight()
+                } else {
+                    label_text()
+                },
+            )),
+            Line::from(Span::styled(
+                "  Filter by last updated or created date",
+                label_text(),
+            )),
+        ];
+
+        let section2 =
+            Paragraph::new(date_lines).block(Block::default().borders(Borders::ALL).border_style(
+                if section_index == 1 {
+                    focused_border()
+                } else {
+                    Style::default()
+                },
+            ));
+        frame.render_widget(section2, chunks[1]);
+
+        let tag_lines = vec![
+            Line::from(Span::styled(
+                "Tags (Future)",
+                if section_index == 2 {
+                    bold_highlight()
+                } else {
+                    label_text()
+                },
+            )),
+            Line::from(Span::styled("  Filter cards by tags", label_text())),
+        ];
+
+        let section3 =
+            Paragraph::new(tag_lines).block(Block::default().borders(Borders::ALL).border_style(
+                if section_index == 2 {
+                    focused_border()
+                } else {
+                    Style::default()
+                },
+            ));
+        frame.render_widget(section3, chunks[2]);
+    }
 }

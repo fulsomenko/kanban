@@ -55,7 +55,7 @@ impl App {
                         if let Some(board) = self.boards.get_mut(board_idx) {
                             if board.active_sprint_id == Some(sprint_id) {
                                 board.active_sprint_id = None;
-                                self.active_sprint_filter = None;
+                                self.active_sprint_filters.remove(&sprint_id);
                             }
                         }
                     }

@@ -150,11 +150,12 @@ impl App {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
                     if let Some(active_sprint_id) = board.active_sprint_id {
-                        if self.active_sprint_filter == Some(active_sprint_id) {
-                            self.active_sprint_filter = None;
+                        if self.active_sprint_filters.contains(&active_sprint_id) {
+                            self.active_sprint_filters.remove(&active_sprint_id);
                             tracing::info!("Disabled sprint filter - showing all cards");
                         } else {
-                            self.active_sprint_filter = Some(active_sprint_id);
+                            self.active_sprint_filters.clear();
+                            self.active_sprint_filters.insert(active_sprint_id);
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
 

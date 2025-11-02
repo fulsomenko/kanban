@@ -5,6 +5,7 @@ use crate::{
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
     export::{BoardExporter, BoardImporter},
+    filters::FilterDialogState,
     input::InputState,
     search::SearchState,
     selection::SelectionState,
@@ -36,7 +37,7 @@ pub struct App {
     pub sprints: Vec<Sprint>,
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
-    pub active_sprint_filter: Option<uuid::Uuid>,
+    pub active_sprint_filters: std::collections::HashSet<uuid::Uuid>,
     pub hide_assigned_cards: bool,
     pub sprint_assign_selection: SelectionState,
     pub focus: Focus,
@@ -61,6 +62,7 @@ pub struct App {
     pub view_strategy: Box<dyn ViewStrategy>,
     pub card_list_component: CardListComponent,
     pub search: SearchState,
+    pub filter_dialog_state: Option<FilterDialogState>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,6 +130,7 @@ pub enum AppMode {
     SetSprintPrefix,
     SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
+    FilterOptions,
 }
 
 impl App {
@@ -146,7 +149,7 @@ impl App {
             sprints: Vec::new(),
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
-            active_sprint_filter: None,
+            active_sprint_filters: std::collections::HashSet::new(),
             hide_assigned_cards: false,
             sprint_assign_selection: SelectionState::new(),
             focus: Focus::Boards,
@@ -195,6 +198,7 @@ impl App {
                 CardListComponentConfig::new(),
             ),
             search: SearchState::new(),
+            filter_dialog_state: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -273,7 +277,7 @@ impl App {
                 KeyCode::Char('c') => self.handle_toggle_card_completion(),
                 KeyCode::Char('o') => self.handle_order_cards_key(),
                 KeyCode::Char('O') => self.handle_toggle_sort_order_key(),
-                KeyCode::Char('T') => self.handle_toggle_hide_assigned(),
+                KeyCode::Char('T') => self.handle_open_filter_dialog(),
                 KeyCode::Char('t') => self.handle_toggle_sprint_filter(),
                 KeyCode::Char('v') => self.handle_card_selection_toggle(),
                 KeyCode::Char('V') => self.handle_toggle_task_list_view(),
@@ -334,6 +338,7 @@ impl App {
             AppMode::ConfirmSprintPrefixCollision => {
                 self.handle_confirm_sprint_prefix_collision_popup(key.code)
             }
+            AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
         }
         should_restart_events
     }
@@ -382,15 +387,19 @@ impl App {
             })
             .collect();
 
-        if self.active_sprint_filter.is_none() && !self.hide_assigned_cards {
+        if self.active_sprint_filters.is_empty() && !self.hide_assigned_cards {
             return cards.len();
         }
 
         cards
             .iter()
             .filter(|c| {
-                if let Some(sprint_id) = self.active_sprint_filter {
-                    if c.sprint_id != Some(sprint_id) {
+                if !self.active_sprint_filters.is_empty() {
+                    if let Some(sprint_id) = c.sprint_id {
+                        if !self.active_sprint_filters.contains(&sprint_id) {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
                 }
@@ -425,8 +434,12 @@ impl App {
                         return false;
                     }
                 }
-                if let Some(sprint_id) = self.active_sprint_filter {
-                    if c.sprint_id != Some(sprint_id) {
+                if !self.active_sprint_filters.is_empty() {
+                    if let Some(sprint_id) = c.sprint_id {
+                        if !self.active_sprint_filters.contains(&sprint_id) {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
                 }
@@ -583,7 +596,7 @@ impl App {
                     all_cards: &self.cards,
                     all_columns: &self.columns,
                     all_sprints: &self.sprints,
-                    active_sprint_filter: self.active_sprint_filter,
+                    active_sprint_filters: self.active_sprint_filters.clone(),
                     hide_assigned_cards: self.hide_assigned_cards,
                     search_query,
                 };
