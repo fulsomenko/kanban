@@ -166,15 +166,15 @@ impl App {
                 if prefix_str.is_empty() {
                     if let Some(board_idx) = self.board_selection.get() {
                         if let Some(board) = self.boards.get_mut(board_idx) {
-                            board.update_branch_prefix(None);
-                            tracing::info!("Cleared branch prefix");
+                            board.update_sprint_prefix(None);
+                            tracing::info!("Cleared sprint prefix");
                         }
                     }
                 } else if Card::validate_branch_prefix(prefix_str) {
                     if let Some(board_idx) = self.board_selection.get() {
                         if let Some(board) = self.boards.get_mut(board_idx) {
-                            board.update_branch_prefix(Some(prefix_str.to_string()));
-                            tracing::info!("Set branch prefix to: {}", prefix_str);
+                            board.update_sprint_prefix(Some(prefix_str.to_string()));
+                            tracing::info!("Set sprint prefix to: {}", prefix_str);
                         }
                     }
                 } else {

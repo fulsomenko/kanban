@@ -1157,11 +1157,11 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 .focused(app.board_focus == BoardFocus::Settings);
 
             let mut settings_lines = vec![
-                if let Some(prefix) = &board.branch_prefix {
-                    metadata_line_styled("Branch Prefix", prefix, active_item())
+                if let Some(prefix) = &board.sprint_prefix {
+                    metadata_line_styled("Sprint Prefix", prefix, active_item())
                 } else {
                     Line::from(vec![
-                        Span::styled("Branch Prefix: ", label_text()),
+                        Span::styled("Sprint Prefix: ", label_text()),
                         Span::styled(
                             app.app_config.effective_default_prefix().to_string(),
                             normal_text(),
