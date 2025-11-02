@@ -132,6 +132,7 @@ pub enum AppMode {
     ConfirmSprintPrefixCollision,
     FilterOptions,
 }
+    Help(Box<AppMode>),
 
 impl App {
     pub fn new(save_file: Option<String>) -> Self {
