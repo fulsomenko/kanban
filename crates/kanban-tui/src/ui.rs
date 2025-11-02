@@ -551,7 +551,7 @@ fn render_sprint_detail_metadata(
     if board.active_sprint_id == Some(sprint.id) {
         lines.push(metadata_line_styled(
             "Active Sprint",
-            "Yes (used for filtering)",
+            "Yes",
             active_item(),
         ));
     }
