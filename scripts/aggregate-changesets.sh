@@ -31,4 +31,8 @@ elif echo "$BUMP_TYPES" | grep -q "minor"; then
 fi
 
 # Output in GitHub Actions format
-echo "bump_type=$HIGHEST_BUMP"
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "bump_type=$HIGHEST_BUMP" >> "$GITHUB_OUTPUT"
+else
+  echo "bump_type=$HIGHEST_BUMP"
+fi

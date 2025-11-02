@@ -64,13 +64,13 @@ jobs:
         if: steps.versions.outputs.should_release == 'true'
         id: bump
         run: |
-          bash scripts/aggregate-changesets.sh >> $GITHUB_OUTPUT || echo "bump_type=patch" >> $GITHUB_OUTPUT
+          bash scripts/aggregate-changesets.sh || echo "bump_type=patch" >> $GITHUB_OUTPUT
 
       - name: Bump version and update changelog
         if: steps.versions.outputs.should_release == 'true'
         id: new_version
         run: |
-          nix develop --command bash scripts/bump-version.sh "${{ steps.bump.outputs.bump_type }}" >> $GITHUB_OUTPUT
+          nix develop --command bash scripts/bump-version.sh "${{ steps.bump.outputs.bump_type }}"
 
       - name: Commit version bump
         if: steps.versions.outputs.should_release == 'true'
