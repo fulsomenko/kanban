@@ -49,7 +49,7 @@ impl AppConfig {
     }
 
     #[deprecated(
-        since = "0.1.0",
+        since = "0.1.10",
         note = "use effective_default_sprint_prefix or effective_default_card_prefix instead"
     )]
     pub fn effective_default_prefix(&self) -> &str {
