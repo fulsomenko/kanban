@@ -1196,15 +1196,25 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         Span::styled(" (default)", label_text()),
                     ])
                 },
-                Line::from(""),
-                metadata_line(
-                    "Sprint Duration",
-                    board
-                        .sprint_duration_days
-                        .map(|d| format!("{} days", d))
-                        .unwrap_or_else(|| "(not set)".to_string()),
-                ),
             ];
+
+            // Show active sprint's card prefix override if it exists
+            if let Some(sprint_prefix) = crate::board_context::get_active_sprint_card_prefix_override(board, &app.sprints) {
+                settings_lines.push(metadata_line_styled(
+                    "Active Sprint Card Prefix",
+                    sprint_prefix,
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
+
+            settings_lines.push(Line::from(""));
+            settings_lines.push(metadata_line(
+                "Sprint Duration",
+                board
+                    .sprint_duration_days
+                    .map(|d| format!("{} days", d))
+                    .unwrap_or_else(|| "(not set)".to_string()),
+            ));
 
             let available_names: Vec<&str> = board
                 .sprint_names
