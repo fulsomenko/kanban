@@ -253,6 +253,35 @@ impl Board {
         let next_number = max_number + 1;
         self.initialize_sprint_counter(prefix, next_number);
     }
+
+    pub fn ensure_card_counter_initialized(
+        &mut self,
+        prefix: &str,
+        all_cards: &[crate::Card],
+    ) {
+        // If counter already exists for this prefix, don't reinitialize
+        if self.prefix_counters.contains_key(prefix) {
+            return;
+        }
+
+        // Find the highest card number with this prefix FOR THIS BOARD
+        let max_number = all_cards
+            .iter()
+            .filter(|card| {
+                let card_prefix = card
+                    .assigned_prefix
+                    .as_deref()
+                    .unwrap_or_else(|| self.card_prefix.as_deref().unwrap_or("task"));
+                card_prefix == prefix
+            })
+            .map(|card| card.card_number)
+            .max()
+            .unwrap_or(0);
+
+        // Initialize counter to one more than the max, or 1 if no cards exist
+        let next_number = max_number + 1;
+        self.initialize_prefix_counter(prefix, next_number);
+    }
 }
 
 #[cfg(test)]
