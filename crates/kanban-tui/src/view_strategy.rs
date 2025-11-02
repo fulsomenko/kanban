@@ -10,7 +10,7 @@ pub struct ViewRefreshContext<'a> {
     pub all_cards: &'a [Card],
     pub all_columns: &'a [Column],
     pub all_sprints: &'a [Sprint],
-    pub active_sprint_filter: Option<Uuid>,
+    pub active_sprint_filters: std::collections::HashSet<Uuid>,
     pub hide_assigned_cards: bool,
     pub search_query: Option<&'a str>,
 }
@@ -90,8 +90,12 @@ impl ViewStrategy for FlatViewStrategy {
                         return false;
                     }
                 }
-                if let Some(sprint_id) = ctx.active_sprint_filter {
-                    if c.sprint_id != Some(sprint_id) {
+                if !ctx.active_sprint_filters.is_empty() {
+                    if let Some(sprint_id) = c.sprint_id {
+                        if !ctx.active_sprint_filters.contains(&sprint_id) {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
                 }
@@ -232,8 +236,12 @@ impl ViewStrategy for GroupedViewStrategy {
                         return false;
                     }
                 }
-                if let Some(sprint_id) = ctx.active_sprint_filter {
-                    if c.sprint_id != Some(sprint_id) {
+                if !ctx.active_sprint_filters.is_empty() {
+                    if let Some(sprint_id) = c.sprint_id {
+                        if !ctx.active_sprint_filters.contains(&sprint_id) {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
                 }
@@ -406,8 +414,12 @@ impl ViewStrategy for KanbanViewStrategy {
                         return false;
                     }
                 }
-                if let Some(sprint_id) = ctx.active_sprint_filter {
-                    if c.sprint_id != Some(sprint_id) {
+                if !ctx.active_sprint_filters.is_empty() {
+                    if let Some(sprint_id) = c.sprint_id {
+                        if !ctx.active_sprint_filters.contains(&sprint_id) {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
                 }

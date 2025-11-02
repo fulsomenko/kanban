@@ -141,13 +141,17 @@ fn build_filter_title_suffix(app: &App) -> Option<String> {
         filters.push("Unassigned Cards".to_string());
     }
 
-    if let Some(sprint_id) = app.active_sprint_filter {
-        if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
-            if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-                if let Some(board) = app.boards.get(board_idx) {
-                    let sprint_name = sprint.formatted_name(board, "sprint");
-                    filters.push(sprint_name);
-                }
+    if !app.active_sprint_filters.is_empty() {
+        if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
+            if let Some(board) = app.boards.get(board_idx) {
+                let mut sprint_names: Vec<String> = app
+                    .sprints
+                    .iter()
+                    .filter(|s| app.active_sprint_filters.contains(&s.id))
+                    .map(|s| s.formatted_name(board, "sprint"))
+                    .collect();
+                sprint_names.sort();
+                filters.extend(sprint_names);
             }
         }
     }
@@ -240,7 +244,7 @@ fn render_tasks_flat(app: &App, frame: &mut Frame, area: Rect) {
                                 is_selected: task_list.get_selected_index() == Some(card_idx),
                                 is_focused: app.focus == Focus::Cards,
                                 is_multi_selected: app.selected_cards.contains(&card.id),
-                                show_sprint_name: app.active_sprint_filter.is_none(),
+                                show_sprint_name: app.active_sprint_filters.is_empty(),
                             });
                             lines.push(line);
                         }
@@ -333,7 +337,7 @@ fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
                                             is_multi_selected: app
                                                 .selected_cards
                                                 .contains(&card.id),
-                                            show_sprint_name: app.active_sprint_filter.is_none(),
+                                            show_sprint_name: app.active_sprint_filters.is_empty(),
                                         });
                                         lines.push(line);
                                     }
@@ -428,7 +432,7 @@ fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
                                 is_selected,
                                 is_focused: app.focus == Focus::Cards && is_focused_column,
                                 is_multi_selected: app.selected_cards.contains(&card.id),
-                                show_sprint_name: app.active_sprint_filter.is_none(),
+                                show_sprint_name: app.active_sprint_filters.is_empty(),
                             });
                             lines.push(line);
                         }

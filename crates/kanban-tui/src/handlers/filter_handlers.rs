@@ -10,7 +10,7 @@ impl App {
 
         let filters = CardFilters {
             show_unassigned_sprints: self.hide_assigned_cards,
-            selected_sprint_ids: self.active_sprint_filter.iter().cloned().collect(),
+            selected_sprint_ids: self.active_sprint_filters.clone(),
             date_from: None,
             date_to: None,
             selected_tags: Default::default(),
@@ -115,17 +115,14 @@ impl App {
     fn apply_filters(&mut self) {
         if let Some(dialog_state) = &self.filter_dialog_state {
             self.hide_assigned_cards = dialog_state.filters.show_unassigned_sprints;
-
-            if !dialog_state.filters.selected_sprint_ids.is_empty() {
-                if let Some(sprint_id) = dialog_state.filters.selected_sprint_ids.iter().next() {
-                    self.active_sprint_filter = Some(*sprint_id);
-                }
-            } else {
-                self.active_sprint_filter = None;
-            }
+            self.active_sprint_filters = dialog_state.filters.selected_sprint_ids.clone();
 
             self.refresh_view();
-            tracing::info!("Applied filters");
+            tracing::info!(
+                "Applied filters: unassigned={}, sprints={}",
+                self.hide_assigned_cards,
+                self.active_sprint_filters.len()
+            );
         }
     }
 }
