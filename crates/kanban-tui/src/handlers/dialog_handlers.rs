@@ -6,11 +6,11 @@ use kanban_domain::Card;
 /// Context for handling different types of prefix dialogs
 enum PrefixDialogContext {
     /// Board-level sprint prefix
-    BoardSprintPrefix,
+    BoardSprint,
     /// Sprint-level sprint prefix override
-    SprintPrefix,
+    Sprint,
     /// Sprint-level card prefix override
-    SprintCardPrefix,
+    SprintCard,
 }
 
 impl App {
@@ -184,7 +184,7 @@ impl App {
                 if prefix_str.is_empty() {
                     // Clear the prefix
                     match context {
-                        PrefixDialogContext::BoardSprintPrefix => {
+                        PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.board_selection.get() {
                                 if let Some(board) = self.boards.get_mut(board_idx) {
                                     board.update_sprint_prefix(None);
@@ -192,7 +192,7 @@ impl App {
                                 }
                             }
                         }
-                        PrefixDialogContext::SprintPrefix => {
+                        PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
                                 if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
                                     sprint.update_prefix(None);
@@ -200,7 +200,7 @@ impl App {
                                 }
                             }
                         }
-                        PrefixDialogContext::SprintCardPrefix => {
+                        PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
                                 if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
                                     sprint.update_card_prefix(None);
@@ -212,7 +212,7 @@ impl App {
                 } else if Card::validate_branch_prefix(prefix_str) {
                     // Set the prefix
                     match context {
-                        PrefixDialogContext::BoardSprintPrefix => {
+                        PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.board_selection.get() {
                                 if let Some(board) = self.boards.get_mut(board_idx) {
                                     board.update_sprint_prefix(Some(prefix_str.to_string()));
@@ -224,7 +224,7 @@ impl App {
                                 }
                             }
                         }
-                        PrefixDialogContext::SprintPrefix => {
+                        PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
                                 if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
                                     sprint.update_prefix(Some(prefix_str.to_string()));
@@ -242,7 +242,7 @@ impl App {
                                 }
                             }
                         }
-                        PrefixDialogContext::SprintCardPrefix => {
+                        PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
                                 if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
                                     sprint.update_card_prefix(Some(prefix_str.to_string()));
@@ -278,7 +278,7 @@ impl App {
     pub fn handle_set_branch_prefix_dialog(&mut self, key_code: KeyCode) {
         self.handle_prefix_dialog_impl(
             key_code,
-            PrefixDialogContext::BoardSprintPrefix,
+            PrefixDialogContext::BoardSprint,
             AppMode::BoardDetail,
             Some(BoardFocus::Settings),
         );
@@ -287,7 +287,7 @@ impl App {
     pub fn handle_set_sprint_prefix_dialog(&mut self, key_code: KeyCode) {
         self.handle_prefix_dialog_impl(
             key_code,
-            PrefixDialogContext::SprintPrefix,
+            PrefixDialogContext::Sprint,
             AppMode::SprintDetail,
             None,
         );
@@ -296,7 +296,7 @@ impl App {
     pub fn handle_set_sprint_card_prefix_dialog(&mut self, key_code: KeyCode) {
         self.handle_prefix_dialog_impl(
             key_code,
-            PrefixDialogContext::SprintCardPrefix,
+            PrefixDialogContext::SprintCard,
             AppMode::SprintDetail,
             None,
         );
