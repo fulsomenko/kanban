@@ -799,6 +799,9 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             "ESC: cancel | j/k: navigate | ENTER: confirm".to_string()
         }
         AppMode::FilterOptions => "ESC: cancel | j/k: navigate | Space: toggle | ENTER: apply".to_string(),
+        AppMode::Help(_) => {
+            "ESC/?: exit help".to_string()
+        }
     };
     let help = Paragraph::new(help_text)
         .style(label_text())

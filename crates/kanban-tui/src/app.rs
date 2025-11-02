@@ -103,7 +103,7 @@ pub enum BoardField {
     Description,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppMode {
     Normal,
     CreateBoard,
@@ -131,8 +131,8 @@ pub enum AppMode {
     SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
     FilterOptions,
-}
     Help(Box<AppMode>),
+}
 
 impl App {
     pub fn new(save_file: Option<String>) -> Self {
@@ -252,6 +252,14 @@ impl App {
             return false;
         }
 
+        if matches!(key.code, KeyCode::Char('?')) && !is_input_mode {
+            if !matches!(self.mode, AppMode::Help(_)) {
+                let previous_mode = self.mode.clone();
+                self.mode = AppMode::Help(Box::new(previous_mode));
+                return false;
+            }
+        }
+
         match self.mode {
             AppMode::Normal => match key.code {
                 KeyCode::Char('/') => {
@@ -340,6 +348,7 @@ impl App {
                 self.handle_confirm_sprint_prefix_collision_popup(key.code)
             }
             AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
+            AppMode::Help(_) => self.handle_help_mode(key.code),
         }
         should_restart_events
     }
@@ -358,6 +367,20 @@ impl App {
             KeyCode::Esc | KeyCode::Enter => {
                 self.search.deactivate();
                 self.mode = AppMode::Normal;
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_help_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Esc | KeyCode::Char('?') => {
+                if let AppMode::Help(previous_mode) = &self.mode {
+                    self.mode = (**previous_mode).clone();
+                } else {
+                    self.mode = AppMode::Normal;
+                }
             }
             _ => {}
         }
