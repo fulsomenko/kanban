@@ -25,7 +25,9 @@ fn parse_card_status_case_insensitive(s: &str) -> Option<String> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoardSettingsDto {
-    pub branch_prefix: Option<String>,
+    #[serde(alias = "branch_prefix")]
+    pub sprint_prefix: Option<String>,
+    pub card_prefix: Option<String>,
     pub sprint_duration_days: Option<u32>,
     pub sprint_names: Vec<String>,
 }
@@ -41,14 +43,16 @@ pub struct CardMetadataDto {
 impl Editable<Board> for BoardSettingsDto {
     fn from_entity(board: &Board) -> Self {
         Self {
-            branch_prefix: board.branch_prefix.clone(),
+            sprint_prefix: board.sprint_prefix.clone(),
+            card_prefix: board.card_prefix.clone(),
             sprint_duration_days: board.sprint_duration_days,
             sprint_names: board.sprint_names.clone(),
         }
     }
 
     fn apply_to(self, board: &mut Board) {
-        board.branch_prefix = self.branch_prefix;
+        board.sprint_prefix = self.sprint_prefix;
+        board.card_prefix = self.card_prefix;
         board.sprint_duration_days = self.sprint_duration_days;
         board.sprint_names = self.sprint_names;
         board.updated_at = chrono::Utc::now();
