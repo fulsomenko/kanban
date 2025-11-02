@@ -5,6 +5,7 @@ use crate::{
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
     export::{BoardExporter, BoardImporter},
+    filters::FilterDialogState,
     input::InputState,
     search::SearchState,
     selection::SelectionState,
@@ -18,10 +19,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, KanbanResult};
+use kanban_core::{AppConfig, Editable, KanbanResult};
 use kanban_domain::{Board, Card, Column, SortField, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
-use serde::{Deserialize, Serialize};
 use std::io;
 
 pub struct App {
@@ -37,7 +37,7 @@ pub struct App {
     pub sprints: Vec<Sprint>,
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
-    pub active_sprint_filter: Option<uuid::Uuid>,
+    pub active_sprint_filters: std::collections::HashSet<uuid::Uuid>,
     pub hide_assigned_cards: bool,
     pub sprint_assign_selection: SelectionState,
     pub focus: Focus,
@@ -62,6 +62,7 @@ pub struct App {
     pub view_strategy: Box<dyn ViewStrategy>,
     pub card_list_component: CardListComponent,
     pub search: SearchState,
+    pub filter_dialog_state: Option<FilterDialogState>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,15 +101,6 @@ pub enum CardField {
 pub enum BoardField {
     Name,
     Description,
-    Settings,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct BoardSettings {
-    branch_prefix: Option<String>,
-    sprint_duration_days: Option<u32>,
-    sprint_prefix: Option<String>,
-    sprint_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -135,6 +127,10 @@ pub enum AppMode {
     DeleteColumnConfirm,
     SelectTaskListView,
     Search,
+    SetSprintPrefix,
+    SetSprintCardPrefix,
+    ConfirmSprintPrefixCollision,
+    FilterOptions,
 }
 
 impl App {
@@ -153,7 +149,7 @@ impl App {
             sprints: Vec::new(),
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
-            active_sprint_filter: None,
+            active_sprint_filters: std::collections::HashSet::new(),
             hide_assigned_cards: false,
             sprint_assign_selection: SelectionState::new(),
             focus: Focus::Boards,
@@ -202,6 +198,7 @@ impl App {
                 CardListComponentConfig::new(),
             ),
             search: SearchState::new(),
+            filter_dialog_state: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -213,6 +210,7 @@ impl App {
             }
         }
 
+        app.migrate_sprint_logs();
         app.check_ended_sprints();
 
         app
@@ -244,6 +242,8 @@ impl App {
                 | AppMode::CreateColumn
                 | AppMode::RenameColumn
                 | AppMode::Search
+                | AppMode::SetSprintPrefix
+                | AppMode::SetSprintCardPrefix
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
@@ -277,7 +277,7 @@ impl App {
                 KeyCode::Char('c') => self.handle_toggle_card_completion(),
                 KeyCode::Char('o') => self.handle_order_cards_key(),
                 KeyCode::Char('O') => self.handle_toggle_sort_order_key(),
-                KeyCode::Char('T') => self.handle_toggle_hide_assigned(),
+                KeyCode::Char('T') => self.handle_open_filter_dialog(),
                 KeyCode::Char('t') => self.handle_toggle_sprint_filter(),
                 KeyCode::Char('v') => self.handle_card_selection_toggle(),
                 KeyCode::Char('V') => self.handle_toggle_task_list_view(),
@@ -320,6 +320,8 @@ impl App {
                     self.handle_board_detail_key(key.code, terminal, event_handler);
             }
             AppMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
+            AppMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
+            AppMode::SetSprintCardPrefix => self.handle_set_sprint_card_prefix_dialog(key.code),
             AppMode::OrderCards => {
                 should_restart_events = self.handle_order_cards_popup(key.code);
             }
@@ -333,6 +335,10 @@ impl App {
             AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
             AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
             AppMode::Search => self.handle_search_mode(key.code),
+            AppMode::ConfirmSprintPrefixCollision => {
+                self.handle_confirm_sprint_prefix_collision_popup(key.code)
+            }
+            AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
         }
         should_restart_events
     }
@@ -381,15 +387,19 @@ impl App {
             })
             .collect();
 
-        if self.active_sprint_filter.is_none() && !self.hide_assigned_cards {
+        if self.active_sprint_filters.is_empty() && !self.hide_assigned_cards {
             return cards.len();
         }
 
         cards
             .iter()
             .filter(|c| {
-                if let Some(sprint_id) = self.active_sprint_filter {
-                    if c.sprint_id != Some(sprint_id) {
+                if !self.active_sprint_filters.is_empty() {
+                    if let Some(sprint_id) = c.sprint_id {
+                        if !self.active_sprint_filters.contains(&sprint_id) {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
                 }
@@ -424,8 +434,12 @@ impl App {
                         return false;
                     }
                 }
-                if let Some(sprint_id) = self.active_sprint_filter {
-                    if c.sprint_id != Some(sprint_id) {
+                if !self.active_sprint_filters.is_empty() {
+                    if let Some(sprint_id) = c.sprint_id {
+                        if !self.active_sprint_filters.contains(&sprint_id) {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
                 }
@@ -582,7 +596,7 @@ impl App {
                     all_cards: &self.cards,
                     all_columns: &self.columns,
                     all_sprints: &self.sprints,
-                    active_sprint_filter: self.active_sprint_filter,
+                    active_sprint_filters: self.active_sprint_filters.clone(),
                     hide_assigned_cards: self.hide_assigned_cards,
                     search_query,
                 };
@@ -662,10 +676,7 @@ impl App {
                 if let Some(board) = self.boards.iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
-                        sprint.formatted_name(
-                            board,
-                            board.sprint_prefix.as_deref().unwrap_or("sprint")
-                        ),
+                        sprint.formatted_name(board, "sprint"),
                         sprint
                             .end_date
                             .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())
@@ -696,19 +707,6 @@ impl App {
                         let content = board.description.as_deref().unwrap_or("").to_string();
                         (temp_file, content)
                     }
-                    BoardField::Settings => {
-                        let temp_file =
-                            temp_dir.join(format!("kanban-board-{}-settings.json", board.id));
-                        let settings = BoardSettings {
-                            branch_prefix: board.branch_prefix.clone(),
-                            sprint_duration_days: board.sprint_duration_days,
-                            sprint_prefix: board.sprint_prefix.clone(),
-                            sprint_names: board.sprint_names.clone(),
-                        };
-                        let content = serde_json::to_string_pretty(&settings)
-                            .unwrap_or_else(|_| "{}".to_string());
-                        (temp_file, content)
-                    }
                 };
 
                 if let Some(new_content) =
@@ -729,21 +727,6 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
-                            }
-                            BoardField::Settings => {
-                                match serde_json::from_str::<BoardSettings>(&new_content) {
-                                    Ok(settings) => {
-                                        board.branch_prefix = settings.branch_prefix;
-                                        board.sprint_duration_days = settings.sprint_duration_days;
-                                        board.sprint_prefix = settings.sprint_prefix;
-                                        board.sprint_names = settings.sprint_names;
-                                        board.updated_at = chrono::Utc::now();
-                                        tracing::info!("Updated board settings via JSON editor");
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("Failed to parse settings JSON: {}", e);
-                                    }
-                                }
                             }
                         }
                     }
@@ -799,6 +782,33 @@ impl App {
                 }
             }
         }
+        Ok(())
+    }
+
+    pub fn edit_entity_json_impl<T: Editable<E>, E>(
+        entity: &mut E,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        event_handler: &EventHandler,
+        temp_file: std::path::PathBuf,
+    ) -> io::Result<()> {
+        let dto = T::from_entity(entity);
+        let current_content =
+            serde_json::to_string_pretty(&dto).unwrap_or_else(|_| "{}".to_string());
+
+        if let Some(new_content) =
+            edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
+        {
+            match serde_json::from_str::<T>(&new_content) {
+                Ok(updated_dto) => {
+                    updated_dto.apply_to(entity);
+                    tracing::info!("Updated entity via JSON editor");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to parse JSON: {}", e);
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -858,20 +868,55 @@ impl App {
         Ok(())
     }
 
-    pub fn copy_branch_name(&mut self) {
+    fn migrate_sprint_logs(&mut self) {
+        let mut migrated_count = 0;
+
+        for card in &mut self.cards {
+            if let Some(sprint_id) = card.sprint_id {
+                if card.sprint_logs.is_empty() {
+                    if let Some(sprint) = self.sprints.iter().find(|s| s.id == sprint_id) {
+                        let sprint_log = kanban_domain::SprintLog::new(
+                            sprint_id,
+                            sprint.sprint_number,
+                            sprint.name_index.and_then(|idx| {
+                                self.boards
+                                    .iter()
+                                    .find(|b| b.id == sprint.board_id)
+                                    .and_then(|board| board.sprint_names.get(idx).cloned())
+                            }),
+                            format!("{:?}", sprint.status),
+                        );
+                        card.sprint_logs.push(sprint_log);
+                        migrated_count += 1;
+                    }
+                }
+            }
+        }
+
+        if migrated_count > 0 {
+            tracing::info!("Migrated sprint logs for {} cards", migrated_count);
+        }
+    }
+
+    /// Generic handler for copying card outputs to clipboard
+    fn copy_card_output<F>(&mut self, output_type: &str, get_output: F)
+    where
+        F: Fn(&Card, &Board, &[Sprint], &str) -> String,
+    {
         if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
                     if let Some(card) = self.cards.get(card_idx) {
-                        let branch_name = card.branch_name(
+                        let output = get_output(
+                            card,
                             board,
                             &self.sprints,
-                            self.app_config.effective_default_prefix(),
+                            self.app_config.effective_default_card_prefix(),
                         );
-                        if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
+                        if let Err(e) = clipboard::copy_to_clipboard(&output) {
                             tracing::error!("Failed to copy to clipboard: {}", e);
                         } else {
-                            tracing::info!("Copied branch name: {}", branch_name);
+                            tracing::info!("Copied {}: {}", output_type, output);
                         }
                     }
                 }
@@ -879,25 +924,16 @@ impl App {
         }
     }
 
+    pub fn copy_branch_name(&mut self) {
+        self.copy_card_output("branch name", |card, board, sprints, prefix| {
+            card.branch_name(board, sprints, prefix)
+        });
+    }
+
     pub fn copy_git_checkout_command(&mut self) {
-        if let Some(card_idx) = self.active_card_index {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    if let Some(card) = self.cards.get(card_idx) {
-                        let command = card.git_checkout_command(
-                            board,
-                            &self.sprints,
-                            self.app_config.effective_default_prefix(),
-                        );
-                        if let Err(e) = clipboard::copy_to_clipboard(&command) {
-                            tracing::error!("Failed to copy to clipboard: {}", e);
-                        } else {
-                            tracing::info!("Copied command: {}", command);
-                        }
-                    }
-                }
-            }
-        }
+        self.copy_card_output("command", |card, board, sprints, prefix| {
+            card.git_checkout_command(board, sprints, prefix)
+        });
     }
 
     pub fn get_current_priority_selection_index(&self) -> usize {

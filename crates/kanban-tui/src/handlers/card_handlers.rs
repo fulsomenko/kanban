@@ -150,11 +150,12 @@ impl App {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
                     if let Some(active_sprint_id) = board.active_sprint_id {
-                        if self.active_sprint_filter == Some(active_sprint_id) {
-                            self.active_sprint_filter = None;
+                        if self.active_sprint_filters.contains(&active_sprint_id) {
+                            self.active_sprint_filters.remove(&active_sprint_id);
                             tracing::info!("Disabled sprint filter - showing all cards");
                         } else {
-                            self.active_sprint_filter = Some(active_sprint_id);
+                            self.active_sprint_filters.clear();
+                            self.active_sprint_filters.insert(active_sprint_id);
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
 
@@ -396,8 +397,26 @@ impl App {
                         .iter()
                         .filter(|c| c.column_id == column.id)
                         .count() as i32;
-                    let mut card =
-                        Card::new(board, column.id, self.input.as_str().to_string(), position);
+                    let effective_prefix = board
+                        .effective_card_prefix(self.app_config.effective_default_card_prefix())
+                        .to_string();
+                    let board_cards: Vec<_> = self
+                        .cards
+                        .iter()
+                        .filter(|c| {
+                            self.columns
+                                .iter()
+                                .any(|col| col.id == c.column_id && col.board_id == bid)
+                        })
+                        .collect();
+                    board.ensure_card_counter_initialized(&effective_prefix, &board_cards);
+                    let mut card = Card::new(
+                        board,
+                        column.id,
+                        self.input.as_str().to_string(),
+                        position,
+                        &effective_prefix,
+                    );
                     let new_card_id = card.id;
                     let column_name = column.name.clone();
 

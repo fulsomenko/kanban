@@ -21,11 +21,6 @@ fi
 
 CHANGELOG="CHANGELOG.md"
 
-# Create backup
-if [ -f "$CHANGELOG" ]; then
-  cp "$CHANGELOG" "$CHANGELOG.bak"
-fi
-
 # Function to get file timestamp (cross-platform)
 get_file_timestamp() {
   local file="$1"

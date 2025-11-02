@@ -1,5 +1,6 @@
 use crate::KanbanResult;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait Repository<T, Id> {
@@ -16,4 +17,9 @@ pub trait Service<T, Id> {
     async fn create(&self, entity: T) -> KanbanResult<T>;
     async fn update(&self, id: Id, entity: T) -> KanbanResult<T>;
     async fn delete(&self, id: Id) -> KanbanResult<()>;
+}
+
+pub trait Editable<T>: Serialize + for<'de> Deserialize<'de> + Sized {
+    fn from_entity(entity: &T) -> Self;
+    fn apply_to(self, entity: &mut T);
 }

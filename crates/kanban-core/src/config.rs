@@ -40,7 +40,19 @@ impl AppConfig {
         Self::default()
     }
 
-    pub fn effective_default_prefix(&self) -> &str {
+    pub fn effective_default_sprint_prefix(&self) -> &str {
+        self.default_branch_prefix.as_deref().unwrap_or("sprint")
+    }
+
+    pub fn effective_default_card_prefix(&self) -> &str {
         self.default_branch_prefix.as_deref().unwrap_or("task")
+    }
+
+    #[deprecated(
+        since = "0.1.10",
+        note = "use effective_default_sprint_prefix or effective_default_card_prefix instead"
+    )]
+    pub fn effective_default_prefix(&self) -> &str {
+        self.effective_default_card_prefix()
     }
 }

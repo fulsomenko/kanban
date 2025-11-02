@@ -119,10 +119,12 @@ mod tests {
         let column = kanban_domain::Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
-        let mut card1 = kanban_domain::Card::new(&mut board_mut, column.id, "Low".to_string(), 0);
+        let mut card1 =
+            kanban_domain::Card::new(&mut board_mut, column.id, "Low".to_string(), 0, "task");
         card1.update_priority(CardPriority::Low);
 
-        let mut card2 = kanban_domain::Card::new(&mut board_mut, column.id, "High".to_string(), 1);
+        let mut card2 =
+            kanban_domain::Card::new(&mut board_mut, column.id, "High".to_string(), 0, "task");
         card2.update_priority(CardPriority::High);
 
         let sorter = PrioritySorter;
@@ -136,10 +138,12 @@ mod tests {
         let column = kanban_domain::Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
-        let mut card1 = kanban_domain::Card::new(&mut board_mut, column.id, "High".to_string(), 0);
+        let mut card1 =
+            kanban_domain::Card::new(&mut board_mut, column.id, "High".to_string(), 0, "task");
         card1.update_priority(CardPriority::High);
 
-        let mut card2 = kanban_domain::Card::new(&mut board_mut, column.id, "Low".to_string(), 1);
+        let mut card2 =
+            kanban_domain::Card::new(&mut board_mut, column.id, "Low".to_string(), 1, "task");
         card2.update_priority(CardPriority::Low);
 
         let mut cards = vec![&card1, &card2];
@@ -156,10 +160,12 @@ mod tests {
         let column = kanban_domain::Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
-        let mut card1 = kanban_domain::Card::new(&mut board_mut, column.id, "Low".to_string(), 0);
+        let mut card1 =
+            kanban_domain::Card::new(&mut board_mut, column.id, "Low".to_string(), 0, "task");
         card1.update_priority(CardPriority::Low);
 
-        let mut card2 = kanban_domain::Card::new(&mut board_mut, column.id, "High".to_string(), 1);
+        let mut card2 =
+            kanban_domain::Card::new(&mut board_mut, column.id, "High".to_string(), 0, "task");
         card2.update_priority(CardPriority::High);
 
         let mut cards = vec![&card1, &card2];

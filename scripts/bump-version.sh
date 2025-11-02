@@ -81,6 +81,11 @@ echo "Version bumped to $NEW_VERSION"
 echo "CHANGELOG.md updated"
 echo "Changesets processed and deleted"
 
+# Output new version for GitHub Actions if running in a workflow
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+fi
+
 # Commit the version bump
 git add .
 git commit -m "chore: bump version to $NEW_VERSION"

@@ -220,10 +220,7 @@ impl SelectionDialog for SprintAssignDialog {
                     let current_indicator = if is_current { " (current)" } else { "" };
 
                     let sprint_name = if let Some(sprint) = sprint_option {
-                        sprint.formatted_name(
-                            board,
-                            board.sprint_prefix.as_deref().unwrap_or("sprint"),
-                        )
+                        sprint.formatted_name(board, "sprint")
                     } else {
                         "(None)".to_string()
                     };

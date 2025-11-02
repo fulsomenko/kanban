@@ -15,8 +15,6 @@ jobs:
   aggregate:
     name: Aggregate Changesets
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     if: github.event.pull_request.merged == true
     steps:
       - uses: actions/checkout@v4
@@ -25,54 +23,6 @@ jobs:
           ref: develop
 
       - name: Aggregate changesets
-        id: aggregate
         run: |
-          bash scripts/aggregate-changesets.sh >> $GITHUB_OUTPUT
-
-      - uses: cachix/install-nix-action@v27
-        if: success()
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      - name: Setup SSH deploy key
-        if: success()
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-      - name: Configure Git
-        if: success()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin git@github.com:fulsomenko/kanban.git
-
-      - name: Get current version
-        if: success()
-        id: version
-        run: echo "version=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)" >> $GITHUB_OUTPUT
-
-      - name: Update changelog
-        if: success()
-        run: |
-          CHANGESETS=$(find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" | sort)
-          bash scripts/update-changelog.sh "${{ steps.version.outputs.version }}" "$CHANGESETS"
-
-      - name: Bump version
-        if: success()
-        run: |
-          nix develop --command bash scripts/bump-version.sh "${{ steps.aggregate.outputs.bump_type }}"
-
-      - name: Clean changesets and push
-        if: success()
-        env:
-          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
-        run: |
-          # Changesets already deleted by bump-version.sh
-          # Pull and push the commits made by the scripts
-          git pull --rebase origin develop
-          git push origin develop
+          bash scripts/aggregate-changesets.sh
+          echo "✅ Changesets validated and aggregated"

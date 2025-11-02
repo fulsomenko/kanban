@@ -1,4 +1,5 @@
 pub mod app;
+pub mod board_context;
 pub mod card_list;
 pub mod card_list_component;
 pub mod clipboard;
@@ -7,6 +8,7 @@ pub mod dialog;
 pub mod editor;
 pub mod events;
 pub mod export;
+pub mod filters;
 pub mod handlers;
 pub mod input;
 pub mod markdown_renderer;

@@ -55,7 +55,7 @@ impl App {
                         if let Some(board) = self.boards.get_mut(board_idx) {
                             if board.active_sprint_id == Some(sprint_id) {
                                 board.active_sprint_id = None;
-                                self.active_sprint_filter = None;
+                                self.active_sprint_filters.remove(&sprint_id);
                             }
                         }
                     }
@@ -71,16 +71,24 @@ impl App {
     pub fn create_sprint(&mut self) {
         let board_idx = self.active_board_index.or(self.board_selection.get());
         if let Some(board_idx) = board_idx {
-            let (sprint_number, name_index, board_id) = {
+            let (sprint_number, name_index, board_id, effective_sprint_prefix) = {
                 if let Some(board) = self.boards.get_mut(board_idx) {
-                    let sprint_number = board.allocate_sprint_number();
+                    let effective_sprint_prefix = board
+                        .sprint_prefix
+                        .as_deref()
+                        .unwrap_or("sprint")
+                        .to_string();
+                    // Ensure the counter for this prefix is initialized based on existing sprints
+                    board
+                        .ensure_sprint_counter_initialized(&effective_sprint_prefix, &self.sprints);
+                    let sprint_number = board.get_next_sprint_number(&effective_sprint_prefix);
                     let input_text = self.input.as_str().trim();
                     let name_index = if input_text.is_empty() {
                         board.consume_sprint_name()
                     } else {
                         Some(board.add_sprint_name_at_used_index(input_text.to_string()))
                     };
-                    (sprint_number, name_index, board.id)
+                    (sprint_number, name_index, board.id, effective_sprint_prefix)
                 } else {
                     return;
                 }
@@ -90,7 +98,7 @@ impl App {
             if let Some(board) = self.boards.get(board_idx) {
                 tracing::info!(
                     "Creating sprint: {} (id: {})",
-                    sprint.formatted_name(board, "sprint"),
+                    sprint.formatted_name(board, &effective_sprint_prefix),
                     sprint.id
                 );
             }
