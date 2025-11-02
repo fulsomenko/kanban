@@ -1,4 +1,4 @@
-use kanban_domain::{Board, Card, Column};
+use kanban_domain::{Board, Card, Column, Sprint};
 use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
@@ -186,4 +186,130 @@ fn test_failed_import_clears_save_file() {
     let app = App::new(Some(file_path.to_str().unwrap().to_string()));
 
     assert!(app.save_file.is_none());
+}
+
+#[test]
+fn test_export_import_sprint_and_card_prefixes() {
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("test_prefixes.json");
+
+    // Create board with both sprint_prefix and card_prefix
+    let mut app = App::new(None);
+    let mut board = Board::new("Prefix Board".to_string(), None);
+    board.update_sprint_prefix(Some("sprint".to_string()));
+    board.update_card_prefix(Some("task".to_string()));
+
+    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let card = Card::new(&mut board, column.id, "Test Card".to_string(), 0, "task");
+
+    // Create sprint with card_prefix override
+    let mut sprint = Sprint::new(board.id, 1, None, None);
+    sprint.update_card_prefix(Some("hotfix".to_string()));
+
+    app.boards.push(board.clone());
+    app.columns.push(column);
+    app.cards.push(card);
+    app.sprints.push(sprint.clone());
+    app.board_selection.set(Some(0));
+    app.input.set(file_path.to_str().unwrap().to_string());
+
+    // Export
+    app.export_board_with_filename().unwrap();
+    let content = fs::read_to_string(&file_path).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+    // Verify prefixes in exported JSON
+    assert_eq!(parsed["boards"][0]["board"]["sprint_prefix"], "sprint");
+    assert_eq!(parsed["boards"][0]["board"]["card_prefix"], "task");
+    assert_eq!(parsed["boards"][0]["sprints"][0]["card_prefix"], "hotfix");
+
+    // Clear and reimport
+    let mut app2 = App::new(None);
+    app2.import_board_from_file(file_path.to_str().unwrap())
+        .unwrap();
+
+    // Verify prefixes preserved after import
+    assert_eq!(app2.boards.len(), 1);
+    assert_eq!(app2.boards[0].sprint_prefix, Some("sprint".to_string()));
+    assert_eq!(app2.boards[0].card_prefix, Some("task".to_string()));
+    assert_eq!(app2.sprints.len(), 1);
+    assert_eq!(app2.sprints[0].card_prefix, Some("hotfix".to_string()));
+}
+
+#[test]
+fn test_backward_compat_old_export_format() {
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("test_old_format.json");
+
+    // Create old format JSON with branch_prefix instead of sprint_prefix
+    let old_json = r#"{
+        "boards": [{
+            "board": {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "name": "Old Board",
+                "description": null,
+                "branch_prefix": "FEAT",
+                "sprint_duration_days": null,
+                "next_card_number": 1,
+                "task_sort_field": "Default",
+                "task_sort_order": "Ascending",
+                "sprint_names": [],
+                "sprint_name_used_count": 0,
+                "next_sprint_number": 1,
+                "active_sprint_id": null,
+                "task_list_view": "Flat",
+                "prefix_counters": {},
+                "sprint_counters": {},
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z"
+            },
+            "columns": [{
+                "id": "00000000-0000-0000-0000-000000000002",
+                "board_id": "00000000-0000-0000-0000-000000000001",
+                "name": "Todo",
+                "position": 0,
+                "wip_limit": null,
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z"
+            }],
+            "cards": [{
+                "id": "00000000-0000-0000-0000-000000000003",
+                "column_id": "00000000-0000-0000-0000-000000000002",
+                "title": "Old Card",
+                "description": null,
+                "priority": "Medium",
+                "status": "Todo",
+                "position": 0,
+                "due_date": null,
+                "points": null,
+                "card_number": 1,
+                "sprint_id": null,
+                "assigned_prefix": "task",
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z",
+                "completed_at": null,
+                "sprint_logs": []
+            }],
+            "sprints": []
+        }]
+    }"#;
+
+    fs::write(&file_path, old_json).unwrap();
+
+    // Import old format
+    let mut app = App::new(None);
+    app.import_board_from_file(file_path.to_str().unwrap())
+        .unwrap();
+
+    // Verify board imported and old branch_prefix is mapped to sprint_prefix
+    assert_eq!(app.boards.len(), 1);
+    assert_eq!(app.boards[0].name, "Old Board");
+    assert_eq!(app.boards[0].sprint_prefix, Some("FEAT".to_string()));
+    // card_prefix should be None since old format didn't have it
+    assert_eq!(app.boards[0].card_prefix, None);
+
+    // Verify cards still work
+    assert_eq!(app.cards.len(), 1);
+    assert_eq!(app.cards[0].title, "Old Card");
+    assert_eq!(app.cards[0].card_prefix, None);
 }
