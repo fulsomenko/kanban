@@ -230,10 +230,15 @@ impl Board {
             return;
         }
 
-        // Find the highest sprint number with this prefix
+        // Find the highest sprint number with this prefix FOR THIS BOARD
         let max_number = all_sprints
             .iter()
             .filter(|sprint| {
+                // Only consider sprints for this board
+                if sprint.board_id != self.id {
+                    return false;
+                }
+
                 let sprint_prefix = sprint
                     .prefix
                     .as_deref()
