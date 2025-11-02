@@ -13,6 +13,7 @@ impl App {
             selected_sprint_ids: self.active_sprint_filter.iter().cloned().collect(),
             date_from: None,
             date_to: None,
+            selected_tags: Default::default(),
         };
 
         self.filter_dialog_state = Some(FilterDialogState::new(filters));
@@ -29,20 +30,77 @@ impl App {
                     self.mode = AppMode::Normal;
                 }
                 KeyCode::Char('j') | KeyCode::Down => {
-                    dialog_state.section_selection = (dialog_state.section_selection + 1) % 3;
+                    match dialog_state.current_section {
+                        FilterDialogSection::UnassignedSprints => {
+                            dialog_state.next_section();
+                        }
+                        FilterDialogSection::Sprints => {
+                            if let Some(board_idx) = self.active_board_index {
+                                if let Some(board) = self.boards.get(board_idx) {
+                                    let sprint_count = self
+                                        .sprints
+                                        .iter()
+                                        .filter(|s| s.board_id == board.id)
+                                        .count();
+                                    if dialog_state.item_selection < sprint_count.saturating_sub(1) {
+                                        dialog_state.item_selection += 1;
+                                    } else {
+                                        dialog_state.next_section();
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            dialog_state.next_section();
+                        }
+                    }
                 }
                 KeyCode::Char('k') | KeyCode::Up => {
-                    dialog_state.section_selection = if dialog_state.section_selection == 0 {
-                        2
-                    } else {
-                        dialog_state.section_selection - 1
-                    };
+                    match dialog_state.current_section {
+                        FilterDialogSection::Sprints => {
+                            if dialog_state.item_selection > 0 {
+                                dialog_state.item_selection -= 1;
+                            } else {
+                                dialog_state.prev_section();
+                            }
+                        }
+                        _ => {
+                            dialog_state.prev_section();
+                        }
+                    }
                 }
                 KeyCode::Char(' ') => {
                     match dialog_state.current_section {
                         FilterDialogSection::UnassignedSprints => {
                             dialog_state.filters.show_unassigned_sprints =
                                 !dialog_state.filters.show_unassigned_sprints;
+                            tracing::info!(
+                                "Toggled unassigned sprints filter: {}",
+                                dialog_state.filters.show_unassigned_sprints
+                            );
+                        }
+                        FilterDialogSection::Sprints => {
+                            if let Some(board_idx) = self.active_board_index {
+                                if let Some(board) = self.boards.get(board_idx) {
+                                    let board_sprints: Vec<_> = self
+                                        .sprints
+                                        .iter()
+                                        .filter(|s| s.board_id == board.id)
+                                        .collect();
+
+                                    if let Some(sprint) = board_sprints.get(dialog_state.item_selection) {
+                                        if dialog_state.filters.selected_sprint_ids.contains(&sprint.id) {
+                                            dialog_state.filters.selected_sprint_ids.remove(&sprint.id);
+                                        } else {
+                                            dialog_state.filters.selected_sprint_ids.insert(sprint.id);
+                                        }
+                                        tracing::info!(
+                                            "Toggled sprint: {}",
+                                            sprint.formatted_name(board, "sprint")
+                                        );
+                                    }
+                                }
+                            }
                         }
                         _ => {}
                     }
