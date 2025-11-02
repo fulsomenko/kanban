@@ -690,60 +690,6 @@ fn render_sprint_task_panel_with_selection(
     frame.render_widget(content, area);
 }
 
-#[allow(dead_code, clippy::too_many_arguments)]
-fn render_sprint_task_panel(
-    app: &App,
-    frame: &mut Frame,
-    area: Rect,
-    _sprint: &Sprint,
-    board: &kanban_domain::Board,
-    cards: &[&kanban_domain::Card],
-    title_suffix: &str,
-    is_focused: bool,
-) {
-    let mut lines = vec![];
-
-    if cards.is_empty() {
-        lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
-    } else {
-        for card in cards {
-            let line = render_card_list_item(CardListItemConfig {
-                card,
-                board,
-                sprints: &app.sprints,
-                is_selected: false,
-                is_focused,
-                is_multi_selected: false,
-                show_sprint_name: false,
-            });
-            lines.push(line);
-        }
-    }
-
-    let points = App::calculate_points(cards);
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        format!("Points: {}", points),
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD),
-    )));
-
-    let border_style = if is_focused {
-        focused_border()
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    let content = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(border_style)
-            .title(format!("{} ({})", title_suffix, cards.len())),
-    );
-    frame.render_widget(content, area);
-}
-
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let _is_kanban_view =
         if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
