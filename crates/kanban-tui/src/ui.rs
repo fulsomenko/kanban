@@ -135,19 +135,28 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn build_filter_title_suffix(app: &App) -> Option<String> {
+    let mut filters = vec![];
+
+    if app.hide_assigned_cards {
+        filters.push("Unassigned Cards".to_string());
+    }
+
     if let Some(sprint_id) = app.active_sprint_filter {
         if let Some(sprint) = app.sprints.iter().find(|s| s.id == sprint_id) {
             if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
                 if let Some(board) = app.boards.get(board_idx) {
                     let sprint_name = sprint.formatted_name(board, "sprint");
-                    return Some(format!(" - {}", sprint_name));
+                    filters.push(sprint_name);
                 }
             }
         }
-    } else if app.hide_assigned_cards {
-        return Some(" - Unassigned Cards".to_string());
     }
-    None
+
+    if filters.is_empty() {
+        None
+    } else {
+        Some(format!(" - {}", filters.join(" + ")))
+    }
 }
 
 fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
