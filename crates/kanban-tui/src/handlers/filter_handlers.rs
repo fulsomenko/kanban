@@ -78,6 +78,7 @@ impl App {
                                 "Toggled unassigned sprints filter: {}",
                                 dialog_state.filters.show_unassigned_sprints
                             );
+                            self.apply_filters();
                         }
                         FilterDialogSection::Sprints => {
                             if let Some(board_idx) = self.active_board_index {
@@ -98,6 +99,7 @@ impl App {
                                             "Toggled sprint: {}",
                                             sprint.formatted_name(board, "sprint")
                                         );
+                                        self.apply_filters();
                                     }
                                 }
                             }
