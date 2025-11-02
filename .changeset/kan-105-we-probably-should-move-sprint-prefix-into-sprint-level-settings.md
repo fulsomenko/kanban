@@ -2,9 +2,34 @@
 bump: patch
 ---
 
-Moving the print sprefix definition
-
-- ui: add help text for sprint prefix collision confirmation
+- refactor: fix clippy enum variant naming warnings
+- chore: cargo fmt
+- refactor: consolidate copy methods with generic implementation
+- refactor: create generic prefix dialog handler abstraction
+- refactor: remove dead code render_sprint_task_panel
+- fix: remove used for filtering output
+- fix: scope sprint counter initialization to board context
+- feat: show active sprint card prefix override in board details
+- feat: add board_context module for board-related queries
+- feat: initialize sprint counter when prefix is assigned
+- feat: initialize sprint counter when creating new sprints
+- feat: add Board::ensure_sprint_counter_initialized method
+- fix: separate default prefixes for sprints and cards
+- test: fix import test to include new card_prefix field
+- test: add integration tests for export/import with prefixes (Phase 4D)
+- test: add backward compatibility tests (Phase 4C)
+- test: add card prefix hierarchy tests (Phase 4B)
+- feat: display separate sprint and card prefix fields in UI
+- feat: add UI rendering for SetSprintCardPrefix dialog
+- fix: rename branch_prefix to sprint_prefix throughout codebase
+- feat: update sprint creation to use per-prefix sprint counters
+- feat: add separate sprint_prefix and card_prefix to BoardSettingsDto
+- feat: add card_prefix field to Card domain model
+- feat: add card_prefix field to Sprint domain model
+- feat: add card_prefix field to Board domain model
+- chore: cargo fmt
+- chore: add changeset
+- feat: add help text for sprint prefix collision confirmation
 - feat: set assigned_prefix when assigning cards to sprints
 - feat: add sprint prefix collision confirmation mode
 - test: update Card::new() call sites to use prefix parameter
