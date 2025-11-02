@@ -484,4 +484,109 @@ mod tests {
         assert_eq!(log.sprint_id, sprint_id);
         assert!(log.ended_at.is_none());
     }
+
+    #[test]
+    fn test_card_prefix_hierarchy_card_override() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
+        let sprints = vec![];
+
+        // Card created with "task" prefix
+        assert_eq!(
+            card.branch_name(&board, &sprints, "task"),
+            "task-1/test-card".to_string()
+        );
+
+        // Set card prefix override to "feat"
+        card.set_card_prefix(Some("feat".to_string()));
+        assert_eq!(
+            card.branch_name(&board, &sprints, "task"),
+            "feat-1/test-card".to_string()
+        );
+    }
+
+    #[test]
+    fn test_card_prefix_hierarchy_sprint_override() {
+        use crate::sprint::Sprint;
+
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
+
+        let mut sprint = Sprint::new(board.id, 1, None, None);
+        sprint.update_card_prefix(Some("hotfix".to_string()));
+        card.assign_to_sprint(sprint.id, 1, None, "Active".to_string());
+
+        let sprints = vec![sprint];
+
+        // Card uses sprint's card_prefix override
+        assert_eq!(
+            card.branch_name(&board, &sprints, "task"),
+            "hotfix-1/test-card".to_string()
+        );
+    }
+
+    #[test]
+    fn test_card_prefix_hierarchy_board_override() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        board.update_card_prefix(Some("feature".to_string()));
+        let card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
+        let sprints = vec![];
+
+        // Card not assigned to sprint, uses board's card_prefix
+        assert_eq!(
+            card.branch_name(&board, &sprints, "task"),
+            "feature-1/test-card".to_string()
+        );
+    }
+
+    #[test]
+    fn test_card_prefix_hierarchy_complete_chain() {
+        use crate::sprint::Sprint;
+
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        board.update_card_prefix(Some("board-override".to_string()));
+
+        let mut sprint = Sprint::new(board.id, 1, None, None);
+        sprint.update_card_prefix(Some("sprint-override".to_string()));
+
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0, "task");
+        card.set_card_prefix(Some("card-override".to_string()));
+        card.assign_to_sprint(sprint.id, 1, None, "Active".to_string());
+
+        let sprints = vec![sprint];
+
+        // Verify card > sprint > board > default hierarchy
+        // Card override takes precedence
+        assert_eq!(
+            card.branch_name(&board, &sprints, "task"),
+            "card-override-1/test-card".to_string()
+        );
+
+        // Clear card override, should use sprint override
+        card.set_card_prefix(None);
+        assert_eq!(
+            card.branch_name(&board, &sprints, "task"),
+            "sprint-override-1/test-card".to_string()
+        );
+
+        // Clear sprint override, should use board override
+        let mut sprint = sprints[0].clone();
+        sprint.update_card_prefix(None);
+        let sprints_no_sprint_override = vec![sprint];
+        assert_eq!(
+            card.branch_name(&board, &sprints_no_sprint_override, "task"),
+            "board-override-1/test-card".to_string()
+        );
+
+        // Clear board override, should use default
+        board.update_card_prefix(None);
+        assert_eq!(
+            card.branch_name(&board, &sprints_no_sprint_override, "task"),
+            "task-1/test-card".to_string()
+        );
+    }
 }
