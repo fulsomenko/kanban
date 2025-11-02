@@ -8,3 +8,4 @@ Update release flow
 - chore: update bump-version script to output new version
 - ci: enhance release workflow with version bump and changelog
 - ci: simplify aggregate-changesets workflow
+- fix: prevent stdout pollution of GITHUB_OUTPUT in release workflow
