@@ -11,75 +11,101 @@ use ratatui::{
 };
 
 pub fn render(app: &App, frame: &mut Frame) {
-    match app.mode {
-        AppMode::CardDetail
-        | AppMode::AssignCardToSprint
-        | AppMode::AssignMultipleCardsToSprint => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
-                .split(frame.area());
+    // Check if we're in Help mode and render underlying view
+    let is_help_mode = matches!(app.mode, AppMode::Help(_));
 
-            render_card_detail_view(app, frame, chunks[0]);
-            render_footer(app, frame, chunks[1]);
+    if !is_help_mode {
+        match app.mode {
+            AppMode::CardDetail
+            | AppMode::AssignCardToSprint
+            | AppMode::AssignMultipleCardsToSprint => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(3)])
+                    .split(frame.area());
 
-            if app.mode == AppMode::AssignCardToSprint {
-                render_assign_sprint_popup(app, frame);
+                render_card_detail_view(app, frame, chunks[0]);
+                render_footer(app, frame, chunks[1]);
+
+                if app.mode == AppMode::AssignCardToSprint {
+                    render_assign_sprint_popup(app, frame);
+                }
+
+                if app.mode == AppMode::AssignMultipleCardsToSprint {
+                    render_assign_multiple_cards_popup(app, frame);
+                }
             }
+            AppMode::BoardDetail => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(3)])
+                    .split(frame.area());
 
-            if app.mode == AppMode::AssignMultipleCardsToSprint {
-                render_assign_multiple_cards_popup(app, frame);
+                render_board_detail_view(app, frame, chunks[0]);
+                render_footer(app, frame, chunks[1]);
+            }
+            AppMode::SprintDetail => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(3)])
+                    .split(frame.area());
+
+                render_sprint_detail_view(app, frame, chunks[0]);
+                render_footer(app, frame, chunks[1]);
+            }
+            _ => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(3)])
+                    .split(frame.area());
+
+                render_main(app, frame, chunks[0]);
+                render_footer(app, frame, chunks[1]);
+
+                match app.mode {
+                    AppMode::CreateBoard => render_create_board_popup(app, frame),
+                    AppMode::CreateCard => render_create_card_popup(app, frame),
+                    AppMode::CreateSprint => render_create_sprint_popup(app, frame),
+                    AppMode::RenameBoard => render_rename_board_popup(app, frame),
+                    AppMode::ExportBoard => render_export_board_popup(app, frame),
+                    AppMode::ExportAll => render_export_all_popup(app, frame),
+                    AppMode::ImportBoard => render_import_board_popup(app, frame),
+                    AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
+                    AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
+                    AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
+                    AppMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
+                    AppMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
+                    AppMode::OrderCards => render_order_cards_popup(app, frame),
+                    AppMode::CreateColumn => render_create_column_popup(app, frame),
+                    AppMode::RenameColumn => render_rename_column_popup(app, frame),
+                    AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
+                    AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
+                    AppMode::FilterOptions => render_filter_options_popup(app, frame),
+                    _ => {}
+                }
             }
         }
-        AppMode::BoardDetail => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
-                .split(frame.area());
-
-            render_board_detail_view(app, frame, chunks[0]);
-            render_footer(app, frame, chunks[1]);
-        }
-        AppMode::SprintDetail => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
-                .split(frame.area());
-
-            render_sprint_detail_view(app, frame, chunks[0]);
-            render_footer(app, frame, chunks[1]);
-        }
-        _ => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
-                .split(frame.area());
-
-            render_main(app, frame, chunks[0]);
-            render_footer(app, frame, chunks[1]);
-
-            match app.mode {
-                AppMode::CreateBoard => render_create_board_popup(app, frame),
-                AppMode::CreateCard => render_create_card_popup(app, frame),
-                AppMode::CreateSprint => render_create_sprint_popup(app, frame),
-                AppMode::RenameBoard => render_rename_board_popup(app, frame),
-                AppMode::ExportBoard => render_export_board_popup(app, frame),
-                AppMode::ExportAll => render_export_all_popup(app, frame),
-                AppMode::ImportBoard => render_import_board_popup(app, frame),
-                AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
-                AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
-                AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
-                AppMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
-                AppMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
-                AppMode::OrderCards => render_order_cards_popup(app, frame),
-                AppMode::CreateColumn => render_create_column_popup(app, frame),
-                AppMode::RenameColumn => render_rename_column_popup(app, frame),
-                AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
-                AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
-                AppMode::FilterOptions => render_filter_options_popup(app, frame),
-                _ => {}
+    } else {
+        // Render underlying view without footer
+        match app.mode {
+            AppMode::CardDetail
+            | AppMode::AssignCardToSprint
+            | AppMode::AssignMultipleCardsToSprint => {
+                render_card_detail_view(app, frame, frame.area());
+            }
+            AppMode::BoardDetail => {
+                render_board_detail_view(app, frame, frame.area());
+            }
+            AppMode::SprintDetail => {
+                render_sprint_detail_view(app, frame, frame.area());
+            }
+            _ => {
+                render_main(app, frame, frame.area());
             }
         }
+
+        // Render help popup on top
+        render_help_popup(app, frame);
     }
 }
 
@@ -799,6 +825,9 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             "ESC: cancel | j/k: navigate | ENTER: confirm".to_string()
         }
         AppMode::FilterOptions => "ESC: cancel | j/k: navigate | Space: toggle | ENTER: apply".to_string(),
+        AppMode::Help(_) => {
+            "ESC/?: exit help".to_string()
+        }
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
@@ -1687,4 +1716,62 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
             ));
         frame.render_widget(section3, chunks[2]);
     }
+}
+
+fn render_help_popup(app: &App, frame: &mut Frame) {
+    use crate::keybindings::KeybindingRegistry;
+
+    let area = centered_rect(80, 80, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Help - Keybindings for Current Context")
+        .borders(Borders::ALL)
+        .border_style(focused_border());
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Min(0)])
+        .split(inner);
+
+    // Get keybindings for the underlying mode
+    let provider = KeybindingRegistry::get_provider(app);
+    let context = provider.get_context();
+
+    // Build lines for each keybinding
+    let mut lines = vec![
+        Line::from(Span::styled(
+            context.name.clone(),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+    ];
+
+    for binding in &context.bindings {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {}", binding.key),
+                Style::default().fg(Color::Yellow),
+            ),
+            Span::raw(" "),
+            Span::styled(binding.description.clone(), normal_text()),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "Press ESC or ? to close help",
+        Style::default()
+            .fg(Color::DarkGray)
+            .add_modifier(Modifier::ITALIC),
+    )));
+
+    let content = Paragraph::new(lines);
+    frame.render_widget(content, chunks[0]);
 }
