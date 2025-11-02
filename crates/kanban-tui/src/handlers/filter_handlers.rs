@@ -68,41 +68,38 @@ impl App {
                     }
                 }
                 KeyCode::Char(' ') => {
-                    match dialog_state.current_section {
-                        FilterDialogSection::Sprints => {
-                            if dialog_state.item_selection == 0 {
-                                dialog_state.filters.show_unassigned_sprints =
-                                    !dialog_state.filters.show_unassigned_sprints;
-                                tracing::info!(
-                                    "Toggled unassigned sprints filter: {}",
-                                    dialog_state.filters.show_unassigned_sprints
-                                );
-                                self.apply_filters();
-                            } else if let Some(board_idx) = self.active_board_index {
-                                if let Some(board) = self.boards.get(board_idx) {
-                                    let board_sprints: Vec<_> = self
-                                        .sprints
-                                        .iter()
-                                        .filter(|s| s.board_id == board.id)
-                                        .collect();
+                    if dialog_state.current_section == FilterDialogSection::Sprints {
+                        if dialog_state.item_selection == 0 {
+                            dialog_state.filters.show_unassigned_sprints =
+                                !dialog_state.filters.show_unassigned_sprints;
+                            tracing::info!(
+                                "Toggled unassigned sprints filter: {}",
+                                dialog_state.filters.show_unassigned_sprints
+                            );
+                            self.apply_filters();
+                        } else if let Some(board_idx) = self.active_board_index {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                let board_sprints: Vec<_> = self
+                                    .sprints
+                                    .iter()
+                                    .filter(|s| s.board_id == board.id)
+                                    .collect();
 
-                                    let sprint_idx = dialog_state.item_selection - 1;
-                                    if let Some(sprint) = board_sprints.get(sprint_idx) {
-                                        if dialog_state.filters.selected_sprint_ids.contains(&sprint.id) {
-                                            dialog_state.filters.selected_sprint_ids.remove(&sprint.id);
-                                        } else {
-                                            dialog_state.filters.selected_sprint_ids.insert(sprint.id);
-                                        }
-                                        tracing::info!(
-                                            "Toggled sprint: {}",
-                                            sprint.formatted_name(board, "sprint")
-                                        );
-                                        self.apply_filters();
+                                let sprint_idx = dialog_state.item_selection - 1;
+                                if let Some(sprint) = board_sprints.get(sprint_idx) {
+                                    if dialog_state.filters.selected_sprint_ids.contains(&sprint.id) {
+                                        dialog_state.filters.selected_sprint_ids.remove(&sprint.id);
+                                    } else {
+                                        dialog_state.filters.selected_sprint_ids.insert(sprint.id);
                                     }
+                                    tracing::info!(
+                                        "Toggled sprint: {}",
+                                        sprint.formatted_name(board, "sprint")
+                                    );
+                                    self.apply_filters();
                                 }
                             }
                         }
-                        _ => {}
                     }
                 }
                 KeyCode::Enter => {
