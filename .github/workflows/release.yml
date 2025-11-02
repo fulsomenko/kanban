@@ -110,3 +110,13 @@ jobs:
         with:
           tag_name: v${{ steps.new_version.outputs.new_version }}
           generate_release_notes: true
+
+      - name: Sync develop with master
+        if: steps.versions.outputs.should_release == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+        run: |
+          git checkout develop
+          git pull origin develop
+          git merge origin/master --no-edit
+          git push origin develop
