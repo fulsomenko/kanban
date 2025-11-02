@@ -277,7 +277,7 @@ impl App {
                 KeyCode::Char('c') => self.handle_toggle_card_completion(),
                 KeyCode::Char('o') => self.handle_order_cards_key(),
                 KeyCode::Char('O') => self.handle_toggle_sort_order_key(),
-                KeyCode::Char('T') => self.handle_toggle_hide_assigned(),
+                KeyCode::Char('T') => self.handle_open_filter_dialog(),
                 KeyCode::Char('t') => self.handle_toggle_sprint_filter(),
                 KeyCode::Char('v') => self.handle_card_selection_toggle(),
                 KeyCode::Char('V') => self.handle_toggle_task_list_view(),
@@ -338,9 +338,7 @@ impl App {
             AppMode::ConfirmSprintPrefixCollision => {
                 self.handle_confirm_sprint_prefix_collision_popup(key.code)
             }
-            AppMode::FilterOptions => {
-                // placeholder handler
-            }
+            AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
         }
         should_restart_events
     }
