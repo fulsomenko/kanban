@@ -175,6 +175,9 @@ impl App {
                         if let Some(board) = self.boards.get_mut(board_idx) {
                             board.update_sprint_prefix(Some(prefix_str.to_string()));
                             tracing::info!("Set sprint prefix to: {}", prefix_str);
+
+                            // Ensure counter is initialized for the new board-level sprint prefix
+                            board.ensure_sprint_counter_initialized(prefix_str, &self.sprints);
                         }
                     }
                 } else {
@@ -205,6 +208,14 @@ impl App {
                         } else if Card::validate_branch_prefix(prefix_str) {
                             sprint.update_prefix(Some(prefix_str.to_string()));
                             tracing::info!("Set sprint prefix to: {}", prefix_str);
+
+                            // Ensure counter is initialized for the new prefix
+                            let board_idx = self.active_board_index.or(self.board_selection.get());
+                            if let Some(board_idx) = board_idx {
+                                if let Some(board) = self.boards.get_mut(board_idx) {
+                                    board.ensure_sprint_counter_initialized(prefix_str, &self.sprints);
+                                }
+                            }
                         } else {
                             tracing::error!(
                                 "Invalid prefix: use alphanumeric, hyphens, underscores only"
