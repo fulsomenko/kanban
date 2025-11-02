@@ -119,12 +119,10 @@ impl<'de> Deserialize<'de> for Board {
 
         // Migrate next_card_number to prefix_counters if needed
         if helper.next_card_number > 1 && board.prefix_counters.is_empty() {
-            let effective_prefix = board
-                .card_prefix
-                .as_deref()
-                .unwrap_or("task")
-                .to_string();
-            board.prefix_counters.insert(effective_prefix, helper.next_card_number);
+            let effective_prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
+            board
+                .prefix_counters
+                .insert(effective_prefix, helper.next_card_number);
         }
 
         Ok(board)
@@ -315,11 +313,7 @@ impl Board {
         self.initialize_sprint_counter(prefix, next_number);
     }
 
-    pub fn ensure_card_counter_initialized(
-        &mut self,
-        prefix: &str,
-        board_cards: &[&crate::Card],
-    ) {
+    pub fn ensure_card_counter_initialized(&mut self, prefix: &str, board_cards: &[&crate::Card]) {
         // If counter already exists for this prefix, don't reinitialize
         if self.prefix_counters.contains_key(prefix) {
             return;

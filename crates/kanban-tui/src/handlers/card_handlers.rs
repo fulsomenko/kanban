@@ -403,15 +403,12 @@ impl App {
                         .cards
                         .iter()
                         .filter(|c| {
-                            self.columns.iter().any(|col| {
-                                col.id == c.column_id && col.board_id == bid
-                            })
+                            self.columns
+                                .iter()
+                                .any(|col| col.id == c.column_id && col.board_id == bid)
                         })
                         .collect();
-                    board.ensure_card_counter_initialized(
-                        &effective_prefix,
-                        &board_cards,
-                    );
+                    board.ensure_card_counter_initialized(&effective_prefix, &board_cards);
                     let mut card = Card::new(
                         board,
                         column.id,
