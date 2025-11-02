@@ -1,9 +1,9 @@
-pub mod normal_mode;
-pub mod card_detail;
 pub mod board_detail;
-pub mod sprint_detail;
+pub mod card_detail;
 pub mod dialog_modes;
+pub mod normal_mode;
 pub mod registry;
+pub mod sprint_detail;
 
 pub use registry::KeybindingRegistry;
 

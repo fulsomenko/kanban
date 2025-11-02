@@ -1,21 +1,26 @@
-use crate::app::{App, AppMode, Focus};
 use super::{
-    KeybindingProvider,
-    normal_mode::{NormalModeCardsProvider, NormalModeBoardsProvider},
-    card_detail::CardDetailProvider,
     board_detail::BoardDetailProvider,
-    sprint_detail::SprintDetailProvider,
+    card_detail::CardDetailProvider,
     dialog_modes::{
-        SearchModeProvider, DialogInputProvider, DialogSelectionProvider,
-        DeleteConfirmProvider, FilterOptionsProvider,
+        DeleteConfirmProvider, DialogInputProvider, DialogSelectionProvider, FilterOptionsProvider,
+        SearchModeProvider,
     },
+    normal_mode::{NormalModeBoardsProvider, NormalModeCardsProvider},
+    sprint_detail::SprintDetailProvider,
+    KeybindingProvider,
 };
+use crate::app::{App, AppMode, Focus};
 
 pub struct KeybindingRegistry;
 
 impl KeybindingRegistry {
     pub fn get_provider(app: &App) -> Box<dyn KeybindingProvider> {
-        Self::get_provider_for_mode(&app.mode, app.focus.clone(), app.card_focus, app.board_focus)
+        Self::get_provider_for_mode(
+            &app.mode,
+            app.focus.clone(),
+            app.card_focus,
+            app.board_focus,
+        )
     }
 
     fn get_provider_for_mode(
@@ -48,11 +53,19 @@ impl KeybindingRegistry {
             AppMode::ImportBoard => Box::new(DialogSelectionProvider::new("Import Project")),
             AppMode::SetCardPriority => Box::new(DialogSelectionProvider::new("Set Priority")),
             AppMode::OrderCards => Box::new(DialogSelectionProvider::new("Sort Tasks")),
-            AppMode::AssignCardToSprint => Box::new(DialogSelectionProvider::new("Assign to Sprint")),
-            AppMode::AssignMultipleCardsToSprint => Box::new(DialogSelectionProvider::new("Assign Cards to Sprint")),
-            AppMode::SelectTaskListView => Box::new(DialogSelectionProvider::new("Select Task View")),
+            AppMode::AssignCardToSprint => {
+                Box::new(DialogSelectionProvider::new("Assign to Sprint"))
+            }
+            AppMode::AssignMultipleCardsToSprint => {
+                Box::new(DialogSelectionProvider::new("Assign Cards to Sprint"))
+            }
+            AppMode::SelectTaskListView => {
+                Box::new(DialogSelectionProvider::new("Select Task View"))
+            }
             AppMode::DeleteColumnConfirm => Box::new(DeleteConfirmProvider::new("Column")),
-            AppMode::ConfirmSprintPrefixCollision => Box::new(DialogSelectionProvider::new("Confirm Action")),
+            AppMode::ConfirmSprintPrefixCollision => {
+                Box::new(DialogSelectionProvider::new("Confirm Action"))
+            }
             AppMode::FilterOptions => Box::new(FilterOptionsProvider),
             AppMode::Help(previous_mode) => {
                 Self::get_provider_for_mode(previous_mode, focus, card_focus, board_focus)

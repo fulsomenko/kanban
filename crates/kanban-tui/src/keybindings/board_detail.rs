@@ -57,9 +57,6 @@ impl KeybindingProvider for BoardDetailProvider {
             _ => {}
         }
 
-        KeybindingContext::new(
-            format!("Project Detail - {} Panel", focus_name),
-            bindings,
-        )
+        KeybindingContext::new(format!("Project Detail - {} Panel", focus_name), bindings)
     }
 }

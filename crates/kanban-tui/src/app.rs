@@ -252,7 +252,10 @@ impl App {
             return false;
         }
 
-        if matches!(key.code, KeyCode::Char('?')) && !is_input_mode && !matches!(self.mode, AppMode::Help(_)) {
+        if matches!(key.code, KeyCode::Char('?'))
+            && !is_input_mode
+            && !matches!(self.mode, AppMode::Help(_))
+        {
             let previous_mode = self.mode.clone();
             self.mode = AppMode::Help(Box::new(previous_mode));
             return false;

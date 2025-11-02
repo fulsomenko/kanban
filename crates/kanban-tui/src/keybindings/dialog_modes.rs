@@ -75,9 +75,7 @@ pub struct DeleteConfirmProvider {
 
 impl DeleteConfirmProvider {
     pub fn new(what: impl Into<String>) -> Self {
-        Self {
-            what: what.into(),
-        }
+        Self { what: what.into() }
     }
 }
 
