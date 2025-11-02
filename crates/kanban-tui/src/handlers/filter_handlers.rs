@@ -1,5 +1,5 @@
 use crate::app::{App, AppMode, Focus};
-use crate::filters::{CardFilters, FilterDialogState, FilterDialogSection};
+use crate::filters::{CardFilters, FilterDialogSection, FilterDialogState};
 use crossterm::event::KeyCode;
 
 impl App {
@@ -29,44 +29,40 @@ impl App {
                     self.filter_dialog_state = None;
                     self.mode = AppMode::Normal;
                 }
-                KeyCode::Char('j') | KeyCode::Down => {
-                    match dialog_state.current_section {
-                        FilterDialogSection::Sprints => {
-                            if let Some(board_idx) = self.active_board_index {
-                                if let Some(board) = self.boards.get(board_idx) {
-                                    let sprint_count = self
-                                        .sprints
-                                        .iter()
-                                        .filter(|s| s.board_id == board.id)
-                                        .count();
-                                    let total_items = 1 + sprint_count;
-                                    if dialog_state.item_selection < total_items.saturating_sub(1) {
-                                        dialog_state.item_selection += 1;
-                                    } else {
-                                        dialog_state.next_section();
-                                    }
+                KeyCode::Char('j') | KeyCode::Down => match dialog_state.current_section {
+                    FilterDialogSection::Sprints => {
+                        if let Some(board_idx) = self.active_board_index {
+                            if let Some(board) = self.boards.get(board_idx) {
+                                let sprint_count = self
+                                    .sprints
+                                    .iter()
+                                    .filter(|s| s.board_id == board.id)
+                                    .count();
+                                let total_items = 1 + sprint_count;
+                                if dialog_state.item_selection < total_items.saturating_sub(1) {
+                                    dialog_state.item_selection += 1;
+                                } else {
+                                    dialog_state.next_section();
                                 }
                             }
                         }
-                        _ => {
-                            dialog_state.next_section();
-                        }
                     }
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    match dialog_state.current_section {
-                        FilterDialogSection::Sprints => {
-                            if dialog_state.item_selection > 0 {
-                                dialog_state.item_selection -= 1;
-                            } else {
-                                dialog_state.prev_section();
-                            }
-                        }
-                        _ => {
+                    _ => {
+                        dialog_state.next_section();
+                    }
+                },
+                KeyCode::Char('k') | KeyCode::Up => match dialog_state.current_section {
+                    FilterDialogSection::Sprints => {
+                        if dialog_state.item_selection > 0 {
+                            dialog_state.item_selection -= 1;
+                        } else {
                             dialog_state.prev_section();
                         }
                     }
-                }
+                    _ => {
+                        dialog_state.prev_section();
+                    }
+                },
                 KeyCode::Char(' ') => {
                     if dialog_state.current_section == FilterDialogSection::Sprints {
                         if dialog_state.item_selection == 0 {
@@ -87,7 +83,11 @@ impl App {
 
                                 let sprint_idx = dialog_state.item_selection - 1;
                                 if let Some(sprint) = board_sprints.get(sprint_idx) {
-                                    if dialog_state.filters.selected_sprint_ids.contains(&sprint.id) {
+                                    if dialog_state
+                                        .filters
+                                        .selected_sprint_ids
+                                        .contains(&sprint.id)
+                                    {
                                         dialog_state.filters.selected_sprint_ids.remove(&sprint.id);
                                     } else {
                                         dialog_state.filters.selected_sprint_ids.insert(sprint.id);
