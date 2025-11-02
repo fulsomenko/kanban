@@ -217,7 +217,10 @@ impl App {
                                 if let Some(board) = self.boards.get_mut(board_idx) {
                                     board.update_sprint_prefix(Some(prefix_str.to_string()));
                                     tracing::info!("Set sprint prefix to: {}", prefix_str);
-                                    board.ensure_sprint_counter_initialized(prefix_str, &self.sprints);
+                                    board.ensure_sprint_counter_initialized(
+                                        prefix_str,
+                                        &self.sprints,
+                                    );
                                 }
                             }
                         }
@@ -232,7 +235,10 @@ impl App {
                             let board_idx = self.active_board_index.or(self.board_selection.get());
                             if let Some(board_idx) = board_idx {
                                 if let Some(board) = self.boards.get_mut(board_idx) {
-                                    board.ensure_sprint_counter_initialized(prefix_str, &self.sprints);
+                                    board.ensure_sprint_counter_initialized(
+                                        prefix_str,
+                                        &self.sprints,
+                                    );
                                 }
                             }
                         }
@@ -240,7 +246,10 @@ impl App {
                             if let Some(sprint_idx) = self.active_sprint_index {
                                 if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
                                     sprint.update_card_prefix(Some(prefix_str.to_string()));
-                                    tracing::info!("Set sprint card prefix override to: {}", prefix_str);
+                                    tracing::info!(
+                                        "Set sprint card prefix override to: {}",
+                                        prefix_str
+                                    );
                                 }
                             }
                         }

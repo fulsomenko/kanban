@@ -60,7 +60,11 @@ impl Sprint {
             .map(|s| s.as_str())
     }
 
-    pub fn effective_sprint_prefix<'a>(&'a self, board: &'a Board, default_prefix: &'a str) -> &'a str {
+    pub fn effective_sprint_prefix<'a>(
+        &'a self,
+        board: &'a Board,
+        default_prefix: &'a str,
+    ) -> &'a str {
         self.prefix
             .as_deref()
             .or(board.sprint_prefix.as_deref())
@@ -71,7 +75,11 @@ impl Sprint {
         self.effective_sprint_prefix(board, default_prefix)
     }
 
-    pub fn effective_card_prefix<'a>(&'a self, board: &'a Board, default_prefix: &'a str) -> &'a str {
+    pub fn effective_card_prefix<'a>(
+        &'a self,
+        board: &'a Board,
+        default_prefix: &'a str,
+    ) -> &'a str {
         self.card_prefix
             .as_deref()
             .or(board.card_prefix.as_deref())

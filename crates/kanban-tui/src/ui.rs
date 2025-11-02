@@ -549,11 +549,7 @@ fn render_sprint_detail_metadata(
     ));
 
     if board.active_sprint_id == Some(sprint.id) {
-        lines.push(metadata_line_styled(
-            "Active Sprint",
-            "Yes",
-            active_item(),
-        ));
+        lines.push(metadata_line_styled("Active Sprint", "Yes", active_item()));
     }
 
     lines.push(Line::from(""));
@@ -563,7 +559,11 @@ fn render_sprint_detail_metadata(
     }
 
     if let Some(prefix) = &sprint.card_prefix {
-        lines.push(metadata_line_styled("Card Prefix Override", prefix, active_item()));
+        lines.push(metadata_line_styled(
+            "Card Prefix Override",
+            prefix,
+            active_item(),
+        ));
     }
 
     if sprint.prefix.is_some() || sprint.card_prefix.is_some() {
@@ -1145,7 +1145,9 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
             ];
 
             // Show active sprint's card prefix override if it exists
-            if let Some(sprint_prefix) = crate::board_context::get_active_sprint_card_prefix_override(board, &app.sprints) {
+            if let Some(sprint_prefix) =
+                crate::board_context::get_active_sprint_card_prefix_override(board, &app.sprints)
+            {
                 settings_lines.push(metadata_line_styled(
                     "Active Sprint Card Prefix",
                     sprint_prefix,
