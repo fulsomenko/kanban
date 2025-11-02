@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FilterDialogSection {
-    UnassignedSprints,
     Sprints,
     DateRange,
     Tags,
@@ -28,7 +27,7 @@ pub struct FilterDialogState {
 impl FilterDialogState {
     pub fn new(filters: CardFilters) -> Self {
         Self {
-            current_section: FilterDialogSection::UnassignedSprints,
+            current_section: FilterDialogSection::Sprints,
             section_index: 0,
             item_selection: 0,
             filters,
@@ -36,30 +35,28 @@ impl FilterDialogState {
     }
 
     pub fn next_section(&mut self) {
-        self.section_index = (self.section_index + 1) % 4;
+        self.section_index = (self.section_index + 1) % 3;
         self.item_selection = 0;
         self.current_section = match self.section_index {
-            0 => FilterDialogSection::UnassignedSprints,
-            1 => FilterDialogSection::Sprints,
-            2 => FilterDialogSection::DateRange,
-            3 => FilterDialogSection::Tags,
-            _ => FilterDialogSection::UnassignedSprints,
+            0 => FilterDialogSection::Sprints,
+            1 => FilterDialogSection::DateRange,
+            2 => FilterDialogSection::Tags,
+            _ => FilterDialogSection::Sprints,
         };
     }
 
     pub fn prev_section(&mut self) {
         self.section_index = if self.section_index == 0 {
-            3
+            2
         } else {
             self.section_index - 1
         };
         self.item_selection = 0;
         self.current_section = match self.section_index {
-            0 => FilterDialogSection::UnassignedSprints,
-            1 => FilterDialogSection::Sprints,
-            2 => FilterDialogSection::DateRange,
-            3 => FilterDialogSection::Tags,
-            _ => FilterDialogSection::UnassignedSprints,
+            0 => FilterDialogSection::Sprints,
+            1 => FilterDialogSection::DateRange,
+            2 => FilterDialogSection::Tags,
+            _ => FilterDialogSection::Sprints,
         };
     }
 }

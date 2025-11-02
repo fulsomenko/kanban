@@ -1521,7 +1521,7 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
 }
 
 fn render_filter_options_popup(app: &App, frame: &mut Frame) {
-    let area = centered_rect(70, 80, frame.area());
+    let area = centered_rect(70, 75, frame.area());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
@@ -1536,8 +1536,7 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
         .direction(Direction::Vertical)
         .margin(2)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Min(6),
+            Constraint::Min(8),
             Constraint::Length(3),
             Constraint::Length(3),
         ])
@@ -1546,48 +1545,36 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
     if let Some(ref dialog_state) = app.filter_dialog_state {
         let section_index = dialog_state.section_index;
 
-        let mut lines = vec![];
-        lines.push(Line::from(Span::styled(
-            "Unassigned Sprints",
+        let mut sprint_lines = vec![Line::from(Span::styled(
+            "Sprints",
             if section_index == 0 {
                 bold_highlight()
             } else {
                 normal_text()
             },
-        )));
+        ))];
 
-        let cursor = if section_index == 0 { "> " } else { "  " };
-        lines.push(Line::from(vec![
-            Span::raw(cursor),
+        let unassigned_cursor = if section_index == 0 && dialog_state.item_selection == 0 {
+            "> "
+        } else {
+            "  "
+        };
+
+        sprint_lines.push(Line::from(vec![
+            Span::raw(unassigned_cursor),
             Span::styled(
                 if dialog_state.filters.show_unassigned_sprints {
-                    "[✓] Show cards with unassigned sprints"
+                    "[✓]"
                 } else {
-                    "[ ] Show cards with unassigned sprints"
+                    "[ ]"
                 },
                 normal_text(),
             ),
+            Span::raw(" "),
+            Span::styled("Show cards with unassigned sprints", normal_text()),
         ]));
 
-        let section1 = Paragraph::new(lines).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(if section_index == 0 {
-                    focused_border()
-                } else {
-                    Style::default()
-                }),
-        );
-        frame.render_widget(section1, chunks[0]);
-
-        let mut sprint_lines = vec![Line::from(Span::styled(
-            "Sprints",
-            if section_index == 1 {
-                bold_highlight()
-            } else {
-                normal_text()
-            },
-        ))];
+        sprint_lines.push(Line::from(Span::styled("─────────────────────────", label_text())));
 
         if let Some(board_idx) = app.active_board_index {
             if let Some(board) = app.boards.get(board_idx) {
@@ -1605,7 +1592,7 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
                 } else {
                     for (idx, sprint) in board_sprints.iter().enumerate() {
                         let is_selected = dialog_state.filters.selected_sprint_ids.contains(&sprint.id);
-                        let cursor = if section_index == 1 && dialog_state.item_selection == idx {
+                        let cursor = if section_index == 0 && dialog_state.item_selection == idx + 1 {
                             "> "
                         } else {
                             "  "
@@ -1628,21 +1615,21 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
             }
         }
 
-        let section2 = Paragraph::new(sprint_lines).block(
+        let section1 = Paragraph::new(sprint_lines).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(if section_index == 1 {
+                .border_style(if section_index == 0 {
                     focused_border()
                 } else {
                     Style::default()
                 }),
         );
-        frame.render_widget(section2, chunks[1]);
+        frame.render_widget(section1, chunks[0]);
 
         let date_lines = vec![
             Line::from(Span::styled(
                 "Date Range (Future)",
-                if section_index == 2 {
+                if section_index == 1 {
                     bold_highlight()
                 } else {
                     label_text()
@@ -1654,21 +1641,21 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
             )),
         ];
 
-        let section3 = Paragraph::new(date_lines).block(
+        let section2 = Paragraph::new(date_lines).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(if section_index == 2 {
+                .border_style(if section_index == 1 {
                     focused_border()
                 } else {
                     Style::default()
                 }),
         );
-        frame.render_widget(section3, chunks[2]);
+        frame.render_widget(section2, chunks[1]);
 
         let tag_lines = vec![
             Line::from(Span::styled(
                 "Tags (Future)",
-                if section_index == 3 {
+                if section_index == 2 {
                     bold_highlight()
                 } else {
                     label_text()
@@ -1680,15 +1667,15 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
             )),
         ];
 
-        let section4 = Paragraph::new(tag_lines).block(
+        let section3 = Paragraph::new(tag_lines).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(if section_index == 3 {
+                .border_style(if section_index == 2 {
                     focused_border()
                 } else {
                     Style::default()
                 }),
         );
-        frame.render_widget(section4, chunks[3]);
+        frame.render_widget(section3, chunks[2]);
     }
 }

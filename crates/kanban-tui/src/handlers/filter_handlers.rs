@@ -31,9 +31,6 @@ impl App {
                 }
                 KeyCode::Char('j') | KeyCode::Down => {
                     match dialog_state.current_section {
-                        FilterDialogSection::UnassignedSprints => {
-                            dialog_state.next_section();
-                        }
                         FilterDialogSection::Sprints => {
                             if let Some(board_idx) = self.active_board_index {
                                 if let Some(board) = self.boards.get(board_idx) {
@@ -42,7 +39,8 @@ impl App {
                                         .iter()
                                         .filter(|s| s.board_id == board.id)
                                         .count();
-                                    if dialog_state.item_selection < sprint_count.saturating_sub(1) {
+                                    let total_items = 1 + sprint_count;
+                                    if dialog_state.item_selection < total_items.saturating_sub(1) {
                                         dialog_state.item_selection += 1;
                                     } else {
                                         dialog_state.next_section();
@@ -71,17 +69,16 @@ impl App {
                 }
                 KeyCode::Char(' ') => {
                     match dialog_state.current_section {
-                        FilterDialogSection::UnassignedSprints => {
-                            dialog_state.filters.show_unassigned_sprints =
-                                !dialog_state.filters.show_unassigned_sprints;
-                            tracing::info!(
-                                "Toggled unassigned sprints filter: {}",
-                                dialog_state.filters.show_unassigned_sprints
-                            );
-                            self.apply_filters();
-                        }
                         FilterDialogSection::Sprints => {
-                            if let Some(board_idx) = self.active_board_index {
+                            if dialog_state.item_selection == 0 {
+                                dialog_state.filters.show_unassigned_sprints =
+                                    !dialog_state.filters.show_unassigned_sprints;
+                                tracing::info!(
+                                    "Toggled unassigned sprints filter: {}",
+                                    dialog_state.filters.show_unassigned_sprints
+                                );
+                                self.apply_filters();
+                            } else if let Some(board_idx) = self.active_board_index {
                                 if let Some(board) = self.boards.get(board_idx) {
                                     let board_sprints: Vec<_> = self
                                         .sprints
@@ -89,7 +86,8 @@ impl App {
                                         .filter(|s| s.board_id == board.id)
                                         .collect();
 
-                                    if let Some(sprint) = board_sprints.get(dialog_state.item_selection) {
+                                    let sprint_idx = dialog_state.item_selection - 1;
+                                    if let Some(sprint) = board_sprints.get(sprint_idx) {
                                         if dialog_state.filters.selected_sprint_ids.contains(&sprint.id) {
                                             dialog_state.filters.selected_sprint_ids.remove(&sprint.id);
                                         } else {
