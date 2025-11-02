@@ -71,14 +71,14 @@ pub enum Focus {
     Cards,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CardFocus {
     Title,
     Metadata,
     Description,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BoardFocus {
     Name,
     Description,
