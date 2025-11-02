@@ -56,7 +56,6 @@ mod tests {
                         "description": null,
                         "created_at": "2024-01-01T00:00:00Z",
                         "updated_at": "2024-01-01T00:00:00Z",
-                        "next_card_number": 1,
                         "sprint_prefix": null,
                         "card_prefix": null,
                         "task_sort_field": "Default",
