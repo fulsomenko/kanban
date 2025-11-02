@@ -953,7 +953,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                                 card.branch_name(
                                     board,
                                     &app.sprints,
-                                    app.app_config.effective_default_prefix(),
+                                    app.app_config.effective_default_card_prefix(),
                                 ),
                                 active_item(),
                             ),
@@ -1049,7 +1049,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                                 card.branch_name(
                                     board,
                                     &app.sprints,
-                                    app.app_config.effective_default_prefix(),
+                                    app.app_config.effective_default_card_prefix(),
                                 ),
                                 active_item(),
                             ),
@@ -1178,7 +1178,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Sprint Prefix: ", label_text()),
                         Span::styled(
-                            app.app_config.effective_default_prefix().to_string(),
+                            app.app_config.effective_default_sprint_prefix().to_string(),
                             normal_text(),
                         ),
                         Span::styled(" (default)", label_text()),
@@ -1190,7 +1190,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Card Prefix: ", label_text()),
                         Span::styled(
-                            app.app_config.effective_default_prefix().to_string(),
+                            app.app_config.effective_default_card_prefix().to_string(),
                             normal_text(),
                         ),
                         Span::styled(" (default)", label_text()),

@@ -893,7 +893,7 @@ impl App {
                         let branch_name = card.branch_name(
                             board,
                             &self.sprints,
-                            self.app_config.effective_default_prefix(),
+                            self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&branch_name) {
                             tracing::error!("Failed to copy to clipboard: {}", e);
@@ -914,7 +914,7 @@ impl App {
                         let command = card.git_checkout_command(
                             board,
                             &self.sprints,
-                            self.app_config.effective_default_prefix(),
+                            self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&command) {
                             tracing::error!("Failed to copy to clipboard: {}", e);
