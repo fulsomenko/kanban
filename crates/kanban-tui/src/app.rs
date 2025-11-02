@@ -5,6 +5,7 @@ use crate::{
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
     export::{BoardExporter, BoardImporter},
+    filters::FilterDialogState,
     input::InputState,
     search::SearchState,
     selection::SelectionState,
@@ -61,6 +62,7 @@ pub struct App {
     pub view_strategy: Box<dyn ViewStrategy>,
     pub card_list_component: CardListComponent,
     pub search: SearchState,
+    pub filter_dialog_state: Option<FilterDialogState>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,6 +130,7 @@ pub enum AppMode {
     SetSprintPrefix,
     SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
+    FilterOptions,
 }
 
 impl App {
@@ -195,6 +198,7 @@ impl App {
                 CardListComponentConfig::new(),
             ),
             search: SearchState::new(),
+            filter_dialog_state: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -333,6 +337,9 @@ impl App {
             AppMode::Search => self.handle_search_mode(key.code),
             AppMode::ConfirmSprintPrefixCollision => {
                 self.handle_confirm_sprint_prefix_collision_popup(key.code)
+            }
+            AppMode::FilterOptions => {
+                // placeholder handler
             }
         }
         should_restart_events

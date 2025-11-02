@@ -784,6 +784,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         AppMode::ConfirmSprintPrefixCollision => {
             "ESC: cancel | j/k: navigate | ENTER: confirm".to_string()
         }
+        AppMode::FilterOptions => "ESC: cancel | j/k: navigate | Space: toggle | ENTER: apply".to_string(),
     };
     let help = Paragraph::new(help_text)
         .style(label_text())

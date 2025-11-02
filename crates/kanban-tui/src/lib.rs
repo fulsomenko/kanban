@@ -8,6 +8,7 @@ pub mod dialog;
 pub mod editor;
 pub mod events;
 pub mod export;
+pub mod filters;
 pub mod handlers;
 pub mod input;
 pub mod markdown_renderer;
