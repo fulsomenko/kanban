@@ -126,6 +126,7 @@ pub enum AppMode {
     SelectTaskListView,
     Search,
     SetSprintPrefix,
+    SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
 }
 
@@ -238,6 +239,7 @@ impl App {
                 | AppMode::RenameColumn
                 | AppMode::Search
                 | AppMode::SetSprintPrefix
+                | AppMode::SetSprintCardPrefix
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
@@ -315,6 +317,7 @@ impl App {
             }
             AppMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
             AppMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
+            AppMode::SetSprintCardPrefix => self.handle_set_sprint_card_prefix_dialog(key.code),
             AppMode::OrderCards => {
                 should_restart_events = self.handle_order_cards_popup(key.code);
             }

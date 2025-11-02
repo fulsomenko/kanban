@@ -70,6 +70,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
                 AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
                 AppMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
+                AppMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
                 AppMode::OrderCards => render_order_cards_popup(app, frame),
                 AppMode::CreateColumn => render_create_column_popup(app, frame),
                 AppMode::RenameColumn => render_rename_column_popup(app, frame),
@@ -804,6 +805,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         },
         AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
         AppMode::SetSprintPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
+        AppMode::SetSprintCardPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
         AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending".to_string(),
         AppMode::SprintDetail => {
             let component = match app.sprint_task_panel {
@@ -811,7 +813,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
                 crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,
             };
             let component_help = component.help_text();
-            format!("q: quit | ESC: back | a: activate sprint | c: complete sprint | p: set prefix | o: sort | O: toggle order | h/l: switch panel | {}", component_help)
+            format!("q: quit | ESC: back | a: activate sprint | c: complete sprint | p: set sprint prefix | C: set card prefix | o: sort | O: toggle order | h/l: switch panel | {}", component_help)
         },
         AppMode::AssignCardToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
         AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
@@ -1336,6 +1338,16 @@ fn render_set_sprint_prefix_popup(app: &App, frame: &mut Frame) {
         frame,
         "Set Sprint Prefix",
         "Sprint Prefix:",
+        app.input.as_str(),
+        app.input.cursor_pos(),
+    );
+}
+
+fn render_set_sprint_card_prefix_popup(app: &App, frame: &mut Frame) {
+    render_input_popup(
+        frame,
+        "Set Card Prefix Override",
+        "Card Prefix:",
         app.input.as_str(),
         app.input.cursor_pos(),
     );

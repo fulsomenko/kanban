@@ -223,6 +223,36 @@ impl App {
         }
     }
 
+    pub fn handle_set_sprint_card_prefix_dialog(&mut self, key_code: KeyCode) {
+        match handle_dialog_input(&mut self.input, key_code, true) {
+            DialogAction::Confirm => {
+                let prefix_str = self.input.as_str().trim();
+                if let Some(sprint_idx) = self.active_sprint_index {
+                    if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
+                        if prefix_str.is_empty() {
+                            sprint.update_card_prefix(None);
+                            tracing::info!("Cleared sprint card prefix override");
+                        } else if Card::validate_branch_prefix(prefix_str) {
+                            sprint.update_card_prefix(Some(prefix_str.to_string()));
+                            tracing::info!("Set sprint card prefix override to: {}", prefix_str);
+                        } else {
+                            tracing::error!(
+                                "Invalid prefix: use alphanumeric, hyphens, underscores only"
+                            );
+                        }
+                    }
+                }
+                self.mode = AppMode::SprintDetail;
+                self.input.clear();
+            }
+            DialogAction::Cancel => {
+                self.mode = AppMode::SprintDetail;
+                self.input.clear();
+            }
+            DialogAction::None => {}
+        }
+    }
+
     pub fn handle_confirm_sprint_prefix_collision_popup(&mut self, key_code: KeyCode) {
         use crossterm::event::KeyCode;
         match key_code {

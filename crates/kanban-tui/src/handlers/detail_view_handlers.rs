@@ -349,6 +349,15 @@ impl App {
                     }
                 }
             }
+            KeyCode::Char('C') => {
+                if let Some(sprint_idx) = self.active_sprint_index {
+                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                        let current_prefix = sprint.card_prefix.clone().unwrap_or_else(String::new);
+                        self.input.set(current_prefix);
+                        self.mode = AppMode::SetSprintCardPrefix;
+                    }
+                }
+            }
             KeyCode::Char('o') => {
                 let sort_idx = self.get_current_sort_field_selection_index();
                 self.sort_field_selection.set(Some(sort_idx));
