@@ -240,8 +240,6 @@ mod tests {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);
 
-        assert_eq!(board.next_card_number, 1);
-
         let card1 = Card::new(&mut board, column_id, "Test Card 1".to_string(), 0, "task");
         assert_eq!(card1.card_number, 1);
         assert_eq!(board.get_prefix_counter("task"), Some(2));
