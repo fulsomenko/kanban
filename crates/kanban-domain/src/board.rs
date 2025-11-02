@@ -219,6 +219,35 @@ impl Board {
     pub fn get_sprint_counter(&self, prefix: &str) -> Option<u32> {
         self.sprint_counters.get(prefix).copied()
     }
+
+    pub fn ensure_sprint_counter_initialized(
+        &mut self,
+        prefix: &str,
+        all_sprints: &[crate::Sprint],
+    ) {
+        // If counter already exists for this prefix, don't reinitialize
+        if self.sprint_counters.contains_key(prefix) {
+            return;
+        }
+
+        // Find the highest sprint number with this prefix
+        let max_number = all_sprints
+            .iter()
+            .filter(|sprint| {
+                let sprint_prefix = sprint
+                    .prefix
+                    .as_deref()
+                    .unwrap_or_else(|| self.sprint_prefix.as_deref().unwrap_or("sprint"));
+                sprint_prefix == prefix
+            })
+            .map(|sprint| sprint.sprint_number)
+            .max()
+            .unwrap_or(0);
+
+        // Initialize counter to one more than the max, or 1 if no sprints exist
+        let next_number = max_number + 1;
+        self.initialize_sprint_counter(prefix, next_number);
+    }
 }
 
 #[cfg(test)]
@@ -463,5 +492,79 @@ mod tests {
         // Verify independence: A and B maintain separate sequences
         assert_eq!(board.get_sprint_counter("A"), Some(6));
         assert_eq!(board.get_sprint_counter("B"), Some(3));
+    }
+
+    #[test]
+    fn test_ensure_sprint_counter_initialized_with_existing_sprints() {
+        use crate::Sprint;
+
+        let mut board = Board::new("Test".to_string(), None);
+
+        // Create sprints manually with different prefixes (simulating existing data)
+        let sprint1 = Sprint::new(board.id, 1, None, None); // Uses default "sprint" prefix
+        let sprint2 = Sprint::new(board.id, 2, None, None);
+        let sprint3 = Sprint::new(board.id, 3, None, None);
+
+        let sprints = vec![sprint1, sprint2, sprint3];
+
+        // Before initialization, no counter exists
+        assert_eq!(board.get_sprint_counter("sprint"), None);
+
+        // Initialize counter based on existing sprints
+        board.ensure_sprint_counter_initialized("sprint", &sprints);
+
+        // Counter should be initialized to 4 (max was 3)
+        assert_eq!(board.get_sprint_counter("sprint"), Some(4));
+
+        // Next allocation should give us 4
+        let next = board.get_next_sprint_number("sprint");
+        assert_eq!(next, 4);
+    }
+
+    #[test]
+    fn test_ensure_sprint_counter_with_prefix_override() {
+        use crate::Sprint;
+
+        let mut board = Board::new("Test".to_string(), None);
+        board.update_sprint_prefix(Some("WOO".to_string()));
+
+        // Create sprints with no explicit prefix (they'll use board's "WOO" prefix as effective)
+        let sprint1 = Sprint::new(board.id, 1, None, None); // effective prefix: WOO
+        let sprint2 = Sprint::new(board.id, 2, None, None); // effective prefix: WOO
+        let sprint3 = Sprint::new(board.id, 3, None, None); // effective prefix: WOO
+
+        let sprints = vec![sprint1, sprint2, sprint3];
+
+        // Initialize counter for "WOO" based on existing sprints
+        board.ensure_sprint_counter_initialized("WOO", &sprints);
+
+        // Counter should be initialized to 4 (max was 3)
+        assert_eq!(board.get_sprint_counter("WOO"), Some(4));
+
+        // Verify next allocation gives 4
+        let next = board.get_next_sprint_number("WOO");
+        assert_eq!(next, 4);
+    }
+
+    #[test]
+    fn test_ensure_sprint_counter_not_reinitialize() {
+        use crate::Sprint;
+
+        let mut board = Board::new("Test".to_string(), None);
+
+        // Pre-initialize counter to 10
+        board.initialize_sprint_counter("test", 10);
+        assert_eq!(board.get_sprint_counter("test"), Some(10));
+
+        // Create some sprints
+        let sprint1 = Sprint::new(board.id, 1, None, Some("test".to_string()));
+        let sprint2 = Sprint::new(board.id, 2, None, Some("test".to_string()));
+        let sprints = vec![sprint1, sprint2];
+
+        // Try to ensure initialization again
+        board.ensure_sprint_counter_initialized("test", &sprints);
+
+        // Counter should still be 10 (not reinitialized)
+        assert_eq!(board.get_sprint_counter("test"), Some(10));
     }
 }
