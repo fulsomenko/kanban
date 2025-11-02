@@ -399,9 +399,18 @@ impl App {
                     let effective_prefix = board
                         .effective_card_prefix(self.app_config.effective_default_card_prefix())
                         .to_string();
+                    let board_cards: Vec<_> = self
+                        .cards
+                        .iter()
+                        .filter(|c| {
+                            self.columns.iter().any(|col| {
+                                col.id == c.column_id && col.board_id == bid
+                            })
+                        })
+                        .collect();
                     board.ensure_card_counter_initialized(
                         &effective_prefix,
-                        &self.cards,
+                        &board_cards,
                     );
                     let mut card = Card::new(
                         board,
