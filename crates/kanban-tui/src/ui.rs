@@ -774,9 +774,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
 
     use crate::keybindings::KeybindingRegistry;
 
-    let help_text: String = if app.mode == AppMode::Normal && app.focus == Focus::Cards {
-        app.card_list_component.help_text()
-    } else if let AppMode::SprintDetail = app.mode {
+    let help_text: String = if let AppMode::SprintDetail = app.mode {
         let component = match app.sprint_task_panel {
             crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
             crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,

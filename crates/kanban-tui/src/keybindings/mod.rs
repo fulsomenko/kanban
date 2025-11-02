@@ -1,5 +1,6 @@
 pub mod board_detail;
 pub mod card_detail;
+pub mod card_list;
 pub mod dialog_modes;
 pub mod normal_mode;
 pub mod registry;

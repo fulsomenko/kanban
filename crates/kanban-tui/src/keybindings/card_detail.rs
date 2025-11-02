@@ -31,7 +31,7 @@ impl KeybindingProvider for CardDetailProvider {
                 Keybinding::new("e", "edit", "Edit current panel"),
                 Keybinding::new("y", "copy branch", "Copy branch name to clipboard"),
                 Keybinding::new("Y", "copy cmd", "Copy git checkout command"),
-                Keybinding::new("s", "assign", "Assign task to sprint"),
+                Keybinding::new("a", "assign", "Assign task to sprint"),
             ],
         )
     }

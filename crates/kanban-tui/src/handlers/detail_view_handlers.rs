@@ -83,7 +83,7 @@ impl App {
                     }
                 }
             },
-            KeyCode::Char('s') => {
+            KeyCode::Char('a') => {
                 if let Some(board_idx) = self.active_board_index {
                     if let Some(board) = self.boards.get(board_idx) {
                         let sprint_count = self
