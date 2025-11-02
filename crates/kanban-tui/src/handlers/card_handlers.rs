@@ -397,8 +397,12 @@ impl App {
                         .filter(|c| c.column_id == column.id)
                         .count() as i32;
                     let effective_prefix = board
-                        .effective_branch_prefix(self.app_config.effective_default_card_prefix())
+                        .effective_card_prefix(self.app_config.effective_default_card_prefix())
                         .to_string();
+                    board.ensure_card_counter_initialized(
+                        &effective_prefix,
+                        &self.cards,
+                    );
                     let mut card = Card::new(
                         board,
                         column.id,
