@@ -557,6 +557,19 @@ fn render_sprint_detail_metadata(
     }
 
     lines.push(Line::from(""));
+
+    if let Some(prefix) = &sprint.prefix {
+        lines.push(metadata_line_styled("Sprint Prefix", prefix, active_item()));
+    }
+
+    if let Some(prefix) = &sprint.card_prefix {
+        lines.push(metadata_line_styled("Card Prefix Override", prefix, active_item()));
+    }
+
+    if sprint.prefix.is_some() || sprint.card_prefix.is_some() {
+        lines.push(Line::from(""));
+    }
+
     lines.push(metadata_line_styled(
         "Created",
         sprint.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
@@ -1164,6 +1177,18 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 } else {
                     Line::from(vec![
                         Span::styled("Sprint Prefix: ", label_text()),
+                        Span::styled(
+                            app.app_config.effective_default_prefix().to_string(),
+                            normal_text(),
+                        ),
+                        Span::styled(" (default)", label_text()),
+                    ])
+                },
+                if let Some(prefix) = &board.card_prefix {
+                    metadata_line_styled("Card Prefix", prefix, active_item())
+                } else {
+                    Line::from(vec![
+                        Span::styled("Card Prefix: ", label_text()),
                         Span::styled(
                             app.app_config.effective_default_prefix().to_string(),
                             normal_text(),
