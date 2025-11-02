@@ -76,6 +76,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 AppMode::RenameColumn => render_rename_column_popup(app, frame),
                 AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
                 AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
+                AppMode::FilterOptions => render_filter_options_popup(app, frame),
                 _ => {}
             }
         }
@@ -1517,4 +1518,135 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
         .collect();
 
     render_selection_popup_with_list_items(frame, "Select Task List View", items, 50, 40);
+}
+
+fn render_filter_options_popup(app: &App, frame: &mut Frame) {
+    let area = centered_rect(70, 60, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Filter Options")
+        .borders(Borders::ALL)
+        .border_style(focused_border());
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(5),
+            Constraint::Length(4),
+        ])
+        .split(inner);
+
+    if let Some(ref dialog_state) = app.filter_dialog_state {
+        let mut lines = vec![];
+
+        lines.push(Line::from(Span::styled(
+            "Unassigned Sprints",
+            if dialog_state.section_selection == 0 {
+                bold_highlight()
+            } else {
+                normal_text()
+            },
+        )));
+        lines.push(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                if dialog_state.filters.show_unassigned_sprints {
+                    "[✓] Show cards with unassigned sprints"
+                } else {
+                    "[ ] Show cards with unassigned sprints"
+                },
+                normal_text(),
+            ),
+        ]));
+
+        let section1 = Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(if dialog_state.section_selection == 0 {
+                    focused_border()
+                } else {
+                    Style::default()
+                }),
+        );
+        frame.render_widget(section1, chunks[0]);
+
+        let mut sprint_lines = vec![Line::from(Span::styled(
+            "Sprints",
+            if dialog_state.section_selection == 1 {
+                bold_highlight()
+            } else {
+                normal_text()
+            },
+        ))];
+
+        if let Some(board_idx) = app.active_board_index {
+            if let Some(board) = app.boards.get(board_idx) {
+                let board_sprints: Vec<_> = app
+                    .sprints
+                    .iter()
+                    .filter(|s| s.board_id == board.id)
+                    .collect();
+
+                if board_sprints.is_empty() {
+                    sprint_lines.push(Line::from(Span::styled(
+                        "  (no sprints available)",
+                        label_text(),
+                    )));
+                } else {
+                    for sprint in board_sprints {
+                        let is_selected = dialog_state.filters.selected_sprint_ids.contains(&sprint.id);
+                        sprint_lines.push(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(
+                                if is_selected { "[✓]" } else { "[ ]" },
+                                normal_text(),
+                            ),
+                            Span::raw(" "),
+                            Span::styled(
+                                sprint.formatted_name(board, "sprint"),
+                                normal_text(),
+                            ),
+                        ]));
+                    }
+                }
+            }
+        }
+
+        let section2 = Paragraph::new(sprint_lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(if dialog_state.section_selection == 1 {
+                    focused_border()
+                } else {
+                    Style::default()
+                }),
+        );
+        frame.render_widget(section2, chunks[1]);
+
+        let date_lines = vec![Line::from(Span::styled(
+            "Date Range (Future)",
+            if dialog_state.section_selection == 2 {
+                bold_highlight()
+            } else {
+                label_text()
+            },
+        ))];
+
+        let section3 = Paragraph::new(date_lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(if dialog_state.section_selection == 2 {
+                    focused_border()
+                } else {
+                    Style::default()
+                }),
+        );
+        frame.render_widget(section3, chunks[2]);
+    }
 }
