@@ -1,8 +1,8 @@
 use super::{Keybinding, KeybindingContext, KeybindingProvider};
 
-pub struct NormalModeCardsProvider;
+pub struct CardListProvider;
 
-impl KeybindingProvider for NormalModeCardsProvider {
+impl KeybindingProvider for CardListProvider {
     fn get_context(&self) -> KeybindingContext {
         KeybindingContext::new(
             "Normal Mode - Cards Panel",
@@ -29,31 +29,7 @@ impl KeybindingProvider for NormalModeCardsProvider {
                 Keybinding::new("T", "options", "Open filter options"),
                 Keybinding::new("/", "search", "Search tasks"),
                 Keybinding::new("Enter/Space", "detail", "View task detail"),
-            ],
-        )
-    }
-}
-
-pub struct NormalModeBoardsProvider;
-
-impl KeybindingProvider for NormalModeBoardsProvider {
-    fn get_context(&self) -> KeybindingContext {
-        KeybindingContext::new(
-            "Normal Mode - Projects Panel",
-            vec![
-                Keybinding::new("?", "help", "Show help"),
-                Keybinding::new("q", "quit", "Quit application"),
-                Keybinding::new("1", "panel 1", "Focus projects panel"),
-                Keybinding::new("2", "panel 2", "Focus tasks panel"),
-                Keybinding::new("n", "new", "Create new project"),
-                Keybinding::new("r", "rename", "Rename selected project"),
-                Keybinding::new("e", "edit", "Edit selected project"),
-                Keybinding::new("x", "export", "Export selected project"),
-                Keybinding::new("X", "export all", "Export all projects"),
-                Keybinding::new("i", "import", "Import project from file"),
-                Keybinding::new("j/↓", "down", "Navigate down"),
-                Keybinding::new("k/↑", "up", "Navigate up"),
-                Keybinding::new("Enter/Space", "detail", "View project detail"),
+                Keybinding::new("p", "priority", "Set task priority"),
             ],
         )
     }

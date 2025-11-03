@@ -772,62 +772,32 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         return;
     }
 
-    let generated_help = app.card_list_component.help_text();
-    let help_text: String = match app.mode {
-        AppMode::Normal => {
-            if app.focus == Focus::Cards {
-                generated_help
-            } else {
-                "q: quit | n: new | r: rename | e: edit project | x: export | X: export all | i: import | 1/2: switch panel".to_string()
-            }
-        }
-        AppMode::CreateBoard => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::CreateCard => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::CreateSprint => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::RenameBoard => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::ExportBoard => "ESC: cancel | ENTER: export".to_string(),
-        AppMode::ExportAll => "ESC: cancel | ENTER: export all".to_string(),
-        AppMode::ImportBoard => "ESC: cancel | j/k: navigate | ENTER/Space: import selected".to_string(),
-        AppMode::CardDetail => match app.card_focus {
-            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit title | s: assign sprint".to_string(),
-            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit description | s: assign sprint".to_string(),
-            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit points | s: assign sprint".to_string(),
-        },
-        AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::SetCardPriority => "ESC: cancel | j/k: navigate | ENTER: confirm".to_string(),
-        AppMode::BoardDetail => match app.board_focus {
-            BoardFocus::Name => "q: quit | ESC: back | 1/2/3/4/5: select panel | e: edit name".to_string(),
-            BoardFocus::Description => "q: quit | ESC: back | 1/2/3/4/5: select panel | e: edit description".to_string(),
-            BoardFocus::Settings => "q: quit | ESC: back | 1/2/3/4/5: select panel | e: edit settings JSON | p: set branch prefix".to_string(),
-            BoardFocus::Sprints => "q: quit | ESC: back | 1/2/3/4/5: select panel | n: new sprint | j/k: navigate | Enter/Space: open sprint".to_string(),
-            BoardFocus::Columns => "q: quit | ESC: back | 1/2/3/4/5: select panel | n: new | r: rename | d: delete | J/K: reorder | j/k: navigate".to_string(),
-        },
-        AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
-        AppMode::SetSprintPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
-        AppMode::SetSprintCardPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
-        AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending".to_string(),
-        AppMode::SprintDetail => {
-            let component = match app.sprint_task_panel {
-                crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
-                crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,
-            };
-            let component_help = component.help_text();
-            format!("q: quit | ESC: back | a: activate sprint | c: complete sprint | p: set sprint prefix | C: set card prefix | o: sort | O: toggle order | h/l: switch panel | {}", component_help)
-        },
-        AppMode::AssignCardToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
-        AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
-        AppMode::CreateColumn => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::RenameColumn => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::DeleteColumnConfirm => "ESC: cancel | ENTER/y: delete | n: cancel".to_string(),
-        AppMode::SelectTaskListView => "ESC: cancel | j/k: navigate | ENTER/Space: select".to_string(),
-        AppMode::Search => "ESC/ENTER: exit search | type to filter".to_string(),
-        AppMode::ConfirmSprintPrefixCollision => {
-            "ESC: cancel | j/k: navigate | ENTER: confirm".to_string()
-        }
-        AppMode::FilterOptions => "ESC: cancel | j/k: navigate | Space: toggle | ENTER: apply".to_string(),
-        AppMode::Help(_) => {
-            "ESC/?: exit help".to_string()
-        }
+    use crate::keybindings::KeybindingRegistry;
+
+    let help_text: String = if let AppMode::SprintDetail = app.mode {
+        let component = match app.sprint_task_panel {
+            crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
+            crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,
+        };
+        let provider = KeybindingRegistry::get_provider(app);
+        let context = provider.get_context();
+        let keybindings = context
+            .bindings
+            .iter()
+            .map(|b| format!("{}: {}", b.key, b.short_description))
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let component_help = component.help_text();
+        format!("{} | {}", keybindings, component_help)
+    } else {
+        let provider = KeybindingRegistry::get_provider(app);
+        let context = provider.get_context();
+        context
+            .bindings
+            .iter()
+            .map(|b| format!("{}: {}", b.key, b.short_description))
+            .collect::<Vec<_>>()
+            .join(" | ")
     };
     let help = Paragraph::new(help_text)
         .style(label_text())

@@ -122,7 +122,7 @@ impl CardListComponentConfig {
         }
 
         if self.is_action_enabled(&CardListActionType::Sprint) {
-            parts.push("s: assign sprint");
+            parts.push("a: assign sprint");
         }
 
         if self.is_action_enabled(&CardListActionType::Sorting) {
@@ -281,7 +281,7 @@ impl CardListComponent {
                     None
                 }
             }
-            KeyCode::Char('s') => {
+            KeyCode::Char('a') => {
                 if self.config.is_action_enabled(&CardListActionType::Sprint) {
                     self.get_selected_card_id()
                         .map(CardListAction::AssignSprint)

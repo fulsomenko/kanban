@@ -1,5 +1,6 @@
 pub mod board_detail;
 pub mod card_detail;
+pub mod card_list;
 pub mod dialog_modes;
 pub mod normal_mode;
 pub mod registry;
@@ -10,13 +11,19 @@ pub use registry::KeybindingRegistry;
 #[derive(Debug, Clone)]
 pub struct Keybinding {
     pub key: String,
+    pub short_description: String,
     pub description: String,
 }
 
 impl Keybinding {
-    pub fn new(key: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn new(
+        key: impl Into<String>,
+        short_description: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         Self {
             key: key.into(),
+            short_description: short_description.into(),
             description: description.into(),
         }
     }

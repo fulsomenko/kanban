@@ -22,36 +22,36 @@ impl KeybindingProvider for BoardDetailProvider {
         };
 
         let mut bindings = vec![
-            Keybinding::new("?", "Show help"),
-            Keybinding::new("q", "Quit project detail"),
-            Keybinding::new("ESC", "Back to project list"),
-            Keybinding::new("1", "Focus project name"),
-            Keybinding::new("2", "Focus description"),
-            Keybinding::new("3", "Focus settings"),
-            Keybinding::new("4", "Focus sprints"),
-            Keybinding::new("5", "Focus columns"),
-            Keybinding::new("e", "Edit current panel"),
-            Keybinding::new("p", "Set branch prefix"),
+            Keybinding::new("?", "help", "Show help"),
+            Keybinding::new("q", "quit", "Exit project detail view"),
+            Keybinding::new("ESC", "back", "Return to project list"),
+            Keybinding::new("1", "panel 1", "Focus project name panel"),
+            Keybinding::new("2", "panel 2", "Focus description panel"),
+            Keybinding::new("3", "panel 3", "Focus settings panel"),
+            Keybinding::new("4", "panel 4", "Focus sprints panel"),
+            Keybinding::new("5", "panel 5", "Focus columns panel"),
+            Keybinding::new("e", "edit", "Edit current panel"),
+            Keybinding::new("p", "prefix", "Set branch prefix"),
         ];
 
         match self.focus {
             BoardFocus::Sprints => {
                 bindings.extend(vec![
-                    Keybinding::new("n", "New sprint"),
-                    Keybinding::new("j/↓", "Navigate down"),
-                    Keybinding::new("k/↑", "Navigate up"),
-                    Keybinding::new("Enter/Space", "Open sprint detail"),
+                    Keybinding::new("n", "new", "Create new sprint"),
+                    Keybinding::new("j/↓", "down", "Navigate down"),
+                    Keybinding::new("k/↑", "up", "Navigate up"),
+                    Keybinding::new("Enter/Space", "detail", "Open sprint detail"),
                 ]);
             }
             BoardFocus::Columns => {
                 bindings.extend(vec![
-                    Keybinding::new("n", "New column"),
-                    Keybinding::new("r", "Rename column"),
-                    Keybinding::new("d", "Delete column"),
-                    Keybinding::new("j/↓", "Navigate down"),
-                    Keybinding::new("k/↑", "Navigate up"),
-                    Keybinding::new("J", "Reorder column up"),
-                    Keybinding::new("K", "Reorder column down"),
+                    Keybinding::new("n", "new", "Create new column"),
+                    Keybinding::new("r", "rename", "Rename selected column"),
+                    Keybinding::new("d", "delete", "Delete selected column"),
+                    Keybinding::new("j/↓", "down", "Navigate down"),
+                    Keybinding::new("k/↑", "up", "Navigate up"),
+                    Keybinding::new("J", "move up", "Reorder column up"),
+                    Keybinding::new("K", "move down", "Reorder column down"),
                 ]);
             }
             _ => {}

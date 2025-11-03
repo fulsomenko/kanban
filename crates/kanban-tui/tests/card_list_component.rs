@@ -69,7 +69,7 @@ fn test_config_help_text_all_actions() {
     assert!(help.contains("e: edit"));
     assert!(help.contains("c: complete"));
     assert!(help.contains("p: priority"));
-    assert!(help.contains("s: assign sprint"));
+    assert!(help.contains("a: assign sprint"));
     assert!(help.contains("o: sort"));
     assert!(help.contains("H/L: move"));
     assert!(help.contains("n: new"));
@@ -262,7 +262,7 @@ fn test_assign_sprint_action() {
     let card_id = Uuid::new_v4();
     component.update_cards(vec![card_id]);
 
-    let action = component.handle_key(KeyCode::Char('s'));
+    let action = component.handle_key(KeyCode::Char('a'));
     assert_eq!(action, Some(CardListAction::AssignSprint(card_id)));
 }
 

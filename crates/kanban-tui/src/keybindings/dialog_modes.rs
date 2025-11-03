@@ -7,9 +7,9 @@ impl KeybindingProvider for SearchModeProvider {
         KeybindingContext::new(
             "Search Mode",
             vec![
-                Keybinding::new("ESC", "Exit search"),
-                Keybinding::new("Enter", "Confirm search"),
-                Keybinding::new("Type", "Enter search query"),
+                Keybinding::new("ESC", "exit", "Exit search mode"),
+                Keybinding::new("Enter", "confirm", "Confirm search and filter"),
+                Keybinding::new("Type", "query", "Enter search query"),
             ],
         )
     }
@@ -32,12 +32,12 @@ impl KeybindingProvider for DialogInputProvider {
         KeybindingContext::new(
             format!("{} - Input Dialog", self.dialog_name),
             vec![
-                Keybinding::new("ESC", "Cancel"),
-                Keybinding::new("Enter", "Confirm"),
-                Keybinding::new("Type", "Enter text"),
-                Keybinding::new("Backspace", "Delete character"),
-                Keybinding::new("←/→", "Move cursor"),
-                Keybinding::new("Home/End", "Jump to start/end"),
+                Keybinding::new("ESC", "cancel", "Cancel and close dialog"),
+                Keybinding::new("Enter", "confirm", "Confirm and apply"),
+                Keybinding::new("Type", "input", "Enter text"),
+                Keybinding::new("Backspace", "delete", "Delete previous character"),
+                Keybinding::new("←/→", "move", "Move cursor left/right"),
+                Keybinding::new("Home/End", "jump", "Jump to start/end of line"),
             ],
         )
     }
@@ -60,10 +60,10 @@ impl KeybindingProvider for DialogSelectionProvider {
         KeybindingContext::new(
             format!("{} - Selection Dialog", self.dialog_name),
             vec![
-                Keybinding::new("ESC", "Cancel"),
-                Keybinding::new("j/↓", "Navigate down"),
-                Keybinding::new("k/↑", "Navigate up"),
-                Keybinding::new("Enter/Space", "Select and confirm"),
+                Keybinding::new("ESC", "cancel", "Cancel and close dialog"),
+                Keybinding::new("j/↓", "down", "Navigate down"),
+                Keybinding::new("k/↑", "up", "Navigate up"),
+                Keybinding::new("Enter/Space", "select", "Select and confirm"),
             ],
         )
     }
@@ -84,10 +84,10 @@ impl KeybindingProvider for DeleteConfirmProvider {
         KeybindingContext::new(
             format!("Delete {} - Confirm", self.what),
             vec![
-                Keybinding::new("ESC", "Cancel"),
-                Keybinding::new("n", "Cancel"),
-                Keybinding::new("y", "Confirm delete"),
-                Keybinding::new("Enter", "Confirm delete"),
+                Keybinding::new("ESC", "cancel", "Cancel deletion"),
+                Keybinding::new("n", "no", "Do not delete"),
+                Keybinding::new("y", "yes", "Confirm deletion"),
+                Keybinding::new("Enter", "yes", "Confirm deletion"),
             ],
         )
     }
@@ -100,11 +100,11 @@ impl KeybindingProvider for FilterOptionsProvider {
         KeybindingContext::new(
             "Filter Options",
             vec![
-                Keybinding::new("ESC", "Cancel"),
-                Keybinding::new("j/↓", "Navigate down"),
-                Keybinding::new("k/↑", "Navigate up"),
-                Keybinding::new("Space", "Toggle filter"),
-                Keybinding::new("Enter", "Apply filters"),
+                Keybinding::new("ESC", "cancel", "Cancel and close filters"),
+                Keybinding::new("j/↓", "down", "Navigate down"),
+                Keybinding::new("k/↑", "up", "Navigate up"),
+                Keybinding::new("Space", "toggle", "Toggle filter option"),
+                Keybinding::new("Enter", "apply", "Apply selected filters"),
             ],
         )
     }

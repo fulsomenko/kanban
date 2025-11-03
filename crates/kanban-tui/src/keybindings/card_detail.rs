@@ -22,16 +22,16 @@ impl KeybindingProvider for CardDetailProvider {
         KeybindingContext::new(
             format!("Card Detail - {} Panel", focus_name),
             vec![
-                Keybinding::new("?", "Show help"),
-                Keybinding::new("q", "Quit card detail"),
-                Keybinding::new("ESC", "Back to task list"),
-                Keybinding::new("1", "Focus task title"),
-                Keybinding::new("2", "Focus metadata"),
-                Keybinding::new("3", "Focus description"),
-                Keybinding::new("e", "Edit current panel"),
-                Keybinding::new("y", "Copy branch name"),
-                Keybinding::new("Y", "Copy git checkout command"),
-                Keybinding::new("s", "Assign to sprint"),
+                Keybinding::new("?", "help", "Show help"),
+                Keybinding::new("q", "quit", "Exit card detail view"),
+                Keybinding::new("ESC", "back", "Return to task list"),
+                Keybinding::new("1", "panel 1", "Focus task title panel"),
+                Keybinding::new("2", "panel 2", "Focus metadata panel"),
+                Keybinding::new("3", "panel 3", "Focus description panel"),
+                Keybinding::new("e", "edit", "Edit current panel"),
+                Keybinding::new("y", "copy branch", "Copy branch name to clipboard"),
+                Keybinding::new("Y", "copy cmd", "Copy git checkout command"),
+                Keybinding::new("a", "assign", "Assign task to sprint"),
             ],
         )
     }

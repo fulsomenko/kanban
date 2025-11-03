@@ -1,11 +1,12 @@
 use super::{
     board_detail::BoardDetailProvider,
     card_detail::CardDetailProvider,
+    card_list::CardListProvider,
     dialog_modes::{
         DeleteConfirmProvider, DialogInputProvider, DialogSelectionProvider, FilterOptionsProvider,
         SearchModeProvider,
     },
-    normal_mode::{NormalModeBoardsProvider, NormalModeCardsProvider},
+    normal_mode::NormalModeBoardsProvider,
     sprint_detail::SprintDetailProvider,
     KeybindingProvider,
 };
@@ -31,7 +32,7 @@ impl KeybindingRegistry {
     ) -> Box<dyn KeybindingProvider> {
         match mode {
             AppMode::Normal => match focus {
-                Focus::Cards => Box::new(NormalModeCardsProvider),
+                Focus::Cards => Box::new(CardListProvider),
                 Focus::Boards => Box::new(NormalModeBoardsProvider),
             },
             AppMode::CardDetail => Box::new(CardDetailProvider::new(card_focus)),
