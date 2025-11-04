@@ -2,7 +2,7 @@ use crate::card_list::{CardList, CardListId};
 use crate::search::{CardSearcher, CompositeCardSearcher};
 use crate::services::filter::CardFilter;
 use crate::services::{get_sorter_for_field, BoardFilter, OrderedSorter};
-use kanban_domain::{Board, Card, Column, Sprint, SprintStatus};
+use kanban_domain::{Board, Card, Column, Sprint};
 use uuid::Uuid;
 
 pub struct ViewRefreshContext<'a> {
@@ -67,13 +67,6 @@ impl ViewStrategy for FlatViewStrategy {
     fn refresh_task_lists(&mut self, ctx: &ViewRefreshContext) {
         let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
 
-        let completed_sprint_ids: std::collections::HashSet<Uuid> = ctx
-            .all_sprints
-            .iter()
-            .filter(|s| s.status == SprintStatus::Completed)
-            .map(|s| s.id)
-            .collect();
-
         let search_filter = ctx
             .search_query
             .map(|q| CompositeCardSearcher::new(q.to_string()));
@@ -84,11 +77,6 @@ impl ViewStrategy for FlatViewStrategy {
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
-                }
-                if let Some(sprint_id) = c.sprint_id {
-                    if completed_sprint_ids.contains(&sprint_id) {
-                        return false;
-                    }
                 }
                 if !ctx.active_sprint_filters.is_empty() {
                     if let Some(sprint_id) = c.sprint_id {
@@ -213,13 +201,6 @@ impl ViewStrategy for GroupedViewStrategy {
 
         let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
 
-        let completed_sprint_ids: std::collections::HashSet<Uuid> = ctx
-            .all_sprints
-            .iter()
-            .filter(|s| s.status == SprintStatus::Completed)
-            .map(|s| s.id)
-            .collect();
-
         let search_filter = ctx
             .search_query
             .map(|q| CompositeCardSearcher::new(q.to_string()));
@@ -230,11 +211,6 @@ impl ViewStrategy for GroupedViewStrategy {
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
-                }
-                if let Some(sprint_id) = c.sprint_id {
-                    if completed_sprint_ids.contains(&sprint_id) {
-                        return false;
-                    }
                 }
                 if !ctx.active_sprint_filters.is_empty() {
                     if let Some(sprint_id) = c.sprint_id {
@@ -391,13 +367,6 @@ impl ViewStrategy for KanbanViewStrategy {
 
         let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
 
-        let completed_sprint_ids: std::collections::HashSet<Uuid> = ctx
-            .all_sprints
-            .iter()
-            .filter(|s| s.status == SprintStatus::Completed)
-            .map(|s| s.id)
-            .collect();
-
         let search_filter = ctx
             .search_query
             .map(|q| CompositeCardSearcher::new(q.to_string()));
@@ -408,11 +377,6 @@ impl ViewStrategy for KanbanViewStrategy {
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
-                }
-                if let Some(sprint_id) = c.sprint_id {
-                    if completed_sprint_ids.contains(&sprint_id) {
-                        return false;
-                    }
                 }
                 if !ctx.active_sprint_filters.is_empty() {
                     if let Some(sprint_id) = c.sprint_id {
