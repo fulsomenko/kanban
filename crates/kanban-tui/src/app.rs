@@ -389,12 +389,6 @@ impl App {
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.columns);
-        let completed_sprint_ids: std::collections::HashSet<uuid::Uuid> = self
-            .sprints
-            .iter()
-            .filter(|s| s.status == kanban_domain::SprintStatus::Completed)
-            .map(|s| s.id)
-            .collect();
 
         let cards: Vec<_> = self
             .cards
@@ -402,11 +396,6 @@ impl App {
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
-                }
-                if let Some(sprint_id) = c.sprint_id {
-                    if completed_sprint_ids.contains(&sprint_id) {
-                        return false;
-                    }
                 }
                 true
             })
@@ -440,24 +429,12 @@ impl App {
         let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.columns);
 
-        let completed_sprint_ids: std::collections::HashSet<uuid::Uuid> = self
-            .sprints
-            .iter()
-            .filter(|s| s.status == kanban_domain::SprintStatus::Completed)
-            .map(|s| s.id)
-            .collect();
-
         let mut cards: Vec<&Card> = self
             .cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
-                }
-                if let Some(sprint_id) = c.sprint_id {
-                    if completed_sprint_ids.contains(&sprint_id) {
-                        return false;
-                    }
                 }
                 if !self.active_sprint_filters.is_empty() {
                     if let Some(sprint_id) = c.sprint_id {
