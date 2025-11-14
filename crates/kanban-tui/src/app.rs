@@ -12,7 +12,7 @@ use crate::{
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     ui,
     view_strategy::{
-        FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewRefreshContext, ViewStrategy,
+        UnifiedViewStrategy, ViewRefreshContext, ViewStrategy,
     },
 };
 use crossterm::{
@@ -193,7 +193,7 @@ impl App {
                     ])
                     .with_multi_select(false),
             ),
-            view_strategy: Box::new(GroupedViewStrategy::new()),
+            view_strategy: Box::new(UnifiedViewStrategy::grouped()),
             card_list_component: CardListComponent::new(
                 CardListId::All,
                 CardListComponentConfig::new(),
@@ -617,9 +617,9 @@ impl App {
 
     pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
         let new_strategy: Box<dyn ViewStrategy> = match task_list_view {
-            kanban_domain::TaskListView::Flat => Box::new(FlatViewStrategy::new()),
-            kanban_domain::TaskListView::GroupedByColumn => Box::new(GroupedViewStrategy::new()),
-            kanban_domain::TaskListView::ColumnView => Box::new(KanbanViewStrategy::new()),
+            kanban_domain::TaskListView::Flat => Box::new(UnifiedViewStrategy::flat()),
+            kanban_domain::TaskListView::GroupedByColumn => Box::new(UnifiedViewStrategy::grouped()),
+            kanban_domain::TaskListView::ColumnView => Box::new(UnifiedViewStrategy::kanban()),
         };
 
         self.view_strategy = new_strategy;
