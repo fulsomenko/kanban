@@ -121,14 +121,26 @@ impl CardList {
             let last_visible_idx = self.scroll_offset + actual_cards_to_show.saturating_sub(1);
 
             if current_idx == last_visible_idx && current_idx < total_cards - 1 {
+                let target_selection = (current_idx + 1).min(total_cards - 1);
+
                 self.scroll_offset = self.scroll_offset.saturating_add(1);
 
-                let new_info = self.calculate_viewport_info(viewport_height);
-                let new_actual_cards = (self.scroll_offset..total_cards)
+                let mut new_info = self.calculate_viewport_info(viewport_height);
+                let mut new_actual_cards = (self.scroll_offset..total_cards)
                     .take(new_info.cards_to_show)
                     .count();
-                let new_last_visible_idx = self.scroll_offset + new_actual_cards.saturating_sub(1);
-                self.selection.set(Some(new_last_visible_idx.min(total_cards - 1)));
+                let mut new_last_visible_idx = self.scroll_offset + new_actual_cards.saturating_sub(1);
+
+                while target_selection > new_last_visible_idx && target_selection < total_cards {
+                    self.scroll_offset = self.scroll_offset.saturating_add(1);
+                    new_info = self.calculate_viewport_info(viewport_height);
+                    new_actual_cards = (self.scroll_offset..total_cards)
+                        .take(new_info.cards_to_show)
+                        .count();
+                    new_last_visible_idx = self.scroll_offset + new_actual_cards.saturating_sub(1);
+                }
+
+                self.selection.set(Some(target_selection));
             } else if current_idx < last_visible_idx {
                 self.selection.next(total_cards);
             }
@@ -385,7 +397,8 @@ mod tests {
 
         list.navigate_down(10);
 
-        assert_eq!(list.scroll_offset, 1);
+        assert_eq!(list.scroll_offset, 2);
+        assert_eq!(list.get_selected_index(), Some(9));
     }
 
     #[test]
