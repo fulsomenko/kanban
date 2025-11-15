@@ -88,7 +88,27 @@ impl RenderStrategy for SinglePanelRenderer {
                                     let viewport_height = (area.height as usize).saturating_sub(4);
                                     let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
                                     let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
-                                    let visible_cards = task_list.cards.iter().skip(scroll_offset).take(viewport_height);
+                                    let total_cards = task_list.cards.len();
+
+                                    let has_cards_above = scroll_offset > 0;
+                                    let has_cards_below = scroll_offset + viewport_height < total_cards;
+
+                                    if has_cards_above {
+                                        let count = scroll_offset;
+                                        let plural = if count == 1 { "" } else { "s" };
+                                        lines.push(Line::from(Span::styled(
+                                            format!("  {} Task{} above", count, plural),
+                                            ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                                        )));
+                                    }
+
+                                    let cards_to_show = if has_cards_above || has_cards_below {
+                                        viewport_height.saturating_sub((if has_cards_above { 1usize } else { 0 }).saturating_add(if has_cards_below { 1usize } else { 0 }))
+                                    } else {
+                                        viewport_height
+                                    };
+
+                                    let visible_cards = task_list.cards.iter().skip(scroll_offset).take(cards_to_show);
 
                                     for (idx, card_id) in visible_cards.enumerate() {
                                         let global_idx = scroll_offset + idx;
@@ -119,6 +139,15 @@ impl RenderStrategy for SinglePanelRenderer {
                                             lines.push(line);
                                         }
                                     }
+
+                                    if has_cards_below {
+                                        let count = total_cards - (scroll_offset + cards_to_show);
+                                        let plural = if count == 1 { "" } else { "s" };
+                                        lines.push(Line::from(Span::styled(
+                                            format!("  {} Task{} below", count, plural),
+                                            ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                                        )));
+                                    }
                                 }
 
                                 if col_idx < task_lists.len() - 1 {
@@ -139,7 +168,27 @@ impl RenderStrategy for SinglePanelRenderer {
                         let viewport_height = area.height.saturating_sub(2) as usize;
                         let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
                         let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
-                        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(viewport_height);
+                        let total_cards = task_list.cards.len();
+
+                        let has_cards_above = scroll_offset > 0;
+                        let has_cards_below = scroll_offset + viewport_height < total_cards;
+
+                        if has_cards_above {
+                            let count = scroll_offset;
+                            let plural = if count == 1 { "" } else { "s" };
+                            lines.push(Line::from(Span::styled(
+                                format!("  {} Task{} above", count, plural),
+                                ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                            )));
+                        }
+
+                        let cards_to_show = if has_cards_above || has_cards_below {
+                            viewport_height.saturating_sub((if has_cards_above { 1usize } else { 0 }).saturating_add(if has_cards_below { 1usize } else { 0 }))
+                        } else {
+                            viewport_height
+                        };
+
+                        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(cards_to_show);
 
                         for (idx, card_id) in visible_cards.enumerate() {
                             let global_idx = scroll_offset + idx;
@@ -155,6 +204,15 @@ impl RenderStrategy for SinglePanelRenderer {
                                 });
                                 lines.push(line);
                             }
+                        }
+
+                        if has_cards_below {
+                            let count = total_cards - (scroll_offset + cards_to_show);
+                            let plural = if count == 1 { "" } else { "s" };
+                            lines.push(Line::from(Span::styled(
+                                format!("  {} Task{} below", count, plural),
+                                ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                            )));
                         }
                     }
                 }
@@ -233,7 +291,27 @@ impl RenderStrategy for MultiPanelRenderer {
                         let viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
                         let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
                         let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
-                        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(viewport_height);
+                        let total_cards = task_list.cards.len();
+
+                        let has_cards_above = scroll_offset > 0;
+                        let has_cards_below = scroll_offset + viewport_height < total_cards;
+
+                        if has_cards_above {
+                            let count = scroll_offset;
+                            let plural = if count == 1 { "" } else { "s" };
+                            lines.push(Line::from(Span::styled(
+                                format!("  {} Task{} above", count, plural),
+                                ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                            )));
+                        }
+
+                        let cards_to_show = if has_cards_above || has_cards_below {
+                            viewport_height.saturating_sub((if has_cards_above { 1usize } else { 0 }).saturating_add(if has_cards_below { 1usize } else { 0 }))
+                        } else {
+                            viewport_height
+                        };
+
+                        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(cards_to_show);
 
                         for (idx, card_id) in visible_cards.enumerate() {
                             let global_idx = scroll_offset + idx;
@@ -256,6 +334,15 @@ impl RenderStrategy for MultiPanelRenderer {
                                 });
                                 lines.push(line);
                             }
+                        }
+
+                        if has_cards_below {
+                            let count = total_cards - (scroll_offset + cards_to_show);
+                            let plural = if count == 1 { "" } else { "s" };
+                            lines.push(Line::from(Span::styled(
+                                format!("  {} Task{} below", count, plural),
+                                ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                            )));
                         }
                     }
 
