@@ -64,7 +64,7 @@ impl CardList {
         }
     }
 
-    pub fn navigate_up(&mut self, _viewport_height: usize) -> bool {
+    pub fn navigate_up(&mut self, viewport_height: usize) -> bool {
         if self.cards.is_empty() {
             return true;
         }
@@ -73,14 +73,24 @@ impl CardList {
         if !was_at_top {
             let current_idx = self.selection.get().unwrap_or(0);
 
-            if current_idx == self.scroll_offset && self.scroll_offset > 0 {
+            // Check if there's a "cards above" indicator
+            let has_cards_above = self.scroll_offset > 0;
+
+            // First visible card index (accounting for "cards above" indicator)
+            let first_visible_idx = self.scroll_offset + (if has_cards_above { 1 } else { 0 });
+
+            // If at first visible card and there are cards above, scroll up and move selection
+            if current_idx == first_visible_idx && self.scroll_offset > 0 {
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
                 self.selection.prev();
-            } else {
+            } else if current_idx > first_visible_idx {
+                // Can move selection without scrolling (we're past the first visible position)
                 self.selection.prev();
             }
+            // If at first visible and can't scroll more, stay in place (don't call prev)
         }
 
+        self.clamp_selection_to_visible(viewport_height);
         was_at_top
     }
 
@@ -88,21 +98,42 @@ impl CardList {
         if self.cards.is_empty() {
             return true;
         }
-        let was_at_bottom = self.selection.get() == Some(self.cards.len() - 1);
+        let total_cards = self.cards.len();
+        let was_at_bottom = self.selection.get() == Some(total_cards - 1);
 
         if !was_at_bottom {
             let current_idx = self.selection.get().unwrap_or(0);
-            let viewport_bottom = self.scroll_offset + viewport_height.saturating_sub(1);
-            let max_scroll = self.cards.len().saturating_sub(viewport_height.max(1));
 
-            if current_idx == viewport_bottom && self.scroll_offset < max_scroll {
+            // Calculate indicator space to determine actual visible cards
+            let has_cards_above = self.scroll_offset > 0;
+            let has_cards_below = self.scroll_offset + viewport_height < total_cards;
+            let num_indicators = (has_cards_above as usize) + (has_cards_below as usize);
+            let visible_cards = viewport_height.saturating_sub(num_indicators);
+
+            // Last visible card index in absolute terms
+            let last_visible_idx = self.scroll_offset + visible_cards.saturating_sub(1);
+
+            // If at last visible card and there are more cards to scroll to, scroll and move selection
+            if current_idx == last_visible_idx && self.scroll_offset + visible_cards < total_cards {
                 self.scroll_offset = self.scroll_offset.saturating_add(1);
-                self.selection.next(self.cards.len());
-            } else {
-                self.selection.next(self.cards.len());
+
+                // After scrolling, recalculate the new last visible position based on updated state
+                let new_has_cards_above = self.scroll_offset > 0;
+                let new_has_cards_below = self.scroll_offset + viewport_height < total_cards;
+                let new_num_indicators = (new_has_cards_above as usize) + (new_has_cards_below as usize);
+                let new_visible_cards = viewport_height.saturating_sub(new_num_indicators);
+                let new_last_visible_idx = self.scroll_offset + new_visible_cards.saturating_sub(1);
+
+                // Move selection to the new last visible position
+                self.selection.set(Some(new_last_visible_idx.min(total_cards - 1)));
+            } else if current_idx < last_visible_idx {
+                // Can move selection without scrolling
+                self.selection.next(total_cards);
             }
+            // If at last visible and can't scroll more, stay in place (don't call next)
         }
 
+        self.clamp_selection_to_visible(viewport_height);
         was_at_bottom
     }
 
@@ -156,6 +187,28 @@ impl CardList {
             } else if selected_idx >= scroll_end {
                 self.scroll_offset = selected_idx.saturating_sub(viewport_height - 1);
             }
+        }
+    }
+
+    pub fn clamp_selection_to_visible(&mut self, viewport_height: usize) {
+        if self.cards.is_empty() {
+            return;
+        }
+
+        if let Some(selected_idx) = self.selection.get() {
+            // Calculate indicators for current scroll state
+            let has_cards_above = self.scroll_offset > 0;
+            let has_cards_below = self.scroll_offset + viewport_height < self.cards.len();
+            let num_indicators = (has_cards_above as usize) + (has_cards_below as usize);
+            let visible_cards = viewport_height.saturating_sub(num_indicators);
+
+            // First and last visible card positions
+            let first_visible = self.scroll_offset + (if has_cards_above { 1 } else { 0 });
+            let last_visible = self.scroll_offset + visible_cards.saturating_sub(1);
+
+            // Clamp selection to visible range
+            let clamped = selected_idx.max(first_visible).min(last_visible.min(self.cards.len() - 1));
+            self.selection.set(Some(clamped));
         }
     }
 }
