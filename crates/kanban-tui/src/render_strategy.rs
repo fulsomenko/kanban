@@ -1,5 +1,8 @@
 use crate::app::App;
-use crate::components::{card_list_item::{render_card_list_item, CardListItemConfig}, PanelConfig};
+use crate::components::{
+    card_list_item::{render_card_list_item, CardListItemConfig},
+    PanelConfig,
+};
 use crate::theme::label_text;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -16,7 +19,9 @@ pub struct SinglePanelRenderer {
 
 impl SinglePanelRenderer {
     pub fn new(show_column_headers: bool) -> Self {
-        Self { show_column_headers }
+        Self {
+            show_column_headers,
+        }
     }
 
     pub fn flat() -> Self {
@@ -75,14 +80,20 @@ impl RenderStrategy for SinglePanelRenderer {
                                 )));
 
                                 if task_list.is_empty() {
-                                    lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
+                                    lines.push(Line::from(Span::styled(
+                                        "  (no tasks)",
+                                        label_text(),
+                                    )));
                                 } else {
-                                    for (local_card_idx, card_id) in task_list.cards.iter().enumerate()
+                                    for (local_card_idx, card_id) in
+                                        task_list.cards.iter().enumerate()
                                     {
-                                        if let Some(card) = app.cards.iter().find(|c| c.id == *card_id)
+                                        if let Some(card) =
+                                            app.cards.iter().find(|c| c.id == *card_id)
                                         {
                                             let is_selected = if is_active_column {
-                                                task_list.get_selected_index() == Some(local_card_idx)
+                                                task_list.get_selected_index()
+                                                    == Some(local_card_idx)
                                             } else {
                                                 false
                                             };
@@ -97,7 +108,9 @@ impl RenderStrategy for SinglePanelRenderer {
                                                 is_multi_selected: app
                                                     .selected_cards
                                                     .contains(&card.id),
-                                                show_sprint_name: app.active_sprint_filters.is_empty(),
+                                                show_sprint_name: app
+                                                    .active_sprint_filters
+                                                    .is_empty(),
                                             });
                                             lines.push(line);
                                         }
@@ -218,7 +231,8 @@ impl RenderStrategy for MultiPanelRenderer {
                                     board,
                                     sprints: &app.sprints,
                                     is_selected,
-                                    is_focused: app.focus == crate::app::Focus::Cards && is_focused_column,
+                                    is_focused: app.focus == crate::app::Focus::Cards
+                                        && is_focused_column,
                                     is_multi_selected: app.selected_cards.contains(&card.id),
                                     show_sprint_name: app.active_sprint_filters.is_empty(),
                                 });

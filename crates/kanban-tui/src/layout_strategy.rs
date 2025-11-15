@@ -1,6 +1,6 @@
 use crate::card_list::{CardList, CardListId};
-use crate::view_strategy::ViewRefreshContext;
 use crate::services::filter_and_sort_cards_by_column;
+use crate::view_strategy::ViewRefreshContext;
 
 pub trait LayoutStrategy {
     fn get_active_task_list(&self) -> Option<&CardList>;

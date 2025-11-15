@@ -1,7 +1,7 @@
 use crate::search::{CardSearcher, CompositeCardSearcher};
-use crate::view_strategy::ViewRefreshContext;
-use crate::services::{get_sorter_for_field, BoardFilter, OrderedSorter};
 use crate::services::filter::CardFilter;
+use crate::services::{get_sorter_for_field, BoardFilter, OrderedSorter};
+use crate::view_strategy::ViewRefreshContext;
 use kanban_domain::Card;
 use uuid::Uuid;
 
@@ -54,10 +54,7 @@ pub fn filter_and_sort_cards(ctx: &ViewRefreshContext) -> Vec<Uuid> {
     filtered_cards.iter().map(|c| c.id).collect()
 }
 
-pub fn filter_and_sort_cards_by_column(
-    ctx: &ViewRefreshContext,
-    column_id: Uuid,
-) -> Vec<Uuid> {
+pub fn filter_and_sort_cards_by_column(ctx: &ViewRefreshContext, column_id: Uuid) -> Vec<Uuid> {
     let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
     let search_filter = ctx
         .search_query

@@ -216,7 +216,9 @@ fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
         .as_any()
         .downcast_ref::<UnifiedViewStrategy>()
     {
-        unified_strategy.get_render_strategy().render(app, frame, area);
+        unified_strategy
+            .get_render_strategy()
+            .render(app, frame, area);
     }
 }
 
