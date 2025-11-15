@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
 };
 
-pub fn render(app: &App, frame: &mut Frame) {
+pub fn render(app: &mut App, frame: &mut Frame) {
     // Check if we're in Help mode and render underlying view
     let is_help_mode = matches!(app.mode, AppMode::Help(_));
 
@@ -110,7 +110,7 @@ pub fn render(app: &App, frame: &mut Frame) {
     }
 }
 
-fn render_main(app: &App, frame: &mut Frame, area: Rect) {
+fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
     let is_kanban_view = if let Some(idx) = app.active_board_index {
         if let Some(board) = app.boards.get(idx) {
             board.task_list_view == kanban_domain::TaskListView::ColumnView
@@ -122,6 +122,7 @@ fn render_main(app: &App, frame: &mut Frame, area: Rect) {
     };
 
     if is_kanban_view {
+        app.viewport_height = area.height.saturating_sub(2) as usize;
         render_tasks_panel(app, frame, area);
     } else {
         let chunks = Layout::default()
@@ -129,6 +130,7 @@ fn render_main(app: &App, frame: &mut Frame, area: Rect) {
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
             .split(area);
 
+        app.viewport_height = chunks[1].height.saturating_sub(2) as usize;
         render_projects_panel(app, frame, chunks[0]);
         render_tasks_panel(app, frame, chunks[1]);
     }
