@@ -1,7 +1,6 @@
 use crate::app::{App, AppMode, CardField, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use crate::view_strategy::{GroupedViewStrategy, KanbanViewStrategy, ViewStrategy};
 use kanban_domain::{Card, CardStatus, Column, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -15,32 +14,11 @@ impl App {
     }
 
     fn get_focused_column_id(&mut self) -> Option<uuid::Uuid> {
-        let grouped_strategy = self
-            .view_strategy
-            .as_any_mut()
-            .downcast_mut::<GroupedViewStrategy>();
-
-        if let Some(grouped) = grouped_strategy {
-            if let Some(task_list) = grouped.get_active_task_list() {
-                if let CardListId::Column(column_id) = task_list.id {
-                    return Some(column_id);
-                }
+        if let Some(task_list) = self.view_strategy.get_active_task_list() {
+            if let CardListId::Column(column_id) = task_list.id {
+                return Some(column_id);
             }
         }
-
-        let kanban_strategy = self
-            .view_strategy
-            .as_any_mut()
-            .downcast_mut::<KanbanViewStrategy>();
-
-        if let Some(kanban) = kanban_strategy {
-            if let Some(task_list) = kanban.get_active_task_list() {
-                if let CardListId::Column(column_id) = task_list.id {
-                    return Some(column_id);
-                }
-            }
-        }
-
         None
     }
 
