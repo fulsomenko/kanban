@@ -10,6 +10,7 @@ pub trait LayoutStrategy {
     fn navigate_right(&mut self, select_last: bool) -> bool;
     fn refresh_lists(&mut self, ctx: &ViewRefreshContext);
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 pub struct SingleListLayout {
@@ -59,6 +60,10 @@ impl LayoutStrategy for SingleListLayout {
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
@@ -180,6 +185,10 @@ impl LayoutStrategy for ColumnListsLayout {
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
