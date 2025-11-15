@@ -11,7 +11,7 @@ pub trait RenderStrategy {
 }
 
 pub struct SinglePanelRenderer {
-    pub show_column_headers: bool,
+    show_column_headers: bool,
 }
 
 impl SinglePanelRenderer {
@@ -108,29 +108,27 @@ impl RenderStrategy for SinglePanelRenderer {
                             }
                         }
                     }
-                } else {
-                    if let Some(task_list) = app.view_strategy.get_active_task_list() {
-                        if task_list.is_empty() {
-                            let message = if app.active_board_index.is_some() {
-                                "  No tasks yet. Press 'n' to create one!"
-                            } else {
-                                "  (Enter/Space) to add tasks"
-                            };
-                            lines.push(Line::from(Span::styled(message, label_text())));
+                } else if let Some(task_list) = app.view_strategy.get_active_task_list() {
+                    if task_list.is_empty() {
+                        let message = if app.active_board_index.is_some() {
+                            "  No tasks yet. Press 'n' to create one!"
                         } else {
-                            for (card_idx, card_id) in task_list.cards.iter().enumerate() {
-                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                                    let line = render_card_list_item(CardListItemConfig {
-                                        card,
-                                        board,
-                                        sprints: &app.sprints,
-                                        is_selected: task_list.get_selected_index() == Some(card_idx),
-                                        is_focused: app.focus == crate::app::Focus::Cards,
-                                        is_multi_selected: app.selected_cards.contains(&card.id),
-                                        show_sprint_name: app.active_sprint_filters.is_empty(),
-                                    });
-                                    lines.push(line);
-                                }
+                            "  (Enter/Space) to add tasks"
+                        };
+                        lines.push(Line::from(Span::styled(message, label_text())));
+                    } else {
+                        for (card_idx, card_id) in task_list.cards.iter().enumerate() {
+                            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                let line = render_card_list_item(CardListItemConfig {
+                                    card,
+                                    board,
+                                    sprints: &app.sprints,
+                                    is_selected: task_list.get_selected_index() == Some(card_idx),
+                                    is_focused: app.focus == crate::app::Focus::Cards,
+                                    is_multi_selected: app.selected_cards.contains(&card.id),
+                                    show_sprint_name: app.active_sprint_filters.is_empty(),
+                                });
+                                lines.push(line);
                             }
                         }
                     }

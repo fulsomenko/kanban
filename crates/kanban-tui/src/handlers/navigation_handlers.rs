@@ -1,4 +1,5 @@
 use crate::app::{App, AppMode, Focus};
+use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::TaskListView;
 
 impl App {
@@ -146,8 +147,8 @@ impl App {
             let column_count = self.view_strategy.get_all_task_lists().len();
 
             if index < column_count {
-                self.view_strategy.as_any_mut().downcast_mut::<crate::view_strategy::UnifiedViewStrategy>()
-                    .and_then(|unified| Some(unified.try_set_active_column_index(index)));
+                self.view_strategy.as_any_mut().downcast_mut::<UnifiedViewStrategy>()
+                    .map(|unified| unified.try_set_active_column_index(index));
 
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     if list.is_empty() {
