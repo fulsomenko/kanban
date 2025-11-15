@@ -75,6 +75,7 @@ impl CardList {
 
             if current_idx == self.scroll_offset && self.scroll_offset > 0 {
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
+                self.selection.prev();
             } else {
                 self.selection.prev();
             }
@@ -96,6 +97,7 @@ impl CardList {
 
             if current_idx == viewport_bottom && self.scroll_offset < max_scroll {
                 self.scroll_offset = self.scroll_offset.saturating_add(1);
+                self.selection.next(self.cards.len());
             } else {
                 self.selection.next(self.cards.len());
             }
