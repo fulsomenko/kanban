@@ -24,7 +24,7 @@ impl App {
             }
             Focus::Cards => {
                 let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_down(20)
+                    list.navigate_down(self.viewport_height)
                 } else {
                     false
                 };
@@ -44,7 +44,7 @@ impl App {
             }
             Focus::Cards => {
                 let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_up(20)
+                    list.navigate_up(self.viewport_height)
                 } else {
                     false
                 };
