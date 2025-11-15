@@ -113,8 +113,8 @@ impl CardList {
             // Last visible card index in absolute terms
             let last_visible_idx = self.scroll_offset + visible_cards.saturating_sub(1);
 
-            // If at last visible card and there are more cards to scroll to, scroll and move selection
-            if current_idx == last_visible_idx && self.scroll_offset + visible_cards < total_cards {
+            // If at last visible card and the last visible is not the actual last card, scroll and move selection
+            if current_idx == last_visible_idx && last_visible_idx < total_cards - 1 {
                 self.scroll_offset = self.scroll_offset.saturating_add(1);
 
                 // After scrolling, recalculate the new last visible position based on updated state
