@@ -64,21 +64,43 @@ impl CardList {
         }
     }
 
-    pub fn navigate_up(&mut self) -> bool {
+    pub fn navigate_up(&mut self, _viewport_height: usize) -> bool {
         if self.cards.is_empty() {
             return true;
         }
         let was_at_top = self.selection.get() == Some(0) || self.selection.get().is_none();
-        self.selection.prev();
+
+        if !was_at_top {
+            let current_idx = self.selection.get().unwrap_or(0);
+
+            if current_idx == self.scroll_offset && self.scroll_offset > 0 {
+                self.scroll_offset = self.scroll_offset.saturating_sub(1);
+            } else {
+                self.selection.prev();
+            }
+        }
+
         was_at_top
     }
 
-    pub fn navigate_down(&mut self) -> bool {
+    pub fn navigate_down(&mut self, viewport_height: usize) -> bool {
         if self.cards.is_empty() {
             return true;
         }
         let was_at_bottom = self.selection.get() == Some(self.cards.len() - 1);
-        self.selection.next(self.cards.len());
+
+        if !was_at_bottom {
+            let current_idx = self.selection.get().unwrap_or(0);
+            let viewport_bottom = self.scroll_offset + viewport_height.saturating_sub(1);
+            let max_scroll = self.cards.len().saturating_sub(viewport_height.max(1));
+
+            if current_idx == viewport_bottom && self.scroll_offset < max_scroll {
+                self.scroll_offset = self.scroll_offset.saturating_add(1);
+            } else {
+                self.selection.next(self.cards.len());
+            }
+        }
+
         was_at_bottom
     }
 
