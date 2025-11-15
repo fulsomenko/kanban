@@ -198,12 +198,12 @@ impl CardListComponent {
         }
     }
 
-    pub fn navigate_up(&mut self) -> bool {
-        self.card_list.navigate_up()
+    pub fn navigate_up(&mut self, viewport_height: usize) -> bool {
+        self.card_list.navigate_up(viewport_height)
     }
 
-    pub fn navigate_down(&mut self) -> bool {
-        self.card_list.navigate_down()
+    pub fn navigate_down(&mut self, viewport_height: usize) -> bool {
+        self.card_list.navigate_down(viewport_height)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -245,7 +245,7 @@ impl CardListComponent {
                     .config
                     .is_action_enabled(&CardListActionType::Navigation)
                 {
-                    self.navigate_down();
+                    self.navigate_down(1000);
                 }
                 None
             }
@@ -254,7 +254,7 @@ impl CardListComponent {
                     .config
                     .is_action_enabled(&CardListActionType::Navigation)
                 {
-                    self.navigate_up();
+                    self.navigate_up(1000);
                 }
                 None
             }
