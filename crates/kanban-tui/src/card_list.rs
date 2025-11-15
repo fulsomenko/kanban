@@ -12,6 +12,7 @@ pub struct CardList {
     pub id: CardListId,
     pub cards: Vec<Uuid>,
     pub selection: SelectionState,
+    pub scroll_offset: usize,
 }
 
 impl CardList {
@@ -20,6 +21,7 @@ impl CardList {
             id,
             cards: Vec::new(),
             selection: SelectionState::new(),
+            scroll_offset: 0,
         }
     }
 
@@ -105,6 +107,31 @@ impl CardList {
             }
         } else {
             self.selection.clear();
+        }
+    }
+
+    pub fn get_scroll_offset(&self) -> usize {
+        self.scroll_offset
+    }
+
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        self.scroll_offset = offset.min(self.cards.len().saturating_sub(1));
+    }
+
+    pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
+        if viewport_height == 0 {
+            return;
+        }
+
+        if let Some(selected_idx) = self.selection.get() {
+            let scroll_start = self.scroll_offset;
+            let scroll_end = scroll_start + viewport_height;
+
+            if selected_idx < scroll_start {
+                self.scroll_offset = selected_idx;
+            } else if selected_idx >= scroll_end {
+                self.scroll_offset = selected_idx.saturating_sub(viewport_height - 1);
+            }
         }
     }
 }
