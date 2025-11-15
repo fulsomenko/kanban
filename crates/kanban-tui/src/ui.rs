@@ -1,6 +1,7 @@
 use crate::app::{App, AppMode, BoardFocus, CardFocus, Focus};
 use crate::components::*;
 use crate::theme::*;
+use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::{Sprint, SprintStatus};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -213,7 +214,7 @@ fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(unified_strategy) = app
         .view_strategy
         .as_any()
-        .downcast_ref::<crate::view_strategy::UnifiedViewStrategy>()
+        .downcast_ref::<UnifiedViewStrategy>()
     {
         unified_strategy.get_render_strategy().render(app, frame, area);
     }
