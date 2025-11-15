@@ -85,16 +85,11 @@ impl RenderStrategy for SinglePanelRenderer {
                                         label_text(),
                                     )));
                                 } else {
-                                    let viewport_height = (area.height as usize).saturating_sub(4);
-                                    let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
-                                    let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
-                                    let total_cards = task_list.cards.len();
+                                    let viewport_height = (area.height as usize).saturating_sub(2);
+                                    let render_info = task_list.get_render_info(viewport_height);
 
-                                    let has_cards_above = scroll_offset > 0;
-                                    let has_cards_below = scroll_offset + viewport_height < total_cards;
-
-                                    if has_cards_above {
-                                        let count = scroll_offset;
+                                    if render_info.show_above_indicator {
+                                        let count = render_info.cards_above_count;
                                         let plural = if count == 1 { "" } else { "s" };
                                         lines.push(Line::from(Span::styled(
                                             format!("  {} Task{} above", count, plural),
@@ -102,46 +97,36 @@ impl RenderStrategy for SinglePanelRenderer {
                                         )));
                                     }
 
-                                    let cards_to_show = if has_cards_above || has_cards_below {
-                                        viewport_height.saturating_sub((if has_cards_above { 1usize } else { 0 }).saturating_add(if has_cards_below { 1usize } else { 0 }))
-                                    } else {
-                                        viewport_height
-                                    };
+                                    for card_idx in &render_info.visible_card_indices {
+                                        if let Some(card_id) = task_list.cards.get(*card_idx) {
+                                            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                                let is_selected = if is_active_column {
+                                                    task_list.get_selected_index() == Some(*card_idx)
+                                                } else {
+                                                    false
+                                                };
 
-                                    let visible_cards = task_list.cards.iter().skip(scroll_offset).take(cards_to_show);
-
-                                    for (idx, card_id) in visible_cards.enumerate() {
-                                        let global_idx = scroll_offset + idx;
-                                        if let Some(card) =
-                                            app.cards.iter().find(|c| c.id == *card_id)
-                                        {
-                                            let is_selected = if is_active_column {
-                                                task_list.get_selected_index()
-                                                    == Some(global_idx)
-                                            } else {
-                                                false
-                                            };
-
-                                            let line = render_card_list_item(CardListItemConfig {
-                                                card,
-                                                board,
-                                                sprints: &app.sprints,
-                                                is_selected,
-                                                is_focused: app.focus == crate::app::Focus::Cards
-                                                    && is_active_column,
-                                                is_multi_selected: app
-                                                    .selected_cards
-                                                    .contains(&card.id),
-                                                show_sprint_name: app
-                                                    .active_sprint_filters
-                                                    .is_empty(),
-                                            });
-                                            lines.push(line);
+                                                let line = render_card_list_item(CardListItemConfig {
+                                                    card,
+                                                    board,
+                                                    sprints: &app.sprints,
+                                                    is_selected,
+                                                    is_focused: app.focus == crate::app::Focus::Cards
+                                                        && is_active_column,
+                                                    is_multi_selected: app
+                                                        .selected_cards
+                                                        .contains(&card.id),
+                                                    show_sprint_name: app
+                                                        .active_sprint_filters
+                                                        .is_empty(),
+                                                });
+                                                lines.push(line);
+                                            }
                                         }
                                     }
 
-                                    if has_cards_below {
-                                        let count = total_cards - (scroll_offset + cards_to_show);
+                                    if render_info.show_below_indicator {
+                                        let count = render_info.cards_below_count;
                                         let plural = if count == 1 { "" } else { "s" };
                                         lines.push(Line::from(Span::styled(
                                             format!("  {} Task{} below", count, plural),
@@ -166,15 +151,10 @@ impl RenderStrategy for SinglePanelRenderer {
                         lines.push(Line::from(Span::styled(message, label_text())));
                     } else {
                         let viewport_height = area.height.saturating_sub(2) as usize;
-                        let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
-                        let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
-                        let total_cards = task_list.cards.len();
+                        let render_info = task_list.get_render_info(viewport_height);
 
-                        let has_cards_above = scroll_offset > 0;
-                        let has_cards_below = scroll_offset + viewport_height < total_cards;
-
-                        if has_cards_above {
-                            let count = scroll_offset;
+                        if render_info.show_above_indicator {
+                            let count = render_info.cards_above_count;
                             let plural = if count == 1 { "" } else { "s" };
                             lines.push(Line::from(Span::styled(
                                 format!("  {} Task{} above", count, plural),
@@ -182,32 +162,25 @@ impl RenderStrategy for SinglePanelRenderer {
                             )));
                         }
 
-                        let cards_to_show = if has_cards_above || has_cards_below {
-                            viewport_height.saturating_sub((if has_cards_above { 1usize } else { 0 }).saturating_add(if has_cards_below { 1usize } else { 0 }))
-                        } else {
-                            viewport_height
-                        };
-
-                        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(cards_to_show);
-
-                        for (idx, card_id) in visible_cards.enumerate() {
-                            let global_idx = scroll_offset + idx;
-                            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                                let line = render_card_list_item(CardListItemConfig {
-                                    card,
-                                    board,
-                                    sprints: &app.sprints,
-                                    is_selected: task_list.get_selected_index() == Some(global_idx),
-                                    is_focused: app.focus == crate::app::Focus::Cards,
-                                    is_multi_selected: app.selected_cards.contains(&card.id),
-                                    show_sprint_name: app.active_sprint_filters.is_empty(),
-                                });
-                                lines.push(line);
+                        for card_idx in &render_info.visible_card_indices {
+                            if let Some(card_id) = task_list.cards.get(*card_idx) {
+                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                    let line = render_card_list_item(CardListItemConfig {
+                                        card,
+                                        board,
+                                        sprints: &app.sprints,
+                                        is_selected: task_list.get_selected_index() == Some(*card_idx),
+                                        is_focused: app.focus == crate::app::Focus::Cards,
+                                        is_multi_selected: app.selected_cards.contains(&card.id),
+                                        show_sprint_name: app.active_sprint_filters.is_empty(),
+                                    });
+                                    lines.push(line);
+                                }
                             }
                         }
 
-                        if has_cards_below {
-                            let count = total_cards - (scroll_offset + cards_to_show);
+                        if render_info.show_below_indicator {
+                            let count = render_info.cards_below_count;
                             let plural = if count == 1 { "" } else { "s" };
                             lines.push(Line::from(Span::styled(
                                 format!("  {} Task{} below", count, plural),
@@ -289,15 +262,10 @@ impl RenderStrategy for MultiPanelRenderer {
                         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
                     } else {
                         let viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
-                        let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
-                        let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
-                        let total_cards = task_list.cards.len();
+                        let render_info = task_list.get_render_info(viewport_height);
 
-                        let has_cards_above = scroll_offset > 0;
-                        let has_cards_below = scroll_offset + viewport_height < total_cards;
-
-                        if has_cards_above {
-                            let count = scroll_offset;
+                        if render_info.show_above_indicator {
+                            let count = render_info.cards_above_count;
                             let plural = if count == 1 { "" } else { "s" };
                             lines.push(Line::from(Span::styled(
                                 format!("  {} Task{} above", count, plural),
@@ -305,39 +273,32 @@ impl RenderStrategy for MultiPanelRenderer {
                             )));
                         }
 
-                        let cards_to_show = if has_cards_above || has_cards_below {
-                            viewport_height.saturating_sub((if has_cards_above { 1usize } else { 0 }).saturating_add(if has_cards_below { 1usize } else { 0 }))
-                        } else {
-                            viewport_height
-                        };
+                        for card_idx in &render_info.visible_card_indices {
+                            if let Some(card_id) = task_list.cards.get(*card_idx) {
+                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                    let is_selected = if is_focused_column {
+                                        task_list.get_selected_index() == Some(*card_idx)
+                                    } else {
+                                        false
+                                    };
 
-                        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(cards_to_show);
-
-                        for (idx, card_id) in visible_cards.enumerate() {
-                            let global_idx = scroll_offset + idx;
-                            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                                let is_selected = if is_focused_column {
-                                    task_list.get_selected_index() == Some(global_idx)
-                                } else {
-                                    false
-                                };
-
-                                let line = render_card_list_item(CardListItemConfig {
-                                    card,
-                                    board,
-                                    sprints: &app.sprints,
-                                    is_selected,
-                                    is_focused: app.focus == crate::app::Focus::Cards
-                                        && is_focused_column,
-                                    is_multi_selected: app.selected_cards.contains(&card.id),
-                                    show_sprint_name: app.active_sprint_filters.is_empty(),
-                                });
-                                lines.push(line);
+                                    let line = render_card_list_item(CardListItemConfig {
+                                        card,
+                                        board,
+                                        sprints: &app.sprints,
+                                        is_selected,
+                                        is_focused: app.focus == crate::app::Focus::Cards
+                                            && is_focused_column,
+                                        is_multi_selected: app.selected_cards.contains(&card.id),
+                                        show_sprint_name: app.active_sprint_filters.is_empty(),
+                                    });
+                                    lines.push(line);
+                                }
                             }
                         }
 
-                        if has_cards_below {
-                            let count = total_cards - (scroll_offset + cards_to_show);
+                        if render_info.show_below_indicator {
+                            let count = render_info.cards_below_count;
                             let plural = if count == 1 { "" } else { "s" };
                             lines.push(Line::from(Span::styled(
                                 format!("  {} Task{} below", count, plural),
