@@ -222,6 +222,18 @@ impl CardListComponent {
         self.card_list.set_selected_index(index);
     }
 
+    pub fn get_scroll_offset(&self) -> usize {
+        self.card_list.get_scroll_offset()
+    }
+
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        self.card_list.set_scroll_offset(offset);
+    }
+
+    pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
+        self.card_list.ensure_selected_visible(viewport_height);
+    }
+
     pub fn help_text(&self) -> String {
         self.config.help_text()
     }
