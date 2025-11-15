@@ -61,6 +61,7 @@ pub struct App {
     pub card_list_component: CardListComponent,
     pub search: SearchState,
     pub filter_dialog_state: Option<FilterDialogState>,
+    pub viewport_height: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -198,6 +199,7 @@ impl App {
             ),
             search: SearchState::new(),
             filter_dialog_state: None,
+            viewport_height: 20,
         };
 
         if let Some(ref filename) = save_file {
