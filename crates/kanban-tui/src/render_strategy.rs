@@ -85,15 +85,19 @@ impl RenderStrategy for SinglePanelRenderer {
                                         label_text(),
                                     )));
                                 } else {
-                                    for (local_card_idx, card_id) in
-                                        task_list.cards.iter().enumerate()
-                                    {
+                                    let viewport_height = (area.height as usize).saturating_sub(4);
+                                    let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
+                                    let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
+                                    let visible_cards = task_list.cards.iter().skip(scroll_offset).take(viewport_height);
+
+                                    for (idx, card_id) in visible_cards.enumerate() {
+                                        let global_idx = scroll_offset + idx;
                                         if let Some(card) =
                                             app.cards.iter().find(|c| c.id == *card_id)
                                         {
                                             let is_selected = if is_active_column {
                                                 task_list.get_selected_index()
-                                                    == Some(local_card_idx)
+                                                    == Some(global_idx)
                                             } else {
                                                 false
                                             };
@@ -117,7 +121,9 @@ impl RenderStrategy for SinglePanelRenderer {
                                     }
                                 }
 
-                                lines.push(Line::from(""));
+                                if col_idx < task_lists.len() - 1 {
+                                    lines.push(Line::from(""));
+                                }
                             }
                         }
                     }
@@ -130,13 +136,19 @@ impl RenderStrategy for SinglePanelRenderer {
                         };
                         lines.push(Line::from(Span::styled(message, label_text())));
                     } else {
-                        for (card_idx, card_id) in task_list.cards.iter().enumerate() {
+                        let viewport_height = area.height.saturating_sub(2) as usize;
+                        let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
+                        let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
+                        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(viewport_height);
+
+                        for (idx, card_id) in visible_cards.enumerate() {
+                            let global_idx = scroll_offset + idx;
                             if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
                                 let line = render_card_list_item(CardListItemConfig {
                                     card,
                                     board,
                                     sprints: &app.sprints,
-                                    is_selected: task_list.get_selected_index() == Some(card_idx),
+                                    is_selected: task_list.get_selected_index() == Some(global_idx),
                                     is_focused: app.focus == crate::app::Focus::Cards,
                                     is_multi_selected: app.selected_cards.contains(&card.id),
                                     show_sprint_name: app.active_sprint_filters.is_empty(),
@@ -218,10 +230,16 @@ impl RenderStrategy for MultiPanelRenderer {
                     if task_list.is_empty() {
                         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
                     } else {
-                        for (local_card_idx, card_id) in task_list.cards.iter().enumerate() {
+                        let viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
+                        let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
+                        let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
+                        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(viewport_height);
+
+                        for (idx, card_id) in visible_cards.enumerate() {
+                            let global_idx = scroll_offset + idx;
                             if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
                                 let is_selected = if is_focused_column {
-                                    task_list.get_selected_index() == Some(local_card_idx)
+                                    task_list.get_selected_index() == Some(global_idx)
                                 } else {
                                     false
                                 };
