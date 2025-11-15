@@ -393,9 +393,15 @@ fn render_sprint_task_panel_with_selection(
     if task_list.is_empty() {
         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
     } else {
-        for (idx, card_id) in task_list.cards.iter().enumerate() {
+        let viewport_height = area.height.saturating_sub(4) as usize;
+        let max_scroll = task_list.cards.len().saturating_sub(viewport_height.max(1));
+        let scroll_offset = task_list.get_scroll_offset().min(max_scroll);
+        let visible_cards = task_list.cards.iter().skip(scroll_offset).take(viewport_height);
+
+        for (idx, card_id) in visible_cards.enumerate() {
+            let global_idx = scroll_offset + idx;
             if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                let is_selected = selected_idx == Some(idx) && is_focused;
+                let is_selected = selected_idx == Some(global_idx) && is_focused;
                 let line = render_card_list_item(CardListItemConfig {
                     card,
                     board,
@@ -418,7 +424,6 @@ fn render_sprint_task_panel_with_selection(
         .collect();
     let points = App::calculate_points(&cards);
 
-    lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
         Style::default()
