@@ -93,33 +93,39 @@ impl RenderStrategy for SinglePanelRenderer {
                                         let plural = if count == 1 { "" } else { "s" };
                                         lines.push(Line::from(Span::styled(
                                             format!("  {} Task{} above", count, plural),
-                                            ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                                            ratatui::style::Style::default()
+                                                .fg(ratatui::style::Color::DarkGray),
                                         )));
                                     }
 
                                     for card_idx in &render_info.visible_card_indices {
                                         if let Some(card_id) = task_list.cards.get(*card_idx) {
-                                            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                            if let Some(card) =
+                                                app.cards.iter().find(|c| c.id == *card_id)
+                                            {
                                                 let is_selected = if is_active_column {
-                                                    task_list.get_selected_index() == Some(*card_idx)
+                                                    task_list.get_selected_index()
+                                                        == Some(*card_idx)
                                                 } else {
                                                     false
                                                 };
 
-                                                let line = render_card_list_item(CardListItemConfig {
-                                                    card,
-                                                    board,
-                                                    sprints: &app.sprints,
-                                                    is_selected,
-                                                    is_focused: app.focus == crate::app::Focus::Cards
-                                                        && is_active_column,
-                                                    is_multi_selected: app
-                                                        .selected_cards
-                                                        .contains(&card.id),
-                                                    show_sprint_name: app
-                                                        .active_sprint_filters
-                                                        .is_empty(),
-                                                });
+                                                let line =
+                                                    render_card_list_item(CardListItemConfig {
+                                                        card,
+                                                        board,
+                                                        sprints: &app.sprints,
+                                                        is_selected,
+                                                        is_focused: app.focus
+                                                            == crate::app::Focus::Cards
+                                                            && is_active_column,
+                                                        is_multi_selected: app
+                                                            .selected_cards
+                                                            .contains(&card.id),
+                                                        show_sprint_name: app
+                                                            .active_sprint_filters
+                                                            .is_empty(),
+                                                    });
                                                 lines.push(line);
                                             }
                                         }
@@ -130,7 +136,8 @@ impl RenderStrategy for SinglePanelRenderer {
                                         let plural = if count == 1 { "" } else { "s" };
                                         lines.push(Line::from(Span::styled(
                                             format!("  {} Task{} below", count, plural),
-                                            ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                                            ratatui::style::Style::default()
+                                                .fg(ratatui::style::Color::DarkGray),
                                         )));
                                     }
                                 }
@@ -158,7 +165,8 @@ impl RenderStrategy for SinglePanelRenderer {
                             let plural = if count == 1 { "" } else { "s" };
                             lines.push(Line::from(Span::styled(
                                 format!("  {} Task{} above", count, plural),
-                                ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                                ratatui::style::Style::default()
+                                    .fg(ratatui::style::Color::DarkGray),
                             )));
                         }
 
@@ -169,7 +177,8 @@ impl RenderStrategy for SinglePanelRenderer {
                                         card,
                                         board,
                                         sprints: &app.sprints,
-                                        is_selected: task_list.get_selected_index() == Some(*card_idx),
+                                        is_selected: task_list.get_selected_index()
+                                            == Some(*card_idx),
                                         is_focused: app.focus == crate::app::Focus::Cards,
                                         is_multi_selected: app.selected_cards.contains(&card.id),
                                         show_sprint_name: app.active_sprint_filters.is_empty(),
@@ -184,7 +193,8 @@ impl RenderStrategy for SinglePanelRenderer {
                             let plural = if count == 1 { "" } else { "s" };
                             lines.push(Line::from(Span::styled(
                                 format!("  {} Task{} below", count, plural),
-                                ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                                ratatui::style::Style::default()
+                                    .fg(ratatui::style::Color::DarkGray),
                             )));
                         }
                     }
@@ -269,7 +279,8 @@ impl RenderStrategy for MultiPanelRenderer {
                             let plural = if count == 1 { "" } else { "s" };
                             lines.push(Line::from(Span::styled(
                                 format!("  {} Task{} above", count, plural),
-                                ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                                ratatui::style::Style::default()
+                                    .fg(ratatui::style::Color::DarkGray),
                             )));
                         }
 
@@ -302,7 +313,8 @@ impl RenderStrategy for MultiPanelRenderer {
                             let plural = if count == 1 { "" } else { "s" };
                             lines.push(Line::from(Span::styled(
                                 format!("  {} Task{} below", count, plural),
-                                ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray),
+                                ratatui::style::Style::default()
+                                    .fg(ratatui::style::Color::DarkGray),
                             )));
                         }
                     }

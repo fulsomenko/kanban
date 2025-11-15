@@ -129,7 +129,8 @@ impl CardList {
                 let mut new_actual_cards = (self.scroll_offset..total_cards)
                     .take(new_info.cards_to_show)
                     .count();
-                let mut new_last_visible_idx = self.scroll_offset + new_actual_cards.saturating_sub(1);
+                let mut new_last_visible_idx =
+                    self.scroll_offset + new_actual_cards.saturating_sub(1);
 
                 while target_selection > new_last_visible_idx && target_selection < total_cards {
                     self.scroll_offset = self.scroll_offset.saturating_add(1);
@@ -265,7 +266,9 @@ impl CardList {
             let first_visible = self.scroll_offset;
             let last_visible = self.scroll_offset + info.cards_to_show.saturating_sub(1);
 
-            let clamped = selected_idx.max(first_visible).min(last_visible.min(self.cards.len() - 1));
+            let clamped = selected_idx
+                .max(first_visible)
+                .min(last_visible.min(self.cards.len() - 1));
             self.selection.set(Some(clamped));
         }
     }
@@ -348,7 +351,10 @@ mod tests {
         assert_eq!(last_visible, 13);
         assert_eq!(info.cards_below_count, 2);
 
-        assert!(info.show_below_indicator, "Should show indicator for cards 14 and 15");
+        assert!(
+            info.show_below_indicator,
+            "Should show indicator for cards 14 and 15"
+        );
     }
 
     #[test]
@@ -454,11 +460,18 @@ mod tests {
 
         let info = list.get_render_info(48);
         assert_eq!(info.cards_above_count, 46);
-        assert!(!info.show_below_indicator, "Last card should have no 'below' indicator");
+        assert!(
+            !info.show_below_indicator,
+            "Last card should have no 'below' indicator"
+        );
 
         list.navigate_down(48);
 
-        assert_eq!(list.get_selected_index(), Some(92), "Should stay at last card (92)");
+        assert_eq!(
+            list.get_selected_index(),
+            Some(92),
+            "Should stay at last card (92)"
+        );
     }
 
     #[test]
@@ -479,7 +492,11 @@ mod tests {
             }
         }
 
-        assert_eq!(list.get_selected_index(), Some(92), "Should reach the last card");
+        assert_eq!(
+            list.get_selected_index(),
+            Some(92),
+            "Should reach the last card"
+        );
     }
 
     #[test]
@@ -489,14 +506,20 @@ mod tests {
         list.selection.set(Some(92));
 
         let info_before = list.get_render_info(50);
-        assert!(info_before.show_above_indicator, "Should have 'above' indicator");
+        assert!(
+            info_before.show_above_indicator,
+            "Should have 'above' indicator"
+        );
 
         let has_below_before = info_before.show_below_indicator;
 
         list.navigate_down(50);
 
         let info_after = list.get_render_info(50);
-        assert!(info_after.show_above_indicator, "Should still have 'above' indicator");
+        assert!(
+            info_after.show_above_indicator,
+            "Should still have 'above' indicator"
+        );
 
         assert_eq!(
             list.get_selected_index(),
@@ -529,6 +552,9 @@ mod tests {
             "Should reach card 116 after {} iterations",
             iterations
         );
-        assert!(iterations < 120, "Should reach last card in reasonable iterations");
+        assert!(
+            iterations < 120,
+            "Should reach last card in reasonable iterations"
+        );
     }
 }
