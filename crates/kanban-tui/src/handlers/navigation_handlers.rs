@@ -29,6 +29,10 @@ impl App {
                     false
                 };
 
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.ensure_selected_visible(20);
+                }
+
                 if hit_bottom {
                     self.view_strategy.navigate_right(false);
                 }
@@ -48,6 +52,10 @@ impl App {
                 } else {
                     false
                 };
+
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.ensure_selected_visible(20);
+                }
 
                 if hit_top {
                     self.view_strategy.navigate_left(true);
@@ -86,6 +94,7 @@ impl App {
                         if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                             if !list.is_empty() {
                                 list.set_selected_index(Some(0));
+                                list.ensure_selected_visible(20);
                             }
                         }
                     }
@@ -158,6 +167,7 @@ impl App {
                     } else if list.get_selected_index().is_none() {
                         list.set_selected_index(Some(0));
                     }
+                    list.ensure_selected_visible(20);
                 }
                 tracing::info!("Switched to column {}", index);
             }
