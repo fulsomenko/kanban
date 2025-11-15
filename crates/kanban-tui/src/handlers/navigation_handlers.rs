@@ -24,14 +24,10 @@ impl App {
             }
             Focus::Cards => {
                 let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_down()
+                    list.navigate_down(20)
                 } else {
                     false
                 };
-
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.ensure_selected_visible(20);
-                }
 
                 if hit_bottom {
                     self.view_strategy.navigate_right(false);
@@ -48,14 +44,10 @@ impl App {
             }
             Focus::Cards => {
                 let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_up()
+                    list.navigate_up(20)
                 } else {
                     false
                 };
-
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.ensure_selected_visible(20);
-                }
 
                 if hit_top {
                     self.view_strategy.navigate_left(true);
