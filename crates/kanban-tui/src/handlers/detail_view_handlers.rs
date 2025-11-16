@@ -83,6 +83,13 @@ impl App {
                     }
                 }
             },
+            KeyCode::Char('d') => {
+                self.handle_delete_card();
+                self.mode = AppMode::Normal;
+                self.active_card_index = None;
+                self.card_focus = CardFocus::Title;
+                self.refresh_view();
+            }
             KeyCode::Char('a') => {
                 if let Some(board_idx) = self.active_board_index {
                     if let Some(board) = self.boards.get(board_idx) {
