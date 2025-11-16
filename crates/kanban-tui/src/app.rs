@@ -468,17 +468,14 @@ impl App {
         if let Some(card_pos) = self.cards.iter().position(|c| c.id == card_id) {
             let card = self.cards.remove(card_pos);
             let column_id = card.column_id;
+            let position = card.position;
 
-            if let Some(card_list) = self.view_strategy.get_active_task_list() {
-                if let Some(idx) = card_list.cards.iter().position(|&id| id == card_id) {
-                    let deleted_card = kanban_domain::DeletedCard::new(card, column_id, idx as i32);
-                    self.deleted_cards.push(deleted_card);
+            let deleted_card = kanban_domain::DeletedCard::new(card, column_id, position);
+            self.deleted_cards.push(deleted_card);
 
-                    self.compact_column_positions(column_id);
-                    self.select_card_after_deletion(column_id, idx as i32);
-                    self.refresh_view();
-                }
-            }
+            self.compact_column_positions(column_id);
+            self.select_card_after_deletion(column_id, position);
+            self.refresh_view();
         }
     }
 
