@@ -273,6 +273,34 @@ impl CardList {
     }
 }
 
+/// Helper function to render scroll indicators based on render info
+pub fn render_scroll_indicators(render_info: &CardListRenderInfo) -> Vec<ratatui::text::Line<'_>> {
+    use ratatui::style::{Color, Style};
+    use ratatui::text::{Line, Span};
+
+    let mut lines = Vec::new();
+
+    if render_info.show_above_indicator {
+        let count = render_info.cards_above_count;
+        let plural = if count == 1 { "" } else { "s" };
+        lines.push(Line::from(Span::styled(
+            format!("  {} Task{} above", count, plural),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    if render_info.show_below_indicator {
+        let count = render_info.cards_below_count;
+        let plural = if count == 1 { "" } else { "s" };
+        lines.push(Line::from(Span::styled(
+            format!("  {} Task{} below", count, plural),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
