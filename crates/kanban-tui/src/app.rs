@@ -32,6 +32,7 @@ pub struct App {
     pub active_card_index: Option<usize>,
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
+    pub deleted_cards: Vec<kanban_domain::DeletedCard>,
     pub sprints: Vec<Sprint>,
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
@@ -130,6 +131,7 @@ pub enum AppMode {
     SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
     FilterOptions,
+    DeletedCardsView,
     Help(Box<AppMode>),
 }
 
@@ -146,6 +148,7 @@ impl App {
             active_card_index: None,
             columns: Vec::new(),
             cards: Vec::new(),
+            deleted_cards: Vec::new(),
             sprints: Vec::new(),
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
@@ -282,6 +285,8 @@ impl App {
                 },
                 KeyCode::Char('x') => self.handle_export_board_key(),
                 KeyCode::Char('X') => self.handle_export_all_key(),
+                KeyCode::Char('d') => self.handle_delete_card(),
+                KeyCode::Char('D') => self.handle_toggle_deleted_cards_view(),
                 KeyCode::Char('i') => self.handle_import_board_key(),
                 KeyCode::Char('a') => self.handle_assign_to_sprint_key(),
                 KeyCode::Char('c') => self.handle_toggle_card_completion(),
@@ -349,6 +354,7 @@ impl App {
                 self.handle_confirm_sprint_prefix_collision_popup(key.code)
             }
             AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
+            AppMode::DeletedCardsView => self.handle_deleted_cards_view_mode(key.code),
             AppMode::Help(_) => self.handle_help_mode(key.code),
         }
         should_restart_events
@@ -369,6 +375,26 @@ impl App {
                 self.search.deactivate();
                 self.mode = AppMode::Normal;
             }
+            _ => {}
+        }
+    }
+
+    fn handle_deleted_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crossterm::event::KeyCode;
+        if self.focus != Focus::Cards {
+            self.focus = Focus::Cards;
+        }
+
+        match key_code {
+            KeyCode::Char('r') => self.handle_restore_card(),
+            KeyCode::Char('x') | KeyCode::Char('X') => self.handle_permanent_delete(),
+            KeyCode::Char('D') | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+                self.handle_toggle_deleted_cards_view();
+            }
+            KeyCode::Char('v') => self.handle_card_selection_toggle(),
+            KeyCode::Char('V') => self.handle_toggle_task_list_view(),
+            KeyCode::Char('j') | KeyCode::Down => self.handle_navigation_down(),
+            KeyCode::Char('k') | KeyCode::Up => self.handle_navigation_up(),
             _ => {}
         }
     }
@@ -462,7 +488,11 @@ impl App {
     pub fn get_selected_card_in_context(&self) -> Option<&Card> {
         if let Some(task_list) = self.view_strategy.get_active_task_list() {
             if let Some(card_id) = task_list.get_selected_card_id() {
-                return self.cards.iter().find(|c| c.id == card_id);
+                if self.mode == AppMode::DeletedCardsView {
+                    return self.deleted_cards.iter().find(|dc| dc.card.id == card_id).map(|dc| &dc.card);
+                } else {
+                    return self.cards.iter().find(|c| c.id == card_id);
+                }
             }
         }
         None
@@ -477,6 +507,17 @@ impl App {
     pub fn select_card_by_id(&mut self, card_id: uuid::Uuid) {
         if let Some(task_list) = self.view_strategy.get_active_task_list_mut() {
             task_list.select_card(card_id);
+        }
+    }
+
+    pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<&Card> {
+        if self.mode == AppMode::DeletedCardsView {
+            self.deleted_cards
+                .iter()
+                .find(|dc| dc.card.id == card_id)
+                .map(|dc| &dc.card)
+        } else {
+            self.cards.iter().find(|c| c.id == card_id)
         }
     }
 
@@ -593,9 +634,20 @@ impl App {
                 } else {
                     None
                 };
+
+                // When in DeletedCardsView, convert deleted cards to Card objects for display
+                let cards_for_display: Vec<Card> = if self.mode == AppMode::DeletedCardsView {
+                    self.deleted_cards
+                        .iter()
+                        .map(|dc| dc.card.clone())
+                        .collect()
+                } else {
+                    self.cards.clone()
+                };
+
                 let ctx = ViewRefreshContext {
                     board,
-                    all_cards: &self.cards,
+                    all_cards: &cards_for_display,
                     all_columns: &self.columns,
                     all_sprints: &self.sprints,
                     active_sprint_filters: self.active_sprint_filters.clone(),
@@ -631,8 +683,13 @@ impl App {
     pub fn export_board_with_filename(&self) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get(board_idx) {
-                let board_export =
-                    BoardExporter::export_board(board, &self.columns, &self.cards, &self.sprints);
+                let board_export = BoardExporter::export_board(
+                    board,
+                    &self.columns,
+                    &self.cards,
+                    &self.deleted_cards,
+                    &self.sprints,
+                );
 
                 let export = crate::export::AllBoardsExport {
                     boards: vec![board_export],
@@ -649,6 +706,7 @@ impl App {
             &self.boards,
             &self.columns,
             &self.cards,
+            &self.deleted_cards,
             &self.sprints,
         );
         BoardExporter::export_to_file(&export, self.input.as_str())?;
@@ -661,6 +719,7 @@ impl App {
                 &self.boards,
                 &self.columns,
                 &self.cards,
+                &self.deleted_cards,
                 &self.sprints,
             );
             BoardExporter::export_to_file(&export, filename)?;
@@ -858,11 +917,13 @@ impl App {
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         let first_new_index = self.boards.len();
         let import = BoardImporter::import_from_file(filename)?;
-        let (boards, columns, cards, sprints) = BoardImporter::extract_entities(import);
+        let (boards, columns, cards, deleted_cards, sprints) =
+            BoardImporter::extract_entities(import);
 
         self.boards.extend(boards);
         self.columns.extend(columns);
         self.cards.extend(cards);
+        self.deleted_cards.extend(deleted_cards);
         self.sprints.extend(sprints);
 
         self.board_selection.set(Some(first_new_index));
