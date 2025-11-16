@@ -20,7 +20,23 @@ use crossterm::{
 use kanban_core::{AppConfig, Editable, KanbanResult};
 use kanban_domain::{Board, Card, Column, SortField, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
+use std::collections::HashMap;
 use std::io;
+use std::time::Instant;
+
+const ANIMATION_DURATION_MS: u128 = 150;
+
+#[derive(Debug, Clone, Copy)]
+pub enum AnimationType {
+    Deleting,
+    Restoring,
+    PermanentDelete,
+}
+
+pub struct CardAnimation {
+    pub animation_type: AnimationType,
+    pub start_time: Instant,
+}
 
 pub struct App {
     pub should_quit: bool,
@@ -33,6 +49,7 @@ pub struct App {
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
     pub deleted_cards: Vec<kanban_domain::DeletedCard>,
+    pub animating_cards: HashMap<uuid::Uuid, CardAnimation>,
     pub sprints: Vec<Sprint>,
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
@@ -149,6 +166,7 @@ impl App {
             columns: Vec::new(),
             cards: Vec::new(),
             deleted_cards: Vec::new(),
+            animating_cards: HashMap::new(),
             sprints: Vec::new(),
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
@@ -412,6 +430,77 @@ impl App {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn handle_animation_tick(&mut self) {
+        let now = Instant::now();
+        let mut completed_animations = Vec::new();
+
+        for (&card_id, animation) in &self.animating_cards {
+            let elapsed = now.duration_since(animation.start_time).as_millis();
+            if elapsed >= ANIMATION_DURATION_MS {
+                completed_animations.push((card_id, animation.animation_type));
+            }
+        }
+
+        for (card_id, animation_type) in completed_animations {
+            self.animating_cards.remove(&card_id);
+            self.complete_animation(card_id, animation_type);
+        }
+    }
+
+    fn complete_animation(&mut self, card_id: uuid::Uuid, animation_type: AnimationType) {
+        match animation_type {
+            AnimationType::Deleting => {
+                self.complete_delete_animation(card_id);
+            }
+            AnimationType::Restoring => {
+                self.complete_restore_animation(card_id);
+            }
+            AnimationType::PermanentDelete => {
+                self.complete_permanent_delete_animation(card_id);
+            }
+        }
+    }
+
+    fn complete_delete_animation(&mut self, card_id: uuid::Uuid) {
+        if let Some(card_pos) = self.cards.iter().position(|c| c.id == card_id) {
+            let card = self.cards.remove(card_pos);
+            let column_id = card.column_id;
+
+            if let Some(card_list) = self.view_strategy.get_active_task_list() {
+                if let Some(idx) = card_list.cards.iter().position(|&id| id == card_id) {
+                    let deleted_card = kanban_domain::DeletedCard::new(card, column_id, idx as i32);
+                    self.deleted_cards.push(deleted_card);
+
+                    self.compact_column_positions(column_id);
+                    self.select_card_after_deletion(column_id, idx as i32);
+                    self.refresh_view();
+                }
+            }
+        }
+    }
+
+    fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
+        if let Some(pos) = self
+            .deleted_cards
+            .iter()
+            .position(|dc| dc.card.id == card_id)
+        {
+            let deleted_card = self.deleted_cards.remove(pos);
+            self.restore_card(deleted_card);
+        }
+    }
+
+    fn complete_permanent_delete_animation(&mut self, card_id: uuid::Uuid) {
+        if let Some(pos) = self
+            .deleted_cards
+            .iter()
+            .position(|dc| dc.card.id == card_id)
+        {
+            self.deleted_cards.remove(pos);
+            self.refresh_view();
         }
     }
 
@@ -898,7 +987,9 @@ impl App {
                                 break;
                             }
                         }
-                        Event::Tick => {}
+                        Event::Tick => {
+                            self.handle_animation_tick();
+                        }
                     }
                 }
 
