@@ -123,6 +123,7 @@ fn test_import_valid_format() {
                 "created_at": "2025-01-01T00:00:00Z",
                 "updated_at": "2025-01-01T00:00:00Z"
             }],
+            "archived_cards": [],
             "sprints": []
         }]
     }"#;
@@ -290,6 +291,7 @@ fn test_backward_compat_old_export_format() {
                 "completed_at": null,
                 "sprint_logs": []
             }],
+            "archived_cards": [],
             "sprints": []
         }]
     }"#;

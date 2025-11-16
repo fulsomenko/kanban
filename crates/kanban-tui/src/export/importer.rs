@@ -79,6 +79,7 @@ mod tests {
                     },
                     "columns": [],
                     "cards": [],
+                    "archived_cards": [],
                     "sprints": []
                 }
             ]
