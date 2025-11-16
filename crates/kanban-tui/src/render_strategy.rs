@@ -3,7 +3,7 @@ use crate::components::{
     card_list_item::{render_card_list_item, CardListItemConfig},
     PanelConfig,
 };
-use crate::theme::label_text;
+use crate::theme::{deleted_view_focused_border, label_text};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -207,9 +207,13 @@ impl RenderStrategy for SinglePanelRenderer {
 
         let title = crate::ui::build_tasks_panel_title(app, true);
 
-        let panel_config = PanelConfig::new(&title)
+        let mut panel_config = PanelConfig::new(&title)
             .with_focus_indicator(&title)
             .focused(app.focus == crate::app::Focus::Cards);
+
+        if app.mode == crate::app::AppMode::DeletedCardsView && app.focus == crate::app::Focus::Cards {
+            panel_config = panel_config.with_custom_border_style(deleted_view_focused_border());
+        }
 
         let content = Paragraph::new(lines).block(panel_config.block());
         frame.render_widget(content, area);
@@ -340,9 +344,13 @@ impl RenderStrategy for MultiPanelRenderer {
                         }
                     }
 
-                    let panel_config = PanelConfig::new(&title)
+                    let mut panel_config = PanelConfig::new(&title)
                         .with_focus_indicator(&title)
                         .focused(app.focus == crate::app::Focus::Cards && is_focused_column);
+
+                    if app.mode == crate::app::AppMode::DeletedCardsView && is_focused_column {
+                        panel_config = panel_config.with_custom_border_style(deleted_view_focused_border());
+                    }
 
                     let content = Paragraph::new(lines).block(panel_config.block());
                     frame.render_widget(content, chunks[col_idx]);

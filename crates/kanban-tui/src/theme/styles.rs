@@ -10,6 +10,10 @@ pub fn unfocused_border() -> Style {
     Style::default().fg(UNFOCUSED_BORDER)
 }
 
+pub fn deleted_view_focused_border() -> Style {
+    Style::default().fg(ratatui::style::Color::Yellow)
+}
+
 pub fn selected_item(focused: bool) -> Style {
     if focused {
         Style::default().bg(SELECTED_BG)
