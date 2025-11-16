@@ -2,6 +2,14 @@ use super::models::AllBoardsExport;
 use kanban_domain::{Board, Card, Column, DeletedCard, Sprint};
 use std::io;
 
+pub type ImportedEntities = (
+    Vec<Board>,
+    Vec<Column>,
+    Vec<Card>,
+    Vec<DeletedCard>,
+    Vec<Sprint>,
+);
+
 pub struct BoardImporter;
 
 impl BoardImporter {
@@ -22,15 +30,7 @@ impl BoardImporter {
         Self::import_from_json(&content)
     }
 
-    pub fn extract_entities(
-        import: AllBoardsExport,
-    ) -> (
-        Vec<Board>,
-        Vec<Column>,
-        Vec<Card>,
-        Vec<DeletedCard>,
-        Vec<Sprint>,
-    ) {
+    pub fn extract_entities(import: AllBoardsExport) -> ImportedEntities {
         let mut boards = Vec::new();
         let mut columns = Vec::new();
         let mut cards = Vec::new();
