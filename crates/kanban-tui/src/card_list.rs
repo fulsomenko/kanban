@@ -89,7 +89,6 @@ impl CardList {
 
         if !was_at_top {
             let current_idx = self.selection.get().unwrap_or(0);
-            let _info = self.calculate_viewport_info(viewport_height);
             let first_visible_idx = self.scroll_offset;
 
             if current_idx == first_visible_idx && self.scroll_offset > 0 {
