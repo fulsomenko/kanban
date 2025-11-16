@@ -92,8 +92,15 @@ impl CardList {
             let first_visible_idx = self.scroll_offset;
 
             if current_idx == first_visible_idx && self.scroll_offset > 0 {
+                let target_selection = current_idx.saturating_sub(1);
+
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
-                self.selection.prev();
+
+                while target_selection < self.scroll_offset && self.scroll_offset > 0 {
+                    self.scroll_offset = self.scroll_offset.saturating_sub(1);
+                }
+
+                self.selection.set(Some(target_selection));
             } else if current_idx > first_visible_idx {
                 self.selection.prev();
             }
