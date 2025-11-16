@@ -149,6 +149,7 @@ pub struct CardListComponent {
     pub card_list: CardList,
     pub config: CardListComponentConfig,
     pub multi_selected: std::collections::HashSet<Uuid>,
+    pub viewport_height: usize,
 }
 
 impl CardListComponent {
@@ -157,6 +158,7 @@ impl CardListComponent {
             card_list: CardList::new(list_id),
             config,
             multi_selected: std::collections::HashSet::new(),
+            viewport_height: 20,
         }
     }
 
@@ -245,7 +247,7 @@ impl CardListComponent {
                     .config
                     .is_action_enabled(&CardListActionType::Navigation)
                 {
-                    self.navigate_down(1000);
+                    self.navigate_down(self.viewport_height);
                 }
                 None
             }
@@ -254,7 +256,7 @@ impl CardListComponent {
                     .config
                     .is_action_enabled(&CardListActionType::Navigation)
                 {
-                    self.navigate_up(1000);
+                    self.navigate_up(self.viewport_height);
                 }
                 None
             }
