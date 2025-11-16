@@ -1,3 +1,4 @@
+use crate::app::AnimationType;
 use crate::theme::*;
 use kanban_domain::{Board, Card, CardStatus, Sprint};
 use ratatui::{
@@ -13,6 +14,7 @@ pub struct CardListItemConfig<'a> {
     pub is_focused: bool,
     pub is_multi_selected: bool,
     pub show_sprint_name: bool,
+    pub animation_type: Option<AnimationType>,
 }
 
 pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
@@ -31,7 +33,15 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
         title_style = title_style.add_modifier(Modifier::CROSSED_OUT);
     }
 
-    if config.is_selected && config.is_focused {
+    // Apply animation flash effect if card is animating
+    if let Some(animation_type) = config.animation_type {
+        let flash_bg = match animation_type {
+            AnimationType::Deleting | AnimationType::PermanentDelete => FLASH_DELETE,
+            AnimationType::Restoring => FLASH_RESTORE,
+        };
+        base_style = base_style.bg(flash_bg);
+        title_style = title_style.bg(flash_bg);
+    } else if config.is_selected && config.is_focused {
         base_style = base_style.bg(SELECTED_BG);
         title_style = title_style.bg(SELECTED_BG);
     }

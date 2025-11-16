@@ -108,6 +108,10 @@ impl RenderStrategy for SinglePanelRenderer {
                                                     false
                                                 };
 
+                                                let animation_type = app
+                                                    .animating_cards
+                                                    .get(&card.id)
+                                                    .map(|a| a.animation_type);
                                                 let line =
                                                     render_card_list_item(CardListItemConfig {
                                                         card,
@@ -123,6 +127,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                                         show_sprint_name: app
                                                             .active_sprint_filters
                                                             .is_empty(),
+                                                        animation_type,
                                                     });
                                                 lines.push(line);
                                             }
@@ -171,6 +176,8 @@ impl RenderStrategy for SinglePanelRenderer {
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
                                 if let Some(card) = app.get_card_by_id(*card_id) {
+                                    let animation_type =
+                                        app.animating_cards.get(&card.id).map(|a| a.animation_type);
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
@@ -180,6 +187,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         is_focused: app.focus == crate::app::Focus::Cards,
                                         is_multi_selected: app.selected_cards.contains(&card.id),
                                         show_sprint_name: app.active_sprint_filters.is_empty(),
+                                        animation_type,
                                     });
                                     lines.push(line);
                                 }
@@ -297,6 +305,8 @@ impl RenderStrategy for MultiPanelRenderer {
                                         false
                                     };
 
+                                    let animation_type =
+                                        app.animating_cards.get(&card.id).map(|a| a.animation_type);
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
@@ -306,6 +316,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                             && is_focused_column,
                                         is_multi_selected: app.selected_cards.contains(&card.id),
                                         show_sprint_name: app.active_sprint_filters.is_empty(),
+                                        animation_type,
                                     });
                                     lines.push(line);
                                 }

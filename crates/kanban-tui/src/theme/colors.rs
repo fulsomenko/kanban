@@ -28,3 +28,6 @@ pub const STATUS_CANCELLED: Color = Color::Red;
 
 pub const POPUP_BG: Color = Color::Black;
 pub const ERROR_COLOR: Color = Color::Red;
+
+pub const FLASH_DELETE: Color = Color::Red;
+pub const FLASH_RESTORE: Color = Color::Blue;

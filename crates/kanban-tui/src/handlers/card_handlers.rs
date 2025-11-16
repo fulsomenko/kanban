@@ -607,28 +607,36 @@ impl App {
         }
 
         if !self.selected_cards.is_empty() {
-            self.delete_selected_cards();
+            self.start_delete_animations_for_selected();
         } else if let Some(card_id) = self.get_selected_card_id() {
-            self.delete_card(card_id);
-            self.refresh_view();
+            self.start_delete_animation(card_id);
         }
     }
 
-    fn delete_selected_cards(&mut self) {
+    fn start_delete_animations_for_selected(&mut self) {
         let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
-        let mut deleted_count = 0;
-
         for card_id in card_ids {
-            if self.delete_card(card_id) {
-                deleted_count += 1;
-            }
+            self.start_delete_animation(card_id);
         }
-
-        tracing::info!("Deleted {} card(s)", deleted_count);
         self.selected_cards.clear();
-        self.refresh_view();
     }
 
+    fn start_delete_animation(&mut self, card_id: uuid::Uuid) {
+        use crate::app::{AnimationType, CardAnimation};
+        use std::time::Instant;
+
+        if self.cards.iter().any(|c| c.id == card_id) {
+            self.animating_cards.insert(
+                card_id,
+                CardAnimation {
+                    animation_type: AnimationType::Deleting,
+                    start_time: Instant::now(),
+                },
+            );
+        }
+    }
+
+    #[allow(dead_code)]
     fn delete_card(&mut self, card_id: uuid::Uuid) -> bool {
         // Find the card to delete
         if let Some(card_pos) = self.cards.iter().position(|c| c.id == card_id) {
@@ -656,7 +664,7 @@ impl App {
         false
     }
 
-    fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
+    pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
         // Get all cards in this column and sort by position
         let mut column_cards: Vec<_> = self
             .cards
@@ -671,7 +679,11 @@ impl App {
         }
     }
 
-    fn select_card_after_deletion(&mut self, deleted_column_id: uuid::Uuid, deleted_position: i32) {
+    pub fn select_card_after_deletion(
+        &mut self,
+        deleted_column_id: uuid::Uuid,
+        deleted_position: i32,
+    ) {
         // Try to find a card in the same column at or after the deleted position
         if let Some(next_card) = self
             .cards
@@ -697,14 +709,38 @@ impl App {
         }
 
         if !self.selected_cards.is_empty() {
-            self.restore_selected_cards();
+            self.start_restore_animations_for_selected();
         } else if let Some(card_idx) = self.active_card_index {
-            if let Some(deleted_card) = self.deleted_cards.get(card_idx).cloned() {
-                self.restore_card(deleted_card);
+            if let Some(deleted_card) = self.deleted_cards.get(card_idx) {
+                self.start_restore_animation(deleted_card.card.id);
             }
         }
     }
 
+    fn start_restore_animations_for_selected(&mut self) {
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        for card_id in card_ids {
+            self.start_restore_animation(card_id);
+        }
+        self.selected_cards.clear();
+    }
+
+    fn start_restore_animation(&mut self, card_id: uuid::Uuid) {
+        use crate::app::{AnimationType, CardAnimation};
+        use std::time::Instant;
+
+        if self.deleted_cards.iter().any(|dc| dc.card.id == card_id) {
+            self.animating_cards.insert(
+                card_id,
+                CardAnimation {
+                    animation_type: AnimationType::Restoring,
+                    start_time: Instant::now(),
+                },
+            );
+        }
+    }
+
+    #[allow(dead_code)]
     fn restore_selected_cards(&mut self) {
         let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
         let mut restored_count = 0;
@@ -726,7 +762,7 @@ impl App {
         self.refresh_view();
     }
 
-    fn restore_card(&mut self, deleted_card: DeletedCard) {
+    pub fn restore_card(&mut self, deleted_card: DeletedCard) {
         let original_column_id = deleted_card.original_column_id;
         let original_position = deleted_card.original_position;
 
@@ -755,14 +791,40 @@ impl App {
         }
 
         if !self.selected_cards.is_empty() {
-            self.permanent_delete_selected_cards();
+            self.start_permanent_delete_animations_for_selected();
         } else if let Some(card_idx) = self.active_card_index {
             if card_idx < self.deleted_cards.len() {
-                self.permanent_delete_card_at(card_idx);
+                if let Some(deleted_card) = self.deleted_cards.get(card_idx) {
+                    self.start_permanent_delete_animation(deleted_card.card.id);
+                }
             }
         }
     }
 
+    fn start_permanent_delete_animations_for_selected(&mut self) {
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        for card_id in card_ids {
+            self.start_permanent_delete_animation(card_id);
+        }
+        self.selected_cards.clear();
+    }
+
+    fn start_permanent_delete_animation(&mut self, card_id: uuid::Uuid) {
+        use crate::app::{AnimationType, CardAnimation};
+        use std::time::Instant;
+
+        if self.deleted_cards.iter().any(|dc| dc.card.id == card_id) {
+            self.animating_cards.insert(
+                card_id,
+                CardAnimation {
+                    animation_type: AnimationType::PermanentDelete,
+                    start_time: Instant::now(),
+                },
+            );
+        }
+    }
+
+    #[allow(dead_code)]
     fn permanent_delete_selected_cards(&mut self) {
         let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
         let mut deleted_count = 0;
@@ -784,6 +846,7 @@ impl App {
         self.refresh_view();
     }
 
+    #[allow(dead_code)]
     fn permanent_delete_card_at(&mut self, index: usize) {
         if index < self.deleted_cards.len() {
             let deleted_card = self.deleted_cards.remove(index);
