@@ -639,8 +639,7 @@ impl App {
             let deleted_position = card.position;
 
             // Create a deleted card with original position preserved
-            let deleted_card =
-                DeletedCard::new(card.clone(), deleted_column_id, deleted_position);
+            let deleted_card = DeletedCard::new(card.clone(), deleted_column_id, deleted_position);
 
             // Add to deleted cards
             self.deleted_cards.push(deleted_card);
@@ -674,13 +673,18 @@ impl App {
 
     fn select_card_after_deletion(&mut self, deleted_column_id: uuid::Uuid, deleted_position: i32) {
         // Try to find a card in the same column at or after the deleted position
-        if let Some(next_card) = self.cards.iter().find(|c| {
-            c.column_id == deleted_column_id && c.position >= deleted_position
-        }) {
+        if let Some(next_card) = self
+            .cards
+            .iter()
+            .find(|c| c.column_id == deleted_column_id && c.position >= deleted_position)
+        {
             self.select_card_by_id(next_card.id);
-        } else if let Some(prev_card) = self.cards.iter().rev().find(|c| {
-            c.column_id == deleted_column_id
-        }) {
+        } else if let Some(prev_card) = self
+            .cards
+            .iter()
+            .rev()
+            .find(|c| c.column_id == deleted_column_id)
+        {
             // Select the last remaining card in the column
             self.select_card_by_id(prev_card.id);
         }
@@ -706,7 +710,11 @@ impl App {
         let mut restored_count = 0;
 
         for card_id in card_ids {
-            if let Some(pos) = self.deleted_cards.iter().position(|dc| dc.card.id == card_id) {
+            if let Some(pos) = self
+                .deleted_cards
+                .iter()
+                .position(|dc| dc.card.id == card_id)
+            {
                 let deleted_card = self.deleted_cards.remove(pos);
                 self.restore_card(deleted_card);
                 restored_count += 1;
@@ -723,11 +731,7 @@ impl App {
         let original_position = deleted_card.original_position;
 
         // Check if the original column still exists
-        let target_column_id = if self
-            .columns
-            .iter()
-            .any(|col| col.id == original_column_id)
-        {
+        let target_column_id = if self.columns.iter().any(|col| col.id == original_column_id) {
             original_column_id
         } else {
             // If original column doesn't exist, use first column
@@ -764,7 +768,11 @@ impl App {
         let mut deleted_count = 0;
 
         for card_id in card_ids {
-            if let Some(pos) = self.deleted_cards.iter().position(|dc| dc.card.id == card_id) {
+            if let Some(pos) = self
+                .deleted_cards
+                .iter()
+                .position(|dc| dc.card.id == card_id)
+            {
                 let deleted_card = self.deleted_cards.remove(pos);
                 tracing::info!("Permanently deleted card '{}'", deleted_card.card.title);
                 deleted_count += 1;
@@ -803,5 +811,4 @@ impl App {
         }
         self.refresh_view();
     }
-
 }

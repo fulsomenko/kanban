@@ -57,9 +57,7 @@ impl BoardExporter {
     ) -> AllBoardsExport {
         let board_exports: Vec<BoardExport> = boards
             .iter()
-            .map(|board| {
-                Self::export_board(board, columns, cards, deleted_cards, sprints)
-            })
+            .map(|board| Self::export_board(board, columns, cards, deleted_cards, sprints))
             .collect();
 
         AllBoardsExport {
@@ -96,7 +94,8 @@ mod tests {
         let deleted_cards = vec![];
         let sprints = vec![];
 
-        let export = BoardExporter::export_board(&board, &columns, &cards, &deleted_cards, &sprints);
+        let export =
+            BoardExporter::export_board(&board, &columns, &cards, &deleted_cards, &sprints);
 
         assert_eq!(export.board.name, "Test");
         assert_eq!(export.columns.len(), 1);

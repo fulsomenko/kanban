@@ -491,7 +491,11 @@ impl App {
         if let Some(task_list) = self.view_strategy.get_active_task_list() {
             if let Some(card_id) = task_list.get_selected_card_id() {
                 if self.mode == AppMode::DeletedCardsView {
-                    return self.deleted_cards.iter().find(|dc| dc.card.id == card_id).map(|dc| &dc.card);
+                    return self
+                        .deleted_cards
+                        .iter()
+                        .find(|dc| dc.card.id == card_id)
+                        .map(|dc| &dc.card);
                 } else {
                     return self.cards.iter().find(|c| c.id == card_id);
                 }

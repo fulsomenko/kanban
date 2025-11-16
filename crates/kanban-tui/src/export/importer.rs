@@ -24,7 +24,13 @@ impl BoardImporter {
 
     pub fn extract_entities(
         import: AllBoardsExport,
-    ) -> (Vec<Board>, Vec<Column>, Vec<Card>, Vec<DeletedCard>, Vec<Sprint>) {
+    ) -> (
+        Vec<Board>,
+        Vec<Column>,
+        Vec<Card>,
+        Vec<DeletedCard>,
+        Vec<Sprint>,
+    ) {
         let mut boards = Vec::new();
         let mut columns = Vec::new();
         let mut cards = Vec::new();
