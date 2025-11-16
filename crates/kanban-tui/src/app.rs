@@ -405,8 +405,8 @@ impl App {
 
         match key_code {
             KeyCode::Char('r') => self.handle_restore_card(),
-            KeyCode::Char('x') | KeyCode::Char('X') => self.handle_delete_card_permanent(),
-            KeyCode::Char('D') | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+            KeyCode::Char('x') => self.handle_delete_card_permanent(),
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
                 self.handle_toggle_archived_cards_view();
             }
             KeyCode::Char('v') => self.handle_card_selection_toggle(),

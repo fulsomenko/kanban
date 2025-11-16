@@ -36,10 +36,10 @@ impl KeybindingProvider for ArchivedCardsViewProvider {
                 Keybinding::new("j/↓", "down", "Navigate down"),
                 Keybinding::new("k/↑", "up", "Navigate up"),
                 Keybinding::new("r", "restore", "Restore selected task(s)"),
-                Keybinding::new("x/X", "delete", "Delete selected task(s)"),
+                Keybinding::new("x", "delete", "Delete selected task(s)"),
                 Keybinding::new("v", "select", "Select task for bulk operation"),
                 Keybinding::new("V", "view", "Toggle task list view"),
-                Keybinding::new("D/q/Esc", "back", "Back to normal view"),
+                Keybinding::new("q/Esc", "back", "Back to normal view"),
             ],
         )
     }
