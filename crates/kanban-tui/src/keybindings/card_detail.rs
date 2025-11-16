@@ -29,6 +29,7 @@ impl KeybindingProvider for CardDetailProvider {
                 Keybinding::new("2", "panel 2", "Focus metadata panel"),
                 Keybinding::new("3", "panel 3", "Focus description panel"),
                 Keybinding::new("e", "edit", "Edit current panel"),
+                Keybinding::new("d", "delete", "Delete this task"),
                 Keybinding::new("y", "copy branch", "Copy branch name to clipboard"),
                 Keybinding::new("Y", "copy cmd", "Copy git checkout command"),
                 Keybinding::new("a", "assign", "Assign task to sprint"),

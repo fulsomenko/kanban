@@ -6,7 +6,7 @@ use super::{
         DeleteConfirmProvider, DialogInputProvider, DialogSelectionProvider, FilterOptionsProvider,
         SearchModeProvider,
     },
-    normal_mode::NormalModeBoardsProvider,
+    normal_mode::{DeletedCardsViewProvider, NormalModeBoardsProvider},
     sprint_detail::SprintDetailProvider,
     KeybindingProvider,
 };
@@ -68,6 +68,7 @@ impl KeybindingRegistry {
                 Box::new(DialogSelectionProvider::new("Confirm Action"))
             }
             AppMode::FilterOptions => Box::new(FilterOptionsProvider),
+            AppMode::DeletedCardsView => Box::new(DeletedCardsViewProvider),
             AppMode::Help(previous_mode) => {
                 Self::get_provider_for_mode(previous_mode, focus, card_focus, board_focus)
             }

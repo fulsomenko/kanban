@@ -14,6 +14,8 @@ impl KeybindingProvider for NormalModeCardsProvider {
                 Keybinding::new("n", "new", "Create new task"),
                 Keybinding::new("e", "edit", "Edit selected task"),
                 Keybinding::new("c", "complete", "Toggle task completion"),
+                Keybinding::new("d", "delete", "Delete selected task(s)"),
+                Keybinding::new("D", "deleted", "View deleted tasks"),
                 Keybinding::new("v", "select", "Select task for bulk operation"),
                 Keybinding::new("V", "view", "Toggle task list view"),
                 Keybinding::new("j/↓", "down", "Navigate down"),
@@ -54,6 +56,26 @@ impl KeybindingProvider for NormalModeBoardsProvider {
                 Keybinding::new("j/↓", "down", "Navigate down"),
                 Keybinding::new("k/↑", "up", "Navigate up"),
                 Keybinding::new("Enter/Space", "detail", "View project detail"),
+            ],
+        )
+    }
+}
+
+pub struct DeletedCardsViewProvider;
+
+impl KeybindingProvider for DeletedCardsViewProvider {
+    fn get_context(&self) -> KeybindingContext {
+        KeybindingContext::new(
+            "Deleted Cards View",
+            vec![
+                Keybinding::new("?", "help", "Show help"),
+                Keybinding::new("j/↓", "down", "Navigate down"),
+                Keybinding::new("k/↑", "up", "Navigate up"),
+                Keybinding::new("r", "restore", "Restore selected task(s)"),
+                Keybinding::new("x/X", "perm delete", "Permanently delete selected task(s)"),
+                Keybinding::new("v", "select", "Select task for bulk operation"),
+                Keybinding::new("V", "view", "Toggle task list view"),
+                Keybinding::new("D/q/Esc", "back", "Back to normal view"),
             ],
         )
     }
