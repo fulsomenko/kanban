@@ -18,7 +18,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
-use kanban_domain::{Board, Card, Column, SortField, SortOrder, Sprint};
+use kanban_domain::{ArchivedCard, Board, Card, Column, SortField, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
 use std::io;
@@ -28,9 +28,9 @@ const ANIMATION_DURATION_MS: u128 = 150;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AnimationType {
-    Deleting,
+    Archiving,
     Restoring,
-    PermanentDelete,
+    Deleting,
 }
 
 pub struct CardAnimation {
@@ -48,7 +48,7 @@ pub struct App {
     pub active_card_index: Option<usize>,
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
-    pub deleted_cards: Vec<kanban_domain::DeletedCard>,
+    pub archived_cards: Vec<ArchivedCard>,
     pub animating_cards: HashMap<uuid::Uuid, CardAnimation>,
     pub sprints: Vec<Sprint>,
     pub sprint_selection: SelectionState,
@@ -148,7 +148,7 @@ pub enum AppMode {
     SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
     FilterOptions,
-    DeletedCardsView,
+    ArchivedCardsView,
     Help(Box<AppMode>),
 }
 
@@ -165,7 +165,7 @@ impl App {
             active_card_index: None,
             columns: Vec::new(),
             cards: Vec::new(),
-            deleted_cards: Vec::new(),
+            archived_cards: Vec::new(),
             animating_cards: HashMap::new(),
             sprints: Vec::new(),
             sprint_selection: SelectionState::new(),
@@ -303,8 +303,8 @@ impl App {
                 },
                 KeyCode::Char('x') => self.handle_export_board_key(),
                 KeyCode::Char('X') => self.handle_export_all_key(),
-                KeyCode::Char('d') => self.handle_delete_card(),
-                KeyCode::Char('D') => self.handle_toggle_deleted_cards_view(),
+                KeyCode::Char('d') => self.handle_archive_card(),
+                KeyCode::Char('D') => self.handle_toggle_archived_cards_view(),
                 KeyCode::Char('i') => self.handle_import_board_key(),
                 KeyCode::Char('a') => self.handle_assign_to_sprint_key(),
                 KeyCode::Char('c') => self.handle_toggle_card_completion(),
@@ -372,7 +372,7 @@ impl App {
                 self.handle_confirm_sprint_prefix_collision_popup(key.code)
             }
             AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
-            AppMode::DeletedCardsView => self.handle_deleted_cards_view_mode(key.code),
+            AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
             AppMode::Help(_) => self.handle_help_mode(key.code),
         }
         should_restart_events
@@ -397,7 +397,7 @@ impl App {
         }
     }
 
-    fn handle_deleted_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
+    fn handle_archived_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
         use crossterm::event::KeyCode;
         if self.focus != Focus::Cards {
             self.focus = Focus::Cards;
@@ -405,9 +405,9 @@ impl App {
 
         match key_code {
             KeyCode::Char('r') => self.handle_restore_card(),
-            KeyCode::Char('x') | KeyCode::Char('X') => self.handle_permanent_delete(),
+            KeyCode::Char('x') | KeyCode::Char('X') => self.handle_delete_card_permanent(),
             KeyCode::Char('D') | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
-                self.handle_toggle_deleted_cards_view();
+                self.handle_toggle_archived_cards_view();
             }
             KeyCode::Char('v') => self.handle_card_selection_toggle(),
             KeyCode::Char('V') => self.handle_toggle_task_list_view(),
@@ -452,26 +452,26 @@ impl App {
 
     fn complete_animation(&mut self, card_id: uuid::Uuid, animation_type: AnimationType) {
         match animation_type {
-            AnimationType::Deleting => {
-                self.complete_delete_animation(card_id);
+            AnimationType::Archiving => {
+                self.complete_archive_animation(card_id);
             }
             AnimationType::Restoring => {
                 self.complete_restore_animation(card_id);
             }
-            AnimationType::PermanentDelete => {
-                self.complete_permanent_delete_animation(card_id);
+            AnimationType::Deleting => {
+                self.complete_delete_animation(card_id);
             }
         }
     }
 
-    fn complete_delete_animation(&mut self, card_id: uuid::Uuid) {
+    fn complete_archive_animation(&mut self, card_id: uuid::Uuid) {
         if let Some(card_pos) = self.cards.iter().position(|c| c.id == card_id) {
             let card = self.cards.remove(card_pos);
             let column_id = card.column_id;
             let position = card.position;
 
-            let deleted_card = kanban_domain::DeletedCard::new(card, column_id, position);
-            self.deleted_cards.push(deleted_card);
+            let archived_card = ArchivedCard::new(card, column_id, position);
+            self.archived_cards.push(archived_card);
 
             self.compact_column_positions(column_id);
             self.select_card_after_deletion(column_id, position);
@@ -481,23 +481,23 @@ impl App {
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
         if let Some(pos) = self
-            .deleted_cards
+            .archived_cards
             .iter()
             .position(|dc| dc.card.id == card_id)
         {
-            let deleted_card = self.deleted_cards.remove(pos);
+            let deleted_card = self.archived_cards.remove(pos);
             self.restore_card(deleted_card);
             self.refresh_view();
         }
     }
 
-    fn complete_permanent_delete_animation(&mut self, card_id: uuid::Uuid) {
+    fn complete_delete_animation(&mut self, card_id: uuid::Uuid) {
         if let Some(pos) = self
-            .deleted_cards
+            .archived_cards
             .iter()
             .position(|dc| dc.card.id == card_id)
         {
-            self.deleted_cards.remove(pos);
+            self.archived_cards.remove(pos);
             self.refresh_view();
         }
     }
@@ -577,9 +577,9 @@ impl App {
     pub fn get_selected_card_in_context(&self) -> Option<&Card> {
         if let Some(task_list) = self.view_strategy.get_active_task_list() {
             if let Some(card_id) = task_list.get_selected_card_id() {
-                if self.mode == AppMode::DeletedCardsView {
+                if self.mode == AppMode::ArchivedCardsView {
                     return self
-                        .deleted_cards
+                        .archived_cards
                         .iter()
                         .find(|dc| dc.card.id == card_id)
                         .map(|dc| &dc.card);
@@ -604,8 +604,8 @@ impl App {
     }
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<&Card> {
-        if self.mode == AppMode::DeletedCardsView {
-            self.deleted_cards
+        if self.mode == AppMode::ArchivedCardsView {
+            self.archived_cards
                 .iter()
                 .find(|dc| dc.card.id == card_id)
                 .map(|dc| &dc.card)
@@ -729,8 +729,8 @@ impl App {
                 };
 
                 // When in DeletedCardsView, convert deleted cards to Card objects for display
-                let cards_for_display: Vec<Card> = if self.mode == AppMode::DeletedCardsView {
-                    self.deleted_cards
+                let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
+                    self.archived_cards
                         .iter()
                         .map(|dc| dc.card.clone())
                         .collect()
@@ -780,7 +780,7 @@ impl App {
                     board,
                     &self.columns,
                     &self.cards,
-                    &self.deleted_cards,
+                    &self.archived_cards,
                     &self.sprints,
                 );
 
@@ -799,7 +799,7 @@ impl App {
             &self.boards,
             &self.columns,
             &self.cards,
-            &self.deleted_cards,
+            &self.archived_cards,
             &self.sprints,
         );
         BoardExporter::export_to_file(&export, self.input.as_str())?;
@@ -812,7 +812,7 @@ impl App {
                 &self.boards,
                 &self.columns,
                 &self.cards,
-                &self.deleted_cards,
+                &self.archived_cards,
                 &self.sprints,
             );
             BoardExporter::export_to_file(&export, filename)?;
@@ -1018,7 +1018,7 @@ impl App {
         self.boards.extend(boards);
         self.columns.extend(columns);
         self.cards.extend(cards);
-        self.deleted_cards.extend(deleted_cards);
+        self.archived_cards.extend(deleted_cards);
         self.sprints.extend(sprints);
 
         self.board_selection.set(Some(first_new_index));

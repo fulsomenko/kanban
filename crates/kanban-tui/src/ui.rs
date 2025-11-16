@@ -193,7 +193,7 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
 }
 
 pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
-    let mut title = if app.mode == AppMode::DeletedCardsView {
+    let mut title = if app.mode == AppMode::ArchivedCardsView {
         "Archive".to_string()
     } else if app.focus == Focus::Cards {
         "Tasks [2]".to_string()
@@ -201,7 +201,7 @@ pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
         "Tasks".to_string()
     };
 
-    if with_filter_suffix && app.mode != AppMode::DeletedCardsView {
+    if with_filter_suffix && app.mode != AppMode::ArchivedCardsView {
         if let Some(suffix) = build_filter_title_suffix(app) {
             title.push_str(&suffix);
         }

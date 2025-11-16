@@ -36,7 +36,7 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
     // Apply animation flash effect if card is animating
     if let Some(animation_type) = config.animation_type {
         let flash_bg = match animation_type {
-            AnimationType::Deleting | AnimationType::PermanentDelete => FLASH_DELETE,
+            AnimationType::Archiving | AnimationType::Deleting => FLASH_DELETE,
             AnimationType::Restoring => FLASH_RESTORE,
         };
         base_style = base_style.bg(flash_bg);

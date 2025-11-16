@@ -84,7 +84,7 @@ impl App {
                 }
             },
             KeyCode::Char('d') => {
-                self.handle_delete_card();
+                self.handle_archive_card();
                 self.mode = AppMode::Normal;
                 self.active_card_index = None;
                 self.card_focus = CardFocus::Title;

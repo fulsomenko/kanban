@@ -219,7 +219,7 @@ impl RenderStrategy for SinglePanelRenderer {
             .with_focus_indicator(&title)
             .focused(app.focus == crate::app::Focus::Cards);
 
-        if app.mode == crate::app::AppMode::DeletedCardsView
+        if app.mode == crate::app::AppMode::ArchivedCardsView
             && app.focus == crate::app::Focus::Cards
         {
             panel_config = panel_config.with_custom_border_style(deleted_view_focused_border());
@@ -361,7 +361,7 @@ impl RenderStrategy for MultiPanelRenderer {
                         .with_focus_indicator(&title)
                         .focused(app.focus == crate::app::Focus::Cards && is_focused_column);
 
-                    if app.mode == crate::app::AppMode::DeletedCardsView && is_focused_column {
+                    if app.mode == crate::app::AppMode::ArchivedCardsView && is_focused_column {
                         panel_config =
                             panel_config.with_custom_border_style(deleted_view_focused_border());
                     }

@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode, CardField, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use kanban_domain::{Card, CardStatus, Column, DeletedCard, SortOrder};
+use kanban_domain::{ArchivedCard, Card, CardStatus, Column, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -601,7 +601,7 @@ impl App {
         }
     }
 
-    pub fn handle_delete_card(&mut self) {
+    pub fn handle_archive_card(&mut self) {
         if self.focus != Focus::Cards {
             return;
         }
@@ -647,10 +647,10 @@ impl App {
             let deleted_position = card.position;
 
             // Create a deleted card with original position preserved
-            let deleted_card = DeletedCard::new(card.clone(), deleted_column_id, deleted_position);
+            let deleted_card = ArchivedCard::new(card.clone(), deleted_column_id, deleted_position);
 
             // Add to deleted cards
-            self.deleted_cards.push(deleted_card);
+            self.archived_cards.push(deleted_card);
 
             // Compact positions in the deleted column to remove gaps
             self.compact_column_positions(deleted_column_id);
@@ -704,7 +704,7 @@ impl App {
     }
 
     pub fn handle_restore_card(&mut self) {
-        if self.mode != AppMode::DeletedCardsView {
+        if self.mode != AppMode::ArchivedCardsView {
             return;
         }
 
@@ -727,7 +727,7 @@ impl App {
         use crate::app::{AnimationType, CardAnimation};
         use std::time::Instant;
 
-        if self.deleted_cards.iter().any(|dc| dc.card.id == card_id) {
+        if self.archived_cards.iter().any(|dc| dc.card.id == card_id) {
             self.animating_cards.insert(
                 card_id,
                 CardAnimation {
@@ -745,11 +745,11 @@ impl App {
 
         for card_id in card_ids {
             if let Some(pos) = self
-                .deleted_cards
+                .archived_cards
                 .iter()
                 .position(|dc| dc.card.id == card_id)
             {
-                let deleted_card = self.deleted_cards.remove(pos);
+                let deleted_card = self.archived_cards.remove(pos);
                 self.restore_card(deleted_card);
                 restored_count += 1;
             }
@@ -760,9 +760,9 @@ impl App {
         self.refresh_view();
     }
 
-    pub fn restore_card(&mut self, deleted_card: DeletedCard) {
-        let original_column_id = deleted_card.original_column_id;
-        let original_position = deleted_card.original_position;
+    pub fn restore_card(&mut self, archived_card: ArchivedCard) {
+        let original_column_id = archived_card.original_column_id;
+        let original_position = archived_card.original_position;
 
         // Check if the original column still exists
         let target_column_id = if self.columns.iter().any(|col| col.id == original_column_id) {
@@ -775,7 +775,7 @@ impl App {
                 .unwrap_or(original_column_id)
         };
 
-        let mut card = deleted_card.into_card();
+        let mut card = archived_card.into_card();
         card.move_to_column(target_column_id, original_position);
 
         self.cards.push(card.clone());
@@ -783,8 +783,8 @@ impl App {
         tracing::info!("Card '{}' restored to original position", card.title);
     }
 
-    pub fn handle_permanent_delete(&mut self) {
-        if self.mode != AppMode::DeletedCardsView {
+    pub fn handle_delete_card_permanent(&mut self) {
+        if self.mode != AppMode::ArchivedCardsView {
             return;
         }
 
@@ -807,11 +807,11 @@ impl App {
         use crate::app::{AnimationType, CardAnimation};
         use std::time::Instant;
 
-        if self.deleted_cards.iter().any(|dc| dc.card.id == card_id) {
+        if self.archived_cards.iter().any(|dc| dc.card.id == card_id) {
             self.animating_cards.insert(
                 card_id,
                 CardAnimation {
-                    animation_type: AnimationType::PermanentDelete,
+                    animation_type: AnimationType::Deleting,
                     start_time: Instant::now(),
                 },
             );
@@ -825,11 +825,11 @@ impl App {
 
         for card_id in card_ids {
             if let Some(pos) = self
-                .deleted_cards
+                .archived_cards
                 .iter()
                 .position(|dc| dc.card.id == card_id)
             {
-                let deleted_card = self.deleted_cards.remove(pos);
+                let deleted_card = self.archived_cards.remove(pos);
                 tracing::info!("Permanently deleted card '{}'", deleted_card.card.title);
                 deleted_count += 1;
             }
@@ -842,17 +842,17 @@ impl App {
 
     #[allow(dead_code)]
     fn permanent_delete_card_at(&mut self, index: usize) {
-        if index < self.deleted_cards.len() {
-            let deleted_card = self.deleted_cards.remove(index);
+        if index < self.archived_cards.len() {
+            let deleted_card = self.archived_cards.remove(index);
             tracing::info!("Permanently deleted card '{}'", deleted_card.card.title);
             self.refresh_view();
         }
     }
 
-    pub fn handle_toggle_deleted_cards_view(&mut self) {
+    pub fn handle_toggle_archived_cards_view(&mut self) {
         match self.mode {
             AppMode::Normal => {
-                self.mode = AppMode::DeletedCardsView;
+                self.mode = AppMode::ArchivedCardsView;
                 self.refresh_view();
 
                 // Initialize selection in view strategy
@@ -863,7 +863,7 @@ impl App {
                     }
                 }
             }
-            AppMode::DeletedCardsView => {
+            AppMode::ArchivedCardsView => {
                 self.mode = AppMode::Normal;
                 self.refresh_view();
 

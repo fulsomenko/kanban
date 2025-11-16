@@ -25,18 +25,18 @@ impl KeybindingProvider for NormalModeBoardsProvider {
     }
 }
 
-pub struct DeletedCardsViewProvider;
+pub struct ArchivedCardsViewProvider;
 
-impl KeybindingProvider for DeletedCardsViewProvider {
+impl KeybindingProvider for ArchivedCardsViewProvider {
     fn get_context(&self) -> KeybindingContext {
         KeybindingContext::new(
-            "Deleted Cards View",
+            "Archived Cards View",
             vec![
                 Keybinding::new("?", "help", "Show help"),
                 Keybinding::new("j/↓", "down", "Navigate down"),
                 Keybinding::new("k/↑", "up", "Navigate up"),
                 Keybinding::new("r", "restore", "Restore selected task(s)"),
-                Keybinding::new("x/X", "perm delete", "Permanently delete selected task(s)"),
+                Keybinding::new("x/X", "delete", "Delete selected task(s)"),
                 Keybinding::new("v", "select", "Select task for bulk operation"),
                 Keybinding::new("V", "view", "Toggle task list view"),
                 Keybinding::new("D/q/Esc", "back", "Back to normal view"),
