@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode, CardField, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use kanban_domain::{Card, CardStatus, Column, SortOrder};
+use kanban_domain::{ArchivedCard, Card, CardStatus, Column, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -598,6 +598,284 @@ impl App {
                     }
                 }
             }
+        }
+    }
+
+    pub fn handle_archive_card(&mut self) {
+        if self.focus != Focus::Cards {
+            return;
+        }
+
+        if !self.selected_cards.is_empty() {
+            self.start_delete_animations_for_selected();
+        } else if let Some(card_id) = self.get_selected_card_id() {
+            self.start_delete_animation(card_id);
+        }
+    }
+
+    fn start_delete_animations_for_selected(&mut self) {
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        for card_id in card_ids {
+            self.start_delete_animation(card_id);
+        }
+        self.selected_cards.clear();
+    }
+
+    fn start_delete_animation(&mut self, card_id: uuid::Uuid) {
+        use crate::app::{AnimationType, CardAnimation};
+        use std::time::Instant;
+
+        if self.cards.iter().any(|c| c.id == card_id) {
+            self.animating_cards.insert(
+                card_id,
+                CardAnimation {
+                    animation_type: AnimationType::Archiving,
+                    start_time: Instant::now(),
+                },
+            );
+        }
+    }
+
+    #[allow(dead_code)]
+    fn delete_card(&mut self, card_id: uuid::Uuid) -> bool {
+        // Find the card to delete
+        if let Some(card_pos) = self.cards.iter().position(|c| c.id == card_id) {
+            let card = self.cards.remove(card_pos);
+
+            // Store card info before it's gone, for selection purposes
+            let deleted_column_id = card.column_id;
+            let deleted_position = card.position;
+
+            // Create a deleted card with original position preserved
+            let deleted_card = ArchivedCard::new(card.clone(), deleted_column_id, deleted_position);
+
+            // Add to deleted cards
+            self.archived_cards.push(deleted_card);
+
+            // Compact positions in the deleted column to remove gaps
+            self.compact_column_positions(deleted_column_id);
+
+            // Update selection to the next appropriate card
+            self.select_card_after_deletion(deleted_column_id, deleted_position);
+
+            tracing::info!("Card '{}' deleted", card.title);
+            return true;
+        }
+        false
+    }
+
+    pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
+        // Get all cards in this column and sort by position
+        let mut column_cards: Vec<_> = self
+            .cards
+            .iter_mut()
+            .filter(|c| c.column_id == column_id)
+            .collect();
+        column_cards.sort_by_key(|c| c.position);
+
+        // Reassign positions sequentially (0, 1, 2, ...)
+        for (new_pos, card) in column_cards.iter_mut().enumerate() {
+            card.position = new_pos as i32;
+        }
+    }
+
+    pub fn select_card_after_deletion(
+        &mut self,
+        deleted_column_id: uuid::Uuid,
+        deleted_position: i32,
+    ) {
+        // Try to find a card in the same column at or after the deleted position
+        if let Some(next_card) = self
+            .cards
+            .iter()
+            .find(|c| c.column_id == deleted_column_id && c.position >= deleted_position)
+        {
+            self.select_card_by_id(next_card.id);
+        } else if let Some(prev_card) = self
+            .cards
+            .iter()
+            .rev()
+            .find(|c| c.column_id == deleted_column_id)
+        {
+            // Select the last remaining card in the column
+            self.select_card_by_id(prev_card.id);
+        }
+        // Else: no selection (falls back to current behavior - no explicit selection)
+    }
+
+    pub fn handle_restore_card(&mut self) {
+        if self.mode != AppMode::ArchivedCardsView {
+            return;
+        }
+
+        if !self.selected_cards.is_empty() {
+            self.start_restore_animations_for_selected();
+        } else if let Some(card_id) = self.get_selected_card_id() {
+            self.start_restore_animation(card_id);
+        }
+    }
+
+    fn start_restore_animations_for_selected(&mut self) {
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        for card_id in card_ids {
+            self.start_restore_animation(card_id);
+        }
+        self.selected_cards.clear();
+    }
+
+    fn start_restore_animation(&mut self, card_id: uuid::Uuid) {
+        use crate::app::{AnimationType, CardAnimation};
+        use std::time::Instant;
+
+        if self.archived_cards.iter().any(|dc| dc.card.id == card_id) {
+            self.animating_cards.insert(
+                card_id,
+                CardAnimation {
+                    animation_type: AnimationType::Restoring,
+                    start_time: Instant::now(),
+                },
+            );
+        }
+    }
+
+    #[allow(dead_code)]
+    fn restore_selected_cards(&mut self) {
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let mut restored_count = 0;
+
+        for card_id in card_ids {
+            if let Some(pos) = self
+                .archived_cards
+                .iter()
+                .position(|dc| dc.card.id == card_id)
+            {
+                let deleted_card = self.archived_cards.remove(pos);
+                self.restore_card(deleted_card);
+                restored_count += 1;
+            }
+        }
+
+        tracing::info!("Restored {} card(s)", restored_count);
+        self.selected_cards.clear();
+        self.refresh_view();
+    }
+
+    pub fn restore_card(&mut self, archived_card: ArchivedCard) {
+        let original_column_id = archived_card.original_column_id;
+        let original_position = archived_card.original_position;
+
+        // Check if the original column still exists
+        let target_column_id = if self.columns.iter().any(|col| col.id == original_column_id) {
+            original_column_id
+        } else {
+            // If original column doesn't exist, use first column
+            self.columns
+                .first()
+                .map(|col| col.id)
+                .unwrap_or(original_column_id)
+        };
+
+        let mut card = archived_card.into_card();
+        card.move_to_column(target_column_id, original_position);
+
+        self.cards.push(card.clone());
+
+        tracing::info!("Card '{}' restored to original position", card.title);
+    }
+
+    pub fn handle_delete_card_permanent(&mut self) {
+        if self.mode != AppMode::ArchivedCardsView {
+            return;
+        }
+
+        if !self.selected_cards.is_empty() {
+            self.start_permanent_delete_animations_for_selected();
+        } else if let Some(card_id) = self.get_selected_card_id() {
+            self.start_permanent_delete_animation(card_id);
+        }
+    }
+
+    fn start_permanent_delete_animations_for_selected(&mut self) {
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        for card_id in card_ids {
+            self.start_permanent_delete_animation(card_id);
+        }
+        self.selected_cards.clear();
+    }
+
+    fn start_permanent_delete_animation(&mut self, card_id: uuid::Uuid) {
+        use crate::app::{AnimationType, CardAnimation};
+        use std::time::Instant;
+
+        if self.archived_cards.iter().any(|dc| dc.card.id == card_id) {
+            self.animating_cards.insert(
+                card_id,
+                CardAnimation {
+                    animation_type: AnimationType::Deleting,
+                    start_time: Instant::now(),
+                },
+            );
+        }
+    }
+
+    #[allow(dead_code)]
+    fn permanent_delete_selected_cards(&mut self) {
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let mut deleted_count = 0;
+
+        for card_id in card_ids {
+            if let Some(pos) = self
+                .archived_cards
+                .iter()
+                .position(|dc| dc.card.id == card_id)
+            {
+                let deleted_card = self.archived_cards.remove(pos);
+                tracing::info!("Permanently deleted card '{}'", deleted_card.card.title);
+                deleted_count += 1;
+            }
+        }
+
+        tracing::info!("Permanently deleted {} card(s)", deleted_count);
+        self.selected_cards.clear();
+        self.refresh_view();
+    }
+
+    #[allow(dead_code)]
+    fn permanent_delete_card_at(&mut self, index: usize) {
+        if index < self.archived_cards.len() {
+            let deleted_card = self.archived_cards.remove(index);
+            tracing::info!("Permanently deleted card '{}'", deleted_card.card.title);
+            self.refresh_view();
+        }
+    }
+
+    pub fn handle_toggle_archived_cards_view(&mut self) {
+        match self.mode {
+            AppMode::Normal => {
+                self.mode = AppMode::ArchivedCardsView;
+                self.refresh_view();
+
+                // Initialize selection in view strategy
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    if !list.is_empty() {
+                        list.set_selected_index(Some(0));
+                        list.ensure_selected_visible(self.viewport_height);
+                    }
+                }
+            }
+            AppMode::ArchivedCardsView => {
+                self.mode = AppMode::Normal;
+                self.refresh_view();
+
+                // Re-initialize selection when returning to normal view
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    if !list.is_empty() {
+                        list.set_selected_index(Some(0));
+                        list.ensure_selected_visible(self.viewport_height);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 }

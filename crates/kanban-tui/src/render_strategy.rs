@@ -3,7 +3,7 @@ use crate::components::{
     card_list_item::{render_card_list_item, CardListItemConfig},
     PanelConfig,
 };
-use crate::theme::label_text;
+use crate::theme::{deleted_view_focused_border, label_text};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -100,9 +100,7 @@ impl RenderStrategy for SinglePanelRenderer {
 
                                     for card_idx in &render_info.visible_card_indices {
                                         if let Some(card_id) = task_list.cards.get(*card_idx) {
-                                            if let Some(card) =
-                                                app.cards.iter().find(|c| c.id == *card_id)
-                                            {
+                                            if let Some(card) = app.get_card_by_id(*card_id) {
                                                 let is_selected = if is_active_column {
                                                     task_list.get_selected_index()
                                                         == Some(*card_idx)
@@ -110,6 +108,10 @@ impl RenderStrategy for SinglePanelRenderer {
                                                     false
                                                 };
 
+                                                let animation_type = app
+                                                    .animating_cards
+                                                    .get(&card.id)
+                                                    .map(|a| a.animation_type);
                                                 let line =
                                                     render_card_list_item(CardListItemConfig {
                                                         card,
@@ -125,6 +127,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                                         show_sprint_name: app
                                                             .active_sprint_filters
                                                             .is_empty(),
+                                                        animation_type,
                                                     });
                                                 lines.push(line);
                                             }
@@ -172,7 +175,9 @@ impl RenderStrategy for SinglePanelRenderer {
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
-                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                if let Some(card) = app.get_card_by_id(*card_id) {
+                                    let animation_type =
+                                        app.animating_cards.get(&card.id).map(|a| a.animation_type);
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
@@ -182,6 +187,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         is_focused: app.focus == crate::app::Focus::Cards,
                                         is_multi_selected: app.selected_cards.contains(&card.id),
                                         show_sprint_name: app.active_sprint_filters.is_empty(),
+                                        animation_type,
                                     });
                                     lines.push(line);
                                 }
@@ -209,9 +215,15 @@ impl RenderStrategy for SinglePanelRenderer {
 
         let title = crate::ui::build_tasks_panel_title(app, true);
 
-        let panel_config = PanelConfig::new(&title)
+        let mut panel_config = PanelConfig::new(&title)
             .with_focus_indicator(&title)
             .focused(app.focus == crate::app::Focus::Cards);
+
+        if app.mode == crate::app::AppMode::ArchivedCardsView
+            && app.focus == crate::app::Focus::Cards
+        {
+            panel_config = panel_config.with_custom_border_style(deleted_view_focused_border());
+        }
 
         let content = Paragraph::new(lines).block(panel_config.block());
         frame.render_widget(content, area);
@@ -286,13 +298,15 @@ impl RenderStrategy for MultiPanelRenderer {
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
-                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                if let Some(card) = app.get_card_by_id(*card_id) {
                                     let is_selected = if is_focused_column {
                                         task_list.get_selected_index() == Some(*card_idx)
                                     } else {
                                         false
                                     };
 
+                                    let animation_type =
+                                        app.animating_cards.get(&card.id).map(|a| a.animation_type);
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
@@ -302,6 +316,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                             && is_focused_column,
                                         is_multi_selected: app.selected_cards.contains(&card.id),
                                         show_sprint_name: app.active_sprint_filters.is_empty(),
+                                        animation_type,
                                     });
                                     lines.push(line);
                                 }
@@ -342,9 +357,14 @@ impl RenderStrategy for MultiPanelRenderer {
                         }
                     }
 
-                    let panel_config = PanelConfig::new(&title)
+                    let mut panel_config = PanelConfig::new(&title)
                         .with_focus_indicator(&title)
                         .focused(app.focus == crate::app::Focus::Cards && is_focused_column);
+
+                    if app.mode == crate::app::AppMode::ArchivedCardsView && is_focused_column {
+                        panel_config =
+                            panel_config.with_custom_border_style(deleted_view_focused_border());
+                    }
 
                     let content = Paragraph::new(lines).block(panel_config.block());
                     frame.render_widget(content, chunks[col_idx]);

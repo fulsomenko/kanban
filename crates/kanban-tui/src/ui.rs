@@ -193,13 +193,15 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
 }
 
 pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
-    let mut title = if app.focus == Focus::Cards {
+    let mut title = if app.mode == AppMode::ArchivedCardsView {
+        "Archive".to_string()
+    } else if app.focus == Focus::Cards {
         "Tasks [2]".to_string()
     } else {
         "Tasks".to_string()
     };
 
-    if with_filter_suffix {
+    if with_filter_suffix && app.mode != AppMode::ArchivedCardsView {
         if let Some(suffix) = build_filter_title_suffix(app) {
             title.push_str(&suffix);
         }
@@ -411,6 +413,8 @@ fn render_sprint_task_panel_with_selection(
             if let Some(card_id) = task_list.cards.get(*card_idx) {
                 if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
                     let is_selected = selected_idx == Some(*card_idx) && is_focused;
+                    let animation_type =
+                        app.animating_cards.get(&card.id).map(|a| a.animation_type);
                     let line = render_card_list_item(CardListItemConfig {
                         card,
                         board,
@@ -419,6 +423,7 @@ fn render_sprint_task_panel_with_selection(
                         is_focused,
                         is_multi_selected: false,
                         show_sprint_name: false,
+                        animation_type,
                     });
                     lines.push(line);
                 }
