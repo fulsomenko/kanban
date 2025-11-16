@@ -100,9 +100,7 @@ impl RenderStrategy for SinglePanelRenderer {
 
                                     for card_idx in &render_info.visible_card_indices {
                                         if let Some(card_id) = task_list.cards.get(*card_idx) {
-                                            if let Some(card) =
-                                                app.cards.iter().find(|c| c.id == *card_id)
-                                            {
+                                            if let Some(card) = app.get_card_by_id(*card_id) {
                                                 let is_selected = if is_active_column {
                                                     task_list.get_selected_index()
                                                         == Some(*card_idx)
@@ -172,7 +170,7 @@ impl RenderStrategy for SinglePanelRenderer {
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
-                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                if let Some(card) = app.get_card_by_id(*card_id) {
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
@@ -286,7 +284,7 @@ impl RenderStrategy for MultiPanelRenderer {
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
-                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                if let Some(card) = app.get_card_by_id(*card_id) {
                                     let is_selected = if is_focused_column {
                                         task_list.get_selected_index() == Some(*card_idx)
                                     } else {
