@@ -853,19 +853,29 @@ impl App {
         match self.mode {
             AppMode::Normal => {
                 self.mode = AppMode::DeletedCardsView;
-                // Select first deleted card if available
-                if !self.deleted_cards.is_empty() {
-                    self.active_card_index = Some(0);
-                } else {
-                    self.active_card_index = None;
+                self.refresh_view();
+
+                // Initialize selection in view strategy
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    if !list.is_empty() {
+                        list.set_selected_index(Some(0));
+                        list.ensure_selected_visible(self.viewport_height);
+                    }
                 }
             }
             AppMode::DeletedCardsView => {
                 self.mode = AppMode::Normal;
-                self.active_card_index = None;
+                self.refresh_view();
+
+                // Re-initialize selection when returning to normal view
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    if !list.is_empty() {
+                        list.set_selected_index(Some(0));
+                        list.ensure_selected_visible(self.viewport_height);
+                    }
+                }
             }
             _ => {}
         }
-        self.refresh_view();
     }
 }
