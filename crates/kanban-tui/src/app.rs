@@ -393,6 +393,8 @@ impl App {
             }
             KeyCode::Char('v') => self.handle_card_selection_toggle(),
             KeyCode::Char('V') => self.handle_toggle_task_list_view(),
+            KeyCode::Char('h') => self.handle_kanban_column_left(),
+            KeyCode::Char('l') => self.handle_kanban_column_right(),
             KeyCode::Char('j') | KeyCode::Down => self.handle_navigation_down(),
             KeyCode::Char('k') | KeyCode::Up => self.handle_navigation_up(),
             _ => {}
