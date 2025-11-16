@@ -710,10 +710,8 @@ impl App {
 
         if !self.selected_cards.is_empty() {
             self.start_restore_animations_for_selected();
-        } else if let Some(card_idx) = self.active_card_index {
-            if let Some(deleted_card) = self.deleted_cards.get(card_idx) {
-                self.start_restore_animation(deleted_card.card.id);
-            }
+        } else if let Some(card_id) = self.get_selected_card_id() {
+            self.start_restore_animation(card_id);
         }
     }
 
@@ -792,12 +790,8 @@ impl App {
 
         if !self.selected_cards.is_empty() {
             self.start_permanent_delete_animations_for_selected();
-        } else if let Some(card_idx) = self.active_card_index {
-            if card_idx < self.deleted_cards.len() {
-                if let Some(deleted_card) = self.deleted_cards.get(card_idx) {
-                    self.start_permanent_delete_animation(deleted_card.card.id);
-                }
-            }
+        } else if let Some(card_id) = self.get_selected_card_id() {
+            self.start_permanent_delete_animation(card_id);
         }
     }
 
