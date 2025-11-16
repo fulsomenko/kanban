@@ -2,11 +2,10 @@
 bump: patch
 ---
 
-- chore: cargo fmt
+- chore: simplify archived cards view keybindings
+- refactor: rename delete to archive, permanent delete to delete
+- refactor: consolidate keybinding providers into CardListProvider
 - feat: add animation state infrastructure and types
-- refactor: simplify complex return type using type alias
-- chore: cargo fmt
-- fix: enable column navigation in deleted cards view
 - feat: add yellow border for deleted cards view visual distinction
 - feat: add card deletion from detail view
 - fix: card lookup in DeletedCardsView mode
