@@ -89,7 +89,11 @@ impl CardList {
 
         if !was_at_top {
             let current_idx = self.selection.get().unwrap_or(0);
-            let render_start = if self.scroll_offset == 1 { 0 } else { self.scroll_offset };
+            let render_start = if self.scroll_offset == 1 {
+                0
+            } else {
+                self.scroll_offset
+            };
             let first_visible_idx = render_start;
 
             if current_idx == first_visible_idx && self.scroll_offset > 0 {
@@ -98,7 +102,11 @@ impl CardList {
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
 
                 loop {
-                    let current_render_start = if self.scroll_offset == 1 { 0 } else { self.scroll_offset };
+                    let current_render_start = if self.scroll_offset == 1 {
+                        0
+                    } else {
+                        self.scroll_offset
+                    };
                     if target_selection >= current_render_start || self.scroll_offset == 0 {
                         break;
                     }
@@ -126,10 +134,12 @@ impl CardList {
             let current_idx = self.selection.get().unwrap_or(0);
 
             let info = self.calculate_viewport_info(viewport_height);
-            let render_start = if self.scroll_offset == 1 { 0 } else { self.scroll_offset };
-            let actual_cards_to_show = (render_start..total_cards)
-                .take(info.cards_to_show)
-                .count();
+            let render_start = if self.scroll_offset == 1 {
+                0
+            } else {
+                self.scroll_offset
+            };
+            let actual_cards_to_show = (render_start..total_cards).take(info.cards_to_show).count();
             let last_visible_idx = render_start + actual_cards_to_show.saturating_sub(1);
 
             if current_idx == last_visible_idx && current_idx < total_cards - 1 {
@@ -138,7 +148,11 @@ impl CardList {
                 self.scroll_offset = self.scroll_offset.saturating_add(1);
 
                 let mut new_info = self.calculate_viewport_info(viewport_height);
-                let mut new_render_start = if self.scroll_offset == 1 { 0 } else { self.scroll_offset };
+                let mut new_render_start = if self.scroll_offset == 1 {
+                    0
+                } else {
+                    self.scroll_offset
+                };
                 let mut new_actual_cards = (new_render_start..total_cards)
                     .take(new_info.cards_to_show)
                     .count();
@@ -148,7 +162,11 @@ impl CardList {
                 while target_selection > new_last_visible_idx && target_selection < total_cards {
                     self.scroll_offset = self.scroll_offset.saturating_add(1);
                     new_info = self.calculate_viewport_info(viewport_height);
-                    new_render_start = if self.scroll_offset == 1 { 0 } else { self.scroll_offset };
+                    new_render_start = if self.scroll_offset == 1 {
+                        0
+                    } else {
+                        self.scroll_offset
+                    };
                     new_actual_cards = (new_render_start..total_cards)
                         .take(new_info.cards_to_show)
                         .count();
@@ -249,7 +267,11 @@ impl CardList {
 
         let info = self.calculate_viewport_info(viewport_height);
 
-        let render_start = if self.scroll_offset == 1 { 0 } else { self.scroll_offset };
+        let render_start = if self.scroll_offset == 1 {
+            0
+        } else {
+            self.scroll_offset
+        };
 
         let visible_indices: Vec<usize> = (0..info.cards_to_show)
             .map(|i| render_start + i)
@@ -279,7 +301,11 @@ impl CardList {
 
         if let Some(selected_idx) = self.selection.get() {
             let info = self.calculate_viewport_info(viewport_height);
-            let render_start = if self.scroll_offset == 1 { 0 } else { self.scroll_offset };
+            let render_start = if self.scroll_offset == 1 {
+                0
+            } else {
+                self.scroll_offset
+            };
             let first_visible = render_start;
             let last_visible = render_start + info.cards_to_show.saturating_sub(1);
 
