@@ -7,7 +7,6 @@ pub struct BoardExport {
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
     pub sprints: Vec<Sprint>,
-    #[serde(default, alias = "deleted_cards")]
     pub archived_cards: Vec<ArchivedCard>,
 }
 
