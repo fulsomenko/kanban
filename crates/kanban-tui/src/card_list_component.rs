@@ -149,6 +149,7 @@ pub struct CardListComponent {
     pub card_list: CardList,
     pub config: CardListComponentConfig,
     pub multi_selected: std::collections::HashSet<Uuid>,
+    pub viewport_height: usize,
 }
 
 impl CardListComponent {
@@ -157,6 +158,7 @@ impl CardListComponent {
             card_list: CardList::new(list_id),
             config,
             multi_selected: std::collections::HashSet::new(),
+            viewport_height: 20,
         }
     }
 
@@ -198,12 +200,12 @@ impl CardListComponent {
         }
     }
 
-    pub fn navigate_up(&mut self) -> bool {
-        self.card_list.navigate_up()
+    pub fn navigate_up(&mut self, viewport_height: usize) -> bool {
+        self.card_list.navigate_up(viewport_height)
     }
 
-    pub fn navigate_down(&mut self) -> bool {
-        self.card_list.navigate_down()
+    pub fn navigate_down(&mut self, viewport_height: usize) -> bool {
+        self.card_list.navigate_down(viewport_height)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -222,6 +224,18 @@ impl CardListComponent {
         self.card_list.set_selected_index(index);
     }
 
+    pub fn get_scroll_offset(&self) -> usize {
+        self.card_list.get_scroll_offset()
+    }
+
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        self.card_list.set_scroll_offset(offset);
+    }
+
+    pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
+        self.card_list.ensure_selected_visible(viewport_height);
+    }
+
     pub fn help_text(&self) -> String {
         self.config.help_text()
     }
@@ -233,7 +247,7 @@ impl CardListComponent {
                     .config
                     .is_action_enabled(&CardListActionType::Navigation)
                 {
-                    self.navigate_down();
+                    self.navigate_down(self.viewport_height);
                 }
                 None
             }
@@ -242,7 +256,7 @@ impl CardListComponent {
                     .config
                     .is_action_enabled(&CardListActionType::Navigation)
                 {
-                    self.navigate_up();
+                    self.navigate_up(self.viewport_height);
                 }
                 None
             }

@@ -1,0 +1,22 @@
+---
+bump: patch
+---
+
+- fix: ensure forward progress when viewport shrinks during down navigation
+- fix: correct viewport height calculation across all renderers
+- feat: add viewport calculation infrastructure to CardList
+- fix: allow scrolling down to show the final card
+- feat: update navigation to account for scroll indicator space
+- feat: add scroll indicators showing tasks above and below viewport
+- feat: use actual viewport_height instead of hardcoded value
+- feat: calculate and update viewport_height during rendering
+- feat: add viewport_height tracking to App
+- fix: eliminate selector jitter by moving selection with scroll
+- refactor: remove preemptive ensure_selected_visible calls
+- refactor: update CardListComponent navigate methods for viewport awareness
+- refactor: implement scroll-on-boundary logic in navigate methods
+- feat: wire up automatic scroll adjustment on navigation
+- feat: implement scroll-aware rendering for sprint detail panels
+- feat: implement scroll-aware rendering in all card list views
+- feat: expose scroll management in CardListComponent
+- feat: add scroll offset tracking to CardList

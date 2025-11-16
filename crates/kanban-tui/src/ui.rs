@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
 };
 
-pub fn render(app: &App, frame: &mut Frame) {
+pub fn render(app: &mut App, frame: &mut Frame) {
     // Check if we're in Help mode and render underlying view
     let is_help_mode = matches!(app.mode, AppMode::Help(_));
 
@@ -110,7 +110,7 @@ pub fn render(app: &App, frame: &mut Frame) {
     }
 }
 
-fn render_main(app: &App, frame: &mut Frame, area: Rect) {
+fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
     let is_kanban_view = if let Some(idx) = app.active_board_index {
         if let Some(board) = app.boards.get(idx) {
             board.task_list_view == kanban_domain::TaskListView::ColumnView
@@ -122,6 +122,7 @@ fn render_main(app: &App, frame: &mut Frame, area: Rect) {
     };
 
     if is_kanban_view {
+        app.viewport_height = area.height.saturating_sub(2) as usize;
         render_tasks_panel(app, frame, area);
     } else {
         let chunks = Layout::default()
@@ -129,6 +130,7 @@ fn render_main(app: &App, frame: &mut Frame, area: Rect) {
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
             .split(area);
 
+        app.viewport_height = chunks[1].height.saturating_sub(2) as usize;
         render_projects_panel(app, frame, chunks[0]);
         render_tasks_panel(app, frame, chunks[1]);
     }
@@ -393,20 +395,43 @@ fn render_sprint_task_panel_with_selection(
     if task_list.is_empty() {
         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
     } else {
-        for (idx, card_id) in task_list.cards.iter().enumerate() {
-            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                let is_selected = selected_idx == Some(idx) && is_focused;
-                let line = render_card_list_item(CardListItemConfig {
-                    card,
-                    board,
-                    sprints: &app.sprints,
-                    is_selected,
-                    is_focused,
-                    is_multi_selected: false,
-                    show_sprint_name: false,
-                });
-                lines.push(line);
+        let viewport_height = area.height.saturating_sub(2) as usize;
+        let render_info = task_list.get_render_info(viewport_height);
+
+        if render_info.show_above_indicator {
+            let count = render_info.cards_above_count;
+            let plural = if count == 1 { "" } else { "s" };
+            lines.push(Line::from(Span::styled(
+                format!("  {} Task{} above", count, plural),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+
+        for card_idx in &render_info.visible_card_indices {
+            if let Some(card_id) = task_list.cards.get(*card_idx) {
+                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                    let is_selected = selected_idx == Some(*card_idx) && is_focused;
+                    let line = render_card_list_item(CardListItemConfig {
+                        card,
+                        board,
+                        sprints: &app.sprints,
+                        is_selected,
+                        is_focused,
+                        is_multi_selected: false,
+                        show_sprint_name: false,
+                    });
+                    lines.push(line);
+                }
             }
+        }
+
+        if render_info.show_below_indicator {
+            let count = render_info.cards_below_count;
+            let plural = if count == 1 { "" } else { "s" };
+            lines.push(Line::from(Span::styled(
+                format!("  {} Task{} below", count, plural),
+                Style::default().fg(Color::DarkGray),
+            )));
         }
     }
 
@@ -418,7 +443,6 @@ fn render_sprint_task_panel_with_selection(
         .collect();
     let points = App::calculate_points(&cards);
 
-    lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
         Style::default()

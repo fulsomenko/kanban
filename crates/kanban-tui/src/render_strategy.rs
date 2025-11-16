@@ -85,39 +85,66 @@ impl RenderStrategy for SinglePanelRenderer {
                                         label_text(),
                                     )));
                                 } else {
-                                    for (local_card_idx, card_id) in
-                                        task_list.cards.iter().enumerate()
-                                    {
-                                        if let Some(card) =
-                                            app.cards.iter().find(|c| c.id == *card_id)
-                                        {
-                                            let is_selected = if is_active_column {
-                                                task_list.get_selected_index()
-                                                    == Some(local_card_idx)
-                                            } else {
-                                                false
-                                            };
+                                    let viewport_height = (area.height as usize).saturating_sub(2);
+                                    let render_info = task_list.get_render_info(viewport_height);
 
-                                            let line = render_card_list_item(CardListItemConfig {
-                                                card,
-                                                board,
-                                                sprints: &app.sprints,
-                                                is_selected,
-                                                is_focused: app.focus == crate::app::Focus::Cards
-                                                    && is_active_column,
-                                                is_multi_selected: app
-                                                    .selected_cards
-                                                    .contains(&card.id),
-                                                show_sprint_name: app
-                                                    .active_sprint_filters
-                                                    .is_empty(),
-                                            });
-                                            lines.push(line);
+                                    if render_info.show_above_indicator {
+                                        let count = render_info.cards_above_count;
+                                        let plural = if count == 1 { "" } else { "s" };
+                                        lines.push(Line::from(Span::styled(
+                                            format!("  {} Task{} above", count, plural),
+                                            ratatui::style::Style::default()
+                                                .fg(ratatui::style::Color::DarkGray),
+                                        )));
+                                    }
+
+                                    for card_idx in &render_info.visible_card_indices {
+                                        if let Some(card_id) = task_list.cards.get(*card_idx) {
+                                            if let Some(card) =
+                                                app.cards.iter().find(|c| c.id == *card_id)
+                                            {
+                                                let is_selected = if is_active_column {
+                                                    task_list.get_selected_index()
+                                                        == Some(*card_idx)
+                                                } else {
+                                                    false
+                                                };
+
+                                                let line =
+                                                    render_card_list_item(CardListItemConfig {
+                                                        card,
+                                                        board,
+                                                        sprints: &app.sprints,
+                                                        is_selected,
+                                                        is_focused: app.focus
+                                                            == crate::app::Focus::Cards
+                                                            && is_active_column,
+                                                        is_multi_selected: app
+                                                            .selected_cards
+                                                            .contains(&card.id),
+                                                        show_sprint_name: app
+                                                            .active_sprint_filters
+                                                            .is_empty(),
+                                                    });
+                                                lines.push(line);
+                                            }
                                         }
+                                    }
+
+                                    if render_info.show_below_indicator {
+                                        let count = render_info.cards_below_count;
+                                        let plural = if count == 1 { "" } else { "s" };
+                                        lines.push(Line::from(Span::styled(
+                                            format!("  {} Task{} below", count, plural),
+                                            ratatui::style::Style::default()
+                                                .fg(ratatui::style::Color::DarkGray),
+                                        )));
                                     }
                                 }
 
-                                lines.push(Line::from(""));
+                                if col_idx < task_lists.len() - 1 {
+                                    lines.push(Line::from(""));
+                                }
                             }
                         }
                     }
@@ -130,19 +157,45 @@ impl RenderStrategy for SinglePanelRenderer {
                         };
                         lines.push(Line::from(Span::styled(message, label_text())));
                     } else {
-                        for (card_idx, card_id) in task_list.cards.iter().enumerate() {
-                            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                                let line = render_card_list_item(CardListItemConfig {
-                                    card,
-                                    board,
-                                    sprints: &app.sprints,
-                                    is_selected: task_list.get_selected_index() == Some(card_idx),
-                                    is_focused: app.focus == crate::app::Focus::Cards,
-                                    is_multi_selected: app.selected_cards.contains(&card.id),
-                                    show_sprint_name: app.active_sprint_filters.is_empty(),
-                                });
-                                lines.push(line);
+                        let viewport_height = area.height.saturating_sub(2) as usize;
+                        let render_info = task_list.get_render_info(viewport_height);
+
+                        if render_info.show_above_indicator {
+                            let count = render_info.cards_above_count;
+                            let plural = if count == 1 { "" } else { "s" };
+                            lines.push(Line::from(Span::styled(
+                                format!("  {} Task{} above", count, plural),
+                                ratatui::style::Style::default()
+                                    .fg(ratatui::style::Color::DarkGray),
+                            )));
+                        }
+
+                        for card_idx in &render_info.visible_card_indices {
+                            if let Some(card_id) = task_list.cards.get(*card_idx) {
+                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                    let line = render_card_list_item(CardListItemConfig {
+                                        card,
+                                        board,
+                                        sprints: &app.sprints,
+                                        is_selected: task_list.get_selected_index()
+                                            == Some(*card_idx),
+                                        is_focused: app.focus == crate::app::Focus::Cards,
+                                        is_multi_selected: app.selected_cards.contains(&card.id),
+                                        show_sprint_name: app.active_sprint_filters.is_empty(),
+                                    });
+                                    lines.push(line);
+                                }
                             }
+                        }
+
+                        if render_info.show_below_indicator {
+                            let count = render_info.cards_below_count;
+                            let plural = if count == 1 { "" } else { "s" };
+                            lines.push(Line::from(Span::styled(
+                                format!("  {} Task{} below", count, plural),
+                                ratatui::style::Style::default()
+                                    .fg(ratatui::style::Color::DarkGray),
+                            )));
                         }
                     }
                 }
@@ -218,26 +271,51 @@ impl RenderStrategy for MultiPanelRenderer {
                     if task_list.is_empty() {
                         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
                     } else {
-                        for (local_card_idx, card_id) in task_list.cards.iter().enumerate() {
-                            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                                let is_selected = if is_focused_column {
-                                    task_list.get_selected_index() == Some(local_card_idx)
-                                } else {
-                                    false
-                                };
+                        let viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
+                        let render_info = task_list.get_render_info(viewport_height);
 
-                                let line = render_card_list_item(CardListItemConfig {
-                                    card,
-                                    board,
-                                    sprints: &app.sprints,
-                                    is_selected,
-                                    is_focused: app.focus == crate::app::Focus::Cards
-                                        && is_focused_column,
-                                    is_multi_selected: app.selected_cards.contains(&card.id),
-                                    show_sprint_name: app.active_sprint_filters.is_empty(),
-                                });
-                                lines.push(line);
+                        if render_info.show_above_indicator {
+                            let count = render_info.cards_above_count;
+                            let plural = if count == 1 { "" } else { "s" };
+                            lines.push(Line::from(Span::styled(
+                                format!("  {} Task{} above", count, plural),
+                                ratatui::style::Style::default()
+                                    .fg(ratatui::style::Color::DarkGray),
+                            )));
+                        }
+
+                        for card_idx in &render_info.visible_card_indices {
+                            if let Some(card_id) = task_list.cards.get(*card_idx) {
+                                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                                    let is_selected = if is_focused_column {
+                                        task_list.get_selected_index() == Some(*card_idx)
+                                    } else {
+                                        false
+                                    };
+
+                                    let line = render_card_list_item(CardListItemConfig {
+                                        card,
+                                        board,
+                                        sprints: &app.sprints,
+                                        is_selected,
+                                        is_focused: app.focus == crate::app::Focus::Cards
+                                            && is_focused_column,
+                                        is_multi_selected: app.selected_cards.contains(&card.id),
+                                        show_sprint_name: app.active_sprint_filters.is_empty(),
+                                    });
+                                    lines.push(line);
+                                }
                             }
+                        }
+
+                        if render_info.show_below_indicator {
+                            let count = render_info.cards_below_count;
+                            let plural = if count == 1 { "" } else { "s" };
+                            lines.push(Line::from(Span::styled(
+                                format!("  {} Task{} below", count, plural),
+                                ratatui::style::Style::default()
+                                    .fg(ratatui::style::Color::DarkGray),
+                            )));
                         }
                     }
 
