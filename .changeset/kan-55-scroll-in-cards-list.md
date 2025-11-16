@@ -20,8 +20,3 @@ bump: patch
 - feat: implement scroll-aware rendering in all card list views
 - feat: expose scroll management in CardListComponent
 - feat: add scroll offset tracking to CardList
-- KAN-130/three-card-list-components-to-become-one (#94)
-- KAN-118/unfilter-tasks-list-on-completed-sprint (#93)
-- KAN-111/sprint-binding-help-is-wrong (#92)
-- KAN-33: Add Help mode with context-aware keybindings (#91)
-- ci: automatically sync develop with master after release (#90)
