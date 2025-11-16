@@ -86,7 +86,7 @@ impl App {
                         if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                             if !list.is_empty() {
                                 list.set_selected_index(Some(0));
-                                list.ensure_selected_visible(20);
+                                list.ensure_selected_visible(self.viewport_height);
                             }
                         }
                     }
@@ -159,7 +159,7 @@ impl App {
                     } else if list.get_selected_index().is_none() {
                         list.set_selected_index(Some(0));
                     }
-                    list.ensure_selected_visible(20);
+                    list.ensure_selected_visible(self.viewport_height);
                 }
                 tracing::info!("Switched to column {}", index);
             }
