@@ -487,6 +487,7 @@ impl App {
         {
             let deleted_card = self.deleted_cards.remove(pos);
             self.restore_card(deleted_card);
+            self.refresh_view();
         }
     }
 
