@@ -14,6 +14,8 @@ impl KeybindingProvider for CardListProvider {
                 Keybinding::new("n", "new", "Create new task"),
                 Keybinding::new("e", "edit", "Edit selected task"),
                 Keybinding::new("c", "complete", "Toggle task completion"),
+                Keybinding::new("d", "delete", "Delete selected task(s)"),
+                Keybinding::new("D", "deleted", "View deleted tasks"),
                 Keybinding::new("v", "select", "Select task for bulk operation"),
                 Keybinding::new("V", "view", "Toggle task list view"),
                 Keybinding::new("j/↓", "down", "Navigate down"),
