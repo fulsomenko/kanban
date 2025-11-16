@@ -629,7 +629,7 @@ impl App {
             self.animating_cards.insert(
                 card_id,
                 CardAnimation {
-                    animation_type: AnimationType::Deleting,
+                    animation_type: AnimationType::Archiving,
                     start_time: Instant::now(),
                 },
             );
