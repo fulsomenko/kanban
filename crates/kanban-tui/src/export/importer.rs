@@ -1,5 +1,5 @@
 use super::models::AllBoardsExport;
-use kanban_domain::{Board, Card, Column, Sprint};
+use kanban_domain::{Board, Card, Column, DeletedCard, Sprint};
 use std::io;
 
 pub struct BoardImporter;
@@ -24,20 +24,22 @@ impl BoardImporter {
 
     pub fn extract_entities(
         import: AllBoardsExport,
-    ) -> (Vec<Board>, Vec<Column>, Vec<Card>, Vec<Sprint>) {
+    ) -> (Vec<Board>, Vec<Column>, Vec<Card>, Vec<DeletedCard>, Vec<Sprint>) {
         let mut boards = Vec::new();
         let mut columns = Vec::new();
         let mut cards = Vec::new();
+        let mut deleted_cards = Vec::new();
         let mut sprints = Vec::new();
 
         for board_data in import.boards {
             boards.push(board_data.board);
             columns.extend(board_data.columns);
             cards.extend(board_data.cards);
+            deleted_cards.extend(board_data.deleted_cards);
             sprints.extend(board_data.sprints);
         }
 
-        (boards, columns, cards, sprints)
+        (boards, columns, cards, deleted_cards, sprints)
     }
 }
 
@@ -104,15 +106,18 @@ mod tests {
                 board: board.clone(),
                 columns: vec![column.clone()],
                 cards: vec![card.clone()],
+                deleted_cards: vec![],
                 sprints: vec![],
             }],
         };
 
-        let (boards, columns, cards, sprints) = BoardImporter::extract_entities(export);
+        let (boards, columns, cards, deleted_cards, sprints) =
+            BoardImporter::extract_entities(export);
 
         assert_eq!(boards.len(), 1);
         assert_eq!(columns.len(), 1);
         assert_eq!(cards.len(), 1);
+        assert_eq!(deleted_cards.len(), 0);
         assert_eq!(sprints.len(), 0);
     }
 }

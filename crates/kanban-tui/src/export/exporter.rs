@@ -1,5 +1,5 @@
 use super::models::{AllBoardsExport, BoardExport};
-use kanban_domain::{Board, Card, Column, Sprint};
+use kanban_domain::{Board, Card, Column, DeletedCard, Sprint};
 use std::io;
 use uuid::Uuid;
 
@@ -10,6 +10,7 @@ impl BoardExporter {
         board: &Board,
         all_columns: &[Column],
         all_cards: &[Card],
+        all_deleted_cards: &[DeletedCard],
         all_sprints: &[Sprint],
     ) -> BoardExport {
         let board_columns: Vec<Column> = all_columns
@@ -26,6 +27,12 @@ impl BoardExporter {
             .cloned()
             .collect();
 
+        let board_deleted_cards: Vec<DeletedCard> = all_deleted_cards
+            .iter()
+            .filter(|dc| column_ids.contains(&dc.original_column_id))
+            .cloned()
+            .collect();
+
         let board_sprints: Vec<Sprint> = all_sprints
             .iter()
             .filter(|s| s.board_id == board.id)
@@ -36,6 +43,7 @@ impl BoardExporter {
             board: board.clone(),
             columns: board_columns,
             cards: board_cards,
+            deleted_cards: board_deleted_cards,
             sprints: board_sprints,
         }
     }
@@ -44,11 +52,14 @@ impl BoardExporter {
         boards: &[Board],
         columns: &[Column],
         cards: &[Card],
+        deleted_cards: &[DeletedCard],
         sprints: &[Sprint],
     ) -> AllBoardsExport {
         let board_exports: Vec<BoardExport> = boards
             .iter()
-            .map(|board| Self::export_board(board, columns, cards, sprints))
+            .map(|board| {
+                Self::export_board(board, columns, cards, deleted_cards, sprints)
+            })
             .collect();
 
         AllBoardsExport {
@@ -82,13 +93,15 @@ mod tests {
         let card = Card::new(&mut board_mut, column.id, "Task".to_string(), 0, "task");
         let cards = vec![card];
 
+        let deleted_cards = vec![];
         let sprints = vec![];
 
-        let export = BoardExporter::export_board(&board, &columns, &cards, &sprints);
+        let export = BoardExporter::export_board(&board, &columns, &cards, &deleted_cards, &sprints);
 
         assert_eq!(export.board.name, "Test");
         assert_eq!(export.columns.len(), 1);
         assert_eq!(export.cards.len(), 1);
+        assert_eq!(export.deleted_cards.len(), 0);
     }
 
     #[test]
@@ -102,9 +115,11 @@ mod tests {
         let columns = vec![column1.clone(), column2.clone()];
 
         let cards = vec![];
+        let deleted_cards = vec![];
         let sprints = vec![];
 
-        let export = BoardExporter::export_all_boards(&boards, &columns, &cards, &sprints);
+        let export =
+            BoardExporter::export_all_boards(&boards, &columns, &cards, &deleted_cards, &sprints);
 
         assert_eq!(export.boards.len(), 2);
         assert_eq!(export.boards[0].board.name, "Board 1");
