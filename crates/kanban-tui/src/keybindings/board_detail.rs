@@ -1,4 +1,4 @@
-use super::{Keybinding, KeybindingContext, KeybindingProvider};
+use super::{Keybinding, KeybindingAction, KeybindingContext, KeybindingProvider};
 use crate::app::BoardFocus;
 
 pub struct BoardDetailProvider {
@@ -22,36 +22,36 @@ impl KeybindingProvider for BoardDetailProvider {
         };
 
         let mut bindings = vec![
-            Keybinding::new("?", "help", "Show help"),
-            Keybinding::new("q", "quit", "Exit project detail view"),
-            Keybinding::new("ESC", "back", "Return to project list"),
-            Keybinding::new("1", "panel 1", "Focus project name panel"),
-            Keybinding::new("2", "panel 2", "Focus description panel"),
-            Keybinding::new("3", "panel 3", "Focus settings panel"),
-            Keybinding::new("4", "panel 4", "Focus sprints panel"),
-            Keybinding::new("5", "panel 5", "Focus columns panel"),
-            Keybinding::new("e", "edit", "Edit current panel"),
-            Keybinding::new("p", "prefix", "Set branch prefix"),
+            Keybinding::new("?", "help", "Show help", KeybindingAction::ShowHelp),
+            Keybinding::new("q", "quit", "Exit project detail view", KeybindingAction::Escape),
+            Keybinding::new("ESC", "back", "Return to project list", KeybindingAction::Escape),
+            Keybinding::new("1", "panel 1", "Focus project name panel", KeybindingAction::FocusPanel(0)),
+            Keybinding::new("2", "panel 2", "Focus description panel", KeybindingAction::FocusPanel(1)),
+            Keybinding::new("3", "panel 3", "Focus settings panel", KeybindingAction::FocusPanel(2)),
+            Keybinding::new("4", "panel 4", "Focus sprints panel", KeybindingAction::FocusPanel(3)),
+            Keybinding::new("5", "panel 5", "Focus columns panel", KeybindingAction::FocusPanel(4)),
+            Keybinding::new("e", "edit", "Edit current panel", KeybindingAction::EditBoard),
+            Keybinding::new("p", "prefix", "Set branch prefix", KeybindingAction::EditBoard),
         ];
 
         match self.focus {
             BoardFocus::Sprints => {
                 bindings.extend(vec![
-                    Keybinding::new("n", "new", "Create new sprint"),
-                    Keybinding::new("j/↓", "down", "Navigate down"),
-                    Keybinding::new("k/↑", "up", "Navigate up"),
-                    Keybinding::new("Enter/Space", "detail", "Open sprint detail"),
+                    Keybinding::new("n", "new", "Create new sprint", KeybindingAction::CreateSprint),
+                    Keybinding::new("j/↓", "down", "Navigate down", KeybindingAction::NavigateDown),
+                    Keybinding::new("k/↑", "up", "Navigate up", KeybindingAction::NavigateUp),
+                    Keybinding::new("Enter/Space", "detail", "Open sprint detail", KeybindingAction::SelectItem),
                 ]);
             }
             BoardFocus::Columns => {
                 bindings.extend(vec![
-                    Keybinding::new("n", "new", "Create new column"),
-                    Keybinding::new("r", "rename", "Rename selected column"),
-                    Keybinding::new("d", "delete", "Delete selected column"),
-                    Keybinding::new("j/↓", "down", "Navigate down"),
-                    Keybinding::new("k/↑", "up", "Navigate up"),
-                    Keybinding::new("J", "move up", "Reorder column up"),
-                    Keybinding::new("K", "move down", "Reorder column down"),
+                    Keybinding::new("n", "new", "Create new column", KeybindingAction::CreateColumn),
+                    Keybinding::new("r", "rename", "Rename selected column", KeybindingAction::RenameColumn),
+                    Keybinding::new("d", "delete", "Delete selected column", KeybindingAction::DeleteColumn),
+                    Keybinding::new("j/↓", "down", "Navigate down", KeybindingAction::NavigateDown),
+                    Keybinding::new("k/↑", "up", "Navigate up", KeybindingAction::NavigateUp),
+                    Keybinding::new("J", "move up", "Reorder column up", KeybindingAction::MoveColumnUp),
+                    Keybinding::new("K", "move down", "Reorder column down", KeybindingAction::MoveColumnDown),
                 ]);
             }
             _ => {}

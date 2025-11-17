@@ -244,28 +244,52 @@ impl App {
         self.should_quit = true;
     }
 
-    fn parse_keybinding_key(key_str: &str) -> Option<crossterm::event::KeyCode> {
-        use crossterm::event::KeyCode;
+    fn execute_action(&mut self, action: &crate::keybindings::KeybindingAction) {
+        use crate::keybindings::KeybindingAction;
 
-        let first_key = key_str.split('/').next()?.trim();
-
-        match first_key {
-            "ESC" => Some(KeyCode::Esc),
-            "Enter" => Some(KeyCode::Enter),
-            "Space" => Some(KeyCode::Char(' ')),
-            "Tab" => Some(KeyCode::Tab),
-            "Backspace" => Some(KeyCode::Backspace),
-            "Delete" => Some(KeyCode::Delete),
-            "Home" => Some(KeyCode::Home),
-            "End" => Some(KeyCode::End),
-            "PageUp" => Some(KeyCode::PageUp),
-            "PageDown" => Some(KeyCode::PageDown),
-            "↑" | "Up" => Some(KeyCode::Up),
-            "↓" | "Down" => Some(KeyCode::Down),
-            "←" | "Left" => Some(KeyCode::Left),
-            "→" | "Right" => Some(KeyCode::Right),
-            s if s.len() == 1 => Some(KeyCode::Char(s.chars().next().unwrap())),
-            _ => None,
+        match action {
+            KeybindingAction::NavigateDown => self.handle_navigation_down(),
+            KeybindingAction::NavigateUp => self.handle_navigation_up(),
+            KeybindingAction::NavigateLeft => self.handle_kanban_column_left(),
+            KeybindingAction::NavigateRight => self.handle_kanban_column_right(),
+            KeybindingAction::SelectItem => self.handle_selection_activate(),
+            KeybindingAction::CreateCard => self.handle_create_card_key(),
+            KeybindingAction::CreateBoard => self.handle_create_board_key(),
+            KeybindingAction::CreateSprint => {},
+            KeybindingAction::CreateColumn => self.handle_create_column_key(),
+            KeybindingAction::RenameBoard => self.handle_rename_board_key(),
+            KeybindingAction::RenameColumn => self.handle_rename_column_key(),
+            KeybindingAction::EditCard => {},
+            KeybindingAction::EditBoard => self.handle_edit_board_key(),
+            KeybindingAction::ToggleCompletion => self.handle_toggle_card_completion(),
+            KeybindingAction::AssignToSprint => self.handle_assign_to_sprint_key(),
+            KeybindingAction::ArchiveCard => self.handle_archive_card(),
+            KeybindingAction::RestoreCard => {},
+            KeybindingAction::DeleteCard => {},
+            KeybindingAction::MoveCardLeft => self.handle_move_card_left(),
+            KeybindingAction::MoveCardRight => self.handle_move_card_right(),
+            KeybindingAction::MoveColumnUp => self.handle_move_column_up(),
+            KeybindingAction::MoveColumnDown => self.handle_move_column_down(),
+            KeybindingAction::DeleteColumn => self.handle_delete_column_key(),
+            KeybindingAction::ExportBoard => self.handle_export_board_key(),
+            KeybindingAction::ExportAll => self.handle_export_all_key(),
+            KeybindingAction::ImportBoard => self.handle_import_board_key(),
+            KeybindingAction::OrderCards => self.handle_order_cards_key(),
+            KeybindingAction::ToggleSortOrder => self.handle_toggle_sort_order_key(),
+            KeybindingAction::ToggleFilter => self.handle_toggle_sprint_filter(),
+            KeybindingAction::ToggleHideAssigned => self.handle_open_filter_dialog(),
+            KeybindingAction::ToggleArchivedView => self.handle_toggle_archived_cards_view(),
+            KeybindingAction::ToggleTaskListView => self.handle_toggle_task_list_view(),
+            KeybindingAction::ToggleCardSelection => self.handle_card_selection_toggle(),
+            KeybindingAction::Search => {
+                if self.focus == Focus::Cards {
+                    self.search.activate();
+                    self.mode = AppMode::Search;
+                }
+            }
+            KeybindingAction::ShowHelp => {}
+            KeybindingAction::Escape => self.handle_escape_key(),
+            KeybindingAction::FocusPanel(panel) => self.handle_column_or_focus_switch(*panel),
         }
     }
 
@@ -466,21 +490,14 @@ impl App {
                     let context = provider.get_context();
 
                     if let Some(binding) = context.bindings.get(index) {
-                        // Parse the first key from the keybinding string and exit help
-                        if let Some(_parsed_key) = Self::parse_keybinding_key(&binding.key) {
-                            if let AppMode::Help(previous_mode) = &self.mode {
-                                self.mode = (**previous_mode).clone();
-                            } else {
-                                self.mode = AppMode::Normal;
-                            }
-                            self.help_selection.clear();
-
-                            // Re-inject the parsed key into the event handler
-                            // We'll schedule it for the next frame
-                            // For now, we just exit and the key won't be processed
-                            // TODO: Properly re-inject keybindings
-                            return;
+                        if let AppMode::Help(previous_mode) = &self.mode {
+                            self.mode = (**previous_mode).clone();
+                        } else {
+                            self.mode = AppMode::Normal;
                         }
+                        self.help_selection.clear();
+
+                        self.execute_action(&binding.action);
                     }
                 }
             }

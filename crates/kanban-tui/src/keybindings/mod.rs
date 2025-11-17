@@ -8,11 +8,53 @@ pub mod sprint_detail;
 
 pub use registry::KeybindingRegistry;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeybindingAction {
+    NavigateDown,
+    NavigateUp,
+    NavigateLeft,
+    NavigateRight,
+    SelectItem,
+    CreateCard,
+    CreateBoard,
+    CreateSprint,
+    CreateColumn,
+    RenameBoard,
+    RenameColumn,
+    EditCard,
+    EditBoard,
+    ToggleCompletion,
+    AssignToSprint,
+    ArchiveCard,
+    RestoreCard,
+    DeleteCard,
+    MoveCardLeft,
+    MoveCardRight,
+    MoveColumnUp,
+    MoveColumnDown,
+    DeleteColumn,
+    ExportBoard,
+    ExportAll,
+    ImportBoard,
+    OrderCards,
+    ToggleSortOrder,
+    ToggleFilter,
+    ToggleHideAssigned,
+    ToggleArchivedView,
+    ToggleTaskListView,
+    ToggleCardSelection,
+    Search,
+    ShowHelp,
+    Escape,
+    FocusPanel(usize),
+}
+
 #[derive(Debug, Clone)]
 pub struct Keybinding {
     pub key: String,
     pub short_description: String,
     pub description: String,
+    pub action: KeybindingAction,
 }
 
 impl Keybinding {
@@ -20,11 +62,13 @@ impl Keybinding {
         key: impl Into<String>,
         short_description: impl Into<String>,
         description: impl Into<String>,
+        action: KeybindingAction,
     ) -> Self {
         Self {
             key: key.into(),
             short_description: short_description.into(),
             description: description.into(),
+            action,
         }
     }
 }
