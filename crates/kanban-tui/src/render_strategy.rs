@@ -3,6 +3,7 @@ use crate::components::{
     card_list_item::{render_card_list_item, CardListItemConfig},
     PanelConfig,
 };
+use crate::layout_strategy::ColumnBoundary;
 use crate::theme::{deleted_view_focused_border, label_text};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -11,6 +12,29 @@ use ratatui::Frame;
 
 pub trait RenderStrategy {
     fn render(&self, app: &App, frame: &mut Frame, area: Rect);
+}
+
+fn count_headers_in_viewport(
+    column_boundaries: &[ColumnBoundary],
+    scroll_offset: usize,
+    viewport_height: usize,
+) -> usize {
+    if column_boundaries.is_empty() {
+        return 0;
+    }
+
+    // Count how many column headers will appear in the viewport
+    // A boundary is relevant if any of its cards appear in the visible range
+    let viewport_end = scroll_offset + viewport_height;
+
+    column_boundaries
+        .iter()
+        .filter(|boundary| {
+            let boundary_end = boundary.start_index + boundary.card_count;
+            // Boundary is relevant if it overlaps with viewport range
+            boundary.start_index < viewport_end && boundary_end > scroll_offset
+        })
+        .count()
 }
 
 pub struct SinglePanelRenderer {
@@ -41,114 +65,141 @@ impl RenderStrategy for SinglePanelRenderer {
 
         if let Some(idx) = board_idx {
             if let Some(board) = app.boards.get(idx) {
-                let task_lists = app.view_strategy.get_all_task_lists();
                 let active_task_list = app.view_strategy.get_active_task_list();
 
                 if self.show_column_headers {
-                    let mut board_columns: Vec<_> = app
-                        .columns
-                        .iter()
-                        .filter(|col| col.board_id == board.id)
-                        .collect();
-                    board_columns.sort_by_key(|col| col.position);
+                    if let Some(task_list) = active_task_list {
+                        use crate::layout_strategy::VirtualUnifiedLayout;
+                        use crate::view_strategy::UnifiedViewStrategy;
 
-                    if board_columns.is_empty() {
-                        lines.push(Line::from(Span::styled(
-                            "  No columns yet. Add columns in board settings.",
-                            label_text(),
-                        )));
-                    } else if task_lists.is_empty() {
-                        let message = if app.active_board_index.is_some() {
-                            "  No tasks yet. Press 'n' to create one!"
+                        // Try to get column boundaries from VirtualUnifiedLayout
+                        let column_boundaries = app
+                            .view_strategy
+                            .as_any()
+                            .downcast_ref::<UnifiedViewStrategy>()
+                            .and_then(|unified| {
+                                let layout_any = unified.get_layout_strategy().as_any();
+                                layout_any.downcast_ref::<VirtualUnifiedLayout>()
+                            })
+                            .map(|layout| layout.get_column_boundaries().to_vec())
+                            .unwrap_or_default();
+
+                        if column_boundaries.is_empty() && task_list.is_empty() {
+                            let message = if app.active_board_index.is_some() {
+                                "  No tasks yet. Press 'n' to create one!"
+                            } else {
+                                "  (Enter/Space) to add tasks"
+                            };
+                            lines.push(Line::from(Span::styled(message, label_text())));
                         } else {
-                            "  (Enter/Space) to add tasks"
-                        };
-                        lines.push(Line::from(Span::styled(message, label_text())));
-                    } else {
-                        for (col_idx, task_list) in task_lists.iter().enumerate() {
-                            if let Some(column) = board_columns.get(col_idx) {
-                                let card_count = task_list.len();
-                                let is_active_column = active_task_list
-                                    .map(|active| std::ptr::eq(*task_list, active))
-                                    .unwrap_or(false);
+                            let raw_viewport_height = area.height.saturating_sub(2) as usize;
 
+                            // Estimate how many column headers will appear in the viewport
+                            let estimated_header_count = count_headers_in_viewport(
+                                &column_boundaries,
+                                task_list.get_scroll_offset(),
+                                raw_viewport_height,
+                            );
+
+                            // Adjust viewport height to account for headers
+                            let adjusted_viewport_height =
+                                raw_viewport_height.saturating_sub(estimated_header_count);
+
+                            let render_info = task_list.get_render_info(adjusted_viewport_height);
+
+                            // Render above indicator
+                            if render_info.show_above_indicator {
+                                let count = render_info.cards_above_count;
+                                let plural = if count == 1 { "" } else { "s" };
                                 lines.push(Line::from(Span::styled(
-                                    format!("── {} ({}) ──", column.name, card_count),
+                                    format!("  {} Task{} above", count, plural),
                                     ratatui::style::Style::default()
-                                        .fg(ratatui::style::Color::Cyan)
-                                        .add_modifier(ratatui::style::Modifier::BOLD),
+                                        .fg(ratatui::style::Color::DarkGray),
                                 )));
+                            }
 
-                                if task_list.is_empty() {
-                                    lines.push(Line::from(Span::styled(
-                                        "  (no tasks)",
-                                        label_text(),
-                                    )));
-                                } else {
-                                    let viewport_height = (area.height as usize).saturating_sub(2);
-                                    let render_info = task_list.get_render_info(viewport_height);
+                            // Render all cards with column headers interspersed
+                            let mut columns_shown = std::collections::HashSet::new();
 
-                                    if render_info.show_above_indicator {
-                                        let count = render_info.cards_above_count;
-                                        let plural = if count == 1 { "" } else { "s" };
+                            for card_idx in &render_info.visible_card_indices {
+                                // Find which column this card belongs to
+                                let card_column_idx = column_boundaries
+                                    .iter()
+                                    .rposition(|b| *card_idx >= b.start_index)
+                                    .unwrap_or(0);
+
+                                // Insert header for this card's column if we haven't already
+                                if !columns_shown.contains(&card_column_idx) {
+                                    if let Some(boundary) = column_boundaries.get(card_column_idx) {
                                         lines.push(Line::from(Span::styled(
-                                            format!("  {} Task{} above", count, plural),
+                                            format!(
+                                                "── {} ({}) ──",
+                                                boundary.column_name, boundary.card_count
+                                            ),
                                             ratatui::style::Style::default()
-                                                .fg(ratatui::style::Color::DarkGray),
+                                                .fg(ratatui::style::Color::Cyan)
+                                                .add_modifier(ratatui::style::Modifier::BOLD),
                                         )));
-                                    }
-
-                                    for card_idx in &render_info.visible_card_indices {
-                                        if let Some(card_id) = task_list.cards.get(*card_idx) {
-                                            if let Some(card) = app.get_card_by_id(*card_id) {
-                                                let is_selected = if is_active_column {
-                                                    task_list.get_selected_index()
-                                                        == Some(*card_idx)
-                                                } else {
-                                                    false
-                                                };
-
-                                                let animation_type = app
-                                                    .animating_cards
-                                                    .get(&card.id)
-                                                    .map(|a| a.animation_type);
-                                                let line =
-                                                    render_card_list_item(CardListItemConfig {
-                                                        card,
-                                                        board,
-                                                        sprints: &app.sprints,
-                                                        is_selected,
-                                                        is_focused: app.focus
-                                                            == crate::app::Focus::Cards
-                                                            && is_active_column,
-                                                        is_multi_selected: app
-                                                            .selected_cards
-                                                            .contains(&card.id),
-                                                        show_sprint_name: app
-                                                            .active_sprint_filters
-                                                            .is_empty(),
-                                                        animation_type,
-                                                    });
-                                                lines.push(line);
-                                            }
-                                        }
-                                    }
-
-                                    if render_info.show_below_indicator {
-                                        let count = render_info.cards_below_count;
-                                        let plural = if count == 1 { "" } else { "s" };
-                                        lines.push(Line::from(Span::styled(
-                                            format!("  {} Task{} below", count, plural),
-                                            ratatui::style::Style::default()
-                                                .fg(ratatui::style::Color::DarkGray),
-                                        )));
+                                        columns_shown.insert(card_column_idx);
                                     }
                                 }
 
-                                if col_idx < task_lists.len() - 1 {
-                                    lines.push(Line::from(""));
+                                if let Some(card_id) = task_list.cards.get(*card_idx) {
+                                    if let Some(card) = app.get_card_by_id(*card_id) {
+                                        let is_selected =
+                                            task_list.get_selected_index() == Some(*card_idx);
+                                        let animation_type = app
+                                            .animating_cards
+                                            .get(&card.id)
+                                            .map(|a| a.animation_type);
+                                        let line = render_card_list_item(CardListItemConfig {
+                                            card,
+                                            board,
+                                            sprints: &app.sprints,
+                                            is_selected,
+                                            is_focused: app.focus == crate::app::Focus::Cards,
+                                            is_multi_selected: app
+                                                .selected_cards
+                                                .contains(&card.id),
+                                            show_sprint_name: app.active_sprint_filters.is_empty(),
+                                            animation_type,
+                                        });
+                                        lines.push(line);
+                                    }
                                 }
                             }
+
+                            // Render below indicator
+                            if render_info.show_below_indicator {
+                                let count = render_info.cards_below_count;
+                                let plural = if count == 1 { "" } else { "s" };
+                                lines.push(Line::from(Span::styled(
+                                    format!("  {} Task{} below", count, plural),
+                                    ratatui::style::Style::default()
+                                        .fg(ratatui::style::Color::DarkGray),
+                                )));
+                            }
+                        }
+                    } else if let Some(board) = app.boards.get(board_idx.unwrap()) {
+                        let mut board_columns: Vec<_> = app
+                            .columns
+                            .iter()
+                            .filter(|col| col.board_id == board.id)
+                            .collect();
+                        board_columns.sort_by_key(|col| col.position);
+
+                        if board_columns.is_empty() {
+                            lines.push(Line::from(Span::styled(
+                                "  No columns yet. Add columns in board settings.",
+                                label_text(),
+                            )));
+                        } else {
+                            let message = if app.active_board_index.is_some() {
+                                "  No tasks yet. Press 'n' to create one!"
+                            } else {
+                                "  (Enter/Space) to add tasks"
+                            };
+                            lines.push(Line::from(Span::styled(message, label_text())));
                         }
                     }
                 } else if let Some(task_list) = app.view_strategy.get_active_task_list() {

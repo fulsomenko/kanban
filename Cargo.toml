@@ -8,9 +8,9 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
-authors = ["Max Emil Blomstervall"]
+authors = ["Max Emil Yoon Blomstervall"]
 license = "Apache-2.0"
 repository = "https://github.com/fulsomenko/kanban"
 homepage = "https://github.com/fulsomenko/kanban"

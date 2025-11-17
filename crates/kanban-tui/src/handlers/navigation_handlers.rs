@@ -1,8 +1,41 @@
 use crate::app::{App, AppMode, Focus};
+use crate::layout_strategy::VirtualUnifiedLayout;
 use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::TaskListView;
 
 impl App {
+    fn get_effective_viewport_height(&self) -> usize {
+        // Check if using grouped view (which has column headers)
+        if let Some(unified) = self
+            .view_strategy
+            .as_any()
+            .downcast_ref::<UnifiedViewStrategy>()
+        {
+            if let Some(layout) = unified
+                .get_layout_strategy()
+                .as_any()
+                .downcast_ref::<VirtualUnifiedLayout>()
+            {
+                // Estimate headers that will appear in the viewport
+                let column_boundaries = layout.get_column_boundaries();
+                if let Some(list) = self.view_strategy.get_active_task_list() {
+                    let estimated_headers = column_boundaries
+                        .iter()
+                        .filter(|b| {
+                            let boundary_end = b.start_index + b.card_count;
+                            let viewport_end = list.get_scroll_offset() + self.viewport_height;
+                            b.start_index < viewport_end && boundary_end > list.get_scroll_offset()
+                        })
+                        .count();
+
+                    return self.viewport_height.saturating_sub(estimated_headers);
+                }
+            }
+        }
+
+        self.viewport_height
+    }
+
     pub fn handle_focus_switch(&mut self, focus_target: Focus) {
         match focus_target {
             Focus::Boards => {
@@ -23,8 +56,9 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
+                let effective_viewport = self.get_effective_viewport_height();
                 let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_down(self.viewport_height)
+                    list.navigate_down(effective_viewport)
                 } else {
                     false
                 };
@@ -43,8 +77,9 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
+                let effective_viewport = self.get_effective_viewport_height();
                 let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_up(self.viewport_height)
+                    list.navigate_up(effective_viewport)
                 } else {
                     false
                 };

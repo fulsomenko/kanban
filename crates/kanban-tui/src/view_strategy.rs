@@ -42,11 +42,11 @@ impl UnifiedViewStrategy {
     }
 
     pub fn grouped() -> Self {
-        use crate::layout_strategy::ColumnListsLayout;
+        use crate::layout_strategy::VirtualUnifiedLayout;
         use crate::render_strategy::SinglePanelRenderer;
 
         Self {
-            layout_strategy: Box::new(ColumnListsLayout::new()),
+            layout_strategy: Box::new(VirtualUnifiedLayout::new()),
             render_strategy: Box::new(SinglePanelRenderer::grouped()),
         }
     }
@@ -59,6 +59,10 @@ impl UnifiedViewStrategy {
             layout_strategy: Box::new(ColumnListsLayout::new()),
             render_strategy: Box::new(MultiPanelRenderer),
         }
+    }
+
+    pub fn get_layout_strategy(&self) -> &dyn LayoutStrategy {
+        self.layout_strategy.as_ref()
     }
 
     pub fn get_layout_strategy_mut(&mut self) -> &mut dyn LayoutStrategy {
