@@ -7,6 +7,7 @@ pub struct BoardExport {
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
     pub sprints: Vec<Sprint>,
+    #[serde(default)]
     pub archived_cards: Vec<ArchivedCard>,
 }
 
