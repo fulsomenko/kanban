@@ -13,18 +13,21 @@
         "sprint_names": [
           "an-eventful-october",
           "an-experience-to-remember",
-          "a-hallowed-week"
+          "a-hallowed-week",
+          "progression-is-progress"
         ],
-        "sprint_name_used_count": 3,
+        "sprint_name_used_count": 4,
         "next_sprint_number": 8,
-        "active_sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+        "active_sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
         "task_list_view": "ColumnView",
         "prefix_counters": {
-          "KAN": 132
+          "KAN": 134
         },
-        "sprint_counters": {},
+        "sprint_counters": {
+          "KAN": 9
+        },
         "created_at": "2025-10-10T08:47:44.779097Z",
-        "updated_at": "2025-11-17T22:03:31.038202Z"
+        "updated_at": "2025-11-17T22:38:49.479432Z"
       },
       "columns": [
         {
@@ -175,7 +178,7 @@
           "description": "Be able to have references to other cards.\n\n[like this](DEV-0001) Should be able to follow that link and open the card in Task Description interface.\n\n",
           "priority": "Medium",
           "status": "Done",
-          "position": 34,
+          "position": 63,
           "due_date": null,
           "points": 4,
           "card_number": 2,
@@ -183,8 +186,8 @@
           "assigned_prefix": null,
           "card_prefix": null,
           "created_at": "2025-10-10T22:03:42.988557Z",
-          "updated_at": "2025-10-23T05:12:33.359277Z",
-          "completed_at": "2025-10-23T05:12:33.359272Z",
+          "updated_at": "2025-11-17T22:43:16.414879Z",
+          "completed_at": "2025-11-17T22:43:16.414879Z",
           "sprint_logs": [
             {
               "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
@@ -207,11 +210,11 @@
           "due_date": null,
           "points": 4,
           "card_number": 6,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-10T22:05:04.607714Z",
-          "updated_at": "2025-11-17T21:43:30.861807Z",
+          "updated_at": "2025-11-17T22:41:06.526722Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -227,6 +230,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448929Z",
+              "ended_at": "2025-11-17T22:41:06.526717Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:06.526722Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -355,11 +366,11 @@
           "due_date": null,
           "points": 1,
           "card_number": 11,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-10T22:53:19.579898Z",
-          "updated_at": "2025-11-04T00:22:28.640560Z",
+          "updated_at": "2025-11-17T22:41:08.233363Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -375,8 +386,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-04T00:22:28.640559Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:08.233357Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:08.233362Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -466,11 +485,11 @@
           "due_date": null,
           "points": 3,
           "card_number": 15,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-11T18:29:10.434614Z",
-          "updated_at": "2025-11-17T22:09:55.333900Z",
+          "updated_at": "2025-11-17T22:39:49.578057Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -486,6 +505,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448946Z",
+              "ended_at": "2025-11-17T22:39:49.578053Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:39:49.578056Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -605,11 +632,11 @@
           "due_date": null,
           "points": 3,
           "card_number": 19,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-11T18:45:47.488818Z",
-          "updated_at": "2025-11-02T16:56:39.448944Z",
+          "updated_at": "2025-11-17T22:41:09.863744Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -625,6 +652,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448944Z",
+              "ended_at": "2025-11-17T22:41:09.863739Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:09.863743Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -641,11 +676,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 20,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-11T19:23:32.612472Z",
-          "updated_at": "2025-11-02T16:56:39.448932Z",
+          "updated_at": "2025-11-17T22:41:11.439765Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -661,6 +696,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448932Z",
+              "ended_at": "2025-11-17T22:41:11.439761Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:11.439765Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -817,11 +860,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 26,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-11T20:54:41.898524Z",
-          "updated_at": "2025-11-02T16:56:39.448942Z",
+          "updated_at": "2025-11-17T22:41:13.126179Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -837,6 +880,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448942Z",
+              "ended_at": "2025-11-17T22:41:13.126154Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:13.126179Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -881,11 +932,11 @@
           "due_date": null,
           "points": 4,
           "card_number": 28,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-11T21:43:08.519830Z",
-          "updated_at": "2025-11-02T16:56:39.448928Z",
+          "updated_at": "2025-11-17T22:41:14.557248Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -901,6 +952,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448927Z",
+              "ended_at": "2025-11-17T22:41:14.557226Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:14.557247Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -974,12 +1033,12 @@
         },
         {
           "id": "0ae3776c-38cc-4b22-8e89-ed9ac767b512",
-          "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+          "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
           "title": "Add cli",
           "description": "I want to besides the tui add a cli interface to the application also\n",
           "priority": "Medium",
-          "status": "Todo",
-          "position": 1,
+          "status": "Done",
+          "position": 63,
           "due_date": null,
           "points": 4,
           "card_number": 32,
@@ -987,8 +1046,8 @@
           "assigned_prefix": null,
           "card_prefix": null,
           "created_at": "2025-10-12T08:23:41.175901Z",
-          "updated_at": "2025-11-17T22:08:21.093286Z",
-          "completed_at": null,
+          "updated_at": "2025-11-17T22:39:51.697929Z",
+          "completed_at": "2025-11-17T22:39:51.697926Z",
           "sprint_logs": [
             {
               "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
@@ -1143,11 +1202,11 @@
           "due_date": null,
           "points": 5,
           "card_number": 36,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-12T14:44:43.936971Z",
-          "updated_at": "2025-11-02T17:01:19.623526Z",
+          "updated_at": "2025-11-17T22:41:15.760154Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -1155,8 +1214,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T17:01:19.623525Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:15.760147Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:15.760153Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -1190,11 +1257,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 38,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
-          "assigned_prefix": null,
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+          "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-12T15:43:38.123195Z",
-          "updated_at": "2025-10-31T20:07:14.934310Z",
+          "updated_at": "2025-11-17T22:41:17.501326Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -1202,6 +1269,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-10-31T20:07:14.934296Z",
+              "ended_at": "2025-11-17T22:41:17.501321Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:17.501325Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -1396,11 +1471,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 47,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-14T20:39:56.710360Z",
-          "updated_at": "2025-11-02T16:56:39.448935Z",
+          "updated_at": "2025-11-17T22:41:18.759132Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -1416,6 +1491,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448934Z",
+              "ended_at": "2025-11-17T22:41:18.759126Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:18.759131Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -1479,11 +1562,11 @@
           "due_date": null,
           "points": 1,
           "card_number": 50,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-14T20:52:00.077779Z",
-          "updated_at": "2025-11-02T17:01:19.623531Z",
+          "updated_at": "2025-11-17T22:41:20.088766Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -1491,8 +1574,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T17:01:19.623530Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:20.088757Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:20.088764Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -1554,11 +1645,11 @@
           "due_date": null,
           "points": 1,
           "card_number": 53,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-14T22:06:38.146481Z",
-          "updated_at": "2025-11-02T16:56:39.448925Z",
+          "updated_at": "2025-11-17T22:41:21.616034Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -1574,6 +1665,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448924Z",
+              "ended_at": "2025-11-17T22:41:21.616027Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:21.616033Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -1609,12 +1708,12 @@
         },
         {
           "id": "0ce90167-1169-40fa-915e-54ca0ff6ed2f",
-          "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+          "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
           "title": "Scroll in cards list",
           "description": "When the task list has grown too big for the current window. we dont show the overflow. we just cut it out\n\nShould be able to scroll down to see the overflowing cards\n\n2025-11-17 23:07:56\n---\n\nScrolling doesnt work when we use the grouped by column list view mode\n",
           "priority": "Medium",
-          "status": "Todo",
-          "position": 3,
+          "status": "Done",
+          "position": 62,
           "due_date": null,
           "points": 3,
           "card_number": 55,
@@ -1622,8 +1721,8 @@
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-15T16:41:59.784803Z",
-          "updated_at": "2025-11-17T22:08:10.801776Z",
-          "completed_at": null,
+          "updated_at": "2025-11-17T22:38:09.399815Z",
+          "completed_at": "2025-11-17T22:37:57.893291Z",
           "sprint_logs": [
             {
               "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
@@ -1720,12 +1819,12 @@
         },
         {
           "id": "2c8d9c7d-44c8-49d5-a3e8-027356e694a6",
-          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
           "title": "moving cards out of complete column doesnt unmark the card as complete",
           "description": "Moving cards out from the last column doesnt seem to unmark them as complete\nMoving cards into the last column doesnt seem to mark them as complete\n\nEntering into the selected card doesnt work. When use `e` on whatever card it opens up a different one\n\nUntil we get the selecting of proper cards fixed we won't have any good board. It will be messy and things wil end up in wrong places\n\nI think the last thing I did was to try move a card around the columns. \n\nIt moved the wrong card. I tried to move that one back, nothing happened.\n\nMoving cards back don't work?\n\n---\n\nJust a card that I picked out. We have `column_id` now so we can drop `status`.\n\n```JSON\n{\n  \"id\": \"0ce90167-1169-40fa-915e-54ca0ff6ed2f\",\n  \"column_id\": \"289b85d8-a199-49fa-9d77-5ad892d87ef8\",\n  \"title\": \"Scroll in cards list\",\n  \"description\": \"When the task list has grown too big for the current window. we dont show the overflow. we just cut it out\\n\",\n  \"priority\": \"Medium\",\n  \"status\": \"Todo\",\n  \"position\": 19,\n  \"due_date\": null,\n  \"points\": 3,\n  \"card_number\": 55,\n  \"sprint_id\": null,\n  \"created_at\": \"2025-10-15T16:41:59.784803Z\",\n  \"updated_at\": \"2025-10-17T06:13:13.740612Z\",\n  \"completed_at\": null\n}\n```\n\n\n",
           "priority": "Medium",
-          "status": "Todo",
-          "position": 47,
+          "status": "Done",
+          "position": 64,
           "due_date": null,
           "points": 1,
           "card_number": 60,
@@ -1733,8 +1832,8 @@
           "assigned_prefix": null,
           "card_prefix": null,
           "created_at": "2025-10-16T22:37:13.346713Z",
-          "updated_at": "2025-11-17T21:43:20.924576Z",
-          "completed_at": null,
+          "updated_at": "2025-11-17T22:43:18.585541Z",
+          "completed_at": "2025-11-17T22:43:18.585541Z",
           "sprint_logs": [
             {
               "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
@@ -1869,11 +1968,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 66,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-20T15:37:09.068407Z",
-          "updated_at": "2025-11-02T16:56:39.448938Z",
+          "updated_at": "2025-11-17T22:41:22.981691Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -1889,6 +1988,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:39.448937Z",
+              "ended_at": "2025-11-17T22:41:22.981679Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:22.981690Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -1905,11 +2012,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 67,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-20T15:49:39.413116Z",
-          "updated_at": "2025-11-02T16:56:23.898923Z",
+          "updated_at": "2025-11-17T22:41:24.979076Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -1925,6 +2032,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:23.898923Z",
+              "ended_at": "2025-11-17T22:41:24.979068Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:24.979074Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -1934,7 +2049,7 @@
           "id": "44270526-19aa-4d58-b895-75f1bb7fb1be",
           "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
           "title": "treesitter for syntax highlighting",
-          "description": "\n```ts\nconst a = 'test';\n```\nSyntect + Markdown: Overview\n\nSyntect can't parse markdown directly, but it\nintegrates beautifully with markdown parsers to highlight code\nblocks within markdown.\n\nHow it works:\n1. Parse markdown using a crate like pulldown-cmark or comrak\n2. When the parser encounters a code block, extract it\n3. Pass it to syntect with the language hint (e.g., rust, python)\n4. Syntect returns highlighted tokens\n5. Render styled text in ratatui\n\nRecommended Stack\n\nFor your kanban task details:\nmarkdown text → pulldown-cmark (parser) → syntect (highlighter) →\nratatui (renderer)\n\nThis gives you:\n- ✅ Full markdown support (bold, italic, links, lists, etc.)\n- ✅ Syntax-highlighted code blocks (any language)\n- ✅ Simple, composable architecture\n- ✅ No semantic tree-sitter needed\n\nArchitecture Approach\n\nCreate a module in kanban-tui called markdown_renderer:\n1. Parse markdown with pulldown-cmark\n2. For each event, check if it's a code block\n3. If yes → use syntect to highlight\n4. Convert to ratatui Spans/Line for terminal rendering\n\nThis is exactly what tools like mdcat and bat do, so it's\nbattle-tested.\n\nPractical Example Flow\n\nCard description: \"Here's the fix:\\n\\n```rust\\nfn add(a: i32) { a\n+ 1 }\\n```\"\n    ↓\nParse markdown (Event::Start(CodeBlock(\"rust\")), Event::Text(\"fn\nadd...\"))\n    ↓\nFor code blocks: syntect highlights with rust grammar\n    ↓\nRender in ratatui with colors/styles\n\nWould you like me to plan out the implementation for integrating\nthis into the kanban TUI?\n\nMerged\n---\n\nThis ticket was merged without any syntax highlighting for code blocks. I accept this as an ok compromise for now and merge to make incremental progress\n",
+          "description": null,
           "priority": "Medium",
           "status": "Done",
           "position": 33,
@@ -2082,11 +2197,11 @@
           "due_date": null,
           "points": 4,
           "card_number": 83,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-22T19:37:16.156456Z",
-          "updated_at": "2025-11-02T16:56:23.898912Z",
+          "updated_at": "2025-11-17T22:41:26.665310Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2102,6 +2217,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:23.898910Z",
+              "ended_at": "2025-11-17T22:41:26.665302Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:26.665309Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -2137,11 +2260,11 @@
           "due_date": null,
           "points": 1,
           "card_number": 85,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-23T05:09:02.396138Z",
-          "updated_at": "2025-11-02T16:56:23.898920Z",
+          "updated_at": "2025-11-17T22:41:34.327395Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2157,6 +2280,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:23.898920Z",
+              "ended_at": "2025-11-17T22:41:34.327395Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327395Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -2295,11 +2426,11 @@
           "due_date": null,
           "points": 3,
           "card_number": 91,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-24T16:50:26.487485Z",
-          "updated_at": "2025-11-02T16:56:23.898917Z",
+          "updated_at": "2025-11-17T22:41:34.327397Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2315,6 +2446,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:23.898917Z",
+              "ended_at": "2025-11-17T22:41:34.327396Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327397Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -2331,11 +2470,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 92,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-24T16:53:18.872916Z",
-          "updated_at": "2025-11-02T17:01:19.623528Z",
+          "updated_at": "2025-11-17T22:41:34.327390Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2343,8 +2482,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T17:01:19.623528Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:34.327389Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327390Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -2359,11 +2506,11 @@
           "due_date": null,
           "points": 4,
           "card_number": 93,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-24T19:54:30.818495Z",
-          "updated_at": "2025-11-02T16:56:14.917354Z",
+          "updated_at": "2025-11-17T22:41:34.327388Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2379,6 +2526,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:14.917352Z",
+              "ended_at": "2025-11-17T22:41:34.327388Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327388Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -2442,11 +2597,11 @@
           "due_date": null,
           "points": 4,
           "card_number": 97,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-24T23:00:04.886094Z",
-          "updated_at": "2025-11-02T17:01:19.623536Z",
+          "updated_at": "2025-11-17T22:41:34.327391Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2454,8 +2609,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T17:01:19.623535Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:34.327391Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327391Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -2470,11 +2633,11 @@
           "due_date": null,
           "points": 3,
           "card_number": 99,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
-          "assigned_prefix": null,
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+          "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-26T08:18:12.441900Z",
-          "updated_at": "2025-10-31T20:07:04.874824Z",
+          "updated_at": "2025-11-17T22:41:34.327393Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2482,6 +2645,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-10-31T20:07:04.874820Z",
+              "ended_at": "2025-11-17T22:41:34.327392Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327392Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -2498,11 +2669,11 @@
           "due_date": null,
           "points": 1,
           "card_number": 100,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-26T09:51:30.456223Z",
-          "updated_at": "2025-11-02T17:01:19.623523Z",
+          "updated_at": "2025-11-17T22:41:34.327385Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2510,8 +2681,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T17:01:19.623519Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:34.327385Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327385Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -2573,11 +2752,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 103,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-30T09:43:26.240840Z",
-          "updated_at": "2025-11-02T17:01:19.623533Z",
+          "updated_at": "2025-11-17T22:41:34.327394Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2585,8 +2764,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T17:01:19.623533Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:34.327394Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327394Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -2639,11 +2826,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 106,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-30T10:19:55.755205Z",
-          "updated_at": "2025-11-02T16:58:54.249181Z",
+          "updated_at": "2025-11-17T22:41:34.327387Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2651,8 +2838,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:58:48.613009Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:34.327386Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327387Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -2667,11 +2862,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 107,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-10-30T18:52:31.763544Z",
-          "updated_at": "2025-11-02T16:56:14.917360Z",
+          "updated_at": "2025-11-17T22:41:34.327382Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2687,6 +2882,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:56:14.917360Z",
+              "ended_at": "2025-11-17T22:41:34.327375Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327380Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -2831,11 +3034,11 @@
           "due_date": null,
           "points": 2,
           "card_number": 112,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
-          "assigned_prefix": null,
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+          "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-11-01T09:35:35.157294Z",
-          "updated_at": "2025-11-01T16:42:25.311075Z",
+          "updated_at": "2025-11-17T22:41:34.327384Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2843,6 +3046,14 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-01T16:42:25.311070Z",
+              "ended_at": "2025-11-17T22:41:34.327383Z",
+              "status": "Planning"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327384Z",
               "ended_at": null,
               "status": "Planning"
             }
@@ -2931,11 +3142,11 @@
           "due_date": null,
           "points": 1,
           "card_number": 115,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-11-01T17:23:30.299863Z",
-          "updated_at": "2025-11-02T16:58:38.066588Z",
+          "updated_at": "2025-11-17T22:41:34.327398Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2943,8 +3154,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:58:38.066584Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:34.327398Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:34.327398Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -2959,11 +3178,11 @@
           "due_date": null,
           "points": 1,
           "card_number": 1,
-          "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+          "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
           "assigned_prefix": "KAN",
           "card_prefix": null,
           "created_at": "2025-11-02T09:56:38.831694Z",
-          "updated_at": "2025-11-17T21:43:36.557555Z",
+          "updated_at": "2025-11-17T22:41:01.506777Z",
           "completed_at": null,
           "sprint_logs": [
             {
@@ -2971,8 +3190,16 @@
               "sprint_number": 7,
               "sprint_name": "a-hallowed-week",
               "started_at": "2025-11-02T16:58:33.071660Z",
-              "ended_at": null,
+              "ended_at": "2025-11-17T22:41:01.506770Z",
               "status": "Active"
+            },
+            {
+              "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+              "sprint_number": 8,
+              "sprint_name": "progression-is-progress",
+              "started_at": "2025-11-17T22:41:01.506776Z",
+              "ended_at": null,
+              "status": "Planning"
             }
           ]
         },
@@ -3277,6 +3504,44 @@
               "status": "Active"
             }
           ]
+        },
+        {
+          "id": "b03b1ea7-cf2b-4ce0-b3e0-aca8cfded23b",
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "title": "urgent migrations",
+          "description": null,
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 52,
+          "due_date": null,
+          "points": null,
+          "card_number": 132,
+          "sprint_id": null,
+          "assigned_prefix": "KAN",
+          "card_prefix": null,
+          "created_at": "2025-11-17T22:29:29.221286Z",
+          "updated_at": "2025-11-17T22:29:29.221286Z",
+          "completed_at": null,
+          "sprint_logs": []
+        },
+        {
+          "id": "14489bd1-79a9-4662-a7c7-755a13bc305e",
+          "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+          "title": "scrolling doesnt work in grouped by columns list",
+          "description": "2025-11-17 23:07:56\n---\n\nScrolling doesnt work when we use the grouped by column list view mode\n",
+          "priority": "Medium",
+          "status": "Todo",
+          "position": 3,
+          "due_date": null,
+          "points": null,
+          "card_number": 133,
+          "sprint_id": null,
+          "assigned_prefix": "KAN",
+          "card_prefix": null,
+          "created_at": "2025-11-17T22:37:56.433493Z",
+          "updated_at": "2025-11-17T22:38:21.257142Z",
+          "completed_at": null,
+          "sprint_logs": []
         }
       ],
       "sprints": [
@@ -3313,11 +3578,24 @@
           "name_index": 2,
           "prefix": null,
           "card_prefix": null,
-          "status": "Active",
+          "status": "Completed",
           "start_date": "2025-11-02T16:57:07.474546Z",
           "end_date": "2025-11-09T16:57:07.474546Z",
           "created_at": "2025-10-31T18:19:30.433027Z",
-          "updated_at": "2025-11-02T16:57:07.474551Z"
+          "updated_at": "2025-11-17T22:39:18.511843Z"
+        },
+        {
+          "id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+          "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
+          "sprint_number": 8,
+          "name_index": 3,
+          "prefix": null,
+          "card_prefix": null,
+          "status": "Active",
+          "start_date": "2025-11-17T22:44:07.121256Z",
+          "end_date": "2025-11-24T22:44:07.121256Z",
+          "created_at": "2025-11-17T22:38:49.479432Z",
+          "updated_at": "2025-11-17T22:44:07.121265Z"
         }
       ],
       "archived_cards": []
