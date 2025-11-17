@@ -66,8 +66,10 @@ impl<'de> Deserialize<'de> for Board {
             pub id: BoardId,
             pub name: String,
             pub description: Option<String>,
-            #[serde(default, alias = "branch_prefix")]
+            #[serde(default)]
             pub sprint_prefix: Option<String>,
+            #[serde(default)]
+            pub branch_prefix: Option<String>,
             #[serde(default)]
             pub card_prefix: Option<String>,
             #[serde(default = "default_sort_field")]
@@ -97,11 +99,12 @@ impl<'de> Deserialize<'de> for Board {
         }
 
         let helper = BoardHelper::deserialize(deserializer)?;
+        let sprint_prefix = helper.sprint_prefix.or(helper.branch_prefix);
         let mut board = Board {
             id: helper.id,
             name: helper.name,
             description: helper.description,
-            sprint_prefix: helper.sprint_prefix,
+            sprint_prefix,
             card_prefix: helper.card_prefix,
             task_sort_field: helper.task_sort_field,
             task_sort_order: helper.task_sort_order,
