@@ -252,12 +252,12 @@ impl App {
         match key_code {
             KeyCode::Char(c) => {
                 // Check if the entire binding_key is a single char match (handles "/" correctly)
-                if binding_key.len() == 1 && binding_key.chars().next() == Some(*c) {
+                if binding_key.len() == 1 && binding_key.starts_with(*c) {
                     return true;
                 }
                 // Check if any part after splitting on '/' matches
                 binding_key.split('/').any(|k| {
-                    k.trim().len() == 1 && k.trim().chars().next() == Some(*c)
+                    k.trim().len() == 1 && k.trim().starts_with(*c)
                 })
             },
             KeyCode::Enter => {

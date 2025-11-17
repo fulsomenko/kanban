@@ -1474,7 +1474,7 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
         lines.push(Line::from(vec![
             Span::styled(prefix.to_string(), style),
             Span::styled(
-                format!("{}", binding.key),
+                binding.key.to_string(),
                 Style::default().fg(Color::Yellow),
             ),
             Span::raw(" "),
