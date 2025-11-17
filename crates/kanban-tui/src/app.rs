@@ -246,7 +246,10 @@ impl App {
         self.should_quit = true;
     }
 
-    fn keycode_matches_binding_key(key_code: &crossterm::event::KeyCode, binding_key: &str) -> bool {
+    fn keycode_matches_binding_key(
+        key_code: &crossterm::event::KeyCode,
+        binding_key: &str,
+    ) -> bool {
         use crossterm::event::KeyCode;
 
         match key_code {
@@ -256,64 +259,46 @@ impl App {
                     return true;
                 }
                 // Check if any part after splitting on '/' matches
-                binding_key.split('/').any(|k| {
-                    k.trim().len() == 1 && k.trim().starts_with(*c)
-                })
-            },
-            KeyCode::Enter => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "Enter" || trimmed == "ENTER"
-                })
-            },
-            KeyCode::Esc => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "Esc" || trimmed == "ESC"
-                })
-            },
-            KeyCode::Backspace => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "Backspace" || trimmed == "BACKSPACE"
-                })
-            },
-            KeyCode::Home => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "Home" || trimmed == "HOME"
-                })
-            },
-            KeyCode::End => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "End" || trimmed == "END"
-                })
-            },
-            KeyCode::Down => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "↓" || trimmed == "Down" || trimmed == "DOWN"
-                })
-            },
-            KeyCode::Up => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "↑" || trimmed == "Up" || trimmed == "UP"
-                })
-            },
-            KeyCode::Left => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "←" || trimmed == "Left" || trimmed == "LEFT"
-                })
-            },
-            KeyCode::Right => {
-                binding_key.split('/').any(|k| {
-                    let trimmed = k.trim();
-                    trimmed == "→" || trimmed == "Right" || trimmed == "RIGHT"
-                })
-            },
+                binding_key
+                    .split('/')
+                    .any(|k| k.trim().len() == 1 && k.trim().starts_with(*c))
+            }
+            KeyCode::Enter => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Enter" || trimmed == "ENTER"
+            }),
+            KeyCode::Esc => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Esc" || trimmed == "ESC"
+            }),
+            KeyCode::Backspace => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Backspace" || trimmed == "BACKSPACE"
+            }),
+            KeyCode::Home => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Home" || trimmed == "HOME"
+            }),
+            KeyCode::End => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "End" || trimmed == "END"
+            }),
+            KeyCode::Down => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "↓" || trimmed == "Down" || trimmed == "DOWN"
+            }),
+            KeyCode::Up => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "↑" || trimmed == "Up" || trimmed == "UP"
+            }),
+            KeyCode::Left => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "←" || trimmed == "Left" || trimmed == "LEFT"
+            }),
+            KeyCode::Right => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "→" || trimmed == "Right" || trimmed == "RIGHT"
+            }),
             _ => false,
         }
     }
@@ -333,7 +318,7 @@ impl App {
             KeybindingAction::CreateColumn => self.handle_create_column_key(),
             KeybindingAction::RenameBoard => self.handle_rename_board_key(),
             KeybindingAction::RenameColumn => self.handle_rename_column_key(),
-            KeybindingAction::EditCard => {},
+            KeybindingAction::EditCard => {}
             KeybindingAction::EditBoard => self.handle_edit_board_key(),
             KeybindingAction::ToggleCompletion => self.handle_toggle_card_completion(),
             KeybindingAction::AssignToSprint => self.handle_assign_to_sprint_key(),
@@ -594,7 +579,10 @@ impl App {
                 let provider = KeybindingRegistry::get_provider(self);
                 let context = provider.get_context();
 
-                if let Some((index, binding)) = context.bindings.iter().enumerate()
+                if let Some((index, binding)) = context
+                    .bindings
+                    .iter()
+                    .enumerate()
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
                     self.help_selection.set(Some(index));
