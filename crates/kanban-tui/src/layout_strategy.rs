@@ -1,6 +1,15 @@
 use crate::card_list::{CardList, CardListId};
 use crate::services::filter_and_sort_cards_by_column;
 use crate::view_strategy::ViewRefreshContext;
+use uuid::Uuid;
+
+#[derive(Clone)]
+pub struct ColumnBoundary {
+    pub column_id: Uuid,
+    pub column_name: String,
+    pub start_index: usize,
+    pub card_count: usize,
+}
 
 pub trait LayoutStrategy {
     fn get_active_task_list(&self) -> Option<&CardList>;
@@ -182,6 +191,91 @@ impl LayoutStrategy for ColumnListsLayout {
         if self.active_column_index >= self.column_lists.len() {
             self.active_column_index = self.column_lists.len().saturating_sub(1);
         }
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+pub struct VirtualUnifiedLayout {
+    unified_list: CardList,
+    column_boundaries: Vec<ColumnBoundary>,
+}
+
+impl VirtualUnifiedLayout {
+    pub fn new() -> Self {
+        Self {
+            unified_list: CardList::new(CardListId::All),
+            column_boundaries: Vec::new(),
+        }
+    }
+
+    pub fn get_column_boundaries(&self) -> &[ColumnBoundary] {
+        &self.column_boundaries
+    }
+}
+
+impl Default for VirtualUnifiedLayout {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LayoutStrategy for VirtualUnifiedLayout {
+    fn get_active_task_list(&self) -> Option<&CardList> {
+        Some(&self.unified_list)
+    }
+
+    fn get_active_task_list_mut(&mut self) -> Option<&mut CardList> {
+        Some(&mut self.unified_list)
+    }
+
+    fn get_all_task_lists(&self) -> Vec<&CardList> {
+        vec![&self.unified_list]
+    }
+
+    fn navigate_left(&mut self, _select_last: bool) -> bool {
+        false
+    }
+
+    fn navigate_right(&mut self, _select_last: bool) -> bool {
+        false
+    }
+
+    fn refresh_lists(&mut self, ctx: &ViewRefreshContext) {
+        let mut board_columns: Vec<_> = ctx
+            .all_columns
+            .iter()
+            .filter(|col| col.board_id == ctx.board.id)
+            .collect();
+        board_columns.sort_by_key(|col| col.position);
+
+        let mut unified_cards = Vec::new();
+        let mut new_boundaries = Vec::new();
+
+        for column in board_columns.iter() {
+            let card_ids = filter_and_sort_cards_by_column(ctx, column.id);
+            let card_count = card_ids.len();
+
+            if card_count > 0 {
+                new_boundaries.push(ColumnBoundary {
+                    column_id: column.id,
+                    column_name: column.name.clone(),
+                    start_index: unified_cards.len(),
+                    card_count,
+                });
+
+                unified_cards.extend(card_ids);
+            }
+        }
+
+        self.unified_list.update_cards(unified_cards);
+        self.column_boundaries = new_boundaries;
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
