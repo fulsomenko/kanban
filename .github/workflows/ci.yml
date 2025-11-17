@@ -124,6 +124,35 @@ jobs:
 
           echo "✅ Changeset validated successfully"
 
+  version-check:
+    name: Version Check
+    if: github.event_name == 'pull_request' && github.base_ref == 'master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version bump
+        run: |
+          CURRENT_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          LAST_VERSION="${LAST_TAG#v}"
+
+          echo "Current version: $CURRENT_VERSION"
+          echo "Last released version: $LAST_VERSION"
+          echo ""
+
+          if [ "$CURRENT_VERSION" = "$LAST_VERSION" ]; then
+            echo "❌ Version has not been bumped!"
+            echo ""
+            echo "The version in Cargo.toml ($CURRENT_VERSION) matches the last released version ($LAST_VERSION)."
+            echo "Please bump the version in Cargo.toml before merging to master."
+            exit 1
+          fi
+
+          echo "✅ Version has been bumped: $LAST_VERSION → $CURRENT_VERSION"
+
   release-validation:
     name: Release Validation
     runs-on: ubuntu-latest
