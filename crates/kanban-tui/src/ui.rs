@@ -1429,6 +1429,7 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
 }
 
 fn render_help_popup(app: &App, frame: &mut Frame) {
+    use crate::components::ListItemConfig;
     use crate::keybindings::KeybindingRegistry;
 
     let area = centered_rect(80, 80, frame.area());
@@ -1451,6 +1452,7 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
     // Get keybindings for the underlying mode
     let provider = KeybindingRegistry::get_provider(app);
     let context = provider.get_context();
+    let selected_idx = app.help_selection.get();
 
     // Build lines for each keybinding
     let mut lines = vec![
@@ -1463,20 +1465,23 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
         Line::from(""),
     ];
 
-    for binding in &context.bindings {
+    for (idx, binding) in context.bindings.iter().enumerate() {
+        let is_selected = selected_idx == Some(idx);
+        let config = ListItemConfig::new().selected(is_selected).focused(true);
+        let prefix = config.item_prefix();
+        let style = config.item_style();
+
         lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {}", binding.key),
-                Style::default().fg(Color::Yellow),
-            ),
+            Span::styled(prefix.to_string(), style),
+            Span::styled(binding.key.to_string(), Style::default().fg(Color::Yellow)),
             Span::raw(" "),
-            Span::styled(binding.description.clone(), normal_text()),
+            Span::styled(binding.description.clone(), style),
         ]));
     }
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "Press ESC or ? to close help",
+        "j/k or ↑↓: navigate | Enter: activate | ESC or ?: close",
         Style::default()
             .fg(Color::DarkGray)
             .add_modifier(Modifier::ITALIC),

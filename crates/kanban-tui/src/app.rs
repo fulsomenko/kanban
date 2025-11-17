@@ -70,6 +70,8 @@ pub struct App {
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
+    pub help_selection: SelectionState,
+    pub help_pending_action: Option<(Instant, crate::keybindings::KeybindingAction)>,
     pub sprint_task_panel: SprintTaskPanel,
     pub sprint_uncompleted_cards: CardList,
     pub sprint_completed_cards: CardList,
@@ -187,6 +189,8 @@ impl App {
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
+            help_selection: SelectionState::new(),
+            help_pending_action: None,
             sprint_task_panel: SprintTaskPanel::Uncompleted,
             sprint_uncompleted_cards: CardList::new(CardListId::All),
             sprint_completed_cards: CardList::new(CardListId::All),
@@ -242,6 +246,112 @@ impl App {
         self.should_quit = true;
     }
 
+    fn keycode_matches_binding_key(
+        key_code: &crossterm::event::KeyCode,
+        binding_key: &str,
+    ) -> bool {
+        use crossterm::event::KeyCode;
+
+        match key_code {
+            KeyCode::Char(c) => {
+                // Check if the entire binding_key is a single char match (handles "/" correctly)
+                if binding_key.len() == 1 && binding_key.starts_with(*c) {
+                    return true;
+                }
+                // Check if any part after splitting on '/' matches
+                binding_key
+                    .split('/')
+                    .any(|k| k.trim().len() == 1 && k.trim().starts_with(*c))
+            }
+            KeyCode::Enter => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Enter" || trimmed == "ENTER"
+            }),
+            KeyCode::Esc => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Esc" || trimmed == "ESC"
+            }),
+            KeyCode::Backspace => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Backspace" || trimmed == "BACKSPACE"
+            }),
+            KeyCode::Home => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Home" || trimmed == "HOME"
+            }),
+            KeyCode::End => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "End" || trimmed == "END"
+            }),
+            KeyCode::Down => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "↓" || trimmed == "Down" || trimmed == "DOWN"
+            }),
+            KeyCode::Up => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "↑" || trimmed == "Up" || trimmed == "UP"
+            }),
+            KeyCode::Left => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "←" || trimmed == "Left" || trimmed == "LEFT"
+            }),
+            KeyCode::Right => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "→" || trimmed == "Right" || trimmed == "RIGHT"
+            }),
+            _ => false,
+        }
+    }
+
+    fn execute_action(&mut self, action: &crate::keybindings::KeybindingAction) {
+        use crate::keybindings::KeybindingAction;
+
+        match action {
+            KeybindingAction::NavigateDown => self.handle_navigation_down(),
+            KeybindingAction::NavigateUp => self.handle_navigation_up(),
+            KeybindingAction::NavigateLeft => self.handle_kanban_column_left(),
+            KeybindingAction::NavigateRight => self.handle_kanban_column_right(),
+            KeybindingAction::SelectItem => self.handle_selection_activate(),
+            KeybindingAction::CreateCard => self.handle_create_card_key(),
+            KeybindingAction::CreateBoard => self.handle_create_board_key(),
+            KeybindingAction::CreateSprint => self.handle_create_sprint_key(),
+            KeybindingAction::CreateColumn => self.handle_create_column_key(),
+            KeybindingAction::RenameBoard => self.handle_rename_board_key(),
+            KeybindingAction::RenameColumn => self.handle_rename_column_key(),
+            KeybindingAction::EditCard => {}
+            KeybindingAction::EditBoard => self.handle_edit_board_key(),
+            KeybindingAction::ToggleCompletion => self.handle_toggle_card_completion(),
+            KeybindingAction::AssignToSprint => self.handle_assign_to_sprint_key(),
+            KeybindingAction::ArchiveCard => self.handle_archive_card(),
+            KeybindingAction::RestoreCard => self.handle_restore_card(),
+            KeybindingAction::DeleteCard => self.handle_delete_card_permanent(),
+            KeybindingAction::MoveCardLeft => self.handle_move_card_left(),
+            KeybindingAction::MoveCardRight => self.handle_move_card_right(),
+            KeybindingAction::MoveColumnUp => self.handle_move_column_up(),
+            KeybindingAction::MoveColumnDown => self.handle_move_column_down(),
+            KeybindingAction::DeleteColumn => self.handle_delete_column_key(),
+            KeybindingAction::ExportBoard => self.handle_export_board_key(),
+            KeybindingAction::ExportAll => self.handle_export_all_key(),
+            KeybindingAction::ImportBoard => self.handle_import_board_key(),
+            KeybindingAction::OrderCards => self.handle_order_cards_key(),
+            KeybindingAction::ToggleSortOrder => self.handle_toggle_sort_order_key(),
+            KeybindingAction::ToggleFilter => self.handle_toggle_sprint_filter(),
+            KeybindingAction::ToggleHideAssigned => self.handle_open_filter_dialog(),
+            KeybindingAction::ToggleArchivedView => self.handle_toggle_archived_cards_view(),
+            KeybindingAction::ToggleTaskListView => self.handle_toggle_task_list_view(),
+            KeybindingAction::ToggleCardSelection => self.handle_card_selection_toggle(),
+            KeybindingAction::Search => {
+                if self.focus == Focus::Cards {
+                    self.search.activate();
+                    self.mode = AppMode::Search;
+                }
+            }
+            KeybindingAction::ShowHelp => {}
+            KeybindingAction::Escape => self.handle_escape_key(),
+            KeybindingAction::FocusPanel(panel) => self.handle_column_or_focus_switch(*panel),
+        }
+    }
+
     fn handle_key_event(
         &mut self,
         key: crossterm::event::KeyEvent,
@@ -278,6 +388,7 @@ impl App {
             && !matches!(self.mode, AppMode::Help(_))
         {
             let previous_mode = self.mode.clone();
+            self.help_selection.set(Some(0));
             self.mode = AppMode::Help(Box::new(previous_mode));
             return false;
         }
@@ -420,16 +531,64 @@ impl App {
     }
 
     fn handle_help_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crate::keybindings::KeybindingRegistry;
         use crossterm::event::KeyCode;
+
         match key_code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.help_pending_action = None;
+                let provider = KeybindingRegistry::get_provider(self);
+                let context = provider.get_context();
+                self.help_selection.next(context.bindings.len());
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.help_pending_action = None;
+                self.help_selection.prev();
+            }
+            KeyCode::Char('h') | KeyCode::Char('l') => {
+                self.help_pending_action = None;
+            }
+            KeyCode::Enter => {
+                self.help_pending_action = None;
+                if let Some(index) = self.help_selection.get() {
+                    let provider = KeybindingRegistry::get_provider(self);
+                    let context = provider.get_context();
+
+                    if let Some(binding) = context.bindings.get(index) {
+                        if let AppMode::Help(previous_mode) = &self.mode {
+                            self.mode = (**previous_mode).clone();
+                        } else {
+                            self.mode = AppMode::Normal;
+                        }
+                        self.help_selection.clear();
+
+                        self.execute_action(&binding.action);
+                    }
+                }
+            }
             KeyCode::Esc | KeyCode::Char('?') => {
+                self.help_pending_action = None;
                 if let AppMode::Help(previous_mode) = &self.mode {
                     self.mode = (**previous_mode).clone();
                 } else {
                     self.mode = AppMode::Normal;
                 }
+                self.help_selection.clear();
             }
-            _ => {}
+            _ => {
+                let provider = KeybindingRegistry::get_provider(self);
+                let context = provider.get_context();
+
+                if let Some((index, binding)) = context
+                    .bindings
+                    .iter()
+                    .enumerate()
+                    .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
+                {
+                    self.help_selection.set(Some(index));
+                    self.help_pending_action = Some((Instant::now(), binding.action));
+                }
+            }
         }
     }
 
@@ -987,6 +1146,22 @@ impl App {
                         }
                         Event::Tick => {
                             self.handle_animation_tick();
+
+                            // Check if help menu pending action should execute
+                            if let Some((start_time, action)) = &self.help_pending_action {
+                                if start_time.elapsed().as_millis() >= 100 {
+                                    if let AppMode::Help(previous_mode) = &self.mode {
+                                        self.mode = (**previous_mode).clone();
+                                    } else {
+                                        self.mode = AppMode::Normal;
+                                    }
+                                    self.help_selection.clear();
+
+                                    let action = *action;
+                                    self.help_pending_action = None;
+                                    self.execute_action(&action);
+                                }
+                            }
                         }
                     }
                 }
