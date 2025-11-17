@@ -70,6 +70,7 @@ pub struct App {
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
+    pub help_selection: SelectionState,
     pub sprint_task_panel: SprintTaskPanel,
     pub sprint_uncompleted_cards: CardList,
     pub sprint_completed_cards: CardList,
@@ -187,6 +188,7 @@ impl App {
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
+            help_selection: SelectionState::new(),
             sprint_task_panel: SprintTaskPanel::Uncompleted,
             sprint_uncompleted_cards: CardList::new(CardListId::All),
             sprint_completed_cards: CardList::new(CardListId::All),
@@ -242,6 +244,31 @@ impl App {
         self.should_quit = true;
     }
 
+    fn parse_keybinding_key(key_str: &str) -> Option<crossterm::event::KeyCode> {
+        use crossterm::event::KeyCode;
+
+        let first_key = key_str.split('/').next()?.trim();
+
+        match first_key {
+            "ESC" => Some(KeyCode::Esc),
+            "Enter" => Some(KeyCode::Enter),
+            "Space" => Some(KeyCode::Char(' ')),
+            "Tab" => Some(KeyCode::Tab),
+            "Backspace" => Some(KeyCode::Backspace),
+            "Delete" => Some(KeyCode::Delete),
+            "Home" => Some(KeyCode::Home),
+            "End" => Some(KeyCode::End),
+            "PageUp" => Some(KeyCode::PageUp),
+            "PageDown" => Some(KeyCode::PageDown),
+            "↑" | "Up" => Some(KeyCode::Up),
+            "↓" | "Down" => Some(KeyCode::Down),
+            "←" | "Left" => Some(KeyCode::Left),
+            "→" | "Right" => Some(KeyCode::Right),
+            s if s.len() == 1 => Some(KeyCode::Char(s.chars().next().unwrap())),
+            _ => None,
+        }
+    }
+
     fn handle_key_event(
         &mut self,
         key: crossterm::event::KeyEvent,
@@ -278,6 +305,7 @@ impl App {
             && !matches!(self.mode, AppMode::Help(_))
         {
             let previous_mode = self.mode.clone();
+            self.help_selection.set(Some(0));
             self.mode = AppMode::Help(Box::new(previous_mode));
             return false;
         }
@@ -420,14 +448,49 @@ impl App {
     }
 
     fn handle_help_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crate::keybindings::KeybindingRegistry;
         use crossterm::event::KeyCode;
+
         match key_code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                let provider = KeybindingRegistry::get_provider(self);
+                let context = provider.get_context();
+                self.help_selection.next(context.bindings.len());
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.help_selection.prev();
+            }
+            KeyCode::Enter => {
+                if let Some(index) = self.help_selection.get() {
+                    let provider = KeybindingRegistry::get_provider(self);
+                    let context = provider.get_context();
+
+                    if let Some(binding) = context.bindings.get(index) {
+                        // Parse the first key from the keybinding string and exit help
+                        if let Some(_parsed_key) = Self::parse_keybinding_key(&binding.key) {
+                            if let AppMode::Help(previous_mode) = &self.mode {
+                                self.mode = (**previous_mode).clone();
+                            } else {
+                                self.mode = AppMode::Normal;
+                            }
+                            self.help_selection.clear();
+
+                            // Re-inject the parsed key into the event handler
+                            // We'll schedule it for the next frame
+                            // For now, we just exit and the key won't be processed
+                            // TODO: Properly re-inject keybindings
+                            return;
+                        }
+                    }
+                }
+            }
             KeyCode::Esc | KeyCode::Char('?') => {
                 if let AppMode::Help(previous_mode) = &self.mode {
                     self.mode = (**previous_mode).clone();
                 } else {
                     self.mode = AppMode::Normal;
                 }
+                self.help_selection.clear();
             }
             _ => {}
         }
