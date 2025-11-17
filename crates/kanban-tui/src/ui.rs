@@ -1,6 +1,7 @@
 use crate::app::{App, AppMode, BoardFocus, CardFocus, Focus};
 use crate::components::*;
 use crate::theme::*;
+use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::{Sprint, SprintStatus};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -10,80 +11,106 @@ use ratatui::{
     Frame,
 };
 
-pub fn render(app: &App, frame: &mut Frame) {
-    match app.mode {
-        AppMode::CardDetail
-        | AppMode::AssignCardToSprint
-        | AppMode::AssignMultipleCardsToSprint => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
-                .split(frame.area());
+pub fn render(app: &mut App, frame: &mut Frame) {
+    // Check if we're in Help mode and render underlying view
+    let is_help_mode = matches!(app.mode, AppMode::Help(_));
 
-            render_card_detail_view(app, frame, chunks[0]);
-            render_footer(app, frame, chunks[1]);
+    if !is_help_mode {
+        match app.mode {
+            AppMode::CardDetail
+            | AppMode::AssignCardToSprint
+            | AppMode::AssignMultipleCardsToSprint => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(3)])
+                    .split(frame.area());
 
-            if app.mode == AppMode::AssignCardToSprint {
-                render_assign_sprint_popup(app, frame);
+                render_card_detail_view(app, frame, chunks[0]);
+                render_footer(app, frame, chunks[1]);
+
+                if app.mode == AppMode::AssignCardToSprint {
+                    render_assign_sprint_popup(app, frame);
+                }
+
+                if app.mode == AppMode::AssignMultipleCardsToSprint {
+                    render_assign_multiple_cards_popup(app, frame);
+                }
             }
+            AppMode::BoardDetail => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(3)])
+                    .split(frame.area());
 
-            if app.mode == AppMode::AssignMultipleCardsToSprint {
-                render_assign_multiple_cards_popup(app, frame);
+                render_board_detail_view(app, frame, chunks[0]);
+                render_footer(app, frame, chunks[1]);
+            }
+            AppMode::SprintDetail => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(3)])
+                    .split(frame.area());
+
+                render_sprint_detail_view(app, frame, chunks[0]);
+                render_footer(app, frame, chunks[1]);
+            }
+            _ => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(3)])
+                    .split(frame.area());
+
+                render_main(app, frame, chunks[0]);
+                render_footer(app, frame, chunks[1]);
+
+                match app.mode {
+                    AppMode::CreateBoard => render_create_board_popup(app, frame),
+                    AppMode::CreateCard => render_create_card_popup(app, frame),
+                    AppMode::CreateSprint => render_create_sprint_popup(app, frame),
+                    AppMode::RenameBoard => render_rename_board_popup(app, frame),
+                    AppMode::ExportBoard => render_export_board_popup(app, frame),
+                    AppMode::ExportAll => render_export_all_popup(app, frame),
+                    AppMode::ImportBoard => render_import_board_popup(app, frame),
+                    AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
+                    AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
+                    AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
+                    AppMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
+                    AppMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
+                    AppMode::OrderCards => render_order_cards_popup(app, frame),
+                    AppMode::CreateColumn => render_create_column_popup(app, frame),
+                    AppMode::RenameColumn => render_rename_column_popup(app, frame),
+                    AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
+                    AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
+                    AppMode::FilterOptions => render_filter_options_popup(app, frame),
+                    _ => {}
+                }
             }
         }
-        AppMode::BoardDetail => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
-                .split(frame.area());
-
-            render_board_detail_view(app, frame, chunks[0]);
-            render_footer(app, frame, chunks[1]);
-        }
-        AppMode::SprintDetail => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
-                .split(frame.area());
-
-            render_sprint_detail_view(app, frame, chunks[0]);
-            render_footer(app, frame, chunks[1]);
-        }
-        _ => {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
-                .split(frame.area());
-
-            render_main(app, frame, chunks[0]);
-            render_footer(app, frame, chunks[1]);
-
-            match app.mode {
-                AppMode::CreateBoard => render_create_board_popup(app, frame),
-                AppMode::CreateCard => render_create_card_popup(app, frame),
-                AppMode::CreateSprint => render_create_sprint_popup(app, frame),
-                AppMode::RenameBoard => render_rename_board_popup(app, frame),
-                AppMode::ExportBoard => render_export_board_popup(app, frame),
-                AppMode::ExportAll => render_export_all_popup(app, frame),
-                AppMode::ImportBoard => render_import_board_popup(app, frame),
-                AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
-                AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
-                AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
-                AppMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
-                AppMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
-                AppMode::OrderCards => render_order_cards_popup(app, frame),
-                AppMode::CreateColumn => render_create_column_popup(app, frame),
-                AppMode::RenameColumn => render_rename_column_popup(app, frame),
-                AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
-                AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
-                AppMode::FilterOptions => render_filter_options_popup(app, frame),
-                _ => {}
+    } else {
+        // Render underlying view without footer
+        match app.mode {
+            AppMode::CardDetail
+            | AppMode::AssignCardToSprint
+            | AppMode::AssignMultipleCardsToSprint => {
+                render_card_detail_view(app, frame, frame.area());
+            }
+            AppMode::BoardDetail => {
+                render_board_detail_view(app, frame, frame.area());
+            }
+            AppMode::SprintDetail => {
+                render_sprint_detail_view(app, frame, frame.area());
+            }
+            _ => {
+                render_main(app, frame, frame.area());
             }
         }
+
+        // Render help popup on top
+        render_help_popup(app, frame);
     }
 }
 
-fn render_main(app: &App, frame: &mut Frame, area: Rect) {
+fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
     let is_kanban_view = if let Some(idx) = app.active_board_index {
         if let Some(board) = app.boards.get(idx) {
             board.task_list_view == kanban_domain::TaskListView::ColumnView
@@ -95,6 +122,7 @@ fn render_main(app: &App, frame: &mut Frame, area: Rect) {
     };
 
     if is_kanban_view {
+        app.viewport_height = area.height.saturating_sub(2) as usize;
         render_tasks_panel(app, frame, area);
     } else {
         let chunks = Layout::default()
@@ -102,6 +130,7 @@ fn render_main(app: &App, frame: &mut Frame, area: Rect) {
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
             .split(area);
 
+        app.viewport_height = chunks[1].height.saturating_sub(2) as usize;
         render_projects_panel(app, frame, chunks[0]);
         render_tasks_panel(app, frame, chunks[1]);
     }
@@ -134,7 +163,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     render_panel(frame, area, &panel_config, content);
 }
 
-fn build_filter_title_suffix(app: &App) -> Option<String> {
+pub fn build_filter_title_suffix(app: &App) -> Option<String> {
     let mut filters = vec![];
 
     if app.hide_assigned_cards {
@@ -163,14 +192,16 @@ fn build_filter_title_suffix(app: &App) -> Option<String> {
     }
 }
 
-fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
-    let mut title = if app.focus == Focus::Cards {
+pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
+    let mut title = if app.mode == AppMode::ArchivedCardsView {
+        "Archive".to_string()
+    } else if app.focus == Focus::Cards {
         "Tasks [2]".to_string()
     } else {
         "Tasks".to_string()
     };
 
-    if with_filter_suffix {
+    if with_filter_suffix && app.mode != AppMode::ArchivedCardsView {
         if let Some(suffix) = build_filter_title_suffix(app) {
             title.push_str(&suffix);
         }
@@ -180,308 +211,18 @@ fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
 }
 
 fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
-    let board_idx = app.active_board_index.or(app.board_selection.get());
-
-    if let Some(idx) = board_idx {
-        if let Some(board) = app.boards.get(idx) {
-            let column_count = app
-                .columns
-                .iter()
-                .filter(|col| col.board_id == board.id)
-                .count();
-
-            let is_preview = app.active_board_index.is_none();
-
-            if is_preview {
-                if column_count > 1 {
-                    render_tasks_grouped_by_column(app, frame, area);
-                } else {
-                    render_tasks_flat(app, frame, area);
-                }
-            } else {
-                match board.task_list_view {
-                    kanban_domain::TaskListView::Flat => {
-                        render_tasks_flat(app, frame, area);
-                    }
-                    kanban_domain::TaskListView::GroupedByColumn => {
-                        render_tasks_grouped_by_column(app, frame, area);
-                    }
-                    kanban_domain::TaskListView::ColumnView => {
-                        render_tasks_kanban_view(app, frame, area);
-                    }
-                }
-            }
-        } else {
-            render_tasks_flat(app, frame, area);
-        }
-    } else {
-        render_tasks_flat(app, frame, area);
-    }
+    render_tasks(app, frame, area);
 }
 
-fn render_tasks_flat(app: &App, frame: &mut Frame, area: Rect) {
-    let board_idx = app.active_board_index.or(app.board_selection.get());
-
-    let mut lines = vec![];
-
-    if let Some(idx) = board_idx {
-        if let Some(board) = app.boards.get(idx) {
-            if let Some(task_list) = app.view_strategy.get_active_task_list() {
-                if task_list.is_empty() {
-                    let message = if app.active_board_index.is_some() {
-                        "  No tasks yet. Press 'n' to create one!"
-                    } else {
-                        "  (Enter/Space) to add tasks"
-                    };
-                    lines.push(Line::from(Span::styled(message, label_text())));
-                } else {
-                    for (card_idx, card_id) in task_list.cards.iter().enumerate() {
-                        if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                            let line = render_card_list_item(CardListItemConfig {
-                                card,
-                                board,
-                                sprints: &app.sprints,
-                                is_selected: task_list.get_selected_index() == Some(card_idx),
-                                is_focused: app.focus == Focus::Cards,
-                                is_multi_selected: app.selected_cards.contains(&card.id),
-                                show_sprint_name: app.active_sprint_filters.is_empty(),
-                            });
-                            lines.push(line);
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-        lines.push(Line::from(Span::styled(
-            "  Select a project to preview tasks",
-            label_text(),
-        )));
-    }
-
-    let title = build_tasks_panel_title(app, true);
-
-    let panel_config = PanelConfig::new(&title)
-        .with_focus_indicator(&title)
-        .focused(app.focus == Focus::Cards);
-
-    let content = Paragraph::new(lines).block(panel_config.block());
-    frame.render_widget(content, area);
-}
-
-fn render_tasks_grouped_by_column(app: &App, frame: &mut Frame, area: Rect) {
-    let board_idx = app.active_board_index.or(app.board_selection.get());
-
-    let mut lines = vec![];
-
-    if let Some(idx) = board_idx {
-        if let Some(board) = app.boards.get(idx) {
-            let mut board_columns: Vec<_> = app
-                .columns
-                .iter()
-                .filter(|col| col.board_id == board.id)
-                .collect();
-            board_columns.sort_by_key(|col| col.position);
-
-            if board_columns.is_empty() {
-                lines.push(Line::from(Span::styled(
-                    "  No columns yet. Add columns in board settings.",
-                    label_text(),
-                )));
-            } else {
-                let task_lists = app.view_strategy.get_all_task_lists();
-                let active_task_list = app.view_strategy.get_active_task_list();
-
-                if task_lists.is_empty() {
-                    let message = if app.active_board_index.is_some() {
-                        "  No tasks yet. Press 'n' to create one!"
-                    } else {
-                        "  (Enter/Space) to add tasks"
-                    };
-                    lines.push(Line::from(Span::styled(message, label_text())));
-                } else {
-                    for (col_idx, task_list) in task_lists.iter().enumerate() {
-                        if let Some(column) = board_columns.get(col_idx) {
-                            let card_count = task_list.len();
-                            let is_active_column = active_task_list
-                                .map(|active| std::ptr::eq(*task_list, active))
-                                .unwrap_or(false);
-
-                            lines.push(Line::from(Span::styled(
-                                format!("── {} ({}) ──", column.name, card_count),
-                                Style::default()
-                                    .fg(Color::Cyan)
-                                    .add_modifier(Modifier::BOLD),
-                            )));
-
-                            if task_list.is_empty() {
-                                lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
-                            } else {
-                                for (local_card_idx, card_id) in task_list.cards.iter().enumerate()
-                                {
-                                    if let Some(card) = app.cards.iter().find(|c| c.id == *card_id)
-                                    {
-                                        let is_selected = if is_active_column {
-                                            task_list.get_selected_index() == Some(local_card_idx)
-                                        } else {
-                                            false
-                                        };
-
-                                        let line = render_card_list_item(CardListItemConfig {
-                                            card,
-                                            board,
-                                            sprints: &app.sprints,
-                                            is_selected,
-                                            is_focused: app.focus == Focus::Cards
-                                                && is_active_column,
-                                            is_multi_selected: app
-                                                .selected_cards
-                                                .contains(&card.id),
-                                            show_sprint_name: app.active_sprint_filters.is_empty(),
-                                        });
-                                        lines.push(line);
-                                    }
-                                }
-                            }
-
-                            lines.push(Line::from(""));
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-        lines.push(Line::from(Span::styled(
-            "  Select a project to preview tasks",
-            label_text(),
-        )));
-    }
-
-    let title = build_tasks_panel_title(app, true);
-
-    let panel_config = PanelConfig::new(&title)
-        .with_focus_indicator(&title)
-        .focused(app.focus == Focus::Cards);
-
-    let content = Paragraph::new(lines).block(panel_config.block());
-    frame.render_widget(content, area);
-}
-
-fn render_tasks_kanban_view(app: &App, frame: &mut Frame, area: Rect) {
-    let board_idx = app.active_board_index.or(app.board_selection.get());
-
-    if let Some(idx) = board_idx {
-        if let Some(board) = app.boards.get(idx) {
-            let task_lists = app.view_strategy.get_all_task_lists();
-
-            if task_lists.is_empty() {
-                let lines = vec![Line::from(Span::styled(
-                    "  No columns yet. Add columns in board settings.",
-                    label_text(),
-                ))];
-
-                let panel_config = PanelConfig::new("Tasks")
-                    .with_focus_indicator("Tasks [2]")
-                    .focused(app.focus == Focus::Cards);
-
-                let content = Paragraph::new(lines).block(panel_config.block());
-                frame.render_widget(content, area);
-                return;
-            }
-
-            let sprint_filter_suffix = build_filter_title_suffix(app);
-
-            let column_count = task_lists.len();
-            let column_width = 100 / column_count as u16;
-
-            let mut constraints = vec![];
-            for _ in 0..column_count {
-                constraints.push(Constraint::Percentage(column_width));
-            }
-
-            let chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints(constraints)
-                .split(area);
-
-            let active_task_list = app.view_strategy.get_active_task_list();
-
-            for (col_idx, task_list) in task_lists.iter().enumerate() {
-                let mut lines = vec![];
-
-                let card_count = task_list.len();
-                let is_focused_column = active_task_list
-                    .map(|active| std::ptr::eq(*task_list, active))
-                    .unwrap_or(false);
-
-                if task_list.is_empty() {
-                    lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
-                } else {
-                    for (local_card_idx, card_id) in task_list.cards.iter().enumerate() {
-                        if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                            let is_selected = if is_focused_column {
-                                task_list.get_selected_index() == Some(local_card_idx)
-                            } else {
-                                false
-                            };
-
-                            let line = render_card_list_item(CardListItemConfig {
-                                card,
-                                board,
-                                sprints: &app.sprints,
-                                is_selected,
-                                is_focused: app.focus == Focus::Cards && is_focused_column,
-                                is_multi_selected: app.selected_cards.contains(&card.id),
-                                show_sprint_name: app.active_sprint_filters.is_empty(),
-                            });
-                            lines.push(line);
-                        }
-                    }
-                }
-
-                let column_name =
-                    if let crate::card_list::CardListId::Column(column_id) = task_list.id {
-                        app.columns
-                            .iter()
-                            .find(|c| c.id == column_id)
-                            .map(|c| c.name.clone())
-                            .unwrap_or_else(|| "Unknown".to_string())
-                    } else {
-                        "All".to_string()
-                    };
-
-                let mut title = if col_idx < 9 {
-                    format!("{} ({}) [{}]", column_name, card_count, col_idx + 1)
-                } else {
-                    format!("{} ({})", column_name, card_count)
-                };
-
-                if col_idx == 0 {
-                    if let Some(ref suffix) = sprint_filter_suffix {
-                        title.push_str(suffix);
-                    }
-                }
-
-                let panel_config = PanelConfig::new(&title)
-                    .with_focus_indicator(&title)
-                    .focused(app.focus == Focus::Cards && is_focused_column);
-
-                let content = Paragraph::new(lines).block(panel_config.block());
-                frame.render_widget(content, chunks[col_idx]);
-            }
-        }
-    } else {
-        let lines = vec![Line::from(Span::styled(
-            "  Select a project to preview tasks",
-            label_text(),
-        ))];
-
-        let panel_config = PanelConfig::new("Tasks")
-            .with_focus_indicator("Tasks [2]")
-            .focused(app.focus == Focus::Cards);
-
-        let content = Paragraph::new(lines).block(panel_config.block());
-        frame.render_widget(content, area);
+fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(unified_strategy) = app
+        .view_strategy
+        .as_any()
+        .downcast_ref::<UnifiedViewStrategy>()
+    {
+        unified_strategy
+            .get_render_strategy()
+            .render(app, frame, area);
     }
 }
 
@@ -656,20 +397,46 @@ fn render_sprint_task_panel_with_selection(
     if task_list.is_empty() {
         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
     } else {
-        for (idx, card_id) in task_list.cards.iter().enumerate() {
-            if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
-                let is_selected = selected_idx == Some(idx) && is_focused;
-                let line = render_card_list_item(CardListItemConfig {
-                    card,
-                    board,
-                    sprints: &app.sprints,
-                    is_selected,
-                    is_focused,
-                    is_multi_selected: false,
-                    show_sprint_name: false,
-                });
-                lines.push(line);
+        let viewport_height = area.height.saturating_sub(2) as usize;
+        let render_info = task_list.get_render_info(viewport_height);
+
+        if render_info.show_above_indicator {
+            let count = render_info.cards_above_count;
+            let plural = if count == 1 { "" } else { "s" };
+            lines.push(Line::from(Span::styled(
+                format!("  {} Task{} above", count, plural),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+
+        for card_idx in &render_info.visible_card_indices {
+            if let Some(card_id) = task_list.cards.get(*card_idx) {
+                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                    let is_selected = selected_idx == Some(*card_idx) && is_focused;
+                    let animation_type =
+                        app.animating_cards.get(&card.id).map(|a| a.animation_type);
+                    let line = render_card_list_item(CardListItemConfig {
+                        card,
+                        board,
+                        sprints: &app.sprints,
+                        is_selected,
+                        is_focused,
+                        is_multi_selected: false,
+                        show_sprint_name: false,
+                        animation_type,
+                    });
+                    lines.push(line);
+                }
             }
+        }
+
+        if render_info.show_below_indicator {
+            let count = render_info.cards_below_count;
+            let plural = if count == 1 { "" } else { "s" };
+            lines.push(Line::from(Span::styled(
+                format!("  {} Task{} below", count, plural),
+                Style::default().fg(Color::DarkGray),
+            )));
         }
     }
 
@@ -681,7 +448,6 @@ fn render_sprint_task_panel_with_selection(
         .collect();
     let points = App::calculate_points(&cards);
 
-    lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
         Style::default()
@@ -746,59 +512,32 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         return;
     }
 
-    let generated_help = app.card_list_component.help_text();
-    let help_text: String = match app.mode {
-        AppMode::Normal => {
-            if app.focus == Focus::Cards {
-                generated_help
-            } else {
-                "q: quit | n: new | r: rename | e: edit project | x: export | X: export all | i: import | 1/2: switch panel".to_string()
-            }
-        }
-        AppMode::CreateBoard => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::CreateCard => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::CreateSprint => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::RenameBoard => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::ExportBoard => "ESC: cancel | ENTER: export".to_string(),
-        AppMode::ExportAll => "ESC: cancel | ENTER: export all".to_string(),
-        AppMode::ImportBoard => "ESC: cancel | j/k: navigate | ENTER/Space: import selected".to_string(),
-        AppMode::CardDetail => match app.card_focus {
-            CardFocus::Title => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit title | s: assign sprint".to_string(),
-            CardFocus::Description => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit description | s: assign sprint".to_string(),
-            CardFocus::Metadata => "q: quit | ESC: back | 1/2/3: select panel | y: copy branch | Y: copy git cmd | e: edit points | s: assign sprint".to_string(),
-        },
-        AppMode::SetCardPoints => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::SetCardPriority => "ESC: cancel | j/k: navigate | ENTER: confirm".to_string(),
-        AppMode::BoardDetail => match app.board_focus {
-            BoardFocus::Name => "q: quit | ESC: back | 1/2/3/4/5: select panel | e: edit name".to_string(),
-            BoardFocus::Description => "q: quit | ESC: back | 1/2/3/4/5: select panel | e: edit description".to_string(),
-            BoardFocus::Settings => "q: quit | ESC: back | 1/2/3/4/5: select panel | e: edit settings JSON | p: set branch prefix".to_string(),
-            BoardFocus::Sprints => "q: quit | ESC: back | 1/2/3/4/5: select panel | n: new sprint | j/k: navigate | Enter/Space: open sprint".to_string(),
-            BoardFocus::Columns => "q: quit | ESC: back | 1/2/3/4/5: select panel | n: new | r: rename | d: delete | J/K: reorder | j/k: navigate".to_string(),
-        },
-        AppMode::SetBranchPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
-        AppMode::SetSprintPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
-        AppMode::SetSprintCardPrefix => "ESC: cancel | ENTER: confirm (empty to clear)".to_string(),
-        AppMode::OrderCards => "ESC: cancel | j/k: navigate | ENTER/Space/a: ascending | d: descending".to_string(),
-        AppMode::SprintDetail => {
-            let component = match app.sprint_task_panel {
-                crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
-                crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,
-            };
-            let component_help = component.help_text();
-            format!("q: quit | ESC: back | a: activate sprint | c: complete sprint | p: set sprint prefix | C: set card prefix | o: sort | O: toggle order | h/l: switch panel | {}", component_help)
-        },
-        AppMode::AssignCardToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
-        AppMode::AssignMultipleCardsToSprint => "ESC: cancel | j/k: navigate | ENTER/Space: assign".to_string(),
-        AppMode::CreateColumn => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::RenameColumn => "ESC: cancel | ENTER: confirm".to_string(),
-        AppMode::DeleteColumnConfirm => "ESC: cancel | ENTER/y: delete | n: cancel".to_string(),
-        AppMode::SelectTaskListView => "ESC: cancel | j/k: navigate | ENTER/Space: select".to_string(),
-        AppMode::Search => "ESC/ENTER: exit search | type to filter".to_string(),
-        AppMode::ConfirmSprintPrefixCollision => {
-            "ESC: cancel | j/k: navigate | ENTER: confirm".to_string()
-        }
-        AppMode::FilterOptions => "ESC: cancel | j/k: navigate | Space: toggle | ENTER: apply".to_string(),
+    use crate::keybindings::KeybindingRegistry;
+
+    let help_text: String = if let AppMode::SprintDetail = app.mode {
+        let component = match app.sprint_task_panel {
+            crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
+            crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,
+        };
+        let provider = KeybindingRegistry::get_provider(app);
+        let context = provider.get_context();
+        let keybindings = context
+            .bindings
+            .iter()
+            .map(|b| format!("{}: {}", b.key, b.short_description))
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let component_help = component.help_text();
+        format!("{} | {}", keybindings, component_help)
+    } else {
+        let provider = KeybindingRegistry::get_provider(app);
+        let context = provider.get_context();
+        context
+            .bindings
+            .iter()
+            .map(|b| format!("{}: {}", b.key, b.short_description))
+            .collect::<Vec<_>>()
+            .join(" | ")
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
@@ -1687,4 +1426,67 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
             ));
         frame.render_widget(section3, chunks[2]);
     }
+}
+
+fn render_help_popup(app: &App, frame: &mut Frame) {
+    use crate::components::ListItemConfig;
+    use crate::keybindings::KeybindingRegistry;
+
+    let area = centered_rect(80, 80, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Help - Keybindings for Current Context")
+        .borders(Borders::ALL)
+        .border_style(focused_border());
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Min(0)])
+        .split(inner);
+
+    // Get keybindings for the underlying mode
+    let provider = KeybindingRegistry::get_provider(app);
+    let context = provider.get_context();
+    let selected_idx = app.help_selection.get();
+
+    // Build lines for each keybinding
+    let mut lines = vec![
+        Line::from(Span::styled(
+            context.name.clone(),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+    ];
+
+    for (idx, binding) in context.bindings.iter().enumerate() {
+        let is_selected = selected_idx == Some(idx);
+        let config = ListItemConfig::new().selected(is_selected).focused(true);
+        let prefix = config.item_prefix();
+        let style = config.item_style();
+
+        lines.push(Line::from(vec![
+            Span::styled(prefix.to_string(), style),
+            Span::styled(binding.key.to_string(), Style::default().fg(Color::Yellow)),
+            Span::raw(" "),
+            Span::styled(binding.description.clone(), style),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "j/k or ↑↓: navigate | Enter: activate | ESC or ?: close",
+        Style::default()
+            .fg(Color::DarkGray)
+            .add_modifier(Modifier::ITALIC),
+    )));
+
+    let content = Paragraph::new(lines);
+    frame.render_widget(content, chunks[0]);
 }

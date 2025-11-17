@@ -1,6 +1,7 @@
 use crate::theme::{focused_border, unfocused_border};
 use ratatui::{
     layout::Rect,
+    style::Style,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
@@ -9,6 +10,7 @@ pub struct PanelConfig<'a> {
     pub title: &'a str,
     pub focused_title: &'a str,
     pub is_focused: bool,
+    pub custom_border_style: Option<Style>,
 }
 
 impl<'a> PanelConfig<'a> {
@@ -17,6 +19,7 @@ impl<'a> PanelConfig<'a> {
             title,
             focused_title: title,
             is_focused: false,
+            custom_border_style: None,
         }
     }
 
@@ -30,8 +33,15 @@ impl<'a> PanelConfig<'a> {
         self
     }
 
+    pub fn with_custom_border_style(mut self, style: Style) -> Self {
+        self.custom_border_style = Some(style);
+        self
+    }
+
     pub fn border_style(&self) -> ratatui::style::Style {
-        if self.is_focused {
+        if let Some(style) = self.custom_border_style {
+            style
+        } else if self.is_focused {
             focused_border()
         } else {
             unfocused_border()

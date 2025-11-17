@@ -11,18 +11,32 @@ use crate::{
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     ui,
-    view_strategy::{
-        FlatViewStrategy, GroupedViewStrategy, KanbanViewStrategy, ViewRefreshContext, ViewStrategy,
-    },
+    view_strategy::{UnifiedViewStrategy, ViewRefreshContext, ViewStrategy},
 };
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
-use kanban_domain::{Board, Card, Column, SortField, SortOrder, Sprint};
+use kanban_domain::{ArchivedCard, Board, Card, Column, SortField, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
+use std::collections::HashMap;
 use std::io;
+use std::time::Instant;
+
+const ANIMATION_DURATION_MS: u128 = 150;
+
+#[derive(Debug, Clone, Copy)]
+pub enum AnimationType {
+    Archiving,
+    Restoring,
+    Deleting,
+}
+
+pub struct CardAnimation {
+    pub animation_type: AnimationType,
+    pub start_time: Instant,
+}
 
 pub struct App {
     pub should_quit: bool,
@@ -34,6 +48,8 @@ pub struct App {
     pub active_card_index: Option<usize>,
     pub columns: Vec<Column>,
     pub cards: Vec<Card>,
+    pub archived_cards: Vec<ArchivedCard>,
+    pub animating_cards: HashMap<uuid::Uuid, CardAnimation>,
     pub sprints: Vec<Sprint>,
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
@@ -54,6 +70,8 @@ pub struct App {
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
+    pub help_selection: SelectionState,
+    pub help_pending_action: Option<(Instant, crate::keybindings::KeybindingAction)>,
     pub sprint_task_panel: SprintTaskPanel,
     pub sprint_uncompleted_cards: CardList,
     pub sprint_completed_cards: CardList,
@@ -63,6 +81,7 @@ pub struct App {
     pub card_list_component: CardListComponent,
     pub search: SearchState,
     pub filter_dialog_state: Option<FilterDialogState>,
+    pub viewport_height: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -71,14 +90,14 @@ pub enum Focus {
     Cards,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CardFocus {
     Title,
     Metadata,
     Description,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BoardFocus {
     Name,
     Description,
@@ -103,7 +122,7 @@ pub enum BoardField {
     Description,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppMode {
     Normal,
     CreateBoard,
@@ -131,6 +150,8 @@ pub enum AppMode {
     SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
     FilterOptions,
+    ArchivedCardsView,
+    Help(Box<AppMode>),
 }
 
 impl App {
@@ -146,6 +167,8 @@ impl App {
             active_card_index: None,
             columns: Vec::new(),
             cards: Vec::new(),
+            archived_cards: Vec::new(),
+            animating_cards: HashMap::new(),
             sprints: Vec::new(),
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
@@ -166,6 +189,8 @@ impl App {
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
+            help_selection: SelectionState::new(),
+            help_pending_action: None,
             sprint_task_panel: SprintTaskPanel::Uncompleted,
             sprint_uncompleted_cards: CardList::new(CardListId::All),
             sprint_completed_cards: CardList::new(CardListId::All),
@@ -192,13 +217,14 @@ impl App {
                     ])
                     .with_multi_select(false),
             ),
-            view_strategy: Box::new(GroupedViewStrategy::new()),
+            view_strategy: Box::new(UnifiedViewStrategy::grouped()),
             card_list_component: CardListComponent::new(
                 CardListId::All,
                 CardListComponentConfig::new(),
             ),
             search: SearchState::new(),
             filter_dialog_state: None,
+            viewport_height: 20,
         };
 
         if let Some(ref filename) = save_file {
@@ -218,6 +244,112 @@ impl App {
 
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    fn keycode_matches_binding_key(
+        key_code: &crossterm::event::KeyCode,
+        binding_key: &str,
+    ) -> bool {
+        use crossterm::event::KeyCode;
+
+        match key_code {
+            KeyCode::Char(c) => {
+                // Check if the entire binding_key is a single char match (handles "/" correctly)
+                if binding_key.len() == 1 && binding_key.starts_with(*c) {
+                    return true;
+                }
+                // Check if any part after splitting on '/' matches
+                binding_key
+                    .split('/')
+                    .any(|k| k.trim().len() == 1 && k.trim().starts_with(*c))
+            }
+            KeyCode::Enter => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Enter" || trimmed == "ENTER"
+            }),
+            KeyCode::Esc => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Esc" || trimmed == "ESC"
+            }),
+            KeyCode::Backspace => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Backspace" || trimmed == "BACKSPACE"
+            }),
+            KeyCode::Home => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "Home" || trimmed == "HOME"
+            }),
+            KeyCode::End => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "End" || trimmed == "END"
+            }),
+            KeyCode::Down => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "↓" || trimmed == "Down" || trimmed == "DOWN"
+            }),
+            KeyCode::Up => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "↑" || trimmed == "Up" || trimmed == "UP"
+            }),
+            KeyCode::Left => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "←" || trimmed == "Left" || trimmed == "LEFT"
+            }),
+            KeyCode::Right => binding_key.split('/').any(|k| {
+                let trimmed = k.trim();
+                trimmed == "→" || trimmed == "Right" || trimmed == "RIGHT"
+            }),
+            _ => false,
+        }
+    }
+
+    fn execute_action(&mut self, action: &crate::keybindings::KeybindingAction) {
+        use crate::keybindings::KeybindingAction;
+
+        match action {
+            KeybindingAction::NavigateDown => self.handle_navigation_down(),
+            KeybindingAction::NavigateUp => self.handle_navigation_up(),
+            KeybindingAction::NavigateLeft => self.handle_kanban_column_left(),
+            KeybindingAction::NavigateRight => self.handle_kanban_column_right(),
+            KeybindingAction::SelectItem => self.handle_selection_activate(),
+            KeybindingAction::CreateCard => self.handle_create_card_key(),
+            KeybindingAction::CreateBoard => self.handle_create_board_key(),
+            KeybindingAction::CreateSprint => self.handle_create_sprint_key(),
+            KeybindingAction::CreateColumn => self.handle_create_column_key(),
+            KeybindingAction::RenameBoard => self.handle_rename_board_key(),
+            KeybindingAction::RenameColumn => self.handle_rename_column_key(),
+            KeybindingAction::EditCard => {}
+            KeybindingAction::EditBoard => self.handle_edit_board_key(),
+            KeybindingAction::ToggleCompletion => self.handle_toggle_card_completion(),
+            KeybindingAction::AssignToSprint => self.handle_assign_to_sprint_key(),
+            KeybindingAction::ArchiveCard => self.handle_archive_card(),
+            KeybindingAction::RestoreCard => self.handle_restore_card(),
+            KeybindingAction::DeleteCard => self.handle_delete_card_permanent(),
+            KeybindingAction::MoveCardLeft => self.handle_move_card_left(),
+            KeybindingAction::MoveCardRight => self.handle_move_card_right(),
+            KeybindingAction::MoveColumnUp => self.handle_move_column_up(),
+            KeybindingAction::MoveColumnDown => self.handle_move_column_down(),
+            KeybindingAction::DeleteColumn => self.handle_delete_column_key(),
+            KeybindingAction::ExportBoard => self.handle_export_board_key(),
+            KeybindingAction::ExportAll => self.handle_export_all_key(),
+            KeybindingAction::ImportBoard => self.handle_import_board_key(),
+            KeybindingAction::OrderCards => self.handle_order_cards_key(),
+            KeybindingAction::ToggleSortOrder => self.handle_toggle_sort_order_key(),
+            KeybindingAction::ToggleFilter => self.handle_toggle_sprint_filter(),
+            KeybindingAction::ToggleHideAssigned => self.handle_open_filter_dialog(),
+            KeybindingAction::ToggleArchivedView => self.handle_toggle_archived_cards_view(),
+            KeybindingAction::ToggleTaskListView => self.handle_toggle_task_list_view(),
+            KeybindingAction::ToggleCardSelection => self.handle_card_selection_toggle(),
+            KeybindingAction::Search => {
+                if self.focus == Focus::Cards {
+                    self.search.activate();
+                    self.mode = AppMode::Search;
+                }
+            }
+            KeybindingAction::ShowHelp => {}
+            KeybindingAction::Escape => self.handle_escape_key(),
+            KeybindingAction::FocusPanel(panel) => self.handle_column_or_focus_switch(*panel),
+        }
     }
 
     fn handle_key_event(
@@ -251,6 +383,16 @@ impl App {
             return false;
         }
 
+        if matches!(key.code, KeyCode::Char('?'))
+            && !is_input_mode
+            && !matches!(self.mode, AppMode::Help(_))
+        {
+            let previous_mode = self.mode.clone();
+            self.help_selection.set(Some(0));
+            self.mode = AppMode::Help(Box::new(previous_mode));
+            return false;
+        }
+
         match self.mode {
             AppMode::Normal => match key.code {
                 KeyCode::Char('/') => {
@@ -272,6 +414,8 @@ impl App {
                 },
                 KeyCode::Char('x') => self.handle_export_board_key(),
                 KeyCode::Char('X') => self.handle_export_all_key(),
+                KeyCode::Char('d') => self.handle_archive_card(),
+                KeyCode::Char('D') => self.handle_toggle_archived_cards_view(),
                 KeyCode::Char('i') => self.handle_import_board_key(),
                 KeyCode::Char('a') => self.handle_assign_to_sprint_key(),
                 KeyCode::Char('c') => self.handle_toggle_card_completion(),
@@ -339,6 +483,8 @@ impl App {
                 self.handle_confirm_sprint_prefix_collision_popup(key.code)
             }
             AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
+            AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
+            AppMode::Help(_) => self.handle_help_mode(key.code),
         }
         should_restart_events
     }
@@ -362,14 +508,161 @@ impl App {
         }
     }
 
+    fn handle_archived_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crossterm::event::KeyCode;
+        if self.focus != Focus::Cards {
+            self.focus = Focus::Cards;
+        }
+
+        match key_code {
+            KeyCode::Char('r') => self.handle_restore_card(),
+            KeyCode::Char('x') => self.handle_delete_card_permanent(),
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+                self.handle_toggle_archived_cards_view();
+            }
+            KeyCode::Char('v') => self.handle_card_selection_toggle(),
+            KeyCode::Char('V') => self.handle_toggle_task_list_view(),
+            KeyCode::Char('h') => self.handle_kanban_column_left(),
+            KeyCode::Char('l') => self.handle_kanban_column_right(),
+            KeyCode::Char('j') | KeyCode::Down => self.handle_navigation_down(),
+            KeyCode::Char('k') | KeyCode::Up => self.handle_navigation_up(),
+            _ => {}
+        }
+    }
+
+    fn handle_help_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crate::keybindings::KeybindingRegistry;
+        use crossterm::event::KeyCode;
+
+        match key_code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.help_pending_action = None;
+                let provider = KeybindingRegistry::get_provider(self);
+                let context = provider.get_context();
+                self.help_selection.next(context.bindings.len());
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.help_pending_action = None;
+                self.help_selection.prev();
+            }
+            KeyCode::Char('h') | KeyCode::Char('l') => {
+                self.help_pending_action = None;
+            }
+            KeyCode::Enter => {
+                self.help_pending_action = None;
+                if let Some(index) = self.help_selection.get() {
+                    let provider = KeybindingRegistry::get_provider(self);
+                    let context = provider.get_context();
+
+                    if let Some(binding) = context.bindings.get(index) {
+                        if let AppMode::Help(previous_mode) = &self.mode {
+                            self.mode = (**previous_mode).clone();
+                        } else {
+                            self.mode = AppMode::Normal;
+                        }
+                        self.help_selection.clear();
+
+                        self.execute_action(&binding.action);
+                    }
+                }
+            }
+            KeyCode::Esc | KeyCode::Char('?') => {
+                self.help_pending_action = None;
+                if let AppMode::Help(previous_mode) = &self.mode {
+                    self.mode = (**previous_mode).clone();
+                } else {
+                    self.mode = AppMode::Normal;
+                }
+                self.help_selection.clear();
+            }
+            _ => {
+                let provider = KeybindingRegistry::get_provider(self);
+                let context = provider.get_context();
+
+                if let Some((index, binding)) = context
+                    .bindings
+                    .iter()
+                    .enumerate()
+                    .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
+                {
+                    self.help_selection.set(Some(index));
+                    self.help_pending_action = Some((Instant::now(), binding.action));
+                }
+            }
+        }
+    }
+
+    fn handle_animation_tick(&mut self) {
+        let now = Instant::now();
+        let mut completed_animations = Vec::new();
+
+        for (&card_id, animation) in &self.animating_cards {
+            let elapsed = now.duration_since(animation.start_time).as_millis();
+            if elapsed >= ANIMATION_DURATION_MS {
+                completed_animations.push((card_id, animation.animation_type));
+            }
+        }
+
+        for (card_id, animation_type) in completed_animations {
+            self.animating_cards.remove(&card_id);
+            self.complete_animation(card_id, animation_type);
+        }
+    }
+
+    fn complete_animation(&mut self, card_id: uuid::Uuid, animation_type: AnimationType) {
+        match animation_type {
+            AnimationType::Archiving => {
+                self.complete_archive_animation(card_id);
+            }
+            AnimationType::Restoring => {
+                self.complete_restore_animation(card_id);
+            }
+            AnimationType::Deleting => {
+                self.complete_delete_animation(card_id);
+            }
+        }
+    }
+
+    fn complete_archive_animation(&mut self, card_id: uuid::Uuid) {
+        if let Some(card_pos) = self.cards.iter().position(|c| c.id == card_id) {
+            let card = self.cards.remove(card_pos);
+            let column_id = card.column_id;
+            let position = card.position;
+
+            let archived_card = ArchivedCard::new(card, column_id, position);
+            self.archived_cards.push(archived_card);
+
+            self.compact_column_positions(column_id);
+            self.select_card_after_deletion(column_id, position);
+            self.refresh_view();
+        }
+    }
+
+    fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
+        if let Some(pos) = self
+            .archived_cards
+            .iter()
+            .position(|dc| dc.card.id == card_id)
+        {
+            let deleted_card = self.archived_cards.remove(pos);
+            self.restore_card(deleted_card);
+            self.refresh_view();
+        }
+    }
+
+    fn complete_delete_animation(&mut self, card_id: uuid::Uuid) {
+        if let Some(pos) = self
+            .archived_cards
+            .iter()
+            .position(|dc| dc.card.id == card_id)
+        {
+            self.archived_cards.remove(pos);
+            self.refresh_view();
+        }
+    }
+
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.columns);
-        let completed_sprint_ids: std::collections::HashSet<uuid::Uuid> = self
-            .sprints
-            .iter()
-            .filter(|s| s.status == kanban_domain::SprintStatus::Completed)
-            .map(|s| s.id)
-            .collect();
 
         let cards: Vec<_> = self
             .cards
@@ -377,11 +670,6 @@ impl App {
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
-                }
-                if let Some(sprint_id) = c.sprint_id {
-                    if completed_sprint_ids.contains(&sprint_id) {
-                        return false;
-                    }
                 }
                 true
             })
@@ -415,24 +703,12 @@ impl App {
         let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.columns);
 
-        let completed_sprint_ids: std::collections::HashSet<uuid::Uuid> = self
-            .sprints
-            .iter()
-            .filter(|s| s.status == kanban_domain::SprintStatus::Completed)
-            .map(|s| s.id)
-            .collect();
-
         let mut cards: Vec<&Card> = self
             .cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
-                }
-                if let Some(sprint_id) = c.sprint_id {
-                    if completed_sprint_ids.contains(&sprint_id) {
-                        return false;
-                    }
                 }
                 if !self.active_sprint_filters.is_empty() {
                     if let Some(sprint_id) = c.sprint_id {
@@ -460,7 +736,15 @@ impl App {
     pub fn get_selected_card_in_context(&self) -> Option<&Card> {
         if let Some(task_list) = self.view_strategy.get_active_task_list() {
             if let Some(card_id) = task_list.get_selected_card_id() {
-                return self.cards.iter().find(|c| c.id == card_id);
+                if self.mode == AppMode::ArchivedCardsView {
+                    return self
+                        .archived_cards
+                        .iter()
+                        .find(|dc| dc.card.id == card_id)
+                        .map(|dc| &dc.card);
+                } else {
+                    return self.cards.iter().find(|c| c.id == card_id);
+                }
             }
         }
         None
@@ -475,6 +759,17 @@ impl App {
     pub fn select_card_by_id(&mut self, card_id: uuid::Uuid) {
         if let Some(task_list) = self.view_strategy.get_active_task_list_mut() {
             task_list.select_card(card_id);
+        }
+    }
+
+    pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<&Card> {
+        if self.mode == AppMode::ArchivedCardsView {
+            self.archived_cards
+                .iter()
+                .find(|dc| dc.card.id == card_id)
+                .map(|dc| &dc.card)
+        } else {
+            self.cards.iter().find(|c| c.id == card_id)
         }
     }
 
@@ -591,9 +886,20 @@ impl App {
                 } else {
                     None
                 };
+
+                // When in DeletedCardsView, convert deleted cards to Card objects for display
+                let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
+                    self.archived_cards
+                        .iter()
+                        .map(|dc| dc.card.clone())
+                        .collect()
+                } else {
+                    self.cards.clone()
+                };
+
                 let ctx = ViewRefreshContext {
                     board,
-                    all_cards: &self.cards,
+                    all_cards: &cards_for_display,
                     all_columns: &self.columns,
                     all_sprints: &self.sprints,
                     active_sprint_filters: self.active_sprint_filters.clone(),
@@ -615,9 +921,11 @@ impl App {
 
     pub fn switch_view_strategy(&mut self, task_list_view: kanban_domain::TaskListView) {
         let new_strategy: Box<dyn ViewStrategy> = match task_list_view {
-            kanban_domain::TaskListView::Flat => Box::new(FlatViewStrategy::new()),
-            kanban_domain::TaskListView::GroupedByColumn => Box::new(GroupedViewStrategy::new()),
-            kanban_domain::TaskListView::ColumnView => Box::new(KanbanViewStrategy::new()),
+            kanban_domain::TaskListView::Flat => Box::new(UnifiedViewStrategy::flat()),
+            kanban_domain::TaskListView::GroupedByColumn => {
+                Box::new(UnifiedViewStrategy::grouped())
+            }
+            kanban_domain::TaskListView::ColumnView => Box::new(UnifiedViewStrategy::kanban()),
         };
 
         self.view_strategy = new_strategy;
@@ -627,8 +935,13 @@ impl App {
     pub fn export_board_with_filename(&self) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
             if let Some(board) = self.boards.get(board_idx) {
-                let board_export =
-                    BoardExporter::export_board(board, &self.columns, &self.cards, &self.sprints);
+                let board_export = BoardExporter::export_board(
+                    board,
+                    &self.columns,
+                    &self.cards,
+                    &self.archived_cards,
+                    &self.sprints,
+                );
 
                 let export = crate::export::AllBoardsExport {
                     boards: vec![board_export],
@@ -645,6 +958,7 @@ impl App {
             &self.boards,
             &self.columns,
             &self.cards,
+            &self.archived_cards,
             &self.sprints,
         );
         BoardExporter::export_to_file(&export, self.input.as_str())?;
@@ -657,6 +971,7 @@ impl App {
                 &self.boards,
                 &self.columns,
                 &self.cards,
+                &self.archived_cards,
                 &self.sprints,
             );
             BoardExporter::export_to_file(&export, filename)?;
@@ -829,7 +1144,25 @@ impl App {
                                 break;
                             }
                         }
-                        Event::Tick => {}
+                        Event::Tick => {
+                            self.handle_animation_tick();
+
+                            // Check if help menu pending action should execute
+                            if let Some((start_time, action)) = &self.help_pending_action {
+                                if start_time.elapsed().as_millis() >= 100 {
+                                    if let AppMode::Help(previous_mode) = &self.mode {
+                                        self.mode = (**previous_mode).clone();
+                                    } else {
+                                        self.mode = AppMode::Normal;
+                                    }
+                                    self.help_selection.clear();
+
+                                    let action = *action;
+                                    self.help_pending_action = None;
+                                    self.execute_action(&action);
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -854,11 +1187,13 @@ impl App {
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         let first_new_index = self.boards.len();
         let import = BoardImporter::import_from_file(filename)?;
-        let (boards, columns, cards, sprints) = BoardImporter::extract_entities(import);
+        let (boards, columns, cards, deleted_cards, sprints) =
+            BoardImporter::extract_entities(import);
 
         self.boards.extend(boards);
         self.columns.extend(columns);
         self.cards.extend(cards);
+        self.archived_cards.extend(deleted_cards);
         self.sprints.extend(sprints);
 
         self.board_selection.set(Some(first_new_index));

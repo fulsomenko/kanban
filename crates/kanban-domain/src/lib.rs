@@ -1,3 +1,4 @@
+pub mod archived_card;
 pub mod board;
 pub mod card;
 pub mod column;
@@ -7,6 +8,7 @@ pub mod sprint_log;
 pub mod tag;
 pub mod task_list_view;
 
+pub use archived_card::ArchivedCard;
 pub use board::{Board, BoardId, SortField, SortOrder};
 pub use card::{Card, CardId, CardPriority, CardStatus};
 pub use column::{Column, ColumnId};

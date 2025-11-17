@@ -1,6 +1,14 @@
 use super::models::AllBoardsExport;
-use kanban_domain::{Board, Card, Column, Sprint};
+use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
 use std::io;
+
+pub type ImportedEntities = (
+    Vec<Board>,
+    Vec<Column>,
+    Vec<Card>,
+    Vec<ArchivedCard>,
+    Vec<Sprint>,
+);
 
 pub struct BoardImporter;
 
@@ -22,22 +30,22 @@ impl BoardImporter {
         Self::import_from_json(&content)
     }
 
-    pub fn extract_entities(
-        import: AllBoardsExport,
-    ) -> (Vec<Board>, Vec<Column>, Vec<Card>, Vec<Sprint>) {
+    pub fn extract_entities(import: AllBoardsExport) -> ImportedEntities {
         let mut boards = Vec::new();
         let mut columns = Vec::new();
         let mut cards = Vec::new();
+        let mut archived_cards = Vec::new();
         let mut sprints = Vec::new();
 
         for board_data in import.boards {
             boards.push(board_data.board);
             columns.extend(board_data.columns);
             cards.extend(board_data.cards);
+            archived_cards.extend(board_data.archived_cards);
             sprints.extend(board_data.sprints);
         }
 
-        (boards, columns, cards, sprints)
+        (boards, columns, cards, archived_cards, sprints)
     }
 }
 
@@ -71,6 +79,7 @@ mod tests {
                     },
                     "columns": [],
                     "cards": [],
+                    "archived_cards": [],
                     "sprints": []
                 }
             ]
@@ -104,15 +113,18 @@ mod tests {
                 board: board.clone(),
                 columns: vec![column.clone()],
                 cards: vec![card.clone()],
+                archived_cards: vec![],
                 sprints: vec![],
             }],
         };
 
-        let (boards, columns, cards, sprints) = BoardImporter::extract_entities(export);
+        let (boards, columns, cards, archived_cards, sprints) =
+            BoardImporter::extract_entities(export);
 
         assert_eq!(boards.len(), 1);
         assert_eq!(columns.len(), 1);
         assert_eq!(cards.len(), 1);
+        assert_eq!(archived_cards.len(), 0);
         assert_eq!(sprints.len(), 0);
     }
 }

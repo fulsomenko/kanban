@@ -1,4 +1,5 @@
 use crate::app::{App, AppMode, Focus};
+use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::TaskListView;
 
 impl App {
@@ -23,7 +24,7 @@ impl App {
             }
             Focus::Cards => {
                 let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_down()
+                    list.navigate_down(self.viewport_height)
                 } else {
                     false
                 };
@@ -43,7 +44,7 @@ impl App {
             }
             Focus::Cards => {
                 let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_up()
+                    list.navigate_up(self.viewport_height)
                 } else {
                     false
                 };
@@ -85,6 +86,7 @@ impl App {
                         if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                             if !list.is_empty() {
                                 list.set_selected_index(Some(0));
+                                list.ensure_selected_visible(self.viewport_height);
                             }
                         }
                     }
@@ -146,13 +148,10 @@ impl App {
             let column_count = self.view_strategy.get_all_task_lists().len();
 
             if index < column_count {
-                if let Some(kanban_strategy) =
-                    self.view_strategy
-                        .as_any_mut()
-                        .downcast_mut::<crate::view_strategy::KanbanViewStrategy>()
-                {
-                    kanban_strategy.set_active_column_index(index);
-                }
+                self.view_strategy
+                    .as_any_mut()
+                    .downcast_mut::<UnifiedViewStrategy>()
+                    .map(|unified| unified.try_set_active_column_index(index));
 
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     if list.is_empty() {
@@ -160,6 +159,7 @@ impl App {
                     } else if list.get_selected_index().is_none() {
                         list.set_selected_index(Some(0));
                     }
+                    list.ensure_selected_visible(self.viewport_height);
                 }
                 tracing::info!("Switched to column {}", index);
             }
