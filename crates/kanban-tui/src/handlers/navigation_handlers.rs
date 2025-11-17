@@ -6,10 +6,16 @@ use kanban_domain::TaskListView;
 impl App {
     fn get_effective_viewport_height(&self) -> usize {
         // Check if using grouped view (which has column headers)
-        if let Some(unified) = self.view_strategy.as_any()
-            .downcast_ref::<UnifiedViewStrategy>() {
-            if let Some(layout) = unified.get_layout_strategy().as_any()
-                .downcast_ref::<VirtualUnifiedLayout>() {
+        if let Some(unified) = self
+            .view_strategy
+            .as_any()
+            .downcast_ref::<UnifiedViewStrategy>()
+        {
+            if let Some(layout) = unified
+                .get_layout_strategy()
+                .as_any()
+                .downcast_ref::<VirtualUnifiedLayout>()
+            {
                 // Estimate headers that will appear in the viewport
                 let column_boundaries = layout.get_column_boundaries();
                 if let Some(list) = self.view_strategy.get_active_task_list() {

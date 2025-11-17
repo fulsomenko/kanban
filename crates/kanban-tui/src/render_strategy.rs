@@ -73,7 +73,9 @@ impl RenderStrategy for SinglePanelRenderer {
                         use crate::view_strategy::UnifiedViewStrategy;
 
                         // Try to get column boundaries from VirtualUnifiedLayout
-                        let column_boundaries = app.view_strategy.as_any()
+                        let column_boundaries = app
+                            .view_strategy
+                            .as_any()
                             .downcast_ref::<UnifiedViewStrategy>()
                             .and_then(|unified| {
                                 let layout_any = unified.get_layout_strategy().as_any();
@@ -100,8 +102,8 @@ impl RenderStrategy for SinglePanelRenderer {
                             );
 
                             // Adjust viewport height to account for headers
-                            let adjusted_viewport_height = raw_viewport_height
-                                .saturating_sub(estimated_header_count);
+                            let adjusted_viewport_height =
+                                raw_viewport_height.saturating_sub(estimated_header_count);
 
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
@@ -130,7 +132,10 @@ impl RenderStrategy for SinglePanelRenderer {
                                 if !columns_shown.contains(&card_column_idx) {
                                     if let Some(boundary) = column_boundaries.get(card_column_idx) {
                                         lines.push(Line::from(Span::styled(
-                                            format!("── {} ({}) ──", boundary.column_name, boundary.card_count),
+                                            format!(
+                                                "── {} ({}) ──",
+                                                boundary.column_name, boundary.card_count
+                                            ),
                                             ratatui::style::Style::default()
                                                 .fg(ratatui::style::Color::Cyan)
                                                 .add_modifier(ratatui::style::Modifier::BOLD),
@@ -141,16 +146,21 @@ impl RenderStrategy for SinglePanelRenderer {
 
                                 if let Some(card_id) = task_list.cards.get(*card_idx) {
                                     if let Some(card) = app.get_card_by_id(*card_id) {
-                                        let is_selected = task_list.get_selected_index() == Some(*card_idx);
-                                        let animation_type =
-                                            app.animating_cards.get(&card.id).map(|a| a.animation_type);
+                                        let is_selected =
+                                            task_list.get_selected_index() == Some(*card_idx);
+                                        let animation_type = app
+                                            .animating_cards
+                                            .get(&card.id)
+                                            .map(|a| a.animation_type);
                                         let line = render_card_list_item(CardListItemConfig {
                                             card,
                                             board,
                                             sprints: &app.sprints,
                                             is_selected,
                                             is_focused: app.focus == crate::app::Focus::Cards,
-                                            is_multi_selected: app.selected_cards.contains(&card.id),
+                                            is_multi_selected: app
+                                                .selected_cards
+                                                .contains(&card.id),
                                             show_sprint_name: app.active_sprint_filters.is_empty(),
                                             animation_type,
                                         });
@@ -170,8 +180,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                 )));
                             }
                         }
-                    }
-                    else if let Some(board) = app.boards.get(board_idx.unwrap()) {
+                    } else if let Some(board) = app.boards.get(board_idx.unwrap()) {
                         let mut board_columns: Vec<_> = app
                             .columns
                             .iter()
