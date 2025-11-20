@@ -351,6 +351,10 @@ impl App {
             KeybindingAction::ShowHelp => {}
             KeybindingAction::Escape => self.handle_escape_key(),
             KeybindingAction::FocusPanel(panel) => self.handle_column_or_focus_switch(*panel),
+            KeybindingAction::JumpToTop => self.handle_jump_to_top(),
+            KeybindingAction::JumpToBottom => self.handle_jump_to_bottom(),
+            KeybindingAction::JumpHalfViewportUp => self.handle_jump_half_viewport_up(),
+            KeybindingAction::JumpHalfViewportDown => self.handle_jump_half_viewport_down(),
         }
     }
 
@@ -398,53 +402,175 @@ impl App {
         match self.mode {
             AppMode::Normal => match key.code {
                 KeyCode::Char('/') => {
+                    self.pending_key = None;
                     if self.focus == Focus::Cards {
                         self.search.activate();
                         self.mode = AppMode::Search;
                     }
                 }
-                KeyCode::Char('n') => match self.focus {
-                    Focus::Boards => self.handle_create_board_key(),
-                    Focus::Cards => self.handle_create_card_key(),
-                },
-                KeyCode::Char('r') => self.handle_rename_board_key(),
-                KeyCode::Char('e') => match self.focus {
-                    Focus::Boards => self.handle_edit_board_key(),
-                    Focus::Cards => {
-                        should_restart_events = self.handle_edit_card_key(terminal, event_handler);
+                KeyCode::Char('g') => {
+                    if self.pending_key == Some('g') {
+                        self.pending_key = None;
+                        self.handle_jump_to_top();
+                    } else {
+                        self.pending_key = Some('g');
                     }
-                },
-                KeyCode::Char('x') => self.handle_export_board_key(),
-                KeyCode::Char('X') => self.handle_export_all_key(),
-                KeyCode::Char('d') => self.handle_archive_card(),
-                KeyCode::Char('D') => self.handle_toggle_archived_cards_view(),
-                KeyCode::Char('i') => self.handle_import_board_key(),
-                KeyCode::Char('a') => self.handle_assign_to_sprint_key(),
-                KeyCode::Char('c') => self.handle_toggle_card_completion(),
-                KeyCode::Char('o') => self.handle_order_cards_key(),
-                KeyCode::Char('O') => self.handle_toggle_sort_order_key(),
-                KeyCode::Char('T') => self.handle_open_filter_dialog(),
-                KeyCode::Char('t') => self.handle_toggle_sprint_filter(),
-                KeyCode::Char('v') => self.handle_card_selection_toggle(),
-                KeyCode::Char('V') => self.handle_toggle_task_list_view(),
-                KeyCode::Char('H') => self.handle_move_card_left(),
-                KeyCode::Char('L') => self.handle_move_card_right(),
-                KeyCode::Char('h') => self.handle_kanban_column_left(),
-                KeyCode::Char('l') => self.handle_kanban_column_right(),
-                KeyCode::Char('1') => self.handle_column_or_focus_switch(0),
-                KeyCode::Char('2') => self.handle_column_or_focus_switch(1),
-                KeyCode::Char('3') => self.handle_column_or_focus_switch(2),
-                KeyCode::Char('4') => self.handle_column_or_focus_switch(3),
-                KeyCode::Char('5') => self.handle_column_or_focus_switch(4),
-                KeyCode::Char('6') => self.handle_column_or_focus_switch(5),
-                KeyCode::Char('7') => self.handle_column_or_focus_switch(6),
-                KeyCode::Char('8') => self.handle_column_or_focus_switch(7),
-                KeyCode::Char('9') => self.handle_column_or_focus_switch(8),
-                KeyCode::Esc => self.handle_escape_key(),
-                KeyCode::Char('j') | KeyCode::Down => self.handle_navigation_down(),
-                KeyCode::Char('k') | KeyCode::Up => self.handle_navigation_up(),
-                KeyCode::Enter | KeyCode::Char(' ') => self.handle_selection_activate(),
-                _ => {}
+                }
+                KeyCode::Char('G') => {
+                    self.pending_key = None;
+                    self.handle_jump_to_bottom();
+                }
+                KeyCode::Char('{') => {
+                    self.pending_key = None;
+                    self.handle_jump_half_viewport_up();
+                }
+                KeyCode::Char('}') => {
+                    self.pending_key = None;
+                    self.handle_jump_half_viewport_down();
+                }
+                KeyCode::Char('n') => {
+                    self.pending_key = None;
+                    match self.focus {
+                        Focus::Boards => self.handle_create_board_key(),
+                        Focus::Cards => self.handle_create_card_key(),
+                    }
+                }
+                KeyCode::Char('r') => {
+                    self.pending_key = None;
+                    self.handle_rename_board_key();
+                }
+                KeyCode::Char('e') => {
+                    self.pending_key = None;
+                    match self.focus {
+                        Focus::Boards => self.handle_edit_board_key(),
+                        Focus::Cards => {
+                            should_restart_events = self.handle_edit_card_key(terminal, event_handler);
+                        }
+                    }
+                }
+                KeyCode::Char('x') => {
+                    self.pending_key = None;
+                    self.handle_export_board_key();
+                }
+                KeyCode::Char('X') => {
+                    self.pending_key = None;
+                    self.handle_export_all_key();
+                }
+                KeyCode::Char('d') => {
+                    self.pending_key = None;
+                    self.handle_archive_card();
+                }
+                KeyCode::Char('D') => {
+                    self.pending_key = None;
+                    self.handle_toggle_archived_cards_view();
+                }
+                KeyCode::Char('i') => {
+                    self.pending_key = None;
+                    self.handle_import_board_key();
+                }
+                KeyCode::Char('a') => {
+                    self.pending_key = None;
+                    self.handle_assign_to_sprint_key();
+                }
+                KeyCode::Char('c') => {
+                    self.pending_key = None;
+                    self.handle_toggle_card_completion();
+                }
+                KeyCode::Char('o') => {
+                    self.pending_key = None;
+                    self.handle_order_cards_key();
+                }
+                KeyCode::Char('O') => {
+                    self.pending_key = None;
+                    self.handle_toggle_sort_order_key();
+                }
+                KeyCode::Char('T') => {
+                    self.pending_key = None;
+                    self.handle_open_filter_dialog();
+                }
+                KeyCode::Char('t') => {
+                    self.pending_key = None;
+                    self.handle_toggle_sprint_filter();
+                }
+                KeyCode::Char('v') => {
+                    self.pending_key = None;
+                    self.handle_card_selection_toggle();
+                }
+                KeyCode::Char('V') => {
+                    self.pending_key = None;
+                    self.handle_toggle_task_list_view();
+                }
+                KeyCode::Char('H') => {
+                    self.pending_key = None;
+                    self.handle_move_card_left();
+                }
+                KeyCode::Char('L') => {
+                    self.pending_key = None;
+                    self.handle_move_card_right();
+                }
+                KeyCode::Char('h') => {
+                    self.pending_key = None;
+                    self.handle_kanban_column_left();
+                }
+                KeyCode::Char('l') => {
+                    self.pending_key = None;
+                    self.handle_kanban_column_right();
+                }
+                KeyCode::Char('1') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(0);
+                }
+                KeyCode::Char('2') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(1);
+                }
+                KeyCode::Char('3') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(2);
+                }
+                KeyCode::Char('4') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(3);
+                }
+                KeyCode::Char('5') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(4);
+                }
+                KeyCode::Char('6') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(5);
+                }
+                KeyCode::Char('7') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(6);
+                }
+                KeyCode::Char('8') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(7);
+                }
+                KeyCode::Char('9') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(8);
+                }
+                KeyCode::Esc => {
+                    self.pending_key = None;
+                    self.handle_escape_key();
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.pending_key = None;
+                    self.handle_navigation_down();
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.pending_key = None;
+                    self.handle_navigation_up();
+                }
+                KeyCode::Enter | KeyCode::Char(' ') => {
+                    self.pending_key = None;
+                    self.handle_selection_activate();
+                }
+                _ => {
+                    self.pending_key = None;
+                }
             },
             AppMode::CreateBoard => self.handle_create_board_dialog(key.code),
             AppMode::CreateCard => self.handle_create_card_dialog(key.code),
