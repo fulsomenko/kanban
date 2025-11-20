@@ -82,6 +82,7 @@ pub struct App {
     pub search: SearchState,
     pub filter_dialog_state: Option<FilterDialogState>,
     pub viewport_height: usize,
+    pub pending_key: Option<char>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -225,6 +226,7 @@ impl App {
             search: SearchState::new(),
             filter_dialog_state: None,
             viewport_height: 20,
+            pending_key: None,
         };
 
         if let Some(ref filename) = save_file {
