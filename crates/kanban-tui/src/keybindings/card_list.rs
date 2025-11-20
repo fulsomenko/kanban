@@ -65,6 +65,20 @@ impl KeybindingProvider for CardListProvider {
                     KeybindingAction::NavigateDown,
                 ),
                 Keybinding::new("k/↑", "up", "Navigate up", KeybindingAction::NavigateUp),
+                Keybinding::new("gg", "top", "Jump to top", KeybindingAction::JumpToTop),
+                Keybinding::new("G", "bottom", "Jump to bottom", KeybindingAction::JumpToBottom),
+                Keybinding::new(
+                    "{",
+                    "half up",
+                    "Jump half viewport up",
+                    KeybindingAction::JumpHalfViewportUp,
+                ),
+                Keybinding::new(
+                    "}",
+                    "half down",
+                    "Jump half viewport down",
+                    KeybindingAction::JumpHalfViewportDown,
+                ),
                 Keybinding::new(
                     "h",
                     "prev col",
