@@ -313,8 +313,10 @@ impl CardList {
         if self.cards.is_empty() {
             return;
         }
+        let render_info = self.get_render_info(viewport_height);
+        let visible_card_count = render_info.visible_card_indices.len();
         let current_idx = self.selection.get().unwrap_or(0);
-        let jump_distance = viewport_height / 2;
+        let jump_distance = visible_card_count / 2;
         let target_idx = current_idx.saturating_sub(jump_distance);
         self.selection.set(Some(target_idx));
         self.ensure_selected_visible(viewport_height);
@@ -324,8 +326,10 @@ impl CardList {
         if self.cards.is_empty() {
             return;
         }
+        let render_info = self.get_render_info(viewport_height);
+        let visible_card_count = render_info.visible_card_indices.len();
         let current_idx = self.selection.get().unwrap_or(0);
-        let jump_distance = viewport_height / 2;
+        let jump_distance = visible_card_count / 2;
         let target_idx = (current_idx + jump_distance).min(self.cards.len() - 1);
         self.selection.set(Some(target_idx));
         self.ensure_selected_visible(viewport_height);
