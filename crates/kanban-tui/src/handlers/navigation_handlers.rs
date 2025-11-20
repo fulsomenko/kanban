@@ -206,4 +206,51 @@ impl App {
             }
         }
     }
+
+    pub fn handle_jump_to_top(&mut self) {
+        match self.focus {
+            Focus::Boards => {
+                self.board_selection.jump_to_first();
+                self.switch_view_strategy(TaskListView::GroupedByColumn);
+            }
+            Focus::Cards => {
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.jump_to_top();
+                }
+            }
+        }
+    }
+
+    pub fn handle_jump_to_bottom(&mut self) {
+        match self.focus {
+            Focus::Boards => {
+                self.board_selection.jump_to_last(self.boards.len());
+                self.switch_view_strategy(TaskListView::GroupedByColumn);
+            }
+            Focus::Cards => {
+                let effective_viewport = self.get_effective_viewport_height();
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.jump_to_bottom(effective_viewport);
+                }
+            }
+        }
+    }
+
+    pub fn handle_jump_half_viewport_up(&mut self) {
+        if self.focus == Focus::Cards {
+            let effective_viewport = self.get_effective_viewport_height();
+            if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                list.jump_half_viewport_up(effective_viewport);
+            }
+        }
+    }
+
+    pub fn handle_jump_half_viewport_down(&mut self) {
+        if self.focus == Focus::Cards {
+            let effective_viewport = self.get_effective_viewport_height();
+            if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                list.jump_half_viewport_down(effective_viewport);
+            }
+        }
+    }
 }
