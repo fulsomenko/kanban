@@ -444,7 +444,8 @@ impl App {
                     match self.focus {
                         Focus::Boards => self.handle_edit_board_key(),
                         Focus::Cards => {
-                            should_restart_events = self.handle_edit_card_key(terminal, event_handler);
+                            should_restart_events =
+                                self.handle_edit_card_key(terminal, event_handler);
                         }
                     }
                 }

@@ -65,7 +65,12 @@ impl KeybindingProvider for NormalModeBoardsProvider {
                 ),
                 Keybinding::new("k/↑", "up", "Navigate up", KeybindingAction::NavigateUp),
                 Keybinding::new("gg", "top", "Jump to top", KeybindingAction::JumpToTop),
-                Keybinding::new("G", "bottom", "Jump to bottom", KeybindingAction::JumpToBottom),
+                Keybinding::new(
+                    "G",
+                    "bottom",
+                    "Jump to bottom",
+                    KeybindingAction::JumpToBottom,
+                ),
                 Keybinding::new(
                     "Enter/Space",
                     "detail",
@@ -93,7 +98,12 @@ impl KeybindingProvider for ArchivedCardsViewProvider {
                 ),
                 Keybinding::new("k/↑", "up", "Navigate up", KeybindingAction::NavigateUp),
                 Keybinding::new("gg", "top", "Jump to top", KeybindingAction::JumpToTop),
-                Keybinding::new("G", "bottom", "Jump to bottom", KeybindingAction::JumpToBottom),
+                Keybinding::new(
+                    "G",
+                    "bottom",
+                    "Jump to bottom",
+                    KeybindingAction::JumpToBottom,
+                ),
                 Keybinding::new(
                     "{",
                     "half up",
