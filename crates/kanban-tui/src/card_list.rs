@@ -294,6 +294,43 @@ impl CardList {
         }
     }
 
+    pub fn jump_to_top(&mut self) {
+        if !self.cards.is_empty() {
+            self.selection.set(Some(0));
+            self.scroll_offset = 0;
+        }
+    }
+
+    pub fn jump_to_bottom(&mut self, viewport_height: usize) {
+        if !self.cards.is_empty() {
+            let last_idx = self.cards.len() - 1;
+            self.selection.set(Some(last_idx));
+            self.ensure_selected_visible(viewport_height);
+        }
+    }
+
+    pub fn jump_half_viewport_up(&mut self, viewport_height: usize) {
+        if self.cards.is_empty() {
+            return;
+        }
+        let current_idx = self.selection.get().unwrap_or(0);
+        let jump_distance = viewport_height / 2;
+        let target_idx = current_idx.saturating_sub(jump_distance);
+        self.selection.set(Some(target_idx));
+        self.ensure_selected_visible(viewport_height);
+    }
+
+    pub fn jump_half_viewport_down(&mut self, viewport_height: usize) {
+        if self.cards.is_empty() {
+            return;
+        }
+        let current_idx = self.selection.get().unwrap_or(0);
+        let jump_distance = viewport_height / 2;
+        let target_idx = (current_idx + jump_distance).min(self.cards.len() - 1);
+        self.selection.set(Some(target_idx));
+        self.ensure_selected_visible(viewport_height);
+    }
+
     pub fn clamp_selection_to_visible(&mut self, viewport_height: usize) {
         if self.cards.is_empty() {
             return;
