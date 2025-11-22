@@ -502,45 +502,129 @@ mod tests {
     }
 
     #[test]
-    fn test_jump_half_page_down_from_start() {
+    fn test_jump_half_page_down_from_top_of_page() {
         let mut page = Page::new(100, 10);
+        // Page 0 has items 0-8, middle = (0+8)/2 = 4
+        // From item 0 (top half): jump to middle (4)
         let new_idx = page.jump_half_page_down(0);
-
         assert_eq!(new_idx, 4);
-        assert_eq!(page.scroll_offset, 0);
     }
 
     #[test]
-    fn test_jump_half_page_down_middle() {
+    fn test_jump_half_page_down_from_middle_of_page() {
         let mut page = Page::new(100, 10);
-        let new_idx = page.jump_half_page_down(25);
-
-        assert_eq!(new_idx, 29);
+        // Page 0 has items 0-8, middle = 4
+        // From item 4 (at middle): jump to bottom (8)
+        let new_idx = page.jump_half_page_down(4);
+        assert_eq!(new_idx, 8);
     }
 
     #[test]
-    fn test_jump_half_page_down_near_end() {
+    fn test_jump_half_page_down_from_bottom_of_page() {
         let mut page = Page::new(100, 10);
-        let new_idx = page.jump_half_page_down(95);
-
-        assert_eq!(new_idx, 99);
+        // Page 0 has items 0-8, middle = 4
+        // From item 8 (at bottom): jump to first item of next page (9)
+        let new_idx = page.jump_half_page_down(8);
+        assert_eq!(new_idx, 9);
     }
 
     #[test]
-    fn test_jump_half_page_up_from_middle() {
+    fn test_jump_half_page_down_three_step_navigation() {
         let mut page = Page::new(100, 10);
-        page.scroll_offset = 20;
-        let new_idx = page.jump_half_page_up(50);
+        // Page 0: items 0-8, middle = 4
+        // Step 1: From top (0) → middle (4)
+        let idx1 = page.jump_half_page_down(0);
+        assert_eq!(idx1, 4);
 
-        assert_eq!(new_idx, 46);
+        // Step 2: From middle (4) → bottom (8)
+        let idx2 = page.jump_half_page_down(idx1);
+        assert_eq!(idx2, 8);
+
+        // Step 3: From bottom (8) → next page start (9)
+        let idx3 = page.jump_half_page_down(idx2);
+        assert_eq!(idx3, 9);
     }
 
     #[test]
-    fn test_jump_half_page_up_from_start() {
+    fn test_jump_half_page_up_from_bottom_of_page() {
         let mut page = Page::new(100, 10);
-        let new_idx = page.jump_half_page_up(5);
+        // Page 0 has items 0-8, middle = 4
+        // From item 8 (bottom half): jump to middle (4)
+        let new_idx = page.jump_half_page_up(8);
+        assert_eq!(new_idx, 4);
+    }
 
-        assert_eq!(new_idx, 1);
+    #[test]
+    fn test_jump_half_page_up_from_middle_of_page() {
+        let mut page = Page::new(100, 10);
+        // Page 0 has items 0-8, middle = 4
+        // From item 4 (at middle): jump to top (0)
+        let new_idx = page.jump_half_page_up(4);
+        assert_eq!(new_idx, 0);
+    }
+
+    #[test]
+    fn test_jump_half_page_up_from_top_of_page() {
+        let mut page = Page::new(100, 10);
+        // Page 0 has items 0-8, middle = 4
+        // From item 0 (at top): jump to last item of previous page
+        // But we're on first page, so stay at 0
+        let new_idx = page.jump_half_page_up(0);
+        assert_eq!(new_idx, 0);
+    }
+
+    #[test]
+    fn test_jump_half_page_up_three_step_navigation() {
+        let mut page = Page::new(100, 10);
+        // Page 1: items 9-16, middle = (9+16)/2 = 12
+        // Starting from item 16 (bottom of page 1)
+        let idx1 = page.jump_half_page_up(16);
+        assert_eq!(idx1, 12); // Jump to middle
+
+        // From middle (12)
+        let idx2 = page.jump_half_page_up(idx1);
+        assert_eq!(idx2, 9); // Jump to top
+
+        // From top (9)
+        let idx3 = page.jump_half_page_up(idx2);
+        assert_eq!(idx3, 8); // Jump to end of previous page
+    }
+
+    #[test]
+    fn test_jump_multiple_pages_down() {
+        let mut page = Page::new(100, 10);
+        // With viewport 10:
+        // Page 0: items 0-8, middle = 4
+        // Page 1: items 9-16, middle = 12
+        // Page 2: items 17-24, middle = 20
+
+        // From top of page 0 -> middle -> bottom -> next page
+        let idx1 = page.jump_half_page_down(0);   // 0 -> 4 (middle of page 0)
+        assert_eq!(idx1, 4);
+        let idx2 = page.jump_half_page_down(idx1); // 4 -> 8 (bottom of page 0)
+        assert_eq!(idx2, 8);
+        let idx3 = page.jump_half_page_down(idx2); // 8 -> 9 (start of page 1)
+        assert_eq!(idx3, 9);
+        let idx4 = page.jump_half_page_down(idx3); // 9 -> 12 (middle of page 1)
+        assert_eq!(idx4, 12);
+    }
+
+    #[test]
+    fn test_jump_multiple_pages_up() {
+        let mut page = Page::new(100, 10);
+        // With viewport 10:
+        // Page 0: items 0-8, middle = 4
+        // Page 1: items 9-16, middle = 12
+
+        // From bottom of page 1 -> middle -> top -> previous page
+        let idx1 = page.jump_half_page_up(16);    // 16 -> 12 (middle of page 1)
+        assert_eq!(idx1, 12);
+        let idx2 = page.jump_half_page_up(idx1);  // 12 -> 9 (top of page 1)
+        assert_eq!(idx2, 9);
+        let idx3 = page.jump_half_page_up(idx2);  // 9 -> 8 (end of page 0)
+        assert_eq!(idx3, 8);
+        let idx4 = page.jump_half_page_up(idx3);  // 8 -> 4 (middle of page 0)
+        assert_eq!(idx4, 4);
     }
 
     #[test]
