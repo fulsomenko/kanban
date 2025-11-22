@@ -167,6 +167,94 @@ impl Page {
         }
     }
 
+    pub fn navigate_up(&mut self, current_idx: usize) -> usize {
+        if self.total_items == 0 {
+            return current_idx;
+        }
+
+        if current_idx == 0 {
+            return current_idx;
+        }
+
+        let page_info = self.get_page_info();
+        let first_visible_idx = page_info.first_visible_idx;
+
+        if current_idx == first_visible_idx && self.scroll_offset > 0 {
+            let target_selection = current_idx.saturating_sub(1);
+            self.scroll_offset = self.scroll_offset.saturating_sub(1);
+
+            loop {
+                let temp_page_info = self.get_page_info();
+                let current_render_start = temp_page_info.first_visible_idx;
+                if target_selection >= current_render_start || self.scroll_offset == 0 {
+                    break;
+                }
+                self.scroll_offset = self.scroll_offset.saturating_sub(1);
+            }
+
+            target_selection
+        } else if current_idx > first_visible_idx {
+            current_idx.saturating_sub(1)
+        } else {
+            current_idx
+        }
+    }
+
+    pub fn navigate_down(&mut self, current_idx: usize) -> usize {
+        if self.total_items == 0 {
+            return current_idx;
+        }
+
+        if current_idx == self.total_items - 1 {
+            return current_idx;
+        }
+
+        let page_info = self.get_page_info();
+        let last_visible_idx = page_info.last_visible_idx;
+
+        if current_idx == last_visible_idx && current_idx < self.total_items - 1 {
+            let target_selection = (current_idx + 1).min(self.total_items - 1);
+            self.scroll_offset = self.scroll_offset.saturating_add(1);
+
+            loop {
+                let temp_page_info = self.get_page_info();
+                let new_last_visible_idx = temp_page_info.last_visible_idx;
+
+                if target_selection <= new_last_visible_idx || target_selection >= self.total_items {
+                    break;
+                }
+                self.scroll_offset = self.scroll_offset.saturating_add(1);
+            }
+
+            target_selection
+        } else if current_idx < last_visible_idx {
+            (current_idx + 1).min(self.total_items - 1)
+        } else {
+            current_idx
+        }
+    }
+
+    pub fn clamp_selection_to_visible(&mut self, selected_idx: usize) {
+        if self.total_items == 0 {
+            return;
+        }
+
+        let render_start = if self.scroll_offset == 1 {
+            0
+        } else {
+            self.scroll_offset
+        };
+
+        let page_info = self.get_page_info();
+        let render_end = render_start + page_info.items_per_page;
+
+        if selected_idx < render_start {
+            self.scroll_offset = selected_idx;
+        } else if selected_idx >= render_end {
+            self.scroll_offset = selected_idx.saturating_sub(page_info.items_per_page - 1);
+        }
+    }
+
     fn calculate_viewport_info(&self) -> ViewportInfo {
         let has_items_above = self.scroll_offset > 1;
         let available_space = self.viewport_height.saturating_sub(has_items_above as usize);
@@ -307,5 +395,92 @@ mod tests {
         page.set_total_items(10);
 
         assert!(page.scroll_offset < 10);
+    }
+
+    #[test]
+    fn test_navigate_up_from_middle() {
+        let mut page = Page::new(20, 10);
+        page.scroll_offset = 5;
+        let new_idx = page.navigate_up(10);
+
+        assert_eq!(new_idx, 9);
+        assert_eq!(page.scroll_offset, 5);
+    }
+
+    #[test]
+    fn test_navigate_up_at_top() {
+        let mut page = Page::new(20, 10);
+        let new_idx = page.navigate_up(0);
+
+        assert_eq!(new_idx, 0);
+        assert_eq!(page.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_navigate_up_with_scroll_adjustment() {
+        let mut page = Page::new(20, 10);
+        page.scroll_offset = 5;
+        let new_idx = page.navigate_up(5);
+
+        assert_eq!(new_idx, 4);
+        assert!(page.scroll_offset < 5);
+    }
+
+    #[test]
+    fn test_navigate_down_from_middle() {
+        let mut page = Page::new(20, 10);
+        page.scroll_offset = 0;
+        let new_idx = page.navigate_down(5);
+
+        assert_eq!(new_idx, 6);
+        assert_eq!(page.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_navigate_down_at_bottom() {
+        let mut page = Page::new(20, 10);
+        let new_idx = page.navigate_down(19);
+
+        assert_eq!(new_idx, 19);
+        assert_eq!(page.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_navigate_down_with_scroll_adjustment() {
+        let mut page = Page::new(20, 10);
+        page.scroll_offset = 0;
+        let page_info = page.get_page_info();
+        let last_visible = page_info.last_visible_idx;
+        let new_idx = page.navigate_down(last_visible);
+
+        assert!(new_idx > last_visible);
+        assert!(page.scroll_offset > 0);
+    }
+
+    #[test]
+    fn test_clamp_selection_to_visible_above() {
+        let mut page = Page::new(100, 10);
+        page.scroll_offset = 50;
+        page.clamp_selection_to_visible(40);
+
+        assert_eq!(page.scroll_offset, 40);
+    }
+
+    #[test]
+    fn test_clamp_selection_to_visible_below() {
+        let mut page = Page::new(100, 10);
+        page.scroll_offset = 0;
+        page.clamp_selection_to_visible(20);
+
+        assert!(page.scroll_offset > 0);
+    }
+
+    #[test]
+    fn test_clamp_selection_to_visible_within_range() {
+        let mut page = Page::new(100, 10);
+        page.scroll_offset = 5;
+        page.clamp_selection_to_visible(10);
+
+        assert_eq!(page.scroll_offset, 5);
     }
 }
