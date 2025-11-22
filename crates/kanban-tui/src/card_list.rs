@@ -121,7 +121,7 @@ impl CardList {
         let render_info = list.get_render_info();
 
         CardListRenderInfo {
-            visible_card_indices: render_info.visible_indices,
+            visible_card_indices: render_info.visible_item_indices,
             show_above_indicator: render_info.show_above_indicator,
             cards_above_count: render_info.items_above_count,
             show_below_indicator: render_info.show_below_indicator,
