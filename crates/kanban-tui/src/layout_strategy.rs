@@ -176,7 +176,9 @@ impl LayoutStrategy for ColumnListsLayout {
 
             let mut task_list = if let Some(existing) = existing_list {
                 let mut list = CardList::new(CardListId::Column(column.id));
-                list.selection = existing.selection.clone();
+                if let Some(selected_idx) = existing.get_selected_index() {
+                    list.set_selected_index(Some(selected_idx));
+                }
                 list
             } else {
                 CardList::new(CardListId::Column(column.id))
