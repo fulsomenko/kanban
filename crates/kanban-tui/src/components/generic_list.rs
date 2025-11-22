@@ -46,29 +46,12 @@ impl ListComponent {
 
         if !was_at_top {
             let current_idx = self.selection.get().unwrap_or(0);
-            let page_info = self.page.get_page_info();
-            let first_visible_idx = page_info.first_visible_idx;
-
-            if current_idx == first_visible_idx && self.page.scroll_offset > 0 {
-                let target_selection = current_idx.saturating_sub(1);
-                self.page.scroll_offset = self.page.scroll_offset.saturating_sub(1);
-
-                loop {
-                    let mut temp_page = self.page.clone();
-                    let current_render_start = temp_page.get_page_info().first_visible_idx;
-                    if target_selection >= current_render_start || self.page.scroll_offset == 0 {
-                        break;
-                    }
-                    self.page.scroll_offset = self.page.scroll_offset.saturating_sub(1);
-                }
-
-                self.selection.set(Some(target_selection));
-            } else if current_idx > first_visible_idx {
-                self.selection.prev();
-            }
+            let new_idx = self.page.navigate_up(current_idx);
+            self.selection.set(Some(new_idx));
         }
 
-        self.clamp_selection_to_visible();
+        let selected_idx = self.selection.get().unwrap_or(0);
+        self.page.clamp_selection_to_visible(selected_idx);
         was_at_top
     }
 
@@ -81,31 +64,12 @@ impl ListComponent {
 
         if !was_at_bottom {
             let current_idx = self.selection.get().unwrap_or(0);
-            let page_info = self.page.get_page_info();
-            let last_visible_idx = page_info.last_visible_idx;
-
-            if current_idx == last_visible_idx && current_idx < self.page.total_items - 1 {
-                let target_selection = (current_idx + 1).min(self.page.total_items - 1);
-                self.page.scroll_offset = self.page.scroll_offset.saturating_add(1);
-
-                loop {
-                    let mut temp_page = self.page.clone();
-                    let temp_page_info = temp_page.get_page_info();
-                    let new_last_visible_idx = temp_page_info.last_visible_idx;
-
-                    if target_selection <= new_last_visible_idx || target_selection >= self.page.total_items {
-                        break;
-                    }
-                    self.page.scroll_offset = self.page.scroll_offset.saturating_add(1);
-                }
-
-                self.selection.set(Some(target_selection));
-            } else if current_idx < last_visible_idx {
-                self.selection.next(self.page.total_items);
-            }
+            let new_idx = self.page.navigate_down(current_idx);
+            self.selection.set(Some(new_idx));
         }
 
-        self.clamp_selection_to_visible();
+        let selected_idx = self.selection.get().unwrap_or(0);
+        self.page.clamp_selection_to_visible(selected_idx);
         was_at_bottom
     }
 
@@ -191,29 +155,6 @@ impl ListComponent {
         self.page.get_page_info()
     }
 
-    fn clamp_selection_to_visible(&mut self) {
-        if self.page.total_items == 0 {
-            self.selection.clear();
-            return;
-        }
-
-        if let Some(selected_idx) = self.selection.get() {
-            let render_start = if self.page.scroll_offset == 1 {
-                0
-            } else {
-                self.page.scroll_offset
-            };
-
-            let page_info = self.page.get_page_info();
-            let render_end = render_start + page_info.items_per_page;
-
-            if selected_idx < render_start {
-                self.page.scroll_offset = selected_idx;
-            } else if selected_idx >= render_end {
-                self.page.scroll_offset = selected_idx.saturating_sub(page_info.items_per_page - 1);
-            }
-        }
-    }
 }
 
 #[cfg(test)]
