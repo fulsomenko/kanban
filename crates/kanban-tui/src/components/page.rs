@@ -8,6 +8,17 @@ pub struct PageInfo {
     pub items_above_count: usize,
     pub show_below_indicator: bool,
     pub items_below_count: usize,
+    pub current_page: usize,
+    pub total_pages: usize,
+}
+
+use crate::layout_strategy::ColumnBoundary;
+
+#[derive(Debug, Clone)]
+struct ComputedPage {
+    start_index: usize,
+    end_index: usize,
+    scroll_offset: usize,  // Where to scroll to display this page
 }
 
 #[derive(Clone)]
@@ -15,6 +26,9 @@ pub struct Page {
     pub total_items: usize,
     pub viewport_height: usize,
     pub scroll_offset: usize,
+    current_page: usize, // explicit page tracking
+    column_boundaries: Vec<ColumnBoundary>, // For header accounting
+    computed_pages: Vec<ComputedPage>, // Pre-computed page boundaries
 }
 
 #[derive(Debug, Clone)]
@@ -26,11 +40,66 @@ struct ViewportInfo {
 
 impl Page {
     pub fn new(total_items: usize, viewport_height: usize) -> Self {
-        Self {
+        let mut page = Self {
             total_items,
             viewport_height,
             scroll_offset: 0,
+            current_page: 0,
+            column_boundaries: Vec::new(),
+            computed_pages: Vec::new(),
+        };
+        page.recompute_pages();
+        page
+    }
+
+    pub fn set_column_boundaries(&mut self, boundaries: Vec<ColumnBoundary>) {
+        self.column_boundaries = boundaries;
+        self.recompute_pages();
+    }
+
+    /// Pre-compute all page boundaries based on current viewport, items, and headers
+    fn recompute_pages(&mut self) {
+        self.computed_pages = self.compute_pages();
+    }
+
+    /// Compute page boundaries accounting for headers and indicators
+    fn compute_pages(&self) -> Vec<ComputedPage> {
+        if self.total_items == 0 {
+            return Vec::new();
         }
+
+        let mut pages = Vec::new();
+        let mut current_scroll = 0;
+
+        while current_scroll < self.total_items {
+            // Calculate overhead at this scroll position
+            let header_count = self.count_headers_at_offset(current_scroll);
+            let has_below = current_scroll + self.viewport_height < self.total_items;
+            let has_above = current_scroll > 0;
+            let indicator_count = (has_above as usize) + (has_below as usize);
+            let total_overhead = header_count + indicator_count;
+
+            // Items that fit on this page
+            let items_per_page = self.viewport_height.saturating_sub(total_overhead);
+
+            if items_per_page == 0 {
+                // Edge case: viewport too small or all overhead
+                break;
+            }
+
+            let start_index = current_scroll;
+            let end_index = (current_scroll + items_per_page - 1).min(self.total_items - 1);
+
+            pages.push(ComputedPage {
+                start_index,
+                end_index,
+                scroll_offset: current_scroll,
+            });
+
+            current_scroll = end_index + 1;
+        }
+
+        pages
     }
 
     pub fn set_total_items(&mut self, total_items: usize) {
@@ -38,13 +107,49 @@ impl Page {
         if self.scroll_offset > total_items.saturating_sub(1) {
             self.scroll_offset = total_items.saturating_sub(1);
         }
+        self.sync_page_from_scroll();
+        self.recompute_pages();
     }
 
     pub fn set_viewport_height(&mut self, height: usize) {
         self.viewport_height = height;
+        self.sync_page_from_scroll();
+        self.recompute_pages();
+    }
+
+    /// Sync current_page from scroll_offset
+    fn sync_page_from_scroll(&mut self) {
+        if self.viewport_height == 0 {
+            self.current_page = 0;
+        } else {
+            self.current_page = self.scroll_offset / self.viewport_height;
+        }
+    }
+
+    pub fn get_current_page(&self) -> usize {
+        self.current_page
+    }
+
+    pub fn get_total_pages(&self) -> usize {
+        if self.total_items == 0 || self.viewport_height == 0 {
+            return 0;
+        }
+        (self.total_items + self.viewport_height - 1) / self.viewport_height
+    }
+
+    /// Round scroll_offset to the nearest page boundary
+    fn align_to_page_boundary(&mut self) {
+        if self.viewport_height == 0 {
+            self.scroll_offset = 0;
+            return;
+        }
+        let page = self.scroll_offset / self.viewport_height;
+        self.scroll_offset = page * self.viewport_height;
     }
 
     pub fn get_page_info(&self) -> PageInfo {
+        let total_pages = self.get_total_pages();
+
         if self.total_items == 0 {
             return PageInfo {
                 visible_item_indices: Vec::new(),
@@ -55,6 +160,8 @@ impl Page {
                 items_above_count: 0,
                 show_below_indicator: false,
                 items_below_count: 0,
+                current_page: 0,
+                total_pages: 0,
             };
         }
 
@@ -89,37 +196,79 @@ impl Page {
             items_above_count: self.scroll_offset,
             show_below_indicator: viewport_info.has_items_below,
             items_below_count,
+            current_page: self.current_page + 1, // 1-indexed for display
+            total_pages,
         }
     }
 
     pub fn jump_half_page_down(&mut self, current_idx: usize) -> usize {
-        if self.total_items == 0 {
-            return 0;
+        if self.computed_pages.is_empty() {
+            return current_idx;
         }
 
-        let page_info = self.get_page_info();
-        let jump_distance = page_info.items_per_page / 2;
+        // Find which page contains the current index
+        if let Some(page_idx) = self
+            .computed_pages
+            .iter()
+            .position(|p| current_idx >= p.start_index && current_idx <= p.end_index)
+        {
+            let page = &self.computed_pages[page_idx];
+            let middle_idx = (page.start_index + page.end_index) / 2;
 
-        let new_idx = (current_idx + jump_distance).min(self.total_items - 1);
+            // Three-level navigation: Top → Middle → Bottom → Next Page
+            if current_idx < middle_idx {
+                // In top half: jump to middle
+                return middle_idx;
+            } else if current_idx < page.end_index {
+                // In bottom half (but not at very bottom): jump to end
+                return page.end_index;
+            } else {
+                // At or past bottom: jump to first card of next page
+                if page_idx < self.computed_pages.len() - 1 {
+                    let next_page = &self.computed_pages[page_idx + 1];
+                    self.scroll_offset = next_page.scroll_offset;
+                    return next_page.start_index;
+                }
+            }
+        }
 
-        self.scroll_to_make_visible(new_idx);
-
-        new_idx
+        // Already on last page or not on any page, stay where we are
+        current_idx
     }
 
     pub fn jump_half_page_up(&mut self, current_idx: usize) -> usize {
-        if self.total_items == 0 {
-            return 0;
+        if self.computed_pages.is_empty() {
+            return current_idx;
         }
 
-        let page_info = self.get_page_info();
-        let jump_distance = page_info.items_per_page / 2;
+        // Find which page contains the current index
+        if let Some(page_idx) = self
+            .computed_pages
+            .iter()
+            .position(|p| current_idx >= p.start_index && current_idx <= p.end_index)
+        {
+            let page = &self.computed_pages[page_idx];
+            let middle_idx = (page.start_index + page.end_index) / 2;
 
-        let new_idx = current_idx.saturating_sub(jump_distance);
+            // Three-level navigation: Bottom → Middle → Top → Previous Page
+            if current_idx > middle_idx {
+                // In bottom half: jump to middle
+                return middle_idx;
+            } else if current_idx > page.start_index {
+                // In top half (but not at very top): jump to start
+                return page.start_index;
+            } else {
+                // At or before top: jump to last card of previous page
+                if page_idx > 0 {
+                    let prev_page = &self.computed_pages[page_idx - 1];
+                    self.scroll_offset = prev_page.scroll_offset;
+                    return prev_page.end_index;
+                }
+            }
+        }
 
-        self.scroll_to_make_visible(new_idx);
-
-        new_idx
+        // Already on first page or not on any page, stay where we are
+        current_idx
     }
 
     pub fn jump_full_page_down(&mut self, current_idx: usize) -> usize {
@@ -127,12 +276,17 @@ impl Page {
             return 0;
         }
 
-        let page_info = self.get_page_info();
-        let jump_distance = page_info.items_per_page;
-
+        let jump_distance = self.viewport_height;
         let new_idx = (current_idx + jump_distance).min(self.total_items - 1);
 
-        self.scroll_to_make_visible(new_idx);
+        // Check if jumping to a new page
+        let current_page = current_idx / self.viewport_height;
+        let new_page = new_idx / self.viewport_height;
+
+        if new_page > current_page {
+            // Jumping to next page: scroll to show it
+            self.scroll_offset = new_page * self.viewport_height;
+        }
 
         new_idx
     }
@@ -142,12 +296,17 @@ impl Page {
             return 0;
         }
 
-        let page_info = self.get_page_info();
-        let jump_distance = page_info.items_per_page;
-
+        let jump_distance = self.viewport_height;
         let new_idx = current_idx.saturating_sub(jump_distance);
 
-        self.scroll_to_make_visible(new_idx);
+        // Check if jumping to a previous page
+        let current_page = current_idx / self.viewport_height;
+        let new_page = new_idx / self.viewport_height;
+
+        if new_page < current_page {
+            // Jumping to previous page: scroll to show it
+            self.scroll_offset = new_page * self.viewport_height;
+        }
 
         new_idx
     }
@@ -165,6 +324,8 @@ impl Page {
         } else if item_idx >= scroll_end {
             self.scroll_offset = item_idx.saturating_sub(self.viewport_height - 1);
         }
+
+        self.sync_page_from_scroll();
     }
 
     pub fn navigate_up(&mut self, current_idx: usize) -> usize {
@@ -255,13 +416,36 @@ impl Page {
         }
     }
 
+    /// Count how many column headers will appear in the viewport at the given scroll offset
+    fn count_headers_at_offset(&self, scroll_offset: usize) -> usize {
+        if self.column_boundaries.is_empty() {
+            return 0;
+        }
+
+        // Count how many column headers will appear in the viewport
+        // A boundary is relevant if any of its cards appear in the visible range
+        let viewport_end = scroll_offset + self.viewport_height;
+
+        self.column_boundaries
+            .iter()
+            .filter(|boundary| {
+                let boundary_end = boundary.start_index + boundary.card_count;
+                // Boundary is relevant if it overlaps with viewport range
+                boundary.start_index < viewport_end && boundary_end > scroll_offset
+            })
+            .count()
+    }
+
     fn calculate_viewport_info(&self) -> ViewportInfo {
         let has_items_above = self.scroll_offset > 1;
         let available_space = self.viewport_height.saturating_sub(has_items_above as usize);
         let has_items_below = self.scroll_offset + available_space < self.total_items;
 
+        // Account for both indicators and column headers
+        let header_count = self.count_headers_at_offset(self.scroll_offset);
         let num_indicator_lines = (has_items_above as usize) + (has_items_below as usize);
-        let items_to_show = self.viewport_height.saturating_sub(num_indicator_lines);
+        let total_overhead_lines = header_count + num_indicator_lines;
+        let items_to_show = self.viewport_height.saturating_sub(total_overhead_lines);
 
         ViewportInfo {
             has_items_above,

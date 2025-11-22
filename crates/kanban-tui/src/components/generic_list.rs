@@ -1,5 +1,6 @@
 use crate::selection::SelectionState;
 use crate::components::{Page, PageInfo};
+use crate::layout_strategy::ColumnBoundary;
 use std::collections::HashSet;
 
 pub type ListRenderInfo = PageInfo;
@@ -149,6 +150,10 @@ impl ListComponent {
 
     pub fn set_viewport_height(&mut self, height: usize) {
         self.page.set_viewport_height(height);
+    }
+
+    pub fn set_column_boundaries(&mut self, boundaries: Vec<ColumnBoundary>) {
+        self.page.set_column_boundaries(boundaries);
     }
 
     pub fn get_render_info(&self) -> ListRenderInfo {

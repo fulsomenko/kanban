@@ -1,4 +1,5 @@
 use crate::components::ListComponent;
+use crate::layout_strategy::ColumnBoundary;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -152,6 +153,10 @@ impl CardList {
     pub fn jump_half_viewport_down(&mut self, viewport_height: usize) {
         self.list.set_viewport_height(viewport_height);
         self.list.jump_half_page_down();
+    }
+
+    pub fn set_column_boundaries(&mut self, boundaries: Vec<ColumnBoundary>) {
+        self.list.set_column_boundaries(boundaries);
     }
 }
 
