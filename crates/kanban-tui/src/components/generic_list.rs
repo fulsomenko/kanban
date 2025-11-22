@@ -1,19 +1,11 @@
 use crate::selection::SelectionState;
-use crate::components::Page;
+use crate::components::{Page, PageInfo};
 use std::collections::HashSet;
 
-#[derive(Debug, Clone)]
-pub struct ListRenderInfo {
-    pub visible_indices: Vec<usize>,
-    pub show_above_indicator: bool,
-    pub items_above_count: usize,
-    pub show_below_indicator: bool,
-    pub items_below_count: usize,
-}
+pub type ListRenderInfo = PageInfo;
 
 #[derive(Clone)]
 pub struct ListComponent {
-    pub item_count: usize,
     pub selection: SelectionState,
     page: Page,
     pub multi_selected: HashSet<usize>,
@@ -23,7 +15,6 @@ pub struct ListComponent {
 impl ListComponent {
     pub fn new(allow_multi_select: bool) -> Self {
         Self {
-            item_count: 0,
             selection: SelectionState::new(),
             page: Page::new(0, 0),
             multi_selected: HashSet::new(),
@@ -33,7 +24,6 @@ impl ListComponent {
 
     pub fn update_item_count(&mut self, count: usize) {
         let current_selection = self.selection.get();
-        self.item_count = count;
         self.page.set_total_items(count);
 
         if let Some(idx) = current_selection {
@@ -48,7 +38,7 @@ impl ListComponent {
     }
 
     pub fn navigate_up(&mut self) -> bool {
-        if self.item_count == 0 {
+        if self.page.total_items == 0 {
             return true;
         }
 
@@ -83,19 +73,19 @@ impl ListComponent {
     }
 
     pub fn navigate_down(&mut self) -> bool {
-        if self.item_count == 0 {
+        if self.page.total_items == 0 {
             return true;
         }
 
-        let was_at_bottom = self.selection.get() == Some(self.item_count - 1);
+        let was_at_bottom = self.selection.get() == Some(self.page.total_items - 1);
 
         if !was_at_bottom {
             let current_idx = self.selection.get().unwrap_or(0);
             let page_info = self.page.get_page_info();
             let last_visible_idx = page_info.last_visible_idx;
 
-            if current_idx == last_visible_idx && current_idx < self.item_count - 1 {
-                let target_selection = (current_idx + 1).min(self.item_count - 1);
+            if current_idx == last_visible_idx && current_idx < self.page.total_items - 1 {
+                let target_selection = (current_idx + 1).min(self.page.total_items - 1);
                 self.page.scroll_offset = self.page.scroll_offset.saturating_add(1);
 
                 loop {
@@ -103,7 +93,7 @@ impl ListComponent {
                     let temp_page_info = temp_page.get_page_info();
                     let new_last_visible_idx = temp_page_info.last_visible_idx;
 
-                    if target_selection <= new_last_visible_idx || target_selection >= self.item_count {
+                    if target_selection <= new_last_visible_idx || target_selection >= self.page.total_items {
                         break;
                     }
                     self.page.scroll_offset = self.page.scroll_offset.saturating_add(1);
@@ -111,7 +101,7 @@ impl ListComponent {
 
                 self.selection.set(Some(target_selection));
             } else if current_idx < last_visible_idx {
-                self.selection.next(self.item_count);
+                self.selection.next(self.page.total_items);
             }
         }
 
@@ -125,7 +115,7 @@ impl ListComponent {
 
     pub fn set_selected_index(&mut self, index: Option<usize>) {
         if let Some(idx) = index {
-            if idx < self.item_count {
+            if idx < self.page.total_items {
                 self.selection.set(Some(idx));
             } else {
                 self.selection.clear();
@@ -136,7 +126,7 @@ impl ListComponent {
     }
 
     pub fn toggle_multi_select(&mut self, index: usize) {
-        if self.allow_multi_select && index < self.item_count {
+        if self.allow_multi_select && index < self.page.total_items {
             if self.multi_selected.contains(&index) {
                 self.multi_selected.remove(&index);
             } else {
@@ -151,7 +141,7 @@ impl ListComponent {
 
     pub fn select_all(&mut self) {
         if self.allow_multi_select {
-            self.multi_selected = (0..self.item_count).collect();
+            self.multi_selected = (0..self.page.total_items).collect();
         }
     }
 
@@ -166,7 +156,7 @@ impl ListComponent {
     }
 
     pub fn set_scroll_offset(&mut self, offset: usize) {
-        self.page.scroll_offset = offset.min(self.item_count.saturating_sub(1));
+        self.page.scroll_offset = offset.min(self.page.total_items.saturating_sub(1));
     }
 
     pub fn ensure_selected_visible(&mut self) {
@@ -176,7 +166,7 @@ impl ListComponent {
     }
 
     pub fn jump_half_page_up(&mut self) {
-        if self.item_count == 0 {
+        if self.page.total_items == 0 {
             return;
         }
         let current_idx = self.selection.get().unwrap_or(0);
@@ -185,7 +175,7 @@ impl ListComponent {
     }
 
     pub fn jump_half_page_down(&mut self) {
-        if self.item_count == 0 {
+        if self.page.total_items == 0 {
             return;
         }
         let current_idx = self.selection.get().unwrap_or(0);
@@ -198,19 +188,11 @@ impl ListComponent {
     }
 
     pub fn get_render_info(&self) -> ListRenderInfo {
-        let page_info = self.page.get_page_info();
-
-        ListRenderInfo {
-            visible_indices: page_info.visible_item_indices,
-            show_above_indicator: page_info.show_above_indicator,
-            items_above_count: page_info.items_above_count,
-            show_below_indicator: page_info.show_below_indicator,
-            items_below_count: page_info.items_below_count,
-        }
+        self.page.get_page_info()
     }
 
     fn clamp_selection_to_visible(&mut self) {
-        if self.item_count == 0 {
+        if self.page.total_items == 0 {
             self.selection.clear();
             return;
         }
@@ -371,7 +353,7 @@ mod tests {
 
         assert!(!info.show_above_indicator);
         // With 5 items and viewport 3, below indicator takes space, so only 2 items shown
-        assert_eq!(info.visible_indices, vec![0, 1]);
+        assert_eq!(info.visible_item_indices, vec![0, 1]);
         assert!(info.show_below_indicator);
     }
 
