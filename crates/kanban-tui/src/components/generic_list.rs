@@ -1,4 +1,5 @@
 use crate::selection::SelectionState;
+use crate::components::Page;
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
@@ -10,11 +11,11 @@ pub struct ListRenderInfo {
     pub items_below_count: usize,
 }
 
+#[derive(Clone)]
 pub struct ListComponent {
     pub item_count: usize,
     pub selection: SelectionState,
-    pub scroll_offset: usize,
-    pub viewport_height: usize,
+    page: Page,
     pub multi_selected: HashSet<usize>,
     pub allow_multi_select: bool,
 }
@@ -24,8 +25,7 @@ impl ListComponent {
         Self {
             item_count: 0,
             selection: SelectionState::new(),
-            scroll_offset: 0,
-            viewport_height: 0,
+            page: Page::new(0, 0),
             multi_selected: HashSet::new(),
             allow_multi_select,
         }
@@ -34,6 +34,7 @@ impl ListComponent {
     pub fn update_item_count(&mut self, count: usize) {
         let current_selection = self.selection.get();
         self.item_count = count;
+        self.page.set_total_items(count);
 
         if let Some(idx) = current_selection {
             if idx >= count && count > 0 {
@@ -55,28 +56,20 @@ impl ListComponent {
 
         if !was_at_top {
             let current_idx = self.selection.get().unwrap_or(0);
-            let render_start = if self.scroll_offset == 1 {
-                0
-            } else {
-                self.scroll_offset
-            };
-            let first_visible_idx = render_start;
+            let page_info = self.page.get_page_info();
+            let first_visible_idx = page_info.first_visible_idx;
 
-            if current_idx == first_visible_idx && self.scroll_offset > 0 {
+            if current_idx == first_visible_idx && self.page.scroll_offset > 0 {
                 let target_selection = current_idx.saturating_sub(1);
-
-                self.scroll_offset = self.scroll_offset.saturating_sub(1);
+                self.page.scroll_offset = self.page.scroll_offset.saturating_sub(1);
 
                 loop {
-                    let current_render_start = if self.scroll_offset == 1 {
-                        0
-                    } else {
-                        self.scroll_offset
-                    };
-                    if target_selection >= current_render_start || self.scroll_offset == 0 {
+                    let mut temp_page = self.page.clone();
+                    let current_render_start = temp_page.get_page_info().first_visible_idx;
+                    if target_selection >= current_render_start || self.page.scroll_offset == 0 {
                         break;
                     }
-                    self.scroll_offset = self.scroll_offset.saturating_sub(1);
+                    self.page.scroll_offset = self.page.scroll_offset.saturating_sub(1);
                 }
 
                 self.selection.set(Some(target_selection));
@@ -98,48 +91,22 @@ impl ListComponent {
 
         if !was_at_bottom {
             let current_idx = self.selection.get().unwrap_or(0);
-
-            let info = self.calculate_viewport_info();
-            let render_start = if self.scroll_offset == 1 {
-                0
-            } else {
-                self.scroll_offset
-            };
-            let actual_items_to_show = (render_start..self.item_count)
-                .take(info.items_to_show)
-                .count();
-            let last_visible_idx = render_start + actual_items_to_show.saturating_sub(1);
+            let page_info = self.page.get_page_info();
+            let last_visible_idx = page_info.last_visible_idx;
 
             if current_idx == last_visible_idx && current_idx < self.item_count - 1 {
                 let target_selection = (current_idx + 1).min(self.item_count - 1);
+                self.page.scroll_offset = self.page.scroll_offset.saturating_add(1);
 
-                self.scroll_offset = self.scroll_offset.saturating_add(1);
+                loop {
+                    let mut temp_page = self.page.clone();
+                    let temp_page_info = temp_page.get_page_info();
+                    let new_last_visible_idx = temp_page_info.last_visible_idx;
 
-                let mut new_info = self.calculate_viewport_info();
-                let mut new_render_start = if self.scroll_offset == 1 {
-                    0
-                } else {
-                    self.scroll_offset
-                };
-                let mut new_actual_items = (new_render_start..self.item_count)
-                    .take(new_info.items_to_show)
-                    .count();
-                let mut new_last_visible_idx =
-                    new_render_start + new_actual_items.saturating_sub(1);
-
-                while target_selection > new_last_visible_idx && target_selection < self.item_count
-                {
-                    self.scroll_offset = self.scroll_offset.saturating_add(1);
-                    new_info = self.calculate_viewport_info();
-                    new_render_start = if self.scroll_offset == 1 {
-                        0
-                    } else {
-                        self.scroll_offset
-                    };
-                    new_actual_items = (new_render_start..self.item_count)
-                        .take(new_info.items_to_show)
-                        .count();
-                    new_last_visible_idx = new_render_start + new_actual_items.saturating_sub(1);
+                    if target_selection <= new_last_visible_idx || target_selection >= self.item_count {
+                        break;
+                    }
+                    self.page.scroll_offset = self.page.scroll_offset.saturating_add(1);
                 }
 
                 self.selection.set(Some(target_selection));
@@ -195,84 +162,50 @@ impl ListComponent {
     }
 
     pub fn get_scroll_offset(&self) -> usize {
-        self.scroll_offset
+        self.page.scroll_offset
     }
 
     pub fn set_scroll_offset(&mut self, offset: usize) {
-        self.scroll_offset = offset.min(self.item_count.saturating_sub(1));
+        self.page.scroll_offset = offset.min(self.item_count.saturating_sub(1));
     }
 
     pub fn ensure_selected_visible(&mut self) {
-        if self.viewport_height == 0 {
+        if let Some(selected_idx) = self.selection.get() {
+            self.page.scroll_to_make_visible(selected_idx);
+        }
+    }
+
+    pub fn jump_half_page_up(&mut self) {
+        if self.item_count == 0 {
             return;
         }
+        let current_idx = self.selection.get().unwrap_or(0);
+        let new_idx = self.page.jump_half_page_up(current_idx);
+        self.selection.set(Some(new_idx));
+    }
 
-        if let Some(selected_idx) = self.selection.get() {
-            let scroll_start = self.scroll_offset;
-            let scroll_end = scroll_start + self.viewport_height;
-
-            if selected_idx < scroll_start {
-                self.scroll_offset = selected_idx;
-            } else if selected_idx >= scroll_end {
-                self.scroll_offset = selected_idx.saturating_sub(self.viewport_height - 1);
-            }
+    pub fn jump_half_page_down(&mut self) {
+        if self.item_count == 0 {
+            return;
         }
+        let current_idx = self.selection.get().unwrap_or(0);
+        let new_idx = self.page.jump_half_page_down(current_idx);
+        self.selection.set(Some(new_idx));
+    }
+
+    pub fn set_viewport_height(&mut self, height: usize) {
+        self.page.set_viewport_height(height);
     }
 
     pub fn get_render_info(&self) -> ListRenderInfo {
-        if self.item_count == 0 {
-            return ListRenderInfo {
-                visible_indices: Vec::new(),
-                show_above_indicator: false,
-                items_above_count: 0,
-                show_below_indicator: false,
-                items_below_count: 0,
-            };
-        }
-
-        let info = self.calculate_viewport_info();
-
-        let render_start = if self.scroll_offset == 1 {
-            0
-        } else {
-            self.scroll_offset
-        };
-
-        let visible_indices: Vec<usize> = (0..info.items_to_show)
-            .map(|i| render_start + i)
-            .filter(|&idx| idx < self.item_count)
-            .collect();
-
-        let items_below_count = if visible_indices.is_empty() {
-            self.item_count.saturating_sub(render_start)
-        } else {
-            let last_visible_idx = *visible_indices.last().unwrap();
-            self.item_count.saturating_sub(last_visible_idx + 1)
-        };
+        let page_info = self.page.get_page_info();
 
         ListRenderInfo {
-            visible_indices,
-            show_above_indicator: info.has_items_above,
-            items_above_count: self.scroll_offset,
-            show_below_indicator: info.has_items_below,
-            items_below_count,
-        }
-    }
-
-    fn calculate_viewport_info(&self) -> ViewportInfo {
-        let has_items_above = self.scroll_offset > 1;
-        let available_space = self
-            .viewport_height
-            .saturating_sub(has_items_above as usize);
-        let has_items_below = self.scroll_offset + available_space < self.item_count;
-
-        let num_indicator_lines = (has_items_above as usize) + (has_items_below as usize);
-        let items_to_show = self.viewport_height.saturating_sub(num_indicator_lines);
-
-        ViewportInfo {
-            has_items_above,
-            has_items_below,
-            items_to_show,
+            visible_indices: page_info.visible_item_indices,
+            show_above_indicator: page_info.show_above_indicator,
+            items_above_count: page_info.items_above_count,
+            show_below_indicator: page_info.show_below_indicator,
+            items_below_count: page_info.items_below_count,
         }
     }
 
@@ -283,29 +216,22 @@ impl ListComponent {
         }
 
         if let Some(selected_idx) = self.selection.get() {
-            let render_start = if self.scroll_offset == 1 {
+            let render_start = if self.page.scroll_offset == 1 {
                 0
             } else {
-                self.scroll_offset
+                self.page.scroll_offset
             };
 
-            let info = self.calculate_viewport_info();
-            let render_end = render_start + info.items_to_show;
+            let page_info = self.page.get_page_info();
+            let render_end = render_start + page_info.items_per_page;
 
             if selected_idx < render_start {
-                self.scroll_offset = selected_idx;
+                self.page.scroll_offset = selected_idx;
             } else if selected_idx >= render_end {
-                self.scroll_offset = selected_idx.saturating_sub(info.items_to_show - 1);
+                self.page.scroll_offset = selected_idx.saturating_sub(page_info.items_per_page - 1);
             }
         }
     }
-}
-
-#[derive(Debug, Clone)]
-struct ViewportInfo {
-    has_items_above: bool,
-    has_items_below: bool,
-    items_to_show: usize,
 }
 
 #[cfg(test)]
@@ -315,7 +241,7 @@ mod tests {
     fn create_test_list(item_count: usize, viewport_height: usize) -> ListComponent {
         let mut list = ListComponent::new(false);
         list.update_item_count(item_count);
-        list.viewport_height = viewport_height;
+        list.set_viewport_height(viewport_height);
         list
     }
 
