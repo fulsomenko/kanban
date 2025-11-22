@@ -36,6 +36,23 @@ impl App {
         self.viewport_height
     }
 
+    fn get_column_boundaries(&self) -> Vec<crate::layout_strategy::ColumnBoundary> {
+        if let Some(unified) = self
+            .view_strategy
+            .as_any()
+            .downcast_ref::<UnifiedViewStrategy>()
+        {
+            if let Some(layout) = unified
+                .get_layout_strategy()
+                .as_any()
+                .downcast_ref::<VirtualUnifiedLayout>()
+            {
+                return layout.get_column_boundaries().to_vec();
+            }
+        }
+        Vec::new()
+    }
+
     pub fn handle_focus_switch(&mut self, focus_target: Focus) {
         match focus_target {
             Focus::Boards => {
@@ -238,18 +255,26 @@ impl App {
 
     pub fn handle_jump_half_viewport_up(&mut self) {
         if self.focus == Focus::Cards {
-            let effective_viewport = self.get_effective_viewport_height();
+            // Pass RAW viewport height, not adjusted - Page will handle header calculations
+            let raw_viewport = self.viewport_height;
+            let column_boundaries = self.get_column_boundaries();
+
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                list.jump_half_viewport_up(effective_viewport);
+                list.set_column_boundaries(column_boundaries);
+                list.jump_half_viewport_up(raw_viewport);
             }
         }
     }
 
     pub fn handle_jump_half_viewport_down(&mut self) {
         if self.focus == Focus::Cards {
-            let effective_viewport = self.get_effective_viewport_height();
+            // Pass RAW viewport height, not adjusted - Page will handle header calculations
+            let raw_viewport = self.viewport_height;
+            let column_boundaries = self.get_column_boundaries();
+
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                list.jump_half_viewport_down(effective_viewport);
+                list.set_column_boundaries(column_boundaries);
+                list.jump_half_viewport_down(raw_viewport);
             }
         }
     }
