@@ -107,7 +107,7 @@ crates/
 ## Roadmap
 
 - [ ] Progressive auto-save (save changes to board as you make them, not just on exit)
-- [ ] Card dependency relationship.
+- [ ] Card dependencies
 - [ ] Configurable keybindings
 - [ ] Multiple storage backends (SQL, MongoDB) with pluggable architecture
 - [ ] HTTP API for remote board access and programmatic control
