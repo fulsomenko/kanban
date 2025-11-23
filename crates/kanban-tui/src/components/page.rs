@@ -134,17 +134,7 @@ impl Page {
         if self.total_items == 0 || self.viewport_height == 0 {
             return 0;
         }
-        (self.total_items + self.viewport_height - 1) / self.viewport_height
-    }
-
-    /// Round scroll_offset to the nearest page boundary
-    fn align_to_page_boundary(&mut self) {
-        if self.viewport_height == 0 {
-            self.scroll_offset = 0;
-            return;
-        }
-        let page = self.scroll_offset / self.viewport_height;
-        self.scroll_offset = page * self.viewport_height;
+        self.total_items.div_ceil(self.viewport_height)
     }
 
     pub fn get_page_info(&self) -> PageInfo {
