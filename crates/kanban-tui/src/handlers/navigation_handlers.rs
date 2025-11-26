@@ -610,3 +610,305 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper to create column boundaries
+    fn column_boundary(start_index: usize, card_count: usize) -> (usize, usize) {
+        (start_index, card_count)
+    }
+
+    // ============================================================================
+    // compute_page_boundaries() Tests
+    // ============================================================================
+
+    #[test]
+    fn test_compute_page_boundaries_empty() {
+        let pages = compute_page_boundaries(0, 10);
+        assert!(pages.is_empty());
+    }
+
+    #[test]
+    fn test_compute_page_boundaries_zero_viewport() {
+        let pages = compute_page_boundaries(100, 0);
+        assert!(pages.is_empty());
+    }
+
+    #[test]
+    fn test_compute_page_boundaries_single_page() {
+        let pages = compute_page_boundaries(5, 10);
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].start, 0);
+        assert_eq!(pages[0].end, 5);
+    }
+
+    #[test]
+    fn test_compute_page_boundaries_first_page_size() {
+        let pages = compute_page_boundaries(20, 10);
+        assert_eq!(pages[0].start, 0);
+        assert_eq!(pages[0].size(), 9); // viewport - 1
+    }
+
+    #[test]
+    fn test_compute_page_boundaries_middle_page_size() {
+        let pages = compute_page_boundaries(22, 10);
+        assert!(pages.len() >= 2);
+        if pages.len() >= 2 {
+            assert_eq!(pages[1].size(), 8); // viewport - 2
+        }
+    }
+
+    #[test]
+    fn test_compute_page_boundaries_last_page_special() {
+        // 22 items, viewport 10
+        // Page 1: 0-8 (9 items)
+        // Page 2: 9-16 (8 items)
+        // Page 3: 17-21 (5 items, remaining)
+        let pages = compute_page_boundaries(22, 10);
+        assert_eq!(pages.len(), 3);
+        assert_eq!(pages[0].size(), 9); // First: viewport - 1
+        assert_eq!(pages[1].size(), 8); // Middle: viewport - 2
+        assert_eq!(pages[2].size(), 5); // Last: remaining
+    }
+
+    #[test]
+    fn test_compute_page_boundaries_single_item() {
+        let pages = compute_page_boundaries(1, 10);
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].start, 0);
+        assert_eq!(pages[0].end, 1);
+    }
+
+    #[test]
+    fn test_compute_page_boundaries_exact_fit() {
+        // 9 items, viewport 10 = fits exactly on first page
+        let pages = compute_page_boundaries(9, 10);
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].size(), 9);
+    }
+
+    #[test]
+    fn test_compute_page_boundaries_boundary_values() {
+        // Test the boundary where last page detection switches
+        // With viewport 10, last_page_max = 9
+        // 9 remaining items should trigger last page sizing
+        let pages = compute_page_boundaries(18, 10);
+        // Page 1: 0-8 (9)
+        // Remaining: 9, which == 9, so IS last page
+        assert_eq!(pages[1].size(), 9); // Last page sizing
+    }
+
+    // ============================================================================
+    // count_headers_in_viewport() Tests
+    // ============================================================================
+
+    #[test]
+    fn test_count_headers_empty_boundaries() {
+        let boundaries = vec![];
+        let count = count_headers_in_viewport(&boundaries, 0, 10);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_count_headers_single_boundary_fully_visible() {
+        let boundaries = vec![column_boundary(0, 5)];
+        let count = count_headers_in_viewport(&boundaries, 0, 10);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_count_headers_multiple_boundaries() {
+        let boundaries = vec![
+            column_boundary(0, 5),
+            column_boundary(5, 5),
+            column_boundary(10, 5),
+        ];
+        let count = count_headers_in_viewport(&boundaries, 0, 10);
+        assert_eq!(count, 2); // First two columns visible
+    }
+
+    #[test]
+    fn test_count_headers_partial_overlap() {
+        let boundaries = vec![
+            column_boundary(0, 5),
+            column_boundary(5, 10), // Cards 5-14
+        ];
+        let count = count_headers_in_viewport(&boundaries, 3, 8);
+        assert_eq!(count, 2); // Both columns have cards in range [3, 11)
+    }
+
+    #[test]
+    fn test_count_headers_no_overlap() {
+        let boundaries = vec![column_boundary(0, 5)];
+        let count = count_headers_in_viewport(&boundaries, 10, 5);
+        assert_eq!(count, 0);
+    }
+
+    // ============================================================================
+    // compute_page_boundaries_with_headers() Tests
+    // ============================================================================
+
+    #[test]
+    fn test_page_boundaries_with_headers_empty() {
+        let pages = compute_page_boundaries_with_headers(0, 10, &[]);
+        assert!(pages.is_empty());
+    }
+
+    #[test]
+    fn test_page_boundaries_with_headers_no_headers() {
+        let boundaries = vec![];
+        let pages = compute_page_boundaries_with_headers(20, 10, &boundaries);
+        assert!(!pages.is_empty());
+        assert_eq!(pages[0].size(), 9); // Same as standard pagination
+    }
+
+    #[test]
+    fn test_page_boundaries_with_headers_single_header() {
+        // Single column with all cards
+        let boundaries = vec![column_boundary(0, 20)];
+        let pages = compute_page_boundaries_with_headers(20, 10, &boundaries);
+
+        // First page: viewport(9) - header(1) = 8 cards
+        assert_eq!(pages[0].size(), 8);
+    }
+
+    #[test]
+    fn test_page_boundaries_with_headers_multiple_headers() {
+        // Two columns
+        let boundaries = vec![column_boundary(0, 10), column_boundary(10, 10)];
+        let pages = compute_page_boundaries_with_headers(20, 10, &boundaries);
+
+        // First page: viewport(9) - header(1) = 8 cards (cards 0-7, all in column 1)
+        assert_eq!(pages[0].size(), 8);
+
+        // Second page starts at card 8, might include column 2 header
+        if pages.len() > 1 {
+            // Middle page: viewport(8) - headers(?)
+            assert!(pages[1].size() > 0);
+        }
+    }
+
+    #[test]
+    fn test_page_boundaries_with_headers_progress() {
+        // Ensure we make progress (no infinite loop)
+        let boundaries = vec![column_boundary(0, 100)];
+        let pages = compute_page_boundaries_with_headers(100, 10, &boundaries);
+
+        let total_cards: usize = pages.iter().map(|p| p.size()).sum();
+        assert_eq!(total_cards, 100); // All cards accounted for
+    }
+
+    #[test]
+    fn test_page_boundaries_with_headers_minimum_progress() {
+        // With heavy headers, page size could drop to 1
+        let boundaries: Vec<(usize, usize)> = (0..20).map(|i| column_boundary(i, 1)).collect();
+        let pages = compute_page_boundaries_with_headers(20, 3, &boundaries);
+
+        // Even with 20 headers in viewport 3, should make progress
+        assert!(!pages.is_empty());
+        for page in &pages {
+            assert!(page.size() >= 1);
+        }
+    }
+
+    // ============================================================================
+    // Jump Calculation Tests
+    // ============================================================================
+
+    #[test]
+    fn test_calculate_jump_down_top_to_middle() {
+        // At position 0 (top) of a 10-card page, should jump to middle
+        let pages = vec![PageBoundary { start: 0, end: 10 }];
+        let target = calculate_jump_target_down(&pages, 0, 0);
+        assert_eq!(target, 5); // Middle of page
+    }
+
+    #[test]
+    fn test_calculate_jump_down_middle_to_bottom() {
+        // At position 5 (middle) of a 10-card page, should jump to bottom
+        let pages = vec![PageBoundary { start: 0, end: 10 }];
+        let target = calculate_jump_target_down(&pages, 5, 0);
+        assert_eq!(target, 9); // Bottom of page
+    }
+
+    #[test]
+    fn test_calculate_jump_down_bottom_to_next_page() {
+        // At position 9 (bottom) of page 0, should jump to top of page 1
+        let pages = vec![
+            PageBoundary { start: 0, end: 10 },
+            PageBoundary { start: 10, end: 20 },
+        ];
+        let target = calculate_jump_target_down(&pages, 9, 0);
+        assert_eq!(target, 10);
+    }
+
+    #[test]
+    fn test_calculate_jump_down_at_last_page_bottom() {
+        // At bottom of last page, stay there
+        let pages = vec![PageBoundary { start: 0, end: 10 }];
+        let target = calculate_jump_target_down(&pages, 9, 0);
+        assert_eq!(target, 9);
+    }
+
+    #[test]
+    fn test_calculate_jump_down_single_item_page() {
+        // Page with only 1 item
+        let pages = vec![PageBoundary { start: 0, end: 1 }];
+        let target = calculate_jump_target_down(&pages, 0, 0);
+        assert_eq!(target, 0);
+    }
+
+    #[test]
+    fn test_calculate_jump_up_bottom_to_middle() {
+        // At position 9 (bottom) of a 10-card page, should jump to middle
+        let pages = vec![PageBoundary { start: 0, end: 10 }];
+        let target = calculate_jump_target_up(&pages, 9, 0);
+        assert_eq!(target, 5); // Middle
+    }
+
+    #[test]
+    fn test_calculate_jump_up_middle_to_top() {
+        // At position 5 (middle) of a 10-card page, should jump to top
+        let pages = vec![PageBoundary { start: 0, end: 10 }];
+        let target = calculate_jump_target_up(&pages, 5, 0);
+        assert_eq!(target, 0); // Top
+    }
+
+    #[test]
+    fn test_calculate_jump_up_top_to_previous_page() {
+        // At position 0 (top) of page 1, should jump to bottom of page 0
+        let pages = vec![
+            PageBoundary { start: 0, end: 10 },
+            PageBoundary { start: 10, end: 20 },
+        ];
+        let target = calculate_jump_target_up(&pages, 10, 1);
+        assert_eq!(target, 9); // Bottom of page 0
+    }
+
+    #[test]
+    fn test_calculate_jump_up_at_first_page_top() {
+        // At top of first page, stay there
+        let pages = vec![PageBoundary { start: 0, end: 10 }];
+        let target = calculate_jump_target_up(&pages, 0, 0);
+        assert_eq!(target, 0);
+    }
+
+    #[test]
+    fn test_find_current_page() {
+        let pages = vec![
+            PageBoundary { start: 0, end: 9 },
+            PageBoundary { start: 9, end: 17 },
+            PageBoundary { start: 17, end: 22 },
+        ];
+
+        assert_eq!(find_current_page(&pages, 0), Some(0));
+        assert_eq!(find_current_page(&pages, 8), Some(0));
+        assert_eq!(find_current_page(&pages, 9), Some(1));
+        assert_eq!(find_current_page(&pages, 16), Some(1));
+        assert_eq!(find_current_page(&pages, 17), Some(2));
+        assert_eq!(find_current_page(&pages, 21), Some(2));
+        assert_eq!(find_current_page(&pages, 22), None);
+    }
+}
