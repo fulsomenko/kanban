@@ -21,10 +21,12 @@ impl PageBoundary {
 
 /// Compute variable-sized page boundaries for jumping navigation.
 ///
-/// Pages are sized based on position:
-/// - First page: viewport_height - 1 (only "below" indicator)
-/// - Middle pages: viewport_height - 2 (both indicators)
-/// - Last page: remaining items (only "above" indicator)
+/// Page sizes vary based on position to account for scroll indicators:
+/// - First page: full viewport (no "above" indicator needed)
+/// - Middle pages: viewport - 1 (need space for "above" indicator)
+/// - Last page: remaining items (no "below" indicator needed)
+///
+/// Headers are already accounted for in the passed viewport_height parameter.
 fn compute_page_boundaries(total_items: usize, viewport_height: usize) -> Vec<PageBoundary> {
     if total_items == 0 || viewport_height == 0 {
         return vec![];
@@ -32,8 +34,8 @@ fn compute_page_boundaries(total_items: usize, viewport_height: usize) -> Vec<Pa
 
     let mut pages = Vec::new();
 
-    // First page: viewport_height - 1 items
-    let first_page_size = viewport_height.saturating_sub(1).max(1);
+    // First page: uses full viewport (no above indicator)
+    let first_page_size = viewport_height;
     let first_page_end = first_page_size.min(total_items);
     pages.push(PageBoundary {
         start: 0,
@@ -41,8 +43,8 @@ fn compute_page_boundaries(total_items: usize, viewport_height: usize) -> Vec<Pa
     });
     let mut current_idx = first_page_end;
 
-    // Middle pages: viewport_height - 2 items each
-    let middle_page_size = viewport_height.saturating_sub(2).max(1);
+    // Middle pages: viewport - 1 (to account for above indicator)
+    let middle_page_size = viewport_height.saturating_sub(1).max(1);
     while current_idx < total_items {
         let page_end = (current_idx + middle_page_size).min(total_items);
         pages.push(PageBoundary {
@@ -131,24 +133,41 @@ fn calculate_jump_target_up(
 }
 
 impl App {
-    /// Calculate actual usable viewport height accounting for indicators
-    /// Headers are rendering details only and don't affect pagination
+    /// Calculate base viewport height accounting for headers only
+    /// Indicators are handled separately in compute_page_boundaries() to account for variable overhead
     fn get_adjusted_viewport_height(&self) -> usize {
         let raw_viewport = self.viewport_height;
 
-        // Only account for scroll indicators for both grouped and flat views
-        // Column headers are visual separators during rendering, not pagination logic
-        if let Some(list) = self.view_strategy.get_active_task_list() {
-            let mut indicator_overhead = 0;
-            if list.get_scroll_offset() > 0 {
-                indicator_overhead += 1;
+        // For grouped view, account for column headers that consume screen space
+        // Headers are constant overhead throughout the list
+        if let Some(unified) = self
+            .view_strategy
+            .as_any()
+            .downcast_ref::<UnifiedViewStrategy>()
+        {
+            if let Some(layout) = unified
+                .get_layout_strategy()
+                .as_any()
+                .downcast_ref::<crate::layout_strategy::VirtualUnifiedLayout>()
+            {
+                if let Some(list) = self.view_strategy.get_active_task_list() {
+                    // Count column headers that will appear in viewport
+                    let column_boundaries = layout.get_column_boundaries();
+                    let estimated_headers = column_boundaries
+                        .iter()
+                        .filter(|b| {
+                            let boundary_end = b.start_index + b.card_count;
+                            let viewport_end = list.get_scroll_offset() + raw_viewport;
+                            b.start_index < viewport_end && boundary_end > list.get_scroll_offset()
+                        })
+                        .count();
+
+                    return raw_viewport.saturating_sub(estimated_headers);
+                }
             }
-            if list.get_scroll_offset() + raw_viewport < list.len() {
-                indicator_overhead += 1;
-            }
-            return raw_viewport.saturating_sub(indicator_overhead);
         }
 
+        // For flat view, no headers to account for
         raw_viewport
     }
 
