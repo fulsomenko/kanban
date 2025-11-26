@@ -49,7 +49,7 @@ impl ListComponent {
             let new_idx = self.page.navigate_up(current_idx);
             self.selection.set(Some(new_idx));
 
-            // Adjust scroll if selection moved before scroll window
+            // Scroll up if selection moved before scroll window
             if new_idx < self.page.scroll_offset {
                 self.page.set_scroll_offset(new_idx);
             }
@@ -69,14 +69,6 @@ impl ListComponent {
             let current_idx = self.selection.get().unwrap_or(0);
             let new_idx = self.page.navigate_down(current_idx);
             self.selection.set(Some(new_idx));
-
-            // Adjust scroll if selection moved beyond scroll window
-            // This is a simple heuristic: assume 10 items fit in viewport
-            let page_size = 10;
-            let scroll_end = self.page.scroll_offset + page_size;
-            if new_idx >= scroll_end {
-                self.page.set_scroll_offset(new_idx.saturating_sub(page_size - 1));
-            }
         }
 
         was_at_bottom
