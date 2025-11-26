@@ -131,49 +131,14 @@ fn calculate_jump_target_up(
 }
 
 impl App {
-    /// Calculate actual usable viewport height accounting for headers and indicators
+    /// Calculate actual usable viewport height accounting for indicators
+    /// Headers are rendering details only and don't affect pagination
     fn get_adjusted_viewport_height(&self) -> usize {
         let raw_viewport = self.viewport_height;
 
-        // Check if using grouped view (which has column headers)
-        if let Some(unified) = self
-            .view_strategy
-            .as_any()
-            .downcast_ref::<UnifiedViewStrategy>()
-        {
-            if let Some(layout) = unified
-                .get_layout_strategy()
-                .as_any()
-                .downcast_ref::<crate::layout_strategy::VirtualUnifiedLayout>()
-            {
-                if let Some(list) = self.view_strategy.get_active_task_list() {
-                    // Count column headers that will appear in viewport
-                    let column_boundaries = layout.get_column_boundaries();
-                    let estimated_headers = column_boundaries
-                        .iter()
-                        .filter(|b| {
-                            let boundary_end = b.start_index + b.card_count;
-                            let viewport_end = list.get_scroll_offset() + raw_viewport;
-                            b.start_index < viewport_end && boundary_end > list.get_scroll_offset()
-                        })
-                        .count();
-
-                    // Calculate indicator overhead based on actual position
-                    let mut indicator_overhead = 0;
-                    if list.get_scroll_offset() > 0 {
-                        indicator_overhead += 1;
-                    }
-                    if list.get_scroll_offset() + raw_viewport < list.len() {
-                        indicator_overhead += 1;
-                    }
-
-                    return raw_viewport
-                        .saturating_sub(estimated_headers)
-                        .saturating_sub(indicator_overhead);
-                }
-            }
-        } else if let Some(list) = self.view_strategy.get_active_task_list() {
-            // For flat view, only account for indicators
+        // Only account for scroll indicators for both grouped and flat views
+        // Column headers are visual separators during rendering, not pagination logic
+        if let Some(list) = self.view_strategy.get_active_task_list() {
             let mut indicator_overhead = 0;
             if list.get_scroll_offset() > 0 {
                 indicator_overhead += 1;
