@@ -368,9 +368,9 @@ impl App {
 
     pub fn handle_jump_half_viewport_up(&mut self) {
         if self.focus == Focus::Cards {
-            // Use conservative page size accounting for actual visible headers
-            // This correctly estimates the number of card lines visible in a page
-            let page_size = self.get_conservative_page_size();
+            // Use stable page size to ensure consistent page boundaries during jumping
+            // Worst-case estimate prevents page shifts as you navigate
+            let page_size = self.get_stable_page_size();
 
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                 list.jump_half_viewport_up(page_size);
@@ -380,9 +380,9 @@ impl App {
 
     pub fn handle_jump_half_viewport_down(&mut self) {
         if self.focus == Focus::Cards {
-            // Use conservative page size accounting for actual visible headers
-            // This correctly estimates the number of card lines visible in a page
-            let page_size = self.get_conservative_page_size();
+            // Use stable page size to ensure consistent page boundaries during jumping
+            // Worst-case estimate prevents page shifts as you navigate
+            let page_size = self.get_stable_page_size();
 
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                 list.jump_half_viewport_down(page_size);
