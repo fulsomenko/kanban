@@ -37,13 +37,6 @@ fn count_headers_in_viewport(
         .count()
 }
 
-fn estimate_indicator_lines(scroll_offset: usize, total_items: usize, viewport_height: usize) -> usize {
-    // Conservatively estimate how many lines will be needed for scroll indicators
-    let has_items_above = scroll_offset > 0;
-    let has_items_below = scroll_offset + viewport_height < total_items;
-
-    (has_items_above as usize) + (has_items_below as usize)
-}
 
 pub struct SinglePanelRenderer {
     show_column_headers: bool,
@@ -102,24 +95,21 @@ impl RenderStrategy for SinglePanelRenderer {
                         } else {
                             let raw_viewport_height = area.height.saturating_sub(2) as usize;
 
-                            // Estimate how many column headers will appear in the viewport
+                            // Count column headers that will appear in the viewport
                             let estimated_header_count = count_headers_in_viewport(
                                 &column_boundaries,
                                 task_list.get_scroll_offset(),
                                 raw_viewport_height,
                             );
 
-                            // Estimate how many lines will be needed for scroll indicators
-                            let estimated_indicator_lines = estimate_indicator_lines(
-                                task_list.get_scroll_offset(),
-                                task_list.len(),
-                                raw_viewport_height.saturating_sub(estimated_header_count),
-                            );
+                            // Use worst-case estimate: always assume both indicators present
+                            // This ensures consistency with navigation handlers
+                            const INDICATOR_OVERHEAD: usize = 2;
 
                             // Adjust viewport height to account for both headers and indicators
                             let adjusted_viewport_height = raw_viewport_height
                                 .saturating_sub(estimated_header_count)
-                                .saturating_sub(estimated_indicator_lines);
+                                .saturating_sub(INDICATOR_OVERHEAD);
 
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
@@ -229,16 +219,13 @@ impl RenderStrategy for SinglePanelRenderer {
                     } else {
                         let raw_viewport_height = area.height.saturating_sub(2) as usize;
 
-                        // Estimate how many lines will be needed for scroll indicators
-                        let estimated_indicator_lines = estimate_indicator_lines(
-                            task_list.get_scroll_offset(),
-                            task_list.len(),
-                            raw_viewport_height,
-                        );
+                        // Use worst-case estimate: always assume both indicators present
+                        // This ensures consistency with navigation handlers and other renderers
+                        const INDICATOR_OVERHEAD: usize = 2;
 
                         // Adjust viewport height to account for indicators
                         let adjusted_viewport_height =
-                            raw_viewport_height.saturating_sub(estimated_indicator_lines);
+                            raw_viewport_height.saturating_sub(INDICATOR_OVERHEAD);
 
                         let render_info = task_list.get_render_info(adjusted_viewport_height);
 
@@ -364,16 +351,13 @@ impl RenderStrategy for MultiPanelRenderer {
                     } else {
                         let raw_viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
 
-                        // Estimate how many lines will be needed for scroll indicators
-                        let estimated_indicator_lines = estimate_indicator_lines(
-                            task_list.get_scroll_offset(),
-                            task_list.len(),
-                            raw_viewport_height,
-                        );
+                        // Use worst-case estimate: always assume both indicators present
+                        // This ensures consistency with navigation handlers and other renderers
+                        const INDICATOR_OVERHEAD: usize = 2;
 
                         // Adjust viewport height to account for indicators
                         let adjusted_viewport_height =
-                            raw_viewport_height.saturating_sub(estimated_indicator_lines);
+                            raw_viewport_height.saturating_sub(INDICATOR_OVERHEAD);
 
                         let render_info = task_list.get_render_info(adjusted_viewport_height);
 
