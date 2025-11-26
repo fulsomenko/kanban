@@ -4,7 +4,106 @@ use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::TaskListView;
 
 impl App {
-    fn get_effective_viewport_height(&self) -> usize {
+    /// Calculate stable page size that won't change during navigation
+    /// Uses worst-case estimates to ensure pages don't shift as you scroll
+    fn get_stable_page_size(&self) -> usize {
+        const INDICATOR_OVERHEAD: usize = 2; // Worst case: both indicators present
+
+        // Check if using grouped view (which has column headers)
+        if let Some(unified) = self
+            .view_strategy
+            .as_any()
+            .downcast_ref::<UnifiedViewStrategy>()
+        {
+            if let Some(layout) = unified
+                .get_layout_strategy()
+                .as_any()
+                .downcast_ref::<VirtualUnifiedLayout>()
+            {
+                // Use worst-case header count: all columns could appear in viewport
+                let column_boundaries = layout.get_column_boundaries();
+                let header_overhead = column_boundaries.len(); // All columns visible in worst case
+
+                // For stability, always assume both indicators are present (worst case)
+                // This prevents page size from changing based on scroll position
+                return self.viewport_height
+                    .saturating_sub(header_overhead)
+                    .saturating_sub(INDICATOR_OVERHEAD);
+            }
+        }
+
+        // For flat view, always assume both indicators (worst case)
+        self.viewport_height.saturating_sub(INDICATOR_OVERHEAD)
+    }
+
+    /// Calculate conservative page size accounting for position
+    /// At boundaries (top/bottom), only 1 indicator appears; in middle, both appear
+    fn get_conservative_page_size(&self) -> usize {
+        let mut indicator_overhead = 2; // Assume both by default
+
+        // Check if using grouped view (which has column headers)
+        if let Some(unified) = self
+            .view_strategy
+            .as_any()
+            .downcast_ref::<UnifiedViewStrategy>()
+        {
+            if let Some(layout) = unified
+                .get_layout_strategy()
+                .as_any()
+                .downcast_ref::<VirtualUnifiedLayout>()
+            {
+                // Count headers that will appear in viewport at current scroll position
+                let column_boundaries = layout.get_column_boundaries();
+                let mut header_overhead = 0;
+                if let Some(list) = self.view_strategy.get_active_task_list() {
+                    let scroll_offset = list.get_scroll_offset();
+                    let viewport_end = scroll_offset + self.viewport_height;
+
+                    // Count column headers that overlap with viewport
+                    for boundary in column_boundaries.iter() {
+                        let boundary_end = boundary.start_index + boundary.card_count;
+                        if boundary.start_index < viewport_end && boundary_end > scroll_offset {
+                            header_overhead += 1;
+                        }
+                    }
+
+                    // Check if at boundaries (where only 1 indicator appears)
+                    if scroll_offset == 0 {
+                        // At top: only "below" indicator
+                        indicator_overhead = 1;
+                    } else if scroll_offset + self.viewport_height >= list.len() {
+                        // At bottom: only "above" indicator
+                        indicator_overhead = 1;
+                    }
+                } else {
+                    // Fallback: use a conservative estimate
+                    header_overhead = column_boundaries.len().min(3);
+                }
+
+                return self.viewport_height
+                    .saturating_sub(header_overhead)
+                    .saturating_sub(indicator_overhead);
+            }
+        } else if let Some(list) = self.view_strategy.get_active_task_list() {
+            // For flat view, check if at boundaries
+            if list.get_scroll_offset() == 0 {
+                // At top: only "below" indicator
+                indicator_overhead = 1;
+            } else if list.get_scroll_offset() + self.viewport_height >= list.len() {
+                // At bottom: only "above" indicator
+                indicator_overhead = 1;
+            }
+        }
+
+        // For flat view, use indicator overhead based on position
+        self.viewport_height.saturating_sub(indicator_overhead)
+    }
+
+    /// Calculate effective page size based on current scroll position
+    /// This accounts for headers and indicators that actually appear now
+    fn get_effective_page_size(&self) -> usize {
+        let mut overhead = 0;
+
         // Check if using grouped view (which has column headers)
         if let Some(unified) = self
             .view_strategy
@@ -28,12 +127,26 @@ impl App {
                         })
                         .count();
 
-                    return self.viewport_height.saturating_sub(estimated_headers);
+                    overhead += estimated_headers;
+
+                    // Estimate scroll indicator lines based on current position
+                    let space_after_headers =
+                        self.viewport_height.saturating_sub(estimated_headers);
+                    let has_items_above = list.get_scroll_offset() > 0;
+                    let has_items_below = list.get_scroll_offset() + space_after_headers < list.len();
+                    overhead += (has_items_above as usize) + (has_items_below as usize);
+
+                    return self.viewport_height.saturating_sub(overhead);
                 }
             }
+        } else if let Some(list) = self.view_strategy.get_active_task_list() {
+            // For flat view, estimate scroll indicator lines
+            let has_items_above = list.get_scroll_offset() > 0;
+            let has_items_below = list.get_scroll_offset() + self.viewport_height < list.len();
+            overhead = (has_items_above as usize) + (has_items_below as usize);
         }
 
-        self.viewport_height
+        self.viewport_height.saturating_sub(overhead)
     }
 
     fn get_column_boundaries(&self) -> Vec<crate::layout_strategy::ColumnBoundary> {
@@ -73,9 +186,8 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                let effective_viewport = self.get_effective_viewport_height();
                 let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_down(effective_viewport)
+                    list.navigate_down()
                 } else {
                     false
                 };
@@ -94,9 +206,8 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                let effective_viewport = self.get_effective_viewport_height();
                 let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_up(effective_viewport)
+                    list.navigate_up()
                 } else {
                     false
                 };
@@ -135,10 +246,11 @@ impl App {
                         self.current_sort_order = Some(task_sort_order);
                         self.switch_view_strategy(task_list_view);
 
+                        let page_size = self.get_conservative_page_size();
                         if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                             if !list.is_empty() {
                                 list.set_selected_index(Some(0));
-                                list.ensure_selected_visible(self.viewport_height);
+                                list.ensure_selected_visible(page_size);
                             }
                         }
                     }
@@ -205,13 +317,14 @@ impl App {
                     .downcast_mut::<UnifiedViewStrategy>()
                     .map(|unified| unified.try_set_active_column_index(index));
 
+                let page_size = self.get_conservative_page_size();
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     if list.is_empty() {
                         list.clear();
                     } else if list.get_selected_index().is_none() {
                         list.set_selected_index(Some(0));
                     }
-                    list.ensure_selected_visible(self.viewport_height);
+                    list.ensure_selected_visible(page_size);
                 }
                 tracing::info!("Switched to column {}", index);
             }
@@ -245,9 +358,9 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                let effective_viewport = self.get_effective_viewport_height();
+                let page_size = self.get_stable_page_size();
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.jump_to_bottom(effective_viewport);
+                    list.jump_to_bottom(page_size);
                 }
             }
         }
@@ -255,26 +368,24 @@ impl App {
 
     pub fn handle_jump_half_viewport_up(&mut self) {
         if self.focus == Focus::Cards {
-            // Pass RAW viewport height, not adjusted - Page will handle header calculations
-            let raw_viewport = self.viewport_height;
-            let column_boundaries = self.get_column_boundaries();
+            // Use conservative page size accounting for actual visible headers
+            // This correctly estimates the number of card lines visible in a page
+            let page_size = self.get_conservative_page_size();
 
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                list.set_column_boundaries(column_boundaries);
-                list.jump_half_viewport_up(raw_viewport);
+                list.jump_half_viewport_up(page_size);
             }
         }
     }
 
     pub fn handle_jump_half_viewport_down(&mut self) {
         if self.focus == Focus::Cards {
-            // Pass RAW viewport height, not adjusted - Page will handle header calculations
-            let raw_viewport = self.viewport_height;
-            let column_boundaries = self.get_column_boundaries();
+            // Use conservative page size accounting for actual visible headers
+            // This correctly estimates the number of card lines visible in a page
+            let page_size = self.get_conservative_page_size();
 
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                list.set_column_boundaries(column_boundaries);
-                list.jump_half_viewport_down(raw_viewport);
+                list.jump_half_viewport_down(page_size);
             }
         }
     }
