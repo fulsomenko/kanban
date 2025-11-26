@@ -37,6 +37,14 @@ fn count_headers_in_viewport(
         .count()
 }
 
+fn estimate_indicator_lines(scroll_offset: usize, total_items: usize, viewport_height: usize) -> usize {
+    // Conservatively estimate how many lines will be needed for scroll indicators
+    let has_items_above = scroll_offset > 0;
+    let has_items_below = scroll_offset + viewport_height < total_items;
+
+    (has_items_above as usize) + (has_items_below as usize)
+}
+
 pub struct SinglePanelRenderer {
     show_column_headers: bool,
 }
@@ -101,9 +109,17 @@ impl RenderStrategy for SinglePanelRenderer {
                                 raw_viewport_height,
                             );
 
-                            // Adjust viewport height to account for headers
-                            let adjusted_viewport_height =
-                                raw_viewport_height.saturating_sub(estimated_header_count);
+                            // Estimate how many lines will be needed for scroll indicators
+                            let estimated_indicator_lines = estimate_indicator_lines(
+                                task_list.get_scroll_offset(),
+                                task_list.len(),
+                                raw_viewport_height.saturating_sub(estimated_header_count),
+                            );
+
+                            // Adjust viewport height to account for both headers and indicators
+                            let adjusted_viewport_height = raw_viewport_height
+                                .saturating_sub(estimated_header_count)
+                                .saturating_sub(estimated_indicator_lines);
 
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
@@ -211,8 +227,20 @@ impl RenderStrategy for SinglePanelRenderer {
                         };
                         lines.push(Line::from(Span::styled(message, label_text())));
                     } else {
-                        let viewport_height = area.height.saturating_sub(2) as usize;
-                        let render_info = task_list.get_render_info(viewport_height);
+                        let raw_viewport_height = area.height.saturating_sub(2) as usize;
+
+                        // Estimate how many lines will be needed for scroll indicators
+                        let estimated_indicator_lines = estimate_indicator_lines(
+                            task_list.get_scroll_offset(),
+                            task_list.len(),
+                            raw_viewport_height,
+                        );
+
+                        // Adjust viewport height to account for indicators
+                        let adjusted_viewport_height =
+                            raw_viewport_height.saturating_sub(estimated_indicator_lines);
+
+                        let render_info = task_list.get_render_info(adjusted_viewport_height);
 
                         if render_info.show_above_indicator {
                             let count = render_info.cards_above_count;
@@ -334,8 +362,20 @@ impl RenderStrategy for MultiPanelRenderer {
                     if task_list.is_empty() {
                         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
                     } else {
-                        let viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
-                        let render_info = task_list.get_render_info(viewport_height);
+                        let raw_viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
+
+                        // Estimate how many lines will be needed for scroll indicators
+                        let estimated_indicator_lines = estimate_indicator_lines(
+                            task_list.get_scroll_offset(),
+                            task_list.len(),
+                            raw_viewport_height,
+                        );
+
+                        // Adjust viewport height to account for indicators
+                        let adjusted_viewport_height =
+                            raw_viewport_height.saturating_sub(estimated_indicator_lines);
+
+                        let render_info = task_list.get_render_info(adjusted_viewport_height);
 
                         if render_info.show_above_indicator {
                             let count = render_info.cards_above_count;
