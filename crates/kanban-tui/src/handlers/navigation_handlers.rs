@@ -175,7 +175,7 @@ fn calculate_jump_target_down(
     }
 
     // Three-level jumping: top (0) → middle (size/2) → bottom (size-1) → next page
-    let next_target = if position_in_page < page_size / 2 {
+    (if position_in_page < page_size / 2 {
         // Currently at top, jump to middle
         current_page.start + page_size / 2
     } else if position_in_page < page_size - 1 {
@@ -187,9 +187,7 @@ fn calculate_jump_target_down(
     } else {
         // At bottom of last page, stay there
         current_index
-    };
-
-    next_target.min(pages.iter().map(|p| p.end).max().unwrap_or(0).saturating_sub(1))
+    }).min(pages.iter().map(|p| p.end).max().unwrap_or(0).saturating_sub(1))
 }
 
 /// Calculate jump target for page-up navigation (Ctrl+U style)
@@ -210,7 +208,7 @@ fn calculate_jump_target_up(
     }
 
     // Three-level jumping: bottom (size-1) → middle (size/2) → top (0) → previous page
-    let next_target = if position_in_page > page_size / 2 {
+    if position_in_page > page_size / 2 {
         // Currently at bottom, jump to middle
         current_page.start + page_size / 2
     } else if position_in_page > 0 {
@@ -222,9 +220,7 @@ fn calculate_jump_target_up(
     } else {
         // At top of first page, stay there
         current_index
-    };
-
-    next_target
+    }
 }
 
 impl App {

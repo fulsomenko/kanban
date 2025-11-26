@@ -6,13 +6,11 @@ use kanban_tui::card_list_component::{
 use uuid::Uuid;
 
 fn create_test_component() -> CardListComponent {
-    let component = CardListComponent::new(CardListId::All, CardListComponentConfig::new());
-    component
+    CardListComponent::new(CardListId::All, CardListComponentConfig::new())
 }
 
 fn create_test_component_with_config(config: CardListComponentConfig) -> CardListComponent {
-    let component = CardListComponent::new(CardListId::All, config);
-    component
+    CardListComponent::new(CardListId::All, config)
 }
 
 // Configuration Tests
