@@ -19,14 +19,35 @@ impl PageBoundary {
     }
 }
 
+/// Count how many column headers will appear in the viewport
+/// A boundary is relevant if any of its cards appear in the visible range
+fn count_headers_in_viewport(
+    column_boundaries: &[(usize, usize)], // (start_index, card_count) tuples
+    scroll_offset: usize,
+    viewport_height: usize,
+) -> usize {
+    if column_boundaries.is_empty() {
+        return 0;
+    }
+
+    let viewport_end = scroll_offset + viewport_height;
+
+    column_boundaries
+        .iter()
+        .filter(|(start_index, card_count)| {
+            let boundary_end = start_index + card_count;
+            // Boundary is relevant if it overlaps with viewport range
+            *start_index < viewport_end && boundary_end > scroll_offset
+        })
+        .count()
+}
+
 /// Compute variable-sized page boundaries for jumping navigation.
 ///
-/// Page sizes vary based on position to account for scroll indicators:
-/// - First page: full viewport (no "above" indicator needed)
-/// - Middle pages: viewport - 1 (need space for "above" indicator)
-/// - Last page: remaining items (no "below" indicator needed)
-///
-/// Headers are already accounted for in the passed viewport_height parameter.
+/// Pages are sized based on position:
+/// - First page: viewport_height - 1 (only "below" indicator)
+/// - Middle pages: viewport_height - 2 (both indicators)
+/// - Last page: remaining items (only "above" indicator, can use up to viewport_height - 1)
 fn compute_page_boundaries(total_items: usize, viewport_height: usize) -> Vec<PageBoundary> {
     if total_items == 0 || viewport_height == 0 {
         return vec![];
@@ -34,8 +55,8 @@ fn compute_page_boundaries(total_items: usize, viewport_height: usize) -> Vec<Pa
 
     let mut pages = Vec::new();
 
-    // First page: uses full viewport (no above indicator)
-    let first_page_size = viewport_height;
+    // First page: viewport_height - 1 items
+    let first_page_size = viewport_height.saturating_sub(1).max(1);
     let first_page_end = first_page_size.min(total_items);
     pages.push(PageBoundary {
         start: 0,
@@ -43,15 +64,89 @@ fn compute_page_boundaries(total_items: usize, viewport_height: usize) -> Vec<Pa
     });
     let mut current_idx = first_page_end;
 
-    // Middle pages: viewport - 1 (to account for above indicator)
-    let middle_page_size = viewport_height.saturating_sub(1).max(1);
+    // Middle and last pages: viewport_height - 2 items each, except last page uses viewport_height - 1
+    let middle_page_size = viewport_height.saturating_sub(2).max(1);
+    let last_page_max_size = viewport_height.saturating_sub(1).max(1);
+
     while current_idx < total_items {
-        let page_end = (current_idx + middle_page_size).min(total_items);
+        let remaining = total_items - current_idx;
+
+        // Check if remaining items fit in a last page (viewport_height - 1)
+        let is_last_page = remaining <= last_page_max_size;
+
+        let page_size = if is_last_page {
+            last_page_max_size
+        } else {
+            middle_page_size
+        };
+
+        let page_end = (current_idx + page_size).min(total_items);
         pages.push(PageBoundary {
             start: current_idx,
             end: page_end,
         });
         current_idx = page_end;
+    }
+
+    pages
+}
+
+/// Compute page boundaries for grouped view, accounting for column headers causing overflow
+///
+/// Headers take up viewport space, so we need to dynamically reduce page sizes
+/// to ensure cards don't spill into the next page when rendered.
+fn compute_page_boundaries_with_headers(
+    total_items: usize,
+    viewport_height: usize,
+    column_boundaries: &[(usize, usize)], // (start_index, card_count)
+) -> Vec<PageBoundary> {
+    if total_items == 0 || viewport_height == 0 {
+        return vec![];
+    }
+
+    let mut pages = Vec::new();
+    let mut current_idx = 0;
+    let first_page_base = viewport_height.saturating_sub(1).max(1);
+    let middle_page_base = viewport_height.saturating_sub(2).max(1);
+    let last_page_base = viewport_height.saturating_sub(1).max(1);
+
+    let mut is_first_page = true;
+
+    while current_idx < total_items {
+        let remaining = total_items - current_idx;
+
+        // Determine base page size (already accounts for indicators)
+        let is_last_page = remaining <= last_page_base;
+        let base_size = if is_first_page {
+            first_page_base
+        } else if is_last_page {
+            last_page_base
+        } else {
+            middle_page_base
+        };
+
+        // Count headers that will appear in this page's visible range
+        let headers_count = count_headers_in_viewport(
+            column_boundaries,
+            current_idx,
+            base_size,
+        );
+
+        // Calculate actual page size after accounting for headers
+        // (base_size already accounts for indicators)
+        let adjusted_size = base_size.saturating_sub(headers_count);
+
+        // Ensure we make progress (at least 1 card per page)
+        let actual_size = adjusted_size.max(1);
+
+        let page_end = (current_idx + actual_size).min(total_items);
+        pages.push(PageBoundary {
+            start: current_idx,
+            end: page_end,
+        });
+
+        current_idx = page_end;
+        is_first_page = false;
     }
 
     pages
@@ -133,42 +228,97 @@ fn calculate_jump_target_up(
 }
 
 impl App {
-    /// Calculate base viewport height accounting for headers only
-    /// Indicators are handled separately in compute_page_boundaries() to account for variable overhead
+    /// Calculate actual usable viewport height accounting for indicators and headers
+    /// Must match the rendering logic to ensure page boundaries align with visible cards
     fn get_adjusted_viewport_height(&self) -> usize {
         let raw_viewport = self.viewport_height;
 
-        // For grouped view, account for column headers that consume screen space
-        // Headers are constant overhead throughout the list
-        if let Some(unified) = self
-            .view_strategy
-            .as_any()
-            .downcast_ref::<UnifiedViewStrategy>()
-        {
-            if let Some(layout) = unified
-                .get_layout_strategy()
-                .as_any()
-                .downcast_ref::<crate::layout_strategy::VirtualUnifiedLayout>()
-            {
-                if let Some(list) = self.view_strategy.get_active_task_list() {
-                    // Count column headers that will appear in viewport
-                    let column_boundaries = layout.get_column_boundaries();
-                    let estimated_headers = column_boundaries
-                        .iter()
-                        .filter(|b| {
-                            let boundary_end = b.start_index + b.card_count;
-                            let viewport_end = list.get_scroll_offset() + raw_viewport;
-                            b.start_index < viewport_end && boundary_end > list.get_scroll_offset()
-                        })
-                        .count();
+        if let Some(list) = self.view_strategy.get_active_task_list() {
+            // Count scroll indicator overhead
+            let mut indicator_overhead = 0;
+            if list.get_scroll_offset() > 0 {
+                indicator_overhead += 1;
+            }
+            if list.get_scroll_offset() + raw_viewport < list.len() {
+                indicator_overhead += 1;
+            }
 
-                    return raw_viewport.saturating_sub(estimated_headers);
+            // Count column header overhead (only in GroupedByColumn view)
+            let mut header_overhead = 0;
+
+            // Try to get column boundaries from UnifiedViewStrategy
+            if let Some(unified) = self
+                .view_strategy
+                .as_any()
+                .downcast_ref::<UnifiedViewStrategy>()
+            {
+                use crate::layout_strategy::VirtualUnifiedLayout;
+
+                if let Some(layout) = unified
+                    .get_layout_strategy()
+                    .as_any()
+                    .downcast_ref::<VirtualUnifiedLayout>()
+                {
+                    let boundaries = layout.get_column_boundaries();
+                    let column_boundaries: Vec<(usize, usize)> = boundaries
+                        .iter()
+                        .map(|b| (b.start_index, b.card_count))
+                        .collect();
+
+                    header_overhead = count_headers_in_viewport(
+                        &column_boundaries,
+                        list.get_scroll_offset(),
+                        raw_viewport,
+                    );
+                }
+            }
+
+            return raw_viewport
+                .saturating_sub(indicator_overhead)
+                .saturating_sub(header_overhead);
+        }
+
+        raw_viewport
+    }
+
+    /// Compute page boundaries appropriate for the current view mode
+    fn compute_pages_for_current_view(&self, total_items: usize) -> Vec<PageBoundary> {
+        // For GroupedByColumn view, use header-aware pagination
+        if let Some(board_idx) = self.active_board_index.or(self.board_selection.get()) {
+            if let Some(board) = self.boards.get(board_idx) {
+                if board.task_list_view == TaskListView::GroupedByColumn {
+                    // Try to get column boundaries for header-aware pagination
+                    if let Some(unified) = self
+                        .view_strategy
+                        .as_any()
+                        .downcast_ref::<UnifiedViewStrategy>()
+                    {
+                        use crate::layout_strategy::VirtualUnifiedLayout;
+
+                        if let Some(layout) = unified
+                            .get_layout_strategy()
+                            .as_any()
+                            .downcast_ref::<VirtualUnifiedLayout>()
+                        {
+                            let boundaries = layout.get_column_boundaries();
+                            let column_boundaries: Vec<(usize, usize)> = boundaries
+                                .iter()
+                                .map(|b| (b.start_index, b.card_count))
+                                .collect();
+
+                            return compute_page_boundaries_with_headers(
+                                total_items,
+                                self.viewport_height,
+                                &column_boundaries,
+                            );
+                        }
+                    }
                 }
             }
         }
 
-        // For flat view, no headers to account for
-        raw_viewport
+        // For Flat view or any other view, use standard pagination
+        compute_page_boundaries(total_items, self.viewport_height)
     }
 
     pub fn handle_focus_switch(&mut self, focus_target: Focus) {
@@ -374,21 +524,27 @@ impl App {
 
     pub fn handle_jump_half_viewport_up(&mut self) {
         if self.focus == Focus::Cards {
-            // Compute adjusted viewport before borrowing list mutably
+            // Get total items before borrowing mutably
+            let total_items = self
+                .view_strategy
+                .get_active_task_list()
+                .map(|list| list.len())
+                .unwrap_or(0);
+
+            if total_items == 0 {
+                return;
+            }
+
+            // Compute pages and adjusted viewport before mutable borrow
+            let pages = self.compute_pages_for_current_view(total_items);
             let adjusted_viewport = self.get_adjusted_viewport_height();
 
+            if pages.is_empty() {
+                return;
+            }
+
+            // Now borrow list mutably
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                let total_items = list.len();
-                if total_items == 0 {
-                    return;
-                }
-
-                // Compute variable-sized pages with adjusted viewport
-                let pages = compute_page_boundaries(total_items, adjusted_viewport);
-                if pages.is_empty() {
-                    return;
-                }
-
                 // Find current page and position
                 if let Some(current_idx) = list.get_selected_index() {
                     if let Some(page_idx) = find_current_page(&pages, current_idx) {
@@ -412,21 +568,27 @@ impl App {
 
     pub fn handle_jump_half_viewport_down(&mut self) {
         if self.focus == Focus::Cards {
-            // Compute adjusted viewport before borrowing list mutably
+            // Get total items before borrowing mutably
+            let total_items = self
+                .view_strategy
+                .get_active_task_list()
+                .map(|list| list.len())
+                .unwrap_or(0);
+
+            if total_items == 0 {
+                return;
+            }
+
+            // Compute pages and adjusted viewport before mutable borrow
+            let pages = self.compute_pages_for_current_view(total_items);
             let adjusted_viewport = self.get_adjusted_viewport_height();
 
+            if pages.is_empty() {
+                return;
+            }
+
+            // Now borrow list mutably
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                let total_items = list.len();
-                if total_items == 0 {
-                    return;
-                }
-
-                // Compute variable-sized pages with adjusted viewport
-                let pages = compute_page_boundaries(total_items, adjusted_viewport);
-                if pages.is_empty() {
-                    return;
-                }
-
                 // Find current page and position
                 if let Some(current_idx) = list.get_selected_index() {
                     if let Some(page_idx) = find_current_page(&pages, current_idx) {
