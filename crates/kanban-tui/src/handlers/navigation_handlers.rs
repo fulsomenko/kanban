@@ -342,7 +342,9 @@ impl App {
             }
             Focus::Cards => {
                 let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_down()
+                    list.navigate_down();
+                    list.ensure_selected_visible(self.viewport_height);
+                    list.get_selected_index() == Some(list.len().saturating_sub(1))
                 } else {
                     false
                 };
@@ -362,7 +364,9 @@ impl App {
             }
             Focus::Cards => {
                 let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_up()
+                    list.navigate_up();
+                    list.ensure_selected_visible(self.viewport_height);
+                    list.get_selected_index() == Some(0)
                 } else {
                     false
                 };
