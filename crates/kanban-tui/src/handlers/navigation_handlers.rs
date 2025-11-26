@@ -1,170 +1,136 @@
 use crate::app::{App, AppMode, Focus};
-use crate::layout_strategy::VirtualUnifiedLayout;
 use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::TaskListView;
 
+/// Page boundary with start index and end index (exclusive)
+#[derive(Debug, Clone, Copy)]
+struct PageBoundary {
+    start: usize,
+    end: usize,
+}
+
+impl PageBoundary {
+    fn contains(&self, index: usize) -> bool {
+        index >= self.start && index < self.end
+    }
+
+    fn size(&self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+}
+
+/// Compute variable-sized page boundaries for jumping navigation.
+///
+/// Pages are sized based on position:
+/// - First page: viewport_height - 1 (only "below" indicator)
+/// - Middle pages: viewport_height - 2 (both indicators)
+/// - Last page: remaining items (only "above" indicator)
+fn compute_page_boundaries(total_items: usize, viewport_height: usize) -> Vec<PageBoundary> {
+    if total_items == 0 || viewport_height == 0 {
+        return vec![];
+    }
+
+    let mut pages = Vec::new();
+
+    // First page: viewport_height - 1 items
+    let first_page_size = viewport_height.saturating_sub(1).max(1);
+    let first_page_end = first_page_size.min(total_items);
+    pages.push(PageBoundary {
+        start: 0,
+        end: first_page_end,
+    });
+    let mut current_idx = first_page_end;
+
+    // Middle pages: viewport_height - 2 items each
+    let middle_page_size = viewport_height.saturating_sub(2).max(1);
+    while current_idx < total_items {
+        let page_end = (current_idx + middle_page_size).min(total_items);
+        pages.push(PageBoundary {
+            start: current_idx,
+            end: page_end,
+        });
+        current_idx = page_end;
+    }
+
+    pages
+}
+
+/// Find which page contains the given index
+fn find_current_page(pages: &[PageBoundary], index: usize) -> Option<usize> {
+    pages.iter().position(|page| page.contains(index))
+}
+
+/// Calculate jump target for page-down navigation (Ctrl+D style)
+/// Implements three-level navigation: top → middle → bottom → next page
+fn calculate_jump_target_down(
+    pages: &[PageBoundary],
+    current_index: usize,
+    current_page_idx: usize,
+) -> usize {
+    let current_page = pages[current_page_idx];
+
+    // Determine position within current page
+    let position_in_page = current_index - current_page.start;
+    let page_size = current_page.size();
+
+    if page_size == 0 {
+        return current_index;
+    }
+
+    // Three-level jumping: top (0) → middle (size/2) → bottom (size-1) → next page
+    let next_target = if position_in_page < page_size / 2 {
+        // Currently at top, jump to middle
+        current_page.start + page_size / 2
+    } else if position_in_page < page_size - 1 {
+        // Currently in middle/near-bottom, jump to bottom
+        current_page.end - 1
+    } else if current_page_idx < pages.len() - 1 {
+        // Currently at bottom, jump to top of next page
+        pages[current_page_idx + 1].start
+    } else {
+        // At bottom of last page, stay there
+        current_index
+    };
+
+    next_target.min(pages.iter().map(|p| p.end).max().unwrap_or(0).saturating_sub(1))
+}
+
+/// Calculate jump target for page-up navigation (Ctrl+U style)
+/// Implements three-level navigation: bottom → middle → top → previous page
+fn calculate_jump_target_up(
+    pages: &[PageBoundary],
+    current_index: usize,
+    current_page_idx: usize,
+) -> usize {
+    let current_page = pages[current_page_idx];
+
+    // Determine position within current page
+    let position_in_page = current_index - current_page.start;
+    let page_size = current_page.size();
+
+    if page_size == 0 {
+        return current_index;
+    }
+
+    // Three-level jumping: bottom (size-1) → middle (size/2) → top (0) → previous page
+    let next_target = if position_in_page > page_size / 2 {
+        // Currently at bottom, jump to middle
+        current_page.start + page_size / 2
+    } else if position_in_page > 0 {
+        // Currently at top/near-top, jump to top
+        current_page.start
+    } else if current_page_idx > 0 {
+        // Currently at top of page, jump to bottom of previous page
+        pages[current_page_idx - 1].end - 1
+    } else {
+        // At top of first page, stay there
+        current_index
+    };
+
+    next_target
+}
+
 impl App {
-    /// Calculate stable page size that won't change during navigation
-    /// Uses worst-case estimates to ensure pages don't shift as you scroll
-    fn get_stable_page_size(&self) -> usize {
-        const INDICATOR_OVERHEAD: usize = 2; // Worst case: both indicators present
-
-        // Check if using grouped view (which has column headers)
-        if let Some(unified) = self
-            .view_strategy
-            .as_any()
-            .downcast_ref::<UnifiedViewStrategy>()
-        {
-            if let Some(layout) = unified
-                .get_layout_strategy()
-                .as_any()
-                .downcast_ref::<VirtualUnifiedLayout>()
-            {
-                // Use worst-case header count: all columns could appear in viewport
-                let column_boundaries = layout.get_column_boundaries();
-                let header_overhead = column_boundaries.len(); // All columns visible in worst case
-
-                // For stability, always assume both indicators are present (worst case)
-                // This prevents page size from changing based on scroll position
-                return self.viewport_height
-                    .saturating_sub(header_overhead)
-                    .saturating_sub(INDICATOR_OVERHEAD);
-            }
-        }
-
-        // For flat view, always assume both indicators (worst case)
-        self.viewport_height.saturating_sub(INDICATOR_OVERHEAD)
-    }
-
-    /// Calculate conservative page size accounting for position
-    /// At boundaries (top/bottom), only 1 indicator appears; in middle, both appear
-    fn get_conservative_page_size(&self) -> usize {
-        let mut indicator_overhead = 2; // Assume both by default
-
-        // Check if using grouped view (which has column headers)
-        if let Some(unified) = self
-            .view_strategy
-            .as_any()
-            .downcast_ref::<UnifiedViewStrategy>()
-        {
-            if let Some(layout) = unified
-                .get_layout_strategy()
-                .as_any()
-                .downcast_ref::<VirtualUnifiedLayout>()
-            {
-                // Count headers that will appear in viewport at current scroll position
-                let column_boundaries = layout.get_column_boundaries();
-                let mut header_overhead = 0;
-                if let Some(list) = self.view_strategy.get_active_task_list() {
-                    let scroll_offset = list.get_scroll_offset();
-                    let viewport_end = scroll_offset + self.viewport_height;
-
-                    // Count column headers that overlap with viewport
-                    for boundary in column_boundaries.iter() {
-                        let boundary_end = boundary.start_index + boundary.card_count;
-                        if boundary.start_index < viewport_end && boundary_end > scroll_offset {
-                            header_overhead += 1;
-                        }
-                    }
-
-                    // Check if at boundaries (where only 1 indicator appears)
-                    if scroll_offset == 0 {
-                        // At top: only "below" indicator
-                        indicator_overhead = 1;
-                    } else if scroll_offset + self.viewport_height >= list.len() {
-                        // At bottom: only "above" indicator
-                        indicator_overhead = 1;
-                    }
-                } else {
-                    // Fallback: use a conservative estimate
-                    header_overhead = column_boundaries.len().min(3);
-                }
-
-                return self.viewport_height
-                    .saturating_sub(header_overhead)
-                    .saturating_sub(indicator_overhead);
-            }
-        } else if let Some(list) = self.view_strategy.get_active_task_list() {
-            // For flat view, check if at boundaries
-            if list.get_scroll_offset() == 0 {
-                // At top: only "below" indicator
-                indicator_overhead = 1;
-            } else if list.get_scroll_offset() + self.viewport_height >= list.len() {
-                // At bottom: only "above" indicator
-                indicator_overhead = 1;
-            }
-        }
-
-        // For flat view, use indicator overhead based on position
-        self.viewport_height.saturating_sub(indicator_overhead)
-    }
-
-    /// Calculate effective page size based on current scroll position
-    /// This accounts for headers and indicators that actually appear now
-    fn get_effective_page_size(&self) -> usize {
-        let mut overhead = 0;
-
-        // Check if using grouped view (which has column headers)
-        if let Some(unified) = self
-            .view_strategy
-            .as_any()
-            .downcast_ref::<UnifiedViewStrategy>()
-        {
-            if let Some(layout) = unified
-                .get_layout_strategy()
-                .as_any()
-                .downcast_ref::<VirtualUnifiedLayout>()
-            {
-                // Estimate headers that will appear in the viewport
-                let column_boundaries = layout.get_column_boundaries();
-                if let Some(list) = self.view_strategy.get_active_task_list() {
-                    let estimated_headers = column_boundaries
-                        .iter()
-                        .filter(|b| {
-                            let boundary_end = b.start_index + b.card_count;
-                            let viewport_end = list.get_scroll_offset() + self.viewport_height;
-                            b.start_index < viewport_end && boundary_end > list.get_scroll_offset()
-                        })
-                        .count();
-
-                    overhead += estimated_headers;
-
-                    // Estimate scroll indicator lines based on current position
-                    let space_after_headers =
-                        self.viewport_height.saturating_sub(estimated_headers);
-                    let has_items_above = list.get_scroll_offset() > 0;
-                    let has_items_below = list.get_scroll_offset() + space_after_headers < list.len();
-                    overhead += (has_items_above as usize) + (has_items_below as usize);
-
-                    return self.viewport_height.saturating_sub(overhead);
-                }
-            }
-        } else if let Some(list) = self.view_strategy.get_active_task_list() {
-            // For flat view, estimate scroll indicator lines
-            let has_items_above = list.get_scroll_offset() > 0;
-            let has_items_below = list.get_scroll_offset() + self.viewport_height < list.len();
-            overhead = (has_items_above as usize) + (has_items_below as usize);
-        }
-
-        self.viewport_height.saturating_sub(overhead)
-    }
-
-    fn get_column_boundaries(&self) -> Vec<crate::layout_strategy::ColumnBoundary> {
-        if let Some(unified) = self
-            .view_strategy
-            .as_any()
-            .downcast_ref::<UnifiedViewStrategy>()
-        {
-            if let Some(layout) = unified
-                .get_layout_strategy()
-                .as_any()
-                .downcast_ref::<VirtualUnifiedLayout>()
-            {
-                return layout.get_column_boundaries().to_vec();
-            }
-        }
-        Vec::new()
-    }
 
     pub fn handle_focus_switch(&mut self, focus_target: Focus) {
         match focus_target {
@@ -246,11 +212,10 @@ impl App {
                         self.current_sort_order = Some(task_sort_order);
                         self.switch_view_strategy(task_list_view);
 
-                        let page_size = self.get_conservative_page_size();
                         if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                             if !list.is_empty() {
                                 list.set_selected_index(Some(0));
-                                list.ensure_selected_visible(page_size);
+                                list.ensure_selected_visible(self.viewport_height);
                             }
                         }
                     }
@@ -317,14 +282,13 @@ impl App {
                     .downcast_mut::<UnifiedViewStrategy>()
                     .map(|unified| unified.try_set_active_column_index(index));
 
-                let page_size = self.get_conservative_page_size();
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     if list.is_empty() {
                         list.clear();
                     } else if list.get_selected_index().is_none() {
                         list.set_selected_index(Some(0));
                     }
-                    list.ensure_selected_visible(page_size);
+                    list.ensure_selected_visible(self.viewport_height);
                 }
                 tracing::info!("Switched to column {}", index);
             }
@@ -358,9 +322,12 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                let page_size = self.get_stable_page_size();
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.jump_to_bottom(page_size);
+                    if !list.is_empty() {
+                        let last_idx = list.len() - 1;
+                        list.jump_to(last_idx);
+                        list.ensure_selected_visible(self.viewport_height);
+                    }
                 }
             }
         }
@@ -368,24 +335,50 @@ impl App {
 
     pub fn handle_jump_half_viewport_up(&mut self) {
         if self.focus == Focus::Cards {
-            // Use stable page size to ensure consistent page boundaries during jumping
-            // Worst-case estimate prevents page shifts as you navigate
-            let page_size = self.get_stable_page_size();
-
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                list.jump_half_viewport_up(page_size);
+                let total_items = list.len();
+                if total_items == 0 {
+                    return;
+                }
+
+                // Compute variable-sized pages
+                let pages = compute_page_boundaries(total_items, self.viewport_height);
+                if pages.is_empty() {
+                    return;
+                }
+
+                // Find current page and position
+                if let Some(current_idx) = list.get_selected_index() {
+                    if let Some(page_idx) = find_current_page(&pages, current_idx) {
+                        let target = calculate_jump_target_up(&pages, current_idx, page_idx);
+                        list.jump_to(target);
+                    }
+                }
             }
         }
     }
 
     pub fn handle_jump_half_viewport_down(&mut self) {
         if self.focus == Focus::Cards {
-            // Use stable page size to ensure consistent page boundaries during jumping
-            // Worst-case estimate prevents page shifts as you navigate
-            let page_size = self.get_stable_page_size();
-
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                list.jump_half_viewport_down(page_size);
+                let total_items = list.len();
+                if total_items == 0 {
+                    return;
+                }
+
+                // Compute variable-sized pages
+                let pages = compute_page_boundaries(total_items, self.viewport_height);
+                if pages.is_empty() {
+                    return;
+                }
+
+                // Find current page and position
+                if let Some(current_idx) = list.get_selected_index() {
+                    if let Some(page_idx) = find_current_page(&pages, current_idx) {
+                        let target = calculate_jump_target_down(&pages, current_idx, page_idx);
+                        list.jump_to(target);
+                    }
+                }
             }
         }
     }
