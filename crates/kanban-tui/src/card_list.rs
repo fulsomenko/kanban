@@ -108,15 +108,12 @@ impl CardList {
         self.list.set_scroll_offset(offset);
     }
 
-    pub fn ensure_selected_visible(&mut self, page_size: usize) {
-        self.list.set_page_size(page_size);
-        self.list.ensure_selected_visible();
+    pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
+        self.list.ensure_selected_visible(viewport_height);
     }
 
-    pub fn get_render_info(&self, page_size: usize) -> CardListRenderInfo {
-        let mut list = self.list.clone();
-        list.set_page_size(page_size);
-        let render_info = list.get_render_info();
+    pub fn get_render_info(&self, viewport_height: usize) -> CardListRenderInfo {
+        let render_info = self.list.get_render_info(viewport_height);
 
         CardListRenderInfo {
             visible_card_indices: render_info.visible_item_indices,
@@ -134,22 +131,16 @@ impl CardList {
         }
     }
 
-    pub fn jump_to_bottom(&mut self, page_size: usize) {
+    pub fn jump_to_bottom(&mut self, viewport_height: usize) {
         if !self.cards.is_empty() {
             let last_idx = self.cards.len() - 1;
             self.list.set_selected_index(Some(last_idx));
-            self.ensure_selected_visible(page_size);
+            self.ensure_selected_visible(viewport_height);
         }
     }
 
-    pub fn jump_half_viewport_up(&mut self, page_size: usize) {
-        self.list.set_page_size(page_size);
-        self.list.jump_half_page_up();
-    }
-
-    pub fn jump_half_viewport_down(&mut self, page_size: usize) {
-        self.list.set_page_size(page_size);
-        self.list.jump_half_page_down();
+    pub fn jump_to(&mut self, index: usize) {
+        self.list.jump_to(index);
     }
 
 }
@@ -187,10 +178,7 @@ mod tests {
     use super::*;
 
     fn create_list_with_cards(count: usize) -> CardList {
-        let mut list = CardList::with_cards(CardListId::All, (0..count).map(|_| Uuid::new_v4()).collect());
-        // Set default page size for testing (accounts for indicators at boundaries)
-        list.list.set_page_size(10);
-        list
+        CardList::with_cards(CardListId::All, (0..count).map(|_| Uuid::new_v4()).collect())
     }
 
     #[test]
