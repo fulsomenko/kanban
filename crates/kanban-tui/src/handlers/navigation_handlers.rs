@@ -131,6 +131,61 @@ fn calculate_jump_target_up(
 }
 
 impl App {
+    /// Calculate actual usable viewport height accounting for headers and indicators
+    fn get_adjusted_viewport_height(&self) -> usize {
+        let raw_viewport = self.viewport_height;
+
+        // Check if using grouped view (which has column headers)
+        if let Some(unified) = self
+            .view_strategy
+            .as_any()
+            .downcast_ref::<UnifiedViewStrategy>()
+        {
+            if let Some(layout) = unified
+                .get_layout_strategy()
+                .as_any()
+                .downcast_ref::<crate::layout_strategy::VirtualUnifiedLayout>()
+            {
+                if let Some(list) = self.view_strategy.get_active_task_list() {
+                    // Count column headers that will appear in viewport
+                    let column_boundaries = layout.get_column_boundaries();
+                    let estimated_headers = column_boundaries
+                        .iter()
+                        .filter(|b| {
+                            let boundary_end = b.start_index + b.card_count;
+                            let viewport_end = list.get_scroll_offset() + raw_viewport;
+                            b.start_index < viewport_end && boundary_end > list.get_scroll_offset()
+                        })
+                        .count();
+
+                    // Calculate indicator overhead based on actual position
+                    let mut indicator_overhead = 0;
+                    if list.get_scroll_offset() > 0 {
+                        indicator_overhead += 1;
+                    }
+                    if list.get_scroll_offset() + raw_viewport < list.len() {
+                        indicator_overhead += 1;
+                    }
+
+                    return raw_viewport
+                        .saturating_sub(estimated_headers)
+                        .saturating_sub(indicator_overhead);
+                }
+            }
+        } else if let Some(list) = self.view_strategy.get_active_task_list() {
+            // For flat view, only account for indicators
+            let mut indicator_overhead = 0;
+            if list.get_scroll_offset() > 0 {
+                indicator_overhead += 1;
+            }
+            if list.get_scroll_offset() + raw_viewport < list.len() {
+                indicator_overhead += 1;
+            }
+            return raw_viewport.saturating_sub(indicator_overhead);
+        }
+
+        raw_viewport
+    }
 
     pub fn handle_focus_switch(&mut self, focus_target: Focus) {
         match focus_target {
@@ -335,14 +390,17 @@ impl App {
 
     pub fn handle_jump_half_viewport_up(&mut self) {
         if self.focus == Focus::Cards {
+            // Compute adjusted viewport before borrowing list mutably
+            let adjusted_viewport = self.get_adjusted_viewport_height();
+
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                 let total_items = list.len();
                 if total_items == 0 {
                     return;
                 }
 
-                // Compute variable-sized pages
-                let pages = compute_page_boundaries(total_items, self.viewport_height);
+                // Compute variable-sized pages with adjusted viewport
+                let pages = compute_page_boundaries(total_items, adjusted_viewport);
                 if pages.is_empty() {
                     return;
                 }
@@ -351,8 +409,17 @@ impl App {
                 if let Some(current_idx) = list.get_selected_index() {
                     if let Some(page_idx) = find_current_page(&pages, current_idx) {
                         let target = calculate_jump_target_up(&pages, current_idx, page_idx);
+
+                        // If jumping to a different page, explicitly scroll to that page
+                        if let Some(target_page_idx) = find_current_page(&pages, target) {
+                            if target_page_idx != page_idx {
+                                let target_page = pages[target_page_idx];
+                                list.set_scroll_offset(target_page.start);
+                            }
+                        }
+
                         list.jump_to(target);
-                        list.ensure_selected_visible(self.viewport_height);
+                        list.ensure_selected_visible(adjusted_viewport);
                     }
                 }
             }
@@ -361,14 +428,17 @@ impl App {
 
     pub fn handle_jump_half_viewport_down(&mut self) {
         if self.focus == Focus::Cards {
+            // Compute adjusted viewport before borrowing list mutably
+            let adjusted_viewport = self.get_adjusted_viewport_height();
+
             if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                 let total_items = list.len();
                 if total_items == 0 {
                     return;
                 }
 
-                // Compute variable-sized pages
-                let pages = compute_page_boundaries(total_items, self.viewport_height);
+                // Compute variable-sized pages with adjusted viewport
+                let pages = compute_page_boundaries(total_items, adjusted_viewport);
                 if pages.is_empty() {
                     return;
                 }
@@ -377,8 +447,17 @@ impl App {
                 if let Some(current_idx) = list.get_selected_index() {
                     if let Some(page_idx) = find_current_page(&pages, current_idx) {
                         let target = calculate_jump_target_down(&pages, current_idx, page_idx);
+
+                        // If jumping to a different page, explicitly scroll to that page
+                        if let Some(target_page_idx) = find_current_page(&pages, target) {
+                            if target_page_idx != page_idx {
+                                let target_page = pages[target_page_idx];
+                                list.set_scroll_offset(target_page.start);
+                            }
+                        }
+
                         list.jump_to(target);
-                        list.ensure_selected_visible(self.viewport_height);
+                        list.ensure_selected_visible(adjusted_viewport);
                     }
                 }
             }
