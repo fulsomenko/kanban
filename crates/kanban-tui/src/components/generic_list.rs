@@ -1,6 +1,5 @@
 use crate::selection::SelectionState;
 use crate::components::{Page, PageInfo};
-use crate::layout_strategy::ColumnBoundary;
 use std::collections::HashSet;
 
 pub type ListRenderInfo = PageInfo;
@@ -148,12 +147,8 @@ impl ListComponent {
         self.selection.set(Some(new_idx));
     }
 
-    pub fn set_viewport_height(&mut self, height: usize) {
-        self.page.set_viewport_height(height);
-    }
-
-    pub fn set_column_boundaries(&mut self, boundaries: Vec<ColumnBoundary>) {
-        self.page.set_column_boundaries(boundaries);
+    pub fn set_page_size(&mut self, size: usize) {
+        self.page.set_page_size(size);
     }
 
     pub fn get_render_info(&self) -> ListRenderInfo {
@@ -166,10 +161,10 @@ impl ListComponent {
 mod tests {
     use super::*;
 
-    fn create_test_list(item_count: usize, viewport_height: usize) -> ListComponent {
+    fn create_test_list(item_count: usize, page_size: usize) -> ListComponent {
         let mut list = ListComponent::new(false);
         list.update_item_count(item_count);
-        list.set_viewport_height(viewport_height);
+        list.set_page_size(page_size);
         list
     }
 
@@ -298,8 +293,8 @@ mod tests {
         let info = list.get_render_info();
 
         assert!(!info.show_above_indicator);
-        // With 5 items and viewport 3, below indicator takes space, so only 2 items shown
-        assert_eq!(info.visible_item_indices, vec![0, 1]);
+        // viewport=3 is pure card space (no overhead), so all 3 items shown
+        assert_eq!(info.visible_item_indices, vec![0, 1, 2]);
         assert!(info.show_below_indicator);
     }
 

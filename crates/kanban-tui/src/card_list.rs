@@ -1,5 +1,4 @@
 use crate::components::ListComponent;
-use crate::layout_strategy::ColumnBoundary;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -73,13 +72,11 @@ impl CardList {
         }
     }
 
-    pub fn navigate_up(&mut self, viewport_height: usize) -> bool {
-        self.list.set_viewport_height(viewport_height);
+    pub fn navigate_up(&mut self) -> bool {
         self.list.navigate_up()
     }
 
-    pub fn navigate_down(&mut self, viewport_height: usize) -> bool {
-        self.list.set_viewport_height(viewport_height);
+    pub fn navigate_down(&mut self) -> bool {
         self.list.navigate_down()
     }
 
@@ -111,14 +108,14 @@ impl CardList {
         self.list.set_scroll_offset(offset);
     }
 
-    pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
-        self.list.set_viewport_height(viewport_height);
+    pub fn ensure_selected_visible(&mut self, page_size: usize) {
+        self.list.set_page_size(page_size);
         self.list.ensure_selected_visible();
     }
 
-    pub fn get_render_info(&self, viewport_height: usize) -> CardListRenderInfo {
+    pub fn get_render_info(&self, page_size: usize) -> CardListRenderInfo {
         let mut list = self.list.clone();
-        list.set_viewport_height(viewport_height);
+        list.set_page_size(page_size);
         let render_info = list.get_render_info();
 
         CardListRenderInfo {
@@ -137,27 +134,24 @@ impl CardList {
         }
     }
 
-    pub fn jump_to_bottom(&mut self, viewport_height: usize) {
+    pub fn jump_to_bottom(&mut self, page_size: usize) {
         if !self.cards.is_empty() {
             let last_idx = self.cards.len() - 1;
             self.list.set_selected_index(Some(last_idx));
-            self.ensure_selected_visible(viewport_height);
+            self.ensure_selected_visible(page_size);
         }
     }
 
-    pub fn jump_half_viewport_up(&mut self, viewport_height: usize) {
-        self.list.set_viewport_height(viewport_height);
+    pub fn jump_half_viewport_up(&mut self, page_size: usize) {
+        self.list.set_page_size(page_size);
         self.list.jump_half_page_up();
     }
 
-    pub fn jump_half_viewport_down(&mut self, viewport_height: usize) {
-        self.list.set_viewport_height(viewport_height);
+    pub fn jump_half_viewport_down(&mut self, page_size: usize) {
+        self.list.set_page_size(page_size);
         self.list.jump_half_page_down();
     }
 
-    pub fn set_column_boundaries(&mut self, boundaries: Vec<ColumnBoundary>) {
-        self.list.set_column_boundaries(boundaries);
-    }
 }
 
 /// Helper function to render scroll indicators based on render info
@@ -193,8 +187,10 @@ mod tests {
     use super::*;
 
     fn create_list_with_cards(count: usize) -> CardList {
-        let cards = (0..count).map(|_| Uuid::new_v4()).collect();
-        CardList::with_cards(CardListId::All, cards)
+        let mut list = CardList::with_cards(CardListId::All, (0..count).map(|_| Uuid::new_v4()).collect());
+        // Set default page size for testing (accounts for indicators at boundaries)
+        list.list.set_page_size(10);
+        list
     }
 
     #[test]
@@ -235,10 +231,11 @@ mod tests {
         let list = create_list_with_cards(10);
         let info = list.get_render_info(5);
 
-        assert_eq!(info.visible_card_indices, vec![0, 1, 2, 3]);
+        // viewport=5 is pure card space, so 5 cards shown
+        assert_eq!(info.visible_card_indices, vec![0, 1, 2, 3, 4]);
         assert!(!info.show_above_indicator);
         assert!(info.show_below_indicator);
-        assert_eq!(info.cards_below_count, 6);
+        assert_eq!(info.cards_below_count, 5);
     }
 
     #[test]
@@ -248,10 +245,11 @@ mod tests {
 
         let info = list.get_render_info(10);
 
+        // viewport=10, starting at 6: shows cards 6-15 (10 cards)
         assert!(info.show_above_indicator);
         assert_eq!(info.cards_above_count, 6);
-        assert!(info.show_below_indicator);
-        assert_eq!(info.cards_below_count, 2);
+        assert!(!info.show_below_indicator);
+        assert_eq!(info.cards_below_count, 0);
     }
 
     #[test]
@@ -261,13 +259,14 @@ mod tests {
 
         let info = list.get_render_info(10);
 
+        // With viewport=10 starting at 6, should see cards 6-15
         let last_visible = *info.visible_card_indices.last().unwrap();
-        assert_eq!(last_visible, 13);
-        assert_eq!(info.cards_below_count, 2);
+        assert_eq!(last_visible, 15);
+        assert_eq!(info.cards_below_count, 0);
 
         assert!(
-            info.show_below_indicator,
-            "Should show indicator for cards 14 and 15"
+            !info.show_below_indicator,
+            "Should not show indicator since we see all remaining cards"
         );
     }
 
@@ -278,6 +277,7 @@ mod tests {
 
         let info = list.get_render_info(10);
 
+        // At scroll 15, only card 15 is visible
         assert_eq!(info.visible_card_indices, vec![15]);
         assert!(info.show_above_indicator);
         assert!(!info.show_below_indicator);
@@ -291,11 +291,12 @@ mod tests {
 
         let info = list.get_render_info(10);
 
+        // viewport=10 is pure card space, so 10 cards shown
         assert!(info.show_above_indicator);
         assert!(info.show_below_indicator);
 
         let cards_shown = info.visible_card_indices.len();
-        assert_eq!(cards_shown, 8);
+        assert_eq!(cards_shown, 10);
     }
 
     #[test]
@@ -303,7 +304,7 @@ mod tests {
         let mut list = create_list_with_cards(20);
         list.set_selected_index(Some(5));
 
-        list.navigate_down(10);
+        list.navigate_down();
 
         assert_eq!(list.get_selected_index(), Some(6));
         assert_eq!(list.get_scroll_offset(), 0);
@@ -315,9 +316,11 @@ mod tests {
         list.set_selected_index(Some(8));
         list.set_scroll_offset(0);
 
-        list.navigate_down(10);
+        list.navigate_down();
 
-        assert_eq!(list.get_scroll_offset(), 2);
+        // With page_size=10, card 8 is visible at scroll 0
+        // Moving down goes to 9, which is still visible at scroll 0
+        assert_eq!(list.get_scroll_offset(), 0);
         assert_eq!(list.get_selected_index(), Some(9));
     }
 
@@ -327,7 +330,7 @@ mod tests {
         list.set_selected_index(Some(5));
         list.set_scroll_offset(0);
 
-        list.navigate_up(10);
+        list.navigate_up();
 
         assert_eq!(list.get_selected_index(), Some(4));
     }
@@ -338,7 +341,7 @@ mod tests {
         list.set_selected_index(Some(5));
         list.set_scroll_offset(5);
 
-        list.navigate_up(10);
+        list.navigate_up();
 
         assert_eq!(list.get_scroll_offset(), 4);
     }
@@ -368,7 +371,7 @@ mod tests {
             "Last card should have no 'below' indicator"
         );
 
-        list.navigate_down(48);
+        list.navigate_down();
 
         assert_eq!(
             list.get_selected_index(),
@@ -384,7 +387,7 @@ mod tests {
 
         for _ in 0..92 {
             let before_idx = list.get_selected_index();
-            list.navigate_down(48);
+            list.navigate_down();
             let after_idx = list.get_selected_index();
 
             if before_idx.is_some() && after_idx.is_some() {
@@ -416,7 +419,7 @@ mod tests {
 
         let has_below_before = info_before.show_below_indicator;
 
-        list.navigate_down(50);
+        list.navigate_down();
 
         let info_after = list.get_render_info(50);
         assert!(
@@ -445,7 +448,7 @@ mod tests {
 
         let mut iterations = 0;
         while list.get_selected_index() != Some(116) && iterations < 200 {
-            list.navigate_down(48);
+            list.navigate_down();
             iterations += 1;
         }
 
