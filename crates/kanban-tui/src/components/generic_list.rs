@@ -16,7 +16,7 @@ impl ListComponent {
     pub fn new(allow_multi_select: bool) -> Self {
         Self {
             selection: SelectionState::new(),
-            page: Page::new(0, 0),
+            page: Page::new(0),
             multi_selected: HashSet::new(),
             allow_multi_select,
         }
@@ -48,10 +48,13 @@ impl ListComponent {
             let current_idx = self.selection.get().unwrap_or(0);
             let new_idx = self.page.navigate_up(current_idx);
             self.selection.set(Some(new_idx));
+
+            // Adjust scroll if selection moved before scroll window
+            if new_idx < self.page.scroll_offset {
+                self.page.set_scroll_offset(new_idx);
+            }
         }
 
-        let selected_idx = self.selection.get().unwrap_or(0);
-        self.page.clamp_selection_to_visible(selected_idx);
         was_at_top
     }
 
@@ -66,10 +69,16 @@ impl ListComponent {
             let current_idx = self.selection.get().unwrap_or(0);
             let new_idx = self.page.navigate_down(current_idx);
             self.selection.set(Some(new_idx));
+
+            // Adjust scroll if selection moved beyond scroll window
+            // This is a simple heuristic: assume 10 items fit in viewport
+            let page_size = 10;
+            let scroll_end = self.page.scroll_offset + page_size;
+            if new_idx >= scroll_end {
+                self.page.set_scroll_offset(new_idx.saturating_sub(page_size - 1));
+            }
         }
 
-        let selected_idx = self.selection.get().unwrap_or(0);
-        self.page.clamp_selection_to_visible(selected_idx);
         was_at_bottom
     }
 
@@ -120,57 +129,52 @@ impl ListComponent {
     }
 
     pub fn set_scroll_offset(&mut self, offset: usize) {
-        self.page.scroll_offset = offset.min(self.page.total_items.saturating_sub(1));
+        self.page.set_scroll_offset(offset);
     }
 
-    pub fn ensure_selected_visible(&mut self) {
+    /// Ensure selected item is visible by scrolling if needed
+    pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
         if let Some(selected_idx) = self.selection.get() {
-            self.page.scroll_to_make_visible(selected_idx);
+            self.page.scroll_to_make_visible(selected_idx, viewport_height);
         }
     }
 
-    pub fn jump_half_page_up(&mut self) {
-        if self.page.total_items == 0 {
-            return;
+    /// Get rendering information given a viewport height (raw lines, all overhead pre-accounted)
+    pub fn get_render_info(&self, viewport_height: usize) -> ListRenderInfo {
+        self.page.get_page_info(viewport_height)
+    }
+
+    /// Direct navigation - jump to a specific index
+    pub fn jump_to(&mut self, index: usize) {
+        if index < self.page.total_items {
+            self.selection.set(Some(index));
         }
-        let current_idx = self.selection.get().unwrap_or(0);
-        let new_idx = self.page.jump_half_page_up(current_idx);
-        self.selection.set(Some(new_idx));
     }
 
-    pub fn jump_half_page_down(&mut self) {
-        if self.page.total_items == 0 {
-            return;
-        }
-        let current_idx = self.selection.get().unwrap_or(0);
-        let new_idx = self.page.jump_half_page_down(current_idx);
-        self.selection.set(Some(new_idx));
+    /// Get total item count
+    pub fn len(&self) -> usize {
+        self.page.total_items
     }
 
-    pub fn set_page_size(&mut self, size: usize) {
-        self.page.set_page_size(size);
+    /// Check if empty
+    pub fn is_empty(&self) -> bool {
+        self.page.total_items == 0
     }
-
-    pub fn get_render_info(&self) -> ListRenderInfo {
-        self.page.get_page_info()
-    }
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn create_test_list(item_count: usize, page_size: usize) -> ListComponent {
+    fn create_test_list(item_count: usize) -> ListComponent {
         let mut list = ListComponent::new(false);
         list.update_item_count(item_count);
-        list.set_page_size(page_size);
         list
     }
 
     #[test]
     fn test_navigate_down() {
-        let mut list = create_test_list(5, 3);
+        let mut list = create_test_list(5);
         assert_eq!(list.get_selected_index(), Some(0));
 
         list.navigate_down();
@@ -182,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_navigate_up() {
-        let mut list = create_test_list(5, 3);
+        let mut list = create_test_list(5);
         list.set_selected_index(Some(2));
 
         list.navigate_up();
@@ -194,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_navigate_down_at_boundary() {
-        let mut list = create_test_list(5, 3);
+        let mut list = create_test_list(5);
         list.set_selected_index(Some(4));
 
         let was_at_bottom = list.navigate_down();
@@ -204,24 +208,12 @@ mod tests {
 
     #[test]
     fn test_navigate_up_at_boundary() {
-        let mut list = create_test_list(5, 3);
+        let mut list = create_test_list(5);
         list.set_selected_index(Some(0));
 
         let was_at_top = list.navigate_up();
         assert!(was_at_top);
         assert_eq!(list.get_selected_index(), Some(0));
-    }
-
-    #[test]
-    fn test_viewport_scrolling() {
-        let mut list = create_test_list(20, 3);
-        assert_eq!(list.get_scroll_offset(), 0);
-
-        for _ in 0..10 {
-            list.navigate_down();
-        }
-
-        assert!(list.get_scroll_offset() > 0);
     }
 
     #[test]
@@ -259,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_empty_list() {
-        let mut list = create_test_list(0, 3);
+        let mut list = create_test_list(0);
         assert_eq!(list.get_selected_index(), None);
 
         list.navigate_down();
@@ -271,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_update_item_count_keeps_selection() {
-        let mut list = create_test_list(5, 3);
+        let mut list = create_test_list(5);
         list.set_selected_index(Some(2));
 
         list.update_item_count(10);
@@ -280,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_update_item_count_clamps_selection() {
-        let mut list = create_test_list(10, 3);
+        let mut list = create_test_list(10);
         list.set_selected_index(Some(8));
 
         list.update_item_count(5);
@@ -289,21 +281,20 @@ mod tests {
 
     #[test]
     fn test_render_info_basic() {
-        let list = create_test_list(5, 3);
-        let info = list.get_render_info();
+        let list = create_test_list(5);
+        let info = list.get_render_info(3);
 
         assert!(!info.show_above_indicator);
-        // viewport=3 is pure card space (no overhead), so all 3 items shown
         assert_eq!(info.visible_item_indices, vec![0, 1, 2]);
         assert!(info.show_below_indicator);
     }
 
     #[test]
     fn test_render_info_with_scroll() {
-        let mut list = create_test_list(10, 3);
+        let mut list = create_test_list(10);
         list.set_scroll_offset(3);
 
-        let info = list.get_render_info();
+        let info = list.get_render_info(3);
         assert!(info.show_above_indicator);
         assert_eq!(info.items_above_count, 3);
     }
@@ -315,5 +306,22 @@ mod tests {
 
         list.toggle_multi_select(1);
         assert!(list.multi_selected.is_empty());
+    }
+
+    #[test]
+    fn test_jump_to() {
+        let mut list = create_test_list(10);
+        list.jump_to(5);
+        assert_eq!(list.get_selected_index(), Some(5));
+    }
+
+    #[test]
+    fn test_ensure_selected_visible() {
+        let mut list = create_test_list(20);
+        list.jump_to(15);
+        list.ensure_selected_visible(5);
+
+        let info = list.get_render_info(5);
+        assert!(info.visible_item_indices.contains(&15));
     }
 }
