@@ -1,5 +1,5 @@
-use crate::selection::SelectionState;
 use crate::components::{Page, PageInfo};
+use crate::selection::SelectionState;
 use std::collections::HashSet;
 
 pub type ListRenderInfo = PageInfo;
@@ -127,7 +127,8 @@ impl ListComponent {
     /// Ensure selected item is visible by scrolling if needed
     pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
         if let Some(selected_idx) = self.selection.get() {
-            self.page.scroll_to_make_visible(selected_idx, viewport_height);
+            self.page
+                .scroll_to_make_visible(selected_idx, viewport_height);
         }
     }
 

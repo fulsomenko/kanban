@@ -57,7 +57,11 @@ impl Page {
         }
 
         // Special case: when scroll_offset == 1, render from index 0 (no items above)
-        let render_start = if self.scroll_offset == 1 { 0 } else { self.scroll_offset };
+        let render_start = if self.scroll_offset == 1 {
+            0
+        } else {
+            self.scroll_offset
+        };
 
         // Determine which items are visible
         let visible_indices: Vec<usize> = (0..viewport_height)

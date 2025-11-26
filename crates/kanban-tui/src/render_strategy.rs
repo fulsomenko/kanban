@@ -37,7 +37,6 @@ fn count_headers_in_viewport(
         .count()
 }
 
-
 pub struct SinglePanelRenderer {
     show_column_headers: bool,
 }
@@ -107,7 +106,8 @@ impl RenderStrategy for SinglePanelRenderer {
                             if task_list.get_scroll_offset() > 0 {
                                 indicator_overhead += 1; // Will show "above" indicator
                             }
-                            if task_list.get_scroll_offset() + raw_viewport_height < task_list.len() {
+                            if task_list.get_scroll_offset() + raw_viewport_height < task_list.len()
+                            {
                                 indicator_overhead += 1; // Will show "below" indicator
                             }
 

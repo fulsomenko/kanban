@@ -52,7 +52,11 @@ impl CardList {
                 }
             }
         } else if !self.cards.is_empty() && self.list.get_selected_index().is_some() {
-            let clamped_idx = self.list.get_selected_index().unwrap().min(self.cards.len() - 1);
+            let clamped_idx = self
+                .list
+                .get_selected_index()
+                .unwrap()
+                .min(self.cards.len() - 1);
             self.list.set_selected_index(Some(clamped_idx));
         }
     }
@@ -142,7 +146,6 @@ impl CardList {
     pub fn jump_to(&mut self, index: usize) {
         self.list.jump_to(index);
     }
-
 }
 
 /// Helper function to render scroll indicators based on render info
@@ -178,7 +181,10 @@ mod tests {
     use super::*;
 
     fn create_list_with_cards(count: usize) -> CardList {
-        CardList::with_cards(CardListId::All, (0..count).map(|_| Uuid::new_v4()).collect())
+        CardList::with_cards(
+            CardListId::All,
+            (0..count).map(|_| Uuid::new_v4()).collect(),
+        )
     }
 
     #[test]

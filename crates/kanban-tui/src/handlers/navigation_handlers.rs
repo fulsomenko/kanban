@@ -126,11 +126,7 @@ fn compute_page_boundaries_with_headers(
         };
 
         // Count headers that will appear in this page's visible range
-        let headers_count = count_headers_in_viewport(
-            column_boundaries,
-            current_idx,
-            base_size,
-        );
+        let headers_count = count_headers_in_viewport(column_boundaries, current_idx, base_size);
 
         // Calculate actual page size after accounting for headers
         // (base_size already accounts for indicators)
@@ -187,7 +183,15 @@ fn calculate_jump_target_down(
     } else {
         // At bottom of last page, stay there
         current_index
-    }).min(pages.iter().map(|p| p.end).max().unwrap_or(0).saturating_sub(1))
+    })
+    .min(
+        pages
+            .iter()
+            .map(|p| p.end)
+            .max()
+            .unwrap_or(0)
+            .saturating_sub(1),
+    )
 }
 
 /// Calculate jump target for page-up navigation (Ctrl+U style)
