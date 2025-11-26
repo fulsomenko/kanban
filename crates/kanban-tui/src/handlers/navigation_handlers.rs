@@ -352,6 +352,7 @@ impl App {
                     if let Some(page_idx) = find_current_page(&pages, current_idx) {
                         let target = calculate_jump_target_up(&pages, current_idx, page_idx);
                         list.jump_to(target);
+                        list.ensure_selected_visible(self.viewport_height);
                     }
                 }
             }
@@ -377,6 +378,7 @@ impl App {
                     if let Some(page_idx) = find_current_page(&pages, current_idx) {
                         let target = calculate_jump_target_down(&pages, current_idx, page_idx);
                         list.jump_to(target);
+                        list.ensure_selected_visible(self.viewport_height);
                     }
                 }
             }
