@@ -361,13 +361,19 @@ impl RenderStrategy for MultiPanelRenderer {
                     } else {
                         let raw_viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
 
-                        // Use worst-case estimate: always assume both indicators present
-                        // This ensures consistency with navigation handlers and other renderers
-                        const INDICATOR_OVERHEAD: usize = 2;
+                        // Calculate indicator overhead based on actual position
+                        // This matches the logic in SinglePanelRenderer and get_adjusted_viewport_height
+                        let mut indicator_overhead = 0;
+                        if task_list.get_scroll_offset() > 0 {
+                            indicator_overhead += 1; // Will show "above" indicator
+                        }
+                        if task_list.get_scroll_offset() + raw_viewport_height < task_list.len() {
+                            indicator_overhead += 1; // Will show "below" indicator
+                        }
 
                         // Adjust viewport height to account for indicators
                         let adjusted_viewport_height =
-                            raw_viewport_height.saturating_sub(INDICATOR_OVERHEAD);
+                            raw_viewport_height.saturating_sub(indicator_overhead);
 
                         let render_info = task_list.get_render_info(adjusted_viewport_height);
 
