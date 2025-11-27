@@ -317,4 +317,81 @@ mod tests {
         let info = list.get_render_info(5);
         assert!(info.visible_item_indices.contains(&15));
     }
+
+    #[test]
+    fn test_navigation_with_adjusted_viewport_prevents_scrolling_past_indicator() {
+        // Scenario: 20 cards, raw viewport 10 lines
+        // When indicators appear, adjusted viewport is 8-9 lines (accounting for indicators)
+        let mut list = create_test_list(20);
+
+        // Start at card 0
+        assert_eq!(list.get_selected_index(), Some(0));
+
+        // Simulate navigation down to card 10 with adjusted viewport of 8
+        // (raw viewport 10 minus 2 for both indicators)
+        for _ in 0..10 {
+            list.navigate_down();
+        }
+
+        assert_eq!(list.get_selected_index(), Some(10));
+
+        // Ensure selected visible with adjusted viewport of 8
+        // This should scroll the list so card 10 is visible
+        let adjusted_viewport = 8;
+        list.ensure_selected_visible(adjusted_viewport);
+
+        // Verify card 10 is visible with the adjusted viewport
+        let info = list.get_render_info(adjusted_viewport);
+        assert!(
+            info.visible_item_indices.contains(&10),
+            "Card 10 should be visible. Visible indices: {:?}, scroll_offset: {}",
+            info.visible_item_indices,
+            list.get_scroll_offset()
+        );
+
+        // Verify the selection is placed correctly
+        // The scroll should place it roughly in the middle or bottom of visible area
+        let scroll_offset = list.get_scroll_offset();
+        let scroll_end = scroll_offset + adjusted_viewport;
+        assert!(
+            scroll_offset <= 10 && 10 < scroll_end,
+            "Card 10 should be within the viewport range [{}, {})",
+            scroll_offset,
+            scroll_end
+        );
+    }
+
+    #[test]
+    fn test_navigation_down_then_up_with_adjusted_viewport() {
+        // Test the full cycle: navigate down, then navigate up
+        let mut list = create_test_list(20);
+
+        // Navigate down to card 5
+        for _ in 0..5 {
+            list.navigate_down();
+        }
+        assert_eq!(list.get_selected_index(), Some(5));
+
+        // Ensure visible with adjusted viewport (accounts for indicators)
+        let adjusted_viewport = 8;
+        list.ensure_selected_visible(adjusted_viewport);
+
+        // Verify it's visible
+        let info = list.get_render_info(adjusted_viewport);
+        assert!(info.visible_item_indices.contains(&5));
+
+        // Navigate up back to card 0
+        for _ in 0..5 {
+            list.navigate_up();
+        }
+        assert_eq!(list.get_selected_index(), Some(0));
+
+        // Ensure visible again with adjusted viewport
+        list.ensure_selected_visible(adjusted_viewport);
+
+        // Verify card 0 is visible and not scrolled past indicator
+        let info = list.get_render_info(adjusted_viewport);
+        assert!(info.visible_item_indices.contains(&0));
+        assert_eq!(list.get_scroll_offset(), 0, "Should be at top of list");
+    }
 }

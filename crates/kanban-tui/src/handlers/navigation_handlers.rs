@@ -341,9 +341,18 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                // First, navigate to change selection
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     list.navigate_down();
-                    list.ensure_selected_visible(self.viewport_height);
+                }
+
+                // Recalculate adjusted viewport AFTER navigation
+                // This accounts for potential scroll changes that affect indicator overhead
+                let adjusted_viewport = self.get_adjusted_viewport_height();
+
+                // Now ensure the new selection is visible with the correct viewport
+                let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.ensure_selected_visible(adjusted_viewport);
                     list.get_selected_index() == Some(list.len().saturating_sub(1))
                 } else {
                     false
@@ -363,9 +372,18 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                // First, navigate to change selection
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     list.navigate_up();
-                    list.ensure_selected_visible(self.viewport_height);
+                }
+
+                // Recalculate adjusted viewport AFTER navigation
+                // This accounts for potential scroll changes that affect indicator overhead
+                let adjusted_viewport = self.get_adjusted_viewport_height();
+
+                // Now ensure the new selection is visible with the correct viewport
+                let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.ensure_selected_visible(adjusted_viewport);
                     list.get_selected_index() == Some(0)
                 } else {
                     false
