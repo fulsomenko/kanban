@@ -346,7 +346,7 @@ impl App {
 
                 // Simple smooth navigation: move by 1 with viewport spanning pages
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    let hit_bottom = list.navigate_down();
+                    let _ = list.navigate_down();
 
                     // Smooth scroll with initial viewport
                     list.ensure_selected_visible(initial_adjusted_viewport);
@@ -361,13 +361,11 @@ impl App {
                 }
 
                 // Check for bottom navigation after all scrolling is done
-                let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list() {
-                    list.get_selected_index() == Some(list.len().saturating_sub(1))
-                } else {
-                    false
-                };
-                if hit_bottom {
-                    self.view_strategy.navigate_right(false);
+                if let Some(list) = self.view_strategy.get_active_task_list() {
+                    let at_bottom = list.get_selected_index() == Some(list.len().saturating_sub(1));
+                    if at_bottom {
+                        self.view_strategy.navigate_right(false);
+                    }
                 }
             }
         }
@@ -385,7 +383,7 @@ impl App {
 
                 // Simple smooth navigation: move by 1 with viewport spanning pages
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    let hit_top = list.navigate_up();
+                    let _ = list.navigate_up();
 
                     // Smooth scroll with initial viewport
                     list.ensure_selected_visible(initial_adjusted_viewport);
@@ -400,13 +398,11 @@ impl App {
                 }
 
                 // Check for top navigation after all scrolling is done
-                let hit_top = if let Some(list) = self.view_strategy.get_active_task_list() {
-                    list.get_selected_index() == Some(0)
-                } else {
-                    false
-                };
-                if hit_top {
-                    self.view_strategy.navigate_left(true);
+                if let Some(list) = self.view_strategy.get_active_task_list() {
+                    let at_top = list.get_selected_index() == Some(0);
+                    if at_top {
+                        self.view_strategy.navigate_left(true);
+                    }
                 }
             }
         }
