@@ -94,16 +94,27 @@ impl RenderStrategy for SinglePanelRenderer {
                         } else {
                             let raw_viewport_height = area.height.saturating_sub(2) as usize;
 
-                            // Estimate how many column headers will appear in the viewport
+                            // Count column headers that will appear in the viewport
                             let estimated_header_count = count_headers_in_viewport(
                                 &column_boundaries,
                                 task_list.get_scroll_offset(),
                                 raw_viewport_height,
                             );
 
-                            // Adjust viewport height to account for headers
-                            let adjusted_viewport_height =
-                                raw_viewport_height.saturating_sub(estimated_header_count);
+                            // Calculate indicator overhead based on actual position
+                            let mut indicator_overhead = 0;
+                            if task_list.get_scroll_offset() > 0 {
+                                indicator_overhead += 1; // Will show "above" indicator
+                            }
+                            if task_list.get_scroll_offset() + raw_viewport_height < task_list.len()
+                            {
+                                indicator_overhead += 1; // Will show "below" indicator
+                            }
+
+                            // Adjust viewport height to account for headers and indicators
+                            let adjusted_viewport_height = raw_viewport_height
+                                .saturating_sub(estimated_header_count)
+                                .saturating_sub(indicator_overhead);
 
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
@@ -211,8 +222,22 @@ impl RenderStrategy for SinglePanelRenderer {
                         };
                         lines.push(Line::from(Span::styled(message, label_text())));
                     } else {
-                        let viewport_height = area.height.saturating_sub(2) as usize;
-                        let render_info = task_list.get_render_info(viewport_height);
+                        let raw_viewport_height = area.height.saturating_sub(2) as usize;
+
+                        // Calculate indicator overhead based on actual position
+                        let mut indicator_overhead = 0;
+                        if task_list.get_scroll_offset() > 0 {
+                            indicator_overhead += 1; // Will show "above" indicator
+                        }
+                        if task_list.get_scroll_offset() + raw_viewport_height < task_list.len() {
+                            indicator_overhead += 1; // Will show "below" indicator
+                        }
+
+                        // Adjust viewport height to account for indicators
+                        let adjusted_viewport_height =
+                            raw_viewport_height.saturating_sub(indicator_overhead);
+
+                        let render_info = task_list.get_render_info(adjusted_viewport_height);
 
                         if render_info.show_above_indicator {
                             let count = render_info.cards_above_count;
@@ -334,8 +359,23 @@ impl RenderStrategy for MultiPanelRenderer {
                     if task_list.is_empty() {
                         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
                     } else {
-                        let viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
-                        let render_info = task_list.get_render_info(viewport_height);
+                        let raw_viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
+
+                        // Calculate indicator overhead based on actual position
+                        // This matches the logic in SinglePanelRenderer and get_adjusted_viewport_height
+                        let mut indicator_overhead = 0;
+                        if task_list.get_scroll_offset() > 0 {
+                            indicator_overhead += 1; // Will show "above" indicator
+                        }
+                        if task_list.get_scroll_offset() + raw_viewport_height < task_list.len() {
+                            indicator_overhead += 1; // Will show "below" indicator
+                        }
+
+                        // Adjust viewport height to account for indicators
+                        let adjusted_viewport_height =
+                            raw_viewport_height.saturating_sub(indicator_overhead);
+
+                        let render_info = task_list.get_render_info(adjusted_viewport_height);
 
                         if render_info.show_above_indicator {
                             let count = render_info.cards_above_count;
