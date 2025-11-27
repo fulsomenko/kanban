@@ -44,6 +44,16 @@ impl SelectionState {
             self.selected_index = Some(0);
         }
     }
+
+    pub fn jump_to_first(&mut self) {
+        self.selected_index = Some(0);
+    }
+
+    pub fn jump_to_last(&mut self, len: usize) {
+        if len > 0 {
+            self.selected_index = Some(len - 1);
+        }
+    }
 }
 
 impl Default for SelectionState {
