@@ -341,23 +341,31 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                // First, navigate to change selection
+                // Get initial adjusted viewport before mutable borrow
+                let initial_adjusted_viewport = self.get_adjusted_viewport_height();
+
+                // Simple smooth navigation: move by 1 with viewport spanning pages
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_down();
+                    let hit_bottom = list.navigate_down();
+
+                    // Smooth scroll with initial viewport
+                    list.ensure_selected_visible(initial_adjusted_viewport);
                 }
 
-                // Recalculate adjusted viewport AFTER navigation
-                // This accounts for potential scroll changes that affect indicator overhead
-                let adjusted_viewport = self.get_adjusted_viewport_height();
+                // Recalculate viewport after scroll may have changed indicators/headers
+                let final_adjusted_viewport = self.get_adjusted_viewport_height();
+                if final_adjusted_viewport != initial_adjusted_viewport {
+                    if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                        list.ensure_selected_visible(final_adjusted_viewport);
+                    }
+                }
 
-                // Now ensure the new selection is visible with the correct viewport
-                let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.ensure_selected_visible(adjusted_viewport);
+                // Check for bottom navigation after all scrolling is done
+                let hit_bottom = if let Some(list) = self.view_strategy.get_active_task_list() {
                     list.get_selected_index() == Some(list.len().saturating_sub(1))
                 } else {
                     false
                 };
-
                 if hit_bottom {
                     self.view_strategy.navigate_right(false);
                 }
@@ -372,23 +380,31 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
-                // First, navigate to change selection
+                // Get initial adjusted viewport before mutable borrow
+                let initial_adjusted_viewport = self.get_adjusted_viewport_height();
+
+                // Simple smooth navigation: move by 1 with viewport spanning pages
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.navigate_up();
+                    let hit_top = list.navigate_up();
+
+                    // Smooth scroll with initial viewport
+                    list.ensure_selected_visible(initial_adjusted_viewport);
                 }
 
-                // Recalculate adjusted viewport AFTER navigation
-                // This accounts for potential scroll changes that affect indicator overhead
-                let adjusted_viewport = self.get_adjusted_viewport_height();
+                // Recalculate viewport after scroll may have changed indicators/headers
+                let final_adjusted_viewport = self.get_adjusted_viewport_height();
+                if final_adjusted_viewport != initial_adjusted_viewport {
+                    if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                        list.ensure_selected_visible(final_adjusted_viewport);
+                    }
+                }
 
-                // Now ensure the new selection is visible with the correct viewport
-                let hit_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    list.ensure_selected_visible(adjusted_viewport);
+                // Check for top navigation after all scrolling is done
+                let hit_top = if let Some(list) = self.view_strategy.get_active_task_list() {
                     list.get_selected_index() == Some(0)
                 } else {
                     false
                 };
-
                 if hit_top {
                     self.view_strategy.navigate_left(true);
                 }
