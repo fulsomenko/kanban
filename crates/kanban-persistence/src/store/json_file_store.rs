@@ -1,17 +1,19 @@
 use crate::traits::{PersistenceMetadata, PersistenceStore, StoreSnapshot, FormatVersion};
 use crate::store::atomic_writer::AtomicWriter;
 use crate::migration::Migrator;
+use crate::conflict::FileMetadata;
 use kanban_core::KanbanResult;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use uuid::Uuid;
 
 /// JSON file-based persistence store
 /// Implements the PersistenceStore trait for JSON file operations
-#[derive(Debug, Clone)]
 pub struct JsonFileStore {
     path: PathBuf,
     instance_id: Uuid,
+    last_known_metadata: Mutex<Option<FileMetadata>>,
 }
 
 /// Wrapper structure for the JSON file format v2
@@ -28,6 +30,7 @@ impl JsonFileStore {
         Self {
             path: path.as_ref().to_path_buf(),
             instance_id: Uuid::new_v4(),
+            last_known_metadata: Mutex::new(None),
         }
     }
 
@@ -37,6 +40,7 @@ impl JsonFileStore {
         Self {
             path: path.as_ref().to_path_buf(),
             instance_id,
+            last_known_metadata: Mutex::new(None),
         }
     }
 
@@ -49,6 +53,24 @@ impl JsonFileStore {
 #[async_trait::async_trait]
 impl PersistenceStore for JsonFileStore {
     async fn save(&self, mut snapshot: StoreSnapshot) -> KanbanResult<PersistenceMetadata> {
+        // Check for external file modifications before saving
+        if self.path.exists() {
+            let current_metadata = FileMetadata::from_file(&self.path)
+                .map_err(|e| kanban_core::KanbanError::Io(e))?;
+
+            // Compare with last known metadata
+            if let Ok(guard) = self.last_known_metadata.lock() {
+                if let Some(last_known) = *guard {
+                    if last_known != current_metadata {
+                        return Err(kanban_core::KanbanError::ConflictDetected {
+                            path: self.path.to_string_lossy().to_string(),
+                            source: None,
+                        });
+                    }
+                }
+            }
+        }
+
         // Update metadata with current instance and time
         snapshot.metadata.instance_id = self.instance_id;
         snapshot.metadata.saved_at = chrono::Utc::now();
@@ -68,6 +90,13 @@ impl PersistenceStore for JsonFileStore {
 
         // Write atomically to disk
         AtomicWriter::write_atomic(&self.path, &json_bytes).await?;
+
+        // Update last known metadata after successful write
+        if let Ok(mut guard) = self.last_known_metadata.lock() {
+            if let Ok(new_metadata) = FileMetadata::from_file(&self.path) {
+                *guard = Some(new_metadata);
+            }
+        }
 
         tracing::info!(
             "Saved {} bytes to {}",
@@ -113,6 +142,13 @@ impl PersistenceStore for JsonFileStore {
             data,
             metadata: envelope.metadata.clone(),
         };
+
+        // Track file metadata after successful load for conflict detection
+        if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
+            if let Ok(mut guard) = self.last_known_metadata.lock() {
+                *guard = Some(file_metadata);
+            }
+        }
 
         tracing::info!(
             "Loaded {} bytes from {}",
