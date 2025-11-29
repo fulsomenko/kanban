@@ -1,24 +1,15 @@
-pub mod commands;
 pub mod snapshot;
 
 use crate::app::App;
-use chrono::Utc;
 use kanban_core::KanbanResult;
-use kanban_persistence::{JsonFileStore, PersistenceMetadata, StoreSnapshot};
+use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_domain::commands::Command;
+use kanban_domain::commands::CommandContext;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 pub use snapshot::DataSnapshot;
-
-/// Trait for state mutations
-/// All state changes go through commands to enable proper persistence and history tracking
-pub trait Command: Send + Sync {
-    /// Execute this command, mutating the app state
-    fn execute(&self, app: &mut App) -> KanbanResult<()>;
-
-    /// Human-readable description of what this command does
-    fn description(&self) -> String;
-}
+pub use kanban_domain::commands;
 
 /// Manages state mutations and persistence
 /// Decouples business logic from persistence concerns
@@ -53,8 +44,17 @@ impl StateManager {
         let description = command.description();
         tracing::debug!("Executing: {}", description);
 
+        // Create context from app data
+        let mut context = CommandContext {
+            boards: &mut app.boards,
+            columns: &mut app.columns,
+            cards: &mut app.cards,
+            sprints: &mut app.sprints,
+            archived_cards: &mut app.archived_cards,
+        };
+
         // Execute business logic
-        command.execute(app)?;
+        command.execute(&mut context)?;
 
         // Mark dirty and queue command
         self.dirty = true;
@@ -77,13 +77,12 @@ impl StateManager {
 
     /// Save state to disk if dirty
     /// Called periodically from the event loop
-    pub async fn save_if_needed(&mut self, app: &App) -> KanbanResult<()> {
+    pub async fn save_if_needed(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
         if !self.dirty {
             return Ok(());
         }
 
         if let Some(ref store) = self.store {
-            let snapshot = DataSnapshot::from_app(app);
             let data = snapshot.to_json_bytes()?;
             let persistence_snapshot = StoreSnapshot {
                 data,
@@ -102,9 +101,9 @@ impl StateManager {
     }
 
     /// Force save immediately (for critical operations)
-    pub async fn save_now(&mut self, app: &App) -> KanbanResult<()> {
+    pub async fn save_now(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
         self.dirty = true;
-        self.save_if_needed(app).await
+        self.save_if_needed(snapshot).await
     }
 
     /// Check if state is dirty
@@ -139,7 +138,7 @@ mod tests {
 
         struct DummyCommand;
         impl Command for DummyCommand {
-            fn execute(&self, _app: &mut App) -> KanbanResult<()> {
+            fn execute(&self, _context: &mut CommandContext) -> KanbanResult<()> {
                 Ok(())
             }
 

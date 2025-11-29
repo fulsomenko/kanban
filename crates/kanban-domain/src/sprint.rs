@@ -137,4 +137,38 @@ impl Sprint {
             false
         }
     }
+
+    /// Update sprint with partial changes
+    pub fn update(&mut self, updates: SprintUpdate) {
+        if let Some(name_index) = updates.name_index {
+            self.name_index = name_index;
+        }
+        if let Some(prefix) = updates.prefix {
+            self.prefix = prefix;
+        }
+        if let Some(card_prefix) = updates.card_prefix {
+            self.card_prefix = card_prefix;
+        }
+        if let Some(status) = updates.status {
+            self.status = status;
+        }
+        if let Some(start_date) = updates.start_date {
+            self.start_date = start_date;
+        }
+        if let Some(end_date) = updates.end_date {
+            self.end_date = end_date;
+        }
+        self.updated_at = Utc::now();
+    }
+}
+
+/// Partial update struct for Sprint
+#[derive(Debug, Clone, Default)]
+pub struct SprintUpdate {
+    pub name_index: Option<Option<usize>>,
+    pub prefix: Option<Option<String>>,
+    pub card_prefix: Option<Option<String>>,
+    pub status: Option<SprintStatus>,
+    pub start_date: Option<Option<DateTime<Utc>>>,
+    pub end_date: Option<Option<DateTime<Utc>>>,
 }

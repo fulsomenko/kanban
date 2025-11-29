@@ -13,6 +13,7 @@ categories = ["command-line-utilities"]
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.1" }
 kanban-domain = { path = "../kanban-domain", version = "^0.1" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.1" }
 ratatui.workspace = true
 crossterm.workspace = true
 anyhow.workspace = true

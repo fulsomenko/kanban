@@ -10,6 +10,7 @@ use crate::{
     search::SearchState,
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
+    state::StateManager,
     ui,
     view_strategy::{UnifiedViewStrategy, ViewRefreshContext, ViewStrategy},
 };
@@ -62,6 +63,7 @@ pub struct App {
     pub import_files: Vec<String>,
     pub import_selection: SelectionState,
     pub save_file: Option<String>,
+    pub state_manager: StateManager,
     pub app_config: AppConfig,
     pub sort_field_selection: SelectionState,
     pub current_sort_field: Option<SortField>,
@@ -158,6 +160,7 @@ pub enum AppMode {
 impl App {
     pub fn new(save_file: Option<String>) -> Self {
         let app_config = AppConfig::load();
+        let state_manager = StateManager::new(save_file.clone());
         let mut app = Self {
             should_quit: false,
             mode: AppMode::Normal,
@@ -182,6 +185,7 @@ impl App {
             import_files: Vec::new(),
             import_selection: SelectionState::new(),
             save_file: save_file.clone(),
+            state_manager,
             app_config,
             sort_field_selection: SelectionState::new(),
             current_sort_field: None,
@@ -1276,6 +1280,12 @@ impl App {
                         Event::Tick => {
                             self.handle_animation_tick();
 
+                            // Progressive saving on tick
+                            let snapshot = crate::state::DataSnapshot::from_app(self);
+                            if let Err(e) = self.state_manager.save_if_needed(&snapshot).await {
+                                tracing::error!("Failed to save state: {}", e);
+                            }
+
                             // Check if help menu pending action should execute
                             if let Some((start_time, action)) = &self.help_pending_action {
                                 if start_time.elapsed().as_millis() >= 100 {
@@ -1305,8 +1315,10 @@ impl App {
             }
         }
 
-        if let Err(e) = self.auto_save() {
-            tracing::error!("Failed to auto-save: {}", e);
+        // Final save on shutdown
+        let snapshot = crate::state::DataSnapshot::from_app(self);
+        if let Err(e) = self.state_manager.save_now(&snapshot).await {
+            tracing::error!("Failed to save on shutdown: {}", e);
         }
 
         restore_terminal(&mut terminal)?;

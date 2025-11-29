@@ -340,6 +340,48 @@ impl Board {
         let next_number = max_number + 1;
         self.initialize_prefix_counter(prefix, next_number);
     }
+
+    /// Update board with partial changes
+    pub fn update(&mut self, updates: BoardUpdate) {
+        if let Some(name) = updates.name {
+            self.name = name;
+        }
+        if let Some(description) = updates.description {
+            self.description = description;
+        }
+        if let Some(sprint_prefix) = updates.sprint_prefix {
+            self.sprint_prefix = sprint_prefix;
+        }
+        if let Some(card_prefix) = updates.card_prefix {
+            self.card_prefix = card_prefix;
+        }
+        if let Some(task_sort_field) = updates.task_sort_field {
+            self.task_sort_field = task_sort_field;
+        }
+        if let Some(task_sort_order) = updates.task_sort_order {
+            self.task_sort_order = task_sort_order;
+        }
+        if let Some(sprint_duration_days) = updates.sprint_duration_days {
+            self.sprint_duration_days = sprint_duration_days;
+        }
+        if let Some(task_list_view) = updates.task_list_view {
+            self.task_list_view = task_list_view;
+        }
+        self.updated_at = Utc::now();
+    }
+}
+
+/// Partial update struct for Board
+#[derive(Debug, Clone, Default)]
+pub struct BoardUpdate {
+    pub name: Option<String>,
+    pub description: Option<Option<String>>,
+    pub sprint_prefix: Option<Option<String>>,
+    pub card_prefix: Option<Option<String>>,
+    pub task_sort_field: Option<SortField>,
+    pub task_sort_order: Option<SortOrder>,
+    pub sprint_duration_days: Option<Option<u32>>,
+    pub task_list_view: Option<TaskListView>,
 }
 
 #[cfg(test)]

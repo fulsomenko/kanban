@@ -228,6 +228,60 @@ impl Card {
     pub fn get_sprint_history(&self) -> &[SprintLog] {
         &self.sprint_logs
     }
+
+    /// Update card with partial changes
+    pub fn update(&mut self, updates: CardUpdate) {
+        if let Some(title) = updates.title {
+            self.title = title;
+        }
+        if let Some(description) = updates.description {
+            self.description = description;
+        }
+        if let Some(priority) = updates.priority {
+            self.priority = priority;
+        }
+        if let Some(status) = updates.status {
+            self.update_status(status);
+        }
+        if let Some(position) = updates.position {
+            self.position = position;
+        }
+        if let Some(column_id) = updates.column_id {
+            self.column_id = column_id;
+        }
+        if let Some(due_date) = updates.due_date {
+            self.due_date = due_date;
+        }
+        if let Some(points) = updates.points {
+            self.points = points;
+        }
+        if let Some(sprint_id) = updates.sprint_id {
+            self.sprint_id = sprint_id;
+        }
+        if let Some(assigned_prefix) = updates.assigned_prefix {
+            self.assigned_prefix = assigned_prefix;
+        }
+        if let Some(card_prefix) = updates.card_prefix {
+            self.card_prefix = card_prefix;
+        }
+        self.updated_at = Utc::now();
+    }
+}
+
+/// Partial update struct for Card
+#[derive(Debug, Clone, Default)]
+pub struct CardUpdate {
+    pub title: Option<String>,
+    pub description: Option<Option<String>>,
+    pub priority: Option<CardPriority>,
+    pub status: Option<CardStatus>,
+    pub position: Option<i32>,
+    pub column_id: Option<ColumnId>,
+    pub due_date: Option<Option<DateTime<Utc>>>,
+    pub points: Option<Option<u8>>,
+    pub sprint_id: Option<Option<Uuid>>,
+    pub assigned_prefix: Option<Option<String>>,
+    pub card_prefix: Option<Option<String>>,
 }
 
 #[cfg(test)]

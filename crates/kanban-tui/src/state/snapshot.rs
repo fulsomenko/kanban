@@ -37,13 +37,15 @@ impl DataSnapshot {
 
     /// Serialize snapshot to JSON bytes
     pub fn to_json_bytes(&self) -> KanbanResult<Vec<u8>> {
-        let json = serde_json::to_vec_pretty(self)?;
+        let json = serde_json::to_vec_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(json)
     }
 
     /// Deserialize snapshot from JSON bytes
     pub fn from_json_bytes(bytes: &[u8]) -> KanbanResult<Self> {
-        let snapshot = serde_json::from_slice(bytes)?;
+        let snapshot = serde_json::from_slice(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(snapshot)
     }
 }
