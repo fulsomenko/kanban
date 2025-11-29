@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/kanban-core",
     "crates/kanban-domain",
+    "crates/kanban-persistence",
     "crates/kanban-tui",
     "crates/kanban-cli",
 ]
@@ -48,6 +49,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Testing
 mockall = "0.13"
+
+# File watching and atomic operations
+notify = "6.1"
+tempfile = "3.8"
 
 [profile.release]
 opt-level = 3
