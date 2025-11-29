@@ -1,5 +1,6 @@
-use crate::traits::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use crate::traits::{PersistenceMetadata, PersistenceStore, StoreSnapshot, FormatVersion};
 use crate::store::atomic_writer::AtomicWriter;
+use crate::migration::Migrator;
 use kanban_core::KanbanResult;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -78,6 +79,19 @@ impl PersistenceStore for JsonFileStore {
     }
 
     async fn load(&self) -> KanbanResult<(StoreSnapshot, PersistenceMetadata)> {
+        // Detect current file version
+        let current_version = Migrator::detect_version(&self.path).await?;
+
+        // Migrate if necessary
+        if current_version == FormatVersion::V1 {
+            tracing::info!(
+                "Detected V1 format at {}. Starting migration to V2...",
+                self.path.display()
+            );
+            Migrator::migrate(FormatVersion::V1, FormatVersion::V2, &self.path).await?;
+            tracing::info!("Migration completed successfully");
+        }
+
         // Read file
         let file_bytes = AtomicWriter::read_all(&self.path).await?;
 
