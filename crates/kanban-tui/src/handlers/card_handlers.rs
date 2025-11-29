@@ -1,7 +1,8 @@
 use crate::app::{App, AppMode, CardField, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use kanban_domain::{ArchivedCard, Card, CardStatus, Column, SortOrder};
+use crate::state::commands::{CreateCard, UpdateCard};
+use kanban_domain::{CardUpdate, ArchivedCard, CardStatus, Column, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -345,109 +346,107 @@ impl App {
             let board_id = self.boards.get(idx).map(|b| b.id);
 
             if let Some(bid) = board_id {
-                if let Some(board) = self.boards.get_mut(idx) {
-                    let target_column_id = if let Some(focused_col_id) = focused_col_id {
-                        Some(focused_col_id)
-                    } else {
-                        self.columns
-                            .iter()
-                            .find(|col| col.board_id == bid)
-                            .map(|col| col.id)
-                    };
-
-                    let column = if let Some(col_id) = target_column_id {
-                        self.columns.iter().find(|col| col.id == col_id).cloned()
-                    } else {
-                        None
-                    };
-
-                    let column = match column {
-                        Some(col) => col,
-                        None => {
-                            let new_column = Column::new(bid, "Todo".to_string(), 0);
-                            self.columns.push(new_column.clone());
-                            new_column
-                        }
-                    };
-
-                    let position = self
-                        .cards
+                let target_column_id = if let Some(focused_col_id) = focused_col_id {
+                    Some(focused_col_id)
+                } else {
+                    self.columns
                         .iter()
-                        .filter(|c| c.column_id == column.id)
-                        .count() as i32;
-                    let effective_prefix = board
-                        .effective_card_prefix(self.app_config.effective_default_card_prefix())
-                        .to_string();
-                    let board_cards: Vec<_> = self
-                        .cards
-                        .iter()
-                        .filter(|c| {
-                            self.columns
-                                .iter()
-                                .any(|col| col.id == c.column_id && col.board_id == bid)
-                        })
-                        .collect();
-                    board.ensure_card_counter_initialized(&effective_prefix, &board_cards);
-                    let mut card = Card::new(
-                        board,
-                        column.id,
-                        self.input.as_str().to_string(),
-                        position,
-                        &effective_prefix,
-                    );
-                    let new_card_id = card.id;
-                    let column_name = column.name.clone();
+                        .find(|col| col.board_id == bid)
+                        .map(|col| col.id)
+                };
 
-                    let board_columns: Vec<_> = self
-                        .columns
-                        .iter()
-                        .filter(|col| col.board_id == bid)
-                        .collect();
+                let column = if let Some(col_id) = target_column_id {
+                    self.columns.iter().find(|col| col.id == col_id).cloned()
+                } else {
+                    None
+                };
 
-                    if board_columns.len() > 2 {
-                        let sorted_cols: Vec<_> = {
-                            let mut cols = board_columns.clone();
-                            cols.sort_by_key(|col| col.position);
-                            cols
-                        };
-                        if let Some(last_col) = sorted_cols.last() {
-                            if last_col.id == column.id {
-                                card.update_status(CardStatus::Done);
+                let column = match column {
+                    Some(col) => col,
+                    None => {
+                        let new_column = Column::new(bid, "Todo".to_string(), 0);
+                        self.columns.push(new_column.clone());
+                        new_column
+                    }
+                };
+
+                let position = self
+                    .cards
+                    .iter()
+                    .filter(|c| c.column_id == column.id)
+                    .count() as i32;
+
+                let column_name = column.name.clone();
+
+                // Execute CreateCard command via StateManager
+                let cmd = Box::new(CreateCard {
+                    board_id: bid,
+                    column_id: column.id,
+                    title: self.input.as_str().to_string(),
+                    position,
+                });
+
+                if let Err(e) = self.execute_command(cmd) {
+                    tracing::error!("Failed to create card: {}", e);
+                    return;
+                }
+
+                // After command execution, find the card to determine its status
+                let board_columns: Vec<_> = self
+                    .columns
+                    .iter()
+                    .filter(|col| col.board_id == bid)
+                    .collect();
+
+                if board_columns.len() > 2 {
+                    let sorted_cols: Vec<_> = {
+                        let mut cols = board_columns.clone();
+                        cols.sort_by_key(|col| col.position);
+                        cols
+                    };
+                    if let Some(last_col) = sorted_cols.last() {
+                        if last_col.id == column.id {
+                            // Find the newly created card and mark it as complete
+                            if let Some(card) = self.cards.iter().rev().find(|c| c.column_id == column.id) {
+                                let card_id = card.id;
+                                let update_cmd = Box::new(UpdateCard {
+                                    card_id,
+                                    updates: CardUpdate {
+                                        status: Some(CardStatus::Done),
+                                        ..Default::default()
+                                    },
+                                });
+                                if let Err(e) = self.execute_command(update_cmd) {
+                                    tracing::error!("Failed to update card status: {}", e);
+                                }
                                 tracing::info!(
-                                    "Creating card: {} (id: {}) in column: {} [marked as complete]",
-                                    card.title,
-                                    card.id,
-                                    column_name
-                                );
-                            } else {
-                                tracing::info!(
-                                    "Creating card: {} (id: {}) in column: {}",
-                                    card.title,
-                                    card.id,
+                                    "Creating card in column: {} [marked as complete]",
                                     column_name
                                 );
                             }
                         } else {
                             tracing::info!(
-                                "Creating card: {} (id: {}) in column: {}",
-                                card.title,
-                                card.id,
+                                "Creating card in column: {}",
                                 column_name
                             );
                         }
                     } else {
                         tracing::info!(
-                            "Creating card: {} (id: {}) in column: {}",
-                            card.title,
-                            card.id,
+                            "Creating card in column: {}",
                             column_name
                         );
                     }
+                } else {
+                    tracing::info!(
+                        "Creating card in column: {}",
+                        column_name
+                    );
+                }
 
-                    self.cards.push(card);
-
-                    self.refresh_view();
-                    self.select_card_by_id(new_card_id);
+                self.refresh_view();
+                // Select the most recently created card
+                if let Some(card) = self.cards.iter().rev().find(|c| c.column_id == column.id) {
+                    self.select_card_by_id(card.id);
                 }
             }
         }

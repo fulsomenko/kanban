@@ -1010,6 +1010,26 @@ impl App {
             .sum()
     }
 
+    /// Execute a command and track state changes for progressive saving
+    /// This helper method allows handlers to execute commands without borrow checker conflicts
+    pub fn execute_command(&mut self, command: Box<dyn crate::state::commands::Command>) -> KanbanResult<()> {
+        // We need to use unsafe to split the borrows for state_manager and the collections
+        // This is safe because we're not dropping anything or violating Rust's safety rules
+        unsafe {
+            let self_ptr = self as *mut Self;
+            let state_manager = &mut (*self_ptr).state_manager;
+
+            state_manager.execute_with_context(
+                &mut (*self_ptr).boards,
+                &mut (*self_ptr).columns,
+                &mut (*self_ptr).cards,
+                &mut (*self_ptr).sprints,
+                &mut (*self_ptr).archived_cards,
+                command,
+            )
+        }
+    }
+
     pub fn refresh_view(&mut self) {
         let board_idx = self.active_board_index.or(self.board_selection.get());
         if let Some(idx) = board_idx {

@@ -5,6 +5,7 @@ use kanban_core::KanbanResult;
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use kanban_domain::commands::Command;
 use kanban_domain::commands::CommandContext;
+use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -40,17 +41,26 @@ impl StateManager {
     }
 
     /// Execute a command and mark state as dirty
-    pub fn execute(&mut self, app: &mut App, command: Box<dyn Command>) -> KanbanResult<()> {
+    /// Takes individual mutable references to avoid borrow checker issues when called from App methods
+    pub fn execute_with_context(
+        &mut self,
+        boards: &mut Vec<Board>,
+        columns: &mut Vec<Column>,
+        cards: &mut Vec<Card>,
+        sprints: &mut Vec<Sprint>,
+        archived_cards: &mut Vec<ArchivedCard>,
+        command: Box<dyn Command>,
+    ) -> KanbanResult<()> {
         let description = command.description();
         tracing::debug!("Executing: {}", description);
 
-        // Create context from app data
+        // Create context from data
         let mut context = CommandContext {
-            boards: &mut app.boards,
-            columns: &mut app.columns,
-            cards: &mut app.cards,
-            sprints: &mut app.sprints,
-            archived_cards: &mut app.archived_cards,
+            boards,
+            columns,
+            cards,
+            sprints,
+            archived_cards,
         };
 
         // Execute business logic
@@ -61,6 +71,18 @@ impl StateManager {
         self.command_queue.push_back(description);
 
         Ok(())
+    }
+
+    /// Execute a command and mark state as dirty (app-based convenience method)
+    pub fn execute(&mut self, app: &mut App, command: Box<dyn Command>) -> KanbanResult<()> {
+        self.execute_with_context(
+            &mut app.boards,
+            &mut app.columns,
+            &mut app.cards,
+            &mut app.sprints,
+            &mut app.archived_cards,
+            command,
+        )
     }
 
     /// Execute multiple commands in a batch
