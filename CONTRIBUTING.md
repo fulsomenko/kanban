@@ -111,13 +111,14 @@ The codebase follows SOLID principles:
 crates/
 ├── kanban-core/        # Core traits, errors, result types
 ├── kanban-domain/      # Domain models (Board, Card, Column)
+├── kanban-persistence/ # JSON storage, versioning & migrations
 ├── kanban-tui/         # Terminal UI (ratatui + crossterm)
 └── kanban-cli/         # CLI entry point (clap)
 ```
 
 **Dependency Flow:**
 ```
-kanban-cli → kanban-tui → kanban-domain → kanban-core
+kanban-cli → kanban-tui → kanban-persistence → kanban-domain → kanban-core
 ```
 
 ### Adding New Features
@@ -143,6 +144,52 @@ kanban-cli → kanban-tui → kanban-domain → kanban-core
    - Add keyboard shortcuts
    - Update help text in footer
    - Handle dialog interactions
+
+### State Management & Persistence Architecture
+
+The application uses a **command pattern** for all state mutations, enabling progressive auto-save:
+
+**Command Pattern Flow:**
+1. **Event Handler** (kanban-tui): Processes keyboard input, collects data
+2. **Command** (kanban-domain): Encapsulates the mutation with parameters
+3. **StateManager** (kanban-tui): Executes command via CommandContext
+4. **CommandContext**: Applies mutation to data vectors
+5. **Dirty Flag**: StateManager marks state as dirty after execution
+6. **Progressive Save**: Auto-saves after 500ms debounce interval
+
+**Example Handler Pattern:**
+```rust
+pub fn handle_create_card_key(&mut self) {
+    // Collect immutable data before command execution
+    let (board_id, column_id) = { /* ... */ };
+
+    // Create command
+    let cmd = Box::new(CreateCard {
+        board_id,
+        column_id,
+        title: self.input.as_str().to_string(),
+        // ... other fields
+    });
+
+    // Execute (sets dirty flag automatically)
+    if let Err(e) = self.execute_command(cmd) {
+        tracing::error!("Failed to create card: {}", e);
+        return;
+    }
+}
+```
+
+**Persistence Features:**
+- **Progressive Auto-Save**: Changes saved after each operation (not just on exit)
+- **Debouncing**: 500ms minimum interval between disk writes to prevent excessive I/O
+- **Format Versioning**: Automatic V1→V2 migration on load with backup creation
+- **Multi-Instance Support**: Last-write-wins resolution for concurrent edits
+
+**When Adding Features:**
+1. **Define domain command** in `kanban-domain/src/commands/`
+2. **Implement Command trait** with execute() and description()
+3. **Update handler** in kanban-tui to use `self.execute_command()`
+4. **StateManager** handles dirty flag and persistence automatically
 
 ## Testing
 
