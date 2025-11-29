@@ -1,7 +1,25 @@
 use super::{Command, CommandContext};
-use crate::BoardUpdate;
+use crate::{BoardUpdate, Board};
 use kanban_core::KanbanResult;
 use uuid::Uuid;
+
+/// Create a new board
+pub struct CreateBoard {
+    pub name: String,
+    pub card_prefix: Option<String>,
+}
+
+impl Command for CreateBoard {
+    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        let board = Board::new(self.name.clone(), self.card_prefix.clone());
+        context.boards.push(board);
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        format!("Create board: '{}'", self.name)
+    }
+}
 
 /// Update board properties (name, description, prefixes, sort options, etc.)
 pub struct UpdateBoard {
