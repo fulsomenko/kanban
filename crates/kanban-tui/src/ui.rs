@@ -82,6 +82,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                     AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
                     AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
                     AppMode::FilterOptions => render_filter_options_popup(app, frame),
+                    AppMode::ConflictResolution => render_conflict_resolution_popup(app, frame),
                     _ => {}
                 }
             }
@@ -1489,4 +1490,45 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
 
     let content = Paragraph::new(lines);
     frame.render_widget(content, chunks[0]);
+}
+
+fn render_conflict_resolution_popup(_app: &App, frame: &mut Frame) {
+    let area = centered_rect(70, 40, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("File Conflict Detected")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let message = Paragraph::new("The file was modified by another instance.\nChoose how to resolve this conflict:")
+        .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(message, chunks[0]);
+
+    let options = vec![
+        Line::from(Span::styled("(O)verwrite", Style::default().fg(Color::Cyan))),
+        Line::from(Span::styled("  Keep your changes and overwrite the file", label_text())),
+        Line::from(""),
+        Line::from(Span::styled("(T)ake theirs", Style::default().fg(Color::Cyan))),
+        Line::from(Span::styled("  Discard your changes and reload the file", label_text())),
+    ];
+    let options_para = Paragraph::new(options);
+    frame.render_widget(options_para, chunks[1]);
+
+    let instructions = Paragraph::new("Press O or T to choose, ESC to retry later")
+        .style(label_text());
+    frame.render_widget(instructions, chunks[2]);
 }

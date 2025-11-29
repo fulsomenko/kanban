@@ -20,6 +20,7 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
 use kanban_domain::{ArchivedCard, Board, Card, Column, SortField, SortOrder, Sprint};
+use kanban_persistence::PersistenceStore;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
 use std::io;
@@ -154,6 +155,7 @@ pub enum AppMode {
     ConfirmSprintPrefixCollision,
     FilterOptions,
     ArchivedCardsView,
+    ConflictResolution,
     Help(Box<AppMode>),
 }
 
@@ -617,6 +619,7 @@ impl App {
             }
             AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
             AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
+            AppMode::ConflictResolution => self.handle_conflict_resolution_popup(key.code),
             AppMode::Help(_) => self.handle_help_mode(key.code),
         }
         should_restart_events
@@ -1300,10 +1303,56 @@ impl App {
                         Event::Tick => {
                             self.handle_animation_tick();
 
+                            // Handle pending conflict resolution actions
+                            if let Some(action) = self.pending_key.take() {
+                                match action {
+                                    'o' => {
+                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        if let Err(e) = self.state_manager.force_overwrite(&snapshot).await {
+                                            tracing::error!("Failed to force overwrite: {}", e);
+                                        }
+                                    }
+                                    't' => {
+                                        // Reload from disk - manually implement to avoid borrow checker issues
+                                        if let Some(ref store) = self.state_manager.store() {
+                                            match store.load().await {
+                                                Ok((snapshot, _metadata)) => {
+                                                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                                                        Ok(data) => {
+                                                            self.boards = data.boards;
+                                                            self.columns = data.columns;
+                                                            self.cards = data.cards;
+                                                            self.sprints = data.sprints;
+                                                            self.archived_cards = data.archived_cards;
+                                                            self.state_manager.clear_conflict();
+                                                            tracing::info!("Reloaded state from disk");
+                                                        }
+                                                        Err(e) => {
+                                                            tracing::error!("Failed to deserialize reloaded state: {}", e);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!("Failed to reload from disk: {}", e);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+
                             // Progressive saving on tick
                             let snapshot = crate::state::DataSnapshot::from_app(self);
-                            if let Err(e) = self.state_manager.save_if_needed(&snapshot).await {
-                                tracing::error!("Failed to save state: {}", e);
+                            match self.state_manager.save_if_needed(&snapshot).await {
+                                Ok(_) => {}
+                                Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                                    tracing::warn!("File conflict detected at {}", path);
+                                    self.mode = AppMode::ConflictResolution;
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to save state: {}", e);
+                                }
                             }
 
                             // Check if help menu pending action should execute
@@ -1337,8 +1386,18 @@ impl App {
 
         // Final save on shutdown
         let snapshot = crate::state::DataSnapshot::from_app(self);
-        if let Err(e) = self.state_manager.save_now(&snapshot).await {
-            tracing::error!("Failed to save on shutdown: {}", e);
+        match self.state_manager.save_now(&snapshot).await {
+            Ok(_) => {}
+            Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                restore_terminal(&mut terminal)?;
+                eprintln!("File conflict detected at {} during shutdown.", path);
+                eprintln!("Your changes were not saved to avoid overwriting external modifications.");
+                eprintln!("Please resolve the conflict and restart the application.");
+                return Ok(());
+            }
+            Err(e) => {
+                tracing::error!("Failed to save on shutdown: {}", e);
+            }
         }
 
         restore_terminal(&mut terminal)?;

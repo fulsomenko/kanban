@@ -69,6 +69,9 @@ impl KeybindingRegistry {
             }
             AppMode::FilterOptions => Box::new(FilterOptionsProvider),
             AppMode::ArchivedCardsView => Box::new(ArchivedCardsViewProvider),
+            AppMode::ConflictResolution => {
+                Box::new(DialogSelectionProvider::new("Resolve Conflict"))
+            }
             AppMode::Help(previous_mode) => {
                 Self::get_provider_for_mode(previous_mode, focus, card_focus, board_focus)
             }

@@ -320,4 +320,27 @@ impl App {
             _ => {}
         }
     }
+
+    pub fn handle_conflict_resolution_popup(&mut self, key_code: KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Char('o') | KeyCode::Char('O') => {
+                // Keep our changes - force overwrite
+                // Store the action to be processed in the event loop
+                self.pending_key = Some('o');
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                // Take their changes - reload from disk
+                self.pending_key = Some('t');
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Esc => {
+                // Retry later - just go back to normal mode
+                self.state_manager.clear_conflict();
+                self.mode = AppMode::Normal;
+            }
+            _ => {}
+        }
+    }
 }
