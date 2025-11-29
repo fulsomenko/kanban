@@ -240,6 +240,7 @@ impl App {
                 if let Err(e) = app.import_board_from_file(filename) {
                     tracing::error!("Failed to load file {}: {}", filename, e);
                     app.save_file = None;
+                    app.state_manager.clear_store();
                 }
             }
         }
@@ -1384,19 +1385,21 @@ impl App {
             }
         }
 
-        // Final save on shutdown
-        let snapshot = crate::state::DataSnapshot::from_app(self);
-        match self.state_manager.save_now(&snapshot).await {
-            Ok(_) => {}
-            Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
-                restore_terminal(&mut terminal)?;
-                eprintln!("File conflict detected at {} during shutdown.", path);
-                eprintln!("Your changes were not saved to avoid overwriting external modifications.");
-                eprintln!("Please resolve the conflict and restart the application.");
-                return Ok(());
-            }
-            Err(e) => {
-                tracing::error!("Failed to save on shutdown: {}", e);
+        // Final save on shutdown - only if save_file is still enabled
+        if self.save_file.is_some() {
+            let snapshot = crate::state::DataSnapshot::from_app(self);
+            match self.state_manager.save_now(&snapshot).await {
+                Ok(_) => {}
+                Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                    restore_terminal(&mut terminal)?;
+                    eprintln!("File conflict detected at {} during shutdown.", path);
+                    eprintln!("Your changes were not saved to avoid overwriting external modifications.");
+                    eprintln!("Please resolve the conflict and restart the application.");
+                    return Ok(());
+                }
+                Err(e) => {
+                    tracing::error!("Failed to save on shutdown: {}", e);
+                }
             }
         }
 

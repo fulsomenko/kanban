@@ -199,6 +199,11 @@ impl StateManager {
         self.conflict_pending = false;
     }
 
+    /// Clear the store reference (called when import fails to prevent accidental saves)
+    pub fn clear_store(&mut self) {
+        self.store = None;
+    }
+
     /// Force overwrite external changes (user chose to keep their changes)
     pub async fn force_overwrite(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
         self.conflict_pending = false;
