@@ -24,6 +24,7 @@ pub struct StateManager {
     dirty: bool,
     instance_id: uuid::Uuid,
     last_save_time: Option<Instant>,
+    conflict_pending: bool,
 }
 
 impl StateManager {
@@ -43,6 +44,7 @@ impl StateManager {
             dirty: false,
             instance_id,
             last_save_time: None,
+            conflict_pending: false,
         }
     }
 
@@ -105,6 +107,7 @@ impl StateManager {
 
     /// Save state to disk if dirty and debounce interval has elapsed
     /// Called periodically from the event loop
+    /// Returns ConflictDetected error if external file modifications detected
     pub async fn save_if_needed(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
         if !self.dirty {
             return Ok(());
@@ -127,16 +130,27 @@ impl StateManager {
                 metadata: PersistenceMetadata::new(2, self.instance_id),
             };
 
-            store.save(persistence_snapshot).await?;
-            self.dirty = false;
-            self.last_save_time = Some(Instant::now());
+            match store.save(persistence_snapshot).await {
+                Ok(_) => {
+                    self.dirty = false;
+                    self.last_save_time = Some(Instant::now());
+                    self.conflict_pending = false;
 
-            let cmd_count = self.command_queue.len();
-            tracing::info!("Saved {} commands to disk", cmd_count);
-            self.command_queue.clear();
+                    let cmd_count = self.command_queue.len();
+                    tracing::info!("Saved {} commands to disk", cmd_count);
+                    self.command_queue.clear();
+                    Ok(())
+                }
+                Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                    self.conflict_pending = true;
+                    tracing::warn!("File conflict detected at {}", path);
+                    Err(kanban_core::KanbanError::ConflictDetected { path, source: None })
+                }
+                Err(e) => Err(e),
+            }
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     /// Force save immediately, bypassing debounce (for critical operations)
@@ -173,6 +187,64 @@ impl StateManager {
     /// Get the store reference
     pub fn store(&self) -> Option<&Arc<JsonFileStore>> {
         self.store.as_ref()
+    }
+
+    /// Check if there's a pending conflict
+    pub fn has_conflict(&self) -> bool {
+        self.conflict_pending
+    }
+
+    /// Clear the conflict flag (called after user resolves conflict)
+    pub fn clear_conflict(&mut self) {
+        self.conflict_pending = false;
+    }
+
+    /// Force overwrite external changes (user chose to keep their changes)
+    pub async fn force_overwrite(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
+        self.conflict_pending = false;
+
+        if let Some(ref store) = self.store {
+            let data = snapshot.to_json_bytes()?;
+            let persistence_snapshot = StoreSnapshot {
+                data,
+                metadata: PersistenceMetadata::new(2, self.instance_id),
+            };
+
+            store.save(persistence_snapshot).await?;
+            self.dirty = false;
+            self.last_save_time = Some(Instant::now());
+            self.command_queue.clear();
+
+            tracing::info!("Force overwrote external changes");
+        }
+
+        Ok(())
+    }
+
+    /// Reload from disk (user chose to discard their changes)
+    pub async fn reload_from_disk(&mut self, app: &mut App) -> KanbanResult<()> {
+        self.conflict_pending = false;
+
+        if let Some(ref store) = self.store {
+            let (snapshot, _metadata) = store.load().await?;
+
+            // Deserialize and rebuild app state from loaded data
+            let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
+                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+
+            app.boards = data.boards;
+            app.columns = data.columns;
+            app.cards = data.cards;
+            app.sprints = data.sprints;
+            app.archived_cards = data.archived_cards;
+
+            self.dirty = false;
+            self.command_queue.clear();
+
+            tracing::info!("Reloaded state from disk");
+        }
+
+        Ok(())
     }
 }
 
