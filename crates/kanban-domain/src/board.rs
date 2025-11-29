@@ -367,6 +367,9 @@ impl Board {
         if let Some(task_list_view) = updates.task_list_view {
             self.task_list_view = task_list_view;
         }
+        if let Some(active_sprint_id) = updates.active_sprint_id {
+            self.active_sprint_id = active_sprint_id;
+        }
         self.updated_at = Utc::now();
     }
 }
@@ -382,6 +385,7 @@ pub struct BoardUpdate {
     pub task_sort_order: Option<SortOrder>,
     pub sprint_duration_days: Option<Option<u32>>,
     pub task_list_view: Option<TaskListView>,
+    pub active_sprint_id: Option<Option<Uuid>>,
 }
 
 #[cfg(test)]
