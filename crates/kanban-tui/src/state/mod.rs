@@ -8,9 +8,13 @@ use kanban_domain::commands::CommandContext;
 use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 pub use snapshot::DataSnapshot;
 pub use kanban_domain::commands;
+
+/// Minimum time between saves to prevent excessive disk writes
+const MIN_SAVE_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Manages state mutations and persistence
 /// Decouples business logic from persistence concerns
@@ -19,6 +23,7 @@ pub struct StateManager {
     command_queue: VecDeque<String>,
     dirty: bool,
     instance_id: uuid::Uuid,
+    last_save_time: Option<Instant>,
 }
 
 impl StateManager {
@@ -37,6 +42,7 @@ impl StateManager {
             command_queue: VecDeque::new(),
             dirty: false,
             instance_id,
+            last_save_time: None,
         }
     }
 
@@ -97,10 +103,20 @@ impl StateManager {
         Ok(())
     }
 
-    /// Save state to disk if dirty
+    /// Save state to disk if dirty and debounce interval has elapsed
     /// Called periodically from the event loop
     pub async fn save_if_needed(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
         if !self.dirty {
+            return Ok(());
+        }
+
+        // Check debounce interval
+        let should_save = match self.last_save_time {
+            None => true,
+            Some(last_save) => last_save.elapsed() >= MIN_SAVE_INTERVAL,
+        };
+
+        if !should_save {
             return Ok(());
         }
 
@@ -113,6 +129,7 @@ impl StateManager {
 
             store.save(persistence_snapshot).await?;
             self.dirty = false;
+            self.last_save_time = Some(Instant::now());
 
             let cmd_count = self.command_queue.len();
             tracing::info!("Saved {} commands to disk", cmd_count);
@@ -122,10 +139,25 @@ impl StateManager {
         Ok(())
     }
 
-    /// Force save immediately (for critical operations)
+    /// Force save immediately, bypassing debounce (for critical operations)
     pub async fn save_now(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
-        self.dirty = true;
-        self.save_if_needed(snapshot).await
+        if let Some(ref store) = self.store {
+            let data = snapshot.to_json_bytes()?;
+            let persistence_snapshot = StoreSnapshot {
+                data,
+                metadata: PersistenceMetadata::new(2, self.instance_id),
+            };
+
+            store.save(persistence_snapshot).await?;
+            self.dirty = false;
+            self.last_save_time = Some(Instant::now());
+
+            let cmd_count = self.command_queue.len();
+            tracing::info!("Force saved {} commands to disk", cmd_count);
+            self.command_queue.clear();
+        }
+
+        Ok(())
     }
 
     /// Check if state is dirty
