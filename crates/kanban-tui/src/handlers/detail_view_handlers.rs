@@ -77,6 +77,8 @@ impl App {
                                 temp_file,
                             ) {
                                 tracing::error!("Failed to edit metadata: {}", e);
+                            } else {
+                                self.state_manager.mark_dirty();
                             }
                             should_restart = true;
                         }
@@ -175,6 +177,8 @@ impl App {
                                 temp_file,
                             ) {
                                 tracing::error!("Failed to edit board settings: {}", e);
+                            } else {
+                                self.state_manager.mark_dirty();
                             }
                             should_restart = true;
                         }
@@ -440,6 +444,7 @@ impl App {
                                     CardStatus::Done
                                 };
                                 card.update_status(new_status);
+                                self.state_manager.mark_dirty();
                                 tracing::info!("Card status updated to: {:?}", new_status);
                             }
                         }
@@ -547,6 +552,7 @@ impl App {
                                                         new_idx == columns.len() - 1;
 
                                                     card.column_id = new_col.id;
+                                                    self.state_manager.mark_dirty();
 
                                                     // Update status based on movement
                                                     if !is_right
