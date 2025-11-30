@@ -10,6 +10,25 @@ use tokio::sync::Mutex;
 /// File system watcher for detecting changes to the persistence file
 /// Uses the `notify` crate for cross-platform file watching
 /// Spawns the watcher in a tokio task to handle the Send requirement
+///
+/// # Future Directory Format Support
+///
+/// This implementation is currently designed for single-file JSON persistence
+/// but can be extended to support directory-based formats by:
+///
+/// 1. Adding a `WatchTarget` enum to distinguish between `File(path)` and `Directory(path, pattern)`
+/// 2. For directory watching, use `RecursiveMode::Recursive` instead of `NonRecursive`
+/// 3. Add glob pattern filtering to the event handler to match specific file extensions
+/// 4. Implement event debouncing (e.g., 100ms window) to batch rapid file changes
+/// 5. The OS-native backends (inotify, FSEvents, ReadDirectoryChangesW) efficiently
+///    handle watching directories with hundreds of files, incurring negligible overhead
+///
+/// Example future usage:
+/// ```ignore
+/// let watcher = FileWatcher::new();
+/// watcher.start_watching(WatchTarget::Directory("./data".into(), "*.json")).await?;
+/// // Efficiently watches all JSON files in directory and subdirectories
+/// ```
 pub struct FileWatcher {
     tx: broadcast::Sender<ChangeEvent>,
     task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
@@ -39,10 +58,15 @@ impl ChangeDetector for FileWatcher {
         let tx = self.tx.clone();
         let task_handle = self.task_handle.clone();
 
+        // Canonicalize to absolute path so it matches OS event paths
+        let canonical_path = tokio::fs::canonicalize(&path).await?;
+
         // Spawn file watching in a background task
         let handle = tokio::spawn(async move {
-            let parent = path.parent().expect("Invalid file path").to_path_buf();
-            let watch_path = path.clone();
+            let parent = canonical_path.parent()
+                .expect("Canonicalized path should always have parent")
+                .to_path_buf();
+            let watch_path = canonical_path;
 
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
