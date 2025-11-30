@@ -88,7 +88,9 @@ impl App {
                     {
                         let board_idx = self.active_board_index.or(self.board_selection.get());
                         board_idx.and_then(|board_idx| {
-                            self.boards.get(board_idx).map(|board| (sprint.id, board.id, sprint.formatted_name(board, "sprint")))
+                            self.boards.get(board_idx).map(|board| {
+                                (sprint.id, board.id, sprint.formatted_name(board, "sprint"))
+                            })
                         })
                     } else {
                         None
