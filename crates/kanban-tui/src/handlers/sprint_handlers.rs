@@ -87,15 +87,9 @@ impl App {
                         || sprint.status == SprintStatus::Planning
                     {
                         let board_idx = self.active_board_index.or(self.board_selection.get());
-                        if let Some(board_idx) = board_idx {
-                            if let Some(board) = self.boards.get(board_idx) {
-                                Some((sprint.id, board.id, sprint.formatted_name(board, "sprint")))
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
+                        board_idx.and_then(|board_idx| {
+                            self.boards.get(board_idx).map(|board| (sprint.id, board.id, sprint.formatted_name(board, "sprint")))
+                        })
                     } else {
                         None
                     }

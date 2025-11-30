@@ -1345,7 +1345,7 @@ impl App {
                                         }
                                         't' => {
                                             // Reload from disk
-                                            if let Some(ref store) = self.state_manager.store() {
+                                            if let Some(store) = self.state_manager.store() {
                                                 match store.load().await {
                                                     Ok((snapshot, _metadata)) => {
                                                         match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
@@ -1488,7 +1488,7 @@ impl App {
     }
 
     async fn auto_reload_from_external_change(&mut self) {
-        if let Some(ref store) = self.state_manager.store() {
+        if let Some(store) = self.state_manager.store() {
             match store.load().await {
                 Ok((snapshot, _metadata)) => {
                     match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {

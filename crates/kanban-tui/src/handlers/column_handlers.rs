@@ -193,11 +193,7 @@ impl App {
     pub fn create_column(&mut self) {
         if let Some(board_idx) = self.board_selection.get() {
             // Collect board_id before command execution
-            let board_id = if let Some(board) = self.boards.get(board_idx) {
-                Some(board.id)
-            } else {
-                None
-            };
+            let board_id = self.boards.get(board_idx).map(|board| board.id);
 
             if let Some(board_id) = board_id {
                 let column_name = self.input.as_str().trim().to_string();
