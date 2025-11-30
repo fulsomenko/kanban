@@ -1,5 +1,4 @@
 use crate::traits::{PersistenceMetadata, PersistenceStore, StoreSnapshot, FormatVersion};
-use crate::store::atomic_writer::AtomicWriter;
 use crate::migration::Migrator;
 use crate::conflict::FileMetadata;
 use kanban_core::KanbanResult;
@@ -88,8 +87,8 @@ impl PersistenceStore for JsonFileStore {
         let json_bytes = serde_json::to_vec_pretty(&envelope)
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
-        // Write atomically to disk
-        AtomicWriter::write_atomic(&self.path, &json_bytes).await?;
+        // Write directly to disk
+        tokio::fs::write(&self.path, &json_bytes).await?;
 
         // Update last known metadata after successful write
         if let Ok(mut guard) = self.last_known_metadata.lock() {
@@ -122,7 +121,7 @@ impl PersistenceStore for JsonFileStore {
         }
 
         // Read file
-        let file_bytes = AtomicWriter::read_all(&self.path).await?;
+        let file_bytes = tokio::fs::read(&self.path).await?;
 
         // Parse JSON envelope
         let envelope: JsonEnvelope = serde_json::from_slice(&file_bytes)
