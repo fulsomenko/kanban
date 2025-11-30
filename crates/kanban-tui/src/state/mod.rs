@@ -25,6 +25,7 @@ pub struct StateManager {
     instance_id: uuid::Uuid,
     last_save_time: Option<Instant>,
     conflict_pending: bool,
+    needs_refresh: bool,
 }
 
 impl StateManager {
@@ -45,6 +46,7 @@ impl StateManager {
             instance_id,
             last_save_time: None,
             conflict_pending: false,
+            needs_refresh: false,
         }
     }
 
@@ -76,6 +78,7 @@ impl StateManager {
 
         // Mark dirty and queue command
         self.dirty = true;
+        self.needs_refresh = true;
         self.command_queue.push_back(description);
 
         Ok(())
@@ -204,6 +207,22 @@ impl StateManager {
         self.store = None;
     }
 
+    /// Check if view needs to be refreshed
+    pub fn needs_refresh(&self) -> bool {
+        self.needs_refresh
+    }
+
+    /// Clear the refresh flag (called after view is refreshed)
+    pub fn clear_refresh(&mut self) {
+        self.needs_refresh = false;
+    }
+
+    /// Mark state as dirty and needing refresh (for direct mutations that bypass execute_command)
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+        self.needs_refresh = true;
+    }
+
     /// Force overwrite external changes (user chose to keep their changes)
     pub async fn force_overwrite(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
         self.conflict_pending = false;
@@ -233,15 +252,11 @@ impl StateManager {
         if let Some(ref store) = self.store {
             let (snapshot, _metadata) = store.load().await?;
 
-            // Deserialize and rebuild app state from loaded data
+            // Deserialize and apply loaded data to app
             let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
                 .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
-            app.boards = data.boards;
-            app.columns = data.columns;
-            app.cards = data.cards;
-            app.sprints = data.sprints;
-            app.archived_cards = data.archived_cards;
+            data.apply_to_app(app);
 
             self.dirty = false;
             self.command_queue.clear();
