@@ -72,6 +72,9 @@ impl KeybindingRegistry {
             AppMode::ConflictResolution => {
                 Box::new(DialogSelectionProvider::new("Resolve Conflict"))
             }
+            AppMode::ExternalChangeDetected => {
+                Box::new(DialogSelectionProvider::new("External Change"))
+            }
             AppMode::Help(previous_mode) => {
                 Self::get_provider_for_mode(previous_mode, focus, card_focus, board_focus)
             }
