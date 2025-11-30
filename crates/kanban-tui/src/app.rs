@@ -86,6 +86,8 @@ pub struct App {
     pub filter_dialog_state: Option<FilterDialogState>,
     pub viewport_height: usize,
     pub pending_key: Option<char>,
+    pub file_change_rx: Option<tokio::sync::broadcast::Receiver<kanban_persistence::ChangeEvent>>,
+    pub file_watcher: Option<kanban_persistence::FileWatcher>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -156,6 +158,7 @@ pub enum AppMode {
     FilterOptions,
     ArchivedCardsView,
     ConflictResolution,
+    ExternalChangeDetected,
     Help(Box<AppMode>),
 }
 
@@ -233,6 +236,8 @@ impl App {
             filter_dialog_state: None,
             viewport_height: 20,
             pending_key: None,
+            file_change_rx: None,
+            file_watcher: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -621,6 +626,7 @@ impl App {
             AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
             AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
             AppMode::ConflictResolution => self.handle_conflict_resolution_popup(key.code),
+            AppMode::ExternalChangeDetected => self.handle_external_change_detected_popup(key.code),
             AppMode::Help(_) => self.handle_help_mode(key.code),
         }
         should_restart_events
@@ -1190,6 +1196,7 @@ impl App {
                             BoardField::Name => {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
+                                    self.state_manager.mark_dirty();
                                 }
                             }
                             BoardField::Description => {
@@ -1199,6 +1206,7 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
+                                self.state_manager.mark_dirty();
                             }
                         }
                     }
@@ -1239,6 +1247,7 @@ impl App {
                             CardField::Title => {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
+                                    self.state_manager.mark_dirty();
                                 }
                             }
                             CardField::Description => {
@@ -1248,6 +1257,7 @@ impl App {
                                     Some(new_content)
                                 };
                                 card.update_description(desc);
+                                self.state_manager.mark_dirty();
                             }
                         }
                     }
@@ -1287,90 +1297,136 @@ impl App {
     pub async fn run(&mut self) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
 
+        // Initialize file watching if a save file is configured
+        if let Some(ref save_file) = self.save_file {
+            use kanban_persistence::ChangeDetector;
+            let watcher = kanban_persistence::FileWatcher::new();
+            let rx = watcher.subscribe();
+            self.file_change_rx = Some(rx);
+
+            let path = std::path::PathBuf::from(save_file);
+            if let Err(e) = watcher.start_watching(path).await {
+                tracing::warn!("Failed to start file watching: {}", e);
+            }
+
+            // Store the watcher to keep the background task alive
+            self.file_watcher = Some(watcher);
+        }
+
         while !self.should_quit {
             let mut events = EventHandler::new();
 
             loop {
                 terminal.draw(|frame| ui::render(self, frame))?;
 
-                if let Some(event) = events.next().await {
-                    match event {
-                        Event::Key(key) => {
-                            let should_restart = self.handle_key_event(key, &mut terminal, &events);
-                            if should_restart {
-                                break;
+                tokio::select! {
+                    Some(event) = events.next() => {
+                        match event {
+                            Event::Key(key) => {
+                                let should_restart = self.handle_key_event(key, &mut terminal, &events);
+                                if should_restart {
+                                    break;
+                                }
                             }
-                        }
-                        Event::Tick => {
-                            self.handle_animation_tick();
+                            Event::Tick => {
+                                self.handle_animation_tick();
 
-                            // Handle pending conflict resolution actions
-                            if let Some(action) = self.pending_key.take() {
-                                match action {
-                                    'o' => {
-                                        let snapshot = crate::state::DataSnapshot::from_app(self);
-                                        if let Err(e) = self.state_manager.force_overwrite(&snapshot).await {
-                                            tracing::error!("Failed to force overwrite: {}", e);
+                                // Handle pending conflict resolution actions
+                                if let Some(action) = self.pending_key.take() {
+                                    match action {
+                                        'o' => {
+                                            let snapshot = crate::state::DataSnapshot::from_app(self);
+                                            if let Err(e) = self.state_manager.force_overwrite(&snapshot).await {
+                                                tracing::error!("Failed to force overwrite: {}", e);
+                                            }
                                         }
-                                    }
-                                    't' => {
-                                        // Reload from disk - manually implement to avoid borrow checker issues
-                                        if let Some(ref store) = self.state_manager.store() {
-                                            match store.load().await {
-                                                Ok((snapshot, _metadata)) => {
-                                                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
-                                                        Ok(data) => {
-                                                            self.boards = data.boards;
-                                                            self.columns = data.columns;
-                                                            self.cards = data.cards;
-                                                            self.sprints = data.sprints;
-                                                            self.archived_cards = data.archived_cards;
-                                                            self.state_manager.clear_conflict();
-                                                            tracing::info!("Reloaded state from disk");
-                                                        }
-                                                        Err(e) => {
-                                                            tracing::error!("Failed to deserialize reloaded state: {}", e);
+                                        't' => {
+                                            // Reload from disk
+                                            if let Some(ref store) = self.state_manager.store() {
+                                                match store.load().await {
+                                                    Ok((snapshot, _metadata)) => {
+                                                        match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                                                            Ok(data) => {
+                                                                data.apply_to_app(self);
+                                                                self.state_manager.clear_conflict();
+                                                                self.refresh_view();
+                                                                tracing::info!("Reloaded state from disk");
+                                                            }
+                                                            Err(e) => {
+                                                                tracing::error!("Failed to deserialize reloaded state: {}", e);
+                                                            }
                                                         }
                                                     }
-                                                }
-                                                Err(e) => {
-                                                    tracing::error!("Failed to reload from disk: {}", e);
+                                                    Err(e) => {
+                                                        tracing::error!("Failed to reload from disk: {}", e);
+                                                    }
                                                 }
                                             }
                                         }
+                                        _ => {}
                                     }
-                                    _ => {}
                                 }
-                            }
 
-                            // Progressive saving on tick
-                            let snapshot = crate::state::DataSnapshot::from_app(self);
-                            match self.state_manager.save_if_needed(&snapshot).await {
-                                Ok(_) => {}
-                                Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
-                                    tracing::warn!("File conflict detected at {}", path);
-                                    self.mode = AppMode::ConflictResolution;
-                                }
-                                Err(e) => {
-                                    tracing::error!("Failed to save state: {}", e);
-                                }
-                            }
-
-                            // Check if help menu pending action should execute
-                            if let Some((start_time, action)) = &self.help_pending_action {
-                                if start_time.elapsed().as_millis() >= 100 {
-                                    if let AppMode::Help(previous_mode) = &self.mode {
-                                        self.mode = (**previous_mode).clone();
-                                    } else {
-                                        self.mode = AppMode::Normal;
+                                // Handle pending external change reload
+                                if let Some(action) = self.pending_key.take() {
+                                    if action == 'r' {
+                                        self.auto_reload_from_external_change().await;
                                     }
-                                    self.help_selection.clear();
+                                }
 
-                                    let action = *action;
-                                    self.help_pending_action = None;
-                                    self.execute_action(&action);
+                                // Progressive saving on tick
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                match self.state_manager.save_if_needed(&snapshot).await {
+                                    Ok(_) => {}
+                                    Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                                        tracing::warn!("File conflict detected at {}", path);
+                                        self.mode = AppMode::ConflictResolution;
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("Failed to save state: {}", e);
+                                    }
+                                }
+
+                                // Check if help menu pending action should execute
+                                if let Some((start_time, action)) = &self.help_pending_action {
+                                    if start_time.elapsed().as_millis() >= 100 {
+                                        if let AppMode::Help(previous_mode) = &self.mode {
+                                            self.mode = (**previous_mode).clone();
+                                        } else {
+                                            self.mode = AppMode::Normal;
+                                        }
+                                        self.help_selection.clear();
+
+                                        let action = *action;
+                                        self.help_pending_action = None;
+                                        self.execute_action(&action);
+                                    }
+                                }
+
+                                // Auto-refresh view if state manager indicates it's needed
+                                if self.state_manager.needs_refresh() {
+                                    self.refresh_view();
+                                    self.state_manager.clear_refresh();
                                 }
                             }
+                        }
+                    }
+                    Some(_change_event) = async {
+                        if let Some(ref mut rx) = &mut self.file_change_rx {
+                            rx.recv().await.ok()
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        // External file change detected - handle smart reload
+                        if !self.state_manager.is_dirty() {
+                            // No local changes, auto-reload silently
+                            self.auto_reload_from_external_change().await;
+                            tracing::info!("Auto-reloaded due to external file change");
+                        } else if self.mode != AppMode::ConflictResolution && self.mode != AppMode::ExternalChangeDetected {
+                            // Local changes exist, prompt user
+                            self.mode = AppMode::ExternalChangeDetected;
+                            tracing::warn!("External file change detected with local changes");
                         }
                     }
                 }
@@ -1424,6 +1480,30 @@ impl App {
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
         Ok(())
+    }
+
+    async fn auto_reload_from_external_change(&mut self) {
+        if let Some(ref store) = self.state_manager.store() {
+            match store.load().await {
+                Ok((snapshot, _metadata)) => {
+                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                        Ok(data) => {
+                            data.apply_to_app(self);
+                            self.state_manager.clear_conflict();
+                            self.mode = AppMode::Normal;
+                            self.refresh_view();
+                            tracing::info!("Auto-reloaded state from external file change");
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to deserialize reloaded state: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to reload from disk: {}", e);
+                }
+            }
+        }
     }
 
     fn migrate_sprint_logs(&mut self) {
