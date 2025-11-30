@@ -54,6 +54,7 @@ impl App {
                                 _ => CardPriority::Medium,
                             };
                             card.update_priority(priority);
+                            self.state_manager.mark_dirty();
                         }
                     }
                 }
@@ -204,6 +205,7 @@ impl App {
                         }
                     }
                 }
+                self.state_manager.mark_dirty();
                 self.mode = AppMode::Normal;
                 self.sprint_assign_selection.clear();
             }
@@ -295,6 +297,7 @@ impl App {
                         }
                     }
                 }
+                self.state_manager.mark_dirty();
                 self.mode = AppMode::Normal;
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
