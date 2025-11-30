@@ -55,7 +55,7 @@ impl PersistenceStore for JsonFileStore {
         // Check for external file modifications before saving
         if self.path.exists() {
             let current_metadata = FileMetadata::from_file(&self.path)
-                .map_err(|e| kanban_core::KanbanError::Io(e))?;
+                .map_err(kanban_core::KanbanError::Io)?;
 
             // Compare with last known metadata
             if let Ok(guard) = self.last_known_metadata.lock() {

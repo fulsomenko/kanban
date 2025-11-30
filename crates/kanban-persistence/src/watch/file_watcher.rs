@@ -74,14 +74,12 @@ impl ChangeDetector for FileWatcher {
                         // Only care about modify events on our file
                         if event.kind == notify::EventKind::Modify(notify::event::ModifyKind::Data(
                             notify::event::DataChange::Content,
-                        )) {
-                            if event.paths.iter().any(|p| p == &watch_path) {
-                                let change = ChangeEvent {
-                                    path: watch_path.clone(),
-                                    detected_at: Utc::now(),
-                                };
-                                let _ = tx.send(change);
-                            }
+                        )) && event.paths.iter().any(|p| p == &watch_path) {
+                            let change = ChangeEvent {
+                                path: watch_path.clone(),
+                                detected_at: Utc::now(),
+                            };
+                            let _ = tx.send(change);
                         }
                     }
                     Err(e) => {
