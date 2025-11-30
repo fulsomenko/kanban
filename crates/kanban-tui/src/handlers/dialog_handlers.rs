@@ -150,6 +150,7 @@ impl App {
                                 if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id)
                                 {
                                     card.set_points(points);
+                                    self.state_manager.mark_dirty();
                                     tracing::info!("Set points to: {:?}", points);
                                 }
                             }
@@ -258,6 +259,7 @@ impl App {
                     tracing::error!("Invalid prefix: use alphanumeric, hyphens, underscores only");
                 }
 
+                self.state_manager.mark_dirty();
                 self.mode = next_mode;
                 if let Some(focus) = next_focus {
                     self.board_focus = focus;
@@ -338,6 +340,26 @@ impl App {
             KeyCode::Esc => {
                 // Retry later - just go back to normal mode
                 self.state_manager.clear_conflict();
+                self.mode = AppMode::Normal;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn handle_external_change_detected_popup(&mut self, key_code: KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                // Reload from external file - discard local changes
+                self.pending_key = Some('r');
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Char('k') | KeyCode::Char('K') => {
+                // Keep local changes - continue editing
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Esc => {
+                // Dismiss dialog - continue with current state
                 self.mode = AppMode::Normal;
             }
             _ => {}
