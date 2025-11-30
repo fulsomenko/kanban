@@ -1,5 +1,5 @@
 use crate::app::{App, AppMode, BoardFocus, Focus};
-use crate::state::commands::{CreateBoard, UpdateBoard, CreateColumn};
+use crate::state::commands::{CreateBoard, CreateColumn, UpdateBoard};
 use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {
@@ -105,11 +105,7 @@ impl App {
                 return;
             }
 
-            tracing::info!(
-                "Created default column: {} (position: {})",
-                name,
-                position
-            );
+            tracing::info!("Created default column: {} (position: {})", name, position);
         }
 
         let new_index = self.boards.len() - 1;

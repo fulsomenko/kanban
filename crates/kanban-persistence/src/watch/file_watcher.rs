@@ -1,7 +1,7 @@
 use crate::traits::{ChangeDetector, ChangeEvent};
 use chrono::Utc;
 use kanban_core::KanbanResult;
-use notify::{Watcher, RecursiveMode};
+use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -63,7 +63,8 @@ impl ChangeDetector for FileWatcher {
 
         // Spawn file watching in a background task
         let handle = tokio::spawn(async move {
-            let parent = canonical_path.parent()
+            let parent = canonical_path
+                .parent()
                 .expect("Canonicalized path should always have parent")
                 .to_path_buf();
             let watch_path = canonical_path;
@@ -72,9 +73,12 @@ impl ChangeDetector for FileWatcher {
                 match res {
                     Ok(event) => {
                         // Only care about modify events on our file
-                        if event.kind == notify::EventKind::Modify(notify::event::ModifyKind::Data(
-                            notify::event::DataChange::Content,
-                        )) && event.paths.iter().any(|p| p == &watch_path) {
+                        if event.kind
+                            == notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                                notify::event::DataChange::Content,
+                            ))
+                            && event.paths.iter().any(|p| p == &watch_path)
+                        {
                             let change = ChangeEvent {
                                 path: watch_path.clone(),
                                 detected_at: Utc::now(),
@@ -138,15 +142,14 @@ mod tests {
         let file_path = dir.path().join("test.json");
 
         // Create initial file
-        tokio::fs::write(&file_path, b"initial content").await.unwrap();
+        tokio::fs::write(&file_path, b"initial content")
+            .await
+            .unwrap();
 
         let watcher = FileWatcher::new();
         let mut rx = watcher.subscribe();
 
-        watcher
-            .start_watching(file_path.clone())
-            .await
-            .unwrap();
+        watcher.start_watching(file_path.clone()).await.unwrap();
 
         // Give watcher time to start
         sleep(Duration::from_millis(100)).await;

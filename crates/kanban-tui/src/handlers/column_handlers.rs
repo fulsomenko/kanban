@@ -1,8 +1,8 @@
 use crate::app::{App, AppMode, BoardFocus};
+use crate::state::commands::{CreateColumn, DeleteColumn, SetBoardTaskListView, UpdateColumn};
 use crossterm::event::KeyCode;
-use kanban_domain::{TaskListView, ColumnUpdate};
-use crate::state::commands::{CreateColumn, UpdateColumn, DeleteColumn, SetBoardTaskListView};
 use kanban_domain::commands::MoveCard;
+use kanban_domain::{ColumnUpdate, TaskListView};
 
 impl App {
     pub fn handle_create_column_key(&mut self) {
@@ -227,11 +227,7 @@ impl App {
                     return;
                 }
 
-                tracing::info!(
-                    "Created column: {} (position: {})",
-                    column_name,
-                    position
-                );
+                tracing::info!("Created column: {} (position: {})", column_name, position);
 
                 let board_column_count = self
                     .columns
@@ -319,7 +315,13 @@ impl App {
                                 .map(|card| (card.id, card.position))
                                 .collect();
 
-                            Some((column_id, column_name, first_column_id, cards_to_move, column_idx))
+                            Some((
+                                column_id,
+                                column_name,
+                                first_column_id,
+                                cards_to_move,
+                                column_idx,
+                            ))
                         } else {
                             None
                         }
@@ -331,7 +333,9 @@ impl App {
                 }
             };
 
-            if let Some((column_id, column_name, first_column_id, cards_to_move, column_idx)) = delete_info {
+            if let Some((column_id, column_name, first_column_id, cards_to_move, column_idx)) =
+                delete_info
+            {
                 tracing::warn!("Cannot delete the last column");
 
                 if let Some(target_column_id) = first_column_id {

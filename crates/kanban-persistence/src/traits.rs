@@ -44,7 +44,10 @@ pub enum PersistenceEvent {
     /// Data was successfully saved
     Saved(PersistenceMetadata),
     /// External changes were detected
-    ExternalChangeDetected { path: PathBuf, saved_at: DateTime<Utc> },
+    ExternalChangeDetected {
+        path: PathBuf,
+        saved_at: DateTime<Utc>,
+    },
     /// A conflict occurred (our changes vs external changes)
     ConflictDetected { reason: String },
     /// An error occurred during persistence
@@ -137,7 +140,12 @@ pub trait MigrationStrategy: Send + Sync {
 
     /// Migrate from one version to another
     /// Returns the path to the migrated file
-    async fn migrate(&self, from: FormatVersion, to: FormatVersion, path: &Path) -> KanbanResult<PathBuf>;
+    async fn migrate(
+        &self,
+        from: FormatVersion,
+        to: FormatVersion,
+        path: &Path,
+    ) -> KanbanResult<PathBuf>;
 }
 
 /// Trait for conflict resolution between local and external changes

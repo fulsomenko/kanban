@@ -1,7 +1,7 @@
 use super::{Command, CommandContext};
 use crate::CardUpdate;
-use kanban_core::KanbanResult;
 use chrono::Utc;
+use kanban_core::KanbanResult;
 use uuid::Uuid;
 
 /// Update card properties (title, description, priority, status, etc.)
@@ -44,7 +44,13 @@ impl Command for CreateCard {
 
         // Now find the board again and create the card
         if let Some(board) = context.boards.iter_mut().find(|b| b.id == self.board_id) {
-            let card = crate::Card::new(board, self.column_id, self.title.clone(), self.position, &prefix);
+            let card = crate::Card::new(
+                board,
+                self.column_id,
+                self.title.clone(),
+                self.position,
+                &prefix,
+            );
             context.cards.push(card);
         }
         Ok(())
@@ -71,7 +77,10 @@ impl Command for MoveCard {
     }
 
     fn description(&self) -> String {
-        format!("Move card {} to column {}", self.card_id, self.new_column_id)
+        format!(
+            "Move card {} to column {}",
+            self.card_id, self.new_column_id
+        )
     }
 }
 
@@ -106,7 +115,11 @@ pub struct RestoreCard {
 
 impl Command for RestoreCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(pos) = context.archived_cards.iter().position(|c| c.card.id == self.card_id) {
+        if let Some(pos) = context
+            .archived_cards
+            .iter()
+            .position(|c| c.card.id == self.card_id)
+        {
             let archived = context.archived_cards.remove(pos);
             let mut card = archived.into_card();
             card.column_id = self.column_id;

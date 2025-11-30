@@ -1,8 +1,8 @@
 use crate::traits::FormatVersion;
+use chrono::Utc;
 use kanban_core::KanbanResult;
 use serde_json::{json, Value};
 use std::path::Path;
-use chrono::Utc;
 use uuid::Uuid;
 
 /// Orchestrates migrations between format versions
@@ -34,19 +34,13 @@ impl Migrator {
     }
 
     /// Migrate a file from one version to another
-    pub async fn migrate(
-        from: FormatVersion,
-        to: FormatVersion,
-        path: &Path,
-    ) -> KanbanResult<()> {
+    pub async fn migrate(from: FormatVersion, to: FormatVersion, path: &Path) -> KanbanResult<()> {
         if from == to {
             return Ok(());
         }
 
         match (from, to) {
-            (FormatVersion::V1, FormatVersion::V2) => {
-                Self::migrate_v1_to_v2(path).await
-            }
+            (FormatVersion::V1, FormatVersion::V2) => Self::migrate_v1_to_v2(path).await,
             _ => Err(kanban_core::KanbanError::Serialization(format!(
                 "Unsupported migration: {:?} -> {:?}",
                 from, to
@@ -151,9 +145,7 @@ mod tests {
             .await
             .unwrap();
 
-        let migrated = tokio::fs::read_to_string(&file_path)
-            .await
-            .unwrap();
+        let migrated = tokio::fs::read_to_string(&file_path).await.unwrap();
         let v2_data: Value = serde_json::from_str(&migrated).unwrap();
 
         assert_eq!(v2_data["version"], 2);

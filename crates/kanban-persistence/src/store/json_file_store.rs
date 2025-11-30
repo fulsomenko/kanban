@@ -1,6 +1,6 @@
-use crate::traits::{PersistenceMetadata, PersistenceStore, StoreSnapshot, FormatVersion};
-use crate::migration::Migrator;
 use crate::conflict::FileMetadata;
+use crate::migration::Migrator;
+use crate::traits::{FormatVersion, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use kanban_core::KanbanResult;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -54,8 +54,8 @@ impl PersistenceStore for JsonFileStore {
     async fn save(&self, mut snapshot: StoreSnapshot) -> KanbanResult<PersistenceMetadata> {
         // Check for external file modifications before saving
         if self.path.exists() {
-            let current_metadata = FileMetadata::from_file(&self.path)
-                .map_err(kanban_core::KanbanError::Io)?;
+            let current_metadata =
+                FileMetadata::from_file(&self.path).map_err(kanban_core::KanbanError::Io)?;
 
             // Compare with last known metadata
             if let Ok(guard) = self.last_known_metadata.lock() {
@@ -129,9 +129,10 @@ impl PersistenceStore for JsonFileStore {
 
         // Validate version
         if envelope.version != 2 {
-            return Err(kanban_core::KanbanError::Serialization(
-                format!("Unsupported format version: {}", envelope.version),
-            ));
+            return Err(kanban_core::KanbanError::Serialization(format!(
+                "Unsupported format version: {}",
+                envelope.version
+            )));
         }
 
         // Reconstruct snapshot

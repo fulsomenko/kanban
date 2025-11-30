@@ -1,8 +1,10 @@
 use crate::app::{App, AppMode, CardField, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use crate::state::commands::{CreateCard, UpdateCard, MoveCard, ArchiveCard, RestoreCard, DeleteCard, SetBoardTaskSort};
-use kanban_domain::{CardUpdate, ArchivedCard, CardStatus, Column, SortOrder};
+use crate::state::commands::{
+    ArchiveCard, CreateCard, DeleteCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard,
+};
+use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, Column, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -200,10 +202,12 @@ impl App {
                         .map(|col| (col.id, col.position))
                         .collect();
                     cols_with_pos.sort_by_key(|(_, pos)| *pos);
-                    let board_columns: Vec<uuid::Uuid> = cols_with_pos.into_iter().map(|(id, _)| id).collect();
+                    let board_columns: Vec<uuid::Uuid> =
+                        cols_with_pos.into_iter().map(|(id, _)| id).collect();
 
-                    let current_column_pos =
-                        board_columns.iter().position(|col_id| *col_id == old_column_id);
+                    let current_column_pos = board_columns
+                        .iter()
+                        .position(|col_id| *col_id == old_column_id);
 
                     if new_status == CardStatus::Done {
                         // Moving to Done: move to last column
@@ -316,7 +320,9 @@ impl App {
                 CardStatus::Done
             };
 
-            let current_column_pos = board_column_ids.iter().position(|col_id| *col_id == old_column_id);
+            let current_column_pos = board_column_ids
+                .iter()
+                .position(|col_id| *col_id == old_column_id);
 
             // Determine target column
             let target_column_id = if new_status == CardStatus::Done {
@@ -441,7 +447,9 @@ impl App {
                     if let Some(last_col) = sorted_cols.last() {
                         if last_col.id == column.id {
                             // Find the newly created card and mark it as complete
-                            if let Some(card) = self.cards.iter().rev().find(|c| c.column_id == column.id) {
+                            if let Some(card) =
+                                self.cards.iter().rev().find(|c| c.column_id == column.id)
+                            {
                                 let card_id = card.id;
                                 let update_cmd = Box::new(UpdateCard {
                                     card_id,
@@ -459,22 +467,13 @@ impl App {
                                 );
                             }
                         } else {
-                            tracing::info!(
-                                "Creating card in column: {}",
-                                column_name
-                            );
+                            tracing::info!("Creating card in column: {}", column_name);
                         }
                     } else {
-                        tracing::info!(
-                            "Creating card in column: {}",
-                            column_name
-                        );
+                        tracing::info!("Creating card in column: {}", column_name);
                     }
                 } else {
-                    tracing::info!(
-                        "Creating card in column: {}",
-                        column_name
-                    );
+                    tracing::info!("Creating card in column: {}", column_name);
                 }
 
                 self.refresh_view();
@@ -506,7 +505,8 @@ impl App {
                         .map(|col| (col.id, col.position))
                         .collect();
                     cols_with_pos.sort_by_key(|(_, pos)| *pos);
-                    let board_column_ids: Vec<uuid::Uuid> = cols_with_pos.into_iter().map(|(id, _)| id).collect();
+                    let board_column_ids: Vec<uuid::Uuid> =
+                        cols_with_pos.into_iter().map(|(id, _)| id).collect();
 
                     let current_position = board_column_ids
                         .iter()
@@ -602,7 +602,8 @@ impl App {
                         .map(|col| (col.id, col.position))
                         .collect();
                     cols_with_pos.sort_by_key(|(_, pos)| *pos);
-                    let board_column_ids: Vec<uuid::Uuid> = cols_with_pos.into_iter().map(|(id, _)| id).collect();
+                    let board_column_ids: Vec<uuid::Uuid> =
+                        cols_with_pos.into_iter().map(|(id, _)| id).collect();
 
                     let current_position = board_column_ids
                         .iter()
@@ -714,9 +715,11 @@ impl App {
     #[allow(dead_code)]
     fn delete_card(&mut self, card_id: uuid::Uuid) -> bool {
         // Store info before executing command
-        let deleted_info = self.cards.iter().find(|c| c.id == card_id).map(|c| {
-            (c.column_id, c.position, c.title.clone())
-        });
+        let deleted_info = self
+            .cards
+            .iter()
+            .find(|c| c.id == card_id)
+            .map(|c| (c.column_id, c.position, c.title.clone()));
 
         if let Some((deleted_column_id, deleted_position, card_title)) = deleted_info {
             // Execute ArchiveCard command

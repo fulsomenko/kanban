@@ -12,7 +12,12 @@ impl MigrationStrategy for V1ToV2Migration {
         crate::migration::Migrator::detect_version(path).await
     }
 
-    async fn migrate(&self, from: FormatVersion, to: FormatVersion, path: &Path) -> KanbanResult<std::path::PathBuf> {
+    async fn migrate(
+        &self,
+        from: FormatVersion,
+        to: FormatVersion,
+        path: &Path,
+    ) -> KanbanResult<std::path::PathBuf> {
         crate::migration::Migrator::migrate(from, to, path).await?;
         Ok(path.to_path_buf())
     }
@@ -58,14 +63,15 @@ mod tests {
             .unwrap();
 
         let strategy = V1ToV2Migration;
-        let result = strategy.migrate(FormatVersion::V1, FormatVersion::V2, &file_path).await.unwrap();
+        let result = strategy
+            .migrate(FormatVersion::V1, FormatVersion::V2, &file_path)
+            .await
+            .unwrap();
 
         assert_eq!(result, file_path);
 
         // Verify it was migrated
-        let migrated = tokio::fs::read_to_string(&file_path)
-            .await
-            .unwrap();
+        let migrated = tokio::fs::read_to_string(&file_path).await.unwrap();
         let data: serde_json::Value = serde_json::from_str(&migrated).unwrap();
         assert_eq!(data["version"], 2);
     }

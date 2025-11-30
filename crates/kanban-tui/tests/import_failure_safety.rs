@@ -1,5 +1,5 @@
 use kanban_domain::{Board, Card, Column};
-use kanban_tui::{App, state::DataSnapshot};
+use kanban_tui::{state::DataSnapshot, App};
 use std::fs;
 use tempfile::tempdir;
 
@@ -33,13 +33,21 @@ fn test_import_failure_prevents_empty_state_save() {
         "data": snapshot_json
     });
 
-    fs::write(&file_path, serde_json::to_string_pretty(&v2_content).unwrap()).unwrap();
+    fs::write(
+        &file_path,
+        serde_json::to_string_pretty(&v2_content).unwrap(),
+    )
+    .unwrap();
 
     // Create app with the V2 format file - should handle it gracefully now
     let app = App::new(Some(file_path.to_str().unwrap().to_string()));
 
     // App should load the board from V2 format
-    assert_eq!(app.boards.len(), 1, "V2 format should be imported successfully");
+    assert_eq!(
+        app.boards.len(),
+        1,
+        "V2 format should be imported successfully"
+    );
     assert_eq!(app.boards[0].name, "Test Board");
     assert!(
         app.save_file.is_some(),
@@ -77,7 +85,13 @@ fn test_v2_format_is_imported_correctly() {
     let board = Board::new("My Project".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let mut board_mut = board.clone();
-    let card = Card::new(&mut board_mut, column.id, "Important Task".to_string(), 0, "task");
+    let card = Card::new(
+        &mut board_mut,
+        column.id,
+        "Important Task".to_string(),
+        0,
+        "task",
+    );
 
     // Create snapshot with board, column, and card
     let snapshot = DataSnapshot {
@@ -100,7 +114,11 @@ fn test_v2_format_is_imported_correctly() {
         "data": snapshot_json
     });
 
-    fs::write(&file_path, serde_json::to_string_pretty(&v2_content).unwrap()).unwrap();
+    fs::write(
+        &file_path,
+        serde_json::to_string_pretty(&v2_content).unwrap(),
+    )
+    .unwrap();
 
     // Create app with V2 format file
     let app = App::new(Some(file_path.to_str().unwrap().to_string()));

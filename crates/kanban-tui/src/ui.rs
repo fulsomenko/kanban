@@ -83,7 +83,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                     AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
                     AppMode::FilterOptions => render_filter_options_popup(app, frame),
                     AppMode::ConflictResolution => render_conflict_resolution_popup(app, frame),
-                    AppMode::ExternalChangeDetected => render_external_change_detected_popup(app, frame),
+                    AppMode::ExternalChangeDetected => {
+                        render_external_change_detected_popup(app, frame)
+                    }
                     _ => {}
                 }
             }
@@ -1515,22 +1517,36 @@ fn render_conflict_resolution_popup(_app: &App, frame: &mut Frame) {
         ])
         .split(inner);
 
-    let message = Paragraph::new("The file was modified by another instance.\nChoose how to resolve this conflict:")
-        .style(Style::default().fg(Color::Yellow));
+    let message = Paragraph::new(
+        "The file was modified by another instance.\nChoose how to resolve this conflict:",
+    )
+    .style(Style::default().fg(Color::Yellow));
     frame.render_widget(message, chunks[0]);
 
     let options = vec![
-        Line::from(Span::styled("(O)verwrite", Style::default().fg(Color::Cyan))),
-        Line::from(Span::styled("  Keep your changes and overwrite the file", label_text())),
+        Line::from(Span::styled(
+            "(O)verwrite",
+            Style::default().fg(Color::Cyan),
+        )),
+        Line::from(Span::styled(
+            "  Keep your changes and overwrite the file",
+            label_text(),
+        )),
         Line::from(""),
-        Line::from(Span::styled("(T)ake theirs", Style::default().fg(Color::Cyan))),
-        Line::from(Span::styled("  Discard your changes and reload the file", label_text())),
+        Line::from(Span::styled(
+            "(T)ake theirs",
+            Style::default().fg(Color::Cyan),
+        )),
+        Line::from(Span::styled(
+            "  Discard your changes and reload the file",
+            label_text(),
+        )),
     ];
     let options_para = Paragraph::new(options);
     frame.render_widget(options_para, chunks[1]);
 
-    let instructions = Paragraph::new("Press O or T to choose, ESC to retry later")
-        .style(label_text());
+    let instructions =
+        Paragraph::new("Press O or T to choose, ESC to retry later").style(label_text());
     frame.render_widget(instructions, chunks[2]);
 }
 
@@ -1556,21 +1572,29 @@ fn render_external_change_detected_popup(_app: &App, frame: &mut Frame) {
         ])
         .split(inner);
 
-    let message = Paragraph::new("The file was modified by another instance.\nYou have unsaved changes. Choose an action:")
-        .style(Style::default().fg(Color::Yellow));
+    let message = Paragraph::new(
+        "The file was modified by another instance.\nYou have unsaved changes. Choose an action:",
+    )
+    .style(Style::default().fg(Color::Yellow));
     frame.render_widget(message, chunks[0]);
 
     let options = vec![
         Line::from(Span::styled("(R)eload", Style::default().fg(Color::Cyan))),
-        Line::from(Span::styled("  Discard your changes and reload the file", label_text())),
+        Line::from(Span::styled(
+            "  Discard your changes and reload the file",
+            label_text(),
+        )),
         Line::from(""),
         Line::from(Span::styled("(K)eep", Style::default().fg(Color::Cyan))),
-        Line::from(Span::styled("  Continue with your changes (save will overwrite)", label_text())),
+        Line::from(Span::styled(
+            "  Continue with your changes (save will overwrite)",
+            label_text(),
+        )),
     ];
     let options_para = Paragraph::new(options);
     frame.render_widget(options_para, chunks[1]);
 
-    let instructions = Paragraph::new("Press R or K to choose, ESC to continue")
-        .style(label_text());
+    let instructions =
+        Paragraph::new("Press R or K to choose, ESC to continue").style(label_text());
     frame.render_widget(instructions, chunks[2]);
 }

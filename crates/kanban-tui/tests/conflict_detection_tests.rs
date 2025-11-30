@@ -44,7 +44,11 @@ async fn test_conflict_detection_on_concurrent_modification() {
         "data": {}
     });
 
-    fs::write(&file_path, serde_json::to_string_pretty(&modified_data).unwrap()).unwrap();
+    fs::write(
+        &file_path,
+        serde_json::to_string_pretty(&modified_data).unwrap(),
+    )
+    .unwrap();
 
     // Small delay to ensure file metadata changes
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -61,7 +65,10 @@ async fn test_conflict_detection_on_concurrent_modification() {
 
     match result {
         Err(KanbanError::ConflictDetected { path, .. }) => {
-            assert!(path.contains("kanban.json"), "Error should contain file path");
+            assert!(
+                path.contains("kanban.json"),
+                "Error should contain file path"
+            );
         }
         _ => panic!("Expected ConflictDetected error"),
     }
@@ -95,7 +102,10 @@ async fn test_no_conflict_when_file_unchanged() {
 
     // Save again with same data - should not detect conflict
     let result = store.save(persist_snapshot).await;
-    assert!(result.is_ok(), "Should not detect conflict when file unchanged");
+    assert!(
+        result.is_ok(),
+        "Should not detect conflict when file unchanged"
+    );
 }
 
 #[tokio::test]
@@ -125,7 +135,10 @@ async fn test_conflict_detection_tracks_file_metadata() {
     store.save(persist_snapshot.clone()).await.unwrap();
 
     // Verify save was successful - file exists
-    assert!(file_path.exists(), "File should exist after successful save");
+    assert!(
+        file_path.exists(),
+        "File should exist after successful save"
+    );
 
     // Modify file externally
     let modified_data = serde_json::json!({
@@ -137,14 +150,21 @@ async fn test_conflict_detection_tracks_file_metadata() {
         },
         "data": {}
     });
-    fs::write(&file_path, serde_json::to_string_pretty(&modified_data).unwrap()).unwrap();
+    fs::write(
+        &file_path,
+        serde_json::to_string_pretty(&modified_data).unwrap(),
+    )
+    .unwrap();
 
     // Small delay to ensure file metadata changes
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Try to save and should detect conflict
     let result = store.save(persist_snapshot).await;
-    assert!(result.is_err(), "Should detect conflict after external modification");
+    assert!(
+        result.is_err(),
+        "Should detect conflict after external modification"
+    );
 }
 
 #[tokio::test]
@@ -184,7 +204,10 @@ async fn test_multiple_instances_with_different_ids() {
 
     // Should succeed because it's a different instance
     let result = store2.save(persist_snapshot2).await;
-    assert!(result.is_ok(), "Different instance should be able to save without conflict");
+    assert!(
+        result.is_ok(),
+        "Different instance should be able to save without conflict"
+    );
 }
 
 #[tokio::test]
@@ -216,7 +239,11 @@ async fn test_conflict_resolution_with_force_overwrite() {
 
     // Externally modify file
     let modified_data = serde_json::json!({"version": 2, "metadata": {}, "data": {}});
-    fs::write(&file_path, serde_json::to_string_pretty(&modified_data).unwrap()).unwrap();
+    fs::write(
+        &file_path,
+        serde_json::to_string_pretty(&modified_data).unwrap(),
+    )
+    .unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -226,5 +253,8 @@ async fn test_conflict_resolution_with_force_overwrite() {
 
     // Now save with force overwrite (simulating user choosing to keep their changes)
     let result = store.save(persist_snapshot).await;
-    assert!(result.is_err(), "Conflict should still be detected until metadata is cleared");
+    assert!(
+        result.is_err(),
+        "Conflict should still be detected until metadata is cleared"
+    );
 }

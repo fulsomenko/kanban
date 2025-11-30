@@ -1,6 +1,6 @@
 use crate::app::{App, AppMode, BoardFocus};
-use kanban_domain::{SprintStatus, BoardUpdate};
-use crate::state::commands::{CreateSprint, ActivateSprint, CompleteSprint, UpdateBoard};
+use crate::state::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
+use kanban_domain::{BoardUpdate, SprintStatus};
 
 impl App {
     pub fn handle_create_sprint_key(&mut self) {
@@ -16,7 +16,13 @@ impl App {
             let sprint_info = {
                 if let Some(sprint) = self.sprints.get(sprint_idx) {
                     if sprint.status == SprintStatus::Planning {
-                        Some((sprint.id, sprint.formatted_name(&self.boards[self.board_selection.get().unwrap_or(0)], "sprint")))
+                        Some((
+                            sprint.id,
+                            sprint.formatted_name(
+                                &self.boards[self.board_selection.get().unwrap_or(0)],
+                                "sprint",
+                            ),
+                        ))
                     } else {
                         None
                     }
@@ -77,7 +83,9 @@ impl App {
             // Collect sprint and board info before mutations
             let sprint_info = {
                 if let Some(sprint) = self.sprints.get(sprint_idx) {
-                    if sprint.status == SprintStatus::Active || sprint.status == SprintStatus::Planning {
+                    if sprint.status == SprintStatus::Active
+                        || sprint.status == SprintStatus::Planning
+                    {
                         let board_idx = self.active_board_index.or(self.board_selection.get());
                         if let Some(board_idx) = board_idx {
                             if let Some(board) = self.boards.get(board_idx) {

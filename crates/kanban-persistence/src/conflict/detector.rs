@@ -56,7 +56,10 @@ mod tests {
         fs::write(&file_path, b"test content").unwrap();
 
         let metadata = FileMetadata::from_file(&file_path).unwrap();
-        assert_eq!(metadata.content_hash, FileMetadata::compute_hash(b"test content"));
+        assert_eq!(
+            metadata.content_hash,
+            FileMetadata::compute_hash(b"test content")
+        );
     }
 
     #[test]

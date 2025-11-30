@@ -1,13 +1,13 @@
-pub mod traits;
-pub mod store;
-pub mod watch;
 pub mod conflict;
-pub mod serialization;
 pub mod migration;
+pub mod serialization;
+pub mod store;
+pub mod traits;
+pub mod watch;
 
-pub use traits::*;
-pub use store::*;
-pub use watch::*;
 pub use conflict::*;
-pub use serialization::*;
 pub use migration::*;
+pub use serialization::*;
+pub use store::*;
+pub use traits::*;
+pub use watch::*;

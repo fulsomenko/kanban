@@ -58,8 +58,12 @@ impl BoardImporter {
 
         for board in snapshot.boards {
             // Find columns, cards, and sprints for this board
-            let board_columns: Vec<_> =
-                snapshot.columns.iter().filter(|c| c.board_id == board.id).cloned().collect();
+            let board_columns: Vec<_> = snapshot
+                .columns
+                .iter()
+                .filter(|c| c.board_id == board.id)
+                .cloned()
+                .collect();
 
             let board_cards: Vec<_> = snapshot
                 .cards
@@ -68,15 +72,21 @@ impl BoardImporter {
                 .cloned()
                 .collect();
 
-            let board_sprints: Vec<_> =
-                snapshot.sprints.iter().filter(|s| s.board_id == board.id).cloned().collect();
+            let board_sprints: Vec<_> = snapshot
+                .sprints
+                .iter()
+                .filter(|s| s.board_id == board.id)
+                .cloned()
+                .collect();
 
             // For archived cards, we need to match them by original column which belongs to this board
             let board_archived: Vec<_> = snapshot
                 .archived_cards
                 .iter()
                 .filter(|a| {
-                    board_columns.iter().any(|col| col.id == a.original_column_id)
+                    board_columns
+                        .iter()
+                        .any(|col| col.id == a.original_column_id)
                 })
                 .cloned()
                 .collect();

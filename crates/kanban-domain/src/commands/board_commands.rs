@@ -1,5 +1,5 @@
 use super::{Command, CommandContext};
-use crate::{BoardUpdate, Board};
+use crate::{Board, BoardUpdate};
 use kanban_core::KanbanResult;
 use uuid::Uuid;
 

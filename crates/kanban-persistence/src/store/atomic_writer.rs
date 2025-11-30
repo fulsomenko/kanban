@@ -22,7 +22,11 @@ impl AtomicWriter {
         // Atomic rename (atomic on POSIX systems)
         fs::rename(&temp_path, path).await?;
 
-        tracing::debug!("Atomically wrote {} bytes to {}", data.len(), path.display());
+        tracing::debug!(
+            "Atomically wrote {} bytes to {}",
+            data.len(),
+            path.display()
+        );
         Ok(())
     }
 
@@ -56,8 +60,12 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
 
-        AtomicWriter::write_atomic(&file_path, b"First").await.unwrap();
-        AtomicWriter::write_atomic(&file_path, b"Second").await.unwrap();
+        AtomicWriter::write_atomic(&file_path, b"First")
+            .await
+            .unwrap();
+        AtomicWriter::write_atomic(&file_path, b"Second")
+            .await
+            .unwrap();
 
         let read_data = AtomicWriter::read_all(&file_path).await.unwrap();
         assert_eq!(read_data, b"Second");
