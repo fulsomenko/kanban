@@ -11,6 +11,21 @@ use ratatui::{
     Frame,
 };
 
+fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some((message, _)) = &app.last_error {
+        let error_style = Style::default()
+            .fg(Color::White)
+            .bg(Color::Red)
+            .add_modifier(Modifier::BOLD);
+
+        let error_widget = Paragraph::new(message.clone())
+            .style(error_style)
+            .alignment(ratatui::layout::Alignment::Center);
+
+        frame.render_widget(error_widget, area);
+    }
+}
+
 pub fn render(app: &mut App, frame: &mut Frame) {
     // Check if we're in Help mode and render underlying view
     let is_help_mode = matches!(app.mode, AppMode::Help(_));
@@ -111,6 +126,17 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
         // Render help popup on top
         render_help_popup(app, frame);
+    }
+
+    // Render error banner on top if present
+    if app.last_error.is_some() {
+        let error_area = Rect {
+            x: 0,
+            y: 0,
+            width: frame.area().width,
+            height: 1,
+        };
+        render_error_banner(app, frame, error_area);
     }
 }
 
