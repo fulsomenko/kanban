@@ -88,6 +88,7 @@ pub struct App {
     pub pending_key: Option<char>,
     pub file_change_rx: Option<tokio::sync::broadcast::Receiver<kanban_persistence::ChangeEvent>>,
     pub file_watcher: Option<kanban_persistence::FileWatcher>,
+    pub last_error: Option<(String, Instant)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -238,6 +239,7 @@ impl App {
             pending_key: None,
             file_change_rx: None,
             file_watcher: None,
+            last_error: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -258,6 +260,22 @@ impl App {
 
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    pub fn set_error(&mut self, message: String) {
+        self.last_error = Some((message, Instant::now()));
+    }
+
+    pub fn clear_error(&mut self) {
+        self.last_error = None;
+    }
+
+    pub fn should_clear_error(&self) -> bool {
+        if let Some((_, instant)) = self.last_error {
+            instant.elapsed().as_secs() >= 5
+        } else {
+            false
+        }
     }
 
     fn keycode_matches_binding_key(
@@ -1021,26 +1039,30 @@ impl App {
     }
 
     /// Execute a command and track state changes for progressive saving
-    /// This helper method allows handlers to execute commands without borrow checker conflicts
+    /// Safely delegates to StateManager which properly handles the borrows
     pub fn execute_command(
         &mut self,
         command: Box<dyn crate::state::commands::Command>,
     ) -> KanbanResult<()> {
-        // We need to use unsafe to split the borrows for state_manager and the collections
-        // This is safe because we're not dropping anything or violating Rust's safety rules
-        unsafe {
-            let self_ptr = self as *mut Self;
-            let state_manager = &mut (*self_ptr).state_manager;
+        // Use destructuring to split mutable borrows and avoid aliasing
+        let Self {
+            state_manager,
+            boards,
+            columns,
+            cards,
+            sprints,
+            archived_cards,
+            ..
+        } = self;
 
-            state_manager.execute_with_context(
-                &mut (*self_ptr).boards,
-                &mut (*self_ptr).columns,
-                &mut (*self_ptr).cards,
-                &mut (*self_ptr).sprints,
-                &mut (*self_ptr).archived_cards,
-                command,
-            )
-        }
+        state_manager.execute_with_context(
+            boards,
+            columns,
+            cards,
+            sprints,
+            archived_cards,
+            command,
+        )
     }
 
     pub fn refresh_view(&mut self) {
@@ -1333,6 +1355,11 @@ impl App {
                             }
                             Event::Tick => {
                                 self.handle_animation_tick();
+
+                                // Auto-clear errors after 5 seconds
+                                if self.should_clear_error() {
+                                    self.clear_error();
+                                }
 
                                 // Handle pending conflict resolution actions
                                 if let Some(action) = self.pending_key.take() {
