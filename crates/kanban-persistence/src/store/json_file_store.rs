@@ -1,3 +1,4 @@
+use crate::atomic_writer::AtomicWriter;
 use crate::conflict::FileMetadata;
 use crate::migration::Migrator;
 use crate::traits::{FormatVersion, PersistenceMetadata, PersistenceStore, StoreSnapshot};
@@ -58,14 +59,17 @@ impl PersistenceStore for JsonFileStore {
                 FileMetadata::from_file(&self.path).map_err(kanban_core::KanbanError::Io)?;
 
             // Compare with last known metadata
-            if let Ok(guard) = self.last_known_metadata.lock() {
-                if let Some(last_known) = *guard {
-                    if last_known != current_metadata {
-                        return Err(kanban_core::KanbanError::ConflictDetected {
-                            path: self.path.to_string_lossy().to_string(),
-                            source: None,
-                        });
-                    }
+            let guard = self.last_known_metadata.lock()
+                .unwrap_or_else(|poisoned| {
+                    tracing::warn!("Mutex poisoned in save conflict check, recovering");
+                    poisoned.into_inner()
+                });
+            if let Some(last_known) = *guard {
+                if last_known != current_metadata {
+                    return Err(kanban_core::KanbanError::ConflictDetected {
+                        path: self.path.to_string_lossy().to_string(),
+                        source: None,
+                    });
                 }
             }
         }
@@ -87,14 +91,17 @@ impl PersistenceStore for JsonFileStore {
         let json_bytes = serde_json::to_vec_pretty(&envelope)
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
-        // Write directly to disk
-        tokio::fs::write(&self.path, &json_bytes).await?;
+        // Write atomically to disk for crash safety
+        AtomicWriter::write_atomic(&self.path, &json_bytes).await?;
 
         // Update last known metadata after successful write
-        if let Ok(mut guard) = self.last_known_metadata.lock() {
-            if let Ok(new_metadata) = FileMetadata::from_file(&self.path) {
-                *guard = Some(new_metadata);
-            }
+        if let Ok(new_metadata) = FileMetadata::from_file(&self.path) {
+            let mut guard = self.last_known_metadata.lock()
+                .unwrap_or_else(|poisoned| {
+                    tracing::warn!("Mutex poisoned in save metadata update, recovering");
+                    poisoned.into_inner()
+                });
+            *guard = Some(new_metadata);
         }
 
         tracing::info!(
@@ -145,9 +152,12 @@ impl PersistenceStore for JsonFileStore {
 
         // Track file metadata after successful load for conflict detection
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
-            if let Ok(mut guard) = self.last_known_metadata.lock() {
-                *guard = Some(file_metadata);
-            }
+            let mut guard = self.last_known_metadata.lock()
+                .unwrap_or_else(|poisoned| {
+                    tracing::warn!("Mutex poisoned in load metadata tracking, recovering");
+                    poisoned.into_inner()
+                });
+            *guard = Some(file_metadata);
         }
 
         tracing::info!(
