@@ -7,8 +7,8 @@ use std::time::SystemTime;
 pub struct FileMetadata {
     /// Last modified time of the file
     pub modified_time: SystemTime,
-    /// Hash of file contents for additional verification
-    pub content_hash: u64,
+    /// File size in bytes for additional verification
+    pub size: u64,
 }
 
 impl FileMetadata {
@@ -16,14 +16,11 @@ impl FileMetadata {
     pub fn from_file(path: &Path) -> std::io::Result<Self> {
         let metadata = fs::metadata(path)?;
         let modified_time = metadata.modified()?;
-
-        // Read content and compute hash
-        let content = fs::read(path)?;
-        let content_hash = Self::compute_hash(&content);
+        let size = metadata.len();
 
         Ok(Self {
             modified_time,
-            content_hash,
+            size,
         })
     }
 
@@ -33,15 +30,6 @@ impl FileMetadata {
         Ok(current != *self)
     }
 
-    /// Compute hash of file contents using FxHash
-    fn compute_hash(content: &[u8]) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        content.hash(&mut hasher);
-        hasher.finish()
-    }
 }
 
 #[cfg(test)]
@@ -53,13 +41,11 @@ mod tests {
     fn test_metadata_from_file() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.json");
-        fs::write(&file_path, b"test content").unwrap();
+        let content = b"test content";
+        fs::write(&file_path, content).unwrap();
 
         let metadata = FileMetadata::from_file(&file_path).unwrap();
-        assert_eq!(
-            metadata.content_hash,
-            FileMetadata::compute_hash(b"test content")
-        );
+        assert_eq!(metadata.size, content.len() as u64);
     }
 
     #[test]
@@ -85,9 +71,17 @@ mod tests {
     }
 
     #[test]
-    fn test_different_hashes_for_different_content() {
-        let hash1 = FileMetadata::compute_hash(b"content1");
-        let hash2 = FileMetadata::compute_hash(b"content2");
-        assert_ne!(hash1, hash2);
+    fn test_size_change_detected() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.json");
+        fs::write(&file_path, b"content1").unwrap();
+
+        let metadata = FileMetadata::from_file(&file_path).unwrap();
+        // File size is 8 bytes
+        assert_eq!(metadata.size, 8);
+
+        // Write longer content
+        fs::write(&file_path, b"content1_longer").unwrap();
+        assert!(metadata.has_changed(&file_path).unwrap());
     }
 }
