@@ -5,11 +5,11 @@
 
 A **fast, keyboard-driven kanban tool**
 
+![Kanban Demo](demo.gif)
+
 **Inspired by**: [lazygit](https://github.com/jesseduffield/lazygit)
 
 **Made possible** by: [ratatui](https://ratatui.rs)
-
-![Kanban Demo](demo.gif)
 
 ## Features
 
