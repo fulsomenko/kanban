@@ -67,7 +67,7 @@ impl ChangeDetector for FileWatcher {
                 .parent()
                 .expect("Canonicalized path should always have parent")
                 .to_path_buf();
-            let watch_path = canonical_path;
+            let watch_path = canonical_path.clone();
 
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
@@ -92,13 +92,22 @@ impl ChangeDetector for FileWatcher {
                 }
             }) {
                 Ok(mut watcher) => {
-                    if let Err(e) = watcher.watch(&parent, RecursiveMode::NonRecursive) {
-                        tracing::error!("Failed to watch directory: {}", e);
+                    // Try to watch the file directly first (works on some platforms)
+                    let watch_result = watcher.watch(&canonical_path, RecursiveMode::NonRecursive);
+
+                    if watch_result.is_err() {
+                        // Fallback to watching the parent directory
+                        if let Err(e) = watcher.watch(&parent, RecursiveMode::NonRecursive) {
+                            tracing::error!("Failed to watch file or parent directory: {}", e);
+                            return;
+                        }
+                        tracing::info!("Watching parent directory: {}", parent.display());
                     } else {
-                        tracing::info!("Started watching directory: {}", parent.display());
-                        // Keep watcher alive
-                        std::future::pending::<()>().await;
+                        tracing::info!("Watching file: {}", canonical_path.display());
                     }
+
+                    // Keep watcher alive
+                    std::future::pending::<()>().await;
                 }
                 Err(e) => {
                     tracing::error!("Failed to create watcher: {}", e);
@@ -166,7 +175,14 @@ mod tests {
 
         // We got an event (timing is platform-dependent, so this might be flaky)
         if let Ok(Ok(event)) = result {
-            assert_eq!(event.path, file_path);
+            // Canonicalize both paths to handle platform differences (e.g., macOS /var -> /private/var)
+            let expected_path = tokio::fs::canonicalize(&file_path)
+                .await
+                .unwrap_or(file_path.clone());
+            let event_path = tokio::fs::canonicalize(&event.path)
+                .await
+                .unwrap_or(event.path.clone());
+            assert_eq!(event_path, expected_path);
         }
     }
 }
