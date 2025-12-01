@@ -212,7 +212,8 @@ impl App {
                         }
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id) {
+                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
@@ -230,7 +231,8 @@ impl App {
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id) {
+                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
@@ -239,7 +241,10 @@ impl App {
                                         },
                                     });
                                     if let Err(e) = self.execute_command(cmd) {
-                                        tracing::error!("Failed to clear sprint card prefix override: {}", e);
+                                        tracing::error!(
+                                            "Failed to clear sprint card prefix override: {}",
+                                            e
+                                        );
                                     } else {
                                         tracing::info!("Cleared sprint card prefix override");
                                     }
@@ -277,7 +282,8 @@ impl App {
                         }
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id) {
+                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
@@ -305,7 +311,8 @@ impl App {
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id) {
+                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
@@ -314,7 +321,10 @@ impl App {
                                         },
                                     });
                                     if let Err(e) = self.execute_command(cmd) {
-                                        tracing::error!("Failed to set sprint card prefix override: {}", e);
+                                        tracing::error!(
+                                            "Failed to set sprint card prefix override: {}",
+                                            e
+                                        );
                                     } else {
                                         tracing::info!(
                                             "Set sprint card prefix override to: {}",

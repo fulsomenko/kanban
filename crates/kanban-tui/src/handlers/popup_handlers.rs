@@ -320,7 +320,8 @@ impl App {
                                 tracing::error!("Failed to unassign card from sprint: {}", e);
                             } else {
                                 // Clear sprint log via direct mutation
-                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == *card_id) {
+                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == *card_id)
+                                {
                                     card.end_current_sprint_log();
                                 }
                             }
@@ -371,7 +372,9 @@ impl App {
                                         tracing::error!("Failed to assign card to sprint: {}", e);
                                     } else {
                                         // Update sprint metadata via direct mutation
-                                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == *card_id) {
+                                        if let Some(card) =
+                                            self.cards.iter_mut().find(|c| c.id == *card_id)
+                                        {
                                             if let Some(old_sprint_id) = card.sprint_id {
                                                 if old_sprint_id != sprint_id {
                                                     card.end_current_sprint_log();

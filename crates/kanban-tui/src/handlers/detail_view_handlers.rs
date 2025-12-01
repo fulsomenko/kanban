@@ -552,8 +552,9 @@ impl App {
                                                     .collect();
                                                 columns.sort_by_key(|(_, pos)| *pos);
 
-                                                if let Some(current_idx) =
-                                                    columns.iter().position(|(id, _)| *id == current_col)
+                                                if let Some(current_idx) = columns
+                                                    .iter()
+                                                    .position(|(id, _)| *id == current_col)
                                                 {
                                                     let new_idx = if is_right {
                                                         (current_idx + 1).min(columns.len() - 1)
@@ -561,9 +562,13 @@ impl App {
                                                         current_idx.saturating_sub(1)
                                                     };
 
-                                                    if let Some((new_col_id, _)) = columns.get(new_idx) {
-                                                        let was_in_last = current_idx == columns.len() - 1;
-                                                        let moving_to_last = new_idx == columns.len() - 1;
+                                                    if let Some((new_col_id, _)) =
+                                                        columns.get(new_idx)
+                                                    {
+                                                        let was_in_last =
+                                                            current_idx == columns.len() - 1;
+                                                        let moving_to_last =
+                                                            new_idx == columns.len() - 1;
                                                         Some((
                                                             *new_col_id,
                                                             was_in_last,
@@ -589,15 +594,21 @@ impl App {
                                     }
                                 };
 
-                                if let Some((new_col_id, was_in_last, moving_to_last, col_count, card_title, current_status)) = move_info {
+                                if let Some((
+                                    new_col_id,
+                                    was_in_last,
+                                    moving_to_last,
+                                    col_count,
+                                    card_title,
+                                    current_status,
+                                )) = move_info
+                                {
                                     // Move card using command
-                                    let move_cmd = Box::new(
-                                        crate::state::commands::MoveCard {
-                                            card_id,
-                                            new_column_id: new_col_id,
-                                            new_position: 0,
-                                        },
-                                    );
+                                    let move_cmd = Box::new(crate::state::commands::MoveCard {
+                                        card_id,
+                                        new_column_id: new_col_id,
+                                        new_position: 0,
+                                    });
                                     if let Err(e) = self.execute_command(move_cmd) {
                                         tracing::error!("Failed to move card: {}", e);
                                         return;
@@ -610,22 +621,16 @@ impl App {
                                         && current_status == kanban_domain::CardStatus::Done
                                     {
                                         // Moving left from last column: uncomplete
-                                        let status_cmd = Box::new(
-                                            crate::state::commands::UpdateCard {
+                                        let status_cmd =
+                                            Box::new(crate::state::commands::UpdateCard {
                                                 card_id,
                                                 updates: kanban_domain::CardUpdate {
-                                                    status: Some(
-                                                        kanban_domain::CardStatus::Todo,
-                                                    ),
+                                                    status: Some(kanban_domain::CardStatus::Todo),
                                                     ..Default::default()
                                                 },
-                                            },
-                                        );
+                                            });
                                         if let Err(e) = self.execute_command(status_cmd) {
-                                            tracing::error!(
-                                                "Failed to update card status: {}",
-                                                e
-                                            );
+                                            tracing::error!("Failed to update card status: {}", e);
                                         } else {
                                             tracing::info!(
                                                 "Moved card {} left from last column (marked as incomplete)",
@@ -635,26 +640,19 @@ impl App {
                                     } else if is_right
                                         && moving_to_last
                                         && col_count > 1
-                                        && current_status
-                                            != kanban_domain::CardStatus::Done
+                                        && current_status != kanban_domain::CardStatus::Done
                                     {
                                         // Moving right to last column: complete
-                                        let status_cmd = Box::new(
-                                            crate::state::commands::UpdateCard {
+                                        let status_cmd =
+                                            Box::new(crate::state::commands::UpdateCard {
                                                 card_id,
                                                 updates: kanban_domain::CardUpdate {
-                                                    status: Some(
-                                                        kanban_domain::CardStatus::Done,
-                                                    ),
+                                                    status: Some(kanban_domain::CardStatus::Done),
                                                     ..Default::default()
                                                 },
-                                            },
-                                        );
+                                            });
                                         if let Err(e) = self.execute_command(status_cmd) {
-                                            tracing::error!(
-                                                "Failed to update card status: {}",
-                                                e
-                                            );
+                                            tracing::error!("Failed to update card status: {}", e);
                                         } else {
                                             tracing::info!(
                                                 "Moved card {} to last column (marked as complete)",
@@ -662,11 +660,11 @@ impl App {
                                             );
                                         }
                                     } else {
-                                        let direction =
-                                            if is_right { "right" } else { "left" };
+                                        let direction = if is_right { "right" } else { "left" };
                                         tracing::info!(
                                             "Moved card {} to {}",
-                                            card_title, direction
+                                            card_title,
+                                            direction
                                         );
                                     }
                                 }

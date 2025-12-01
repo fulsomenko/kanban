@@ -29,7 +29,6 @@ impl FileMetadata {
         let current = Self::from_file(path)?;
         Ok(current != *self)
     }
-
 }
 
 #[cfg(test)]

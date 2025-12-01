@@ -1055,14 +1055,7 @@ impl App {
             ..
         } = self;
 
-        state_manager.execute_with_context(
-            boards,
-            columns,
-            cards,
-            sprints,
-            archived_cards,
-            command,
-        )
+        state_manager.execute_with_context(boards, columns, cards, sprints, archived_cards, command)
     }
 
     pub fn refresh_view(&mut self) {

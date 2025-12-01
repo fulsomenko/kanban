@@ -59,11 +59,10 @@ impl PersistenceStore for JsonFileStore {
                 FileMetadata::from_file(&self.path).map_err(kanban_core::KanbanError::Io)?;
 
             // Compare with last known metadata
-            let guard = self.last_known_metadata.lock()
-                .unwrap_or_else(|poisoned| {
-                    tracing::warn!("Mutex poisoned in save conflict check, recovering");
-                    poisoned.into_inner()
-                });
+            let guard = self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
+                tracing::warn!("Mutex poisoned in save conflict check, recovering");
+                poisoned.into_inner()
+            });
             if let Some(last_known) = *guard {
                 if last_known != current_metadata {
                     return Err(kanban_core::KanbanError::ConflictDetected {
@@ -96,11 +95,10 @@ impl PersistenceStore for JsonFileStore {
 
         // Update last known metadata after successful write
         if let Ok(new_metadata) = FileMetadata::from_file(&self.path) {
-            let mut guard = self.last_known_metadata.lock()
-                .unwrap_or_else(|poisoned| {
-                    tracing::warn!("Mutex poisoned in save metadata update, recovering");
-                    poisoned.into_inner()
-                });
+            let mut guard = self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
+                tracing::warn!("Mutex poisoned in save metadata update, recovering");
+                poisoned.into_inner()
+            });
             *guard = Some(new_metadata);
         }
 
@@ -152,11 +150,10 @@ impl PersistenceStore for JsonFileStore {
 
         // Track file metadata after successful load for conflict detection
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
-            let mut guard = self.last_known_metadata.lock()
-                .unwrap_or_else(|poisoned| {
-                    tracing::warn!("Mutex poisoned in load metadata tracking, recovering");
-                    poisoned.into_inner()
-                });
+            let mut guard = self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
+                tracing::warn!("Mutex poisoned in load metadata tracking, recovering");
+                poisoned.into_inner()
+            });
             *guard = Some(file_metadata);
         }
 
