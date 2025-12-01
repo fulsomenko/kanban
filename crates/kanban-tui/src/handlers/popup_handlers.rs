@@ -44,8 +44,8 @@ impl App {
             KeyCode::Enter => {
                 if let Some(priority_idx) = self.priority_selection.get() {
                     if let Some(card_idx) = self.active_card_index {
-                        if let Some(card) = self.cards.get_mut(card_idx) {
-                            use kanban_domain::CardPriority;
+                        if let Some(card) = self.cards.get(card_idx) {
+                            use kanban_domain::{CardPriority, CardUpdate};
                             let priority = match priority_idx {
                                 0 => CardPriority::Low,
                                 1 => CardPriority::Medium,
@@ -53,8 +53,17 @@ impl App {
                                 3 => CardPriority::Critical,
                                 _ => CardPriority::Medium,
                             };
-                            card.update_priority(priority);
-                            self.state_manager.mark_dirty();
+                            let card_id = card.id;
+                            let cmd = Box::new(crate::state::commands::UpdateCard {
+                                card_id,
+                                updates: CardUpdate {
+                                    priority: Some(priority),
+                                    ..Default::default()
+                                },
+                            });
+                            if let Err(e) = self.execute_command(cmd) {
+                                tracing::error!("Failed to update card priority: {}", e);
+                            }
                         }
                     }
                 }
@@ -110,8 +119,16 @@ impl App {
                     self.current_sort_order = Some(order);
 
                     if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get_mut(board_idx) {
-                            board.update_task_sort(field, order);
+                        if let Some(board) = self.boards.get(board_idx) {
+                            let board_id = board.id;
+                            let cmd = Box::new(crate::state::commands::SetBoardTaskSort {
+                                board_id,
+                                field,
+                                order,
+                            });
+                            if let Err(e) = self.execute_command(cmd) {
+                                tracing::error!("Failed to set board task sort: {}", e);
+                            }
                         }
                     }
 
@@ -164,40 +181,90 @@ impl App {
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if let Some(selection_idx) = self.sprint_assign_selection.get() {
                     if let Some(card_idx) = self.active_card_index {
-                        if let Some(card) = self.cards.get_mut(card_idx) {
-                            if selection_idx == 0 {
-                                card.end_current_sprint_log();
-                                card.sprint_id = None;
-                                card.set_assigned_prefix(None);
+                        let card_id = {
+                            if let Some(card) = self.cards.get(card_idx) {
+                                card.id
+                            } else {
+                                return;
+                            }
+                        };
+
+                        if selection_idx == 0 {
+                            // Unassign from sprint
+                            let cmd = Box::new(crate::state::commands::UpdateCard {
+                                card_id,
+                                updates: kanban_domain::CardUpdate {
+                                    sprint_id: Some(None),
+                                    assigned_prefix: Some(None),
+                                    ..Default::default()
+                                },
+                            });
+                            if let Err(e) = self.execute_command(cmd) {
+                                tracing::error!("Failed to unassign card from sprint: {}", e);
+                            } else {
+                                // Clear sprint log via direct mutation (domain operation)
+                                if let Some(card) = self.cards.get_mut(card_idx) {
+                                    card.end_current_sprint_log();
+                                }
                                 tracing::info!("Unassigned card from sprint");
-                            } else if let Some(board_idx) = self.active_board_index {
-                                if let Some(board) = self.boards.get(board_idx) {
-                                    let board_sprints: Vec<_> = self
-                                        .sprints
-                                        .iter()
-                                        .filter(|s| s.board_id == board.id)
-                                        .collect();
-                                    if let Some(sprint) = board_sprints.get(selection_idx - 1) {
-                                        if let Some(old_sprint_id) = card.sprint_id {
-                                            if old_sprint_id != sprint.id {
-                                                card.end_current_sprint_log();
-                                            }
+                            }
+                        } else if let Some(board_idx) = self.active_board_index {
+                            if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
+                                let board_sprints: Vec<_> = self
+                                    .sprints
+                                    .iter()
+                                    .filter(|s| s.board_id == board_id)
+                                    .collect();
+                                if let Some(sprint) = board_sprints.get(selection_idx - 1) {
+                                    let sprint_id = sprint.id;
+                                    let sprint_number = sprint.sprint_number;
+                                    let sprint_status = format!("{:?}", sprint.status);
+
+                                    // Get effective prefix and sprint info before calling execute_command
+                                    let effective_prefix = {
+                                        if let Some(board) = self.boards.get(board_idx) {
+                                            sprint.effective_prefix(board, "task").to_string()
+                                        } else {
+                                            "task".to_string()
                                         }
-                                        card.assign_to_sprint(
-                                            sprint.id,
-                                            sprint.sprint_number,
-                                            sprint.get_name(board).map(|s| s.to_string()),
-                                            format!("{:?}", sprint.status),
-                                        );
-                                        // Set the assigned prefix based on the sprint's effective prefix
-                                        let effective_prefix =
-                                            sprint.effective_prefix(board, "task");
-                                        card.set_assigned_prefix(Some(
-                                            effective_prefix.to_string(),
-                                        ));
+                                    };
+
+                                    let sprint_name = {
+                                        if let Some(board) = self.boards.get(board_idx) {
+                                            sprint.get_name(board).map(|s| s.to_string())
+                                        } else {
+                                            None
+                                        }
+                                    };
+
+                                    let cmd = Box::new(crate::state::commands::UpdateCard {
+                                        card_id,
+                                        updates: kanban_domain::CardUpdate {
+                                            sprint_id: Some(Some(sprint_id)),
+                                            assigned_prefix: Some(Some(effective_prefix.clone())),
+                                            ..Default::default()
+                                        },
+                                    });
+                                    if let Err(e) = self.execute_command(cmd) {
+                                        tracing::error!("Failed to assign card to sprint: {}", e);
+                                    } else {
+                                        // Update sprint metadata via direct mutation (domain operation)
+                                        if let Some(card) = self.cards.get_mut(card_idx) {
+                                            if let Some(old_sprint_id) = card.sprint_id {
+                                                if old_sprint_id != sprint_id {
+                                                    card.end_current_sprint_log();
+                                                }
+                                            }
+                                            card.assign_to_sprint(
+                                                sprint_id,
+                                                sprint_number,
+                                                sprint_name,
+                                                sprint_status,
+                                            );
+                                        }
                                         tracing::info!(
-                                            "Assigned card to sprint: {}",
-                                            sprint.formatted_name(board, "sprint")
+                                            "Assigned card to sprint with id: {}",
+                                            sprint_id
                                         );
                                     }
                                 }
@@ -205,7 +272,6 @@ impl App {
                         }
                     }
                 }
-                self.state_manager.mark_dirty();
                 self.mode = AppMode::Normal;
                 self.sprint_assign_selection.clear();
             }
@@ -238,66 +304,98 @@ impl App {
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if let Some(selection_idx) = self.sprint_assign_selection.get() {
                     let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
-                    for card_id in card_ids {
-                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                            if selection_idx == 0 {
-                                card.end_current_sprint_log();
-                                card.sprint_id = None;
-                                card.set_assigned_prefix(None);
-                            } else if let Some(board_idx) = self.active_board_index {
-                                if let Some(board) = self.boards.get(board_idx) {
-                                    let board_sprints: Vec<_> = self
-                                        .sprints
-                                        .iter()
-                                        .filter(|s| s.board_id == board.id)
-                                        .collect();
-                                    if let Some(sprint) = board_sprints.get(selection_idx - 1) {
-                                        if let Some(old_sprint_id) = card.sprint_id {
-                                            if old_sprint_id != sprint.id {
-                                                card.end_current_sprint_log();
-                                            }
-                                        }
-                                        card.assign_to_sprint(
-                                            sprint.id,
-                                            sprint.sprint_number,
-                                            sprint.get_name(board).map(|s| s.to_string()),
-                                            format!("{:?}", sprint.status),
-                                        );
-                                        // Set the assigned prefix based on the sprint's effective prefix
-                                        let effective_prefix =
-                                            sprint.effective_prefix(board, "task");
-                                        card.set_assigned_prefix(Some(
-                                            effective_prefix.to_string(),
-                                        ));
-                                    }
+
+                    if selection_idx == 0 {
+                        // Unassign cards from sprint
+                        for card_id in &card_ids {
+                            let cmd = Box::new(crate::state::commands::UpdateCard {
+                                card_id: *card_id,
+                                updates: kanban_domain::CardUpdate {
+                                    sprint_id: Some(None),
+                                    assigned_prefix: Some(None),
+                                    ..Default::default()
+                                },
+                            });
+                            if let Err(e) = self.execute_command(cmd) {
+                                tracing::error!("Failed to unassign card from sprint: {}", e);
+                            } else {
+                                // Clear sprint log via direct mutation
+                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == *card_id) {
+                                    card.end_current_sprint_log();
                                 }
                             }
                         }
-                    }
-
-                    if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        tracing::info!(
+                            "Unassigned {} cards from sprint",
+                            self.selected_cards.len()
+                        );
+                    } else if let Some(board_idx) = self.active_board_index {
+                        if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
                             let board_sprints: Vec<_> = self
                                 .sprints
                                 .iter()
-                                .filter(|s| s.board_id == board.id)
+                                .filter(|s| s.board_id == board_id)
                                 .collect();
-                            if selection_idx == 0 {
+                            if let Some(sprint) = board_sprints.get(selection_idx - 1) {
+                                let sprint_id = sprint.id;
+                                let sprint_number = sprint.sprint_number;
+                                let sprint_status = format!("{:?}", sprint.status);
+
+                                // Get effective prefix and sprint info before the loop
+                                let effective_prefix = {
+                                    if let Some(board) = self.boards.get(board_idx) {
+                                        sprint.effective_prefix(board, "task").to_string()
+                                    } else {
+                                        "task".to_string()
+                                    }
+                                };
+
+                                let sprint_name = {
+                                    if let Some(board) = self.boards.get(board_idx) {
+                                        sprint.get_name(board).map(|s| s.to_string())
+                                    } else {
+                                        None
+                                    }
+                                };
+
+                                for card_id in &card_ids {
+                                    let cmd = Box::new(crate::state::commands::UpdateCard {
+                                        card_id: *card_id,
+                                        updates: kanban_domain::CardUpdate {
+                                            sprint_id: Some(Some(sprint_id)),
+                                            assigned_prefix: Some(Some(effective_prefix.clone())),
+                                            ..Default::default()
+                                        },
+                                    });
+                                    if let Err(e) = self.execute_command(cmd) {
+                                        tracing::error!("Failed to assign card to sprint: {}", e);
+                                    } else {
+                                        // Update sprint metadata via direct mutation
+                                        if let Some(card) = self.cards.iter_mut().find(|c| c.id == *card_id) {
+                                            if let Some(old_sprint_id) = card.sprint_id {
+                                                if old_sprint_id != sprint_id {
+                                                    card.end_current_sprint_log();
+                                                }
+                                            }
+                                            card.assign_to_sprint(
+                                                sprint_id,
+                                                sprint_number,
+                                                sprint_name.clone(),
+                                                sprint_status.clone(),
+                                            );
+                                        }
+                                    }
+                                }
+
                                 tracing::info!(
-                                    "Unassigned {} cards from sprint",
-                                    self.selected_cards.len()
-                                );
-                            } else if let Some(sprint) = board_sprints.get(selection_idx - 1) {
-                                tracing::info!(
-                                    "Assigned {} cards to sprint: {}",
+                                    "Assigned {} cards to sprint with id: {}",
                                     self.selected_cards.len(),
-                                    sprint.formatted_name(board, "sprint")
+                                    sprint_id
                                 );
                             }
                         }
                     }
                 }
-                self.state_manager.mark_dirty();
                 self.mode = AppMode::Normal;
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();

@@ -436,16 +436,25 @@ impl App {
                             }
                         }
                         CardListAction::Complete(card_id) => {
-                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                                use kanban_domain::CardStatus;
+                            if let Some(card) = self.cards.iter().find(|c| c.id == card_id) {
+                                use kanban_domain::{CardStatus, CardUpdate};
                                 let new_status = if card.status == CardStatus::Done {
                                     CardStatus::Todo
                                 } else {
                                     CardStatus::Done
                                 };
-                                card.update_status(new_status);
-                                self.state_manager.mark_dirty();
-                                tracing::info!("Card status updated to: {:?}", new_status);
+                                let cmd = Box::new(crate::state::commands::UpdateCard {
+                                    card_id,
+                                    updates: CardUpdate {
+                                        status: Some(new_status),
+                                        ..Default::default()
+                                    },
+                                });
+                                if let Err(e) = self.execute_command(cmd) {
+                                    tracing::error!("Failed to update card status: {}", e);
+                                } else {
+                                    tracing::info!("Card status updated to: {:?}", new_status);
+                                }
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
@@ -525,76 +534,140 @@ impl App {
                         CardListAction::MoveColumn(card_id, is_right) => {
                             if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
                             {
-                                if let Some(card) = self.cards.get_mut(card_idx) {
-                                    if let Some(board_idx) = self.active_board_index {
-                                        if let Some(board) = self.boards.get(board_idx) {
-                                            let current_col = card.column_id;
-                                            let mut columns: Vec<_> = self
-                                                .columns
-                                                .iter()
-                                                .filter(|c| c.board_id == board.id)
-                                                .collect();
-                                            columns.sort_by_key(|col| col.position);
+                                // Extract all necessary data before any command execution
+                                let move_info = {
+                                    if let Some(card) = self.cards.get(card_idx) {
+                                        let current_col = card.column_id;
+                                        let current_status = card.status;
+                                        let card_title = card.title.clone();
 
-                                            if let Some(current_idx) =
-                                                columns.iter().position(|c| c.id == current_col)
-                                            {
-                                                let new_idx = if is_right {
-                                                    (current_idx + 1).min(columns.len() - 1)
-                                                } else {
-                                                    current_idx.saturating_sub(1)
-                                                };
+                                        if let Some(board_idx) = self.active_board_index {
+                                            if let Some(board) = self.boards.get(board_idx) {
+                                                let board_id = board.id;
+                                                let mut columns: Vec<_> = self
+                                                    .columns
+                                                    .iter()
+                                                    .filter(|c| c.board_id == board_id)
+                                                    .map(|c| (c.id, c.position))
+                                                    .collect();
+                                                columns.sort_by_key(|(_, pos)| *pos);
 
-                                                if let Some(new_col) = columns.get(new_idx) {
-                                                    let was_in_last =
-                                                        current_idx == columns.len() - 1;
-                                                    let moving_to_last =
-                                                        new_idx == columns.len() - 1;
-
-                                                    card.column_id = new_col.id;
-                                                    self.state_manager.mark_dirty();
-
-                                                    // Update status based on movement
-                                                    if !is_right
-                                                        && was_in_last
-                                                        && columns.len() > 1
-                                                        && card.status
-                                                            == kanban_domain::CardStatus::Done
-                                                    {
-                                                        // Moving left from last column: uncomplete
-                                                        card.update_status(
-                                                            kanban_domain::CardStatus::Todo,
-                                                        );
-                                                        tracing::info!(
-                                                            "Moved card {} left from last column (marked as incomplete)",
-                                                            card.title
-                                                        );
-                                                    } else if is_right
-                                                        && moving_to_last
-                                                        && columns.len() > 1
-                                                        && card.status
-                                                            != kanban_domain::CardStatus::Done
-                                                    {
-                                                        // Moving right to last column: complete
-                                                        card.update_status(
-                                                            kanban_domain::CardStatus::Done,
-                                                        );
-                                                        tracing::info!(
-                                                            "Moved card {} to last column (marked as complete)",
-                                                            card.title
-                                                        );
+                                                if let Some(current_idx) =
+                                                    columns.iter().position(|(id, _)| *id == current_col)
+                                                {
+                                                    let new_idx = if is_right {
+                                                        (current_idx + 1).min(columns.len() - 1)
                                                     } else {
-                                                        let direction =
-                                                            if is_right { "right" } else { "left" };
-                                                        tracing::info!(
-                                                            "Moved card {} to {}",
-                                                            card.title,
-                                                            direction
-                                                        );
+                                                        current_idx.saturating_sub(1)
+                                                    };
+
+                                                    if let Some((new_col_id, _)) = columns.get(new_idx) {
+                                                        let was_in_last = current_idx == columns.len() - 1;
+                                                        let moving_to_last = new_idx == columns.len() - 1;
+                                                        Some((
+                                                            *new_col_id,
+                                                            was_in_last,
+                                                            moving_to_last,
+                                                            columns.len(),
+                                                            card_title,
+                                                            current_status,
+                                                        ))
+                                                    } else {
+                                                        None
                                                     }
+                                                } else {
+                                                    None
                                                 }
+                                            } else {
+                                                None
                                             }
+                                        } else {
+                                            None
                                         }
+                                    } else {
+                                        None
+                                    }
+                                };
+
+                                if let Some((new_col_id, was_in_last, moving_to_last, col_count, card_title, current_status)) = move_info {
+                                    // Move card using command
+                                    let move_cmd = Box::new(
+                                        crate::state::commands::MoveCard {
+                                            card_id,
+                                            new_column_id: new_col_id,
+                                            new_position: 0,
+                                        },
+                                    );
+                                    if let Err(e) = self.execute_command(move_cmd) {
+                                        tracing::error!("Failed to move card: {}", e);
+                                        return;
+                                    }
+
+                                    // Update status based on movement
+                                    if !is_right
+                                        && was_in_last
+                                        && col_count > 1
+                                        && current_status == kanban_domain::CardStatus::Done
+                                    {
+                                        // Moving left from last column: uncomplete
+                                        let status_cmd = Box::new(
+                                            crate::state::commands::UpdateCard {
+                                                card_id,
+                                                updates: kanban_domain::CardUpdate {
+                                                    status: Some(
+                                                        kanban_domain::CardStatus::Todo,
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        );
+                                        if let Err(e) = self.execute_command(status_cmd) {
+                                            tracing::error!(
+                                                "Failed to update card status: {}",
+                                                e
+                                            );
+                                        } else {
+                                            tracing::info!(
+                                                "Moved card {} left from last column (marked as incomplete)",
+                                                card_title
+                                            );
+                                        }
+                                    } else if is_right
+                                        && moving_to_last
+                                        && col_count > 1
+                                        && current_status
+                                            != kanban_domain::CardStatus::Done
+                                    {
+                                        // Moving right to last column: complete
+                                        let status_cmd = Box::new(
+                                            crate::state::commands::UpdateCard {
+                                                card_id,
+                                                updates: kanban_domain::CardUpdate {
+                                                    status: Some(
+                                                        kanban_domain::CardStatus::Done,
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        );
+                                        if let Err(e) = self.execute_command(status_cmd) {
+                                            tracing::error!(
+                                                "Failed to update card status: {}",
+                                                e
+                                            );
+                                        } else {
+                                            tracing::info!(
+                                                "Moved card {} to last column (marked as complete)",
+                                                card_title
+                                            );
+                                        }
+                                    } else {
+                                        let direction =
+                                            if is_right { "right" } else { "left" };
+                                        tracing::info!(
+                                            "Moved card {} to {}",
+                                            card_title, direction
+                                        );
                                     }
                                 }
                             }
