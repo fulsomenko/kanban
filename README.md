@@ -3,7 +3,11 @@
 [![Crates.io](https://img.shields.io/crates/v/kanban-cli.svg)](https://crates.io/crates/kanban-cli)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
 
-A **fast, keyboard-driven kanban tool**, inspired by [lazygit](https://github.com/jesseduffield/lazygit). Built with Rust.
+A **fast, keyboard-driven kanban tool**
+
+**Inspired by**: [lazygit](https://github.com/jesseduffield/lazygit)
+
+**Made possible** by: [ratatui](https://ratatui.rs)
 
 ![Kanban Demo](demo.gif)
 
@@ -118,10 +122,6 @@ crates/
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, code style, and testing guidelines.
-
-**Inspired by**: [lazygit](https://github.com/jesseduffield/lazygit)
-
-**Made possible** by: [ratatui](https://ratatui.rs)
 
 ## License
 
