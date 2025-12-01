@@ -2,6 +2,7 @@
 bump: patch
 ---
 
+- feat(tui): add user-visible error display banner
 - feat(tui): Add ExternalChangeDetected dialog
 - feat(tui): Integrate FileWatcher with App event loop
 - feat(state): Add view refresh tracking to StateManager
@@ -12,6 +13,6 @@ bump: patch
 - feat(persistence): add automatic V1→V2 migration on load
 - feat(state): add debouncing to StateManager::save_if_needed()
 - feat(domain): add active_sprint_id field to BoardUpdate
-- feat(domain): add CreateBoard command
 - feat(state): create Command trait and StateManager
 - feat(persistence): create kanban-persistence crate structure
+
