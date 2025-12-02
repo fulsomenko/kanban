@@ -87,14 +87,39 @@ impl ChangeDetector for FileWatcher {
 
                         let has_our_file = event.paths.iter().any(|p| p == &watch_path);
 
+                        if is_relevant_event {
+                            tracing::debug!(
+                                "File system event detected: kind={:?}, paths={:?}, has_our_file={}",
+                                event.kind,
+                                event.paths,
+                                has_our_file
+                            );
+                        }
+
                         // For parent directory watching, trigger on any relevant event
                         // (atomic writes show as temp file events, but the target file exists and changed)
                         if is_relevant_event && (has_our_file || watch_path.exists()) {
+                            tracing::debug!(
+                                "File event detected: kind={:?}, path={}, our_file_exists={}",
+                                event.kind,
+                                watch_path.display(),
+                                watch_path.exists()
+                            );
                             let change = ChangeEvent {
                                 path: watch_path.clone(),
                                 detected_at: Utc::now(),
                             };
-                            let _ = tx.send(change);
+                            match tx.send(change) {
+                                Ok(receiver_count) => {
+                                    tracing::debug!(
+                                        "File change event sent to {} receivers",
+                                        receiver_count
+                                    );
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to send file change event: {}", e);
+                                }
+                            }
                         }
                     }
                     Err(e) => {
