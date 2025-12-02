@@ -1318,13 +1318,17 @@ impl App {
         // Initialize file watching if a save file is configured
         if let Some(ref save_file) = self.save_file {
             use kanban_persistence::ChangeDetector;
+            tracing::info!("Initializing file watcher for: {}", save_file);
             let watcher = kanban_persistence::FileWatcher::new();
             let rx = watcher.subscribe();
             self.file_change_rx = Some(rx);
+            tracing::debug!("File change broadcast receiver subscribed");
 
             let path = std::path::PathBuf::from(save_file);
-            if let Err(e) = watcher.start_watching(path).await {
-                tracing::warn!("Failed to start file watching: {}", e);
+            if let Err(e) = watcher.start_watching(path.clone()).await {
+                tracing::warn!("Failed to start file watching for {}: {}", path.display(), e);
+            } else {
+                tracing::info!("File watcher started for: {}", path.display());
             }
 
             // Store the watcher to keep the background task alive
@@ -1436,7 +1440,26 @@ impl App {
                     }
                     Some(_change_event) = async {
                         if let Some(ref mut rx) = &mut self.file_change_rx {
-                            rx.recv().await.ok()
+                            match rx.recv().await {
+                                Ok(event) => {
+                                    tracing::debug!(
+                                        "File change event received at {}",
+                                        event.detected_at
+                                    );
+                                    Some(event)
+                                }
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                                    tracing::warn!(
+                                        "File watcher events lagged: {} events dropped",
+                                        count
+                                    );
+                                    None
+                                }
+                                Err(e) => {
+                                    tracing::error!("File change receiver error: {}", e);
+                                    None
+                                }
+                            }
                         } else {
                             std::future::pending().await
                         }
@@ -1444,18 +1467,20 @@ impl App {
                         // Ignore file events that occur during our own save operation
                         if self.state_manager.is_currently_saving() {
                             tracing::debug!("Ignoring file event during own save operation");
-                            continue;
-                        }
-
-                        // External file change detected - handle smart reload
-                        if !self.state_manager.is_dirty() {
-                            // No local changes, auto-reload silently
-                            self.auto_reload_from_external_change().await;
-                            tracing::info!("Auto-reloaded due to external file change");
-                        } else if self.mode != AppMode::ConflictResolution && self.mode != AppMode::ExternalChangeDetected {
-                            // Local changes exist, prompt user
-                            self.mode = AppMode::ExternalChangeDetected;
-                            tracing::warn!("External file change detected with local changes");
+                        } else {
+                            // External file change detected - handle smart reload
+                            if !self.state_manager.is_dirty() {
+                                // No local changes, auto-reload silently
+                                tracing::info!("External change detected, auto-reloading");
+                                self.auto_reload_from_external_change().await;
+                                tracing::info!("Auto-reloaded due to external file change");
+                            } else if self.mode != AppMode::ConflictResolution
+                                && self.mode != AppMode::ExternalChangeDetected
+                            {
+                                // Local changes exist, prompt user
+                                tracing::warn!("External file change detected with local changes");
+                                self.mode = AppMode::ExternalChangeDetected;
+                            }
                         }
                     }
                 }
