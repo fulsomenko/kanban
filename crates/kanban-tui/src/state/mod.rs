@@ -137,12 +137,20 @@ impl StateManager {
             };
 
             self.currently_saving.store(true, Ordering::SeqCst);
+            tracing::debug!(
+                "Save operation started (instance_id: {})",
+                self.instance_id
+            );
 
             let save_result = store.save(persistence_snapshot).await;
 
             // Allow time for file system events to be dispatched by the OS
             tokio::time::sleep(Duration::from_millis(50)).await;
             self.currently_saving.store(false, Ordering::SeqCst);
+            tracing::debug!(
+                "Save operation completed and flag cleared (instance_id: {})",
+                self.instance_id
+            );
 
             match save_result {
                 Ok(_) => {
@@ -177,12 +185,20 @@ impl StateManager {
             };
 
             self.currently_saving.store(true, Ordering::SeqCst);
+            tracing::debug!(
+                "Force save operation started (instance_id: {})",
+                self.instance_id
+            );
 
             let save_result = store.save(persistence_snapshot).await;
 
             // Allow time for file system events to be dispatched by the OS
             tokio::time::sleep(Duration::from_millis(50)).await;
             self.currently_saving.store(false, Ordering::SeqCst);
+            tracing::debug!(
+                "Force save operation completed and flag cleared (instance_id: {})",
+                self.instance_id
+            );
 
             save_result?;
             self.dirty = false;
