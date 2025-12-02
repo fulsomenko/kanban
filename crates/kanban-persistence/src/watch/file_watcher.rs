@@ -74,16 +74,22 @@ impl ChangeDetector for FileWatcher {
                     Ok(event) => {
                         // Detect changes from any write strategy:
                         // - Modify(Data(Content)): direct writes
-                        // - Create(_): atomic writes (rename operation)
+                        // - Create(_): atomic writes (rename operation creating new file)
+                        // - Remove(_): atomic writes (old file removed during rename)
                         let is_relevant_event = match event.kind {
                             notify::EventKind::Modify(notify::event::ModifyKind::Data(
                                 notify::event::DataChange::Content,
                             )) => true,
                             notify::EventKind::Create(_) => true,
+                            notify::EventKind::Remove(_) => true,
                             _ => false,
                         };
 
-                        if is_relevant_event && event.paths.iter().any(|p| p == &watch_path) {
+                        let has_our_file = event.paths.iter().any(|p| p == &watch_path);
+
+                        // For parent directory watching, trigger on any relevant event
+                        // (atomic writes show as temp file events, but the target file exists and changed)
+                        if is_relevant_event && (has_our_file || watch_path.exists()) {
                             let change = ChangeEvent {
                                 path: watch_path.clone(),
                                 detected_at: Utc::now(),
@@ -97,18 +103,18 @@ impl ChangeDetector for FileWatcher {
                 }
             }) {
                 Ok(mut watcher) => {
-                    // Try to watch the file directly first (works on some platforms)
-                    let watch_result = watcher.watch(&canonical_path, RecursiveMode::NonRecursive);
+                    // Watch parent directory first (better for detecting atomic writes on macOS FSEvents)
+                    let watch_result = watcher.watch(&parent, RecursiveMode::NonRecursive);
 
                     if watch_result.is_err() {
-                        // Fallback to watching the parent directory
-                        if let Err(e) = watcher.watch(&parent, RecursiveMode::NonRecursive) {
+                        // Fallback to watching the file directly if parent watch fails
+                        if let Err(e) = watcher.watch(&canonical_path, RecursiveMode::NonRecursive) {
                             tracing::error!("Failed to watch file or parent directory: {}", e);
                             return;
                         }
-                        tracing::info!("Watching parent directory: {}", parent.display());
-                    } else {
                         tracing::info!("Watching file: {}", canonical_path.display());
+                    } else {
+                        tracing::info!("Watching parent directory: {}", parent.display());
                     }
 
                     // Keep watcher alive
