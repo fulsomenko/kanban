@@ -27,7 +27,20 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("kanban-debug.log")?;
+
+    tracing_subscriber::fmt()
+        .with_writer(log_file)
+        .with_max_level(tracing::Level::DEBUG)
+        .with_target(true)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
+        .with_ansi(false)
+        .init();
 
     let cli = Cli::parse();
 
