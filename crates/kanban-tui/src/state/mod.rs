@@ -7,6 +7,7 @@ use kanban_domain::commands::CommandContext;
 use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -26,6 +27,7 @@ pub struct StateManager {
     last_save_time: Option<Instant>,
     conflict_pending: bool,
     needs_refresh: bool,
+    currently_saving: Arc<AtomicBool>,
 }
 
 impl StateManager {
@@ -47,6 +49,7 @@ impl StateManager {
             last_save_time: None,
             conflict_pending: false,
             needs_refresh: false,
+            currently_saving: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -133,7 +136,15 @@ impl StateManager {
                 metadata: PersistenceMetadata::new(2, self.instance_id),
             };
 
-            match store.save(persistence_snapshot).await {
+            self.currently_saving.store(true, Ordering::SeqCst);
+
+            let save_result = store.save(persistence_snapshot).await;
+
+            // Allow time for file system events to be dispatched by the OS
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            self.currently_saving.store(false, Ordering::SeqCst);
+
+            match save_result {
                 Ok(_) => {
                     self.dirty = false;
                     self.last_save_time = Some(Instant::now());
@@ -165,7 +176,15 @@ impl StateManager {
                 metadata: PersistenceMetadata::new(2, self.instance_id),
             };
 
-            store.save(persistence_snapshot).await?;
+            self.currently_saving.store(true, Ordering::SeqCst);
+
+            let save_result = store.save(persistence_snapshot).await;
+
+            // Allow time for file system events to be dispatched by the OS
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            self.currently_saving.store(false, Ordering::SeqCst);
+
+            save_result?;
             self.dirty = false;
             self.last_save_time = Some(Instant::now());
 
@@ -180,6 +199,11 @@ impl StateManager {
     /// Check if state is dirty
     pub fn is_dirty(&self) -> bool {
         self.dirty
+    }
+
+    /// Check if a save operation is currently in progress
+    pub fn is_currently_saving(&self) -> bool {
+        self.currently_saving.load(Ordering::SeqCst)
     }
 
     /// Get the instance ID for this manager
@@ -265,6 +289,13 @@ impl StateManager {
         }
 
         Ok(())
+    }
+
+    /// Mark state as clean, clearing dirty flag and command queue
+    /// Used after successful external reload to prevent re-save
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
+        self.command_queue.clear();
     }
 }
 
