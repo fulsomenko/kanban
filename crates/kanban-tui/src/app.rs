@@ -1441,6 +1441,12 @@ impl App {
                             std::future::pending().await
                         }
                     } => {
+                        // Ignore file events that occur during our own save operation
+                        if self.state_manager.is_currently_saving() {
+                            tracing::debug!("Ignoring file event during own save operation");
+                            continue;
+                        }
+
                         // External file change detected - handle smart reload
                         if !self.state_manager.is_dirty() {
                             // No local changes, auto-reload silently
@@ -1514,6 +1520,7 @@ impl App {
                     match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
                         Ok(data) => {
                             data.apply_to_app(self);
+                            self.state_manager.mark_clean();
                             self.state_manager.clear_conflict();
                             self.mode = AppMode::Normal;
                             self.refresh_view();
