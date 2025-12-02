@@ -72,13 +72,18 @@ impl ChangeDetector for FileWatcher {
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
                     Ok(event) => {
-                        // Only care about modify events on our file
-                        if event.kind
-                            == notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                        // Detect changes from any write strategy:
+                        // - Modify(Data(Content)): direct writes
+                        // - Create(_): atomic writes (rename operation)
+                        let is_relevant_event = match event.kind {
+                            notify::EventKind::Modify(notify::event::ModifyKind::Data(
                                 notify::event::DataChange::Content,
-                            ))
-                            && event.paths.iter().any(|p| p == &watch_path)
-                        {
+                            )) => true,
+                            notify::EventKind::Create(_) => true,
+                            _ => false,
+                        };
+
+                        if is_relevant_event && event.paths.iter().any(|p| p == &watch_path) {
                             let change = ChangeEvent {
                                 path: watch_path.clone(),
                                 detected_at: Utc::now(),
@@ -146,7 +151,7 @@ mod tests {
     use tokio::time::{sleep, Duration};
 
     #[tokio::test]
-    async fn test_file_watcher_detects_changes() {
+    async fn test_file_watcher_detects_direct_writes() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.json");
 
@@ -163,7 +168,7 @@ mod tests {
         // Give watcher time to start
         sleep(Duration::from_millis(100)).await;
 
-        // Modify the file
+        // Modify the file with direct write
         tokio::fs::write(&file_path, b"modified content")
             .await
             .unwrap();
@@ -176,6 +181,50 @@ mod tests {
         // We got an event (timing is platform-dependent, so this might be flaky)
         if let Ok(Ok(event)) = result {
             // Canonicalize both paths to handle platform differences (e.g., macOS /var -> /private/var)
+            let expected_path = tokio::fs::canonicalize(&file_path)
+                .await
+                .unwrap_or(file_path.clone());
+            let event_path = tokio::fs::canonicalize(&event.path)
+                .await
+                .unwrap_or(event.path.clone());
+            assert_eq!(event_path, expected_path);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_file_watcher_detects_atomic_writes() {
+        use std::fs;
+        use tempfile::NamedTempFile;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.json");
+
+        // Create initial file
+        tokio::fs::write(&file_path, b"initial content")
+            .await
+            .unwrap();
+
+        let watcher = FileWatcher::new();
+        let mut rx = watcher.subscribe();
+
+        watcher.start_watching(file_path.clone()).await.unwrap();
+
+        // Give watcher time to start
+        sleep(Duration::from_millis(100)).await;
+
+        // Modify file with atomic write pattern (temp → rename)
+        let temp_file = NamedTempFile::new_in(dir.path()).unwrap();
+        let temp_path = temp_file.path().to_path_buf();
+        std::fs::write(&temp_path, b"atomic write content").unwrap();
+        fs::rename(&temp_path, &file_path).unwrap();
+
+        // Wait for change event (with timeout)
+        let result = tokio::time::timeout(Duration::from_secs(2), rx.recv()).await;
+
+        watcher.stop_watching().await.unwrap();
+
+        // We got an event from the atomic write
+        if let Ok(Ok(event)) = result {
             let expected_path = tokio::fs::canonicalize(&file_path)
                 .await
                 .unwrap_or(file_path.clone());
