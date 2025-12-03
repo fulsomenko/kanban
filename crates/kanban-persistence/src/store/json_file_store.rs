@@ -48,6 +48,24 @@ impl JsonFileStore {
     pub fn instance_id(&self) -> Uuid {
         self.instance_id
     }
+
+    /// Lock metadata mutex with poisoning recovery and detailed error logging
+    fn lock_metadata(
+        &self,
+        operation: &str,
+    ) -> std::sync::MutexGuard<Option<FileMetadata>> {
+        self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
+            tracing::error!(
+                path = %self.path.display(),
+                instance_id = %self.instance_id,
+                operation = operation,
+                "Mutex poisoned during {}. A panic occurred while holding this lock, \
+                 which may indicate data inconsistency. Attempting recovery by extracting poisoned data.",
+                operation
+            );
+            poisoned.into_inner()
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -59,10 +77,7 @@ impl PersistenceStore for JsonFileStore {
                 FileMetadata::from_file(&self.path).map_err(kanban_core::KanbanError::Io)?;
 
             // Compare with last known metadata
-            let guard = self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
-                tracing::warn!("Mutex poisoned in save conflict check, recovering");
-                poisoned.into_inner()
-            });
+            let guard = self.lock_metadata("save conflict check");
             if let Some(last_known) = *guard {
                 if last_known != current_metadata {
                     return Err(kanban_core::KanbanError::ConflictDetected {
@@ -95,10 +110,7 @@ impl PersistenceStore for JsonFileStore {
 
         // Update last known metadata after successful write
         if let Ok(new_metadata) = FileMetadata::from_file(&self.path) {
-            let mut guard = self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
-                tracing::warn!("Mutex poisoned in save metadata update, recovering");
-                poisoned.into_inner()
-            });
+            let mut guard = self.lock_metadata("save metadata update");
             *guard = Some(new_metadata);
         }
 
@@ -150,10 +162,7 @@ impl PersistenceStore for JsonFileStore {
 
         // Track file metadata after successful load for conflict detection
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
-            let mut guard = self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
-                tracing::warn!("Mutex poisoned in load metadata tracking, recovering");
-                poisoned.into_inner()
-            });
+            let mut guard = self.lock_metadata("load metadata tracking");
             *guard = Some(file_metadata);
         }
 
