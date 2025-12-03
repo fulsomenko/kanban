@@ -17,8 +17,39 @@ pub use snapshot::DataSnapshot;
 /// Minimum time between saves to prevent excessive disk writes
 const MIN_SAVE_INTERVAL: Duration = Duration::from_millis(500);
 
-/// Manages state mutations and persistence
-/// Decouples business logic from persistence concerns
+/// Manages state mutations and persistence with debounced auto-saving
+///
+/// # Save Behavior
+///
+/// ## Automatic Saving (Debounced)
+/// - Changes are marked "dirty" immediately when made
+/// - Saves occur automatically every 500ms when dirty (see [`MIN_SAVE_INTERVAL`])
+/// - This prevents excessive disk I/O during rapid edits
+///
+/// ## Data Loss Window
+/// In the event of a crash, up to 500ms of changes may be lost:
+/// - If user makes edit at T+0ms and crash occurs at T+400ms, edit is **lost**
+/// - If user makes edit at T+0ms and crash occurs at T+600ms, edit is **saved**
+///
+/// ## Shutdown Behavior
+/// - [`save_now()`](Self::save_now) is called on app shutdown (bypasses debounce)
+/// - Ensures final state is persisted even if < 500ms since last edit
+/// - No data loss on clean shutdown
+///
+/// ## Manual Save
+/// Use [`save_now()`](Self::save_now) to force immediate save, bypassing debounce.
+/// This is used for:
+/// - Application shutdown
+/// - Conflict resolution (overwrite mode)
+///
+/// # Example
+/// ```ignore
+/// // Normal operation - respects 500ms debounce
+/// state_manager.save_if_needed(&snapshot).await?;
+///
+/// // Critical operation - immediate save
+/// state_manager.save_now(&snapshot).await?;
+/// ```
 pub struct StateManager {
     store: Option<Arc<JsonFileStore>>,
     command_queue: VecDeque<String>,
