@@ -76,14 +76,11 @@ impl ChangeDetector for FileWatcher {
                         // - Modify(Data(Content)): direct writes
                         // - Create(_): atomic writes (rename operation creating new file)
                         // - Remove(_): atomic writes (old file removed during rename)
-                        let is_relevant_event = match event.kind {
+                        let is_relevant_event = matches!(event.kind,
                             notify::EventKind::Modify(notify::event::ModifyKind::Data(
                                 notify::event::DataChange::Content,
-                            )) => true,
-                            notify::EventKind::Create(_) => true,
-                            notify::EventKind::Remove(_) => true,
-                            _ => false,
-                        };
+                            )) | notify::EventKind::Create(_) | notify::EventKind::Remove(_)
+                        );
 
                         let has_our_file = event.paths.iter().any(|p| p == &watch_path);
 
