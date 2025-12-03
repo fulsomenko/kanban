@@ -60,8 +60,8 @@ async fn main() -> anyhow::Result<()> {
                     tracing::info!("Created new board file: {}", file_path);
                 }
             }
-            let mut app = App::new(cli.file);
-            app.run().await?;
+            let (mut app, save_rx) = App::new(cli.file);
+            app.run(save_rx).await?;
         }
         Some(Commands::Init { name }) => {
             println!("Initializing kanban board: {}", name);

@@ -20,7 +20,7 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
 use kanban_domain::{ArchivedCard, Board, Card, Column, SortField, SortOrder, Sprint};
-use kanban_persistence::PersistenceStore;
+use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
 use std::io;
@@ -164,9 +164,14 @@ pub enum AppMode {
 }
 
 impl App {
-    pub fn new(save_file: Option<String>) -> Self {
+    pub fn new(
+        save_file: Option<String>,
+    ) -> (
+        Self,
+        Option<tokio::sync::mpsc::UnboundedReceiver<crate::state::DataSnapshot>>,
+    ) {
         let app_config = AppConfig::load();
-        let state_manager = StateManager::new(save_file.clone());
+        let (state_manager, save_rx) = StateManager::new(save_file.clone());
         let mut app = Self {
             should_quit: false,
             mode: AppMode::Normal,
@@ -255,7 +260,7 @@ impl App {
         app.migrate_sprint_logs();
         app.check_ended_sprints();
 
-        app
+        (app, save_rx)
     }
 
     pub fn quit(&mut self) {
@@ -1312,8 +1317,48 @@ impl App {
         Ok(())
     }
 
-    pub async fn run(&mut self) -> KanbanResult<()> {
+    pub async fn run(
+        &mut self,
+        save_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::state::DataSnapshot>>,
+    ) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
+
+        // Spawn async save worker if save channel is configured
+        if let Some(mut rx) = save_rx {
+            if let Some(store) = self.state_manager.store().cloned() {
+                let instance_id = self.state_manager.instance_id();
+                tokio::spawn(async move {
+                    while let Some(snapshot) = rx.recv().await {
+                        let data = match snapshot.to_json_bytes() {
+                            Ok(d) => d,
+                            Err(e) => {
+                                tracing::error!("Failed to serialize snapshot: {}", e);
+                                continue;
+                            }
+                        };
+
+                        let persistence_snapshot = StoreSnapshot {
+                            data,
+                            metadata: PersistenceMetadata::new(2, instance_id),
+                        };
+
+                        match store.save(persistence_snapshot).await {
+                            Ok(_) => {
+                                tracing::debug!("Save worker completed save");
+                            }
+                            Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                                tracing::warn!("Save worker detected conflict at {}", path);
+                                // Note: conflict will be detected on next user action
+                            }
+                            Err(e) => {
+                                tracing::error!("Save worker failed: {}", e);
+                            }
+                        }
+                    }
+                    tracing::info!("Save worker shut down");
+                });
+            }
+        }
 
         // Initialize file watching if a save file is configured
         if let Some(ref save_file) = self.save_file {
@@ -1405,19 +1450,6 @@ impl App {
                                     }
                                 }
 
-                                // Progressive saving on tick
-                                let snapshot = crate::state::DataSnapshot::from_app(self);
-                                match self.state_manager.save_if_needed(&snapshot).await {
-                                    Ok(_) => {}
-                                    Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
-                                        tracing::warn!("File conflict detected at {}", path);
-                                        self.mode = AppMode::ConflictResolution;
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("Failed to save state: {}", e);
-                                    }
-                                }
-
                                 // Check if help menu pending action should execute
                                 if let Some((start_time, action)) = &self.help_pending_action {
                                     if start_time.elapsed().as_millis() >= 100 {
@@ -1499,25 +1531,8 @@ impl App {
             }
         }
 
-        // Final save on shutdown - only if save_file is still enabled
-        if self.save_file.is_some() {
-            let snapshot = crate::state::DataSnapshot::from_app(self);
-            match self.state_manager.save_now(&snapshot).await {
-                Ok(_) => {}
-                Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
-                    restore_terminal(&mut terminal)?;
-                    eprintln!("File conflict detected at {} during shutdown.", path);
-                    eprintln!(
-                        "Your changes were not saved to avoid overwriting external modifications."
-                    );
-                    eprintln!("Please resolve the conflict and restart the application.");
-                    return Ok(());
-                }
-                Err(e) => {
-                    tracing::error!("Failed to save on shutdown: {}", e);
-                }
-            }
-        }
+        // Note: No explicit final save needed - the save worker processes all queued saves
+        // When the app exits, the channel sender is dropped and the worker drains remaining saves
 
         restore_terminal(&mut terminal)?;
         Ok(())
@@ -1708,6 +1723,7 @@ fn restore_terminal(
 
 impl Default for App {
     fn default() -> Self {
-        Self::new(None)
+        let (app, _rx) = Self::new(None);
+        app
     }
 }

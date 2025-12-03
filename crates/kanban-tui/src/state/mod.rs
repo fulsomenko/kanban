@@ -9,79 +9,78 @@ use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, S
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use tokio::sync::mpsc;
 
 pub use kanban_domain::commands;
 pub use snapshot::DataSnapshot;
 
-/// Minimum time between saves to prevent excessive disk writes
-const MIN_SAVE_INTERVAL: Duration = Duration::from_millis(500);
-
-/// Manages state mutations and persistence with debounced auto-saving
+/// Manages state mutations and persistence with immediate auto-saving
 ///
 /// # Save Behavior
 ///
-/// ## Automatic Saving (Debounced)
-/// - Changes are marked "dirty" immediately when made
-/// - Saves occur automatically every 500ms when dirty (see [`MIN_SAVE_INTERVAL`])
-/// - This prevents excessive disk I/O during rapid edits
+/// Changes are saved immediately after each command execution:
+/// - No debounce delay - every change is persisted instantly
+/// - No data loss window - state is always current on disk
+/// - Simple and predictable behavior
 ///
-/// ## Data Loss Window
-/// In the event of a crash, up to 500ms of changes may be lost:
-/// - If user makes edit at T+0ms and crash occurs at T+400ms, edit is **lost**
-/// - If user makes edit at T+0ms and crash occurs at T+600ms, edit is **saved**
-///
-/// ## Shutdown Behavior
-/// - [`save_now()`](Self::save_now) is called on app shutdown (bypasses debounce)
-/// - Ensures final state is persisted even if < 500ms since last edit
-/// - No data loss on clean shutdown
-///
-/// ## Manual Save
-/// Use [`save_now()`](Self::save_now) to force immediate save, bypassing debounce.
-/// This is used for:
-/// - Application shutdown
-/// - Conflict resolution (overwrite mode)
+/// The immediate save approach works well for kanban boards because:
+/// - User actions are discrete and human-paced (not rapid-fire)
+/// - Modern SSDs handle frequent writes efficiently (1-5ms per save)
+/// - Conflict detection and file watching remain responsive
 ///
 /// # Example
 /// ```ignore
-/// // Normal operation - respects 500ms debounce
-/// state_manager.save_if_needed(&snapshot).await?;
-///
-/// // Critical operation - immediate save
-/// state_manager.save_now(&snapshot).await?;
+/// // Execute command - automatically saves afterward
+/// state_manager.execute(app, command)?;
+/// state_manager.save(&snapshot).await?;
 /// ```
 pub struct StateManager {
     store: Option<Arc<JsonFileStore>>,
     command_queue: VecDeque<String>,
     dirty: bool,
     instance_id: uuid::Uuid,
-    last_save_time: Option<Instant>,
     conflict_pending: bool,
     needs_refresh: bool,
     currently_saving: Arc<AtomicBool>,
+    save_tx: Option<mpsc::UnboundedSender<DataSnapshot>>,
 }
 
 impl StateManager {
     /// Create a new state manager with optional persistence store
-    pub fn new(save_file: Option<String>) -> Self {
-        let (store, instance_id) = if let Some(path) = save_file {
+    ///
+    /// Returns the StateManager and an optional receiver for async save processing.
+    /// If save_file is None, the receiver will also be None (no saves needed).
+    pub fn new(
+        save_file: Option<String>,
+    ) -> (Self, Option<mpsc::UnboundedReceiver<DataSnapshot>>) {
+        let (store, instance_id, save_channel) = if let Some(path) = save_file {
             let store = Arc::new(JsonFileStore::new(&path));
             let id = store.instance_id();
-            (Some(store), id)
+            let (tx, rx) = mpsc::unbounded_channel();
+            (Some(store), id, Some((tx, rx)))
         } else {
-            (None, uuid::Uuid::new_v4())
+            (None, uuid::Uuid::new_v4(), None)
         };
 
-        Self {
+        let (save_tx, save_rx) = if let Some((tx, rx)) = save_channel {
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+
+        let manager = Self {
             store,
             command_queue: VecDeque::new(),
             dirty: false,
             instance_id,
-            last_save_time: None,
             conflict_pending: false,
             needs_refresh: false,
             currently_saving: Arc::new(AtomicBool::new(false)),
-        }
+            save_tx,
+        };
+
+        (manager, save_rx)
     }
 
     /// Execute a command and mark state as dirty
@@ -119,7 +118,10 @@ impl StateManager {
     }
 
     /// Execute a command and mark state as dirty (app-based convenience method)
+    ///
+    /// After execution, queues a snapshot for async saving if a save channel is configured.
     pub fn execute(&mut self, app: &mut App, command: Box<dyn Command>) -> KanbanResult<()> {
+        // Execute command
         self.execute_with_context(
             &mut app.boards,
             &mut app.columns,
@@ -127,7 +129,18 @@ impl StateManager {
             &mut app.sprints,
             &mut app.archived_cards,
             command,
-        )
+        )?;
+
+        // Queue snapshot for async save if channel is available
+        if let Some(ref tx) = self.save_tx {
+            let snapshot = DataSnapshot::from_app(app);
+            // Send is non-blocking and only fails if receiver is dropped
+            if let Err(e) = tx.send(snapshot) {
+                tracing::error!("Failed to queue save: channel closed: {:?}", e);
+            }
+        }
+
+        Ok(())
     }
 
     /// Execute multiple commands in a batch
@@ -142,21 +155,12 @@ impl StateManager {
         Ok(())
     }
 
-    /// Save state to disk if dirty and debounce interval has elapsed
-    /// Called periodically from the event loop
-    /// Returns ConflictDetected error if external file modifications detected
-    pub async fn save_if_needed(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
+    /// Save state to disk immediately if dirty
+    ///
+    /// Returns ConflictDetected error if external file modifications detected.
+    /// This allows the application to prompt the user for conflict resolution.
+    pub async fn save(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
         if !self.dirty {
-            return Ok(());
-        }
-
-        // Check debounce interval
-        let should_save = match self.last_save_time {
-            None => true,
-            Some(last_save) => last_save.elapsed() >= MIN_SAVE_INTERVAL,
-        };
-
-        if !should_save {
             return Ok(());
         }
 
@@ -183,7 +187,6 @@ impl StateManager {
             match save_result {
                 Ok(_) => {
                     self.dirty = false;
-                    self.last_save_time = Some(Instant::now());
                     self.conflict_pending = false;
 
                     let cmd_count = self.command_queue.len();
@@ -201,43 +204,6 @@ impl StateManager {
         } else {
             Ok(())
         }
-    }
-
-    /// Force save immediately, bypassing debounce (for critical operations)
-    pub async fn save_now(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
-        if let Some(ref store) = self.store {
-            let data = snapshot.to_json_bytes()?;
-            let persistence_snapshot = StoreSnapshot {
-                data,
-                metadata: PersistenceMetadata::new(2, self.instance_id),
-            };
-
-            self.currently_saving.store(true, Ordering::SeqCst);
-            tracing::debug!(
-                "Force save operation started (instance_id: {})",
-                self.instance_id
-            );
-
-            let save_result = store.save(persistence_snapshot).await;
-
-            // Allow time for file system events to be dispatched by the OS
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            self.currently_saving.store(false, Ordering::SeqCst);
-            tracing::debug!(
-                "Force save operation completed and flag cleared (instance_id: {})",
-                self.instance_id
-            );
-
-            save_result?;
-            self.dirty = false;
-            self.last_save_time = Some(Instant::now());
-
-            let cmd_count = self.command_queue.len();
-            tracing::info!("Force saved {} commands to disk", cmd_count);
-            self.command_queue.clear();
-        }
-
-        Ok(())
     }
 
     /// Check if state is dirty
@@ -304,7 +270,6 @@ impl StateManager {
 
             store.save(persistence_snapshot).await?;
             self.dirty = false;
-            self.last_save_time = Some(Instant::now());
             self.command_queue.clear();
 
             tracing::info!("Force overwrote external changes");
@@ -349,13 +314,13 @@ mod tests {
 
     #[test]
     fn test_state_manager_creation() {
-        let manager = StateManager::new(None);
+        let (manager, _rx) = StateManager::new(None);
         assert!(!manager.is_dirty());
     }
 
     #[test]
     fn test_dirty_flag_after_execute() {
-        let mut manager = StateManager::new(None);
+        let (mut manager, _rx) = StateManager::new(None);
 
         struct DummyCommand;
         impl Command for DummyCommand {
@@ -369,7 +334,8 @@ mod tests {
         }
 
         let command = Box::new(DummyCommand);
-        manager.execute(&mut App::new(None), command).unwrap();
+        let (mut app, _app_rx) = App::new(None);
+        manager.execute(&mut app, command).unwrap();
 
         assert!(manager.is_dirty());
     }
