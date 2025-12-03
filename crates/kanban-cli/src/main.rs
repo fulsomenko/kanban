@@ -27,20 +27,28 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let log_file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("kanban-debug.log")?;
+    // Configure logging based on KANBAN_DEBUG_LOG environment variable
+    if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
+        let log_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)?;
 
-    tracing_subscriber::fmt()
-        .with_writer(log_file)
-        .with_max_level(tracing::Level::DEBUG)
-        .with_target(true)
-        .with_thread_ids(true)
-        .with_file(true)
-        .with_line_number(true)
-        .with_ansi(false)
-        .init();
+        tracing_subscriber::fmt()
+            .with_writer(log_file)
+            .with_max_level(tracing::Level::DEBUG)
+            .with_target(true)
+            .with_thread_ids(true)
+            .with_file(true)
+            .with_line_number(true)
+            .with_ansi(false)
+            .init();
+    } else {
+        // Default to stderr with WARN level for production use
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::WARN)
+            .init();
+    }
 
     let cli = Cli::parse();
 
