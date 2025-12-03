@@ -137,10 +137,7 @@ impl StateManager {
             };
 
             self.currently_saving.store(true, Ordering::SeqCst);
-            tracing::debug!(
-                "Save operation started (instance_id: {})",
-                self.instance_id
-            );
+            tracing::debug!("Save operation started (instance_id: {})", self.instance_id);
 
             let save_result = store.save(persistence_snapshot).await;
 

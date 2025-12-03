@@ -1326,7 +1326,11 @@ impl App {
 
             let path = std::path::PathBuf::from(save_file);
             if let Err(e) = watcher.start_watching(path.clone()).await {
-                tracing::warn!("Failed to start file watching for {}: {}", path.display(), e);
+                tracing::warn!(
+                    "Failed to start file watching for {}: {}",
+                    path.display(),
+                    e
+                );
             } else {
                 tracing::info!("File watcher started for: {}", path.display());
             }
