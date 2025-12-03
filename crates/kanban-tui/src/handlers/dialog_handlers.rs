@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode, BoardFocus};
 use crate::dialog::{handle_dialog_input, DialogAction};
 use crossterm::event::KeyCode;
-use kanban_domain::Card;
+use kanban_domain::{Card, FieldUpdate};
 
 /// Context for handling different types of prefix dialogs
 enum PrefixDialogContext {
@@ -150,7 +150,7 @@ impl App {
                                 let cmd = Box::new(crate::state::commands::UpdateCard {
                                     card_id,
                                     updates: kanban_domain::CardUpdate {
-                                        points: Some(points),
+                                        points: points.into(),
                                         ..Default::default()
                                     },
                                 });
@@ -198,7 +198,7 @@ impl App {
                                     let cmd = Box::new(crate::state::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
-                                            sprint_prefix: Some(None),
+                                            sprint_prefix: FieldUpdate::Clear,
                                             ..Default::default()
                                         },
                                     });
@@ -217,7 +217,7 @@ impl App {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
-                                            prefix: Some(None),
+                                            prefix: FieldUpdate::Clear,
                                             ..Default::default()
                                         },
                                     });
@@ -236,7 +236,7 @@ impl App {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
-                                            card_prefix: Some(None),
+                                            card_prefix: FieldUpdate::Clear,
                                             ..Default::default()
                                         },
                                     });
@@ -261,7 +261,7 @@ impl App {
                                     let cmd = Box::new(crate::state::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
-                                            sprint_prefix: Some(Some(prefix_str.clone())),
+                                            sprint_prefix: FieldUpdate::Set(prefix_str.clone()),
                                             ..Default::default()
                                         },
                                     });
@@ -287,7 +287,7 @@ impl App {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
-                                            prefix: Some(Some(prefix_str.clone())),
+                                            prefix: FieldUpdate::Set(prefix_str.clone()),
                                             ..Default::default()
                                         },
                                     });
@@ -316,7 +316,7 @@ impl App {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
-                                            card_prefix: Some(Some(prefix_str.clone())),
+                                            card_prefix: FieldUpdate::Set(prefix_str.clone()),
                                             ..Default::default()
                                         },
                                     });

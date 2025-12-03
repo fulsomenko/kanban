@@ -53,7 +53,7 @@ impl JsonFileStore {
     fn lock_metadata(
         &self,
         operation: &str,
-    ) -> std::sync::MutexGuard<Option<FileMetadata>> {
+    ) -> std::sync::MutexGuard<'_, Option<FileMetadata>> {
         self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
             tracing::error!(
                 path = %self.path.display(),

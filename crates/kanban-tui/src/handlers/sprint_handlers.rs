@@ -1,6 +1,6 @@
 use crate::app::{App, AppMode, BoardFocus};
 use crate::state::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
-use kanban_domain::{BoardUpdate, SprintStatus};
+use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
 
 impl App {
     pub fn handle_create_sprint_key(&mut self) {
@@ -53,7 +53,7 @@ impl App {
                         let board_cmd = Box::new(UpdateBoard {
                             board_id,
                             updates: BoardUpdate {
-                                active_sprint_id: Some(Some(sprint_id)),
+                                active_sprint_id: FieldUpdate::Set(sprint_id),
                                 ..Default::default()
                             },
                         });
@@ -113,7 +113,7 @@ impl App {
                 let board_cmd = Box::new(UpdateBoard {
                     board_id,
                     updates: BoardUpdate {
-                        active_sprint_id: Some(None),
+                        active_sprint_id: FieldUpdate::Clear,
                         ..Default::default()
                     },
                 });

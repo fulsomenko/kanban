@@ -1,6 +1,6 @@
 use crate::app::{App, AppMode};
 use crossterm::event::KeyCode;
-use kanban_domain::{SortField, SortOrder};
+use kanban_domain::{FieldUpdate, SortField, SortOrder};
 
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
@@ -194,8 +194,8 @@ impl App {
                             let cmd = Box::new(crate::state::commands::UpdateCard {
                                 card_id,
                                 updates: kanban_domain::CardUpdate {
-                                    sprint_id: Some(None),
-                                    assigned_prefix: Some(None),
+                                    sprint_id: FieldUpdate::Clear,
+                                    assigned_prefix: FieldUpdate::Clear,
                                     ..Default::default()
                                 },
                             });
@@ -240,8 +240,8 @@ impl App {
                                     let cmd = Box::new(crate::state::commands::UpdateCard {
                                         card_id,
                                         updates: kanban_domain::CardUpdate {
-                                            sprint_id: Some(Some(sprint_id)),
-                                            assigned_prefix: Some(Some(effective_prefix.clone())),
+                                            sprint_id: FieldUpdate::Set(sprint_id),
+                                            assigned_prefix: FieldUpdate::Set(effective_prefix.clone()),
                                             ..Default::default()
                                         },
                                     });
@@ -311,8 +311,8 @@ impl App {
                             let cmd = Box::new(crate::state::commands::UpdateCard {
                                 card_id: *card_id,
                                 updates: kanban_domain::CardUpdate {
-                                    sprint_id: Some(None),
-                                    assigned_prefix: Some(None),
+                                    sprint_id: FieldUpdate::Clear,
+                                    assigned_prefix: FieldUpdate::Clear,
                                     ..Default::default()
                                 },
                             });
@@ -363,8 +363,8 @@ impl App {
                                     let cmd = Box::new(crate::state::commands::UpdateCard {
                                         card_id: *card_id,
                                         updates: kanban_domain::CardUpdate {
-                                            sprint_id: Some(Some(sprint_id)),
-                                            assigned_prefix: Some(Some(effective_prefix.clone())),
+                                            sprint_id: FieldUpdate::Set(sprint_id),
+                                            assigned_prefix: FieldUpdate::Set(effective_prefix.clone()),
                                             ..Default::default()
                                         },
                                     });

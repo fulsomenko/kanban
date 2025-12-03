@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::board::Board;
+use crate::field_update::FieldUpdate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SprintStatus {
@@ -140,35 +141,28 @@ impl Sprint {
 
     /// Update sprint with partial changes
     pub fn update(&mut self, updates: SprintUpdate) {
-        if let Some(name_index) = updates.name_index {
-            self.name_index = name_index;
-        }
-        if let Some(prefix) = updates.prefix {
-            self.prefix = prefix;
-        }
-        if let Some(card_prefix) = updates.card_prefix {
-            self.card_prefix = card_prefix;
-        }
+        updates.name_index.apply_to(&mut self.name_index);
+        updates.prefix.apply_to(&mut self.prefix);
+        updates.card_prefix.apply_to(&mut self.card_prefix);
         if let Some(status) = updates.status {
             self.status = status;
         }
-        if let Some(start_date) = updates.start_date {
-            self.start_date = start_date;
-        }
-        if let Some(end_date) = updates.end_date {
-            self.end_date = end_date;
-        }
+        updates.start_date.apply_to(&mut self.start_date);
+        updates.end_date.apply_to(&mut self.end_date);
         self.updated_at = Utc::now();
     }
 }
 
 /// Partial update struct for Sprint
+///
+/// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
+/// See [`FieldUpdate`] documentation for usage examples.
 #[derive(Debug, Clone, Default)]
 pub struct SprintUpdate {
-    pub name_index: Option<Option<usize>>,
-    pub prefix: Option<Option<String>>,
-    pub card_prefix: Option<Option<String>>,
+    pub name_index: FieldUpdate<usize>,
+    pub prefix: FieldUpdate<String>,
+    pub card_prefix: FieldUpdate<String>,
     pub status: Option<SprintStatus>,
-    pub start_date: Option<Option<DateTime<Utc>>>,
-    pub end_date: Option<Option<DateTime<Utc>>>,
+    pub start_date: FieldUpdate<DateTime<Utc>>,
+    pub end_date: FieldUpdate<DateTime<Utc>>,
 }

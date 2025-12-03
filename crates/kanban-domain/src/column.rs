@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::board::BoardId;
+use crate::field_update::FieldUpdate;
 
 pub type ColumnId = Uuid;
 
@@ -54,17 +55,18 @@ impl Column {
         if let Some(position) = updates.position {
             self.position = position;
         }
-        if let Some(wip_limit) = updates.wip_limit {
-            self.wip_limit = wip_limit;
-        }
+        updates.wip_limit.apply_to(&mut self.wip_limit);
         self.updated_at = Utc::now();
     }
 }
 
 /// Partial update struct for Column
+///
+/// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
+/// See [`FieldUpdate`] documentation for usage examples.
 #[derive(Debug, Clone, Default)]
 pub struct ColumnUpdate {
     pub name: Option<String>,
     pub position: Option<i32>,
-    pub wip_limit: Option<Option<i32>>,
+    pub wip_limit: FieldUpdate<i32>,
 }
