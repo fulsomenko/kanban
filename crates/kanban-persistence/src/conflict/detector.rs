@@ -1,26 +1,43 @@
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::time::SystemTime;
 
 /// Metadata about a file for conflict detection
+///
+/// Uses modification time, size, and content hash for comprehensive change detection.
+/// The hash provides additional protection against edge cases where timestamp and size
+/// might be identical but content differs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileMetadata {
     /// Last modified time of the file
     pub modified_time: SystemTime,
     /// File size in bytes for additional verification
     pub size: u64,
+    /// Content hash for detecting changes even when timestamp/size are identical
+    pub content_hash: u64,
 }
 
 impl FileMetadata {
     /// Create FileMetadata from a file on disk
+    ///
+    /// Computes content hash by reading and hashing the entire file.
+    /// For typical kanban files (< 1MB), this adds minimal overhead (1-5ms).
     pub fn from_file(path: &Path) -> std::io::Result<Self> {
         let metadata = fs::metadata(path)?;
         let modified_time = metadata.modified()?;
         let size = metadata.len();
 
+        // Always compute content hash for comprehensive change detection
+        let content = fs::read(path)?;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        content.hash(&mut hasher);
+        let content_hash = hasher.finish();
+
         Ok(Self {
             modified_time,
             size,
+            content_hash,
         })
     }
 
