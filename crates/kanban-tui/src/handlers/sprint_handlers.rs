@@ -38,28 +38,22 @@ impl App {
                         let duration = board.sprint_duration_days.unwrap_or(14);
                         let board_id = board.id;
 
-                        // Execute ActivateSprint command
-                        let cmd = Box::new(ActivateSprint {
+                        // Execute ActivateSprint and UpdateBoard as batch
+                        let activate_cmd = Box::new(ActivateSprint {
                             sprint_id,
                             duration_days: duration,
-                        });
+                        }) as Box<dyn crate::state::commands::Command>;
 
-                        if let Err(e) = self.execute_command(cmd) {
-                            tracing::error!("Failed to activate sprint: {}", e);
-                            return;
-                        }
-
-                        // Update board's active sprint ID
                         let board_cmd = Box::new(UpdateBoard {
                             board_id,
                             updates: BoardUpdate {
                                 active_sprint_id: FieldUpdate::Set(sprint_id),
                                 ..Default::default()
                             },
-                        });
+                        }) as Box<dyn crate::state::commands::Command>;
 
-                        if let Err(e) = self.execute_command(board_cmd) {
-                            tracing::error!("Failed to set active sprint: {}", e);
+                        if let Err(e) = self.execute_commands_batch(vec![activate_cmd, board_cmd]) {
+                            tracing::error!("Failed to activate sprint: {}", e);
                             return;
                         }
 
@@ -101,25 +95,20 @@ impl App {
             };
 
             if let Some((sprint_id, board_id, sprint_name)) = sprint_info {
-                // Execute CompleteSprint command
-                let cmd = Box::new(CompleteSprint { sprint_id });
+                // Execute CompleteSprint and UpdateBoard as batch
+                let complete_cmd = Box::new(CompleteSprint { sprint_id })
+                    as Box<dyn crate::state::commands::Command>;
 
-                if let Err(e) = self.execute_command(cmd) {
-                    tracing::error!("Failed to complete sprint: {}", e);
-                    return;
-                }
-
-                // Clear active sprint from board if it matches
                 let board_cmd = Box::new(UpdateBoard {
                     board_id,
                     updates: BoardUpdate {
                         active_sprint_id: FieldUpdate::Clear,
                         ..Default::default()
                     },
-                });
+                }) as Box<dyn crate::state::commands::Command>;
 
-                if let Err(e) = self.execute_command(board_cmd) {
-                    tracing::error!("Failed to clear active sprint: {}", e);
+                if let Err(e) = self.execute_commands_batch(vec![complete_cmd, board_cmd]) {
+                    tracing::error!("Failed to complete sprint: {}", e);
                     return;
                 }
 
