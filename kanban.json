@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "1c2c1dd8-4b42-4cf9-a30d-a3b266edd989",
-    "saved_at": "2025-12-04T21:31:08.653346Z",
+    "instance_id": "98a243a5-060f-44f8-907a-c40e6a6a74c3",
+    "saved_at": "2025-12-04T21:59:09.079146Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -493,14 +493,14 @@
         "assigned_prefix": "KAN",
         "card_number": 15,
         "card_prefix": null,
-        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-04T21:59:09.071230Z",
         "created_at": "2025-10-11T18:29:10.434614Z",
         "description": "If for whatever reason two instances of Kanban are editing the same JSON.\n\nImplement a procedure to listen for changes \n\nProgressive saving and not all at the end?\n\n2025-11-17 23:08:46\n---\n\nAfter a couple of data losses. I don't want to loose data anymore. lets implement progressive data saving so that we can support multiple instances of the tui and other applications. TLDR; enable us to use the cli while using the tui.\n",
         "due_date": null,
         "id": "1e257c13-f9ee-40e4-86b5-704a9649ea4e",
         "points": 3,
-        "position": 0,
+        "position": 70,
         "priority": "High",
         "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
         "sprint_logs": [
@@ -529,9 +529,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "Progressive saving / Detect changes to current json",
-        "updated_at": "2025-11-30T15:00:49.553781Z"
+        "updated_at": "2025-12-04T21:59:09.071233Z"
       },
       {
         "assigned_prefix": null,
@@ -3837,7 +3837,16 @@
         "position": 52,
         "priority": "Low",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:59:06.363678Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "if no sprints, cant scroll to column settings",
         "updated_at": "2025-12-04T21:30:39.000940Z"
@@ -3856,7 +3865,16 @@
         "position": 53,
         "priority": "Low",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:59:06.363679Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "filter out completed sprints from assign list",
         "updated_at": "2025-12-04T21:31:08.642323Z"
