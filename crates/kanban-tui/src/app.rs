@@ -1427,16 +1427,6 @@ impl App {
                         match store.save(persistence_snapshot).await {
                             Ok(_) => {
                                 tracing::debug!("Save worker completed save");
-                                // Record the file metadata to filter out self-triggered events
-                                if let Some(ref watcher) = file_watcher {
-                                    let store_path = store.path().to_path_buf();
-                                    if let Err(e) = watcher.record_own_write(&store_path) {
-                                        tracing::warn!(
-                                            "Failed to record own write for conflict detection: {}",
-                                            e
-                                        );
-                                    }
-                                }
                                 // Signal that save is complete
                                 if let Some(ref tx) = save_completion_tx {
                                     if let Err(e) = tx.send(()) {
@@ -1516,9 +1506,17 @@ impl App {
                                 if let Some(action) = self.pending_key.take() {
                                     match action {
                                         'o' => {
+                                            // Pause file watcher to avoid conflict detection for our own save
+                                            if let Some(ref watcher) = self.file_watcher {
+                                                watcher.pause();
+                                            }
                                             let snapshot = crate::state::DataSnapshot::from_app(self);
                                             if let Err(e) = self.state_manager.force_overwrite(&snapshot).await {
                                                 tracing::error!("Failed to force overwrite: {}", e);
+                                            }
+                                            // Resume file watcher after save completes
+                                            if let Some(ref watcher) = self.file_watcher {
+                                                watcher.resume();
                                             }
                                         }
                                         't' => {
