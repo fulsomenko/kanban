@@ -79,6 +79,8 @@ impl App {
                                 tracing::error!("Failed to edit metadata: {}", e);
                             } else {
                                 self.state_manager.mark_dirty();
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                self.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
                         }
@@ -179,6 +181,8 @@ impl App {
                                 tracing::error!("Failed to edit board settings: {}", e);
                             } else {
                                 self.state_manager.mark_dirty();
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                self.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
                         }
