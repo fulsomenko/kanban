@@ -8,7 +8,7 @@ fn test_export_single_board() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_export.json");
 
-    let mut app = App::new(None);
+    let (mut app, _rx) = App::new(None);
 
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
@@ -39,7 +39,7 @@ fn test_export_all_boards() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_export_all.json");
 
-    let mut app = App::new(None);
+    let (mut app, _rx) = App::new(None);
 
     let mut board1 = Board::new("Board 1".to_string(), None);
     let column1 = Column::new(board1.id, "Todo".to_string(), 0);
@@ -74,7 +74,7 @@ fn test_export_empty_boards() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_empty.json");
 
-    let mut app = App::new(None);
+    let (mut app, _rx) = App::new(None);
     app.save_file = Some(file_path.to_str().unwrap().to_string());
 
     app.auto_save().unwrap();
@@ -130,7 +130,7 @@ fn test_import_valid_format() {
 
     fs::write(&file_path, json).unwrap();
 
-    let mut app = App::new(None);
+    let (mut app, _rx) = App::new(None);
     app.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 
@@ -149,7 +149,7 @@ fn test_import_invalid_format_fails() {
     let json = r#"{"invalid": "format"}"#;
     fs::write(&file_path, json).unwrap();
 
-    let mut app = App::new(None);
+    let (mut app, _rx) = App::new(None);
     let result = app.import_board_from_file(file_path.to_str().unwrap());
 
     assert!(result.is_err());
@@ -160,7 +160,7 @@ fn test_auto_save() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_autosave.json");
 
-    let mut app = App::new(Some(file_path.to_str().unwrap().to_string()));
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
 
     let board = Board::new("Auto Save Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
@@ -184,7 +184,7 @@ fn test_failed_import_clears_save_file() {
     let json = r#"{"boards": [{"invalid": true}]}"#;
     fs::write(&file_path, json).unwrap();
 
-    let app = App::new(Some(file_path.to_str().unwrap().to_string()));
+    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
 
     assert!(app.save_file.is_none());
 }
@@ -195,7 +195,7 @@ fn test_export_import_sprint_and_card_prefixes() {
     let file_path = dir.path().join("test_prefixes.json");
 
     // Create board with both sprint_prefix and card_prefix
-    let mut app = App::new(None);
+    let (mut app, _rx) = App::new(None);
     let mut board = Board::new("Prefix Board".to_string(), None);
     board.update_sprint_prefix(Some("sprint".to_string()));
     board.update_card_prefix(Some("task".to_string()));
@@ -225,7 +225,7 @@ fn test_export_import_sprint_and_card_prefixes() {
     assert_eq!(parsed["boards"][0]["sprints"][0]["card_prefix"], "hotfix");
 
     // Clear and reimport
-    let mut app2 = App::new(None);
+    let (mut app2, _rx2) = App::new(None);
     app2.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 
@@ -299,7 +299,7 @@ fn test_backward_compat_old_export_format() {
     fs::write(&file_path, old_json).unwrap();
 
     // Import old format
-    let mut app = App::new(None);
+    let (mut app, _rx) = App::new(None);
     app.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 

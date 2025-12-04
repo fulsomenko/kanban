@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode, BoardFocus};
 use crate::dialog::{handle_dialog_input, DialogAction};
 use crossterm::event::KeyCode;
-use kanban_domain::Card;
+use kanban_domain::{Card, FieldUpdate};
 
 /// Context for handling different types of prefix dialogs
 enum PrefixDialogContext {
@@ -147,9 +147,16 @@ impl App {
 
                             if let Some(card) = board_cards.get(card_idx) {
                                 let card_id = card.id;
-                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id)
-                                {
-                                    card.set_points(points);
+                                let cmd = Box::new(crate::state::commands::UpdateCard {
+                                    card_id,
+                                    updates: kanban_domain::CardUpdate {
+                                        points: points.into(),
+                                        ..Default::default()
+                                    },
+                                });
+                                if let Err(e) = self.execute_command(cmd) {
+                                    tracing::error!("Failed to set card points: {}", e);
+                                } else {
                                     tracing::info!("Set points to: {:?}", points);
                                 }
                             }
@@ -179,56 +186,116 @@ impl App {
     ) {
         match handle_dialog_input(&mut self.input, key_code, true) {
             DialogAction::Confirm => {
-                let prefix_str = self.input.as_str().trim();
+                // Extract prefix early to avoid borrow issues with self
+                let prefix_str = self.input.as_str().trim().to_string();
 
                 if prefix_str.is_empty() {
                     // Clear the prefix
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.board_selection.get() {
-                                if let Some(board) = self.boards.get_mut(board_idx) {
-                                    board.update_sprint_prefix(None);
-                                    tracing::info!("Cleared sprint prefix");
+                                if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
+                                    let cmd = Box::new(crate::state::commands::UpdateBoard {
+                                        board_id,
+                                        updates: kanban_domain::BoardUpdate {
+                                            sprint_prefix: FieldUpdate::Clear,
+                                            ..Default::default()
+                                        },
+                                    });
+                                    if let Err(e) = self.execute_command(cmd) {
+                                        tracing::error!("Failed to clear sprint prefix: {}", e);
+                                    } else {
+                                        tracing::info!("Cleared sprint prefix");
+                                    }
                                 }
                             }
                         }
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                                    sprint.update_prefix(None);
-                                    tracing::info!("Cleared sprint prefix");
+                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                {
+                                    let cmd = Box::new(crate::state::commands::UpdateSprint {
+                                        sprint_id,
+                                        updates: kanban_domain::SprintUpdate {
+                                            prefix: FieldUpdate::Clear,
+                                            ..Default::default()
+                                        },
+                                    });
+                                    if let Err(e) = self.execute_command(cmd) {
+                                        tracing::error!("Failed to clear sprint prefix: {}", e);
+                                    } else {
+                                        tracing::info!("Cleared sprint prefix");
+                                    }
                                 }
                             }
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                                    sprint.update_card_prefix(None);
-                                    tracing::info!("Cleared sprint card prefix override");
+                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                {
+                                    let cmd = Box::new(crate::state::commands::UpdateSprint {
+                                        sprint_id,
+                                        updates: kanban_domain::SprintUpdate {
+                                            card_prefix: FieldUpdate::Clear,
+                                            ..Default::default()
+                                        },
+                                    });
+                                    if let Err(e) = self.execute_command(cmd) {
+                                        tracing::error!(
+                                            "Failed to clear sprint card prefix override: {}",
+                                            e
+                                        );
+                                    } else {
+                                        tracing::info!("Cleared sprint card prefix override");
+                                    }
                                 }
                             }
                         }
                     }
-                } else if Card::validate_branch_prefix(prefix_str) {
+                } else if Card::validate_branch_prefix(&prefix_str) {
                     // Set the prefix
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.board_selection.get() {
-                                if let Some(board) = self.boards.get_mut(board_idx) {
-                                    board.update_sprint_prefix(Some(prefix_str.to_string()));
-                                    tracing::info!("Set sprint prefix to: {}", prefix_str);
-                                    board.ensure_sprint_counter_initialized(
-                                        prefix_str,
-                                        &self.sprints,
-                                    );
+                                if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
+                                    let cmd = Box::new(crate::state::commands::UpdateBoard {
+                                        board_id,
+                                        updates: kanban_domain::BoardUpdate {
+                                            sprint_prefix: FieldUpdate::Set(prefix_str.clone()),
+                                            ..Default::default()
+                                        },
+                                    });
+                                    if let Err(e) = self.execute_command(cmd) {
+                                        tracing::error!("Failed to set sprint prefix: {}", e);
+                                    } else {
+                                        tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                        // Ensure counter is initialized for new prefix
+                                        if let Some(board) = self.boards.get_mut(board_idx) {
+                                            board.ensure_sprint_counter_initialized(
+                                                &prefix_str,
+                                                &self.sprints,
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                                    sprint.update_prefix(Some(prefix_str.to_string()));
-                                    tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                {
+                                    let cmd = Box::new(crate::state::commands::UpdateSprint {
+                                        sprint_id,
+                                        updates: kanban_domain::SprintUpdate {
+                                            prefix: FieldUpdate::Set(prefix_str.clone()),
+                                            ..Default::default()
+                                        },
+                                    });
+                                    if let Err(e) = self.execute_command(cmd) {
+                                        tracing::error!("Failed to set sprint prefix: {}", e);
+                                    } else {
+                                        tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                    }
                                 }
                             }
                             // Initialize counter for sprint-level prefix
@@ -236,7 +303,7 @@ impl App {
                             if let Some(board_idx) = board_idx {
                                 if let Some(board) = self.boards.get_mut(board_idx) {
                                     board.ensure_sprint_counter_initialized(
-                                        prefix_str,
+                                        &prefix_str,
                                         &self.sprints,
                                     );
                                 }
@@ -244,12 +311,26 @@ impl App {
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                                    sprint.update_card_prefix(Some(prefix_str.to_string()));
-                                    tracing::info!(
-                                        "Set sprint card prefix override to: {}",
-                                        prefix_str
-                                    );
+                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                {
+                                    let cmd = Box::new(crate::state::commands::UpdateSprint {
+                                        sprint_id,
+                                        updates: kanban_domain::SprintUpdate {
+                                            card_prefix: FieldUpdate::Set(prefix_str.clone()),
+                                            ..Default::default()
+                                        },
+                                    });
+                                    if let Err(e) = self.execute_command(cmd) {
+                                        tracing::error!(
+                                            "Failed to set sprint card prefix override: {}",
+                                            e
+                                        );
+                                    } else {
+                                        tracing::info!(
+                                            "Set sprint card prefix override to: {}",
+                                            prefix_str
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -316,6 +397,49 @@ impl App {
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 // User declined, go back to prefix dialog
                 self.mode = AppMode::SetSprintPrefix;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn handle_conflict_resolution_popup(&mut self, key_code: KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Char('o') | KeyCode::Char('O') => {
+                // Keep our changes - force overwrite
+                // Store the action to be processed in the event loop
+                self.pending_key = Some('o');
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                // Take their changes - reload from disk
+                self.pending_key = Some('t');
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Esc => {
+                // Retry later - just go back to normal mode
+                self.state_manager.clear_conflict();
+                self.mode = AppMode::Normal;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn handle_external_change_detected_popup(&mut self, key_code: KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                // Reload from external file - discard local changes
+                self.pending_key = Some('r');
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Char('k') | KeyCode::Char('K') => {
+                // Keep local changes - continue editing
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Esc => {
+                // Dismiss dialog - continue with current state
+                self.mode = AppMode::Normal;
             }
             _ => {}
         }

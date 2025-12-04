@@ -19,4 +19,11 @@ pub enum KanbanError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("File conflict: {path} was modified by another instance")]
+    ConflictDetected {
+        path: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }

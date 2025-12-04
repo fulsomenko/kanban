@@ -1,5 +1,6 @@
 use crate::app::{App, AppMode, BoardFocus};
-use kanban_domain::{Sprint, SprintStatus};
+use crate::state::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
+use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
 
 impl App {
     pub fn handle_create_sprint_key(&mut self) {
@@ -11,20 +12,64 @@ impl App {
 
     pub fn handle_activate_sprint_key(&mut self) {
         if let Some(sprint_idx) = self.active_sprint_index {
-            if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                if sprint.status == SprintStatus::Planning {
-                    let board_idx = self.active_board_index.or(self.board_selection.get());
-                    if let Some(board_idx) = board_idx {
-                        if let Some(board) = self.boards.get_mut(board_idx) {
-                            let duration = board.sprint_duration_days.unwrap_or(14);
-                            let sprint_id = sprint.id;
-                            sprint.activate(duration);
-                            board.active_sprint_id = Some(sprint_id);
+            // Collect sprint info before mutations
+            let sprint_info = {
+                if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if sprint.status == SprintStatus::Planning {
+                        Some((
+                            sprint.id,
+                            sprint.formatted_name(
+                                &self.boards[self.board_selection.get().unwrap_or(0)],
+                                "sprint",
+                            ),
+                        ))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+
+            if let Some((sprint_id, _)) = sprint_info {
+                let board_idx = self.active_board_index.or(self.board_selection.get());
+                if let Some(board_idx) = board_idx {
+                    if let Some(board) = self.boards.get(board_idx) {
+                        let duration = board.sprint_duration_days.unwrap_or(14);
+                        let board_id = board.id;
+
+                        // Execute ActivateSprint command
+                        let cmd = Box::new(ActivateSprint {
+                            sprint_id,
+                            duration_days: duration,
+                        });
+
+                        if let Err(e) = self.execute_command(cmd) {
+                            tracing::error!("Failed to activate sprint: {}", e);
+                            return;
                         }
+
+                        // Update board's active sprint ID
+                        let board_cmd = Box::new(UpdateBoard {
+                            board_id,
+                            updates: BoardUpdate {
+                                active_sprint_id: FieldUpdate::Set(sprint_id),
+                                ..Default::default()
+                            },
+                        });
+
+                        if let Err(e) = self.execute_command(board_cmd) {
+                            tracing::error!("Failed to set active sprint: {}", e);
+                            return;
+                        }
+
                         if let Some(board) = self.boards.get(board_idx) {
                             tracing::info!(
                                 "Activated sprint: {}",
-                                sprint.formatted_name(board, "sprint")
+                                self.sprints
+                                    .get(sprint_idx)
+                                    .map(|s| s.formatted_name(board, "sprint"))
+                                    .unwrap_or_default()
                             );
                         }
                     }
@@ -35,35 +80,56 @@ impl App {
 
     pub fn handle_complete_sprint_key(&mut self) {
         if let Some(sprint_idx) = self.active_sprint_index {
-            if let Some(sprint) = self.sprints.get_mut(sprint_idx) {
-                if sprint.status == SprintStatus::Active || sprint.status == SprintStatus::Planning
-                {
-                    let sprint_id = sprint.id;
-                    sprint.complete();
-                    let board_idx = self.active_board_index.or(self.board_selection.get());
-                    if let Some(board_idx) = board_idx {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            tracing::info!(
-                                "Completed sprint: {}",
-                                sprint.formatted_name(board, "sprint")
-                            );
-                        }
+            // Collect sprint and board info before mutations
+            let sprint_info = {
+                if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if sprint.status == SprintStatus::Active
+                        || sprint.status == SprintStatus::Planning
+                    {
+                        let board_idx = self.active_board_index.or(self.board_selection.get());
+                        board_idx.and_then(|board_idx| {
+                            self.boards.get(board_idx).map(|board| {
+                                (sprint.id, board.id, sprint.formatted_name(board, "sprint"))
+                            })
+                        })
+                    } else {
+                        None
                     }
-
-                    let board_idx = self.active_board_index.or(self.board_selection.get());
-                    if let Some(board_idx) = board_idx {
-                        if let Some(board) = self.boards.get_mut(board_idx) {
-                            if board.active_sprint_id == Some(sprint_id) {
-                                board.active_sprint_id = None;
-                                self.active_sprint_filters.remove(&sprint_id);
-                            }
-                        }
-                    }
-
-                    self.mode = AppMode::BoardDetail;
-                    self.board_focus = BoardFocus::Sprints;
-                    self.active_sprint_index = None;
+                } else {
+                    None
                 }
+            };
+
+            if let Some((sprint_id, board_id, sprint_name)) = sprint_info {
+                // Execute CompleteSprint command
+                let cmd = Box::new(CompleteSprint { sprint_id });
+
+                if let Err(e) = self.execute_command(cmd) {
+                    tracing::error!("Failed to complete sprint: {}", e);
+                    return;
+                }
+
+                // Clear active sprint from board if it matches
+                let board_cmd = Box::new(UpdateBoard {
+                    board_id,
+                    updates: BoardUpdate {
+                        active_sprint_id: FieldUpdate::Clear,
+                        ..Default::default()
+                    },
+                });
+
+                if let Err(e) = self.execute_command(board_cmd) {
+                    tracing::error!("Failed to clear active sprint: {}", e);
+                    return;
+                }
+
+                self.active_sprint_filters.remove(&sprint_id);
+
+                tracing::info!("Completed sprint: {}", sprint_name);
+
+                self.mode = AppMode::BoardDetail;
+                self.board_focus = BoardFocus::Sprints;
+                self.active_sprint_index = None;
             }
         }
     }
@@ -94,21 +160,36 @@ impl App {
                 }
             };
 
-            let sprint = Sprint::new(board_id, sprint_number, name_index, None);
-            if let Some(board) = self.boards.get(board_idx) {
-                tracing::info!(
-                    "Creating sprint: {} (id: {})",
-                    sprint.formatted_name(board, &effective_sprint_prefix),
-                    sprint.id
-                );
-            }
-            self.sprints.push(sprint);
+            // Execute CreateSprint command
+            let cmd = Box::new(CreateSprint {
+                board_id,
+                sprint_number,
+                name_index,
+                prefix: Some(effective_sprint_prefix.clone()),
+            });
 
+            if let Err(e) = self.execute_command(cmd) {
+                tracing::error!("Failed to create sprint: {}", e);
+                return;
+            }
+
+            // Log the newly created sprint
             let board_sprints: Vec<_> = self
                 .sprints
                 .iter()
                 .filter(|s| s.board_id == board_id)
                 .collect();
+
+            if let Some(new_sprint) = board_sprints.last() {
+                if let Some(board) = self.boards.get(board_idx) {
+                    tracing::info!(
+                        "Creating sprint: {} (id: {})",
+                        new_sprint.formatted_name(board, &effective_sprint_prefix),
+                        new_sprint.id
+                    );
+                }
+            }
+
             let new_index = board_sprints.len() - 1;
             self.sprint_selection.set(Some(new_index));
         }

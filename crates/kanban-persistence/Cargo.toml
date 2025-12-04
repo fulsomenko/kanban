@@ -1,0 +1,39 @@
+[package]
+name = "kanban-persistence"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Persistence layer for the kanban project management tool with progressive saving and multi-instance support"
+keywords = ["kanban", "persistence", "storage", "file-watching"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+kanban-core = { path = "../kanban-core", version = "^0.1" }
+kanban-domain = { path = "../kanban-domain", version = "^0.1" }
+
+# Core async and error handling
+tokio.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# IDs and time
+uuid.workspace = true
+chrono.workspace = true
+
+# File operations
+notify.workspace = true
+tempfile.workspace = true
+
+# Logging
+tracing.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true

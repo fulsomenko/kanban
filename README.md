@@ -96,21 +96,36 @@ Built with **Rust** for speed and reliability:
 
 ```
 crates/
-├── kanban-core    → Shared traits & error handling
-├── kanban-domain  → Domain models (Board, Card, Column, Sprint)
-├── kanban-tui     → Terminal UI with ratatui
-└── kanban-cli     → CLI entry point
+├── kanban-core        → Shared traits & error handling
+├── kanban-domain      → Domain models (Board, Card, Column, Sprint)
+├── kanban-persistence → JSON storage, versioning & migrations
+├── kanban-tui         → Terminal UI with ratatui
+└── kanban-cli         → CLI entry point
 ```
+
+**Key Design Patterns:**
+- **Command Pattern**: All mutations flow through domain commands for persistent tracking
+- **Progressive Saving**: Changes auto-save with 500ms debounce, not just on exit
+- **Format Versioning**: Automatic V1→V2 migration with backup on first load
+- **Multi-Instance Support**: Last-write-wins conflict resolution for concurrent edits
 
 ## Data & Persistence
 
-- **Format**: JSON-based import/export with auto-save on exit
+- **Format**: JSON-based import/export with **progressive auto-save** (saves changes as you make them, not just on exit)
+- **Automatic Migration**: V1 data files are automatically upgraded to V2 format on load with backup creation
+- **Multi-Instance Support**:
+  - Real-time file watching detects changes from other running instances
+  - Automatic reload when no local changes exist
+  - User prompt when local edits conflict with external changes
+  - Last-write-wins conflict resolution for concurrent edits
+- **Atomic Writes**: Crash-safe write pattern (temp file → atomic rename) prevents data corruption
 - **External Editor**: Automatically detects vim, nvim, nano, or your `$EDITOR` for editing descriptions
 - **Rich Metadata**: Timestamps, priority levels, story points, custom tags
+- **Smart Debouncing**: Prevents excessive disk writes with 500ms minimum save interval
 
 ## Roadmap
 
-- [ ] Progressive auto-save (save changes to board as you make them, not just on exit)
+- [x] Progressive auto-save (save changes to board as you make them, not just on exit)
 - [ ] Card dependencies
 - [ ] Configurable keybindings
 - [ ] Audit log
