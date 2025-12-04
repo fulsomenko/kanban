@@ -41,14 +41,24 @@ pub struct StateManager {
     conflict_pending: bool,
     needs_refresh: bool,
     save_tx: Option<mpsc::UnboundedSender<DataSnapshot>>,
+    save_completion_tx: Option<mpsc::UnboundedSender<()>>,
+    pending_saves: usize,
 }
 
 impl StateManager {
     /// Create a new state manager with optional persistence store
     ///
-    /// Returns the StateManager and an optional receiver for async save processing.
-    /// If save_file is None, the receiver will also be None (no saves needed).
-    pub fn new(save_file: Option<String>) -> (Self, Option<mpsc::UnboundedReceiver<DataSnapshot>>) {
+    /// Returns a tuple of:
+    /// - StateManager instance
+    /// - Optional receiver for async save processing (snapshots to save)
+    /// - Optional receiver for save completion notifications
+    pub fn new(
+        save_file: Option<String>,
+    ) -> (
+        Self,
+        Option<mpsc::UnboundedReceiver<DataSnapshot>>,
+        Option<mpsc::UnboundedReceiver<()>>,
+    ) {
         let (store, instance_id, save_channel) = if let Some(path) = save_file {
             let store = Arc::new(JsonFileStore::new(&path));
             let id = store.instance_id();
@@ -64,6 +74,8 @@ impl StateManager {
             (None, None)
         };
 
+        let (save_completion_tx, save_completion_rx) = mpsc::unbounded_channel();
+
         let manager = Self {
             store,
             command_queue: VecDeque::new(),
@@ -72,9 +84,11 @@ impl StateManager {
             conflict_pending: false,
             needs_refresh: false,
             save_tx,
+            save_completion_tx: Some(save_completion_tx),
+            pending_saves: 0,
         };
 
-        (manager, save_rx)
+        (manager, save_rx, Some(save_completion_rx))
     }
 
     /// Execute a command and mark state as dirty
@@ -266,11 +280,13 @@ impl StateManager {
 
     /// Queue a snapshot for async saving
     /// Used by App::execute_command to ensure snapshots are queued
-    pub fn queue_snapshot(&self, snapshot: DataSnapshot) {
+    /// Increments pending_saves to track unsaved changes
+    pub fn queue_snapshot(&mut self, snapshot: DataSnapshot) {
         if let Some(ref tx) = self.save_tx {
-            tracing::debug!("Queueing snapshot for async save");
+            tracing::debug!("Queueing snapshot for async save (pending: {} -> {})", self.pending_saves, self.pending_saves + 1);
             match tx.send(snapshot) {
                 Ok(_) => {
+                    self.pending_saves += 1;
                     tracing::debug!("Snapshot queued successfully");
                 }
                 Err(e) => {
@@ -281,6 +297,30 @@ impl StateManager {
             tracing::debug!("No save channel available - skipping save");
         }
     }
+
+    /// Check if there are pending saves waiting to be written
+    pub fn has_pending_saves(&self) -> bool {
+        self.pending_saves > 0
+    }
+
+    /// Signal that a save has been completed (called by save worker)
+    pub fn save_completed(&mut self) {
+        if self.pending_saves > 0 {
+            self.pending_saves -= 1;
+            tracing::debug!("Save completed (pending: {} -> {})", self.pending_saves + 1, self.pending_saves);
+
+            // If no more pending saves, clear the dirty flag
+            if self.pending_saves == 0 {
+                self.dirty = false;
+                tracing::debug!("All saves complete - clearing dirty flag");
+            }
+        }
+    }
+
+    /// Get the save completion sender for the worker to use
+    pub fn save_completion_tx(&self) -> Option<&mpsc::UnboundedSender<()>> {
+        self.save_completion_tx.as_ref()
+    }
 }
 
 #[cfg(test)]
@@ -289,13 +329,13 @@ mod tests {
 
     #[test]
     fn test_state_manager_creation() {
-        let (manager, _rx) = StateManager::new(None);
+        let (manager, _rx, _completion_rx) = StateManager::new(None);
         assert!(!manager.is_dirty());
     }
 
     #[test]
     fn test_dirty_flag_after_execute() {
-        let (mut manager, _rx) = StateManager::new(None);
+        let (mut manager, _rx, _completion_rx) = StateManager::new(None);
 
         struct DummyCommand;
         impl Command for DummyCommand {
