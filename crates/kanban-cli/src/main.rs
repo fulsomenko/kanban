@@ -27,7 +27,28 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    // Configure logging based on KANBAN_DEBUG_LOG environment variable
+    if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
+        let log_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)?;
+
+        tracing_subscriber::fmt()
+            .with_writer(log_file)
+            .with_max_level(tracing::Level::DEBUG)
+            .with_target(true)
+            .with_thread_ids(true)
+            .with_file(true)
+            .with_line_number(true)
+            .with_ansi(false)
+            .init();
+    } else {
+        // Default to stderr with WARN level for production use
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::WARN)
+            .init();
+    }
 
     let cli = Cli::parse();
 
@@ -39,8 +60,8 @@ async fn main() -> anyhow::Result<()> {
                     tracing::info!("Created new board file: {}", file_path);
                 }
             }
-            let mut app = App::new(cli.file);
-            app.run().await?;
+            let (mut app, save_rx) = App::new(cli.file);
+            app.run(save_rx).await?;
         }
         Some(Commands::Init { name }) => {
             println!("Initializing kanban board: {}", name);

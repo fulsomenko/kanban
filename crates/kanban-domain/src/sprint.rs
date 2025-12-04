@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::board::Board;
+use crate::field_update::FieldUpdate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SprintStatus {
@@ -137,4 +138,31 @@ impl Sprint {
             false
         }
     }
+
+    /// Update sprint with partial changes
+    pub fn update(&mut self, updates: SprintUpdate) {
+        updates.name_index.apply_to(&mut self.name_index);
+        updates.prefix.apply_to(&mut self.prefix);
+        updates.card_prefix.apply_to(&mut self.card_prefix);
+        if let Some(status) = updates.status {
+            self.status = status;
+        }
+        updates.start_date.apply_to(&mut self.start_date);
+        updates.end_date.apply_to(&mut self.end_date);
+        self.updated_at = Utc::now();
+    }
+}
+
+/// Partial update struct for Sprint
+///
+/// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
+/// See [`FieldUpdate`] documentation for usage examples.
+#[derive(Debug, Clone, Default)]
+pub struct SprintUpdate {
+    pub name_index: FieldUpdate<usize>,
+    pub prefix: FieldUpdate<String>,
+    pub card_prefix: FieldUpdate<String>,
+    pub status: Option<SprintStatus>,
+    pub start_date: FieldUpdate<DateTime<Utc>>,
+    pub end_date: FieldUpdate<DateTime<Utc>>,
 }

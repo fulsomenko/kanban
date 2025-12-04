@@ -3,6 +3,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::field_update::FieldUpdate;
 use crate::task_list_view::TaskListView;
 
 pub type BoardId = Uuid;
@@ -340,6 +341,49 @@ impl Board {
         let next_number = max_number + 1;
         self.initialize_prefix_counter(prefix, next_number);
     }
+
+    /// Update board with partial changes
+    pub fn update(&mut self, updates: BoardUpdate) {
+        if let Some(name) = updates.name {
+            self.name = name;
+        }
+        updates.description.apply_to(&mut self.description);
+        updates.sprint_prefix.apply_to(&mut self.sprint_prefix);
+        updates.card_prefix.apply_to(&mut self.card_prefix);
+        if let Some(task_sort_field) = updates.task_sort_field {
+            self.task_sort_field = task_sort_field;
+        }
+        if let Some(task_sort_order) = updates.task_sort_order {
+            self.task_sort_order = task_sort_order;
+        }
+        updates
+            .sprint_duration_days
+            .apply_to(&mut self.sprint_duration_days);
+        if let Some(task_list_view) = updates.task_list_view {
+            self.task_list_view = task_list_view;
+        }
+        updates
+            .active_sprint_id
+            .apply_to(&mut self.active_sprint_id);
+        self.updated_at = Utc::now();
+    }
+}
+
+/// Partial update struct for Board
+///
+/// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
+/// See [`FieldUpdate`] documentation for usage examples.
+#[derive(Debug, Clone, Default)]
+pub struct BoardUpdate {
+    pub name: Option<String>,
+    pub description: FieldUpdate<String>,
+    pub sprint_prefix: FieldUpdate<String>,
+    pub card_prefix: FieldUpdate<String>,
+    pub task_sort_field: Option<SortField>,
+    pub task_sort_order: Option<SortOrder>,
+    pub sprint_duration_days: FieldUpdate<u32>,
+    pub task_list_view: Option<TaskListView>,
+    pub active_sprint_id: FieldUpdate<Uuid>,
 }
 
 #[cfg(test)]

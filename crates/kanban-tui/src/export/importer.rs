@@ -14,15 +14,95 @@ pub struct BoardImporter;
 
 impl BoardImporter {
     pub fn import_from_json(json: &str) -> Result<AllBoardsExport, io::Error> {
+        // Try V2 format first
+        if let Ok(envelope) = serde_json::from_str::<serde_json::Value>(json) {
+            if let Some(version) = envelope.get("version").and_then(|v| v.as_u64()) {
+                if version == 2 {
+                    // V2 format: data is a DataSnapshot with flat structure
+                    // (boards, columns, cards at root level, not nested per board)
+                    if let Some(data) = envelope.get("data") {
+                        // Try to deserialize as DataSnapshot and convert to AllBoardsExport
+                        if let Ok(snapshot) =
+                            serde_json::from_value::<crate::state::DataSnapshot>(data.clone())
+                        {
+                            return Ok(Self::convert_snapshot_to_export(snapshot));
+                        }
+                    }
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "V2 format detected but data section is invalid".to_string(),
+                    ));
+                }
+            }
+        }
+
+        // Fall back to V1 format (direct deserialization)
         serde_json::from_str(json).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "Invalid JSON format. Expected {{\"boards\": [...]}} structure. Error: {}",
+                    "Invalid JSON format. Expected {{\"boards\": [...]}} structure (V1) or {{\"version\": 2, \"data\": {{...}}}} structure (V2). Error: {}",
                     err
                 ),
             )
         })
+    }
+
+    /// Convert DataSnapshot format (V2) to AllBoardsExport format (V1-compatible)
+    /// V2 has flat structure: boards[], columns[], cards[], sprints[]
+    /// V1 has nested structure: boards[{board, columns[], cards[], sprints[]}]
+    fn convert_snapshot_to_export(snapshot: crate::state::DataSnapshot) -> AllBoardsExport {
+        use super::models::BoardExport;
+
+        let mut board_exports = Vec::new();
+
+        for board in snapshot.boards {
+            // Find columns, cards, and sprints for this board
+            let board_columns: Vec<_> = snapshot
+                .columns
+                .iter()
+                .filter(|c| c.board_id == board.id)
+                .cloned()
+                .collect();
+
+            let board_cards: Vec<_> = snapshot
+                .cards
+                .iter()
+                .filter(|c| board_columns.iter().any(|col| col.id == c.column_id))
+                .cloned()
+                .collect();
+
+            let board_sprints: Vec<_> = snapshot
+                .sprints
+                .iter()
+                .filter(|s| s.board_id == board.id)
+                .cloned()
+                .collect();
+
+            // For archived cards, we need to match them by original column which belongs to this board
+            let board_archived: Vec<_> = snapshot
+                .archived_cards
+                .iter()
+                .filter(|a| {
+                    board_columns
+                        .iter()
+                        .any(|col| col.id == a.original_column_id)
+                })
+                .cloned()
+                .collect();
+
+            board_exports.push(BoardExport {
+                board,
+                columns: board_columns,
+                cards: board_cards,
+                sprints: board_sprints,
+                archived_cards: board_archived,
+            });
+        }
+
+        AllBoardsExport {
+            boards: board_exports,
+        }
     }
 
     pub fn import_from_file(filename: &str) -> io::Result<AllBoardsExport> {
