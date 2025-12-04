@@ -1062,15 +1062,24 @@ impl App {
             .sum()
     }
 
-    /// Execute a command and track state changes for progressive saving
-    /// Manually queues snapshot after execution to ensure saves happen
+    /// Execute multiple commands as a batch with a single pause/resume cycle
+    /// This is the preferred method as it prevents race conditions where rapid successive saves
+    /// detect previous writes as external. For single commands, this still works efficiently.
     pub fn execute_command(
         &mut self,
         command: Box<dyn crate::state::commands::Command>,
     ) -> KanbanResult<()> {
-        // Execute the command first
+        self.execute_commands_batch(vec![command])
+    }
+
+    /// Execute multiple commands as a batch with a single pause/resume cycle
+    /// This prevents race conditions where rapid successive saves detect previous writes as external
+    pub fn execute_commands_batch(
+        &mut self,
+        commands: Vec<Box<dyn crate::state::commands::Command>>,
+    ) -> KanbanResult<()> {
+        // Execute all commands first
         {
-            // Use destructuring to split mutable borrows and avoid aliasing
             let Self {
                 state_manager,
                 boards,
@@ -1081,17 +1090,19 @@ impl App {
                 ..
             } = self;
 
-            state_manager.execute_with_context(
-                boards,
-                columns,
-                cards,
-                sprints,
-                archived_cards,
-                command,
-            )?;
-        } // Release the destructured borrows
+            for command in commands {
+                state_manager.execute_with_context(
+                    boards,
+                    columns,
+                    cards,
+                    sprints,
+                    archived_cards,
+                    command,
+                )?;
+            }
+        }
 
-        // Queue snapshot for async save (after releasing the destructured borrows)
+        // Queue one snapshot for async save after all commands have executed
         let snapshot = crate::state::DataSnapshot::from_app(self);
         self.state_manager.queue_snapshot(snapshot);
 
