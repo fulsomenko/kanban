@@ -53,7 +53,7 @@ impl JsonFileStore {
     fn lock_metadata(&self) -> std::sync::MutexGuard<'_, Option<FileMetadata>> {
         self.last_known_metadata.lock().expect(
             "Metadata mutex poisoned - a panic occurred while holding the lock. \
-             Application state may be corrupted and recovery is not safe."
+             Application state may be corrupted and recovery is not safe.",
         )
     }
 }

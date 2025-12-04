@@ -60,7 +60,6 @@ impl FileWatcher {
         self.paused.store(false, Ordering::SeqCst);
         tracing::debug!("File watcher resumed");
     }
-
 }
 
 impl Default for FileWatcher {

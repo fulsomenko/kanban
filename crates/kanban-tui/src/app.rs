@@ -430,7 +430,8 @@ impl App {
             if self.state_manager.has_pending_saves() && !self.quit_with_pending {
                 // First quit attempt with pending saves - show warning
                 self.set_error(
-                    "⏳ Saves pending... press 'q' again to force quit, or wait for completion".to_string()
+                    "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
+                        .to_string(),
                 );
                 self.quit_with_pending = true;
                 tracing::warn!("Quit attempted with pending saves, requiring confirmation");

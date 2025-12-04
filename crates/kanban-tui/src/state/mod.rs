@@ -152,7 +152,10 @@ impl StateManager {
             match tx.try_send(snapshot) {
                 Ok(_) => {
                     self.pending_saves += 1;
-                    tracing::debug!("Snapshot queued successfully (pending: {})", self.pending_saves);
+                    tracing::debug!(
+                        "Snapshot queued successfully (pending: {})",
+                        self.pending_saves
+                    );
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                     tracing::warn!(
