@@ -109,7 +109,12 @@ crates/
 
 - **Format**: JSON-based import/export with **progressive auto-save** (saves changes as you make them, not just on exit)
 - **Automatic Migration**: V1 data files are automatically upgraded to V2 format on load with backup creation
-- **Multi-Instance Support**: Last-write-wins conflict resolution for concurrent edits
+- **Multi-Instance Support**:
+  - Real-time file watching detects changes from other running instances
+  - Automatic reload when no local changes exist
+  - User prompt when local edits conflict with external changes
+  - Last-write-wins conflict resolution for concurrent edits
+- **Atomic Writes**: Crash-safe write pattern (temp file → atomic rename) prevents data corruption
 - **External Editor**: Automatically detects vim, nvim, nano, or your `$EDITOR` for editing descriptions
 - **Rich Metadata**: Timestamps, priority levels, story points, custom tags
 - **Smart Debouncing**: Prevents excessive disk writes with 500ms minimum save interval
