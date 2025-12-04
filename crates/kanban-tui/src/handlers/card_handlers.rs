@@ -532,17 +532,16 @@ impl App {
                                 .filter(|c| c.column_id == target_column_id)
                                 .count() as i32;
 
-                            // Execute MoveCard command
-                            let cmd = Box::new(MoveCard {
+                            // Build batch with MoveCard and optional status update
+                            let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                                Vec::new();
+
+                            let move_cmd = Box::new(MoveCard {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position,
-                            });
-
-                            if let Err(e) = self.execute_command(cmd) {
-                                tracing::error!("Failed to move card left: {}", e);
-                                return;
-                            }
+                            }) as Box<dyn crate::state::commands::Command>;
+                            commands.push(move_cmd);
 
                             // If moving from last column and card is Done, mark as Todo
                             if is_moving_from_last
@@ -555,13 +554,17 @@ impl App {
                                         status: Some(CardStatus::Todo),
                                         ..Default::default()
                                     },
-                                });
+                                }) as Box<dyn crate::state::commands::Command>;
+                                commands.push(status_cmd);
+                            }
 
-                                if let Err(e) = self.execute_command(status_cmd) {
-                                    tracing::error!("Failed to update card status: {}", e);
-                                    return;
-                                }
+                            if let Err(e) = self.execute_commands_batch(commands) {
+                                tracing::error!("Failed to move card left: {}", e);
+                                return;
+                            }
 
+                            if is_moving_from_last && num_cols > 1 && current_status == CardStatus::Done
+                            {
                                 tracing::info!(
                                     "Moved card from last column (unmarked as complete)"
                                 );
@@ -629,17 +632,16 @@ impl App {
                                 .filter(|c| c.column_id == target_column_id)
                                 .count() as i32;
 
-                            // Execute MoveCard command
-                            let cmd = Box::new(MoveCard {
+                            // Build batch with MoveCard and optional status update
+                            let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                                Vec::new();
+
+                            let move_cmd = Box::new(MoveCard {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position,
-                            });
-
-                            if let Err(e) = self.execute_command(cmd) {
-                                tracing::error!("Failed to move card right: {}", e);
-                                return;
-                            }
+                            }) as Box<dyn crate::state::commands::Command>;
+                            commands.push(move_cmd);
 
                             // If moving to last column and card is not Done, mark as Done
                             if is_moving_to_last
@@ -652,13 +654,16 @@ impl App {
                                         status: Some(CardStatus::Done),
                                         ..Default::default()
                                     },
-                                });
+                                }) as Box<dyn crate::state::commands::Command>;
+                                commands.push(status_cmd);
+                            }
 
-                                if let Err(e) = self.execute_command(status_cmd) {
-                                    tracing::error!("Failed to update card status: {}", e);
-                                    return;
-                                }
+                            if let Err(e) = self.execute_commands_batch(commands) {
+                                tracing::error!("Failed to move card right: {}", e);
+                                return;
+                            }
 
+                            if is_moving_to_last && num_cols > 1 && current_status != CardStatus::Done {
                                 tracing::info!("Moved card to last column (marked as complete)");
                             } else {
                                 tracing::info!("Moved card to next column");
