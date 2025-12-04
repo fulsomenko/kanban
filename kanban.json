@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "85651ace-0d01-41f0-a55e-e05d86088b54",
-    "saved_at": "2025-12-04T21:19:49.338389Z",
+    "instance_id": "1c2c1dd8-4b42-4cf9-a30d-a3b266edd989",
+    "saved_at": "2025-12-04T21:31:08.653346Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -43,7 +43,7 @@
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 139
+          "KAN": 141
         },
         "sprint_counters": {
           "KAN": 10
@@ -61,7 +61,7 @@
         "task_list_view": "ColumnView",
         "task_sort_field": "UpdatedAt",
         "task_sort_order": "Descending",
-        "updated_at": "2025-12-04T21:18:03.661658Z"
+        "updated_at": "2025-12-04T21:30:48.049533Z"
       }
     ],
     "cards": [
@@ -419,7 +419,16 @@
         "position": 18,
         "priority": "Critical",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245013Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "Publish on nixpkgs",
         "updated_at": "2025-12-04T21:19:18.914382Z"
@@ -1247,7 +1256,16 @@
         "position": 9,
         "priority": "Low",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245014Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "hitting 2 should activate the highlighted board",
         "updated_at": "2025-12-04T21:19:18.914198Z"
@@ -1358,7 +1376,16 @@
         "position": 33,
         "priority": "Low",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245014Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "Add retrospective note on completed tasks",
         "updated_at": "2025-12-04T21:19:18.914107Z"
@@ -2121,7 +2148,16 @@
         "position": 8,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245015Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "extend test coverage",
         "updated_at": "2025-12-04T21:19:18.914804Z"
@@ -2140,7 +2176,16 @@
         "position": 19,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245015Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "Assignee for cards",
         "updated_at": "2025-12-04T21:19:18.914634Z"
@@ -2250,7 +2295,16 @@
         "position": 12,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245015Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "a sprint can only be completed after the duration is over",
         "updated_at": "2025-12-04T21:19:18.913825Z"
@@ -2360,7 +2414,16 @@
         "position": 15,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245015Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "automatic sprint completion",
         "updated_at": "2025-12-04T21:19:18.913468Z"
@@ -2587,7 +2650,16 @@
         "position": 25,
         "priority": "High",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245016Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "Marketing",
         "updated_at": "2025-12-04T21:19:18.914465Z"
@@ -3270,7 +3342,16 @@
         "position": 27,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245016Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "ui module refactor",
         "updated_at": "2025-12-04T21:19:18.913641Z"
@@ -3345,7 +3426,16 @@
         "position": 28,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245016Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "dont reset search on scroll",
         "updated_at": "2025-12-04T21:19:18.914018Z"
@@ -3448,7 +3538,16 @@
         "position": 40,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245016Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "when filtering by sprint x, dont include unassigned cards.",
         "updated_at": "2025-12-04T21:19:18.915008Z"
@@ -3467,7 +3566,16 @@
         "position": 43,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245017Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "add filter for completed cards",
         "updated_at": "2025-12-04T21:19:18.913922Z"
@@ -3486,7 +3594,16 @@
         "position": 48,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245017Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "migrations one",
         "updated_at": "2025-12-04T21:19:18.914298Z"
@@ -3608,7 +3725,16 @@
         "position": 46,
         "priority": "High",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245017Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "undo action",
         "updated_at": "2025-12-04T21:19:18.913735Z"
@@ -3627,7 +3753,16 @@
         "position": 49,
         "priority": "Low",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245017Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "update package README.md's",
         "updated_at": "2025-12-04T21:19:18.914723Z"
@@ -3646,7 +3781,16 @@
         "position": 49,
         "priority": "Low",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245017Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "page indicator",
         "updated_at": "2025-12-04T21:19:18.914552Z"
@@ -3665,10 +3809,57 @@
         "position": 51,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T21:30:07.245018Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "Saving improvements",
         "updated_at": "2025-12-04T21:18:24.988900Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 139,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-04T21:30:21.011908Z",
+        "description": null,
+        "due_date": null,
+        "id": "b818d480-5b41-41b7-aa8b-ae599a443247",
+        "points": 1,
+        "position": 52,
+        "priority": "Low",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "if no sprints, cant scroll to column settings",
+        "updated_at": "2025-12-04T21:30:39.000940Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 140,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-04T21:30:48.049528Z",
+        "description": null,
+        "due_date": null,
+        "id": "828d42c0-015d-46d7-b23b-c04206076b5f",
+        "points": 2,
+        "position": 53,
+        "priority": "Low",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "filter out completed sprints from assign list",
+        "updated_at": "2025-12-04T21:31:08.642323Z"
       }
     ],
     "columns": [
