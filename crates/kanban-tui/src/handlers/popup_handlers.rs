@@ -313,30 +313,26 @@ impl App {
                     let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
 
                     if selection_idx == 0 {
-                        // Unassign cards from sprint
+                        // Unassign cards from sprint - batch all unassignments
+                        let mut unassign_commands: Vec<Box<dyn crate::state::commands::Command>> =
+                            Vec::new();
                         for card_id in &card_ids {
-                            let cmd = Box::new(crate::state::commands::UpdateCard {
-                                card_id: *card_id,
-                                updates: kanban_domain::CardUpdate {
-                                    sprint_id: FieldUpdate::Clear,
-                                    assigned_prefix: FieldUpdate::Clear,
-                                    ..Default::default()
+                            let cmd = Box::new(
+                                kanban_domain::commands::UnassignCardFromSprint {
+                                    card_id: *card_id,
                                 },
-                            });
-                            if let Err(e) = self.execute_command(cmd) {
-                                tracing::error!("Failed to unassign card from sprint: {}", e);
-                            } else {
-                                // Clear sprint log via direct mutation
-                                if let Some(card) = self.cards.iter_mut().find(|c| c.id == *card_id)
-                                {
-                                    card.end_current_sprint_log();
-                                }
-                            }
+                            ) as Box<dyn crate::state::commands::Command>;
+                            unassign_commands.push(cmd);
                         }
-                        tracing::info!(
-                            "Unassigned {} cards from sprint",
-                            self.selected_cards.len()
-                        );
+
+                        if let Err(e) = self.execute_commands_batch(unassign_commands) {
+                            tracing::error!("Failed to unassign cards from sprint: {}", e);
+                        } else {
+                            tracing::info!(
+                                "Unassigned {} cards from sprint",
+                                self.selected_cards.len()
+                            );
+                        }
                     } else if let Some(board_idx) = self.active_board_index {
                         if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
                             let board_sprints: Vec<_> = self
