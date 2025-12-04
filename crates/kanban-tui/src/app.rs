@@ -1412,6 +1412,10 @@ impl App {
                             }
                         }
 
+                        // Wait for OS to flush file system events before resuming watcher
+                        // This prevents our own file writes from being detected as external changes
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
                         // Resume file watching after save completes
                         if let Some(ref watcher) = file_watcher {
                             watcher.resume();

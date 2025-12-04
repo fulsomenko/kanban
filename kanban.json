@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "6c40f7cb-f35c-4155-bb5b-f3ea8c9adca1",
-    "saved_at": "2025-11-30T15:00:58.419949Z",
+    "instance_id": "738adef7-acc9-49ff-8d05-b01cd4674e0b",
+    "saved_at": "2025-12-04T00:47:13.400730Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -62,6 +62,44 @@
         "task_sort_field": "UpdatedAt",
         "task_sort_order": "Descending",
         "updated_at": "2025-11-27T21:19:19.195165Z"
+      },
+      {
+        "active_sprint_id": null,
+        "card_prefix": null,
+        "created_at": "2025-12-04T00:45:08.192483Z",
+        "description": null,
+        "id": "5bbe8f82-2a5a-49f1-996e-156eb70f3f96",
+        "name": "test",
+        "next_sprint_number": 1,
+        "prefix_counters": {},
+        "sprint_counters": {},
+        "sprint_duration_days": null,
+        "sprint_name_used_count": 0,
+        "sprint_names": [],
+        "sprint_prefix": null,
+        "task_list_view": "Flat",
+        "task_sort_field": "Default",
+        "task_sort_order": "Ascending",
+        "updated_at": "2025-12-04T00:45:08.192483Z"
+      },
+      {
+        "active_sprint_id": null,
+        "card_prefix": null,
+        "created_at": "2025-12-04T00:47:13.351531Z",
+        "description": null,
+        "id": "d2ab7643-e931-473e-9312-4a6bc34b57b3",
+        "name": "test2",
+        "next_sprint_number": 1,
+        "prefix_counters": {},
+        "sprint_counters": {},
+        "sprint_duration_days": null,
+        "sprint_name_used_count": 0,
+        "sprint_names": [],
+        "sprint_prefix": null,
+        "task_list_view": "Flat",
+        "task_sort_field": "Default",
+        "task_sort_order": "Ascending",
+        "updated_at": "2025-12-04T00:47:13.351531Z"
       }
     ],
     "cards": [
@@ -3678,6 +3716,60 @@
         "name": "Complete",
         "position": 2,
         "updated_at": "2025-10-30T18:52:12.692465Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "5bbe8f82-2a5a-49f1-996e-156eb70f3f96",
+        "created_at": "2025-12-04T00:45:08.192643Z",
+        "id": "76f3788f-14f0-48d6-a96e-47a29824d007",
+        "name": "TODO",
+        "position": 0,
+        "updated_at": "2025-12-04T00:45:08.192643Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "5bbe8f82-2a5a-49f1-996e-156eb70f3f96",
+        "created_at": "2025-12-04T00:45:08.192732Z",
+        "id": "4bc83bba-9560-46c3-b0e1-6eafd48adc78",
+        "name": "Doing",
+        "position": 1,
+        "updated_at": "2025-12-04T00:45:08.192732Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "5bbe8f82-2a5a-49f1-996e-156eb70f3f96",
+        "created_at": "2025-12-04T00:45:08.192813Z",
+        "id": "06518914-5aef-4f36-9bd2-94a10a3ab6b4",
+        "name": "Complete",
+        "position": 2,
+        "updated_at": "2025-12-04T00:45:08.192813Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "d2ab7643-e931-473e-9312-4a6bc34b57b3",
+        "created_at": "2025-12-04T00:47:13.351607Z",
+        "id": "270a9d1c-1a24-43ee-91d4-26d1c6ddc01e",
+        "name": "TODO",
+        "position": 0,
+        "updated_at": "2025-12-04T00:47:13.351607Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "d2ab7643-e931-473e-9312-4a6bc34b57b3",
+        "created_at": "2025-12-04T00:47:13.351651Z",
+        "id": "b88e28ba-c7c2-4eb4-b2c0-99c6357025e1",
+        "name": "Doing",
+        "position": 1,
+        "updated_at": "2025-12-04T00:47:13.351651Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "d2ab7643-e931-473e-9312-4a6bc34b57b3",
+        "created_at": "2025-12-04T00:47:13.351692Z",
+        "id": "185a0d4a-d79d-4922-8860-c6072aebdc87",
+        "name": "Complete",
+        "position": 2,
+        "updated_at": "2025-12-04T00:47:13.351692Z",
         "wip_limit": null
       }
     ],
