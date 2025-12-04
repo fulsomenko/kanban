@@ -11,8 +11,8 @@
 /// use kanban_domain::FieldUpdate;
 ///
 /// let title_update = FieldUpdate::Set("New Title".to_string());
-/// let description_update = FieldUpdate::Clear;
-/// let priority_update = FieldUpdate::NoChange;
+/// let description_update: FieldUpdate<String> = FieldUpdate::Clear;
+/// let priority_update: FieldUpdate<i32> = FieldUpdate::NoChange;
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FieldUpdate<T> {
