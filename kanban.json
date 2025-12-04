@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "3864a7ef-9d57-40c9-9b43-6e251b7e8f1f",
-    "saved_at": "2025-12-04T22:00:26.168456Z",
+    "instance_id": "e62d9377-7cda-4544-accc-263b3cf7aa9c",
+    "saved_at": "2025-12-04T22:03:34.499104Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -43,7 +43,7 @@
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 141
+          "KAN": 143
         },
         "sprint_counters": {
           "KAN": 10
@@ -61,7 +61,7 @@
         "task_list_view": "ColumnView",
         "task_sort_field": "UpdatedAt",
         "task_sort_order": "Descending",
-        "updated_at": "2025-12-04T22:00:26.140438Z"
+        "updated_at": "2025-12-04T22:02:17.267779Z"
       }
     ],
     "cards": [
@@ -3878,6 +3878,53 @@
         "status": "Todo",
         "title": "filter out completed sprints from assign list",
         "updated_at": "2025-12-04T21:31:08.642323Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 141,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-04T22:01:12.983879Z",
+        "description": null,
+        "due_date": null,
+        "id": "769d8dea-2465-4496-a74c-5204aa60873c",
+        "points": 1,
+        "position": 54,
+        "priority": "Low",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T22:03:25.551805Z",
+            "status": "Active"
+          }
+        ],
+        "status": "Todo",
+        "title": "scrolling up from column options lands the cursor on the first sprint in the listg",
+        "updated_at": "2025-12-04T22:02:02.793603Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 142,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-04T22:02:17.267772Z",
+        "description": "When in the card details, editing fields. Like using P or external editor sends the user back to the card list after save\n\nThis also affects other instances of the application\n",
+        "due_date": null,
+        "id": "2ecebef1-0c46-426b-8ab8-e8d228c9ce36",
+        "points": 4,
+        "position": 55,
+        "priority": "High",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "updating fields jumps the user back to board",
+        "updated_at": "2025-12-04T22:03:34.492558Z"
       }
     ],
     "columns": [
