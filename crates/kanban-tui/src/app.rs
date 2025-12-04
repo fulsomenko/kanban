@@ -1416,7 +1416,10 @@ impl App {
                                 // Signal that save is complete
                                 if let Some(ref tx) = save_completion_tx {
                                     if let Err(e) = tx.send(()) {
-                                        tracing::error!("Failed to send save completion signal: {}", e);
+                                        tracing::error!(
+                                            "Failed to send save completion signal: {}",
+                                            e
+                                        );
                                     }
                                 }
                             }
@@ -1425,7 +1428,10 @@ impl App {
                                 // Signal completion even on conflict
                                 if let Some(ref tx) = save_completion_tx {
                                     if let Err(e) = tx.send(()) {
-                                        tracing::error!("Failed to send save completion signal: {}", e);
+                                        tracing::error!(
+                                            "Failed to send save completion signal: {}",
+                                            e
+                                        );
                                     }
                                 }
                             }
@@ -1434,7 +1440,10 @@ impl App {
                                 // Signal completion even on failure
                                 if let Some(ref tx) = save_completion_tx {
                                     if let Err(e) = tx.send(()) {
-                                        tracing::error!("Failed to send save completion signal: {}", e);
+                                        tracing::error!(
+                                            "Failed to send save completion signal: {}",
+                                            e
+                                        );
                                     }
                                 }
                             }

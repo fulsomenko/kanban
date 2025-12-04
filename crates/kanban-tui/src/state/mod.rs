@@ -283,7 +283,11 @@ impl StateManager {
     /// Increments pending_saves to track unsaved changes
     pub fn queue_snapshot(&mut self, snapshot: DataSnapshot) {
         if let Some(ref tx) = self.save_tx {
-            tracing::debug!("Queueing snapshot for async save (pending: {} -> {})", self.pending_saves, self.pending_saves + 1);
+            tracing::debug!(
+                "Queueing snapshot for async save (pending: {} -> {})",
+                self.pending_saves,
+                self.pending_saves + 1
+            );
             match tx.send(snapshot) {
                 Ok(_) => {
                     self.pending_saves += 1;
@@ -307,7 +311,11 @@ impl StateManager {
     pub fn save_completed(&mut self) {
         if self.pending_saves > 0 {
             self.pending_saves -= 1;
-            tracing::debug!("Save completed (pending: {} -> {})", self.pending_saves + 1, self.pending_saves);
+            tracing::debug!(
+                "Save completed (pending: {} -> {})",
+                self.pending_saves + 1,
+                self.pending_saves
+            );
 
             // If no more pending saves, clear the dirty flag
             if self.pending_saves == 0 {
