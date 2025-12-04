@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "7d0c2dc6-2d29-4960-9af5-487ff727da21",
-    "saved_at": "2025-12-04T22:41:10.395439Z",
+    "instance_id": "c4f131fb-c238-402c-ae1a-825e6a5adb0b",
+    "saved_at": "2025-12-04T23:05:56.839488Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -43,7 +43,7 @@
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 146
+          "KAN": 147
         },
         "sprint_counters": {
           "KAN": 10
@@ -61,7 +61,7 @@
         "task_list_view": "ColumnView",
         "task_sort_field": "Priority",
         "task_sort_order": "Descending",
-        "updated_at": "2025-12-04T22:39:36.658310Z"
+        "updated_at": "2025-12-04T23:03:58.581899Z"
       }
     ],
     "cards": [
@@ -3977,20 +3977,39 @@
         "assigned_prefix": "KAN",
         "card_number": 145,
         "card_prefix": null,
-        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-04T23:05:56.834091Z",
         "created_at": "2025-12-04T22:39:36.658299Z",
-        "description": "Hitting `e` from the task list, on a card doesnt update its description\n\nI think this is also how we saw a conflict with the own instance\n\n",
+        "description": "Hitting `e` from the task list, on a card doesnt update its description\n\nI think this is also how we saw a conflict with the own instance\n\n2025-12-05 00:05:28\n---\n\nPatch applied\n\nWe add the pause call in the queue snapshot and resume after save\n",
         "due_date": null,
         "id": "abcdf9ab-c39e-4a65-a6b4-ba7828f6eae5",
         "points": 5,
-        "position": 2,
+        "position": 75,
         "priority": "Critical",
         "sprint_id": null,
         "sprint_logs": [],
-        "status": "Todo",
+        "status": "Done",
         "title": "We broke the file watcher / having a conflict with one instance",
-        "updated_at": "2025-12-04T22:41:10.387679Z"
+        "updated_at": "2025-12-04T23:05:56.834093Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 146,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-04T23:03:58.581895Z",
+        "description": "Create an mcp server.\n\nDepends on kanban cli?\n\n",
+        "due_date": null,
+        "id": "b8d92ecb-1f96-4d5d-8c37-18f13a31497b",
+        "points": 3,
+        "position": 52,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Kanban MCP",
+        "updated_at": "2025-12-04T23:04:47.048526Z"
       }
     ],
     "columns": [
