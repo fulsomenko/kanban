@@ -43,6 +43,7 @@ pub struct StateManager {
     save_tx: Option<mpsc::Sender<DataSnapshot>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
+    file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
 }
 
 impl StateManager {
@@ -90,6 +91,7 @@ impl StateManager {
             save_tx,
             save_completion_tx: Some(save_completion_tx),
             pending_saves: 0,
+            file_watcher: None,
         };
 
         (manager, save_rx, Some(save_completion_rx))
@@ -298,9 +300,18 @@ impl StateManager {
     /// Used by App::execute_command to ensure snapshots are queued
     /// Increments pending_saves to track unsaved changes
     ///
+    /// Pauses file watcher before queueing to prevent detecting our own writes as external changes.
+    /// The save worker will resume the watcher after the save completes.
+    ///
     /// Uses try_send to handle bounded channel capacity (100 snapshots).
     /// If channel is full, logs warning and skips save to prevent blocking UI.
     pub fn queue_snapshot(&mut self, snapshot: DataSnapshot) {
+        // Pause file watching before queuing save to prevent detecting our own writes
+        if let Some(ref watcher) = self.file_watcher {
+            watcher.pause();
+            tracing::debug!("File watcher paused before queuing snapshot");
+        }
+
         if let Some(ref tx) = self.save_tx {
             tracing::debug!(
                 "Queueing snapshot for async save (pending: {} -> {})",
@@ -318,13 +329,28 @@ impl StateManager {
                         This may indicate the disk is slow or the save worker is overloaded.",
                         self.pending_saves
                     );
+                    // Resume watcher if we couldn't queue the snapshot
+                    if let Some(ref watcher) = self.file_watcher {
+                        watcher.resume();
+                        tracing::debug!("File watcher resumed (save queue full)");
+                    }
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                     tracing::error!("Failed to queue save: channel closed");
+                    // Resume watcher if channel is closed
+                    if let Some(ref watcher) = self.file_watcher {
+                        watcher.resume();
+                        tracing::debug!("File watcher resumed (channel closed)");
+                    }
                 }
             }
         } else {
             tracing::debug!("No save channel available - skipping save");
+            // Resume watcher if no save channel
+            if let Some(ref watcher) = self.file_watcher {
+                watcher.resume();
+                tracing::debug!("File watcher resumed (no save channel)");
+            }
         }
     }
 
@@ -354,6 +380,13 @@ impl StateManager {
     /// Get the save completion sender for the worker to use
     pub fn save_completion_tx(&self) -> Option<&mpsc::UnboundedSender<()>> {
         self.save_completion_tx.as_ref()
+    }
+
+    /// Set the file watcher for coordinating pause/resume with saves
+    /// Called after the file watcher is initialized in App::run()
+    pub fn set_file_watcher(&mut self, watcher: Arc<kanban_persistence::FileWatcher>) {
+        self.file_watcher = Some(watcher);
+        tracing::debug!("File watcher set on StateManager");
     }
 }
 
