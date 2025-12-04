@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "738adef7-acc9-49ff-8d05-b01cd4674e0b",
-    "saved_at": "2025-12-04T00:47:13.400730Z",
+    "instance_id": "85651ace-0d01-41f0-a55e-e05d86088b54",
+    "saved_at": "2025-12-04T21:19:49.338389Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -43,7 +43,7 @@
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 138
+          "KAN": 139
         },
         "sprint_counters": {
           "KAN": 10
@@ -61,7 +61,7 @@
         "task_list_view": "ColumnView",
         "task_sort_field": "UpdatedAt",
         "task_sort_order": "Descending",
-        "updated_at": "2025-11-27T21:19:19.195165Z"
+        "updated_at": "2025-12-04T21:18:03.661658Z"
       }
     ],
     "cards": [
@@ -218,7 +218,7 @@
         "points": 4,
         "position": 44,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448929Z",
@@ -247,7 +247,7 @@
         ],
         "status": "Todo",
         "title": "Card dependencies",
-        "updated_at": "2025-11-17T22:41:06.526722Z"
+        "updated_at": "2025-12-04T21:19:48.905467Z"
       },
       {
         "assigned_prefix": null,
@@ -374,7 +374,7 @@
         "points": 1,
         "position": 4,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-04T00:22:28.640552Z",
@@ -403,10 +403,10 @@
         ],
         "status": "Todo",
         "title": "Be able to scroll in the card description",
-        "updated_at": "2025-11-17T22:41:08.233363Z"
+        "updated_at": "2025-12-04T21:19:48.905172Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 12,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -418,11 +418,11 @@
         "points": 5,
         "position": 18,
         "priority": "Critical",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "Publish on nixpkgs",
-        "updated_at": "2025-10-31T17:48:28.061624Z"
+        "updated_at": "2025-12-04T21:19:18.914382Z"
       },
       {
         "assigned_prefix": null,
@@ -640,7 +640,7 @@
         "points": 3,
         "position": 24,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448943Z",
@@ -669,7 +669,7 @@
         ],
         "status": "Todo",
         "title": "Link to pull request",
-        "updated_at": "2025-11-17T22:41:09.863744Z"
+        "updated_at": "2025-12-04T21:19:48.907272Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -684,7 +684,7 @@
         "points": 2,
         "position": 0,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448931Z",
@@ -713,7 +713,7 @@
         ],
         "status": "Todo",
         "title": "Remove a card",
-        "updated_at": "2025-11-17T22:41:11.439765Z"
+        "updated_at": "2025-12-04T21:19:48.906161Z"
       },
       {
         "assigned_prefix": null,
@@ -868,7 +868,7 @@
         "points": 2,
         "position": 1,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448941Z",
@@ -897,7 +897,7 @@
         ],
         "status": "Todo",
         "title": "When titles are too long. they don't fit the tasks list",
-        "updated_at": "2025-11-17T22:41:13.126179Z"
+        "updated_at": "2025-12-04T21:19:48.906073Z"
       },
       {
         "assigned_prefix": null,
@@ -940,7 +940,7 @@
         "points": 4,
         "position": 2,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448927Z",
@@ -969,7 +969,7 @@
         ],
         "status": "Todo",
         "title": "When setting the priority, the card details are closed and the lists are shown",
-        "updated_at": "2025-11-17T22:41:14.557248Z"
+        "updated_at": "2025-12-04T21:19:48.907564Z"
       },
       {
         "assigned_prefix": null,
@@ -1210,7 +1210,7 @@
         "points": 5,
         "position": 7,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:15.760147Z",
@@ -1231,10 +1231,10 @@
         ],
         "status": "Todo",
         "title": "audit history - keep a log of changes",
-        "updated_at": "2025-11-17T22:41:15.760154Z"
+        "updated_at": "2025-12-04T21:19:48.905898Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 37,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -1246,11 +1246,11 @@
         "points": 1,
         "position": 9,
         "priority": "Low",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "hitting 2 should activate the highlighted board",
-        "updated_at": "2025-10-31T17:50:15.937023Z"
+        "updated_at": "2025-12-04T21:19:18.914198Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1265,7 +1265,7 @@
         "points": 2,
         "position": 11,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:17.501321Z",
@@ -1286,7 +1286,7 @@
         ],
         "status": "Todo",
         "title": "branch name doesnt reflected the used version",
-        "updated_at": "2025-11-17T22:41:17.501326Z"
+        "updated_at": "2025-12-04T21:19:48.907435Z"
       },
       {
         "assigned_prefix": null,
@@ -1345,7 +1345,7 @@
         "updated_at": "2025-11-27T21:20:31.743113Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 41,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -1357,11 +1357,11 @@
         "points": 2,
         "position": 33,
         "priority": "Low",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "Add retrospective note on completed tasks",
-        "updated_at": "2025-11-02T17:01:10.028498Z"
+        "updated_at": "2025-12-04T21:19:18.914107Z"
       },
       {
         "assigned_prefix": null,
@@ -1479,7 +1479,7 @@
         "points": 2,
         "position": 22,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448934Z",
@@ -1508,7 +1508,7 @@
         ],
         "status": "Todo",
         "title": "Syntax highlighting for card description",
-        "updated_at": "2025-11-17T22:41:18.759132Z"
+        "updated_at": "2025-12-04T21:19:48.905984Z"
       },
       {
         "assigned_prefix": null,
@@ -1570,7 +1570,7 @@
         "points": 1,
         "position": 5,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:20.088757Z",
@@ -1591,7 +1591,7 @@
         ],
         "status": "Todo",
         "title": "cards without priority should be order following low priority",
-        "updated_at": "2025-11-17T22:41:20.088766Z"
+        "updated_at": "2025-12-04T21:19:48.905559Z"
       },
       {
         "assigned_prefix": null,
@@ -1976,7 +1976,7 @@
         "points": 2,
         "position": 3,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448937Z",
@@ -2005,7 +2005,7 @@
         ],
         "status": "Todo",
         "title": "Create new card from card",
-        "updated_at": "2025-11-17T22:41:22.981691Z"
+        "updated_at": "2025-12-04T21:19:48.907661Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2020,7 +2020,7 @@
         "points": 2,
         "position": 6,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898922Z",
@@ -2049,7 +2049,7 @@
         ],
         "status": "Todo",
         "title": "Archive a card",
-        "updated_at": "2025-11-17T22:41:24.979076Z"
+        "updated_at": "2025-12-04T21:19:48.906509Z"
       },
       {
         "assigned_prefix": null,
@@ -2108,7 +2108,7 @@
         "updated_at": "2025-10-27T22:27:09.272122Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 78,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -2120,14 +2120,14 @@
         "points": 3,
         "position": 8,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "extend test coverage",
-        "updated_at": "2025-10-24T19:36:59.016495Z"
+        "updated_at": "2025-12-04T21:19:18.914804Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 79,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -2139,11 +2139,11 @@
         "points": 3,
         "position": 19,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "Assignee for cards",
-        "updated_at": "2025-10-31T17:54:15.875252Z"
+        "updated_at": "2025-12-04T21:19:18.914634Z"
       },
       {
         "assigned_prefix": null,
@@ -2205,7 +2205,7 @@
         "points": 4,
         "position": 10,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898897Z",
@@ -2234,10 +2234,10 @@
         ],
         "status": "Todo",
         "title": "editing task settings by json",
-        "updated_at": "2025-11-17T22:41:26.665310Z"
+        "updated_at": "2025-12-04T21:19:48.907190Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 84,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -2249,11 +2249,11 @@
         "points": 2,
         "position": 12,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "a sprint can only be completed after the duration is over",
-        "updated_at": "2025-10-23T18:01:27.494453Z"
+        "updated_at": "2025-12-04T21:19:18.913825Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2268,7 +2268,7 @@
         "points": 1,
         "position": 13,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898919Z",
@@ -2297,7 +2297,7 @@
         ],
         "status": "Todo",
         "title": "bring the task columns, completed non completed into sprint details",
-        "updated_at": "2025-11-17T22:41:34.327395Z"
+        "updated_at": "2025-12-04T21:19:48.906344Z"
       },
       {
         "assigned_prefix": null,
@@ -2347,7 +2347,7 @@
         "updated_at": "2025-11-02T17:00:33.469911Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 88,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -2359,11 +2359,11 @@
         "points": 3,
         "position": 15,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "automatic sprint completion",
-        "updated_at": "2025-10-24T16:54:11.618331Z"
+        "updated_at": "2025-12-04T21:19:18.913468Z"
       },
       {
         "assigned_prefix": null,
@@ -2434,7 +2434,7 @@
         "points": 3,
         "position": 17,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898916Z",
@@ -2463,7 +2463,7 @@
         ],
         "status": "Todo",
         "title": "in card creation show a list of cards fuzzily matching the proposed title",
-        "updated_at": "2025-11-17T22:41:34.327397Z"
+        "updated_at": "2025-12-04T21:19:48.906938Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2478,7 +2478,7 @@
         "points": 2,
         "position": 20,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327389Z",
@@ -2499,7 +2499,7 @@
         ],
         "status": "Todo",
         "title": "highlight cards that have moved from the first column to the second but are not in the last and are missing points or priority",
-        "updated_at": "2025-11-17T22:41:34.327390Z"
+        "updated_at": "2025-12-04T21:19:48.907097Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2514,7 +2514,7 @@
         "points": 4,
         "position": 21,
         "priority": "High",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:14.917340Z",
@@ -2543,7 +2543,7 @@
         ],
         "status": "Todo",
         "title": "dialogs always return to main when opened ",
-        "updated_at": "2025-11-17T22:41:34.327388Z"
+        "updated_at": "2025-12-04T21:19:48.907354Z"
       },
       {
         "assigned_prefix": null,
@@ -2574,7 +2574,7 @@
         "updated_at": "2025-10-25T21:17:27.509711Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 95,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -2586,11 +2586,11 @@
         "points": 3,
         "position": 25,
         "priority": "High",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "Marketing",
-        "updated_at": "2025-10-24T22:33:17.220955Z"
+        "updated_at": "2025-12-04T21:19:18.914465Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2605,7 +2605,7 @@
         "points": 4,
         "position": 29,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327391Z",
@@ -2626,7 +2626,7 @@
         ],
         "status": "Todo",
         "title": "unify the sprint details view",
-        "updated_at": "2025-11-17T22:41:34.327391Z"
+        "updated_at": "2025-12-04T21:19:48.906694Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2641,7 +2641,7 @@
         "points": 3,
         "position": 30,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327392Z",
@@ -2662,7 +2662,7 @@
         ],
         "status": "Todo",
         "title": "set a due date for a card",
-        "updated_at": "2025-11-17T22:41:34.327393Z"
+        "updated_at": "2025-12-04T21:19:48.905730Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2677,7 +2677,7 @@
         "points": 1,
         "position": 31,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327385Z",
@@ -2698,7 +2698,7 @@
         ],
         "status": "Todo",
         "title": "assigning cards to sprint doesnt remove it from unsprinted cards list",
-        "updated_at": "2025-11-17T22:41:34.327385Z"
+        "updated_at": "2025-12-04T21:19:48.906599Z"
       },
       {
         "assigned_prefix": null,
@@ -2760,7 +2760,7 @@
         "points": 2,
         "position": 37,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327394Z",
@@ -2781,7 +2781,7 @@
         ],
         "status": "Todo",
         "title": "default sprint and branch prefixes",
-        "updated_at": "2025-11-17T22:41:34.327394Z"
+        "updated_at": "2025-12-04T21:19:48.907019Z"
       },
       {
         "assigned_prefix": null,
@@ -2834,7 +2834,7 @@
         "points": 2,
         "position": 23,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327386Z",
@@ -2855,7 +2855,7 @@
         ],
         "status": "Todo",
         "title": "moving and item between columns should also move the selector along with the card",
-        "updated_at": "2025-11-17T22:41:34.327387Z"
+        "updated_at": "2025-12-04T21:19:48.906777Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2870,7 +2870,7 @@
         "points": 2,
         "position": 26,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:14.917359Z",
@@ -2899,7 +2899,7 @@
         ],
         "status": "Todo",
         "title": "when changing place of columns",
-        "updated_at": "2025-11-17T22:41:34.327382Z"
+        "updated_at": "2025-12-04T21:19:48.906251Z"
       },
       {
         "assigned_prefix": null,
@@ -3042,7 +3042,7 @@
         "points": 2,
         "position": 38,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327383Z",
@@ -3063,7 +3063,7 @@
         ],
         "status": "Todo",
         "title": "`T` should bring up filtering dialogue",
-        "updated_at": "2025-11-17T22:41:34.327384Z"
+        "updated_at": "2025-12-04T21:19:48.905281Z"
       },
       {
         "assigned_prefix": null,
@@ -3150,7 +3150,7 @@
         "points": 1,
         "position": 42,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327398Z",
@@ -3171,7 +3171,7 @@
         ],
         "status": "Todo",
         "title": "it is not apparent enough that we are entered into a board",
-        "updated_at": "2025-11-17T22:41:34.327398Z"
+        "updated_at": "2025-12-04T21:19:48.906431Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3186,7 +3186,7 @@
         "points": 1,
         "position": 50,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:01.506770Z",
@@ -3207,7 +3207,7 @@
         ],
         "status": "Todo",
         "title": "filter out completed sprint from sprint assign",
-        "updated_at": "2025-11-27T21:21:41.258241Z"
+        "updated_at": "2025-12-04T21:19:48.906854Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3269,11 +3269,11 @@
         "points": null,
         "position": 27,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "ui module refactor",
-        "updated_at": "2025-11-02T22:05:04.816599Z"
+        "updated_at": "2025-12-04T21:19:18.913641Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3344,11 +3344,11 @@
         "points": null,
         "position": 28,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "dont reset search on scroll",
-        "updated_at": "2025-11-03T16:59:39.258002Z"
+        "updated_at": "2025-12-04T21:19:18.914018Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3363,7 +3363,7 @@
         "points": null,
         "position": 32,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": null,
@@ -3376,7 +3376,7 @@
         ],
         "status": "Todo",
         "title": "escape bind to clear search, enter to apply",
-        "updated_at": "2025-11-17T22:46:16.108008Z"
+        "updated_at": "2025-12-04T21:19:48.905046Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3391,7 +3391,7 @@
         "points": null,
         "position": 34,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": null,
@@ -3404,7 +3404,7 @@
         ],
         "status": "Todo",
         "title": "implement { and } bindings",
-        "updated_at": "2025-11-17T22:46:16.108010Z"
+        "updated_at": "2025-12-04T21:19:48.905640Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3419,7 +3419,7 @@
         "points": null,
         "position": 35,
         "priority": "Medium",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": null,
@@ -3432,7 +3432,7 @@
         ],
         "status": "Todo",
         "title": "implement `g` and `G` bindings",
-        "updated_at": "2025-11-17T22:46:16.108007Z"
+        "updated_at": "2025-12-04T21:19:48.905370Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3447,11 +3447,11 @@
         "points": null,
         "position": 40,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "when filtering by sprint x, dont include unassigned cards.",
-        "updated_at": "2025-11-03T17:07:39.327652Z"
+        "updated_at": "2025-12-04T21:19:18.915008Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3466,11 +3466,11 @@
         "points": null,
         "position": 43,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "add filter for completed cards",
-        "updated_at": "2025-11-04T00:22:03.948102Z"
+        "updated_at": "2025-12-04T21:19:18.913922Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3485,11 +3485,11 @@
         "points": null,
         "position": 48,
         "priority": "Medium",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "migrations one",
-        "updated_at": "2025-11-05T12:35:29.959274Z"
+        "updated_at": "2025-12-04T21:19:18.914298Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3504,7 +3504,7 @@
         "points": 1,
         "position": 45,
         "priority": "Low",
-        "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
             "ended_at": null,
@@ -3517,7 +3517,7 @@
         ],
         "status": "Todo",
         "title": "include commit hash in -V",
-        "updated_at": "2025-11-17T22:46:16.108011Z"
+        "updated_at": "2025-12-04T21:19:48.905816Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3607,11 +3607,11 @@
         "points": 4,
         "position": 46,
         "priority": "High",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "undo action",
-        "updated_at": "2025-11-17T23:10:11.705703Z"
+        "updated_at": "2025-12-04T21:19:18.913735Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3626,11 +3626,11 @@
         "points": 1,
         "position": 49,
         "priority": "Low",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "update package README.md's",
-        "updated_at": "2025-11-18T07:35:47.239836Z"
+        "updated_at": "2025-12-04T21:19:18.914723Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3645,11 +3645,30 @@
         "points": null,
         "position": 49,
         "priority": "Low",
-        "sprint_id": null,
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [],
         "status": "Todo",
         "title": "page indicator",
-        "updated_at": "2025-11-27T21:20:12.471133Z"
+        "updated_at": "2025-12-04T21:19:18.914552Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 138,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-04T21:18:03.661653Z",
+        "description": "Creating a board triggers 4 commands:\n\n  - Create board\n  - Create column \"TODO\"\n  - Create column \"Doing\"\n  - Create column \"Complete\"\n\n  Each command queues a snapshot → 4 saves. This could be optimized to batch them into 1 save.\n",
+        "due_date": null,
+        "id": "74fa27ca-332c-4f31-8990-6f0ece3d32da",
+        "points": null,
+        "position": 51,
+        "priority": "Medium",
+        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Saving improvements",
+        "updated_at": "2025-12-04T21:18:24.988900Z"
       }
     ],
     "columns": [
