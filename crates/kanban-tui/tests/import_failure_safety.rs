@@ -40,7 +40,7 @@ fn test_import_failure_prevents_empty_state_save() {
     .unwrap();
 
     // Create app with the V2 format file - should handle it gracefully now
-    let app = App::new(Some(file_path.to_str().unwrap().to_string()));
+    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
 
     // App should load the board from V2 format
     assert_eq!(
@@ -64,7 +64,7 @@ fn test_import_failure_disables_save_file() {
     fs::write(&file_path, "{ invalid json }").unwrap();
 
     // Create app with invalid file
-    let app = App::new(Some(file_path.to_str().unwrap().to_string()));
+    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
 
     // save_file should be None due to import failure
     assert!(
@@ -121,7 +121,7 @@ fn test_v2_format_is_imported_correctly() {
     .unwrap();
 
     // Create app with V2 format file
-    let app = App::new(Some(file_path.to_str().unwrap().to_string()));
+    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
 
     // Should successfully import the board with its column and card
     assert_eq!(app.boards.len(), 1);

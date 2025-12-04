@@ -14,20 +14,15 @@
 /// let description_update = FieldUpdate::Clear;
 /// let priority_update = FieldUpdate::NoChange;
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FieldUpdate<T> {
     /// Do not modify this field (keep existing value)
+    #[default]
     NoChange,
     /// Set the field to the provided value
     Set(T),
     /// Clear the field (set to None)
     Clear,
-}
-
-impl<T> Default for FieldUpdate<T> {
-    fn default() -> Self {
-        FieldUpdate::NoChange
-    }
 }
 
 impl<T> FieldUpdate<T> {
