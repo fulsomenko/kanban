@@ -426,59 +426,63 @@ impl App {
 
                 let column_name = column.name.clone();
 
-                // Execute CreateCard command via StateManager
-                let cmd = Box::new(CreateCard {
-                    board_id: bid,
-                    column_id: column.id,
-                    title: self.input.as_str().to_string(),
-                    position,
-                });
-
-                if let Err(e) = self.execute_command(cmd) {
-                    tracing::error!("Failed to create card: {}", e);
-                    return;
-                }
-
-                // After command execution, find the card to determine its status
+                // Determine if we need to mark as complete (if in last column)
                 let board_columns: Vec<_> = self
                     .columns
                     .iter()
                     .filter(|col| col.board_id == bid)
                     .collect();
 
-                if board_columns.len() > 2 {
-                    let sorted_cols: Vec<_> = {
-                        let mut cols = board_columns.clone();
-                        cols.sort_by_key(|col| col.position);
-                        cols
-                    };
+                let mark_as_complete = if board_columns.len() > 2 {
+                    let mut sorted_cols = board_columns.clone();
+                    sorted_cols.sort_by_key(|col| col.position);
                     if let Some(last_col) = sorted_cols.last() {
-                        if last_col.id == column.id {
-                            // Find the newly created card and mark it as complete
-                            if let Some(card) =
-                                self.cards.iter().rev().find(|c| c.column_id == column.id)
-                            {
-                                let card_id = card.id;
-                                let update_cmd = Box::new(UpdateCard {
-                                    card_id,
-                                    updates: CardUpdate {
-                                        status: Some(CardStatus::Done),
-                                        ..Default::default()
-                                    },
-                                });
-                                if let Err(e) = self.execute_command(update_cmd) {
-                                    tracing::error!("Failed to update card status: {}", e);
-                                }
-                                tracing::info!(
-                                    "Creating card in column: {} [marked as complete]",
-                                    column_name
-                                );
-                            }
-                        } else {
-                            tracing::info!("Creating card in column: {}", column_name);
-                        }
+                        last_col.id == column.id
                     } else {
-                        tracing::info!("Creating card in column: {}", column_name);
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                // Build batch: CreateCard + optional status update
+                let mut commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+
+                let create_cmd = Box::new(CreateCard {
+                    board_id: bid,
+                    column_id: column.id,
+                    title: self.input.as_str().to_string(),
+                    position,
+                }) as Box<dyn crate::state::commands::Command>;
+                commands.push(create_cmd);
+
+                if let Err(e) = self.execute_commands_batch(commands) {
+                    tracing::error!("Failed to create card: {}", e);
+                    return;
+                }
+
+                // After command execution, find the newly created card
+                if mark_as_complete {
+                    if let Some(card) =
+                        self.cards.iter().rev().find(|c| c.column_id == column.id)
+                    {
+                        let card_id = card.id;
+                        let update_cmd = Box::new(UpdateCard {
+                            card_id,
+                            updates: CardUpdate {
+                                status: Some(CardStatus::Done),
+                                ..Default::default()
+                            },
+                        }) as Box<dyn crate::state::commands::Command>;
+
+                        if let Err(e) = self.execute_command(update_cmd) {
+                            tracing::error!("Failed to update card status: {}", e);
+                        }
+
+                        tracing::info!(
+                            "Creating card in column: {} [marked as complete]",
+                            column_name
+                        );
                     }
                 } else {
                     tracing::info!("Creating card in column: {}", column_name);
