@@ -337,17 +337,22 @@ impl App {
                 if let Some(target_column_id) = first_column_id {
                     if target_column_id != column_id {
                         let card_count = cards_to_move.len();
+
+                        // Batch all card moves together to avoid race conditions
+                        let mut move_commands: Vec<Box<dyn crate::state::commands::Command>> =
+                            Vec::new();
                         for (card_id, position) in cards_to_move {
                             let cmd = Box::new(MoveCard {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position: position,
-                            });
+                            }) as Box<dyn crate::state::commands::Command>;
+                            move_commands.push(cmd);
+                        }
 
-                            if let Err(e) = self.execute_command(cmd) {
-                                tracing::error!("Failed to move card: {}", e);
-                                continue;
-                            }
+                        if let Err(e) = self.execute_commands_batch(move_commands) {
+                            tracing::error!("Failed to move cards: {}", e);
+                            return;
                         }
 
                         tracing::info!("Moved {} cards to first column", card_count);
