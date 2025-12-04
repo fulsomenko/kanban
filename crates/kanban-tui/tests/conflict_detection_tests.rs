@@ -258,3 +258,141 @@ async fn test_conflict_resolution_with_force_overwrite() {
         "Conflict should still be detected until metadata is cleared"
     );
 }
+
+#[tokio::test]
+async fn test_multi_instance_concurrent_editing_3_instances() {
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("shared_board.json");
+
+    // Instance 1: Create initial board with data
+    let instance1_id = uuid::Uuid::new_v4();
+    let store1 = JsonFileStore::with_instance_id(&file_path, instance1_id);
+
+    let mut board1 = Board::new("Shared Project".to_string(), None);
+    let column1 = Column::new(board1.id, "Todo".to_string(), 0);
+    let column2 = Column::new(board1.id, "In Progress".to_string(), 1);
+
+    let card1 = Card::new(&mut board1, column1.id, "Task A".to_string(), 0, "feature");
+    let card2 = Card::new(&mut board1, column2.id, "Task B".to_string(), 0, "bug");
+
+    let snapshot1 = DataSnapshot {
+        boards: vec![board1.clone()],
+        columns: vec![column1.clone(), column2.clone()],
+        cards: vec![card1.clone(), card2.clone()],
+        sprints: vec![],
+        archived_cards: vec![],
+    };
+
+    let data = snapshot1.to_json_bytes().unwrap();
+    let persist_snapshot = StoreSnapshot {
+        data: data.clone(),
+        metadata: PersistenceMetadata::new(2, instance1_id),
+    };
+    store1.save(persist_snapshot).await.unwrap();
+
+    // Instance 2: Load and modify (add a new card in Todo column)
+    let instance2_id = uuid::Uuid::new_v4();
+    let store2 = JsonFileStore::with_instance_id(&file_path, instance2_id);
+
+    let (loaded_snap, _) = store2.load().await.unwrap();
+    let mut snapshot2: DataSnapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
+
+    let new_card = Card::new(
+        &mut snapshot2.boards[0],
+        snapshot2.columns[0].id,
+        "Task C (from Instance 2)".to_string(),
+        0,
+        "chore",
+    );
+    snapshot2.cards.push(new_card);
+
+    let data2 = snapshot2.to_json_bytes().unwrap();
+    let persist_snapshot2 = StoreSnapshot {
+        data: data2,
+        metadata: PersistenceMetadata::new(2, instance2_id),
+    };
+
+    // Ensure file modification time changes
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let result2 = store2.save(persist_snapshot2.clone()).await;
+    assert!(
+        result2.is_ok(),
+        "Instance 2 should save successfully (instance 1 hasn't tried yet)"
+    );
+
+    // Instance 3: Load and also modify (rename a card)
+    let instance3_id = uuid::Uuid::new_v4();
+    let store3 = JsonFileStore::with_instance_id(&file_path, instance3_id);
+
+    let (loaded_snap3, _) = store3.load().await.unwrap();
+    let mut snapshot3: DataSnapshot = serde_json::from_slice(&loaded_snap3.data).unwrap();
+
+    // Rename the first card
+    snapshot3.cards[0].title = "Task A - Updated by Instance 3".to_string();
+
+    let data3 = snapshot3.to_json_bytes().unwrap();
+    let persist_snapshot3 = StoreSnapshot {
+        data: data3,
+        metadata: PersistenceMetadata::new(2, instance3_id),
+    };
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let result3 = store3.save(persist_snapshot3.clone()).await;
+    assert!(
+        result3.is_ok(),
+        "Instance 3 should save successfully (instance 2 saved, but store tracks different instance)"
+    );
+
+    // Now Instance 1 tries to save (has outdated metadata)
+    // This should fail because file was modified by instances 2 and 3
+    let persist_snapshot_retry = StoreSnapshot {
+        data: data.clone(),
+        metadata: PersistenceMetadata::new(2, instance1_id),
+    };
+    let result1_retry = store1.save(persist_snapshot_retry).await;
+    assert!(
+        result1_retry.is_err(),
+        "Instance 1 should detect conflict after other instances modified"
+    );
+
+    match result1_retry {
+        Err(KanbanError::ConflictDetected { path, .. }) => {
+            assert!(path.contains("shared_board.json"));
+        }
+        _ => panic!("Expected ConflictDetected error"),
+    }
+
+    // Verify final state: Instance 3's save wins (last write)
+    let (final_snap, _) = store3.load().await.unwrap();
+    let final_data: DataSnapshot = serde_json::from_slice(&final_snap.data).unwrap();
+
+    // Should have 2 cards (Instance 2 added one, Instance 3 renamed another)
+    assert_eq!(final_data.cards.len(), 3, "Should have 3 cards total");
+
+    // Verify Instance 3's change is present (renamed task A)
+    let task_a = final_data
+        .cards
+        .iter()
+        .find(|c| c.title.contains("Updated by Instance 3"))
+        .expect("Instance 3's change should be in final state");
+    assert_eq!(task_a.title, "Task A - Updated by Instance 3");
+
+    // Verify Instance 2's change is present (added task C)
+    let task_c = final_data
+        .cards
+        .iter()
+        .find(|c| c.title.contains("Task C (from Instance 2)"))
+        .expect("Instance 2's addition should be in final state");
+    assert!(task_c.title.contains("Task C (from Instance 2)"));
+
+    // All instances should be able to detect and load the final state
+    let (store1_final, _) = store1.load().await.unwrap();
+    let store1_final_data: DataSnapshot = serde_json::from_slice(&store1_final.data).unwrap();
+    assert_eq!(
+        store1_final_data.cards.len(),
+        3,
+        "Instance 1 can see final state with all 3 cards"
+    );
+}
