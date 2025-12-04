@@ -237,33 +237,38 @@ impl App {
                                         }
                                     };
 
-                                    let cmd = Box::new(crate::state::commands::UpdateCard {
+                                    // Build batch of commands
+                                    let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                                        Vec::new();
+
+                                    // First, assign to sprint
+                                    let assign_cmd = Box::new(
+                                        kanban_domain::commands::AssignCardToSprint {
+                                            card_id,
+                                            sprint_id,
+                                            sprint_number,
+                                            sprint_name,
+                                            sprint_status,
+                                        },
+                                    ) as Box<dyn crate::state::commands::Command>;
+                                    commands.push(assign_cmd);
+
+                                    // Then, update the assigned prefix
+                                    let update_cmd = Box::new(crate::state::commands::UpdateCard {
                                         card_id,
                                         updates: kanban_domain::CardUpdate {
-                                            sprint_id: FieldUpdate::Set(sprint_id),
                                             assigned_prefix: FieldUpdate::Set(
                                                 effective_prefix.clone(),
                                             ),
                                             ..Default::default()
                                         },
-                                    });
-                                    if let Err(e) = self.execute_command(cmd) {
+                                    }) as Box<dyn crate::state::commands::Command>;
+                                    commands.push(update_cmd);
+
+                                    // Execute all commands as a batch
+                                    if let Err(e) = self.execute_commands_batch(commands) {
                                         tracing::error!("Failed to assign card to sprint: {}", e);
                                     } else {
-                                        // Update sprint metadata via direct mutation (domain operation)
-                                        if let Some(card) = self.cards.get_mut(card_idx) {
-                                            if let Some(old_sprint_id) = card.sprint_id {
-                                                if old_sprint_id != sprint_id {
-                                                    card.end_current_sprint_log();
-                                                }
-                                            }
-                                            card.assign_to_sprint(
-                                                sprint_id,
-                                                sprint_number,
-                                                sprint_name,
-                                                sprint_status,
-                                            );
-                                        }
                                         tracing::info!(
                                             "Assigned card to sprint with id: {}",
                                             sprint_id
@@ -361,37 +366,38 @@ impl App {
                                     }
                                 };
 
+                                // Build batch of commands for all cards
+                                let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                                    Vec::new();
                                 for card_id in &card_ids {
-                                    let cmd = Box::new(crate::state::commands::UpdateCard {
+                                    // First, assign to sprint
+                                    let assign_cmd = Box::new(
+                                        kanban_domain::commands::AssignCardToSprint {
+                                            card_id: *card_id,
+                                            sprint_id,
+                                            sprint_number,
+                                            sprint_name: sprint_name.clone(),
+                                            sprint_status: sprint_status.clone(),
+                                        },
+                                    ) as Box<dyn crate::state::commands::Command>;
+                                    commands.push(assign_cmd);
+
+                                    // Then, update the assigned prefix
+                                    let update_cmd = Box::new(crate::state::commands::UpdateCard {
                                         card_id: *card_id,
                                         updates: kanban_domain::CardUpdate {
-                                            sprint_id: FieldUpdate::Set(sprint_id),
                                             assigned_prefix: FieldUpdate::Set(
                                                 effective_prefix.clone(),
                                             ),
                                             ..Default::default()
                                         },
-                                    });
-                                    if let Err(e) = self.execute_command(cmd) {
-                                        tracing::error!("Failed to assign card to sprint: {}", e);
-                                    } else {
-                                        // Update sprint metadata via direct mutation
-                                        if let Some(card) =
-                                            self.cards.iter_mut().find(|c| c.id == *card_id)
-                                        {
-                                            if let Some(old_sprint_id) = card.sprint_id {
-                                                if old_sprint_id != sprint_id {
-                                                    card.end_current_sprint_log();
-                                                }
-                                            }
-                                            card.assign_to_sprint(
-                                                sprint_id,
-                                                sprint_number,
-                                                sprint_name.clone(),
-                                                sprint_status.clone(),
-                                            );
-                                        }
-                                    }
+                                    }) as Box<dyn crate::state::commands::Command>;
+                                    commands.push(update_cmd);
+                                }
+
+                                // Execute all commands as a batch (single pause/resume cycle)
+                                if let Err(e) = self.execute_commands_batch(commands) {
+                                    tracing::error!("Failed to assign cards to sprint: {}", e);
                                 }
 
                                 tracing::info!(
