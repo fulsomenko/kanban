@@ -305,6 +305,9 @@ impl App {
             Vec::new()
         };
 
+        // Batch all card updates to avoid race conditions with file watcher
+        let mut update_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+
         for card_id in card_ids {
             // First, get card info without mutable borrow
             let (old_column_id, old_status) =
@@ -362,14 +365,19 @@ impl App {
                 updates.position = Some(position);
             }
 
-            // Execute UpdateCard command
-            let cmd = Box::new(UpdateCard { card_id, updates });
-            if let Err(e) = self.execute_command(cmd) {
-                tracing::error!("Failed to toggle card completion: {}", e);
-                continue;
-            }
-
+            // Add to batch
+            let cmd = Box::new(UpdateCard { card_id, updates })
+                as Box<dyn crate::state::commands::Command>;
+            update_commands.push(cmd);
             toggled_count += 1;
+        }
+
+        // Execute all updates as a batch
+        if !update_commands.is_empty() {
+            if let Err(e) = self.execute_commands_batch(update_commands) {
+                tracing::error!("Failed to toggle card completion: {}", e);
+                return;
+            }
         }
 
         tracing::info!("Toggled {} cards completion status", toggled_count);
