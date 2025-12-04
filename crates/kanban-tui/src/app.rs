@@ -89,6 +89,7 @@ pub struct App {
     pub file_change_rx: Option<tokio::sync::broadcast::Receiver<kanban_persistence::ChangeEvent>>,
     pub file_watcher: Option<kanban_persistence::FileWatcher>,
     pub save_worker_handle: Option<tokio::task::JoinHandle<()>>,
+    pub save_completion_rx: Option<tokio::sync::mpsc::UnboundedReceiver<()>>,
     pub last_error: Option<(String, Instant)>,
 }
 
@@ -172,7 +173,7 @@ impl App {
         Option<tokio::sync::mpsc::UnboundedReceiver<crate::state::DataSnapshot>>,
     ) {
         let app_config = AppConfig::load();
-        let (state_manager, save_rx) = StateManager::new(save_file.clone());
+        let (state_manager, save_rx, save_completion_rx) = StateManager::new(save_file.clone());
         let mut app = Self {
             should_quit: false,
             mode: AppMode::Normal,
@@ -246,6 +247,7 @@ impl App {
             file_change_rx: None,
             file_watcher: None,
             save_worker_handle: None,
+            save_completion_rx,
             last_error: None,
         };
 
@@ -1238,6 +1240,8 @@ impl App {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
                                     self.state_manager.mark_dirty();
+                                    let snapshot = crate::state::DataSnapshot::from_app(self);
+                                    self.state_manager.queue_snapshot(snapshot);
                                 }
                             }
                             BoardField::Description => {
@@ -1248,6 +1252,8 @@ impl App {
                                 };
                                 board.update_description(desc);
                                 self.state_manager.mark_dirty();
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                self.state_manager.queue_snapshot(snapshot);
                             }
                         }
                     }
@@ -1289,6 +1295,8 @@ impl App {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
                                     self.state_manager.mark_dirty();
+                                    let snapshot = crate::state::DataSnapshot::from_app(self);
+                                    self.state_manager.queue_snapshot(snapshot);
                                 }
                             }
                             CardField::Description => {
@@ -1299,6 +1307,8 @@ impl App {
                                 };
                                 card.update_description(desc);
                                 self.state_manager.mark_dirty();
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                self.state_manager.queue_snapshot(snapshot);
                             }
                         }
                     }
@@ -1372,6 +1382,7 @@ impl App {
             if let Some(store) = self.state_manager.store().cloned() {
                 let instance_id = self.state_manager.instance_id();
                 let file_watcher = self.file_watcher.clone();
+                let save_completion_tx = self.state_manager.save_completion_tx().cloned();
 
                 tracing::info!("Spawning save worker to process snapshots");
                 let handle = tokio::spawn(async move {
@@ -1402,13 +1413,30 @@ impl App {
                         match store.save(persistence_snapshot).await {
                             Ok(_) => {
                                 tracing::debug!("Save worker completed save");
+                                // Signal that save is complete
+                                if let Some(ref tx) = save_completion_tx {
+                                    if let Err(e) = tx.send(()) {
+                                        tracing::error!("Failed to send save completion signal: {}", e);
+                                    }
+                                }
                             }
                             Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
                                 tracing::warn!("Save worker detected conflict at {}", path);
-                                // Note: conflict will be detected on next user action
+                                // Signal completion even on conflict
+                                if let Some(ref tx) = save_completion_tx {
+                                    if let Err(e) = tx.send(()) {
+                                        tracing::error!("Failed to send save completion signal: {}", e);
+                                    }
+                                }
                             }
                             Err(e) => {
                                 tracing::error!("Save worker failed: {}", e);
+                                // Signal completion even on failure
+                                if let Some(ref tx) = save_completion_tx {
+                                    if let Err(e) = tx.send(()) {
+                                        tracing::error!("Failed to send save completion signal: {}", e);
+                                    }
+                                }
                             }
                         }
 
@@ -1520,6 +1548,17 @@ impl App {
                                 }
                             }
                         }
+                    }
+                    _ = async {
+                        if let Some(ref mut rx) = &mut self.save_completion_rx {
+                            rx.recv().await
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        // Save operation completed - update dirty flag
+                        tracing::debug!("Save completion signal received");
+                        self.state_manager.save_completed();
                     }
                     Some(_change_event) = async {
                         if let Some(ref mut rx) = &mut self.file_change_rx {
