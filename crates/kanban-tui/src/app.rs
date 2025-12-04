@@ -1388,7 +1388,10 @@ impl App {
             }
 
             // Store the watcher to keep the background task alive
-            self.file_watcher = Some(watcher);
+            self.file_watcher = Some(watcher.clone());
+            // Also set it on the state manager (wrapped in Arc) so queue_snapshot can pause it
+            let watcher_arc = std::sync::Arc::new(watcher);
+            self.state_manager.set_file_watcher(watcher_arc);
         }
 
         // Spawn async save worker if save channel is configured
@@ -1404,15 +1407,12 @@ impl App {
                     tracing::info!("Save worker task started, waiting for snapshots");
                     while let Some(snapshot) = rx.recv().await {
                         tracing::debug!("Save worker received snapshot, starting save operation");
-                        // Pause file watching during our save to avoid self-triggered events
-                        if let Some(ref watcher) = file_watcher {
-                            watcher.pause();
-                        }
 
                         let data = match snapshot.to_json_bytes() {
                             Ok(d) => d,
                             Err(e) => {
                                 tracing::error!("Failed to serialize snapshot: {}", e);
+                                // Resume file watching since save is not happening
                                 if let Some(ref watcher) = file_watcher {
                                     watcher.resume();
                                 }
