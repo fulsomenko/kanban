@@ -78,14 +78,14 @@ impl App {
                             let prev_pos = board_columns[selected_idx - 1].1;
                             let curr_pos = board_columns[selected_idx].1;
 
-                            // Swap positions using commands
+                            // Swap positions using batched commands
                             let cmd1 = Box::new(UpdateColumn {
                                 column_id: prev_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(curr_pos),
                                     ..Default::default()
                                 },
-                            });
+                            }) as Box<dyn crate::state::commands::Command>;
 
                             let cmd2 = Box::new(UpdateColumn {
                                 column_id: curr_col_id,
@@ -93,14 +93,9 @@ impl App {
                                     position: Some(prev_pos),
                                     ..Default::default()
                                 },
-                            });
+                            }) as Box<dyn crate::state::commands::Command>;
 
-                            if let Err(e) = self.execute_command(cmd1) {
-                                tracing::error!("Failed to move column: {}", e);
-                                return;
-                            }
-
-                            if let Err(e) = self.execute_command(cmd2) {
+                            if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
                                 return;
                             }
@@ -135,14 +130,14 @@ impl App {
                             let curr_pos = board_columns[selected_idx].1;
                             let next_pos = board_columns[selected_idx + 1].1;
 
-                            // Swap positions using commands
+                            // Swap positions using batched commands
                             let cmd1 = Box::new(UpdateColumn {
                                 column_id: next_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(curr_pos),
                                     ..Default::default()
                                 },
-                            });
+                            }) as Box<dyn crate::state::commands::Command>;
 
                             let cmd2 = Box::new(UpdateColumn {
                                 column_id: curr_col_id,
@@ -150,14 +145,9 @@ impl App {
                                     position: Some(next_pos),
                                     ..Default::default()
                                 },
-                            });
+                            }) as Box<dyn crate::state::commands::Command>;
 
-                            if let Err(e) = self.execute_command(cmd1) {
-                                tracing::error!("Failed to move column: {}", e);
-                                return;
-                            }
-
-                            if let Err(e) = self.execute_command(cmd2) {
+                            if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
                                 return;
                             }
