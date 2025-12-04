@@ -7,9 +7,7 @@ use kanban_domain::commands::CommandContext;
 use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::mpsc;
 
 pub use kanban_domain::commands;
@@ -42,7 +40,6 @@ pub struct StateManager {
     instance_id: uuid::Uuid,
     conflict_pending: bool,
     needs_refresh: bool,
-    currently_saving: Arc<AtomicBool>,
     save_tx: Option<mpsc::UnboundedSender<DataSnapshot>>,
 }
 
@@ -51,9 +48,7 @@ impl StateManager {
     ///
     /// Returns the StateManager and an optional receiver for async save processing.
     /// If save_file is None, the receiver will also be None (no saves needed).
-    pub fn new(
-        save_file: Option<String>,
-    ) -> (Self, Option<mpsc::UnboundedReceiver<DataSnapshot>>) {
+    pub fn new(save_file: Option<String>) -> (Self, Option<mpsc::UnboundedReceiver<DataSnapshot>>) {
         let (store, instance_id, save_channel) = if let Some(path) = save_file {
             let store = Arc::new(JsonFileStore::new(&path));
             let id = store.instance_id();
@@ -76,7 +71,6 @@ impl StateManager {
             instance_id,
             conflict_pending: false,
             needs_refresh: false,
-            currently_saving: Arc::new(AtomicBool::new(false)),
             save_tx,
         };
 
@@ -155,65 +149,9 @@ impl StateManager {
         Ok(())
     }
 
-    /// Save state to disk immediately if dirty
-    ///
-    /// Returns ConflictDetected error if external file modifications detected.
-    /// This allows the application to prompt the user for conflict resolution.
-    pub async fn save(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
-        if !self.dirty {
-            return Ok(());
-        }
-
-        if let Some(ref store) = self.store {
-            let data = snapshot.to_json_bytes()?;
-            let persistence_snapshot = StoreSnapshot {
-                data,
-                metadata: PersistenceMetadata::new(2, self.instance_id),
-            };
-
-            self.currently_saving.store(true, Ordering::SeqCst);
-            tracing::debug!("Save operation started (instance_id: {})", self.instance_id);
-
-            let save_result = store.save(persistence_snapshot).await;
-
-            // Allow time for file system events to be dispatched by the OS
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            self.currently_saving.store(false, Ordering::SeqCst);
-            tracing::debug!(
-                "Save operation completed and flag cleared (instance_id: {})",
-                self.instance_id
-            );
-
-            match save_result {
-                Ok(_) => {
-                    self.dirty = false;
-                    self.conflict_pending = false;
-
-                    let cmd_count = self.command_queue.len();
-                    tracing::info!("Saved {} commands to disk", cmd_count);
-                    self.command_queue.clear();
-                    Ok(())
-                }
-                Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
-                    self.conflict_pending = true;
-                    tracing::warn!("File conflict detected at {}", path);
-                    Err(kanban_core::KanbanError::ConflictDetected { path, source: None })
-                }
-                Err(e) => Err(e),
-            }
-        } else {
-            Ok(())
-        }
-    }
-
     /// Check if state is dirty
     pub fn is_dirty(&self) -> bool {
         self.dirty
-    }
-
-    /// Check if a save operation is currently in progress
-    pub fn is_currently_saving(&self) -> bool {
-        self.currently_saving.load(Ordering::SeqCst)
     }
 
     /// Get the instance ID for this manager

@@ -3,6 +3,7 @@ use chrono::Utc;
 use kanban_core::KanbanResult;
 use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex;
@@ -29,9 +30,11 @@ use tokio::sync::Mutex;
 /// watcher.start_watching(WatchTarget::Directory("./data".into(), "*.json")).await?;
 /// // Efficiently watches all JSON files in directory and subdirectories
 /// ```
+#[derive(Clone)]
 pub struct FileWatcher {
     tx: broadcast::Sender<ChangeEvent>,
     task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    paused: Arc<AtomicBool>,
 }
 
 impl FileWatcher {
@@ -42,7 +45,20 @@ impl FileWatcher {
         Self {
             tx,
             task_handle: Arc::new(Mutex::new(None)),
+            paused: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Pause file watching - events will be ignored until resumed
+    pub fn pause(&self) {
+        self.paused.store(true, Ordering::SeqCst);
+        tracing::debug!("File watcher paused");
+    }
+
+    /// Resume file watching - events will be processed normally
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::SeqCst);
+        tracing::debug!("File watcher resumed");
     }
 }
 
@@ -57,6 +73,7 @@ impl ChangeDetector for FileWatcher {
     async fn start_watching(&self, path: PathBuf) -> KanbanResult<()> {
         let tx = self.tx.clone();
         let task_handle = self.task_handle.clone();
+        let paused = self.paused.clone();
 
         // Canonicalize to absolute path so it matches OS event paths
         let canonical_path = tokio::fs::canonicalize(&path).await?;
@@ -68,6 +85,7 @@ impl ChangeDetector for FileWatcher {
                 .expect("Canonicalized path should always have parent")
                 .to_path_buf();
             let watch_path = canonical_path.clone();
+            let paused_clone = paused.clone();
 
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
@@ -98,6 +116,16 @@ impl ChangeDetector for FileWatcher {
                         // For parent directory watching, trigger on any relevant event
                         // (atomic writes show as temp file events, but the target file exists and changed)
                         if is_relevant_event && (has_our_file || watch_path.exists()) {
+                            // Check if file watching is paused (e.g., during our own save operation)
+                            if paused_clone.load(Ordering::SeqCst) {
+                                tracing::debug!(
+                                    "File event ignored (watcher paused): kind={:?}, path={}",
+                                    event.kind,
+                                    watch_path.display()
+                                );
+                                return;
+                            }
+
                             tracing::debug!(
                                 "File event detected: kind={:?}, path={}, our_file_exists={}",
                                 event.kind,

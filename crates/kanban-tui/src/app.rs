@@ -1323,44 +1323,8 @@ impl App {
     ) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
 
-        // Spawn async save worker if save channel is configured
-        if let Some(mut rx) = save_rx {
-            if let Some(store) = self.state_manager.store().cloned() {
-                let instance_id = self.state_manager.instance_id();
-                tokio::spawn(async move {
-                    while let Some(snapshot) = rx.recv().await {
-                        let data = match snapshot.to_json_bytes() {
-                            Ok(d) => d,
-                            Err(e) => {
-                                tracing::error!("Failed to serialize snapshot: {}", e);
-                                continue;
-                            }
-                        };
-
-                        let persistence_snapshot = StoreSnapshot {
-                            data,
-                            metadata: PersistenceMetadata::new(2, instance_id),
-                        };
-
-                        match store.save(persistence_snapshot).await {
-                            Ok(_) => {
-                                tracing::debug!("Save worker completed save");
-                            }
-                            Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
-                                tracing::warn!("Save worker detected conflict at {}", path);
-                                // Note: conflict will be detected on next user action
-                            }
-                            Err(e) => {
-                                tracing::error!("Save worker failed: {}", e);
-                            }
-                        }
-                    }
-                    tracing::info!("Save worker shut down");
-                });
-            }
-        }
-
         // Initialize file watching if a save file is configured
+        // (Done before spawning save worker so worker can pause/resume it)
         if let Some(ref save_file) = self.save_file {
             use kanban_persistence::ChangeDetector;
             tracing::info!("Initializing file watcher for: {}", save_file);
@@ -1382,6 +1346,58 @@ impl App {
 
             // Store the watcher to keep the background task alive
             self.file_watcher = Some(watcher);
+        }
+
+        // Spawn async save worker if save channel is configured
+        if let Some(mut rx) = save_rx {
+            if let Some(store) = self.state_manager.store().cloned() {
+                let instance_id = self.state_manager.instance_id();
+                let file_watcher = self.file_watcher.clone();
+
+                tokio::spawn(async move {
+                    while let Some(snapshot) = rx.recv().await {
+                        // Pause file watching during our save to avoid self-triggered events
+                        if let Some(ref watcher) = file_watcher {
+                            watcher.pause();
+                        }
+
+                        let data = match snapshot.to_json_bytes() {
+                            Ok(d) => d,
+                            Err(e) => {
+                                tracing::error!("Failed to serialize snapshot: {}", e);
+                                if let Some(ref watcher) = file_watcher {
+                                    watcher.resume();
+                                }
+                                continue;
+                            }
+                        };
+
+                        let persistence_snapshot = StoreSnapshot {
+                            data,
+                            metadata: PersistenceMetadata::new(2, instance_id),
+                        };
+
+                        match store.save(persistence_snapshot).await {
+                            Ok(_) => {
+                                tracing::debug!("Save worker completed save");
+                            }
+                            Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                                tracing::warn!("Save worker detected conflict at {}", path);
+                                // Note: conflict will be detected on next user action
+                            }
+                            Err(e) => {
+                                tracing::error!("Save worker failed: {}", e);
+                            }
+                        }
+
+                        // Resume file watching after save completes
+                        if let Some(ref watcher) = file_watcher {
+                            watcher.resume();
+                        }
+                    }
+                    tracing::info!("Save worker shut down");
+                });
+            }
         }
 
         while !self.should_quit {
@@ -1500,23 +1516,19 @@ impl App {
                             std::future::pending().await
                         }
                     } => {
-                        // Ignore file events that occur during our own save operation
-                        if self.state_manager.is_currently_saving() {
-                            tracing::debug!("Ignoring file event during own save operation");
-                        } else {
-                            // External file change detected - handle smart reload
-                            if !self.state_manager.is_dirty() {
-                                // No local changes, auto-reload silently
-                                tracing::info!("External change detected, auto-reloading");
-                                self.auto_reload_from_external_change().await;
-                                tracing::info!("Auto-reloaded due to external file change");
-                            } else if self.mode != AppMode::ConflictResolution
-                                && self.mode != AppMode::ExternalChangeDetected
-                            {
-                                // Local changes exist, prompt user
-                                tracing::warn!("External file change detected with local changes");
-                                self.mode = AppMode::ExternalChangeDetected;
-                            }
+                        // External file change detected - handle smart reload
+                        // (File watcher is paused during our own saves, so this is always external)
+                        if !self.state_manager.is_dirty() {
+                            // No local changes, auto-reload silently
+                            tracing::info!("External change detected, auto-reloading");
+                            self.auto_reload_from_external_change().await;
+                            tracing::info!("Auto-reloaded due to external file change");
+                        } else if self.mode != AppMode::ConflictResolution
+                            && self.mode != AppMode::ExternalChangeDetected
+                        {
+                            // Local changes exist, prompt user
+                            tracing::warn!("External file change detected with local changes");
+                            self.mode = AppMode::ExternalChangeDetected;
                         }
                     }
                 }

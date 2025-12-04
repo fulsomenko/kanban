@@ -356,11 +356,15 @@ impl Board {
         if let Some(task_sort_order) = updates.task_sort_order {
             self.task_sort_order = task_sort_order;
         }
-        updates.sprint_duration_days.apply_to(&mut self.sprint_duration_days);
+        updates
+            .sprint_duration_days
+            .apply_to(&mut self.sprint_duration_days);
         if let Some(task_list_view) = updates.task_list_view {
             self.task_list_view = task_list_view;
         }
-        updates.active_sprint_id.apply_to(&mut self.active_sprint_id);
+        updates
+            .active_sprint_id
+            .apply_to(&mut self.active_sprint_id);
         self.updated_at = Utc::now();
     }
 }

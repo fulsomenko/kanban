@@ -50,10 +50,7 @@ impl JsonFileStore {
     }
 
     /// Lock metadata mutex with poisoning recovery and detailed error logging
-    fn lock_metadata(
-        &self,
-        operation: &str,
-    ) -> std::sync::MutexGuard<'_, Option<FileMetadata>> {
+    fn lock_metadata(&self, operation: &str) -> std::sync::MutexGuard<'_, Option<FileMetadata>> {
         self.last_known_metadata.lock().unwrap_or_else(|poisoned| {
             tracing::error!(
                 path = %self.path.display(),

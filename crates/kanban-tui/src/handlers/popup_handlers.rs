@@ -241,7 +241,9 @@ impl App {
                                         card_id,
                                         updates: kanban_domain::CardUpdate {
                                             sprint_id: FieldUpdate::Set(sprint_id),
-                                            assigned_prefix: FieldUpdate::Set(effective_prefix.clone()),
+                                            assigned_prefix: FieldUpdate::Set(
+                                                effective_prefix.clone(),
+                                            ),
                                             ..Default::default()
                                         },
                                     });
@@ -364,7 +366,9 @@ impl App {
                                         card_id: *card_id,
                                         updates: kanban_domain::CardUpdate {
                                             sprint_id: FieldUpdate::Set(sprint_id),
-                                            assigned_prefix: FieldUpdate::Set(effective_prefix.clone()),
+                                            assigned_prefix: FieldUpdate::Set(
+                                                effective_prefix.clone(),
+                                            ),
                                             ..Default::default()
                                         },
                                     });
