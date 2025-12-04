@@ -88,6 +88,7 @@ pub struct App {
     pub pending_key: Option<char>,
     pub file_change_rx: Option<tokio::sync::broadcast::Receiver<kanban_persistence::ChangeEvent>>,
     pub file_watcher: Option<kanban_persistence::FileWatcher>,
+    pub save_worker_handle: Option<tokio::task::JoinHandle<()>>,
     pub last_error: Option<(String, Instant)>,
 }
 
@@ -244,6 +245,7 @@ impl App {
             pending_key: None,
             file_change_rx: None,
             file_watcher: None,
+            save_worker_handle: None,
             last_error: None,
         };
 
@@ -1354,7 +1356,7 @@ impl App {
                 let instance_id = self.state_manager.instance_id();
                 let file_watcher = self.file_watcher.clone();
 
-                tokio::spawn(async move {
+                let handle = tokio::spawn(async move {
                     while let Some(snapshot) = rx.recv().await {
                         // Pause file watching during our save to avoid self-triggered events
                         if let Some(ref watcher) = file_watcher {
@@ -1397,6 +1399,7 @@ impl App {
                     }
                     tracing::info!("Save worker shut down");
                 });
+                self.save_worker_handle = Some(handle);
             }
         }
 
@@ -1543,8 +1546,14 @@ impl App {
             }
         }
 
-        // Note: No explicit final save needed - the save worker processes all queued saves
-        // When the app exits, the channel sender is dropped and the worker drains remaining saves
+        // Graceful shutdown: ensure all queued saves complete before exit
+        self.state_manager.close_save_channel(); // Close save_tx channel to signal worker to finish
+
+        // Wait for save worker to finish processing all queued saves
+        if let Some(handle) = self.save_worker_handle.take() {
+            handle.await.ok();
+            tracing::info!("Save worker finished, all saves complete");
+        }
 
         restore_terminal(&mut terminal)?;
         Ok(())

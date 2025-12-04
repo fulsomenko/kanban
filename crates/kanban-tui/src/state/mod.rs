@@ -244,6 +244,12 @@ impl StateManager {
         self.dirty = false;
         self.command_queue.clear();
     }
+
+    /// Close the save channel to signal the worker to finish processing and exit
+    /// Called during graceful shutdown before waiting for the worker to finish
+    pub fn close_save_channel(&mut self) {
+        self.save_tx = None;
+    }
 }
 
 #[cfg(test)]
