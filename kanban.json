@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "98a243a5-060f-44f8-907a-c40e6a6a74c3",
-    "saved_at": "2025-12-04T21:59:09.079146Z",
+    "instance_id": "3864a7ef-9d57-40c9-9b43-6e251b7e8f1f",
+    "saved_at": "2025-12-04T22:00:26.168456Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -35,7 +35,7 @@
     ],
     "boards": [
       {
-        "active_sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+        "active_sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "card_prefix": "KAN",
         "created_at": "2025-10-10T08:47:44.779097Z",
         "description": "Management of the **Kanban** project\n",
@@ -61,7 +61,7 @@
         "task_list_view": "ColumnView",
         "task_sort_field": "UpdatedAt",
         "task_sort_order": "Descending",
-        "updated_at": "2025-12-04T21:30:48.049533Z"
+        "updated_at": "2025-12-04T22:00:26.140438Z"
       }
     ],
     "cards": [
@@ -3959,21 +3959,21 @@
         "prefix": null,
         "sprint_number": 8,
         "start_date": "2025-11-17T22:44:07.121256Z",
-        "status": "Active",
-        "updated_at": "2025-11-17T22:44:07.121265Z"
+        "status": "Completed",
+        "updated_at": "2025-12-04T22:00:02.074471Z"
       },
       {
         "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
         "card_prefix": null,
         "created_at": "2025-11-27T21:01:26.827434Z",
-        "end_date": null,
+        "end_date": "2025-12-11T22:00:26.140257Z",
         "id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "name_index": 4,
         "prefix": null,
         "sprint_number": 9,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2025-11-27T21:01:26.827434Z"
+        "start_date": "2025-12-04T22:00:26.140257Z",
+        "status": "Active",
+        "updated_at": "2025-12-04T22:00:26.140260Z"
       }
     ]
   }
