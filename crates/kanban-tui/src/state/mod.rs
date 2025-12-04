@@ -128,10 +128,18 @@ impl StateManager {
         // Queue snapshot for async save if channel is available
         if let Some(ref tx) = self.save_tx {
             let snapshot = DataSnapshot::from_app(app);
+            tracing::debug!("Queueing snapshot for async save");
             // Send is non-blocking and only fails if receiver is dropped
-            if let Err(e) = tx.send(snapshot) {
-                tracing::error!("Failed to queue save: channel closed: {:?}", e);
+            match tx.send(snapshot) {
+                Ok(_) => {
+                    tracing::debug!("Snapshot queued successfully");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to queue save: channel closed: {:?}", e);
+                }
             }
+        } else {
+            tracing::debug!("No save channel available - skipping save");
         }
 
         Ok(())
@@ -249,6 +257,29 @@ impl StateManager {
     /// Called during graceful shutdown before waiting for the worker to finish
     pub fn close_save_channel(&mut self) {
         self.save_tx = None;
+    }
+
+    /// Check if the save channel is available for sending snapshots
+    pub fn has_save_channel(&self) -> bool {
+        self.save_tx.is_some()
+    }
+
+    /// Queue a snapshot for async saving
+    /// Used by App::execute_command to ensure snapshots are queued
+    pub fn queue_snapshot(&self, snapshot: DataSnapshot) {
+        if let Some(ref tx) = self.save_tx {
+            tracing::debug!("Queueing snapshot for async save");
+            match tx.send(snapshot) {
+                Ok(_) => {
+                    tracing::debug!("Snapshot queued successfully");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to queue save: channel closed: {:?}", e);
+                }
+            }
+        } else {
+            tracing::debug!("No save channel available - skipping save");
+        }
     }
 }
 

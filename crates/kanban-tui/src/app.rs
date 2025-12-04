@@ -1046,23 +1046,39 @@ impl App {
     }
 
     /// Execute a command and track state changes for progressive saving
-    /// Safely delegates to StateManager which properly handles the borrows
+    /// Manually queues snapshot after execution to ensure saves happen
     pub fn execute_command(
         &mut self,
         command: Box<dyn crate::state::commands::Command>,
     ) -> KanbanResult<()> {
-        // Use destructuring to split mutable borrows and avoid aliasing
-        let Self {
-            state_manager,
-            boards,
-            columns,
-            cards,
-            sprints,
-            archived_cards,
-            ..
-        } = self;
+        // Execute the command first
+        {
+            // Use destructuring to split mutable borrows and avoid aliasing
+            let Self {
+                state_manager,
+                boards,
+                columns,
+                cards,
+                sprints,
+                archived_cards,
+                ..
+            } = self;
 
-        state_manager.execute_with_context(boards, columns, cards, sprints, archived_cards, command)
+            state_manager.execute_with_context(
+                boards,
+                columns,
+                cards,
+                sprints,
+                archived_cards,
+                command,
+            )?;
+        } // Release the destructured borrows
+
+        // Queue snapshot for async save (after releasing the destructured borrows)
+        let snapshot = crate::state::DataSnapshot::from_app(self);
+        self.state_manager.queue_snapshot(snapshot);
+
+        Ok(())
     }
 
     pub fn refresh_view(&mut self) {
@@ -1352,12 +1368,16 @@ impl App {
 
         // Spawn async save worker if save channel is configured
         if let Some(mut rx) = save_rx {
+            tracing::debug!("Save channel receiver available");
             if let Some(store) = self.state_manager.store().cloned() {
                 let instance_id = self.state_manager.instance_id();
                 let file_watcher = self.file_watcher.clone();
 
+                tracing::info!("Spawning save worker to process snapshots");
                 let handle = tokio::spawn(async move {
+                    tracing::info!("Save worker task started, waiting for snapshots");
                     while let Some(snapshot) = rx.recv().await {
+                        tracing::debug!("Save worker received snapshot, starting save operation");
                         // Pause file watching during our save to avoid self-triggered events
                         if let Some(ref watcher) = file_watcher {
                             watcher.pause();
@@ -1397,10 +1417,14 @@ impl App {
                             watcher.resume();
                         }
                     }
-                    tracing::info!("Save worker shut down");
+                    tracing::info!("Save worker exited recv loop (channel closed)");
                 });
                 self.save_worker_handle = Some(handle);
+            } else {
+                tracing::warn!("Could not spawn save worker: no store available");
             }
+        } else {
+            tracing::debug!("No save channel receiver - no saves will be processed");
         }
 
         while !self.should_quit {
