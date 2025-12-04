@@ -238,19 +238,20 @@ impl App {
                                     };
 
                                     // Build batch of commands
-                                    let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
-                                        Vec::new();
+                                    let mut commands: Vec<
+                                        Box<dyn crate::state::commands::Command>,
+                                    > = Vec::new();
 
                                     // First, assign to sprint
-                                    let assign_cmd = Box::new(
-                                        kanban_domain::commands::AssignCardToSprint {
+                                    let assign_cmd =
+                                        Box::new(kanban_domain::commands::AssignCardToSprint {
                                             card_id,
                                             sprint_id,
                                             sprint_number,
                                             sprint_name,
                                             sprint_status,
-                                        },
-                                    ) as Box<dyn crate::state::commands::Command>;
+                                        })
+                                            as Box<dyn crate::state::commands::Command>;
                                     commands.push(assign_cmd);
 
                                     // Then, update the assigned prefix
@@ -262,7 +263,8 @@ impl App {
                                             ),
                                             ..Default::default()
                                         },
-                                    }) as Box<dyn crate::state::commands::Command>;
+                                    })
+                                        as Box<dyn crate::state::commands::Command>;
                                     commands.push(update_cmd);
 
                                     // Execute all commands as a batch
@@ -317,11 +319,10 @@ impl App {
                         let mut unassign_commands: Vec<Box<dyn crate::state::commands::Command>> =
                             Vec::new();
                         for card_id in &card_ids {
-                            let cmd = Box::new(
-                                kanban_domain::commands::UnassignCardFromSprint {
-                                    card_id: *card_id,
-                                },
-                            ) as Box<dyn crate::state::commands::Command>;
+                            let cmd = Box::new(kanban_domain::commands::UnassignCardFromSprint {
+                                card_id: *card_id,
+                            })
+                                as Box<dyn crate::state::commands::Command>;
                             unassign_commands.push(cmd);
                         }
 
@@ -367,15 +368,15 @@ impl App {
                                     Vec::new();
                                 for card_id in &card_ids {
                                     // First, assign to sprint
-                                    let assign_cmd = Box::new(
-                                        kanban_domain::commands::AssignCardToSprint {
+                                    let assign_cmd =
+                                        Box::new(kanban_domain::commands::AssignCardToSprint {
                                             card_id: *card_id,
                                             sprint_id,
                                             sprint_number,
                                             sprint_name: sprint_name.clone(),
                                             sprint_status: sprint_status.clone(),
-                                        },
-                                    ) as Box<dyn crate::state::commands::Command>;
+                                        })
+                                            as Box<dyn crate::state::commands::Command>;
                                     commands.push(assign_cmd);
 
                                     // Then, update the assigned prefix
@@ -387,7 +388,8 @@ impl App {
                                             ),
                                             ..Default::default()
                                         },
-                                    }) as Box<dyn crate::state::commands::Command>;
+                                    })
+                                        as Box<dyn crate::state::commands::Command>;
                                     commands.push(update_cmd);
                                 }
 

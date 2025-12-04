@@ -42,7 +42,8 @@ impl App {
                         let activate_cmd = Box::new(ActivateSprint {
                             sprint_id,
                             duration_days: duration,
-                        }) as Box<dyn crate::state::commands::Command>;
+                        })
+                            as Box<dyn crate::state::commands::Command>;
 
                         let board_cmd = Box::new(UpdateBoard {
                             board_id,
@@ -50,7 +51,8 @@ impl App {
                                 active_sprint_id: FieldUpdate::Set(sprint_id),
                                 ..Default::default()
                             },
-                        }) as Box<dyn crate::state::commands::Command>;
+                        })
+                            as Box<dyn crate::state::commands::Command>;
 
                         if let Err(e) = self.execute_commands_batch(vec![activate_cmd, board_cmd]) {
                             tracing::error!("Failed to activate sprint: {}", e);

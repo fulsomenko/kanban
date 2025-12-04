@@ -85,7 +85,8 @@ impl App {
                                     position: Some(curr_pos),
                                     ..Default::default()
                                 },
-                            }) as Box<dyn crate::state::commands::Command>;
+                            })
+                                as Box<dyn crate::state::commands::Command>;
 
                             let cmd2 = Box::new(UpdateColumn {
                                 column_id: curr_col_id,
@@ -93,7 +94,8 @@ impl App {
                                     position: Some(prev_pos),
                                     ..Default::default()
                                 },
-                            }) as Box<dyn crate::state::commands::Command>;
+                            })
+                                as Box<dyn crate::state::commands::Command>;
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
@@ -137,7 +139,8 @@ impl App {
                                     position: Some(curr_pos),
                                     ..Default::default()
                                 },
-                            }) as Box<dyn crate::state::commands::Command>;
+                            })
+                                as Box<dyn crate::state::commands::Command>;
 
                             let cmd2 = Box::new(UpdateColumn {
                                 column_id: curr_col_id,
@@ -145,7 +148,8 @@ impl App {
                                     position: Some(next_pos),
                                     ..Default::default()
                                 },
-                            }) as Box<dyn crate::state::commands::Command>;
+                            })
+                                as Box<dyn crate::state::commands::Command>;
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
@@ -336,7 +340,8 @@ impl App {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position: position,
-                            }) as Box<dyn crate::state::commands::Command>;
+                            })
+                                as Box<dyn crate::state::commands::Command>;
                             move_commands.push(cmd);
                         }
 

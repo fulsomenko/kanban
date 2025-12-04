@@ -463,9 +463,7 @@ impl App {
 
                 // After command execution, find the newly created card
                 if mark_as_complete {
-                    if let Some(card) =
-                        self.cards.iter().rev().find(|c| c.column_id == column.id)
-                    {
+                    if let Some(card) = self.cards.iter().rev().find(|c| c.column_id == column.id) {
                         let card_id = card.id;
                         let update_cmd = Box::new(UpdateCard {
                             card_id,
@@ -473,7 +471,8 @@ impl App {
                                 status: Some(CardStatus::Done),
                                 ..Default::default()
                             },
-                        }) as Box<dyn crate::state::commands::Command>;
+                        })
+                            as Box<dyn crate::state::commands::Command>;
 
                         if let Err(e) = self.execute_command(update_cmd) {
                             tracing::error!("Failed to update card status: {}", e);
@@ -544,7 +543,8 @@ impl App {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position,
-                            }) as Box<dyn crate::state::commands::Command>;
+                            })
+                                as Box<dyn crate::state::commands::Command>;
                             commands.push(move_cmd);
 
                             // If moving from last column and card is Done, mark as Todo
@@ -558,7 +558,8 @@ impl App {
                                         status: Some(CardStatus::Todo),
                                         ..Default::default()
                                     },
-                                }) as Box<dyn crate::state::commands::Command>;
+                                })
+                                    as Box<dyn crate::state::commands::Command>;
                                 commands.push(status_cmd);
                             }
 
@@ -567,7 +568,9 @@ impl App {
                                 return;
                             }
 
-                            if is_moving_from_last && num_cols > 1 && current_status == CardStatus::Done
+                            if is_moving_from_last
+                                && num_cols > 1
+                                && current_status == CardStatus::Done
                             {
                                 tracing::info!(
                                     "Moved card from last column (unmarked as complete)"
@@ -644,7 +647,8 @@ impl App {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position,
-                            }) as Box<dyn crate::state::commands::Command>;
+                            })
+                                as Box<dyn crate::state::commands::Command>;
                             commands.push(move_cmd);
 
                             // If moving to last column and card is not Done, mark as Done
@@ -658,7 +662,8 @@ impl App {
                                         status: Some(CardStatus::Done),
                                         ..Default::default()
                                     },
-                                }) as Box<dyn crate::state::commands::Command>;
+                                })
+                                    as Box<dyn crate::state::commands::Command>;
                                 commands.push(status_cmd);
                             }
 
@@ -667,7 +672,10 @@ impl App {
                                 return;
                             }
 
-                            if is_moving_to_last && num_cols > 1 && current_status != CardStatus::Done {
+                            if is_moving_to_last
+                                && num_cols > 1
+                                && current_status != CardStatus::Done
+                            {
                                 tracing::info!("Moved card to last column (marked as complete)");
                             } else {
                                 tracing::info!("Moved card to next column");
