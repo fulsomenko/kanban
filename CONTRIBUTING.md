@@ -155,7 +155,7 @@ The application uses a **command pattern** for all state mutations, enabling pro
 3. **StateManager** (kanban-tui): Executes command via CommandContext
 4. **CommandContext**: Applies mutation to data vectors
 5. **Dirty Flag**: StateManager marks state as dirty after execution
-6. **Progressive Save**: Auto-saves after 500ms debounce interval
+6. **Progressive Save**: Auto-saves immediately after each command via async channel
 
 **Example Handler Pattern:**
 ```rust
@@ -180,10 +180,13 @@ pub fn handle_create_card_key(&mut self) {
 ```
 
 **Persistence Features:**
-- **Progressive Auto-Save**: Changes saved after each operation (not just on exit)
-- **Debouncing**: 500ms minimum interval between disk writes to prevent excessive I/O
+- **Progressive Auto-Save**: Changes saved immediately after each operation (not just on exit)
+- **Async Processing**: Commands queued immediately via bounded channel, processed by background worker
+- **Conflict Detection**: Multi-instance changes detected via file metadata (timestamp + size + content hash)
 - **Format Versioning**: Automatic V1→V2 migration on load with backup creation
-- **Multi-Instance Support**: Last-write-wins resolution for concurrent edits
+- **Multi-Instance Support**: Last-write-wins resolution for concurrent edits (see [CONFLICT_RESOLUTION.md](CONFLICT_RESOLUTION.md) for data loss scenarios and limitations)
+- **Atomic Writes**: Crash-safe write pattern (temp file → atomic rename) prevents corruption
+- **Own-Write Detection**: Metadata-based filtering prevents false positives from our own saves
 
 **When Adding Features:**
 1. **Define domain command** in `kanban-domain/src/commands/`
