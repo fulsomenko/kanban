@@ -11,7 +11,7 @@ bump: patch
 - feat(persistence): detect file conflicts before save
 - feat(core,persistence): add conflict detection for multi-instance saves
 - feat(persistence): add automatic V1→V2 migration on load
-- feat(state): add debouncing to StateManager::save_if_needed()
+- feat(state): implement immediate async save via channel queue
 - feat(domain): add active_sprint_id field to BoardUpdate
 - feat(state): create Command trait and StateManager
 - feat(persistence): create kanban-persistence crate structure
