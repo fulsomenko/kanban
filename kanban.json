@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "e62d9377-7cda-4544-accc-263b3cf7aa9c",
-    "saved_at": "2025-12-04T22:03:34.499104Z",
+    "instance_id": "7d0c2dc6-2d29-4960-9af5-487ff727da21",
+    "saved_at": "2025-12-04T22:41:10.395439Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -43,7 +43,7 @@
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 143
+          "KAN": 146
         },
         "sprint_counters": {
           "KAN": 10
@@ -59,9 +59,9 @@
         ],
         "sprint_prefix": "KAN",
         "task_list_view": "ColumnView",
-        "task_sort_field": "UpdatedAt",
+        "task_sort_field": "Priority",
         "task_sort_order": "Descending",
-        "updated_at": "2025-12-04T22:02:17.267779Z"
+        "updated_at": "2025-12-04T22:39:36.658310Z"
       }
     ],
     "cards": [
@@ -215,9 +215,9 @@
         "description": "Introduce two features\n\n# Block\n\n- Add blocked by card\n- Add create blocker. Creating the new card that would be the blocker.\n\n# Grouping of cards under one card\n\nI would like to keep things flat but I would like card meta data where I can group cards by a top level card.\n\nThe interface would present the grouping as nested to begin with and we see how it behaves?\n\nExample\n\n```\nImplement Card Grouping ...\n```\n\nWhich would when hit enter or space on expand into\n\n```\nImplement Card Grouping\n  Create ui\n  Add metadata\n```\n\n# Duplicate cards\n\nWhen two cards propose changes that are two sides of the same coin. Be able to add them as siblings. \n\nBut when two cards propose changes that are the same side of the same coin, we want to merge them together. Creating a new card by editing the description and title in a git conflict type way\n\nThe merging will ofcourse be handled by opening EDITOR and injecting the content into their respective section.\n\nExample\n---\n\nTitle\n\n```\n<<<<<<< KAN-0001\nCard Background\n=======\nCard Background Color\n>>>>>>> KAN-0002\n```\n\nDescription\n\n```\nWe want to introduce a new feature that\n<<<<<<< KAN-0001\nMakes card background purple\n=======\nMakes card background green\n>>>>>>> KAN-0002\n```\n",
         "due_date": null,
         "id": "e96684a5-4645-443e-8e2c-6bb646e248c6",
-        "points": 4,
+        "points": 5,
         "position": 44,
-        "priority": "Medium",
+        "priority": "High",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
           {
@@ -247,7 +247,7 @@
         ],
         "status": "Todo",
         "title": "Card dependencies",
-        "updated_at": "2025-12-04T21:19:48.905467Z"
+        "updated_at": "2025-12-04T22:33:14.595343Z"
       },
       {
         "assigned_prefix": null,
@@ -303,7 +303,7 @@
         ],
         "status": "Todo",
         "title": "Test the application with another editor",
-        "updated_at": "2025-11-17T22:11:56.700488Z"
+        "updated_at": "2025-12-04T22:33:35.771744Z"
       },
       {
         "assigned_prefix": null,
@@ -643,7 +643,7 @@
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
         "completed_at": null,
         "created_at": "2025-10-11T18:45:47.488818Z",
-        "description": "If a pull request is open for a card. Open a link to that pull\n\nshow if a card has a pull request open (or in draft in the task list)\n\nExamples\n\nPR opem\n```\nA task name - [PR] (green)\n```\n\nDraft\n```\nA task name - [PR] (greyed out)\n```\n---\n\nI am getting the feeling that this would depend on having configuration for collaborative version control per board\n\n",
+        "description": "If a pull request is open for a card. Open a link to that pull\n\nshow if a card has a pull request open (or in draft in the task list)\n\nExamples\n\nPR opem\n```\nA task name - [PR] (green)\n```\n\nDraft\n```\nA task name - [PR] (greyed out)\n```\n---\n\nI am getting the feeling that this would depend on having configuration for collaborative version control per board\n\n---\n\nGit integration\n",
         "due_date": null,
         "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
         "points": 3,
@@ -678,7 +678,7 @@
         ],
         "status": "Todo",
         "title": "Link to pull request",
-        "updated_at": "2025-12-04T21:19:48.907272Z"
+        "updated_at": "2025-12-04T22:34:06.057361Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1316,7 +1316,7 @@
         "description": "On board level. Be able to define a set of tags..\n\nThen\n\nBe able to categorize (assign) cards using tag system\nBe able to filter task list by tags\n\nExamples of tags\n\n- Bugs\n- Feature\n- UI\n- Architecture\n\nActually. Maybe tags should be a entity on the same level as these and not tightly couple into board.\n\nWould allow for tag reuse across boards? but in such case would require in board. a reference to what tags are chosen.\n\n```JSON\n{\n  \"boards\": [\n    {\n      \"board\": { \"id\": \"...\", \"name\": \"My Board\", ... },\n      \"columns\": [ { \"id\": \"...\", \"name\": \"Todo\", ... } ],\n      \"cards\": [ { \"id\": \"...\", \"title\": \"My Task\", ... } ],\n      \"sprints\": [ { \"id\": \"...\", \"sprint_number\": 1, \"status\": \"Active\", ... } ]\n    }\n  ]\n}\n```\n\nE.g. \n```JSON\n{\n  \"boards\": [\n    {\n      \"board\": { \"id\": \"...\", \"name\": \"My Board\", ... },\n      \"columns\": [ { \"id\": \"...\", \"name\": \"Todo\", ... } ],\n      \"cards\": [ { \"id\": \"...\", \"title\": \"My Task\", ... } ],\n      \"sprints\": [ { \"id\": \"...\", \"sprint_number\": 1, \"status\": \"Active\", ... } ]\n      \"tags\": [ { \"id\": \"...\", \"name\": \"Feature\", ... } ],\n    }\n  ]\n}\n```\n\n",
         "due_date": null,
         "id": "8be94a1d-a915-46d1-a7f1-020da9307cd9",
-        "points": 2,
+        "points": 5,
         "position": 14,
         "priority": "Critical",
         "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
@@ -1332,7 +1332,7 @@
         ],
         "status": "Todo",
         "title": "Tags for cards",
-        "updated_at": "2025-10-20T15:48:49.737680Z"
+        "updated_at": "2025-12-04T22:32:07.215922Z"
       },
       {
         "assigned_prefix": null,
@@ -2038,14 +2038,14 @@
         "assigned_prefix": "KAN",
         "card_number": 67,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-04T22:37:18.340275Z",
         "created_at": "2025-10-20T15:49:39.413116Z",
-        "description": "Be able to archive a card.\n\nIn the domain model we add.\n\n```JSON\n{\n  \"id\": \"2defd1a8-9c55-4ef9-801f-9522a9c72a4a\",\n  \"column_id\": \"591afb61-7289-46bf-ba07-21758afd44fe\",\n  \"title\": \"Archive a card\",\n  \"description\": \"Be able to archive a card.\\n\\nIn the domain model we add.\\n\\n\\n\",\n  \"priority\": \"Medium\",\n  \"status\": \"Todo\",\n  \"position\": 30,\n  \"due_date\": null,\n  \"points\": 2,\n  \"card_number\": 67,\n  \"sprint_id\": \"737b04e6-52e2-4a40-bbaa-e2c9bcc84249\",\n  \"created_at\": \"2025-10-20T15:49:39.413116Z\",\n  \"updated_at\": \"2025-10-20T15:52:36.784687Z\",\n  \"completed_at\": null\n}\n```\n\nto\n\n```JSON\n{\n  \"id\": \"2defd1a8-9c55-4ef9-801f-9522a9c72a4a\",\n  \"column_id\": \"591afb61-7289-46bf-ba07-21758afd44fe\",\n  \"title\": \"Archive a card\",\n  \"description\": \"Be able to archive a card.\\n\\nIn the domain model we add.\\n\\n\\n\",\n  \"priority\": \"Medium\",\n  \"status\": \"Todo\",\n  \"position\": 30,\n  \"due_date\": null,\n  \"points\": 2,\n  \"card_number\": 67,\n  \"sprint_id\": \"737b04e6-52e2-4a40-bbaa-e2c9bcc84249\",\n  \"created_at\": \"2025-10-20T15:49:39.413116Z\",\n  \"updated_at\": \"2025-10-20T15:52:36.784687Z\",\n  \"completed_at\": null,\n  \"archived_at\": null | \"2025-10-20T15:52:36.784687Z\"\n}\n```\n\n`\"archived_at\": null | \"2025-10-20T15:52:36.784687Z\"`\n\nwe add the `archived_at` key that will either have a date or a null value.\n\nNull if the card was never archived or the date for when the card was archived\n\nif the card has an `archived_at` value we should exclude it from the main tasks lists\n\nwe shoeuld probably also be able to compose an archived_at list\n",
+        "description": "Be able to archive a card.\n\nIn the domain model we add.\n\n```JSON\n{\n  \"id\": \"2defd1a8-9c55-4ef9-801f-9522a9c72a4a\",\n  \"column_id\": \"591afb61-7289-46bf-ba07-21758afd44fe\",\n  \"title\": \"Archive a card\",\n  \"description\": \"Be able to archive a card.\\n\\nIn the domain model we add.\\n\\n\\n\",\n  \"priority\": \"Medium\",\n  \"status\": \"Todo\",\n  \"position\": 30,\n  \"due_date\": null,\n  \"points\": 2,\n  \"card_number\": 67,\n  \"sprint_id\": \"737b04e6-52e2-4a40-bbaa-e2c9bcc84249\",\n  \"created_at\": \"2025-10-20T15:49:39.413116Z\",\n  \"updated_at\": \"2025-10-20T15:52:36.784687Z\",\n  \"completed_at\": null\n}\n```\n\nto\n\n```JSON\n{\n  \"id\": \"2defd1a8-9c55-4ef9-801f-9522a9c72a4a\",\n  \"column_id\": \"591afb61-7289-46bf-ba07-21758afd44fe\",\n  \"title\": \"Archive a card\",\n  \"description\": \"Be able to archive a card.\\n\\nIn the domain model we add.\\n\\n\\n\",\n  \"priority\": \"Medium\",\n  \"status\": \"Todo\",\n  \"position\": 30,\n  \"due_date\": null,\n  \"points\": 2,\n  \"card_number\": 67,\n  \"sprint_id\": \"737b04e6-52e2-4a40-bbaa-e2c9bcc84249\",\n  \"created_at\": \"2025-10-20T15:49:39.413116Z\",\n  \"updated_at\": \"2025-10-20T15:52:36.784687Z\",\n  \"completed_at\": null,\n  \"archived_at\": null | \"2025-10-20T15:52:36.784687Z\"\n}\n```\n\n`\"archived_at\": null | \"2025-10-20T15:52:36.784687Z\"`\n\nwe add the `archived_at` key that will either have a date or a null value.\n\nNull if the card was never archived or the date for when the card was archived\n\nif the card has an `archived_at` value we should exclude it from the main tasks lists\n\nwe shoeuld probably also be able to compose an archived_at list\n\n2025-12-04 23:37:06\n---\n\nSome time back we actually did this ticket\n",
         "due_date": null,
         "id": "2defd1a8-9c55-4ef9-801f-9522a9c72a4a",
         "points": 2,
-        "position": 6,
+        "position": 74,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
@@ -2074,9 +2074,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "Archive a card",
-        "updated_at": "2025-12-04T21:19:48.906509Z"
+        "updated_at": "2025-12-04T22:37:18.340275Z"
       },
       {
         "assigned_prefix": null,
@@ -2568,14 +2568,14 @@
         "assigned_prefix": "KAN",
         "card_number": 93,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
         "completed_at": null,
         "created_at": "2025-10-24T19:54:30.818495Z",
         "description": "discrupting the context of the viewer\n\nwhen opening a dialog inside say the sprint details view\n\nThe ui switches to the main card list, upsetting the viewers (user) context and mind model\n\nmake it so that opening a dialog keeps the background ui where it is so that context remains the same\n\n---\n\nsomething else is wrong with the context.\n\nonce the context has been disrupted like this the user will be sent back to the undefined context when taking an action.\n\nthen having to `escape` or whatever out of that list\n\nexample\n\nopen sprint details on a completed sprint\n\nnavigate two cards down\n\n`escape` that card\n\nbe returned to the main card list / kanban view.\n\nwhen one should have been returned to the sprint details\n",
         "due_date": null,
         "id": "6a994d78-3e0f-4158-bfe8-f3c82e402a65",
         "points": 4,
-        "position": 21,
+        "position": 1,
         "priority": "High",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
@@ -2606,7 +2606,7 @@
         ],
         "status": "Todo",
         "title": "dialogs always return to main when opened ",
-        "updated_at": "2025-12-04T21:19:48.907354Z"
+        "updated_at": "2025-12-04T22:38:49.459947Z"
       },
       {
         "assigned_prefix": null,
@@ -2640,14 +2640,14 @@
         "assigned_prefix": "KAN",
         "card_number": 95,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-04T22:30:44.543435Z",
         "created_at": "2025-10-24T22:30:35.678212Z",
-        "description": "Limited marketing/visibility - No README badges, screenshots/GIFs, or demo that would grab attention quickly. First impressions matter\n  enormously for GitHub discoverability.45la\n",
+        "description": "Limited marketing/visibility - No README badges, screenshots/GIFs, or demo that would grab attention quickly. First impressions matter\n  enormously for GitHub discoverability.\n\n2025-12-04 23:30:57\n---\n\nClosing this as we have done a limited effort to accomplish this.\n\nSimple GIF\nPublished on two awesome lists\n\nTo be iterated on\n",
         "due_date": null,
         "id": "145961c6-0899-4ca5-acb9-44aa005254dc",
         "points": 3,
-        "position": 25,
+        "position": 71,
         "priority": "High",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
@@ -2660,9 +2660,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "Marketing",
-        "updated_at": "2025-12-04T21:19:18.914465Z"
+        "updated_at": "2025-12-04T22:31:39.181361Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3472,14 +3472,14 @@
         "assigned_prefix": "KAN",
         "card_number": 124,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-04T22:36:45.823045Z",
         "created_at": "2025-11-03T17:02:21.943472Z",
-        "description": "for the long card lists\n\nit would be beneficial to use `{` and `}` vim style bindings to skip sections. for now the grouped by columns flats list seems to be the best use of this bind\n",
+        "description": "for the long card lists\n\nit would be beneficial to use `{` and `}` vim style bindings to skip sections. for now the grouped by columns flats list seems to be the best use of this bind\n\n2025-12-04 23:35:24\n---\n\nThis was done and I think I ended up pretty satisfied with it\n",
         "due_date": null,
         "id": "08be2710-da5a-4f32-9407-42de26969de1",
-        "points": null,
-        "position": 34,
+        "points": 3,
+        "position": 72,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
@@ -3492,22 +3492,22 @@
             "status": "Active"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "implement { and } bindings",
-        "updated_at": "2025-12-04T21:19:48.905640Z"
+        "updated_at": "2025-12-04T22:36:45.823045Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 125,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-04T22:36:48.606503Z",
         "created_at": "2025-11-03T17:05:05.686984Z",
-        "description": "We want to have the binding `gg` and `G` to go to the top and bottom of card lists\n\napplicable to any card list viewing style\n",
+        "description": "We want to have the binding `gg` and `G` to go to the top and bottom of card lists\n\napplicable to any card list viewing style\n\n2025-12-04 23:36:14\n---\n\nThis ticket was completed but now I have noticed it doesnt work so well so a new ticket was crafted\n",
         "due_date": null,
         "id": "47f876df-415f-4824-923d-5b025d980304",
         "points": null,
-        "position": 35,
+        "position": 73,
         "priority": "Medium",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
@@ -3520,9 +3520,9 @@
             "status": "Active"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "implement `g` and `G` bindings",
-        "updated_at": "2025-12-04T21:19:48.905370Z"
+        "updated_at": "2025-12-04T22:36:48.606504Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3904,27 +3904,93 @@
           }
         ],
         "status": "Todo",
-        "title": "scrolling up from column options lands the cursor on the first sprint in the listg",
-        "updated_at": "2025-12-04T22:02:02.793603Z"
+        "title": "scrolling up from column options lands the cursor on the first sprint in the list",
+        "updated_at": "2025-12-04T22:39:06.281363Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 142,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
         "completed_at": null,
         "created_at": "2025-12-04T22:02:17.267772Z",
-        "description": "When in the card details, editing fields. Like using P or external editor sends the user back to the card list after save\n\nThis also affects other instances of the application\n",
+        "description": "When in the card details, editing fields. Like using P or external editor sends the user back to the card list after save\n\nThis also affects other instances of the application\ntest\n",
         "due_date": null,
         "id": "2ecebef1-0c46-426b-8ab8-e8d228c9ce36",
         "points": 4,
-        "position": 55,
+        "position": 0,
         "priority": "High",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-        "sprint_logs": [],
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-04T22:29:46.206853Z",
+            "status": "Active"
+          }
+        ],
         "status": "Todo",
         "title": "updating fields jumps the user back to board",
-        "updated_at": "2025-12-04T22:03:34.492558Z"
+        "updated_at": "2025-12-04T22:40:11.113226Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 143,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-04T22:35:04.074325Z",
+        "description": null,
+        "due_date": null,
+        "id": "c89e3ee2-dba2-4008-be8a-469abc42d680",
+        "points": null,
+        "position": 53,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "`gg` | `G` works poorly",
+        "updated_at": "2025-12-04T22:35:04.074325Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 144,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-04T22:37:41.840393Z",
+        "description": "When scrolling from the second to last element in a kanban view column, we switch to the next column prematurely\n",
+        "due_date": null,
+        "id": "84f9a824-784c-4d66-8f04-002bd12aea11",
+        "points": null,
+        "position": 51,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Kanban view - switches column on the second to last item",
+        "updated_at": "2025-12-04T22:38:16.057265Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 145,
+        "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2025-12-04T22:39:36.658299Z",
+        "description": "Hitting `e` from the task list, on a card doesnt update its description\n\nI think this is also how we saw a conflict with the own instance\n\n",
+        "due_date": null,
+        "id": "abcdf9ab-c39e-4a65-a6b4-ba7828f6eae5",
+        "points": 5,
+        "position": 2,
+        "priority": "Critical",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "We broke the file watcher / having a conflict with one instance",
+        "updated_at": "2025-12-04T22:41:10.387679Z"
       }
     ],
     "columns": [
