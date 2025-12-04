@@ -228,7 +228,7 @@ impl App {
                                 .filter(|s| s.board_id == board.id)
                                 .count();
                             let current_idx = self.sprint_selection.get().unwrap_or(0);
-                            if current_idx >= sprint_count - 1 && sprint_count > 0 {
+                            if sprint_count > 0 && current_idx >= sprint_count - 1 {
                                 self.board_focus = BoardFocus::Columns;
                                 self.column_selection.set(Some(0));
                             } else {
@@ -246,7 +246,7 @@ impl App {
                                 .filter(|col| col.board_id == board.id)
                                 .count();
                             let current_idx = self.column_selection.get().unwrap_or(0);
-                            if current_idx >= column_count - 1 && column_count > 0 {
+                            if column_count > 0 && current_idx >= column_count - 1 {
                                 self.board_focus = BoardFocus::Name;
                                 self.sprint_selection.set(Some(0));
                             } else {
