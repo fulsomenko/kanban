@@ -40,7 +40,7 @@ pub struct StateManager {
     instance_id: uuid::Uuid,
     conflict_pending: bool,
     needs_refresh: bool,
-    save_tx: Option<mpsc::UnboundedSender<DataSnapshot>>,
+    save_tx: Option<mpsc::Sender<DataSnapshot>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
 }
@@ -56,13 +56,17 @@ impl StateManager {
         save_file: Option<String>,
     ) -> (
         Self,
-        Option<mpsc::UnboundedReceiver<DataSnapshot>>,
+        Option<mpsc::Receiver<DataSnapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
+        // Use bounded channel (capacity: 100) to prevent unbounded memory growth
+        // If queue is full, save_if_needed() will log a warning instead of blocking
+        const SAVE_QUEUE_CAPACITY: usize = 100;
+
         let (store, instance_id, save_channel) = if let Some(path) = save_file {
             let store = Arc::new(JsonFileStore::new(&path));
             let id = store.instance_id();
-            let (tx, rx) = mpsc::unbounded_channel();
+            let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
             (Some(store), id, Some((tx, rx)))
         } else {
             (None, uuid::Uuid::new_v4(), None)
@@ -143,13 +147,22 @@ impl StateManager {
         if let Some(ref tx) = self.save_tx {
             let snapshot = DataSnapshot::from_app(app);
             tracing::debug!("Queueing snapshot for async save");
-            // Send is non-blocking and only fails if receiver is dropped
-            match tx.send(snapshot) {
+            // Use try_send (non-blocking) since we're in a synchronous context
+            // Backpressure is handled by queue_snapshot method
+            match tx.try_send(snapshot) {
                 Ok(_) => {
-                    tracing::debug!("Snapshot queued successfully");
+                    self.pending_saves += 1;
+                    tracing::debug!("Snapshot queued successfully (pending: {})", self.pending_saves);
                 }
-                Err(e) => {
-                    tracing::error!("Failed to queue save: channel closed: {:?}", e);
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                    tracing::warn!(
+                        "Save queue is full ({} pending), skipping this save. \
+                        This may indicate the disk is slow or the save worker is overloaded.",
+                        self.pending_saves
+                    );
+                }
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                    tracing::error!("Failed to queue save: channel closed");
                 }
             }
         } else {
@@ -281,6 +294,9 @@ impl StateManager {
     /// Queue a snapshot for async saving
     /// Used by App::execute_command to ensure snapshots are queued
     /// Increments pending_saves to track unsaved changes
+    ///
+    /// Uses try_send to handle bounded channel capacity (100 snapshots).
+    /// If channel is full, logs warning and skips save to prevent blocking UI.
     pub fn queue_snapshot(&mut self, snapshot: DataSnapshot) {
         if let Some(ref tx) = self.save_tx {
             tracing::debug!(
@@ -288,13 +304,20 @@ impl StateManager {
                 self.pending_saves,
                 self.pending_saves + 1
             );
-            match tx.send(snapshot) {
+            match tx.try_send(snapshot) {
                 Ok(_) => {
                     self.pending_saves += 1;
                     tracing::debug!("Snapshot queued successfully");
                 }
-                Err(e) => {
-                    tracing::error!("Failed to queue save: channel closed: {:?}", e);
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                    tracing::warn!(
+                        "Save queue is full ({} pending), skipping this save. \
+                        This may indicate the disk is slow or the save worker is overloaded.",
+                        self.pending_saves
+                    );
+                }
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                    tracing::error!("Failed to queue save: channel closed");
                 }
             }
         } else {

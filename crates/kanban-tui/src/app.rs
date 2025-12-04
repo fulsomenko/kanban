@@ -170,7 +170,7 @@ impl App {
         save_file: Option<String>,
     ) -> (
         Self,
-        Option<tokio::sync::mpsc::UnboundedReceiver<crate::state::DataSnapshot>>,
+        Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
     ) {
         let app_config = AppConfig::load();
         let (state_manager, save_rx, save_completion_rx) = StateManager::new(save_file.clone());
@@ -1347,7 +1347,7 @@ impl App {
 
     pub async fn run(
         &mut self,
-        save_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::state::DataSnapshot>>,
+        save_rx: Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
     ) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
 
