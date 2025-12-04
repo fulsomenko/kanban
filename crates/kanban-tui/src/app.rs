@@ -42,6 +42,7 @@ pub struct CardAnimation {
 
 pub struct App {
     pub should_quit: bool,
+    pub quit_with_pending: bool, // Force quit even if saves are pending (second 'q' press)
     pub mode: AppMode,
     pub input: InputState,
     pub boards: Vec<Board>,
@@ -176,6 +177,7 @@ impl App {
         let (state_manager, save_rx, save_completion_rx) = StateManager::new(save_file.clone());
         let mut app = Self {
             should_quit: false,
+            quit_with_pending: false,
             mode: AppMode::Normal,
             input: InputState::new(),
             boards: Vec::new(),
@@ -424,6 +426,18 @@ impl App {
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
+            // Check for pending saves before quitting
+            if self.state_manager.has_pending_saves() && !self.quit_with_pending {
+                // First quit attempt with pending saves - show warning
+                self.set_error(
+                    "⏳ Saves pending... press 'q' again to force quit, or wait for completion".to_string()
+                );
+                self.quit_with_pending = true;
+                tracing::warn!("Quit attempted with pending saves, requiring confirmation");
+                return false;
+            }
+
+            // Either no pending saves, or user confirmed force quit
             self.quit();
             return false;
         }
@@ -1575,6 +1589,10 @@ impl App {
                         // Save operation completed - update dirty flag
                         tracing::debug!("Save completion signal received");
                         self.state_manager.save_completed();
+                        // Reset force quit flag if all saves are now complete
+                        if !self.state_manager.has_pending_saves() {
+                            self.quit_with_pending = false;
+                        }
                     }
                     Some(_change_event) = async {
                         if let Some(ref mut rx) = &mut self.file_change_rx {
