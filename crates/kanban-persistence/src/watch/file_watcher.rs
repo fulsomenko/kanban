@@ -1,12 +1,15 @@
+use crate::conflict::FileMetadata;
 use crate::traits::{ChangeDetector, ChangeEvent};
 use chrono::Utc;
 use kanban_core::KanbanResult;
 use notify::{RecursiveMode, Watcher};
-use std::path::PathBuf;
+use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::sync::broadcast;
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as TokioMutex;
 
 /// File system watcher for detecting changes to the persistence file
 /// Uses the `notify` crate for cross-platform file watching
@@ -33,8 +36,9 @@ use tokio::sync::Mutex;
 #[derive(Clone)]
 pub struct FileWatcher {
     tx: broadcast::Sender<ChangeEvent>,
-    task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    task_handle: Arc<TokioMutex<Option<tokio::task::JoinHandle<()>>>>,
     paused: Arc<AtomicBool>,
+    recent_own_writes: Arc<Mutex<VecDeque<(FileMetadata, Instant)>>>,
 }
 
 impl FileWatcher {
@@ -44,8 +48,9 @@ impl FileWatcher {
         let (tx, _) = broadcast::channel(10);
         Self {
             tx,
-            task_handle: Arc::new(Mutex::new(None)),
+            task_handle: Arc::new(TokioMutex::new(None)),
             paused: Arc::new(AtomicBool::new(false)),
+            recent_own_writes: Arc::new(Mutex::new(VecDeque::with_capacity(10))),
         }
     }
 
@@ -60,6 +65,39 @@ impl FileWatcher {
         self.paused.store(false, Ordering::SeqCst);
         tracing::debug!("File watcher resumed");
     }
+
+    /// Record metadata of a file we just wrote, to filter out self-triggered events
+    ///
+    /// This enables metadata-based own-write detection without timing delays.
+    /// When a file change event fires, we check if the file's current metadata matches
+    /// what we recorded here - if so, it's our own write and we ignore the event.
+    pub fn record_own_write(&self, path: &Path) -> KanbanResult<()> {
+        match FileMetadata::from_file(path) {
+            Ok(metadata) => {
+                if let Ok(mut writes) = self.recent_own_writes.lock() {
+                    // Keep last 10 own writes (for deduplication if multiple saves happen quickly)
+                    if writes.len() >= 10 {
+                        writes.pop_front();
+                    }
+                    writes.push_back((metadata, Instant::now()));
+                    tracing::debug!("Recorded own write metadata for {}", path.display());
+                } else {
+                    tracing::warn!("Failed to lock recent_own_writes mutex");
+                }
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to record own write metadata for {}: {}",
+                    path.display(),
+                    e
+                );
+                // Don't fail the save if we can't record metadata - just skip own-write detection
+                Ok(())
+            }
+        }
+    }
+
 }
 
 impl Default for FileWatcher {
@@ -74,6 +112,7 @@ impl ChangeDetector for FileWatcher {
         let tx = self.tx.clone();
         let task_handle = self.task_handle.clone();
         let paused = self.paused.clone();
+        let recent_own_writes = self.recent_own_writes.clone();
 
         // Canonicalize to absolute path so it matches OS event paths
         let canonical_path = tokio::fs::canonicalize(&path).await?;
@@ -86,6 +125,7 @@ impl ChangeDetector for FileWatcher {
                 .to_path_buf();
             let watch_path = canonical_path.clone();
             let paused_clone = paused.clone();
+            let recent_writes_clone = recent_own_writes.clone();
 
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
@@ -120,6 +160,50 @@ impl ChangeDetector for FileWatcher {
                             if paused_clone.load(Ordering::SeqCst) {
                                 tracing::debug!(
                                     "File event ignored (watcher paused): kind={:?}, path={}",
+                                    event.kind,
+                                    watch_path.display()
+                                );
+                                return;
+                            }
+
+                            // Check if this is our own write using metadata-based detection
+                            // This avoids false positives from our own saves
+                            let is_own_write = if watch_path.exists() {
+                                if let Ok(current_metadata) =
+                                    crate::conflict::FileMetadata::from_file(&watch_path)
+                                {
+                                    // Try to get the mutex lock
+                                    if let Ok(mut writes) = recent_writes_clone.lock() {
+                                        let now = std::time::Instant::now();
+                                        const OWN_WRITE_WINDOW: std::time::Duration =
+                                            std::time::Duration::from_secs(5);
+                                        // Remove stale entries
+                                        while let Some((_metadata, recorded_at)) = writes.front() {
+                                            if now.duration_since(*recorded_at) > OWN_WRITE_WINDOW {
+                                                writes.pop_front();
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        // Check if current metadata matches any recent write
+                                        writes.iter().any(|(metadata, recorded_at)| {
+                                            *metadata == current_metadata
+                                                && now.duration_since(*recorded_at)
+                                                    < std::time::Duration::from_secs(1)
+                                        })
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            };
+
+                            if is_own_write {
+                                tracing::debug!(
+                                    "File event ignored (own write detected): kind={:?}, path={}",
                                     event.kind,
                                     watch_path.display()
                                 );
