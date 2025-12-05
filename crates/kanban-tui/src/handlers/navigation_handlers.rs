@@ -345,12 +345,17 @@ impl App {
                 let initial_adjusted_viewport = self.get_adjusted_viewport_height();
 
                 // Simple smooth navigation: move by 1 with viewport spanning pages
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    let _ = list.navigate_down();
+                let was_at_bottom =
+                    if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                        let was_at_bottom = list.navigate_down();
 
-                    // Smooth scroll with initial viewport
-                    list.ensure_selected_visible(initial_adjusted_viewport);
-                }
+                        // Smooth scroll with initial viewport
+                        list.ensure_selected_visible(initial_adjusted_viewport);
+
+                        was_at_bottom
+                    } else {
+                        false
+                    };
 
                 // Recalculate viewport after scroll may have changed indicators/headers
                 let final_adjusted_viewport = self.get_adjusted_viewport_height();
@@ -360,12 +365,9 @@ impl App {
                     }
                 }
 
-                // Check for bottom navigation after all scrolling is done
-                if let Some(list) = self.view_strategy.get_active_task_list() {
-                    let at_bottom = list.get_selected_index() == Some(list.len().saturating_sub(1));
-                    if at_bottom {
-                        self.view_strategy.navigate_right(false);
-                    }
+                // Check for bottom navigation: only switch columns if we were ALREADY at bottom
+                if was_at_bottom {
+                    self.view_strategy.navigate_right(false);
                 }
             }
         }
@@ -382,12 +384,16 @@ impl App {
                 let initial_adjusted_viewport = self.get_adjusted_viewport_height();
 
                 // Simple smooth navigation: move by 1 with viewport spanning pages
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    let _ = list.navigate_up();
+                let was_at_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    let was_at_top = list.navigate_up();
 
                     // Smooth scroll with initial viewport
                     list.ensure_selected_visible(initial_adjusted_viewport);
-                }
+
+                    was_at_top
+                } else {
+                    false
+                };
 
                 // Recalculate viewport after scroll may have changed indicators/headers
                 let final_adjusted_viewport = self.get_adjusted_viewport_height();
@@ -397,12 +403,9 @@ impl App {
                     }
                 }
 
-                // Check for top navigation after all scrolling is done
-                if let Some(list) = self.view_strategy.get_active_task_list() {
-                    let at_top = list.get_selected_index() == Some(0);
-                    if at_top {
-                        self.view_strategy.navigate_left(true);
-                    }
+                // Check for top navigation: only switch columns if we were ALREADY at top
+                if was_at_top {
+                    self.view_strategy.navigate_left(true);
                 }
             }
         }
