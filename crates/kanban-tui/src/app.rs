@@ -821,8 +821,7 @@ impl App {
 
         // Execute batch archive commands
         if had_archives {
-            let mut archive_commands: Vec<Box<dyn crate::state::commands::Command>> =
-                Vec::new();
+            let mut archive_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
             for card_id in archive_cards {
                 let cmd = Box::new(kanban_domain::commands::ArchiveCard { card_id })
                     as Box<dyn crate::state::commands::Command>;
@@ -830,7 +829,8 @@ impl App {
             }
             if let Err(e) = self.execute_commands_batch(archive_commands) {
                 tracing::error!("Failed to archive cards: {}", e);
-            } else if let (Some(column_id), Some(position)) = (last_archive_column, last_archive_position)
+            } else if let (Some(column_id), Some(position)) =
+                (last_archive_column, last_archive_position)
             {
                 self.compact_column_positions(column_id);
                 self.select_card_after_deletion(column_id, position);
