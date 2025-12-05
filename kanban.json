@@ -2,8 +2,8 @@
   "version": 2,
   "metadata": {
     "format_version": 2,
-    "instance_id": "d5e7032e-d3a2-497e-b4b3-0ebd1d5ddced",
-    "saved_at": "2025-12-05T00:04:02.737263Z",
+    "instance_id": "4a82f506-441f-4c9b-b912-3b7a145fdfbf",
+    "saved_at": "2025-12-04T23:34:17.512631Z",
     "schema_version": "2.0.0"
   },
   "data": {
@@ -61,7 +61,7 @@
         "task_list_view": "ColumnView",
         "task_sort_field": "Priority",
         "task_sort_order": "Descending",
-        "updated_at": "2025-12-05T00:04:02.728056Z"
+        "updated_at": "2025-12-04T23:31:25.382139Z"
       }
     ],
     "cards": [
@@ -4015,20 +4015,216 @@
         "assigned_prefix": "KAN",
         "card_number": 147,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
         "completed_at": null,
-        "created_at": "2025-12-05T00:04:02.728037Z",
+        "created_at": "2025-12-04T23:31:25.382132Z",
         "description": null,
         "due_date": null,
-        "id": "27592648-0228-49e5-8cb8-d29c23bf2526",
-        "points": null,
-        "position": 53,
-        "priority": "Medium",
+        "id": "55adb5ff-9ddf-4ea7-82ee-d93af5d1f552",
+        "points": 1,
+        "position": 2,
+        "priority": "High",
         "sprint_id": null,
         "sprint_logs": [],
         "status": "Todo",
-        "title": "archiving / deleting cards is broken",
-        "updated_at": "2025-12-05T00:04:02.728037Z"
+        "title": "multiselecting and assigning cards causes write race condition",
+        "updated_at": "2025-12-04T23:32:42.632591Z"
+      },
+      {
+        "assigned_prefix": "sprint",
+        "card_number": 1,
+        "card_prefix": null,
+        "column_id": "f7588a2d-bc37-4ece-a1a3-a3babcf1c069",
+        "completed_at": null,
+        "created_at": "2025-12-04T23:33:17.292547Z",
+        "description": null,
+        "due_date": null,
+        "id": "91ad3594-62f9-4ec5-a424-de8105ab22eb",
+        "points": null,
+        "position": 0,
+        "priority": "Medium",
+        "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+            "sprint_name": "test",
+            "sprint_number": 1,
+            "started_at": "2025-12-04T23:34:17.506119Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "t",
+        "updated_at": "2025-12-04T23:34:17.506120Z"
+      },
+      {
+        "assigned_prefix": "sprint",
+        "card_number": 2,
+        "card_prefix": null,
+        "column_id": "f7588a2d-bc37-4ece-a1a3-a3babcf1c069",
+        "completed_at": null,
+        "created_at": "2025-12-04T23:33:18.459242Z",
+        "description": null,
+        "due_date": null,
+        "id": "b0c42030-a6a7-403d-9264-10a1dda5d42f",
+        "points": null,
+        "position": 1,
+        "priority": "Medium",
+        "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+            "sprint_name": "test",
+            "sprint_number": 1,
+            "started_at": "2025-12-04T23:34:17.506116Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "t",
+        "updated_at": "2025-12-04T23:34:17.506118Z"
+      },
+      {
+        "assigned_prefix": "sprint",
+        "card_number": 3,
+        "card_prefix": null,
+        "column_id": "f7588a2d-bc37-4ece-a1a3-a3babcf1c069",
+        "completed_at": null,
+        "created_at": "2025-12-04T23:33:53.646227Z",
+        "description": null,
+        "due_date": null,
+        "id": "f336cd3b-1525-46ea-a76c-db4f07d8da9a",
+        "points": null,
+        "position": 2,
+        "priority": "Medium",
+        "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+            "sprint_name": "test",
+            "sprint_number": 1,
+            "started_at": "2025-12-04T23:34:17.506113Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "t",
+        "updated_at": "2025-12-04T23:34:17.506115Z"
+      },
+      {
+        "assigned_prefix": "sprint",
+        "card_number": 4,
+        "card_prefix": null,
+        "column_id": "f7588a2d-bc37-4ece-a1a3-a3babcf1c069",
+        "completed_at": null,
+        "created_at": "2025-12-04T23:33:54.610343Z",
+        "description": null,
+        "due_date": null,
+        "id": "29ec1419-bc44-48b5-aaa4-c31e5655640e",
+        "points": null,
+        "position": 3,
+        "priority": "Medium",
+        "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+            "sprint_name": "test",
+            "sprint_number": 1,
+            "started_at": "2025-12-04T23:34:17.506121Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "t",
+        "updated_at": "2025-12-04T23:34:17.506122Z"
+      },
+      {
+        "assigned_prefix": "sprint",
+        "card_number": 5,
+        "card_prefix": null,
+        "column_id": "f7588a2d-bc37-4ece-a1a3-a3babcf1c069",
+        "completed_at": null,
+        "created_at": "2025-12-04T23:33:55.307233Z",
+        "description": null,
+        "due_date": null,
+        "id": "0994e72a-13fc-43e3-adfd-955345c9e774",
+        "points": null,
+        "position": 4,
+        "priority": "Medium",
+        "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+            "sprint_name": "test",
+            "sprint_number": 1,
+            "started_at": "2025-12-04T23:34:17.506123Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "t",
+        "updated_at": "2025-12-04T23:34:17.506124Z"
+      },
+      {
+        "assigned_prefix": "sprint",
+        "card_number": 6,
+        "card_prefix": null,
+        "column_id": "f7588a2d-bc37-4ece-a1a3-a3babcf1c069",
+        "completed_at": null,
+        "created_at": "2025-12-04T23:33:55.914221Z",
+        "description": null,
+        "due_date": null,
+        "id": "d327df47-10af-41c5-80e7-fd88847edbc4",
+        "points": null,
+        "position": 5,
+        "priority": "Medium",
+        "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+            "sprint_name": "test",
+            "sprint_number": 1,
+            "started_at": "2025-12-04T23:34:17.506101Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "t",
+        "updated_at": "2025-12-04T23:34:17.506107Z"
+      },
+      {
+        "assigned_prefix": "sprint",
+        "card_number": 7,
+        "card_prefix": null,
+        "column_id": "f7588a2d-bc37-4ece-a1a3-a3babcf1c069",
+        "completed_at": null,
+        "created_at": "2025-12-04T23:33:56.538723Z",
+        "description": null,
+        "due_date": null,
+        "id": "329c13c3-b162-4194-bcfb-aadb4bdba4d0",
+        "points": null,
+        "position": 6,
+        "priority": "Medium",
+        "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "be826dbc-cbb9-4b2b-bc5b-cf4c99c860da",
+            "sprint_name": "test",
+            "sprint_number": 1,
+            "started_at": "2025-12-04T23:34:17.506109Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "t",
+        "updated_at": "2025-12-04T23:34:17.506111Z"
       }
     ],
     "columns": [
