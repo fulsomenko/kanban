@@ -121,7 +121,7 @@ crates/
 - **Atomic Writes**: Crash-safe write pattern (temp file → atomic rename) prevents data corruption
 - **External Editor**: Automatically detects vim, nvim, nano, or your `$EDITOR` for editing descriptions
 - **Rich Metadata**: Timestamps, priority levels, story points, custom tags
-- **Bounded Save Queue**: Maintains a queue of up to 100 pending snapshots to prevent unbounded memory growth
+- **Bounded Save Queue**: Maintains a queue of up to 100 pending snapshots
 
 ## Roadmap
 
