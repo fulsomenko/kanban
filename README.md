@@ -105,13 +105,13 @@ crates/
 
 **Key Design Patterns:**
 - **Command Pattern**: All mutations flow through domain commands for persistent tracking
-- **Progressive Saving**: Changes auto-save with 500ms debounce, not just on exit
+- **Immediate Saving**: Changes auto-save after each action
 - **Format Versioning**: Automatic V1→V2 migration with backup on first load
 - **Multi-Instance Support**: Last-write-wins conflict resolution for concurrent edits
 
 ## Data & Persistence
 
-- **Format**: JSON-based import/export with **progressive auto-save** (saves changes as you make them, not just on exit)
+- **Format**: JSON-based import/export
 - **Automatic Migration**: V1 data files are automatically upgraded to V2 format on load with backup creation
 - **Multi-Instance Support**:
   - Real-time file watching detects changes from other running instances
@@ -121,7 +121,7 @@ crates/
 - **Atomic Writes**: Crash-safe write pattern (temp file → atomic rename) prevents data corruption
 - **External Editor**: Automatically detects vim, nvim, nano, or your `$EDITOR` for editing descriptions
 - **Rich Metadata**: Timestamps, priority levels, story points, custom tags
-- **Smart Debouncing**: Prevents excessive disk writes with 500ms minimum save interval
+- **Bounded Save Queue**: Maintains a queue of up to 100 pending snapshots
 
 ## Roadmap
 
