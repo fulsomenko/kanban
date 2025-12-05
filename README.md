@@ -111,7 +111,7 @@ crates/
 
 ## Data & Persistence
 
-- **Format**: JSON-based import/export with **immediate auto-save** (saves changes instantly after each action)
+- **Format**: JSON-based import/export
 - **Automatic Migration**: V1 data files are automatically upgraded to V2 format on load with backup creation
 - **Multi-Instance Support**:
   - Real-time file watching detects changes from other running instances
