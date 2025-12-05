@@ -1135,41 +1135,6 @@ impl App {
         Ok(())
     }
 
-    pub fn execute_commands_batch(
-        &mut self,
-        commands: Vec<Box<dyn crate::state::commands::Command>>,
-    ) -> KanbanResult<()> {
-        // Execute all commands first
-        {
-            let Self {
-                state_manager,
-                boards,
-                columns,
-                cards,
-                sprints,
-                archived_cards,
-                ..
-            } = self;
-
-            for command in commands {
-                state_manager.execute_with_context(
-                    boards,
-                    columns,
-                    cards,
-                    sprints,
-                    archived_cards,
-                    command,
-                )?;
-            }
-        }
-
-        // Queue one snapshot for async save after all commands have executed
-        let snapshot = crate::state::DataSnapshot::from_app(self);
-        self.state_manager.queue_snapshot(snapshot);
-
-        Ok(())
-    }
-
     pub fn refresh_view(&mut self) {
         let board_idx = self.active_board_index.or(self.board_selection.get());
         if let Some(idx) = board_idx {
