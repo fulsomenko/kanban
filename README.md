@@ -105,7 +105,7 @@ crates/
 
 **Key Design Patterns:**
 - **Command Pattern**: All mutations flow through domain commands for persistent tracking
-- **Immediate Saving**: Changes auto-save instantly after each action, not just on exit
+- **Immediate Saving**: Changes auto-save instantly after each action
 - **Format Versioning**: Automatic V1→V2 migration with backup on first load
 - **Multi-Instance Support**: Last-write-wins conflict resolution for concurrent edits
 
