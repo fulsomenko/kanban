@@ -68,7 +68,7 @@ impl App {
     pub fn create_board(&mut self) {
         let board_name = self.input.as_str().to_string();
 
-        // Execute CreateBoard command
+        // Execute CreateBoard command first to get the board ID
         let create_board_cmd = Box::new(CreateBoard {
             name: board_name.clone(),
             card_prefix: None,
@@ -86,11 +86,8 @@ impl App {
             return;
         };
 
-        let task_list_view = TaskListView::default(); // Default view for new boards
-
-        tracing::info!("Created board: {} (id: {})", board_name, board_id);
-
-        // Create default columns
+        // Now batch the column creation commands
+        let mut column_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
         let default_columns = vec![("TODO", 0i32), ("Doing", 1i32), ("Complete", 2i32)];
 
         for (name, position) in default_columns {
@@ -98,15 +95,20 @@ impl App {
                 board_id,
                 name: name.to_string(),
                 position,
-            });
-
-            if let Err(e) = self.execute_command(create_col_cmd) {
-                tracing::error!("Failed to create column: {}", e);
-                return;
-            }
-
-            tracing::info!("Created default column: {} (position: {})", name, position);
+            }) as Box<dyn crate::state::commands::Command>;
+            column_commands.push(create_col_cmd);
         }
+
+        // Execute all column creation commands as a batch (single pause/resume cycle)
+        if let Err(e) = self.execute_commands_batch(column_commands) {
+            tracing::error!("Failed to create default columns: {}", e);
+            return;
+        }
+
+        let task_list_view = TaskListView::default(); // Default view for new boards
+
+        tracing::info!("Created board: {} (id: {})", board_name, board_id);
+        tracing::info!("Created default columns: TODO, Doing, Complete");
 
         let new_index = self.boards.len() - 1;
         self.board_selection.set(Some(new_index));

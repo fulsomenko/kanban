@@ -305,6 +305,9 @@ impl App {
             Vec::new()
         };
 
+        // Batch all card updates to avoid race conditions with file watcher
+        let mut update_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+
         for card_id in card_ids {
             // First, get card info without mutable borrow
             let (old_column_id, old_status) =
@@ -362,14 +365,19 @@ impl App {
                 updates.position = Some(position);
             }
 
-            // Execute UpdateCard command
-            let cmd = Box::new(UpdateCard { card_id, updates });
-            if let Err(e) = self.execute_command(cmd) {
-                tracing::error!("Failed to toggle card completion: {}", e);
-                continue;
-            }
-
+            // Add to batch
+            let cmd = Box::new(UpdateCard { card_id, updates })
+                as Box<dyn crate::state::commands::Command>;
+            update_commands.push(cmd);
             toggled_count += 1;
+        }
+
+        // Execute all updates as a batch
+        if !update_commands.is_empty() {
+            if let Err(e) = self.execute_commands_batch(update_commands) {
+                tracing::error!("Failed to toggle card completion: {}", e);
+                return;
+            }
         }
 
         tracing::info!("Toggled {} cards completion status", toggled_count);
@@ -418,59 +426,62 @@ impl App {
 
                 let column_name = column.name.clone();
 
-                // Execute CreateCard command via StateManager
-                let cmd = Box::new(CreateCard {
-                    board_id: bid,
-                    column_id: column.id,
-                    title: self.input.as_str().to_string(),
-                    position,
-                });
-
-                if let Err(e) = self.execute_command(cmd) {
-                    tracing::error!("Failed to create card: {}", e);
-                    return;
-                }
-
-                // After command execution, find the card to determine its status
+                // Determine if we need to mark as complete (if in last column)
                 let board_columns: Vec<_> = self
                     .columns
                     .iter()
                     .filter(|col| col.board_id == bid)
                     .collect();
 
-                if board_columns.len() > 2 {
-                    let sorted_cols: Vec<_> = {
-                        let mut cols = board_columns.clone();
-                        cols.sort_by_key(|col| col.position);
-                        cols
-                    };
+                let mark_as_complete = if board_columns.len() > 2 {
+                    let mut sorted_cols = board_columns.clone();
+                    sorted_cols.sort_by_key(|col| col.position);
                     if let Some(last_col) = sorted_cols.last() {
-                        if last_col.id == column.id {
-                            // Find the newly created card and mark it as complete
-                            if let Some(card) =
-                                self.cards.iter().rev().find(|c| c.column_id == column.id)
-                            {
-                                let card_id = card.id;
-                                let update_cmd = Box::new(UpdateCard {
-                                    card_id,
-                                    updates: CardUpdate {
-                                        status: Some(CardStatus::Done),
-                                        ..Default::default()
-                                    },
-                                });
-                                if let Err(e) = self.execute_command(update_cmd) {
-                                    tracing::error!("Failed to update card status: {}", e);
-                                }
-                                tracing::info!(
-                                    "Creating card in column: {} [marked as complete]",
-                                    column_name
-                                );
-                            }
-                        } else {
-                            tracing::info!("Creating card in column: {}", column_name);
-                        }
+                        last_col.id == column.id
                     } else {
-                        tracing::info!("Creating card in column: {}", column_name);
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                // Build batch: CreateCard + optional status update
+                let mut commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+
+                let create_cmd = Box::new(CreateCard {
+                    board_id: bid,
+                    column_id: column.id,
+                    title: self.input.as_str().to_string(),
+                    position,
+                }) as Box<dyn crate::state::commands::Command>;
+                commands.push(create_cmd);
+
+                if let Err(e) = self.execute_commands_batch(commands) {
+                    tracing::error!("Failed to create card: {}", e);
+                    return;
+                }
+
+                // After command execution, find the newly created card
+                if mark_as_complete {
+                    if let Some(card) = self.cards.iter().rev().find(|c| c.column_id == column.id) {
+                        let card_id = card.id;
+                        let update_cmd = Box::new(UpdateCard {
+                            card_id,
+                            updates: CardUpdate {
+                                status: Some(CardStatus::Done),
+                                ..Default::default()
+                            },
+                        })
+                            as Box<dyn crate::state::commands::Command>;
+
+                        if let Err(e) = self.execute_command(update_cmd) {
+                            tracing::error!("Failed to update card status: {}", e);
+                        }
+
+                        tracing::info!(
+                            "Creating card in column: {} [marked as complete]",
+                            column_name
+                        );
                     }
                 } else {
                     tracing::info!("Creating card in column: {}", column_name);
@@ -524,17 +535,17 @@ impl App {
                                 .filter(|c| c.column_id == target_column_id)
                                 .count() as i32;
 
-                            // Execute MoveCard command
-                            let cmd = Box::new(MoveCard {
+                            // Build batch with MoveCard and optional status update
+                            let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                                Vec::new();
+
+                            let move_cmd = Box::new(MoveCard {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position,
-                            });
-
-                            if let Err(e) = self.execute_command(cmd) {
-                                tracing::error!("Failed to move card left: {}", e);
-                                return;
-                            }
+                            })
+                                as Box<dyn crate::state::commands::Command>;
+                            commands.push(move_cmd);
 
                             // If moving from last column and card is Done, mark as Todo
                             if is_moving_from_last
@@ -547,13 +558,20 @@ impl App {
                                         status: Some(CardStatus::Todo),
                                         ..Default::default()
                                     },
-                                });
+                                })
+                                    as Box<dyn crate::state::commands::Command>;
+                                commands.push(status_cmd);
+                            }
 
-                                if let Err(e) = self.execute_command(status_cmd) {
-                                    tracing::error!("Failed to update card status: {}", e);
-                                    return;
-                                }
+                            if let Err(e) = self.execute_commands_batch(commands) {
+                                tracing::error!("Failed to move card left: {}", e);
+                                return;
+                            }
 
+                            if is_moving_from_last
+                                && num_cols > 1
+                                && current_status == CardStatus::Done
+                            {
                                 tracing::info!(
                                     "Moved card from last column (unmarked as complete)"
                                 );
@@ -621,17 +639,17 @@ impl App {
                                 .filter(|c| c.column_id == target_column_id)
                                 .count() as i32;
 
-                            // Execute MoveCard command
-                            let cmd = Box::new(MoveCard {
+                            // Build batch with MoveCard and optional status update
+                            let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                                Vec::new();
+
+                            let move_cmd = Box::new(MoveCard {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position,
-                            });
-
-                            if let Err(e) = self.execute_command(cmd) {
-                                tracing::error!("Failed to move card right: {}", e);
-                                return;
-                            }
+                            })
+                                as Box<dyn crate::state::commands::Command>;
+                            commands.push(move_cmd);
 
                             // If moving to last column and card is not Done, mark as Done
                             if is_moving_to_last
@@ -644,13 +662,20 @@ impl App {
                                         status: Some(CardStatus::Done),
                                         ..Default::default()
                                     },
-                                });
+                                })
+                                    as Box<dyn crate::state::commands::Command>;
+                                commands.push(status_cmd);
+                            }
 
-                                if let Err(e) = self.execute_command(status_cmd) {
-                                    tracing::error!("Failed to update card status: {}", e);
-                                    return;
-                                }
+                            if let Err(e) = self.execute_commands_batch(commands) {
+                                tracing::error!("Failed to move card right: {}", e);
+                                return;
+                            }
 
+                            if is_moving_to_last
+                                && num_cols > 1
+                                && current_status != CardStatus::Done
+                            {
                                 tracing::info!("Moved card to last column (marked as complete)");
                             } else {
                                 tracing::info!("Moved card to next column");

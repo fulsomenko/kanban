@@ -157,16 +157,24 @@ pub struct AssignCardToSprint {
     pub sprint_id: Uuid,
     pub sprint_number: u32,
     pub sprint_name: Option<String>,
+    pub sprint_status: String,
 }
 
 impl Command for AssignCardToSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         if let Some(card) = context.cards.iter_mut().find(|c| c.id == self.card_id) {
+            // End the current sprint log if moving to a different sprint
+            if let Some(old_sprint_id) = card.sprint_id {
+                if old_sprint_id != self.sprint_id {
+                    card.end_current_sprint_log();
+                }
+            }
+            // Assign to the new sprint
             card.assign_to_sprint(
                 self.sprint_id,
                 self.sprint_number,
                 self.sprint_name.clone(),
-                "Active".to_string(),
+                self.sprint_status.clone(),
             );
         }
         Ok(())
