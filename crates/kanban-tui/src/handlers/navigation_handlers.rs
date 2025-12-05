@@ -345,16 +345,17 @@ impl App {
                 let initial_adjusted_viewport = self.get_adjusted_viewport_height();
 
                 // Simple smooth navigation: move by 1 with viewport spanning pages
-                let was_at_bottom = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
-                    let was_at_bottom = list.navigate_down();
+                let was_at_bottom =
+                    if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                        let was_at_bottom = list.navigate_down();
 
-                    // Smooth scroll with initial viewport
-                    list.ensure_selected_visible(initial_adjusted_viewport);
+                        // Smooth scroll with initial viewport
+                        list.ensure_selected_visible(initial_adjusted_viewport);
 
-                    was_at_bottom
-                } else {
-                    false
-                };
+                        was_at_bottom
+                    } else {
+                        false
+                    };
 
                 // Recalculate viewport after scroll may have changed indicators/headers
                 let final_adjusted_viewport = self.get_adjusted_viewport_height();
