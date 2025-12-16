@@ -285,7 +285,19 @@ impl App {
                     let current_idx = self.column_selection.get().unwrap_or(0);
                     if current_idx == 0 {
                         self.board_focus = BoardFocus::Sprints;
-                        self.sprint_selection.set(Some(0));
+                        let last_sprint_idx = self
+                            .board_selection
+                            .get()
+                            .and_then(|idx| self.boards.get(idx))
+                            .map(|board| {
+                                self.sprints
+                                    .iter()
+                                    .filter(|s| s.board_id == board.id)
+                                    .count()
+                                    .saturating_sub(1)
+                            })
+                            .unwrap_or(0);
+                        self.sprint_selection.set(Some(last_sprint_idx));
                     } else {
                         self.column_selection.prev();
                     }
