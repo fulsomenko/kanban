@@ -1764,7 +1764,6 @@ impl App {
                             data.apply_to_app(self);
                             self.state_manager.mark_clean();
                             self.state_manager.clear_conflict();
-                            self.mode = AppMode::Normal;
                             self.refresh_view();
                             tracing::info!("Auto-reloaded state from external file change");
                         }
