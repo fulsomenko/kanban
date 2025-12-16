@@ -1127,6 +1127,9 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
                 .sprints
                 .iter()
                 .filter(|s| s.board_id == board.id)
+                .filter(|s| {
+                    s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled
+                })
                 .collect();
 
             for (idx, sprint_option) in std::iter::once(None)
