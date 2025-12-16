@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode, BoardFocus};
+use crate::app::{App, BoardFocus, DialogMode};
 use crate::state::commands::{CreateColumn, DeleteColumn, SetBoardTaskListView, UpdateColumn};
 use crossterm::event::KeyCode;
 use kanban_domain::commands::MoveCard;
@@ -9,7 +9,7 @@ impl App {
         if self.board_focus == BoardFocus::Columns {
             if let Some(board_idx) = self.board_selection.get() {
                 if self.boards.get(board_idx).is_some() {
-                    self.mode = AppMode::CreateColumn;
+                    self.open_dialog(DialogMode::CreateColumn);
                     self.input.clear();
                 }
             }
@@ -29,7 +29,7 @@ impl App {
                     if let Some(column_idx) = self.column_selection.get() {
                         if let Some(column) = board_columns.get(column_idx) {
                             self.input.set(column.name.clone());
-                            self.mode = AppMode::RenameColumn;
+                            self.open_dialog(DialogMode::RenameColumn);
                         }
                     }
                 }
@@ -48,7 +48,7 @@ impl App {
                         .count();
 
                     if column_count > 1 {
-                        self.mode = AppMode::DeleteColumnConfirm;
+                        self.open_dialog(DialogMode::DeleteColumnConfirm);
                     } else {
                         tracing::warn!("Cannot delete the last column");
                     }
@@ -179,7 +179,7 @@ impl App {
                     TaskListView::ColumnView => 2,
                 };
                 self.task_list_view_selection.set(Some(current_view_idx));
-                self.mode = AppMode::SelectTaskListView;
+                self.open_dialog(DialogMode::SelectTaskListView);
             }
         }
     }
@@ -390,13 +390,13 @@ impl App {
     pub fn handle_create_column_dialog(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Columns;
                 self.input.clear();
             }
             KeyCode::Enter => {
                 self.create_column();
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Columns;
                 self.input.clear();
             }
@@ -419,13 +419,13 @@ impl App {
     pub fn handle_rename_column_dialog(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Columns;
                 self.input.clear();
             }
             KeyCode::Enter => {
                 self.rename_column();
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Columns;
                 self.input.clear();
             }
@@ -448,16 +448,16 @@ impl App {
     pub fn handle_delete_column_confirm_popup(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Columns;
             }
             KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
                 self.delete_column();
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Columns;
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Columns;
             }
             _ => {}
@@ -467,7 +467,7 @@ impl App {
     pub fn handle_select_task_list_view_popup(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.task_list_view_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
@@ -496,7 +496,7 @@ impl App {
 
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set task list view: {}", e);
-                                self.mode = AppMode::Normal;
+                                self.pop_mode();
                                 self.task_list_view_selection.clear();
                                 return;
                             }
@@ -511,7 +511,7 @@ impl App {
                         }
                     }
                 }
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.task_list_view_selection.clear();
             }
             _ => {}
