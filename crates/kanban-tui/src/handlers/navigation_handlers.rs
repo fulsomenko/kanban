@@ -454,7 +454,7 @@ impl App {
                     let card_id = selected_card.id;
                     let actual_idx = self.cards.iter().position(|c| c.id == card_id);
                     self.active_card_index = actual_idx;
-                    self.mode = AppMode::CardDetail;
+                    self.push_mode(AppMode::CardDetail);
                 }
             }
         }

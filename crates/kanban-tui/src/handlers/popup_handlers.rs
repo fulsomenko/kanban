@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode};
+use crate::app::App;
 use crossterm::event::KeyCode;
 use kanban_domain::{FieldUpdate, SortField, SortOrder};
 
@@ -6,7 +6,7 @@ impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.import_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
@@ -23,7 +23,7 @@ impl App {
                         }
                     }
                 }
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.import_selection.clear();
             }
             _ => {}
@@ -33,7 +33,7 @@ impl App {
     pub fn handle_set_card_priority_popup(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::CardDetail;
+                self.pop_mode();
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 self.priority_selection.next(4);
@@ -67,7 +67,7 @@ impl App {
                         }
                     }
                 }
-                self.mode = AppMode::CardDetail;
+                self.pop_mode();
             }
             _ => {}
         }
@@ -76,7 +76,7 @@ impl App {
     pub fn handle_order_cards_popup(&mut self, key_code: KeyCode) -> bool {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.sort_field_selection.clear();
                 false
             }
@@ -132,19 +132,12 @@ impl App {
                         }
                     }
 
-                    // Return to the appropriate mode based on where we came from
                     let is_sprint_detail = self.active_sprint_index.is_some();
-                    let prev_mode = if is_sprint_detail {
-                        AppMode::SprintDetail
-                    } else {
-                        AppMode::Normal
-                    };
-                    self.mode = prev_mode;
+                    self.pop_mode();
                     self.sort_field_selection.clear();
 
                     tracing::info!("Sorting by {:?} ({:?})", field, order);
 
-                    // Apply sorting to the appropriate context
                     if is_sprint_detail {
                         self.apply_sort_to_sprint_lists(field, order);
                     } else {
@@ -160,7 +153,7 @@ impl App {
     pub fn handle_assign_card_to_sprint_popup(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.sprint_assign_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
@@ -281,7 +274,7 @@ impl App {
                         }
                     }
                 }
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.sprint_assign_selection.clear();
             }
             _ => {}
@@ -291,7 +284,7 @@ impl App {
     pub fn handle_assign_multiple_cards_to_sprint_popup(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
             }
@@ -407,7 +400,7 @@ impl App {
                         }
                     }
                 }
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
             }

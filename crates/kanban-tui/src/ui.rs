@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode, BoardFocus, CardFocus, Focus};
+use crate::app::{App, AppMode, BoardFocus, CardFocus, DialogMode, Focus};
 use crate::components::*;
 use crate::theme::*;
 use crate::view_strategy::UnifiedViewStrategy;
@@ -31,100 +31,62 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let is_help_mode = matches!(app.mode, AppMode::Help(_));
 
     if !is_help_mode {
-        match app.mode {
-            AppMode::CardDetail
-            | AppMode::AssignCardToSprint
-            | AppMode::AssignMultipleCardsToSprint => {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(3)])
+            .split(frame.area());
 
-                render_card_detail_view(app, frame, chunks[0]);
-                render_footer(app, frame, chunks[1]);
+        // Phase 1: Render base view (from stack if in dialog mode)
+        let base_mode = app.get_base_mode();
+        match base_mode {
+            AppMode::CardDetail => render_card_detail_view(app, frame, chunks[0]),
+            AppMode::BoardDetail => render_board_detail_view(app, frame, chunks[0]),
+            AppMode::SprintDetail => render_sprint_detail_view(app, frame, chunks[0]),
+            _ => render_main(app, frame, chunks[0]),
+        }
+        render_footer(app, frame, chunks[1]);
 
-                if app.mode == AppMode::AssignCardToSprint {
-                    render_assign_sprint_popup(app, frame);
+        // Phase 2: Render dialog overlay if active
+        if let AppMode::Dialog(ref dialog) = app.mode {
+            match dialog {
+                DialogMode::CreateBoard => render_create_board_popup(app, frame),
+                DialogMode::CreateCard => render_create_card_popup(app, frame),
+                DialogMode::CreateSprint => render_create_sprint_popup(app, frame),
+                DialogMode::RenameBoard => render_rename_board_popup(app, frame),
+                DialogMode::ExportBoard => render_export_board_popup(app, frame),
+                DialogMode::ExportAll => render_export_all_popup(app, frame),
+                DialogMode::ImportBoard => render_import_board_popup(app, frame),
+                DialogMode::SetCardPoints => render_set_card_points_popup(app, frame),
+                DialogMode::SetCardPriority => render_set_card_priority_popup(app, frame),
+                DialogMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
+                DialogMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
+                DialogMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
+                DialogMode::OrderCards => render_order_cards_popup(app, frame),
+                DialogMode::CreateColumn => render_create_column_popup(app, frame),
+                DialogMode::RenameColumn => render_rename_column_popup(app, frame),
+                DialogMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
+                DialogMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
+                DialogMode::FilterOptions => render_filter_options_popup(app, frame),
+                DialogMode::AssignCardToSprint => render_assign_sprint_popup(app, frame),
+                DialogMode::AssignMultipleCardsToSprint => {
+                    render_assign_multiple_cards_popup(app, frame)
                 }
-
-                if app.mode == AppMode::AssignMultipleCardsToSprint {
-                    render_assign_multiple_cards_popup(app, frame);
+                DialogMode::ConflictResolution => render_conflict_resolution_popup(app, frame),
+                DialogMode::ExternalChangeDetected => {
+                    render_external_change_detected_popup(app, frame)
                 }
-            }
-            AppMode::BoardDetail => {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
-
-                render_board_detail_view(app, frame, chunks[0]);
-                render_footer(app, frame, chunks[1]);
-            }
-            AppMode::SprintDetail => {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
-
-                render_sprint_detail_view(app, frame, chunks[0]);
-                render_footer(app, frame, chunks[1]);
-            }
-            _ => {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
-
-                render_main(app, frame, chunks[0]);
-                render_footer(app, frame, chunks[1]);
-
-                match app.mode {
-                    AppMode::CreateBoard => render_create_board_popup(app, frame),
-                    AppMode::CreateCard => render_create_card_popup(app, frame),
-                    AppMode::CreateSprint => render_create_sprint_popup(app, frame),
-                    AppMode::RenameBoard => render_rename_board_popup(app, frame),
-                    AppMode::ExportBoard => render_export_board_popup(app, frame),
-                    AppMode::ExportAll => render_export_all_popup(app, frame),
-                    AppMode::ImportBoard => render_import_board_popup(app, frame),
-                    AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
-                    AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
-                    AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
-                    AppMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
-                    AppMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
-                    AppMode::OrderCards => render_order_cards_popup(app, frame),
-                    AppMode::CreateColumn => render_create_column_popup(app, frame),
-                    AppMode::RenameColumn => render_rename_column_popup(app, frame),
-                    AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
-                    AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
-                    AppMode::FilterOptions => render_filter_options_popup(app, frame),
-                    AppMode::ConflictResolution => render_conflict_resolution_popup(app, frame),
-                    AppMode::ExternalChangeDetected => {
-                        render_external_change_detected_popup(app, frame)
-                    }
-                    _ => {}
-                }
+                DialogMode::ConfirmSprintPrefixCollision => {}
             }
         }
     } else {
-        // Render underlying view without footer
-        match app.mode {
-            AppMode::CardDetail
-            | AppMode::AssignCardToSprint
-            | AppMode::AssignMultipleCardsToSprint => {
-                render_card_detail_view(app, frame, frame.area());
-            }
-            AppMode::BoardDetail => {
-                render_board_detail_view(app, frame, frame.area());
-            }
-            AppMode::SprintDetail => {
-                render_sprint_detail_view(app, frame, frame.area());
-            }
-            _ => {
-                render_main(app, frame, frame.area());
-            }
+        // Help mode: render base view without footer, then help popup
+        let base_mode = app.get_base_mode();
+        match base_mode {
+            AppMode::CardDetail => render_card_detail_view(app, frame, frame.area()),
+            AppMode::BoardDetail => render_board_detail_view(app, frame, frame.area()),
+            AppMode::SprintDetail => render_sprint_detail_view(app, frame, frame.area()),
+            _ => render_main(app, frame, frame.area()),
         }
-
-        // Render help popup on top
         render_help_popup(app, frame);
     }
 

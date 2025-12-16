@@ -1,11 +1,11 @@
-use crate::app::{App, AppMode, BoardFocus};
+use crate::app::{App, BoardFocus, DialogMode};
 use crate::state::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
 use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
 
 impl App {
     pub fn handle_create_sprint_key(&mut self) {
         if self.board_focus == BoardFocus::Sprints && self.board_selection.get().is_some() {
-            self.mode = AppMode::CreateSprint;
+            self.open_dialog(DialogMode::CreateSprint);
             self.input.clear();
         }
     }
@@ -118,7 +118,7 @@ impl App {
 
                 tracing::info!("Completed sprint: {}", sprint_name);
 
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Sprints;
                 self.active_sprint_index = None;
             }

@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode, CardField, Focus};
+use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
 use crate::state::commands::{
@@ -11,7 +11,7 @@ use std::io;
 impl App {
     pub fn handle_create_card_key(&mut self) {
         if self.focus == Focus::Cards && self.active_board_index.is_some() {
-            self.mode = AppMode::CreateCard;
+            self.open_dialog(DialogMode::CreateCard);
             self.input.clear();
         }
     }
@@ -57,7 +57,7 @@ impl App {
 
         if !self.selected_cards.is_empty() {
             self.sprint_assign_selection.clear();
-            self.mode = AppMode::AssignMultipleCardsToSprint;
+            self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
         } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.boards.get(board_idx) {
@@ -74,7 +74,7 @@ impl App {
                         }
                         let selection_idx = self.get_current_sprint_selection_index();
                         self.sprint_assign_selection.set(Some(selection_idx));
-                        self.mode = AppMode::AssignCardToSprint;
+                        self.open_dialog(DialogMode::AssignCardToSprint);
                     }
                 }
             }
@@ -85,7 +85,7 @@ impl App {
         if self.focus == Focus::Cards && self.active_board_index.is_some() {
             let sort_idx = self.get_current_sort_field_selection_index();
             self.sort_field_selection.set(Some(sort_idx));
-            self.mode = AppMode::OrderCards;
+            self.open_dialog(DialogMode::OrderCards);
         }
     }
 
