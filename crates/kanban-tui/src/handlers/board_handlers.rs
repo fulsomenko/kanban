@@ -1,11 +1,11 @@
-use crate::app::{App, AppMode, BoardFocus, Focus};
+use crate::app::{App, AppMode, BoardFocus, DialogMode, Focus};
 use crate::state::commands::{CreateBoard, CreateColumn, UpdateBoard};
 use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {
     pub fn handle_create_board_key(&mut self) {
         if self.focus == Focus::Boards {
-            self.mode = AppMode::CreateBoard;
+            self.open_dialog(DialogMode::CreateBoard);
             self.input.clear();
         }
     }
@@ -15,7 +15,7 @@ impl App {
             if let Some(board_idx) = self.board_selection.get() {
                 if let Some(board) = self.boards.get(board_idx) {
                     self.input.set(board.name.clone());
-                    self.mode = AppMode::RenameBoard;
+                    self.open_dialog(DialogMode::RenameBoard);
                 }
             }
         }
@@ -23,7 +23,7 @@ impl App {
 
     pub fn handle_edit_board_key(&mut self) {
         if self.focus == Focus::Boards && self.board_selection.get().is_some() {
-            self.mode = AppMode::BoardDetail;
+            self.push_mode(AppMode::BoardDetail);
             self.board_focus = BoardFocus::Name;
         }
     }
@@ -38,7 +38,7 @@ impl App {
                         chrono::Utc::now().format("%Y%m%d-%H%M%S")
                     );
                     self.input.set(filename);
-                    self.mode = AppMode::ExportBoard;
+                    self.open_dialog(DialogMode::ExportBoard);
                 }
             }
         }
@@ -51,7 +51,7 @@ impl App {
                 chrono::Utc::now().format("%Y%m%d-%H%M%S")
             );
             self.input.set(filename);
-            self.mode = AppMode::ExportAll;
+            self.open_dialog(DialogMode::ExportAll);
         }
     }
 
@@ -60,7 +60,7 @@ impl App {
             self.scan_import_files();
             if !self.import_files.is_empty() {
                 self.import_selection.set(Some(0));
-                self.mode = AppMode::ImportBoard;
+                self.open_dialog(DialogMode::ImportBoard);
             }
         }
     }

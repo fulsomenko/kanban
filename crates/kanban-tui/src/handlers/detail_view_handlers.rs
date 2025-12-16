@@ -1,4 +1,6 @@
-use crate::app::{App, AppMode, BoardField, BoardFocus, CardField, CardFocus, SprintTaskPanel};
+use crate::app::{
+    App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
+};
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
 use kanban_domain::{BoardSettingsDto, CardMetadataDto};
@@ -15,7 +17,7 @@ impl App {
         let mut should_restart = false;
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.active_card_index = None;
                 self.card_focus = CardFocus::Title;
             }
@@ -89,7 +91,7 @@ impl App {
             },
             KeyCode::Char('d') => {
                 self.handle_archive_card();
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.active_card_index = None;
                 self.card_focus = CardFocus::Title;
                 self.refresh_view();
@@ -105,18 +107,18 @@ impl App {
                         if sprint_count > 0 {
                             let selection_idx = self.get_current_sprint_selection_index();
                             self.sprint_assign_selection.set(Some(selection_idx));
-                            self.mode = AppMode::AssignCardToSprint;
+                            self.open_dialog(DialogMode::AssignCardToSprint);
                         }
                     }
                 }
             }
             KeyCode::Char('p') => {
-                self.mode = AppMode::SetCardPoints;
+                self.open_dialog(DialogMode::SetCardPoints);
             }
             KeyCode::Char('P') => {
                 let priority_idx = self.get_current_priority_selection_index();
                 self.priority_selection.set(Some(priority_idx));
-                self.mode = AppMode::SetCardPriority;
+                self.open_dialog(DialogMode::SetCardPriority);
             }
             _ => {}
         }
@@ -132,7 +134,7 @@ impl App {
         let mut should_restart = false;
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Name;
             }
             KeyCode::Char('1') => {
@@ -318,7 +320,7 @@ impl App {
                                     if let Some(sprint) = self.sprints.get(*actual_idx) {
                                         self.populate_sprint_task_lists(sprint.id);
                                     }
-                                    self.mode = AppMode::SprintDetail;
+                                    self.push_mode(AppMode::SprintDetail);
                                 }
                             }
                         }
@@ -332,7 +334,7 @@ impl App {
                             let current_prefix =
                                 board.sprint_prefix.clone().unwrap_or_else(String::new);
                             self.input.set(current_prefix);
-                            self.mode = AppMode::SetBranchPrefix;
+                            self.open_dialog(DialogMode::SetBranchPrefix);
                         }
                     }
                 }
@@ -345,7 +347,7 @@ impl App {
     pub fn handle_sprint_detail_key(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Sprints;
                 self.active_sprint_index = None;
             }
@@ -360,7 +362,7 @@ impl App {
                     if let Some(sprint) = self.sprints.get(sprint_idx) {
                         let current_prefix = sprint.prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
-                        self.mode = AppMode::SetSprintPrefix;
+                        self.open_dialog(DialogMode::SetSprintPrefix);
                     }
                 }
             }
@@ -369,14 +371,14 @@ impl App {
                     if let Some(sprint) = self.sprints.get(sprint_idx) {
                         let current_prefix = sprint.card_prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
-                        self.mode = AppMode::SetSprintCardPrefix;
+                        self.open_dialog(DialogMode::SetSprintCardPrefix);
                     }
                 }
             }
             KeyCode::Char('o') => {
                 let sort_idx = self.get_current_sort_field_selection_index();
                 self.sort_field_selection.set(Some(sort_idx));
-                self.mode = AppMode::OrderCards;
+                self.open_dialog(DialogMode::OrderCards);
             }
             KeyCode::Char('O') => {
                 if let Some(current_order) = self.current_sort_order {
@@ -427,7 +429,7 @@ impl App {
                             if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
-                                self.mode = AppMode::CardDetail;
+                                self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
                         }
@@ -435,7 +437,7 @@ impl App {
                             if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
-                                self.mode = AppMode::CardDetail;
+                                self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
                         }
@@ -467,7 +469,7 @@ impl App {
                                 self.active_card_index = Some(card_idx);
                                 let priority_idx = self.get_current_priority_selection_index();
                                 self.priority_selection.set(Some(priority_idx));
-                                self.mode = AppMode::SetCardPriority;
+                                self.open_dialog(DialogMode::SetCardPriority);
                             }
                         }
                         CardListAction::AssignSprint(card_id) => {
@@ -485,7 +487,7 @@ impl App {
                                             let selection_idx =
                                                 self.get_current_sprint_selection_index();
                                             self.sprint_assign_selection.set(Some(selection_idx));
-                                            self.mode = AppMode::AssignCardToSprint;
+                                            self.open_dialog(DialogMode::AssignCardToSprint);
                                         }
                                     }
                                 }
@@ -506,7 +508,7 @@ impl App {
                                             let selection_idx =
                                                 self.get_current_sprint_selection_index();
                                             self.sprint_assign_selection.set(Some(selection_idx));
-                                            self.mode = AppMode::AssignCardToSprint;
+                                            self.open_dialog(DialogMode::AssignCardToSprint);
                                         }
                                     }
                                 }
@@ -515,7 +517,7 @@ impl App {
                         CardListAction::Sort => {
                             let sort_idx = self.get_current_sort_field_selection_index();
                             self.sort_field_selection.set(Some(sort_idx));
-                            self.mode = AppMode::OrderCards;
+                            self.open_dialog(DialogMode::OrderCards);
                         }
                         CardListAction::OrderCards => {
                             if let Some(current_order) = self.current_sort_order {
@@ -675,7 +677,7 @@ impl App {
                             }
                         }
                         CardListAction::Create => {
-                            self.mode = AppMode::CreateCard;
+                            self.open_dialog(DialogMode::CreateCard);
                             self.input.clear();
                         }
                         CardListAction::ToggleMultiSelect(card_id) => {

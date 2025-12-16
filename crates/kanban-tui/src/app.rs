@@ -44,6 +44,7 @@ pub struct App {
     pub should_quit: bool,
     pub quit_with_pending: bool, // Force quit even if saves are pending (second 'q' press)
     pub mode: AppMode,
+    pub mode_stack: Vec<AppMode>,
     pub input: InputState,
     pub boards: Vec<Board>,
     pub board_selection: SelectionState,
@@ -133,13 +134,10 @@ pub enum BoardField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AppMode {
-    Normal,
+pub enum DialogMode {
     CreateBoard,
     CreateCard,
-    CardDetail,
     RenameBoard,
-    BoardDetail,
     ExportBoard,
     ExportAll,
     ImportBoard,
@@ -147,7 +145,6 @@ pub enum AppMode {
     SetCardPriority,
     SetBranchPrefix,
     OrderCards,
-    SprintDetail,
     CreateSprint,
     AssignCardToSprint,
     AssignMultipleCardsToSprint,
@@ -155,15 +152,24 @@ pub enum AppMode {
     RenameColumn,
     DeleteColumnConfirm,
     SelectTaskListView,
-    Search,
     SetSprintPrefix,
     SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
     FilterOptions,
-    ArchivedCardsView,
     ConflictResolution,
     ExternalChangeDetected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppMode {
+    Normal,
+    CardDetail,
+    BoardDetail,
+    SprintDetail,
+    Search,
+    ArchivedCardsView,
     Help(Box<AppMode>),
+    Dialog(DialogMode),
 }
 
 impl App {
@@ -179,6 +185,7 @@ impl App {
             should_quit: false,
             quit_with_pending: false,
             mode: AppMode::Normal,
+            mode_stack: Vec::new(),
             input: InputState::new(),
             boards: Vec::new(),
             board_selection: SelectionState::new(),
@@ -271,6 +278,31 @@ impl App {
 
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    pub fn push_mode(&mut self, new_mode: AppMode) {
+        self.mode_stack.push(self.mode.clone());
+        self.mode = new_mode;
+    }
+
+    pub fn pop_mode(&mut self) {
+        self.mode = self.mode_stack.pop().unwrap_or(AppMode::Normal);
+    }
+
+    pub fn is_dialog_mode(&self) -> bool {
+        matches!(self.mode, AppMode::Dialog(_))
+    }
+
+    pub fn get_base_mode(&self) -> &AppMode {
+        if self.is_dialog_mode() {
+            self.mode_stack.last().unwrap_or(&AppMode::Normal)
+        } else {
+            &self.mode
+        }
+    }
+
+    pub fn open_dialog(&mut self, dialog: DialogMode) {
+        self.push_mode(AppMode::Dialog(dialog));
     }
 
     pub fn set_error(&mut self, message: String) {
@@ -410,19 +442,19 @@ impl App {
 
         let is_input_mode = matches!(
             self.mode,
-            AppMode::CreateBoard
-                | AppMode::CreateCard
-                | AppMode::CreateSprint
-                | AppMode::RenameBoard
-                | AppMode::ExportBoard
-                | AppMode::ExportAll
-                | AppMode::SetCardPoints
-                | AppMode::SetBranchPrefix
-                | AppMode::CreateColumn
-                | AppMode::RenameColumn
-                | AppMode::Search
-                | AppMode::SetSprintPrefix
-                | AppMode::SetSprintCardPrefix
+            AppMode::Search
+                | AppMode::Dialog(DialogMode::CreateBoard)
+                | AppMode::Dialog(DialogMode::CreateCard)
+                | AppMode::Dialog(DialogMode::CreateSprint)
+                | AppMode::Dialog(DialogMode::RenameBoard)
+                | AppMode::Dialog(DialogMode::ExportBoard)
+                | AppMode::Dialog(DialogMode::ExportAll)
+                | AppMode::Dialog(DialogMode::SetCardPoints)
+                | AppMode::Dialog(DialogMode::SetBranchPrefix)
+                | AppMode::Dialog(DialogMode::CreateColumn)
+                | AppMode::Dialog(DialogMode::RenameColumn)
+                | AppMode::Dialog(DialogMode::SetSprintPrefix)
+                | AppMode::Dialog(DialogMode::SetSprintCardPrefix)
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
@@ -627,17 +659,6 @@ impl App {
                     self.pending_key = None;
                 }
             },
-            AppMode::CreateBoard => self.handle_create_board_dialog(key.code),
-            AppMode::CreateCard => self.handle_create_card_dialog(key.code),
-            AppMode::CreateSprint => self.handle_create_sprint_dialog(key.code),
-            AppMode::RenameBoard => self.handle_rename_board_dialog(key.code),
-            AppMode::ExportBoard => self.handle_export_board_dialog(key.code),
-            AppMode::ExportAll => self.handle_export_all_dialog(key.code),
-            AppMode::ImportBoard => self.handle_import_board_popup(key.code),
-            AppMode::SetCardPoints => {
-                should_restart_events = self.handle_set_card_points_dialog(key.code);
-            }
-            AppMode::SetCardPriority => self.handle_set_card_priority_popup(key.code),
             AppMode::CardDetail => {
                 should_restart_events =
                     self.handle_card_detail_key(key.code, terminal, event_handler);
@@ -646,30 +667,49 @@ impl App {
                 should_restart_events =
                     self.handle_board_detail_key(key.code, terminal, event_handler);
             }
-            AppMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
-            AppMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
-            AppMode::SetSprintCardPrefix => self.handle_set_sprint_card_prefix_dialog(key.code),
-            AppMode::OrderCards => {
-                should_restart_events = self.handle_order_cards_popup(key.code);
-            }
             AppMode::SprintDetail => self.handle_sprint_detail_key(key.code),
-            AppMode::AssignCardToSprint => self.handle_assign_card_to_sprint_popup(key.code),
-            AppMode::AssignMultipleCardsToSprint => {
-                self.handle_assign_multiple_cards_to_sprint_popup(key.code)
-            }
-            AppMode::CreateColumn => self.handle_create_column_dialog(key.code),
-            AppMode::RenameColumn => self.handle_rename_column_dialog(key.code),
-            AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
-            AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
             AppMode::Search => self.handle_search_mode(key.code),
-            AppMode::ConfirmSprintPrefixCollision => {
-                self.handle_confirm_sprint_prefix_collision_popup(key.code)
-            }
-            AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
             AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
-            AppMode::ConflictResolution => self.handle_conflict_resolution_popup(key.code),
-            AppMode::ExternalChangeDetected => self.handle_external_change_detected_popup(key.code),
             AppMode::Help(_) => self.handle_help_mode(key.code),
+            AppMode::Dialog(ref dialog) => match dialog {
+                DialogMode::CreateBoard => self.handle_create_board_dialog(key.code),
+                DialogMode::CreateCard => self.handle_create_card_dialog(key.code),
+                DialogMode::CreateSprint => self.handle_create_sprint_dialog(key.code),
+                DialogMode::RenameBoard => self.handle_rename_board_dialog(key.code),
+                DialogMode::ExportBoard => self.handle_export_board_dialog(key.code),
+                DialogMode::ExportAll => self.handle_export_all_dialog(key.code),
+                DialogMode::ImportBoard => self.handle_import_board_popup(key.code),
+                DialogMode::SetCardPoints => {
+                    should_restart_events = self.handle_set_card_points_dialog(key.code);
+                }
+                DialogMode::SetCardPriority => self.handle_set_card_priority_popup(key.code),
+                DialogMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
+                DialogMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
+                DialogMode::SetSprintCardPrefix => {
+                    self.handle_set_sprint_card_prefix_dialog(key.code)
+                }
+                DialogMode::OrderCards => {
+                    should_restart_events = self.handle_order_cards_popup(key.code);
+                }
+                DialogMode::AssignCardToSprint => self.handle_assign_card_to_sprint_popup(key.code),
+                DialogMode::AssignMultipleCardsToSprint => {
+                    self.handle_assign_multiple_cards_to_sprint_popup(key.code)
+                }
+                DialogMode::CreateColumn => self.handle_create_column_dialog(key.code),
+                DialogMode::RenameColumn => self.handle_rename_column_dialog(key.code),
+                DialogMode::DeleteColumnConfirm => {
+                    self.handle_delete_column_confirm_popup(key.code)
+                }
+                DialogMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
+                DialogMode::ConfirmSprintPrefixCollision => {
+                    self.handle_confirm_sprint_prefix_collision_popup(key.code)
+                }
+                DialogMode::FilterOptions => self.handle_filter_options_popup(key.code),
+                DialogMode::ConflictResolution => self.handle_conflict_resolution_popup(key.code),
+                DialogMode::ExternalChangeDetected => {
+                    self.handle_external_change_detected_popup(key.code)
+                }
+            },
         }
         should_restart_events
     }
@@ -1663,12 +1703,12 @@ impl App {
                             tracing::info!("External change detected, auto-reloading");
                             self.auto_reload_from_external_change().await;
                             tracing::info!("Auto-reloaded due to external file change");
-                        } else if self.mode != AppMode::ConflictResolution
-                            && self.mode != AppMode::ExternalChangeDetected
+                        } else if self.mode != AppMode::Dialog(DialogMode::ConflictResolution)
+                            && self.mode != AppMode::Dialog(DialogMode::ExternalChangeDetected)
                         {
                             // Local changes exist, prompt user
                             tracing::warn!("External file change detected with local changes");
-                            self.mode = AppMode::ExternalChangeDetected;
+                            self.open_dialog(DialogMode::ExternalChangeDetected);
                         }
                     }
                 }
