@@ -1,4 +1,6 @@
-use crate::app::{App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel};
+use crate::app::{
+    App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
+};
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
 use kanban_domain::{BoardSettingsDto, CardMetadataDto};

@@ -691,9 +691,7 @@ impl App {
                 DialogMode::OrderCards => {
                     should_restart_events = self.handle_order_cards_popup(key.code);
                 }
-                DialogMode::AssignCardToSprint => {
-                    self.handle_assign_card_to_sprint_popup(key.code)
-                }
+                DialogMode::AssignCardToSprint => self.handle_assign_card_to_sprint_popup(key.code),
                 DialogMode::AssignMultipleCardsToSprint => {
                     self.handle_assign_multiple_cards_to_sprint_popup(key.code)
                 }
@@ -702,16 +700,12 @@ impl App {
                 DialogMode::DeleteColumnConfirm => {
                     self.handle_delete_column_confirm_popup(key.code)
                 }
-                DialogMode::SelectTaskListView => {
-                    self.handle_select_task_list_view_popup(key.code)
-                }
+                DialogMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
                 DialogMode::ConfirmSprintPrefixCollision => {
                     self.handle_confirm_sprint_prefix_collision_popup(key.code)
                 }
                 DialogMode::FilterOptions => self.handle_filter_options_popup(key.code),
-                DialogMode::ConflictResolution => {
-                    self.handle_conflict_resolution_popup(key.code)
-                }
+                DialogMode::ConflictResolution => self.handle_conflict_resolution_popup(key.code),
                 DialogMode::ExternalChangeDetected => {
                     self.handle_external_change_detected_popup(key.code)
                 }
