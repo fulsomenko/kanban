@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::fs;
 use tempfile::tempdir;
 
+#[allow(deprecated)]
 fn kanban() -> Command {
     Command::cargo_bin("kanban").unwrap()
 }

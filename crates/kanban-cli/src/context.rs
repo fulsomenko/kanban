@@ -222,7 +222,7 @@ impl KanbanOperations for CliContext {
     }
 
     fn list_cards(&self, filter: CardFilter) -> KanbanResult<Vec<Card>> {
-        let mut cards: Vec<_> = self.cards.iter().cloned().collect();
+        let mut cards: Vec<_> = self.cards.to_vec();
 
         if let Some(board_id) = filter.board_id {
             let board_columns: Vec<_> = self
