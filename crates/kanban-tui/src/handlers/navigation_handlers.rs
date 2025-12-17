@@ -285,7 +285,7 @@ impl App {
     fn compute_pages_for_current_view(&self, total_items: usize) -> Vec<PageBoundary> {
         // For GroupedByColumn view, use header-aware pagination
         if let Some(board_idx) = self.active_board_index.or(self.board_selection.get()) {
-            if let Some(board) = self.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards.get(board_idx) {
                 if board.task_list_view == TaskListView::GroupedByColumn {
                     // Try to get column boundaries for header-aware pagination
                     if let Some(unified) = self
@@ -337,7 +337,7 @@ impl App {
     pub fn handle_navigation_down(&mut self) {
         match self.focus {
             Focus::Boards => {
-                self.board_selection.next(self.boards.len());
+                self.board_selection.next(self.ctx.boards.len());
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
@@ -419,7 +419,7 @@ impl App {
 
                     if let Some(board_idx) = self.active_board_index {
                         let (task_list_view, task_sort_field, task_sort_order) = {
-                            if let Some(board) = self.boards.get(board_idx) {
+                            if let Some(board) = self.ctx.boards.get(board_idx) {
                                 (
                                     board.task_list_view,
                                     board.task_sort_field,
@@ -452,7 +452,7 @@ impl App {
             Focus::Cards => {
                 if let Some(selected_card) = self.get_selected_card_in_context() {
                     let card_id = selected_card.id;
-                    let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                    let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
                     self.active_card_index = actual_idx;
                     self.push_mode(AppMode::CardDetail);
                 }
@@ -471,7 +471,7 @@ impl App {
 
     pub fn is_kanban_view(&self) -> bool {
         if let Some(board_idx) = self.active_board_index.or(self.board_selection.get()) {
-            if let Some(board) = self.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards.get(board_idx) {
                 return board.task_list_view == TaskListView::ColumnView;
             }
         }
@@ -544,7 +544,7 @@ impl App {
     pub fn handle_jump_to_bottom(&mut self) {
         match self.focus {
             Focus::Boards => {
-                self.board_selection.jump_to_last(self.boards.len());
+                self.board_selection.jump_to_last(self.ctx.boards.len());
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {

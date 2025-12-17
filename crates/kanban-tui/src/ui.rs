@@ -104,7 +104,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
 fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
     let is_kanban_view = if let Some(idx) = app.active_board_index {
-        if let Some(board) = app.boards.get(idx) {
+        if let Some(board) = app.ctx.boards.get(idx) {
             board.task_list_view == kanban_domain::TaskListView::ColumnView
         } else {
             false
@@ -131,13 +131,13 @@ fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
 fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     let mut lines = vec![];
 
-    if app.boards.is_empty() {
+    if app.ctx.boards.is_empty() {
         lines.push(Line::from(Span::styled(
             "No projects yet. Press 'n' to create one!",
             label_text(),
         )));
     } else {
-        for (idx, board) in app.boards.iter().enumerate() {
+        for (idx, board) in app.ctx.boards.iter().enumerate() {
             let config = ListItemConfig::new()
                 .selected(app.board_selection.get() == Some(idx))
                 .focused(app.focus == Focus::Boards)
@@ -164,8 +164,9 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
 
     if !app.active_sprint_filters.is_empty() {
         if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-            if let Some(board) = app.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
                 let mut sprint_names: Vec<String> = app
+                    .ctx
                     .sprints
                     .iter()
                     .filter(|s| app.active_sprint_filters.contains(&s.id))
@@ -220,9 +221,9 @@ fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(sprint_idx) = app.active_sprint_index {
-        if let Some(sprint) = app.sprints.get(sprint_idx) {
+        if let Some(sprint) = app.ctx.sprints.get(sprint_idx) {
             if let Some(board_idx) = app.active_board_index {
-                if let Some(board) = app.boards.get(board_idx) {
+                if let Some(board) = app.ctx.boards.get(board_idx) {
                     let is_completed = sprint.status == SprintStatus::Completed;
 
                     if is_completed {
@@ -283,6 +284,7 @@ fn render_sprint_detail_metadata(
     lines.push(Line::from(""));
 
     let card_count = app
+        .ctx
         .cards
         .iter()
         .filter(|c| c.sprint_id == Some(sprint.id))
@@ -403,14 +405,14 @@ fn render_sprint_task_panel_with_selection(
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
-                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
                     let is_selected = selected_idx == Some(*card_idx) && is_focused;
                     let animation_type =
                         app.animating_cards.get(&card.id).map(|a| a.animation_type);
                     let line = render_card_list_item(CardListItemConfig {
                         card,
                         board,
-                        sprints: &app.sprints,
+                        sprints: &app.ctx.sprints,
                         is_selected,
                         is_focused,
                         is_multi_selected: false,
@@ -436,7 +438,7 @@ fn render_sprint_task_panel_with_selection(
     let cards: Vec<&kanban_domain::Card> = task_list
         .cards
         .iter()
-        .filter_map(|card_id| app.cards.iter().find(|c| c.id == *card_id))
+        .filter_map(|card_id| app.ctx.cards.iter().find(|c| c.id == *card_id))
         .collect();
     let points = App::calculate_points(&cards);
 
@@ -465,7 +467,7 @@ fn render_sprint_task_panel_with_selection(
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let _is_kanban_view =
         if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-            if let Some(board) = app.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
                 board.task_list_view == kanban_domain::TaskListView::ColumnView
             } else {
                 false
@@ -585,9 +587,9 @@ fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(card_idx) = app.active_card_index {
-        if let Some(card) = app.cards.get(card_idx) {
+        if let Some(card) = app.ctx.cards.get(card_idx) {
             if let Some(board_idx) = app.active_board_index {
-                if let Some(board) = app.boards.get(board_idx) {
+                if let Some(board) = app.ctx.boards.get(board_idx) {
                     let has_sprint_logs = card.sprint_logs.len() > 1;
 
                     let constraints = vec![
@@ -644,7 +646,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                                 "Branch",
                                 card.branch_name(
                                     board,
-                                    &app.sprints,
+                                    &app.ctx.sprints,
                                     app.app_config.effective_default_card_prefix(),
                                 ),
                                 active_item(),
@@ -740,7 +742,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                                 "Branch",
                                 card.branch_name(
                                     board,
-                                    &app.sprints,
+                                    &app.ctx.sprints,
                                     app.app_config.effective_default_card_prefix(),
                                 ),
                                 active_item(),
@@ -828,7 +830,7 @@ fn render_import_board_popup(app: &App, frame: &mut Frame) {
 
 fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(board_idx) = app.board_selection.get() {
-        if let Some(board) = app.boards.get(board_idx) {
+        if let Some(board) = app.ctx.boards.get(board_idx) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -892,7 +894,10 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             // Show active sprint's card prefix override if it exists
             if let Some(sprint_prefix) =
-                crate::board_context::get_active_sprint_card_prefix_override(board, &app.sprints)
+                crate::board_context::get_active_sprint_card_prefix_override(
+                    board,
+                    &app.ctx.sprints,
+                )
             {
                 settings_lines.push(metadata_line_styled(
                     "Active Sprint Card Prefix",
@@ -929,6 +934,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 .focused(app.board_focus == BoardFocus::Sprints);
 
             let board_sprints: Vec<&Sprint> = app
+                .ctx
                 .sprints
                 .iter()
                 .filter(|s| s.board_id == board.id)
@@ -956,6 +962,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let sprint_name = sprint.formatted_name(board, "sprint");
 
                     let card_count = app
+                        .ctx
                         .cards
                         .iter()
                         .filter(|c| c.sprint_id == Some(sprint.id))
@@ -1007,6 +1014,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 .focused(app.board_focus == BoardFocus::Columns);
 
             let mut board_columns: Vec<_> = app
+                .ctx
                 .columns
                 .iter()
                 .filter(|col| col.board_id == board.id)
@@ -1026,6 +1034,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let is_focused = app.board_focus == BoardFocus::Columns;
 
                     let card_count = app
+                        .ctx
                         .cards
                         .iter()
                         .filter(|c| c.column_id == column.id)
@@ -1122,8 +1131,9 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     let mut lines = vec![];
 
     if let Some(board_idx) = app.active_board_index {
-        if let Some(board) = app.boards.get(board_idx) {
+        if let Some(board) = app.ctx.boards.get(board_idx) {
             let board_sprints: Vec<_> = app
+                .ctx
                 .sprints
                 .iter()
                 .filter(|s| s.board_id == board.id)
@@ -1224,7 +1234,7 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
 
     let current_view = app
         .active_board_index
-        .and_then(|idx| app.boards.get(idx))
+        .and_then(|idx| app.ctx.boards.get(idx))
         .map(|board| board.task_list_view);
 
     let items: Vec<ListItem> = views
@@ -1327,8 +1337,9 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
         )));
 
         if let Some(board_idx) = app.active_board_index {
-            if let Some(board) = app.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
                 let board_sprints: Vec<_> = app
+                    .ctx
                     .sprints
                     .iter()
                     .filter(|s| s.board_id == board.id)

@@ -44,7 +44,7 @@ impl App {
             KeyCode::Enter => {
                 if let Some(priority_idx) = self.priority_selection.get() {
                     if let Some(card_idx) = self.active_card_index {
-                        if let Some(card) = self.cards.get(card_idx) {
+                        if let Some(card) = self.ctx.cards.get(card_idx) {
                             use kanban_domain::{CardPriority, CardUpdate};
                             let priority = match priority_idx {
                                 0 => CardPriority::Low,
@@ -119,7 +119,7 @@ impl App {
                     self.current_sort_order = Some(order);
 
                     if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let board_id = board.id;
                             let cmd = Box::new(crate::state::commands::SetBoardTaskSort {
                                 board_id,
@@ -158,8 +158,9 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
-                    if let Some(board) = self.boards.get(board_idx) {
+                    if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = self
+                            .ctx
                             .sprints
                             .iter()
                             .filter(|s| s.board_id == board.id)
@@ -175,7 +176,7 @@ impl App {
                 if let Some(selection_idx) = self.sprint_assign_selection.get() {
                     if let Some(card_idx) = self.active_card_index {
                         let card_id = {
-                            if let Some(card) = self.cards.get(card_idx) {
+                            if let Some(card) = self.ctx.cards.get(card_idx) {
                                 card.id
                             } else {
                                 return;
@@ -196,14 +197,15 @@ impl App {
                                 tracing::error!("Failed to unassign card from sprint: {}", e);
                             } else {
                                 // Clear sprint log via direct mutation (domain operation)
-                                if let Some(card) = self.cards.get_mut(card_idx) {
+                                if let Some(card) = self.ctx.cards.get_mut(card_idx) {
                                     card.end_current_sprint_log();
                                 }
                                 tracing::info!("Unassigned card from sprint");
                             }
                         } else if let Some(board_idx) = self.active_board_index {
-                            if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
+                            if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
                                 let board_sprints: Vec<_> = self
+                                    .ctx
                                     .sprints
                                     .iter()
                                     .filter(|s| s.board_id == board_id)
@@ -215,7 +217,7 @@ impl App {
 
                                     // Get effective prefix and sprint info before calling execute_command
                                     let effective_prefix = {
-                                        if let Some(board) = self.boards.get(board_idx) {
+                                        if let Some(board) = self.ctx.boards.get(board_idx) {
                                             sprint.effective_prefix(board, "task").to_string()
                                         } else {
                                             "task".to_string()
@@ -223,7 +225,7 @@ impl App {
                                     };
 
                                     let sprint_name = {
-                                        if let Some(board) = self.boards.get(board_idx) {
+                                        if let Some(board) = self.ctx.boards.get(board_idx) {
                                             sprint.get_name(board).map(|s| s.to_string())
                                         } else {
                                             None
@@ -290,8 +292,9 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
-                    if let Some(board) = self.boards.get(board_idx) {
+                    if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = self
+                            .ctx
                             .sprints
                             .iter()
                             .filter(|s| s.board_id == board.id)
@@ -328,8 +331,9 @@ impl App {
                             );
                         }
                     } else if let Some(board_idx) = self.active_board_index {
-                        if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
+                        if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
                             let board_sprints: Vec<_> = self
+                                .ctx
                                 .sprints
                                 .iter()
                                 .filter(|s| s.board_id == board_id)
@@ -341,7 +345,7 @@ impl App {
 
                                 // Get effective prefix and sprint info before the loop
                                 let effective_prefix = {
-                                    if let Some(board) = self.boards.get(board_idx) {
+                                    if let Some(board) = self.ctx.boards.get(board_idx) {
                                         sprint.effective_prefix(board, "task").to_string()
                                     } else {
                                         "task".to_string()
@@ -349,7 +353,7 @@ impl App {
                                 };
 
                                 let sprint_name = {
-                                    if let Some(board) = self.boards.get(board_idx) {
+                                    if let Some(board) = self.ctx.boards.get(board_idx) {
                                         sprint.get_name(board).map(|s| s.to_string())
                                     } else {
                                         None

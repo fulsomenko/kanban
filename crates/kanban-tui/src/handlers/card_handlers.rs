@@ -60,8 +60,9 @@ impl App {
             self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
         } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     let sprint_count = self
+                        .ctx
                         .sprints
                         .iter()
                         .filter(|s| s.board_id == board.id)
@@ -69,7 +70,7 @@ impl App {
                     if sprint_count > 0 {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
                             let card_id = selected_card.id;
-                            let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                            let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
                             self.active_card_index = actual_idx;
                         }
                         let selection_idx = self.get_current_sprint_selection_index();
@@ -99,7 +100,7 @@ impl App {
                 self.current_sort_order = Some(new_order);
 
                 if let Some(board_idx) = self.active_board_index {
-                    if let Some(board) = self.boards.get(board_idx) {
+                    if let Some(board) = self.ctx.boards.get(board_idx) {
                         if let Some(field) = self.current_sort_field {
                             let cmd = Box::new(SetBoardTaskSort {
                                 board_id: board.id,
@@ -138,7 +139,7 @@ impl App {
     pub fn handle_toggle_sprint_filter(&mut self) {
         if self.focus == Focus::Cards && self.active_board_index.is_some() {
             if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     if let Some(active_sprint_id) = board.active_sprint_id {
                         if self.active_sprint_filters.contains(&active_sprint_id) {
                             self.active_sprint_filters.remove(&active_sprint_id);
@@ -167,7 +168,7 @@ impl App {
         if self.focus == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
                 let card_id = selected_card.id;
-                let actual_idx = self.cards.iter().position(|c| c.id == card_id);
+                let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
                 self.active_card_index = actual_idx;
 
                 if let Err(e) =
@@ -193,9 +194,10 @@ impl App {
 
             // Calculate target column and position before calling execute_command
             let target_column_and_position = if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     // Get sorted column IDs
                     let mut cols_with_pos: Vec<_> = self
+                        .ctx
                         .columns
                         .iter()
                         .filter(|col| col.board_id == board.id)
@@ -214,6 +216,7 @@ impl App {
                         if let Some(last_col) = board_columns.last() {
                             if *last_col != old_column_id {
                                 let position = self
+                                    .ctx
                                     .cards
                                     .iter()
                                     .filter(|c| c.column_id == *last_col)
@@ -232,6 +235,7 @@ impl App {
                                 // Currently in last column, move to second-to-last
                                 let target_col = board_columns[board_columns.len() - 2];
                                 let position = self
+                                    .ctx
                                     .cards
                                     .iter()
                                     .filter(|c| c.column_id == target_col)
@@ -288,9 +292,10 @@ impl App {
 
         // Build list of column IDs for target calculations
         let board_column_ids: Vec<uuid::Uuid> = if let Some(board_idx) = self.active_board_index {
-            if let Some(board) = self.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards.get(board_idx) {
                 // Sort by position
                 let mut cols_with_pos: Vec<_> = self
+                    .ctx
                     .columns
                     .iter()
                     .filter(|col| col.board_id == board.id)
@@ -311,7 +316,7 @@ impl App {
         for card_id in card_ids {
             // First, get card info without mutable borrow
             let (old_column_id, old_status) =
-                if let Some(card) = self.cards.iter().find(|c| c.id == card_id) {
+                if let Some(card) = self.ctx.cards.iter().find(|c| c.id == card_id) {
                     (card.column_id, card.status)
                 } else {
                     continue;
@@ -351,8 +356,13 @@ impl App {
             };
 
             // Calculate position in target column before command execution
-            let target_position = target_column_id
-                .map(|col_id| self.cards.iter().filter(|c| c.column_id == col_id).count() as i32);
+            let target_position = target_column_id.map(|col_id| {
+                self.ctx
+                    .cards
+                    .iter()
+                    .filter(|c| c.column_id == col_id)
+                    .count() as i32
+            });
 
             // Build update with status and optionally column/position
             let mut updates = CardUpdate {
@@ -391,20 +401,25 @@ impl App {
     pub fn create_card(&mut self) {
         if let Some(idx) = self.active_board_index {
             let focused_col_id = self.get_focused_column_id();
-            let board_id = self.boards.get(idx).map(|b| b.id);
+            let board_id = self.ctx.boards.get(idx).map(|b| b.id);
 
             if let Some(bid) = board_id {
                 let target_column_id = if let Some(focused_col_id) = focused_col_id {
                     Some(focused_col_id)
                 } else {
-                    self.columns
+                    self.ctx
+                        .columns
                         .iter()
                         .find(|col| col.board_id == bid)
                         .map(|col| col.id)
                 };
 
                 let column = if let Some(col_id) = target_column_id {
-                    self.columns.iter().find(|col| col.id == col_id).cloned()
+                    self.ctx
+                        .columns
+                        .iter()
+                        .find(|col| col.id == col_id)
+                        .cloned()
                 } else {
                     None
                 };
@@ -413,12 +428,13 @@ impl App {
                     Some(col) => col,
                     None => {
                         let new_column = Column::new(bid, "Todo".to_string(), 0);
-                        self.columns.push(new_column.clone());
+                        self.ctx.columns.push(new_column.clone());
                         new_column
                     }
                 };
 
                 let position = self
+                    .ctx
                     .cards
                     .iter()
                     .filter(|c| c.column_id == column.id)
@@ -428,6 +444,7 @@ impl App {
 
                 // Determine if we need to mark as complete (if in last column)
                 let board_columns: Vec<_> = self
+                    .ctx
                     .columns
                     .iter()
                     .filter(|col| col.board_id == bid)
@@ -463,7 +480,13 @@ impl App {
 
                 // After command execution, find the newly created card
                 if mark_as_complete {
-                    if let Some(card) = self.cards.iter().rev().find(|c| c.column_id == column.id) {
+                    if let Some(card) = self
+                        .ctx
+                        .cards
+                        .iter()
+                        .rev()
+                        .find(|c| c.column_id == column.id)
+                    {
                         let card_id = card.id;
                         let update_cmd = Box::new(UpdateCard {
                             card_id,
@@ -489,7 +512,13 @@ impl App {
 
                 self.refresh_view();
                 // Select the most recently created card
-                if let Some(card) = self.cards.iter().rev().find(|c| c.column_id == column.id) {
+                if let Some(card) = self
+                    .ctx
+                    .cards
+                    .iter()
+                    .rev()
+                    .find(|c| c.column_id == column.id)
+                {
                     self.select_card_by_id(card.id);
                 }
             }
@@ -503,13 +532,14 @@ impl App {
 
         if let Some(card) = self.get_selected_card_in_context() {
             if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     let card_id = card.id;
                     let current_column_id = card.column_id;
                     let current_status = card.status;
 
                     // Collect and sort column IDs before command execution
                     let mut cols_with_pos: Vec<_> = self
+                        .ctx
                         .columns
                         .iter()
                         .filter(|col| col.board_id == board.id)
@@ -530,6 +560,7 @@ impl App {
                             let num_cols = board_column_ids.len();
 
                             let new_position = self
+                                .ctx
                                 .cards
                                 .iter()
                                 .filter(|c| c.column_id == target_column_id)
@@ -607,13 +638,14 @@ impl App {
 
         if let Some(card) = self.get_selected_card_in_context() {
             if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     let card_id = card.id;
                     let current_column_id = card.column_id;
                     let current_status = card.status;
 
                     // Collect and sort column IDs before command execution
                     let mut cols_with_pos: Vec<_> = self
+                        .ctx
                         .columns
                         .iter()
                         .filter(|col| col.board_id == board.id)
@@ -634,6 +666,7 @@ impl App {
                             let num_cols = board_column_ids.len();
 
                             let new_position = self
+                                .ctx
                                 .cards
                                 .iter()
                                 .filter(|c| c.column_id == target_column_id)
@@ -726,7 +759,7 @@ impl App {
         use crate::app::{AnimationType, CardAnimation};
         use std::time::Instant;
 
-        if self.cards.iter().any(|c| c.id == card_id) {
+        if self.ctx.cards.iter().any(|c| c.id == card_id) {
             self.animating_cards.insert(
                 card_id,
                 CardAnimation {
@@ -741,6 +774,7 @@ impl App {
     fn delete_card(&mut self, card_id: uuid::Uuid) -> bool {
         // Store info before executing command
         let deleted_info = self
+            .ctx
             .cards
             .iter()
             .find(|c| c.id == card_id)
@@ -769,6 +803,7 @@ impl App {
     pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
         // Get all cards in this column and sort by position
         let mut column_cards: Vec<_> = self
+            .ctx
             .cards
             .iter_mut()
             .filter(|c| c.column_id == column_id)
@@ -788,12 +823,14 @@ impl App {
     ) {
         // Try to find a card in the same column at or after the deleted position
         if let Some(next_card) = self
+            .ctx
             .cards
             .iter()
             .find(|c| c.column_id == deleted_column_id && c.position >= deleted_position)
         {
             self.select_card_by_id(next_card.id);
         } else if let Some(prev_card) = self
+            .ctx
             .cards
             .iter()
             .rev()
@@ -829,7 +866,12 @@ impl App {
         use crate::app::{AnimationType, CardAnimation};
         use std::time::Instant;
 
-        if self.archived_cards.iter().any(|dc| dc.card.id == card_id) {
+        if self
+            .ctx
+            .archived_cards
+            .iter()
+            .any(|dc| dc.card.id == card_id)
+        {
             self.animating_cards.insert(
                 card_id,
                 CardAnimation {
@@ -846,13 +888,14 @@ impl App {
         let mut restored_count = 0;
 
         for card_id in card_ids {
-            if let Some(pos) = self
+            if let Some(archived_card) = self
+                .ctx
                 .archived_cards
                 .iter()
-                .position(|dc| dc.card.id == card_id)
+                .find(|dc| dc.card.id == card_id)
+                .cloned()
             {
-                let deleted_card = self.archived_cards.remove(pos);
-                self.restore_card(deleted_card);
+                self.restore_card(archived_card);
                 restored_count += 1;
             }
         }
@@ -869,11 +912,17 @@ impl App {
         let card_title = archived_card.card.title.clone();
 
         // Check if the original column still exists
-        let target_column_id = if self.columns.iter().any(|col| col.id == original_column_id) {
+        let target_column_id = if self
+            .ctx
+            .columns
+            .iter()
+            .any(|col| col.id == original_column_id)
+        {
             original_column_id
         } else {
             // If original column doesn't exist, use first column
-            self.columns
+            self.ctx
+                .columns
                 .first()
                 .map(|col| col.id)
                 .unwrap_or(original_column_id)
@@ -918,7 +967,12 @@ impl App {
         use crate::app::{AnimationType, CardAnimation};
         use std::time::Instant;
 
-        if self.archived_cards.iter().any(|dc| dc.card.id == card_id) {
+        if self
+            .ctx
+            .archived_cards
+            .iter()
+            .any(|dc| dc.card.id == card_id)
+        {
             self.animating_cards.insert(
                 card_id,
                 CardAnimation {
@@ -935,7 +989,12 @@ impl App {
         let mut deleted_count = 0;
 
         for card_id in card_ids {
-            if let Some(card) = self.archived_cards.iter().find(|dc| dc.card.id == card_id) {
+            if let Some(card) = self
+                .ctx
+                .archived_cards
+                .iter()
+                .find(|dc| dc.card.id == card_id)
+            {
                 let card_title = card.card.title.clone();
 
                 // Execute DeleteCard command
@@ -957,8 +1016,8 @@ impl App {
 
     #[allow(dead_code)]
     fn permanent_delete_card_at(&mut self, index: usize) {
-        if index < self.archived_cards.len() {
-            if let Some(card) = self.archived_cards.get(index) {
+        if index < self.ctx.archived_cards.len() {
+            if let Some(card) = self.ctx.archived_cards.get(index) {
                 let card_id = card.card.id;
                 let card_title = card.card.title.clone();
 

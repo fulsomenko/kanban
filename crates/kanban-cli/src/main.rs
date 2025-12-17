@@ -1,33 +1,15 @@
-use clap::{Parser, Subcommand};
+mod cli;
+mod context;
+mod handlers;
+mod output;
+
+use clap::{CommandFactory, Parser};
+use cli::{Cli, Commands};
+use context::CliContext;
 use kanban_tui::App;
-
-#[derive(Parser)]
-#[command(name = "kanban")]
-#[command(about = "A terminal-based kanban board", long_about = None)]
-#[command(version, arg_required_else_help = false)]
-#[command(
-    help_template = "{name} {version}\n{about-section}\n{usage-heading} {usage}\n\n{all-args}"
-)]
-struct Cli {
-    /// Optional file path to load and auto-save boards
-    file: Option<String>,
-
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Initialize a new kanban board
-    Init {
-        #[arg(short, long)]
-        name: String,
-    },
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Configure logging based on KANBAN_DEBUG_LOG environment variable
     if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
         let log_file = std::fs::OpenOptions::new()
             .create(true)
@@ -44,7 +26,6 @@ async fn main() -> anyhow::Result<()> {
             .with_ansi(false)
             .init();
     } else {
-        // Default to stderr with WARN level for production use
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::WARN)
             .init();
@@ -64,8 +45,39 @@ async fn main() -> anyhow::Result<()> {
             let (mut app, save_rx) = App::new(cli.file);
             app.run(save_rx).await?;
         }
-        Some(Commands::Init { name }) => {
-            println!("Initializing kanban board: {}", name);
+        Some(Commands::Completions { shell }) => {
+            clap_complete::generate(shell, &mut Cli::command(), "kanban", &mut std::io::stdout());
+        }
+        Some(cmd) => {
+            let file_path = cli.file.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "File path required for CLI operations. Provide as argument or set KANBAN_FILE env var."
+                )
+            })?;
+
+            let mut ctx = CliContext::load(&file_path).await?;
+
+            match cmd {
+                Commands::Board(board_cmd) => {
+                    handlers::board::handle(&mut ctx, board_cmd.action).await?;
+                }
+                Commands::Column(column_cmd) => {
+                    handlers::column::handle(&mut ctx, column_cmd.action).await?;
+                }
+                Commands::Card(card_cmd) => {
+                    handlers::card::handle(&mut ctx, card_cmd.action).await?;
+                }
+                Commands::Sprint(sprint_cmd) => {
+                    handlers::sprint::handle(&mut ctx, sprint_cmd.action).await?;
+                }
+                Commands::Export(args) => {
+                    handlers::export::handle_export(&ctx, args).await?;
+                }
+                Commands::Import(args) => {
+                    handlers::export::handle_import(&mut ctx, args).await?;
+                }
+                Commands::Completions { .. } => unreachable!(),
+            }
         }
     }
 

@@ -132,35 +132,19 @@ impl App {
                     return false;
                 };
 
-                if let Some(card_idx) = self.active_card_index {
-                    if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
-                            let board_cards: Vec<_> = self
-                                .cards
-                                .iter()
-                                .filter(|card| {
-                                    self.columns.iter().any(|col| {
-                                        col.id == card.column_id && col.board_id == board.id
-                                    })
-                                })
-                                .collect();
-
-                            if let Some(card) = board_cards.get(card_idx) {
-                                let card_id = card.id;
-                                let cmd = Box::new(crate::state::commands::UpdateCard {
-                                    card_id,
-                                    updates: kanban_domain::CardUpdate {
-                                        points: points.into(),
-                                        ..Default::default()
-                                    },
-                                });
-                                if let Err(e) = self.execute_command(cmd) {
-                                    tracing::error!("Failed to set card points: {}", e);
-                                } else {
-                                    tracing::info!("Set points to: {:?}", points);
-                                }
-                            }
-                        }
+                if let Some(card) = self.get_selected_card_in_context() {
+                    let card_id = card.id;
+                    let cmd = Box::new(crate::state::commands::UpdateCard {
+                        card_id,
+                        updates: kanban_domain::CardUpdate {
+                            points: points.into(),
+                            ..Default::default()
+                        },
+                    });
+                    if let Err(e) = self.execute_command(cmd) {
+                        tracing::error!("Failed to set card points: {}", e);
+                    } else {
+                        tracing::info!("Set points to: {:?}", points);
                     }
                 }
                 self.pop_mode();
@@ -186,7 +170,8 @@ impl App {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.board_selection.get() {
-                                if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
+                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
+                                {
                                     let cmd = Box::new(crate::state::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
@@ -204,7 +189,8 @@ impl App {
                         }
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                if let Some(sprint_id) =
+                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
@@ -223,7 +209,8 @@ impl App {
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                if let Some(sprint_id) =
+                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
@@ -248,7 +235,8 @@ impl App {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.board_selection.get() {
-                                if let Some(board_id) = self.boards.get(board_idx).map(|b| b.id) {
+                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
+                                {
                                     let cmd = Box::new(crate::state::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
@@ -260,10 +248,10 @@ impl App {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
                                     } else {
                                         tracing::info!("Set sprint prefix to: {}", prefix_str);
-                                        if let Some(board) = self.boards.get_mut(board_idx) {
+                                        if let Some(board) = self.ctx.boards.get_mut(board_idx) {
                                             board.ensure_sprint_counter_initialized(
                                                 &prefix_str,
-                                                &self.sprints,
+                                                &self.ctx.sprints,
                                             );
                                         }
                                     }
@@ -272,7 +260,8 @@ impl App {
                         }
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                if let Some(sprint_id) =
+                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
@@ -290,17 +279,18 @@ impl App {
                             }
                             let board_idx = self.active_board_index.or(self.board_selection.get());
                             if let Some(board_idx) = board_idx {
-                                if let Some(board) = self.boards.get_mut(board_idx) {
+                                if let Some(board) = self.ctx.boards.get_mut(board_idx) {
                                     board.ensure_sprint_counter_initialized(
                                         &prefix_str,
-                                        &self.sprints,
+                                        &self.ctx.sprints,
                                     );
                                 }
                             }
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.sprints.get(sprint_idx).map(|s| s.id)
+                                if let Some(sprint_id) =
+                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
@@ -387,7 +377,7 @@ impl App {
             }
             KeyCode::Esc => {
                 // Retry later - just go back to previous mode
-                self.state_manager.clear_conflict();
+                self.ctx.state_manager.clear_conflict();
                 self.pop_mode();
             }
             _ => {}
