@@ -68,7 +68,7 @@ impl App {
                 }
                 CardFocus::Metadata => {
                     if let Some(card_idx) = self.active_card_index {
-                        if let Some(card) = self.cards.get_mut(card_idx) {
+                        if let Some(card) = self.ctx.cards.get_mut(card_idx) {
                             let card_id = card.id;
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-card-{}-metadata.json", card_id));
@@ -80,9 +80,9 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit metadata: {}", e);
                             } else {
-                                self.state_manager.mark_dirty();
+                                self.ctx.state_manager.mark_dirty();
                                 let snapshot = crate::state::DataSnapshot::from_app(self);
-                                self.state_manager.queue_snapshot(snapshot);
+                                self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
                         }
@@ -98,8 +98,9 @@ impl App {
             }
             KeyCode::Char('a') => {
                 if let Some(board_idx) = self.active_board_index {
-                    if let Some(board) = self.boards.get(board_idx) {
+                    if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = self
+                            .ctx
                             .sprints
                             .iter()
                             .filter(|s| s.board_id == board.id)
@@ -170,7 +171,7 @@ impl App {
                 }
                 BoardFocus::Settings => {
                     if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get_mut(board_idx) {
+                        if let Some(board) = self.ctx.boards.get_mut(board_idx) {
                             let board_id = board.id;
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-board-{}-settings.json", board_id));
@@ -182,9 +183,9 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit board settings: {}", e);
                             } else {
-                                self.state_manager.mark_dirty();
+                                self.ctx.state_manager.mark_dirty();
                                 let snapshot = crate::state::DataSnapshot::from_app(self);
-                                self.state_manager.queue_snapshot(snapshot);
+                                self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
                         }
@@ -223,8 +224,9 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => match self.board_focus {
                 BoardFocus::Sprints => {
                     if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let sprint_count = self
+                                .ctx
                                 .sprints
                                 .iter()
                                 .filter(|s| s.board_id == board.id)
@@ -241,8 +243,9 @@ impl App {
                 }
                 BoardFocus::Columns => {
                     if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let column_count = self
+                                .ctx
                                 .columns
                                 .iter()
                                 .filter(|col| col.board_id == board.id)
@@ -288,9 +291,9 @@ impl App {
                         let last_sprint_idx = self
                             .board_selection
                             .get()
-                            .and_then(|idx| self.boards.get(idx))
+                            .and_then(|idx| self.ctx.boards.get(idx))
                             .map(|board| {
-                                self.sprints
+                                self.ctx.sprints
                                     .iter()
                                     .filter(|s| s.board_id == board.id)
                                     .count()
@@ -319,8 +322,9 @@ impl App {
                 if self.board_focus == BoardFocus::Sprints {
                     if let Some(sprint_idx) = self.sprint_selection.get() {
                         if let Some(board_idx) = self.board_selection.get() {
-                            if let Some(board) = self.boards.get(board_idx) {
+                            if let Some(board) = self.ctx.boards.get(board_idx) {
                                 let board_sprints: Vec<_> = self
+                                    .ctx
                                     .sprints
                                     .iter()
                                     .enumerate()
@@ -329,7 +333,7 @@ impl App {
                                 if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
                                     self.active_sprint_index = Some(*actual_idx);
                                     self.active_board_index = Some(board_idx);
-                                    if let Some(sprint) = self.sprints.get(*actual_idx) {
+                                    if let Some(sprint) = self.ctx.sprints.get(*actual_idx) {
                                         self.populate_sprint_task_lists(sprint.id);
                                     }
                                     self.push_mode(AppMode::SprintDetail);
@@ -342,7 +346,7 @@ impl App {
             KeyCode::Char('p') => {
                 if self.board_focus == BoardFocus::Settings {
                     if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let current_prefix =
                                 board.sprint_prefix.clone().unwrap_or_else(String::new);
                             self.input.set(current_prefix);
@@ -371,7 +375,7 @@ impl App {
             }
             KeyCode::Char('p') => {
                 if let Some(sprint_idx) = self.active_sprint_index {
-                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         let current_prefix = sprint.prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
                         self.open_dialog(DialogMode::SetSprintPrefix);
@@ -380,7 +384,7 @@ impl App {
             }
             KeyCode::Char('C') => {
                 if let Some(sprint_idx) = self.active_sprint_index {
-                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         let current_prefix = sprint.card_prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
                         self.open_dialog(DialogMode::SetSprintCardPrefix);
@@ -408,7 +412,7 @@ impl App {
             }
             KeyCode::Char('h') | KeyCode::Left => {
                 if let Some(sprint_idx) = self.active_sprint_index {
-                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
                             self.sprint_task_panel = SprintTaskPanel::Uncompleted;
                         }
@@ -417,7 +421,7 @@ impl App {
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 if let Some(sprint_idx) = self.active_sprint_index {
-                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
                             self.sprint_task_panel = SprintTaskPanel::Completed;
                         }
@@ -438,7 +442,7 @@ impl App {
 
                     match action {
                         CardListAction::Select(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 self.push_mode(AppMode::CardDetail);
@@ -446,7 +450,7 @@ impl App {
                             }
                         }
                         CardListAction::Edit(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 self.push_mode(AppMode::CardDetail);
@@ -454,7 +458,7 @@ impl App {
                             }
                         }
                         CardListAction::Complete(card_id) => {
-                            if let Some(card) = self.cards.iter().find(|c| c.id == card_id) {
+                            if let Some(card) = self.ctx.cards.iter().find(|c| c.id == card_id) {
                                 use kanban_domain::{CardStatus, CardUpdate};
                                 let new_status = if card.status == CardStatus::Done {
                                     CardStatus::Todo
@@ -476,7 +480,7 @@ impl App {
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 let priority_idx = self.get_current_priority_selection_index();
@@ -485,12 +489,13 @@ impl App {
                             }
                         }
                         CardListAction::AssignSprint(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.active_board_index {
-                                    if let Some(board) = self.boards.get(board_idx) {
+                                    if let Some(board) = self.ctx.boards.get(board_idx) {
                                         let sprint_count = self
+                                            .ctx
                                             .sprints
                                             .iter()
                                             .filter(|s| s.board_id == board.id)
@@ -506,12 +511,13 @@ impl App {
                             }
                         }
                         CardListAction::ReassignSprint(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.active_board_index {
-                                    if let Some(board) = self.boards.get(board_idx) {
+                                    if let Some(board) = self.ctx.boards.get(board_idx) {
                                         let sprint_count = self
+                                            .ctx
                                             .sprints
                                             .iter()
                                             .filter(|s| s.board_id == board.id)
@@ -550,19 +556,20 @@ impl App {
                             }
                         }
                         CardListAction::MoveColumn(card_id, is_right) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 // Extract all necessary data before any command execution
                                 let move_info = {
-                                    if let Some(card) = self.cards.get(card_idx) {
+                                    if let Some(card) = self.ctx.cards.get(card_idx) {
                                         let current_col = card.column_id;
                                         let current_status = card.status;
                                         let card_title = card.title.clone();
 
                                         if let Some(board_idx) = self.active_board_index {
-                                            if let Some(board) = self.boards.get(board_idx) {
+                                            if let Some(board) = self.ctx.boards.get(board_idx) {
                                                 let board_id = board.id;
                                                 let mut columns: Vec<_> = self
+                                                    .ctx
                                                     .columns
                                                     .iter()
                                                     .filter(|c| c.board_id == board_id)

@@ -14,12 +14,12 @@ impl App {
         if let Some(sprint_idx) = self.active_sprint_index {
             // Collect sprint info before mutations
             let sprint_info = {
-                if let Some(sprint) = self.sprints.get(sprint_idx) {
+                if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                     if sprint.status == SprintStatus::Planning {
                         Some((
                             sprint.id,
                             sprint.formatted_name(
-                                &self.boards[self.board_selection.get().unwrap_or(0)],
+                                &self.ctx.boards[self.board_selection.get().unwrap_or(0)],
                                 "sprint",
                             ),
                         ))
@@ -34,7 +34,7 @@ impl App {
             if let Some((sprint_id, _)) = sprint_info {
                 let board_idx = self.active_board_index.or(self.board_selection.get());
                 if let Some(board_idx) = board_idx {
-                    if let Some(board) = self.boards.get(board_idx) {
+                    if let Some(board) = self.ctx.boards.get(board_idx) {
                         let duration = board.sprint_duration_days.unwrap_or(14);
                         let board_id = board.id;
 
@@ -59,10 +59,10 @@ impl App {
                             return;
                         }
 
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             tracing::info!(
                                 "Activated sprint: {}",
-                                self.sprints
+                                self.ctx.sprints
                                     .get(sprint_idx)
                                     .map(|s| s.formatted_name(board, "sprint"))
                                     .unwrap_or_default()
@@ -78,13 +78,13 @@ impl App {
         if let Some(sprint_idx) = self.active_sprint_index {
             // Collect sprint and board info before mutations
             let sprint_info = {
-                if let Some(sprint) = self.sprints.get(sprint_idx) {
+                if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                     if sprint.status == SprintStatus::Active
                         || sprint.status == SprintStatus::Planning
                     {
                         let board_idx = self.active_board_index.or(self.board_selection.get());
                         board_idx.and_then(|board_idx| {
-                            self.boards.get(board_idx).map(|board| {
+                            self.ctx.boards.get(board_idx).map(|board| {
                                 (sprint.id, board.id, sprint.formatted_name(board, "sprint"))
                             })
                         })
@@ -129,7 +129,7 @@ impl App {
         let board_idx = self.active_board_index.or(self.board_selection.get());
         if let Some(board_idx) = board_idx {
             let (sprint_number, name_index, board_id, effective_sprint_prefix) = {
-                if let Some(board) = self.boards.get_mut(board_idx) {
+                if let Some(board) = self.ctx.boards.get_mut(board_idx) {
                     let effective_sprint_prefix = board
                         .sprint_prefix
                         .as_deref()
@@ -137,7 +137,7 @@ impl App {
                         .to_string();
                     // Ensure the counter for this prefix is initialized based on existing sprints
                     board
-                        .ensure_sprint_counter_initialized(&effective_sprint_prefix, &self.sprints);
+                        .ensure_sprint_counter_initialized(&effective_sprint_prefix, &self.ctx.sprints);
                     let sprint_number = board.get_next_sprint_number(&effective_sprint_prefix);
                     let input_text = self.input.as_str().trim();
                     let name_index = if input_text.is_empty() {
@@ -166,13 +166,14 @@ impl App {
 
             // Log the newly created sprint
             let board_sprints: Vec<_> = self
+                .ctx
                 .sprints
                 .iter()
                 .filter(|s| s.board_id == board_id)
                 .collect();
 
             if let Some(new_sprint) = board_sprints.last() {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     tracing::info!(
                         "Creating sprint: {} (id: {})",
                         new_sprint.formatted_name(board, &effective_sprint_prefix),

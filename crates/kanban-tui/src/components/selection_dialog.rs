@@ -136,8 +136,9 @@ impl SelectionDialog for SprintAssignDialog {
     fn options_count(&self, app: &App) -> usize {
         use kanban_domain::SprintStatus;
         if let Some(board_idx) = app.active_board_index {
-            if let Some(board) = app.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
                 let sprint_count = app
+                    .ctx
                     .sprints
                     .iter()
                     .filter(|s| s.board_id == board.id)
@@ -186,9 +187,10 @@ impl SelectionDialog for SprintAssignDialog {
         let mut lines = vec![];
 
         if let Some(board_idx) = app.active_board_index {
-            if let Some(board) = app.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
                 use kanban_domain::SprintStatus;
                 let board_sprints: Vec<_> = app
+                    .ctx
                     .sprints
                     .iter()
                     .filter(|s| s.board_id == board.id)
@@ -198,7 +200,7 @@ impl SelectionDialog for SprintAssignDialog {
                     .collect();
 
                 let current_sprint_id = if let Some(card_idx) = app.active_card_index {
-                    app.cards.get(card_idx).and_then(|c| c.sprint_id)
+                    app.ctx.cards.get(card_idx).and_then(|c| c.sprint_id)
                 } else {
                     None
                 };

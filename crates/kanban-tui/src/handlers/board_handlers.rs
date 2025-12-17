@@ -13,7 +13,7 @@ impl App {
     pub fn handle_rename_board_key(&mut self) {
         if self.focus == Focus::Boards && self.board_selection.get().is_some() {
             if let Some(board_idx) = self.board_selection.get() {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     self.input.set(board.name.clone());
                     self.open_dialog(DialogMode::RenameBoard);
                 }
@@ -31,7 +31,7 @@ impl App {
     pub fn handle_export_board_key(&mut self) {
         if self.focus == Focus::Boards && self.board_selection.get().is_some() {
             if let Some(board_idx) = self.board_selection.get() {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     let filename = format!(
                         "{}-{}.json",
                         board.name.replace(" ", "-").to_lowercase(),
@@ -45,7 +45,7 @@ impl App {
     }
 
     pub fn handle_export_all_key(&mut self) {
-        if self.focus == Focus::Boards && !self.boards.is_empty() {
+        if self.focus == Focus::Boards && !self.ctx.boards.is_empty() {
             let filename = format!(
                 "kanban-all-{}.json",
                 chrono::Utc::now().format("%Y%m%d-%H%M%S")
@@ -80,7 +80,7 @@ impl App {
         }
 
         // Get the board ID from the newly created board
-        let board_id = if let Some(board) = self.boards.last() {
+        let board_id = if let Some(board) = self.ctx.boards.last() {
             board.id
         } else {
             return;
@@ -110,14 +110,14 @@ impl App {
         tracing::info!("Created board: {} (id: {})", board_name, board_id);
         tracing::info!("Created default columns: TODO, Doing, Complete");
 
-        let new_index = self.boards.len() - 1;
+        let new_index = self.ctx.boards.len() - 1;
         self.board_selection.set(Some(new_index));
         self.switch_view_strategy(task_list_view);
     }
 
     pub fn rename_board(&mut self) {
         if let Some(idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get(idx) {
+            if let Some(board) = self.ctx.boards.get(idx) {
                 let board_id = board.id;
                 let new_name = self.input.as_str().to_string();
 
