@@ -137,11 +137,11 @@ impl StateManager {
     pub fn execute(&mut self, app: &mut App, command: Box<dyn Command>) -> KanbanResult<()> {
         // Execute command
         self.execute_with_context(
-            &mut app.boards,
-            &mut app.columns,
-            &mut app.cards,
-            &mut app.sprints,
-            &mut app.archived_cards,
+            &mut app.ctx.boards,
+            &mut app.ctx.columns,
+            &mut app.ctx.cards,
+            &mut app.ctx.sprints,
+            &mut app.ctx.archived_cards,
             command,
         )?;
 

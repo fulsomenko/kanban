@@ -10,7 +10,7 @@ use crate::{
     search::SearchState,
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
-    state::StateManager,
+    tui_context::TuiContext,
     ui,
     view_strategy::{UnifiedViewStrategy, ViewRefreshContext, ViewStrategy},
 };
@@ -19,7 +19,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
-use kanban_domain::{ArchivedCard, Board, Card, Column, SortField, SortOrder, Sprint};
+use kanban_domain::{Board, Card, SortField, SortOrder, Sprint};
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
@@ -46,15 +46,11 @@ pub struct App {
     pub mode: AppMode,
     pub mode_stack: Vec<AppMode>,
     pub input: InputState,
-    pub boards: Vec<Board>,
+    pub ctx: TuiContext,
     pub board_selection: SelectionState,
     pub active_board_index: Option<usize>,
     pub active_card_index: Option<usize>,
-    pub columns: Vec<Column>,
-    pub cards: Vec<Card>,
-    pub archived_cards: Vec<ArchivedCard>,
     pub animating_cards: HashMap<uuid::Uuid, CardAnimation>,
-    pub sprints: Vec<Sprint>,
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
     pub active_sprint_filters: std::collections::HashSet<uuid::Uuid>,
@@ -66,7 +62,6 @@ pub struct App {
     pub import_files: Vec<String>,
     pub import_selection: SelectionState,
     pub save_file: Option<String>,
-    pub state_manager: StateManager,
     pub app_config: AppConfig,
     pub sort_field_selection: SelectionState,
     pub current_sort_field: Option<SortField>,
@@ -180,22 +175,18 @@ impl App {
         Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
     ) {
         let app_config = AppConfig::load();
-        let (state_manager, save_rx, save_completion_rx) = StateManager::new(save_file.clone());
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone());
         let mut app = Self {
             should_quit: false,
             quit_with_pending: false,
             mode: AppMode::Normal,
             mode_stack: Vec::new(),
             input: InputState::new(),
-            boards: Vec::new(),
+            ctx,
             board_selection: SelectionState::new(),
             active_board_index: None,
             active_card_index: None,
-            columns: Vec::new(),
-            cards: Vec::new(),
-            archived_cards: Vec::new(),
             animating_cards: HashMap::new(),
-            sprints: Vec::new(),
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
             active_sprint_filters: std::collections::HashSet::new(),
@@ -207,7 +198,6 @@ impl App {
             import_files: Vec::new(),
             import_selection: SelectionState::new(),
             save_file: save_file.clone(),
-            state_manager,
             app_config,
             sort_field_selection: SelectionState::new(),
             current_sort_field: None,
@@ -265,7 +255,7 @@ impl App {
                 if let Err(e) = app.import_board_from_file(filename) {
                     tracing::error!("Failed to load file {}: {}", filename, e);
                     app.save_file = None;
-                    app.state_manager.clear_store();
+                    app.ctx.state_manager.clear_store();
                 }
             }
         }
@@ -459,7 +449,7 @@ impl App {
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
             // Check for pending saves before quitting
-            if self.state_manager.has_pending_saves() && !self.quit_with_pending {
+            if self.ctx.state_manager.has_pending_saves() && !self.quit_with_pending {
                 // First quit attempt with pending saves - show warning
                 self.set_error(
                     "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
@@ -839,8 +829,8 @@ impl App {
             self.animating_cards.remove(&card_id);
             match animation_type {
                 AnimationType::Archiving => {
-                    if let Some(card_pos) = self.cards.iter().position(|c| c.id == card_id) {
-                        let card = self.cards[card_pos].clone();
+                    if let Some(card_pos) = self.ctx.cards.iter().position(|c| c.id == card_id) {
+                        let card = self.ctx.cards[card_pos].clone();
                         last_archive_column = Some(card.column_id);
                         last_archive_position = Some(card.position);
                         archive_cards.push(card_id);
@@ -902,20 +892,22 @@ impl App {
     }
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
-        if let Some(pos) = self
+        if let Some(archived_card) = self
+            .ctx
             .archived_cards
             .iter()
-            .position(|dc| dc.card.id == card_id)
+            .find(|dc| dc.card.id == card_id)
+            .cloned()
         {
-            let deleted_card = self.archived_cards.remove(pos);
-            self.restore_card(deleted_card);
+            self.restore_card(archived_card);
         }
     }
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
-        let board_filter = BoardFilter::new(board_id, &self.columns);
+        let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
 
         let cards: Vec<_> = self
+            .ctx
             .cards
             .iter()
             .filter(|c| {
@@ -951,10 +943,11 @@ impl App {
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
-        let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
-        let board_filter = BoardFilter::new(board_id, &self.columns);
+        let board = self.ctx.boards.iter().find(|b| b.id == board_id).unwrap();
+        let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
 
         let mut cards: Vec<&Card> = self
+            .ctx
             .cards
             .iter()
             .filter(|c| {
@@ -989,12 +982,13 @@ impl App {
             if let Some(card_id) = task_list.get_selected_card_id() {
                 if self.mode == AppMode::ArchivedCardsView {
                     return self
+                        .ctx
                         .archived_cards
                         .iter()
                         .find(|dc| dc.card.id == card_id)
                         .map(|dc| &dc.card);
                 } else {
-                    return self.cards.iter().find(|c| c.id == card_id);
+                    return self.ctx.cards.iter().find(|c| c.id == card_id);
                 }
             }
         }
@@ -1015,17 +1009,19 @@ impl App {
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<&Card> {
         if self.mode == AppMode::ArchivedCardsView {
-            self.archived_cards
+            self.ctx
+                .archived_cards
                 .iter()
                 .find(|dc| dc.card.id == card_id)
                 .map(|dc| &dc.card)
         } else {
-            self.cards.iter().find(|c| c.id == card_id)
+            self.ctx.cards.iter().find(|c| c.id == card_id)
         }
     }
 
     pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        self.cards
+        self.ctx
+            .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id))
             .collect()
@@ -1033,6 +1029,7 @@ impl App {
 
     pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
         let cards: Vec<&Card> = self
+            .ctx
             .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
@@ -1047,6 +1044,7 @@ impl App {
 
     pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
         let cards: Vec<&Card> = self
+            .ctx
             .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
@@ -1061,6 +1059,7 @@ impl App {
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let uncompleted_ids: Vec<uuid::Uuid> = self
+            .ctx
             .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
@@ -1068,6 +1067,7 @@ impl App {
             .collect();
 
         let completed_ids: Vec<uuid::Uuid> = self
+            .ctx
             .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
@@ -1092,12 +1092,12 @@ impl App {
 
         let mut uncompleted_cards: Vec<&Card> = uncompleted_card_ids
             .iter()
-            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .filter_map(|id| self.ctx.cards.iter().find(|c| c.id == *id))
             .collect();
 
         let mut completed_cards: Vec<&Card> = completed_card_ids
             .iter()
-            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .filter_map(|id| self.ctx.cards.iter().find(|c| c.id == *id))
             .collect();
 
         let sorter = get_sorter_for_field(sort_field);
@@ -1144,41 +1144,13 @@ impl App {
         &mut self,
         commands: Vec<Box<dyn crate::state::commands::Command>>,
     ) -> KanbanResult<()> {
-        // Execute all commands first
-        {
-            let Self {
-                state_manager,
-                boards,
-                columns,
-                cards,
-                sprints,
-                archived_cards,
-                ..
-            } = self;
-
-            for command in commands {
-                state_manager.execute_with_context(
-                    boards,
-                    columns,
-                    cards,
-                    sprints,
-                    archived_cards,
-                    command,
-                )?;
-            }
-        }
-
-        // Queue one snapshot for async save after all commands have executed
-        let snapshot = crate::state::DataSnapshot::from_app(self);
-        self.state_manager.queue_snapshot(snapshot);
-
-        Ok(())
+        self.ctx.execute_commands_batch(commands)
     }
 
     pub fn refresh_view(&mut self) {
         let board_idx = self.active_board_index.or(self.board_selection.get());
         if let Some(idx) = board_idx {
-            if let Some(board) = self.boards.get(idx) {
+            if let Some(board) = self.ctx.boards.get(idx) {
                 let search_query = if self.search.is_active {
                     Some(self.search.query())
                 } else {
@@ -1187,19 +1159,20 @@ impl App {
 
                 // When in DeletedCardsView, convert deleted cards to Card objects for display
                 let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
-                    self.archived_cards
+                    self.ctx
+                        .archived_cards
                         .iter()
                         .map(|dc| dc.card.clone())
                         .collect()
                 } else {
-                    self.cards.clone()
+                    self.ctx.cards.clone()
                 };
 
                 let ctx = ViewRefreshContext {
                     board,
                     all_cards: &cards_for_display,
-                    all_columns: &self.columns,
-                    all_sprints: &self.sprints,
+                    all_columns: &self.ctx.columns,
+                    all_sprints: &self.ctx.sprints,
                     active_sprint_filters: self.active_sprint_filters.clone(),
                     hide_assigned_cards: self.hide_assigned_cards,
                     search_query,
@@ -1232,13 +1205,13 @@ impl App {
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards.get(board_idx) {
                 let board_export = BoardExporter::export_board(
                     board,
-                    &self.columns,
-                    &self.cards,
-                    &self.archived_cards,
-                    &self.sprints,
+                    &self.ctx.columns,
+                    &self.ctx.cards,
+                    &self.ctx.archived_cards,
+                    &self.ctx.sprints,
                 );
 
                 let export = crate::export::AllBoardsExport {
@@ -1253,11 +1226,11 @@ impl App {
 
     pub fn export_all_boards_with_filename(&self) -> io::Result<()> {
         let export = BoardExporter::export_all_boards(
-            &self.boards,
-            &self.columns,
-            &self.cards,
-            &self.archived_cards,
-            &self.sprints,
+            &self.ctx.boards,
+            &self.ctx.columns,
+            &self.ctx.cards,
+            &self.ctx.archived_cards,
+            &self.ctx.sprints,
         );
         BoardExporter::export_to_file(&export, self.input.as_str())?;
         Ok(())
@@ -1266,11 +1239,11 @@ impl App {
     pub fn auto_save(&self) -> io::Result<()> {
         if let Some(ref filename) = self.save_file {
             let export = BoardExporter::export_all_boards(
-                &self.boards,
-                &self.columns,
-                &self.cards,
-                &self.archived_cards,
-                &self.sprints,
+                &self.ctx.boards,
+                &self.ctx.columns,
+                &self.ctx.cards,
+                &self.ctx.archived_cards,
+                &self.ctx.sprints,
             );
             BoardExporter::export_to_file(&export, filename)?;
         }
@@ -1278,7 +1251,7 @@ impl App {
     }
 
     fn check_ended_sprints(&self) {
-        let ended_sprints: Vec<_> = self.sprints.iter().filter(|s| s.is_ended()).collect();
+        let ended_sprints: Vec<_> = self.ctx.sprints.iter().filter(|s| s.is_ended()).collect();
 
         if !ended_sprints.is_empty() {
             tracing::warn!(
@@ -1286,7 +1259,7 @@ impl App {
                 ended_sprints.len()
             );
             for sprint in &ended_sprints {
-                if let Some(board) = self.boards.iter().find(|b| b.id == sprint.board_id) {
+                if let Some(board) = self.ctx.boards.iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
                         sprint.formatted_name(board, "sprint"),
@@ -1307,7 +1280,7 @@ impl App {
         field: BoardField,
     ) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards.get(board_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     BoardField::Name => {
@@ -1326,14 +1299,14 @@ impl App {
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
                     let board_id = board.id;
-                    if let Some(board) = self.boards.iter_mut().find(|b| b.id == board_id) {
+                    if let Some(board) = self.ctx.boards.iter_mut().find(|b| b.id == board_id) {
                         match field {
                             BoardField::Name => {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
-                                    self.state_manager.mark_dirty();
+                                    self.ctx.state_manager.mark_dirty();
                                     let snapshot = crate::state::DataSnapshot::from_app(self);
-                                    self.state_manager.queue_snapshot(snapshot);
+                                    self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
                             BoardField::Description => {
@@ -1343,9 +1316,9 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
-                                self.state_manager.mark_dirty();
+                                self.ctx.state_manager.mark_dirty();
                                 let snapshot = crate::state::DataSnapshot::from_app(self);
-                                self.state_manager.queue_snapshot(snapshot);
+                                self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
                     }
@@ -1362,7 +1335,7 @@ impl App {
         field: CardField,
     ) -> io::Result<()> {
         if let Some(card_idx) = self.active_card_index {
-            if let Some(card) = self.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     CardField::Title => {
@@ -1381,14 +1354,14 @@ impl App {
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
                     let card_id = card.id;
-                    if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                    if let Some(card) = self.ctx.cards.iter_mut().find(|c| c.id == card_id) {
                         match field {
                             CardField::Title => {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
-                                    self.state_manager.mark_dirty();
+                                    self.ctx.state_manager.mark_dirty();
                                     let snapshot = crate::state::DataSnapshot::from_app(self);
-                                    self.state_manager.queue_snapshot(snapshot);
+                                    self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
                             CardField::Description => {
@@ -1398,9 +1371,9 @@ impl App {
                                     Some(new_content)
                                 };
                                 card.update_description(desc);
-                                self.state_manager.mark_dirty();
+                                self.ctx.state_manager.mark_dirty();
                                 let snapshot = crate::state::DataSnapshot::from_app(self);
-                                self.state_manager.queue_snapshot(snapshot);
+                                self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
                     }
@@ -1468,16 +1441,16 @@ impl App {
             self.file_watcher = Some(watcher.clone());
             // Also set it on the state manager (wrapped in Arc) so queue_snapshot can pause it
             let watcher_arc = std::sync::Arc::new(watcher);
-            self.state_manager.set_file_watcher(watcher_arc);
+            self.ctx.state_manager.set_file_watcher(watcher_arc);
         }
 
         // Spawn async save worker if save channel is configured
         if let Some(mut rx) = save_rx {
             tracing::debug!("Save channel receiver available");
-            if let Some(store) = self.state_manager.store().cloned() {
-                let instance_id = self.state_manager.instance_id();
+            if let Some(store) = self.ctx.state_manager.store().cloned() {
+                let instance_id = self.ctx.state_manager.instance_id();
                 let file_watcher = self.file_watcher.clone();
-                let save_completion_tx = self.state_manager.save_completion_tx().cloned();
+                let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
 
                 tracing::info!("Spawning save worker to process snapshots");
                 let handle = tokio::spawn(async move {
@@ -1589,7 +1562,7 @@ impl App {
                                                 watcher.pause();
                                             }
                                             let snapshot = crate::state::DataSnapshot::from_app(self);
-                                            if let Err(e) = self.state_manager.force_overwrite(&snapshot).await {
+                                            if let Err(e) = self.ctx.state_manager.force_overwrite(&snapshot).await {
                                                 tracing::error!("Failed to force overwrite: {}", e);
                                             }
                                             // Resume file watcher after save completes
@@ -1599,13 +1572,13 @@ impl App {
                                         }
                                         't' => {
                                             // Reload from disk
-                                            if let Some(store) = self.state_manager.store() {
+                                            if let Some(store) = self.ctx.state_manager.store() {
                                                 match store.load().await {
                                                     Ok((snapshot, _metadata)) => {
                                                         match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
                                                             Ok(data) => {
                                                                 data.apply_to_app(self);
-                                                                self.state_manager.clear_conflict();
+                                                                self.ctx.state_manager.clear_conflict();
                                                                 self.refresh_view();
                                                                 tracing::info!("Reloaded state from disk");
                                                             }
@@ -1648,9 +1621,9 @@ impl App {
                                 }
 
                                 // Auto-refresh view if state manager indicates it's needed
-                                if self.state_manager.needs_refresh() {
+                                if self.ctx.state_manager.needs_refresh() {
                                     self.refresh_view();
-                                    self.state_manager.clear_refresh();
+                                    self.ctx.state_manager.clear_refresh();
                                 }
                             }
                         }
@@ -1664,9 +1637,9 @@ impl App {
                     } => {
                         // Save operation completed - update dirty flag
                         tracing::debug!("Save completion signal received");
-                        self.state_manager.save_completed();
+                        self.ctx.state_manager.save_completed();
                         // Reset force quit flag if all saves are now complete
-                        if !self.state_manager.has_pending_saves() {
+                        if !self.ctx.state_manager.has_pending_saves() {
                             self.quit_with_pending = false;
                         }
                     }
@@ -1697,11 +1670,11 @@ impl App {
                         }
                     } => {
                         // Check if this is our own write by comparing instance IDs
-                        if let Some(store) = self.state_manager.store() {
+                        if let Some(store) = self.ctx.state_manager.store() {
                             match store.load().await {
                                 Ok((_snapshot, metadata)) => {
                                     // Compare instance IDs
-                                    if metadata.instance_id == self.state_manager.instance_id() {
+                                    if metadata.instance_id == self.ctx.state_manager.instance_id() {
                                         tracing::debug!(
                                             "File change from own instance ({}), ignoring",
                                             metadata.instance_id
@@ -1718,7 +1691,7 @@ impl App {
                         }
 
                         // External file change detected - handle smart reload
-                        if !self.state_manager.is_dirty() {
+                        if !self.ctx.state_manager.is_dirty() {
                             // No local changes, auto-reload silently
                             tracing::info!("External change detected, auto-reloading");
                             self.auto_reload_from_external_change().await;
@@ -1744,7 +1717,7 @@ impl App {
         }
 
         // Graceful shutdown: ensure all queued saves complete before exit
-        self.state_manager.close_save_channel(); // Close save_tx channel to signal worker to finish
+        self.ctx.state_manager.close_save_channel(); // Close save_tx channel to signal worker to finish
 
         // Wait for save worker to finish processing all queued saves
         if let Some(handle) = self.save_worker_handle.take() {
@@ -1757,16 +1730,16 @@ impl App {
     }
 
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
-        let first_new_index = self.boards.len();
+        let first_new_index = self.ctx.boards.len();
         let import = BoardImporter::import_from_file(filename)?;
         let (boards, columns, cards, deleted_cards, sprints) =
             BoardImporter::extract_entities(import);
 
-        self.boards.extend(boards);
-        self.columns.extend(columns);
-        self.cards.extend(cards);
-        self.archived_cards.extend(deleted_cards);
-        self.sprints.extend(sprints);
+        self.ctx.boards.extend(boards);
+        self.ctx.columns.extend(columns);
+        self.ctx.cards.extend(cards);
+        self.ctx.archived_cards.extend(deleted_cards);
+        self.ctx.sprints.extend(sprints);
 
         self.board_selection.set(Some(first_new_index));
 
@@ -1776,14 +1749,14 @@ impl App {
     }
 
     async fn auto_reload_from_external_change(&mut self) {
-        if let Some(store) = self.state_manager.store() {
+        if let Some(store) = self.ctx.state_manager.store() {
             match store.load().await {
                 Ok((snapshot, _metadata)) => {
                     match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
                         Ok(data) => {
                             data.apply_to_app(self);
-                            self.state_manager.mark_clean();
-                            self.state_manager.clear_conflict();
+                            self.ctx.state_manager.mark_clean();
+                            self.ctx.state_manager.clear_conflict();
                             self.refresh_view();
                             tracing::info!("Auto-reloaded state from external file change");
                         }
@@ -1802,15 +1775,16 @@ impl App {
     fn migrate_sprint_logs(&mut self) {
         let mut migrated_count = 0;
 
-        for card in &mut self.cards {
+        for card in &mut self.ctx.cards {
             if let Some(sprint_id) = card.sprint_id {
                 if card.sprint_logs.is_empty() {
-                    if let Some(sprint) = self.sprints.iter().find(|s| s.id == sprint_id) {
+                    if let Some(sprint) = self.ctx.sprints.iter().find(|s| s.id == sprint_id) {
                         let sprint_log = kanban_domain::SprintLog::new(
                             sprint_id,
                             sprint.sprint_number,
                             sprint.name_index.and_then(|idx| {
-                                self.boards
+                                self.ctx
+                                    .boards
                                     .iter()
                                     .find(|b| b.id == sprint.board_id)
                                     .and_then(|board| board.sprint_names.get(idx).cloned())
@@ -1836,12 +1810,12 @@ impl App {
     {
         if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    if let Some(card) = self.cards.get(card_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
+                    if let Some(card) = self.ctx.cards.get(card_idx) {
                         let output = get_output(
                             card,
                             board,
-                            &self.sprints,
+                            &self.ctx.sprints,
                             self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&output) {
@@ -1869,7 +1843,7 @@ impl App {
 
     pub fn get_current_priority_selection_index(&self) -> usize {
         if let Some(card_idx) = self.active_card_index {
-            if let Some(card) = self.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
                     CardPriority::Low => 0,
@@ -1884,11 +1858,12 @@ impl App {
 
     pub fn get_current_sprint_selection_index(&self) -> usize {
         if let Some(card_idx) = self.active_card_index {
-            if let Some(card) = self.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let board_sprints: Vec<_> = self
+                                .ctx
                                 .sprints
                                 .iter()
                                 .filter(|s| s.board_id == board.id)

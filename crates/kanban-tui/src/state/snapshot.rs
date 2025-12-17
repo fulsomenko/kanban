@@ -23,21 +23,21 @@ impl DataSnapshot {
     /// Create snapshot from current app state
     pub fn from_app(app: &App) -> Self {
         Self {
-            boards: app.boards.clone(),
-            columns: app.columns.clone(),
-            cards: app.cards.clone(),
-            archived_cards: app.archived_cards.clone(),
-            sprints: app.sprints.clone(),
+            boards: app.ctx.boards.clone(),
+            columns: app.ctx.columns.clone(),
+            cards: app.ctx.cards.clone(),
+            archived_cards: app.ctx.archived_cards.clone(),
+            sprints: app.ctx.sprints.clone(),
         }
     }
 
     /// Apply snapshot to app state (overwrites)
     pub fn apply_to_app(&self, app: &mut App) {
-        app.boards = self.boards.clone();
-        app.columns = self.columns.clone();
-        app.cards = self.cards.clone();
-        app.archived_cards = self.archived_cards.clone();
-        app.sprints = self.sprints.clone();
+        app.ctx.boards = self.boards.clone();
+        app.ctx.columns = self.columns.clone();
+        app.ctx.cards = self.cards.clone();
+        app.ctx.archived_cards = self.archived_cards.clone();
+        app.ctx.sprints = self.sprints.clone();
     }
 
     /// Serialize snapshot to JSON bytes

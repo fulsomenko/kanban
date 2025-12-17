@@ -53,6 +53,8 @@ nix run github:fulsomenko/kanban
 
 ## Quick Start
 
+### TUI
+
 ```bash
 kanban                 # Launch the app
 kanban myboard.json    # Load a board from file
@@ -63,6 +65,28 @@ kanban myboard.json    # Load a board from file
 2. Press `Enter` to activate it
 3. Add cards with `n` and organize them
 4. Press `x` to export as JSON
+
+### CLI
+
+```bash
+export KANBAN_FILE=myboard.json   # Set data file
+
+# Boards
+kanban board list
+kanban board create --name "My Project"
+
+# Cards
+kanban card list --board-id <ID>
+kanban card create --board-id <ID> --column-id <ID> --title "New task"
+kanban card update <CARD_ID> --status done --priority high
+
+# Sprints
+kanban sprint create --board-id <ID>
+kanban sprint activate <SPRINT_ID>
+kanban card assign-sprint <CARD_ID> --sprint-id <SPRINT_ID>
+```
+
+All commands output JSON. See `kanban --help` for full reference.
 
 ## Multiple Views
 
@@ -126,12 +150,12 @@ crates/
 ## Roadmap
 
 - [x] Progressive auto-save (save changes to board as you make them, not just on exit)
+- [x] Full CLI interface matching TUI operations (scriptable kanban commands)
 - [ ] Card dependencies
 - [ ] Configurable keybindings
 - [ ] Audit log
 - [ ] Multiple storage backends (.md archive, SQL, MongoDB) with pluggable architecture
 - [ ] HTTP API for remote board access and programmatic control
-- [ ] Full CLI interface matching TUI operations (scriptable kanban commands)
 - [ ] Collaborative features (multi-user, sync)
 
 ## Contributing

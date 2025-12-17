@@ -1,6 +1,6 @@
 # kanban-cli
 
-Command-line entry point and file management for the kanban project management tool. Coordinates workspace layers and manages JSON persistence.
+Command-line interface for the kanban project management tool. Supports both an interactive TUI mode and a scriptable CLI mode for automation and integration.
 
 ## Installation
 
@@ -19,7 +19,7 @@ cargo build --release
 
 ## Usage
 
-### Basic Usage
+### Interactive TUI Mode
 
 ```bash
 # Launch interactive TUI
@@ -32,21 +32,170 @@ kanban boards.json
 kanban /path/to/myproject.json
 ```
 
-## Command-Line Interface
+### CLI Mode
 
-### Arguments
+```bash
+# All CLI commands require a data file
+kanban myproject.json board list
+kanban myproject.json card create --board-id <ID> --column-id <ID> --title "New task"
 
+# Or use KANBAN_FILE environment variable
+export KANBAN_FILE=myproject.json
+kanban board list
+kanban card list --board-id <ID>
 ```
-kanban [FILE]
+
+## CLI Commands
+
+### Board Operations
+
+```bash
+# List all boards
+kanban board list
+
+# Create a new board
+kanban board create --name "My Project"
+kanban board create --name "My Project" --sprint-prefix "SPRINT" --card-prefix "TASK"
+
+# Get board details
+kanban board get <BOARD_ID>
+
+# Update a board
+kanban board update <BOARD_ID> --name "New Name"
+kanban board update <BOARD_ID> --sprint-prefix "SP" --card-prefix "TSK"
+
+# Delete a board
+kanban board delete <BOARD_ID>
 ```
 
-- `[FILE]` - Optional path to JSON file for import/export (default: none)
-  - If file exists: loads boards on startup
-  - If file doesn't exist: creates with empty structure
-  - On graceful shutdown: auto-saves all changes
-  - Without file arg: loads/saves to temporary file (lost on exit)
+### Column Operations
 
-### Environment Variables
+```bash
+# List columns for a board
+kanban column list --board-id <BOARD_ID>
+
+# Create a column
+kanban column create --board-id <BOARD_ID> --name "In Progress"
+kanban column create --board-id <BOARD_ID> --name "Review" --position 2
+
+# Reorder a column (change position)
+kanban column reorder <COLUMN_ID> --position 2
+
+# Delete a column
+kanban column delete <COLUMN_ID>
+```
+
+### Card Operations
+
+```bash
+# List cards
+kanban card list --board-id <BOARD_ID>
+kanban card list --board-id <BOARD_ID> --column-id <COLUMN_ID>
+kanban card list --board-id <BOARD_ID> --sprint-id <SPRINT_ID>
+
+# Create a card
+kanban card create --board-id <BOARD_ID> --column-id <COLUMN_ID> --title "Implement feature"
+kanban card create --board-id <BOARD_ID> --column-id <COLUMN_ID> --title "Bug fix" \
+  --priority high --points 3 --description "Fix the login bug"
+
+# Get card details
+kanban card get <CARD_ID>
+
+# Update a card
+kanban card update <CARD_ID> --title "Updated title"
+kanban card update <CARD_ID> --priority high --status done --points 5
+
+# Move a card to another column
+kanban card move <CARD_ID> --column-id <NEW_COLUMN_ID>
+kanban card move <CARD_ID> --column-id <NEW_COLUMN_ID> --position 0
+
+# Archive/restore/delete cards
+kanban card archive <CARD_ID>
+kanban card restore <CARD_ID>
+kanban card delete <CARD_ID>  # permanently delete archived card
+
+# Sprint assignment
+kanban card assign-sprint <CARD_ID> --sprint-id <SPRINT_ID>
+kanban card unassign-sprint <CARD_ID>
+
+# Git integration
+kanban card branch-name <CARD_ID>
+kanban card git-checkout <CARD_ID>
+
+# Bulk operations (comma-separated IDs)
+kanban card bulk-archive --ids <ID1>,<ID2>,<ID3>
+kanban card bulk-move --ids <ID1>,<ID2>,<ID3> --column-id <COLUMN_ID>
+kanban card bulk-assign-sprint --ids <ID1>,<ID2>,<ID3> --sprint-id <SPRINT_ID>
+```
+
+### Sprint Operations
+
+```bash
+# List sprints for a board
+kanban sprint list --board-id <BOARD_ID>
+
+# Create a sprint
+kanban sprint create --board-id <BOARD_ID>
+kanban sprint create --board-id <BOARD_ID> --card-prefix "HOTFIX"
+
+# Sprint lifecycle
+kanban sprint activate <SPRINT_ID>
+kanban sprint complete <SPRINT_ID>
+kanban sprint cancel <SPRINT_ID>
+```
+
+### Export/Import
+
+```bash
+# Export a single board (outputs JSON to stdout)
+kanban export --board-id <BOARD_ID>
+kanban export --board-id <BOARD_ID> > board.json
+
+# Export all boards
+kanban export > all-boards.json
+
+# Import boards from file
+kanban import --file boards.json
+```
+
+### Shell Completions
+
+```bash
+# Generate completions for your shell
+kanban completions bash > /etc/bash_completion.d/kanban
+kanban completions zsh > ~/.zsh/completions/_kanban
+kanban completions fish > ~/.config/fish/completions/kanban.fish
+```
+
+## Output Format
+
+All CLI commands output JSON for easy parsing and scripting:
+
+```json
+{
+  "success": true,
+  "api_version": "0.1.13",
+  "data": { ... }
+}
+```
+
+```bash
+# Pipe to jq for processing
+kanban card list --board-id <ID> | jq '.data.items[] | .title'
+
+# Check if operation succeeded
+kanban board create --name "Test" | jq '.success'
+```
+
+## Environment Variables
+
+**Data File:**
+
+```bash
+# Set default data file
+export KANBAN_FILE=~/projects/kanban.json
+kanban board list  # uses KANBAN_FILE
+```
 
 **Logging Configuration:**
 
@@ -59,7 +208,7 @@ RUST_LOG=info kanban
 RUST_LOG=kanban_tui=debug,kanban_domain=info kanban
 ```
 
-**Custom Editor (optional, via kanban-tui):**
+**Custom Editor (TUI mode):**
 
 ```bash
 EDITOR=vim kanban boards.json
