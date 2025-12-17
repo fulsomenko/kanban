@@ -2,6 +2,8 @@
 bump: patch
 ---
 
+- fix(tui): restoring restoring cards
+- fix(cli): restoring to a non existing column
 - docs: add CLI quick start section to root README
 - docs: update CLI README with command documentation
 - fix: use get_selected_card_in_context for points dialog
