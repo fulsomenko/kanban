@@ -16,7 +16,8 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 || args.points.is_some()
                 || args.due_date.is_some()
             {
-                let updates = build_card_update_from_create(&args);
+                let updates = build_card_update_from_create(&args)
+                    .map_err(|e| anyhow::anyhow!(e))?;
                 card = ctx.update_card(card.id, updates)?;
             }
 
@@ -28,7 +29,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 let archived = ctx.list_archived_cards()?;
                 output::output_list(archived);
             } else {
-                let filter = build_filter(&args);
+                let filter = build_filter(&args).map_err(|e| anyhow::anyhow!(e))?;
                 let cards = ctx.list_cards(filter)?;
                 output::output_list(cards);
             }
@@ -38,7 +39,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             None => output::output_error(&format!("Card not found: {}", id)),
         },
         CardAction::Update(args) => {
-            let updates = build_card_update(&args);
+            let updates = build_card_update(&args).map_err(|e| anyhow::anyhow!(e))?;
             let card = ctx.update_card(args.id, updates)?;
             ctx.save().await?;
             output::output_success(&card);
@@ -104,24 +105,32 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
     Ok(())
 }
 
-fn build_filter(args: &CardListArgs) -> CardFilter {
-    CardFilter {
+fn build_filter(args: &CardListArgs) -> Result<CardFilter, String> {
+    let status = match &args.status {
+        Some(s) => Some(parse_status(s)?),
+        None => None,
+    };
+    Ok(CardFilter {
         board_id: args.board_id,
         column_id: args.column_id,
         sprint_id: args.sprint_id,
-        status: args.status.as_ref().and_then(|s| parse_status(s)),
-    }
+        status,
+    })
 }
 
-fn build_card_update_from_create(args: &CardCreateArgs) -> CardUpdate {
-    CardUpdate {
+fn build_card_update_from_create(args: &CardCreateArgs) -> Result<CardUpdate, String> {
+    let priority = match &args.priority {
+        Some(p) => Some(parse_priority(p)?),
+        None => None,
+    };
+    Ok(CardUpdate {
         title: None,
         description: args
             .description
             .clone()
             .map(FieldUpdate::Set)
             .unwrap_or(FieldUpdate::NoChange),
-        priority: args.priority.as_ref().and_then(|p| parse_priority(p)),
+        priority,
         status: None,
         position: None,
         column_id: None,
@@ -138,19 +147,27 @@ fn build_card_update_from_create(args: &CardCreateArgs) -> CardUpdate {
         sprint_id: FieldUpdate::NoChange,
         assigned_prefix: FieldUpdate::NoChange,
         card_prefix: FieldUpdate::NoChange,
-    }
+    })
 }
 
-fn build_card_update(args: &CardUpdateArgs) -> CardUpdate {
-    CardUpdate {
+fn build_card_update(args: &CardUpdateArgs) -> Result<CardUpdate, String> {
+    let priority = match &args.priority {
+        Some(p) => Some(parse_priority(p)?),
+        None => None,
+    };
+    let status = match &args.status {
+        Some(s) => Some(parse_status(s)?),
+        None => None,
+    };
+    Ok(CardUpdate {
         title: args.title.clone(),
         description: args
             .description
             .clone()
             .map(FieldUpdate::Set)
             .unwrap_or(FieldUpdate::NoChange),
-        priority: args.priority.as_ref().and_then(|p| parse_priority(p)),
-        status: args.status.as_ref().and_then(|s| parse_status(s)),
+        priority,
+        status,
         position: None,
         column_id: None,
         points: args
@@ -169,26 +186,32 @@ fn build_card_update(args: &CardUpdateArgs) -> CardUpdate {
         sprint_id: FieldUpdate::NoChange,
         assigned_prefix: FieldUpdate::NoChange,
         card_prefix: FieldUpdate::NoChange,
-    }
+    })
 }
 
-fn parse_priority(s: &str) -> Option<CardPriority> {
+fn parse_priority(s: &str) -> Result<CardPriority, String> {
     match s.to_lowercase().as_str() {
-        "low" => Some(CardPriority::Low),
-        "medium" => Some(CardPriority::Medium),
-        "high" => Some(CardPriority::High),
-        "critical" => Some(CardPriority::Critical),
-        _ => None,
+        "low" => Ok(CardPriority::Low),
+        "medium" => Ok(CardPriority::Medium),
+        "high" => Ok(CardPriority::High),
+        "critical" => Ok(CardPriority::Critical),
+        _ => Err(format!(
+            "Invalid priority '{}'. Valid values: low, medium, high, critical",
+            s
+        )),
     }
 }
 
-fn parse_status(s: &str) -> Option<CardStatus> {
+fn parse_status(s: &str) -> Result<CardStatus, String> {
     match s.to_lowercase().replace(['-', '_'], "").as_str() {
-        "todo" => Some(CardStatus::Todo),
-        "inprogress" => Some(CardStatus::InProgress),
-        "blocked" => Some(CardStatus::Blocked),
-        "done" => Some(CardStatus::Done),
-        _ => None,
+        "todo" => Ok(CardStatus::Todo),
+        "inprogress" => Ok(CardStatus::InProgress),
+        "blocked" => Ok(CardStatus::Blocked),
+        "done" => Ok(CardStatus::Done),
+        _ => Err(format!(
+            "Invalid status '{}'. Valid values: todo, in-progress, blocked, done",
+            s
+        )),
     }
 }
 
