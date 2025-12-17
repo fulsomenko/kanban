@@ -1,8 +1,8 @@
 {
   "version": 2,
   "metadata": {
-    "instance_id": "07e8eca0-da17-4dd5-906e-36815f5a4d7b",
-    "saved_at": "2025-12-05T23:23:00.318700Z"
+    "instance_id": "b654593c-9b03-4928-828f-ed90ba9349dc",
+    "saved_at": "2025-12-17T01:00:19.549405Z"
   },
   "data": {
     "archived_cards": [
@@ -33,7 +33,7 @@
     ],
     "boards": [
       {
-        "active_sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "active_sprint_id": null,
         "card_prefix": "KAN",
         "created_at": "2025-10-10T08:47:44.779097Z",
         "description": "Management of the **Kanban** project\n",
@@ -41,25 +41,26 @@
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 148
+          "KAN": 152
         },
         "sprint_counters": {
-          "KAN": 10
+          "KAN": 11
         },
         "sprint_duration_days": 7,
-        "sprint_name_used_count": 5,
+        "sprint_name_used_count": 6,
         "sprint_names": [
           "an-eventful-october",
           "an-experience-to-remember",
           "a-hallowed-week",
           "progression-is-progress",
-          "full-bowling"
+          "full-bowling",
+          "a-merry-christmas"
         ],
         "sprint_prefix": "KAN",
         "task_list_view": "ColumnView",
         "task_sort_field": "Priority",
         "task_sort_order": "Descending",
-        "updated_at": "2025-12-04T23:31:25.382139Z"
+        "updated_at": "2025-12-17T00:57:48.068855Z"
       }
     ],
     "cards": [
@@ -216,7 +217,7 @@
         "points": 5,
         "position": 44,
         "priority": "High",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448929Z",
@@ -235,17 +236,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264743Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:06.526722Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264743Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Card dependencies",
-        "updated_at": "2025-12-04T22:33:14.595343Z"
+        "updated_at": "2025-12-15T20:35:57.264744Z"
       },
       {
         "assigned_prefix": null,
@@ -372,7 +381,7 @@
         "points": 1,
         "position": 4,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-04T00:22:28.640552Z",
@@ -391,17 +400,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264686Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:08.233362Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264687Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Be able to scroll in the card description",
-        "updated_at": "2025-12-04T21:19:48.905172Z"
+        "updated_at": "2025-12-15T20:35:57.264687Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -414,22 +431,46 @@
         "due_date": null,
         "id": "d48f9085-57ff-42c5-9f42-3cbb3cafde93",
         "points": 5,
-        "position": 18,
+        "position": 51,
         "priority": "Critical",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264752Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245013Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": "2025-12-15T20:57:38.672030Z",
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264752Z",
+            "status": "Planning"
+          },
+          {
+            "ended_at": "2025-12-15T20:58:58.965814Z",
+            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+            "sprint_name": "full-bowling",
+            "sprint_number": 9,
+            "started_at": "2025-12-15T20:57:38.672034Z",
+            "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:58:58.965818Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Publish on nixpkgs",
-        "updated_at": "2025-12-04T21:19:18.914382Z"
+        "updated_at": "2025-12-15T20:58:58.965839Z"
       },
       {
         "assigned_prefix": null,
@@ -647,7 +688,7 @@
         "points": 3,
         "position": 24,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448943Z",
@@ -666,17 +707,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264721Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:09.863743Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264721Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Link to pull request",
-        "updated_at": "2025-12-04T22:34:06.057361Z"
+        "updated_at": "2025-12-15T20:35:57.264722Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -691,7 +740,7 @@
         "points": 2,
         "position": 0,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448931Z",
@@ -710,17 +759,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264733Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:11.439765Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264733Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Remove a card",
-        "updated_at": "2025-12-04T21:19:48.906161Z"
+        "updated_at": "2025-12-15T20:35:57.264734Z"
       },
       {
         "assigned_prefix": null,
@@ -875,7 +932,7 @@
         "points": 2,
         "position": 1,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448941Z",
@@ -894,17 +951,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264679Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:13.126179Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264681Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "When titles are too long. they don't fit the tasks list",
-        "updated_at": "2025-12-04T21:19:48.906073Z"
+        "updated_at": "2025-12-15T20:35:57.264685Z"
       },
       {
         "assigned_prefix": null,
@@ -947,7 +1012,7 @@
         "points": 4,
         "position": 2,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448927Z",
@@ -966,17 +1031,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264771Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:14.557247Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264771Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "When setting the priority, the card details are closed and the lists are shown",
-        "updated_at": "2025-12-04T21:19:48.907564Z"
+        "updated_at": "2025-12-15T20:35:57.264772Z"
       },
       {
         "assigned_prefix": null,
@@ -1217,7 +1290,7 @@
         "points": 5,
         "position": 7,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:15.760147Z",
@@ -1228,17 +1301,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264729Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:15.760153Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264729Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "audit history - keep a log of changes",
-        "updated_at": "2025-12-04T21:19:48.905898Z"
+        "updated_at": "2025-12-15T20:35:57.264730Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1253,20 +1334,28 @@
         "points": 1,
         "position": 9,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264750Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245014Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264750Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "hitting 2 should activate the highlighted board",
-        "updated_at": "2025-12-04T21:19:18.914198Z"
+        "updated_at": "2025-12-15T20:35:57.264751Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1281,7 +1370,7 @@
         "points": 2,
         "position": 11,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:17.501321Z",
@@ -1292,17 +1381,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264726Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:17.501325Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264726Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "branch name doesnt reflected the used version",
-        "updated_at": "2025-12-04T21:19:48.907435Z"
+        "updated_at": "2025-12-15T20:35:57.264726Z"
       },
       {
         "assigned_prefix": null,
@@ -1330,7 +1427,7 @@
         ],
         "status": "Todo",
         "title": "Tags for cards",
-        "updated_at": "2025-12-04T22:32:07.215922Z"
+        "updated_at": "2025-12-15T20:42:23.480058Z"
       },
       {
         "assigned_prefix": null,
@@ -1373,20 +1470,28 @@
         "points": 2,
         "position": 33,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264745Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245014Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264745Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add retrospective note on completed tasks",
-        "updated_at": "2025-12-04T21:19:18.914107Z"
+        "updated_at": "2025-12-15T20:35:57.264746Z"
       },
       {
         "assigned_prefix": null,
@@ -1504,7 +1609,7 @@
         "points": 2,
         "position": 22,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448934Z",
@@ -1523,17 +1628,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264706Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:18.759131Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264706Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Syntax highlighting for card description",
-        "updated_at": "2025-12-04T21:19:48.905984Z"
+        "updated_at": "2025-12-15T20:35:57.264707Z"
       },
       {
         "assigned_prefix": null,
@@ -1595,7 +1708,7 @@
         "points": 1,
         "position": 5,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:20.088757Z",
@@ -1606,17 +1719,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264775Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:20.088764Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264775Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "cards without priority should be order following low priority",
-        "updated_at": "2025-12-04T21:19:48.905559Z"
+        "updated_at": "2025-12-15T20:35:57.264776Z"
       },
       {
         "assigned_prefix": null,
@@ -2001,7 +2122,7 @@
         "points": 2,
         "position": 3,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448937Z",
@@ -2020,17 +2141,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264691Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:22.981690Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264692Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Create new card from card",
-        "updated_at": "2025-12-04T21:19:48.907661Z"
+        "updated_at": "2025-12-15T20:35:57.264693Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2145,20 +2274,28 @@
         "points": 3,
         "position": 8,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264767Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245015Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264767Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "extend test coverage",
-        "updated_at": "2025-12-04T21:19:18.914804Z"
+        "updated_at": "2025-12-15T20:35:57.264768Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2173,20 +2310,28 @@
         "points": 3,
         "position": 19,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264710Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245015Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264710Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Assignee for cards",
-        "updated_at": "2025-12-04T21:19:18.914634Z"
+        "updated_at": "2025-12-15T20:35:57.264711Z"
       },
       {
         "assigned_prefix": null,
@@ -2248,7 +2393,7 @@
         "points": 4,
         "position": 10,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898897Z",
@@ -2267,17 +2412,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264749Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:26.665309Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264749Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "editing task settings by json",
-        "updated_at": "2025-12-04T21:19:48.907190Z"
+        "updated_at": "2025-12-15T20:35:57.264750Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2286,26 +2439,34 @@
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
         "completed_at": null,
         "created_at": "2025-10-22T19:49:01.680522Z",
-        "description": "it makes sense right? an activated sprint can only be completed after the duration has passed\n",
+        "description": "it makes sense right? an activated sprint can only be completed after the duration has passed\n\nnot sure. what if the tasks are all over. then we want it to be completed.\n\nSo if 0 tasks left or duration is over?\n",
         "due_date": null,
         "id": "9d7ee9b3-205a-4fab-997d-5b944805c2c9",
         "points": 2,
         "position": 12,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264761Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245015Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264761Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "a sprint can only be completed after the duration is over",
-        "updated_at": "2025-12-04T21:19:18.913825Z"
+        "updated_at": "2025-12-16T02:02:39.964489Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2320,7 +2481,7 @@
         "points": 1,
         "position": 13,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898919Z",
@@ -2339,17 +2500,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264694Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327395Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264694Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "bring the task columns, completed non completed into sprint details",
-        "updated_at": "2025-12-04T21:19:48.906344Z"
+        "updated_at": "2025-12-15T20:35:57.264695Z"
       },
       {
         "assigned_prefix": null,
@@ -2411,20 +2580,28 @@
         "points": 3,
         "position": 15,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264757Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245015Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264757Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "automatic sprint completion",
-        "updated_at": "2025-12-04T21:19:18.913468Z"
+        "updated_at": "2025-12-15T20:35:57.264758Z"
       },
       {
         "assigned_prefix": null,
@@ -2495,7 +2672,7 @@
         "points": 3,
         "position": 17,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898916Z",
@@ -2514,17 +2691,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264759Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327397Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264759Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "in card creation show a list of cards fuzzily matching the proposed title",
-        "updated_at": "2025-12-04T21:19:48.906938Z"
+        "updated_at": "2025-12-15T20:35:57.264760Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2539,7 +2724,7 @@
         "points": 2,
         "position": 20,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327389Z",
@@ -2550,30 +2735,38 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264765Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327390Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264765Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "highlight cards that have moved from the first column to the second but are not in the last and are missing points or priority",
-        "updated_at": "2025-12-04T21:19:48.907097Z"
+        "updated_at": "2025-12-15T20:35:57.264766Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 93,
         "card_prefix": null,
-        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-16T01:01:24.347116Z",
         "created_at": "2025-10-24T19:54:30.818495Z",
         "description": "disrupting the context of the viewer\n\nwhen opening a dialog inside say the sprint details view\n\nThe ui switches to the main card list, upsetting the viewers (user) context and mind model\n\nmake it so that opening a dialog keeps the background ui where it is so that context remains the same\n\n---\n\nsomething else is wrong with the context.\n\nonce the context has been disrupted like this the user will be sent back to the undefined context when taking an action.\n\nthen having to `escape` or whatever out of that list\n\nexample\n\nopen sprint details on a completed sprint\n\nnavigate two cards down\n\n`escape` that card\n\nbe returned to the main card list / kanban view.\n\nwhen one should have been returned to the sprint details\n\n---\n\nOr when after opening the external editor on the card description and then saving and exit. We are returned to the card list and not the card details \n",
         "due_date": null,
         "id": "6a994d78-3e0f-4158-bfe8-f3c82e402a65",
         "points": 4,
-        "position": 1,
+        "position": 78,
         "priority": "High",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
@@ -2602,9 +2795,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
-        "title": "dialogs always return to main when opened ",
-        "updated_at": "2025-12-05T23:23:00.298432Z"
+        "status": "Done",
+        "title": "dialogs always return to main when opened",
+        "updated_at": "2025-12-16T01:01:24.347119Z"
       },
       {
         "assigned_prefix": null,
@@ -2675,7 +2868,7 @@
         "points": 4,
         "position": 29,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327391Z",
@@ -2686,17 +2879,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264739Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327391Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264739Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "unify the sprint details view",
-        "updated_at": "2025-12-04T21:19:48.906694Z"
+        "updated_at": "2025-12-15T20:35:57.264740Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2711,7 +2912,7 @@
         "points": 3,
         "position": 30,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327392Z",
@@ -2722,17 +2923,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264727Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327392Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264728Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "set a due date for a card",
-        "updated_at": "2025-12-04T21:19:48.905730Z"
+        "updated_at": "2025-12-15T20:35:57.264728Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2747,7 +2956,7 @@
         "points": 1,
         "position": 31,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327385Z",
@@ -2758,17 +2967,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264753Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327385Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264753Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "assigning cards to sprint doesnt remove it from unsprinted cards list",
-        "updated_at": "2025-12-04T21:19:48.906599Z"
+        "updated_at": "2025-12-15T20:35:57.264754Z"
       },
       {
         "assigned_prefix": null,
@@ -2830,7 +3047,7 @@
         "points": 2,
         "position": 37,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327394Z",
@@ -2841,17 +3058,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264755Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327394Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264755Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "default sprint and branch prefixes",
-        "updated_at": "2025-12-04T21:19:48.907019Z"
+        "updated_at": "2025-12-15T20:35:57.264756Z"
       },
       {
         "assigned_prefix": null,
@@ -2904,7 +3129,7 @@
         "points": 2,
         "position": 23,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327386Z",
@@ -2915,17 +3140,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264689Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327387Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264689Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "moving and item between columns should also move the selector along with the card",
-        "updated_at": "2025-12-04T21:19:48.906777Z"
+        "updated_at": "2025-12-15T20:35:57.264690Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2940,7 +3173,7 @@
         "points": 2,
         "position": 26,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:14.917359Z",
@@ -2959,17 +3192,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264741Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327380Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264742Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "when changing place of columns",
-        "updated_at": "2025-12-04T21:19:48.906251Z"
+        "updated_at": "2025-12-15T20:35:57.264743Z"
       },
       {
         "assigned_prefix": null,
@@ -3103,16 +3344,16 @@
         "assigned_prefix": "KAN",
         "card_number": 112,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-16T02:03:01.106117Z",
         "created_at": "2025-11-01T09:35:35.157294Z",
         "description": "`T` binding should bring up the filtering dialogue where we can select which filterings are enabled for a sprint\n\nIt is a multi select dialogue\n\nyou can choose whatever filters you want\n\nto be later used for tag feature\n",
         "due_date": null,
         "id": "92ee0d48-48b0-480d-8a2d-040d1bf52657",
         "points": 2,
-        "position": 38,
+        "position": 82,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327383Z",
@@ -3123,17 +3364,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264773Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327384Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264773Z",
+            "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "`T` should bring up filtering dialogue",
-        "updated_at": "2025-12-04T21:19:48.905281Z"
+        "updated_at": "2025-12-16T02:03:01.106117Z"
       },
       {
         "assigned_prefix": null,
@@ -3220,7 +3469,7 @@
         "points": 1,
         "position": 42,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327398Z",
@@ -3231,17 +3480,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264747Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:34.327398Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264747Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "it is not apparent enough that we are entered into a board",
-        "updated_at": "2025-12-04T21:19:48.906431Z"
+        "updated_at": "2025-12-15T20:35:57.264748Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3256,7 +3513,7 @@
         "points": 1,
         "position": 50,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:01.506770Z",
@@ -3267,17 +3524,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264717Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:41:01.506776Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264717Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "filter out completed sprint from sprint assign",
-        "updated_at": "2025-12-04T21:19:48.906854Z"
+        "updated_at": "2025-12-15T20:35:57.264718Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3339,20 +3604,28 @@
         "points": null,
         "position": 27,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264763Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245016Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264763Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "ui module refactor",
-        "updated_at": "2025-12-04T21:19:18.913641Z"
+        "updated_at": "2025-12-15T20:35:57.264764Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3423,20 +3696,28 @@
         "points": null,
         "position": 28,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264701Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245016Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264701Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "dont reset search on scroll",
-        "updated_at": "2025-12-04T21:19:18.914018Z"
+        "updated_at": "2025-12-15T20:35:57.264702Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3451,20 +3732,28 @@
         "points": null,
         "position": 32,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264719Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:46:16.108008Z",
             "status": "Active"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264720Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "escape bind to clear search, enter to apply",
-        "updated_at": "2025-12-04T21:19:48.905046Z"
+        "updated_at": "2025-12-15T20:35:57.264720Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3535,20 +3824,28 @@
         "points": null,
         "position": 40,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264769Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245016Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264769Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "when filtering by sprint x, dont include unassigned cards.",
-        "updated_at": "2025-12-04T21:19:18.915008Z"
+        "updated_at": "2025-12-15T20:35:57.264770Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3563,20 +3860,28 @@
         "points": null,
         "position": 43,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264735Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245017Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264735Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "add filter for completed cards",
-        "updated_at": "2025-12-04T21:19:18.913922Z"
+        "updated_at": "2025-12-15T20:35:57.264736Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3585,26 +3890,34 @@
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
         "completed_at": null,
         "created_at": "2025-11-05T12:33:50.536195Z",
-        "description": "we need a way to handle schema revisions.\n\nas we have recently noticed.\n\nDuring the change from board level sprint prefix settings to the fork with sprint fix and counters per prefix etc..\n\nwe broke the application during import of the old schema\n\nwe should introduce versioning of the schema? and do migrations from version x -> y\n",
+        "description": "we need a way to handle schema revisions.\n\nas we have recently noticed.\n\nDuring the change from board level sprint prefix settings to the fork with sprint fix and counters per prefix etc..\n\nwe broke the application during import of the old schema\n\nwe should introduce versioning of the schema? and do migrations from version x -> y\n\n2025-12-16 03:03:18\n---\n\nsomewhere along the line we implemented v2 of the json schema\n\nThere is a bug with starting the app and providing a file path to a non existant file\n\nI think we take on this next\n",
         "due_date": null,
         "id": "7a9bfecc-6ed4-41d8-81ba-8a2dbb51e345",
         "points": null,
         "position": 48,
         "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264737Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245017Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264737Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "migrations one",
-        "updated_at": "2025-12-04T21:19:18.914298Z"
+        "updated_at": "2025-12-16T02:04:14.709503Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3619,20 +3932,28 @@
         "points": 1,
         "position": 45,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264699Z",
             "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
             "sprint_name": "progression-is-progress",
             "sprint_number": 8,
             "started_at": "2025-11-17T22:46:16.108011Z",
             "status": "Active"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264699Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "include commit hash in -V",
-        "updated_at": "2025-12-04T21:19:48.905816Z"
+        "updated_at": "2025-12-15T20:35:57.264700Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3722,20 +4043,28 @@
         "points": 4,
         "position": 46,
         "priority": "High",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264708Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245017Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264708Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "undo action",
-        "updated_at": "2025-12-04T21:19:18.913735Z"
+        "updated_at": "2025-12-15T20:35:57.264709Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3750,20 +4079,28 @@
         "points": 1,
         "position": 49,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264731Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245017Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264731Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "update package README.md's",
-        "updated_at": "2025-12-04T21:19:18.914723Z"
+        "updated_at": "2025-12-15T20:35:57.264732Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3775,23 +4112,31 @@
         "description": "it would be cool with an indicator of what page I am on out of how many \n\n(1/3)\n\n(45/99)\n",
         "due_date": null,
         "id": "777f9c87-af5c-408d-b796-cedca10475c7",
-        "points": null,
+        "points": 1,
         "position": 49,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264712Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245017Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264713Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "page indicator",
-        "updated_at": "2025-12-04T21:19:18.914552Z"
+        "updated_at": "2025-12-16T02:00:32.249776Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3803,23 +4148,31 @@
         "description": "Creating a board triggers 4 commands:\n\n  - Create board\n  - Create column \"TODO\"\n  - Create column \"Doing\"\n  - Create column \"Complete\"\n\n  Each command queues a snapshot → 4 saves. This could be optimized to batch them into 1 save.\n",
         "due_date": null,
         "id": "74fa27ca-332c-4f31-8990-6f0ece3d32da",
-        "points": null,
+        "points": 2,
         "position": 51,
-        "priority": "Medium",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "priority": "Low",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264723Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:30:07.245018Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264724Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Saving improvements",
-        "updated_at": "2025-12-04T21:18:24.988900Z"
+        "updated_at": "2025-12-16T02:00:54.211081Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3834,89 +4187,113 @@
         "points": 1,
         "position": 52,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264696Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:59:06.363678Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264696Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "if no sprints, cant scroll to column settings",
-        "updated_at": "2025-12-04T21:30:39.000940Z"
+        "updated_at": "2025-12-15T20:35:57.264697Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 140,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-16T02:00:04.675191Z",
         "created_at": "2025-12-04T21:30:48.049528Z",
         "description": null,
         "due_date": null,
         "id": "828d42c0-015d-46d7-b23b-c04206076b5f",
         "points": 2,
-        "position": 53,
+        "position": 81,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264715Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T21:59:06.363679Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264715Z",
+            "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "filter out completed sprints from assign list",
-        "updated_at": "2025-12-04T21:31:08.642323Z"
+        "updated_at": "2025-12-16T02:00:04.675192Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 141,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-16T01:48:43.479945Z",
         "created_at": "2025-12-04T22:01:12.983879Z",
         "description": null,
         "due_date": null,
         "id": "769d8dea-2465-4496-a74c-5204aa60873c",
         "points": 1,
-        "position": 54,
+        "position": 80,
         "priority": "Low",
-        "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2025-12-15T20:35:57.264703Z",
             "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
             "sprint_name": "full-bowling",
             "sprint_number": 9,
             "started_at": "2025-12-04T22:03:25.551805Z",
             "status": "Active"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264704Z",
+            "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "scrolling up from column options lands the cursor on the first sprint in the list",
-        "updated_at": "2025-12-04T22:39:06.281363Z"
+        "updated_at": "2025-12-16T01:48:43.479947Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 142,
         "card_prefix": null,
-        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-16T01:32:54.009370Z",
         "created_at": "2025-12-04T22:02:17.267772Z",
-        "description": "When in the card details, editing fields. Like using P or external editor sends the user back to the card list after save\n\nThis also affects other instances of the application\ntest\n",
+        "description": "When in the card details, editing fields. Like using P or external editor sends the user back to the card list after save\n\nThis also affects other instances of the application\n",
         "due_date": null,
         "id": "2ecebef1-0c46-426b-8ab8-e8d228c9ce36",
-        "points": 4,
-        "position": 0,
+        "points": 2,
+        "position": 79,
         "priority": "High",
         "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
         "sprint_logs": [
@@ -3929,9 +4306,9 @@
             "status": "Active"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "updating fields jumps the user back to board",
-        "updated_at": "2025-12-04T22:40:11.113226Z"
+        "updated_at": "2025-12-16T01:32:54.009371Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3956,20 +4333,20 @@
         "assigned_prefix": "KAN",
         "card_number": 144,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-05T23:20:48.705557Z",
         "created_at": "2025-12-04T22:37:41.840393Z",
         "description": "When scrolling from the second to last element in a kanban view column, we switch to the next column prematurely\n",
         "due_date": null,
         "id": "84f9a824-784c-4d66-8f04-002bd12aea11",
         "points": null,
-        "position": 51,
+        "position": 77,
         "priority": "Medium",
         "sprint_id": null,
         "sprint_logs": [],
-        "status": "Todo",
+        "status": "Done",
         "title": "Kanban view - switches column on the second to last item",
-        "updated_at": "2025-12-04T22:38:16.057265Z"
+        "updated_at": "2025-12-05T23:20:48.705557Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4013,20 +4390,77 @@
         "assigned_prefix": "KAN",
         "card_number": 147,
         "card_prefix": null,
-        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-05T23:20:36.892207Z",
         "created_at": "2025-12-04T23:31:25.382132Z",
         "description": null,
         "due_date": null,
         "id": "55adb5ff-9ddf-4ea7-82ee-d93af5d1f552",
-        "points": 2,
-        "position": 2,
+        "points": 1,
+        "position": 76,
         "priority": "High",
         "sprint_id": null,
         "sprint_logs": [],
-        "status": "Todo",
+        "status": "Done",
         "title": "multiselecting and assigning cards causes write race condition",
-        "updated_at": "2025-12-05T23:21:19.593796Z"
+        "updated_at": "2025-12-05T23:20:36.892208Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 148,
+        "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2025-12-06T10:58:26.968309Z",
+        "description": "Something is wrong using the app with \n\n`kanban filepath.json`\n\nthe thing just crashes\n",
+        "due_date": null,
+        "id": "d4904952-c37a-4796-adb2-f744c8959930",
+        "points": 1,
+        "position": 1,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "kanban filepath.json crashes",
+        "updated_at": "2025-12-16T02:08:07.340060Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 150,
+        "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2025-12-16T02:04:22.114571Z",
+        "description": "There is a bug with starting the app and providing a file path to a non existant file\n",
+        "due_date": null,
+        "id": "da91abfd-e6bf-4a62-968c-24368f8b78bc",
+        "points": 2,
+        "position": 0,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "file path to a non existant file crashes the app",
+        "updated_at": "2025-12-16T02:07:12.487188Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 151,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-17T00:57:48.068843Z",
+        "description": "2025-12-17 01:58:29\n---\n\nThe time has come.\n\nIt is time to initiate the kanban cli for command line kanbanning\n\nOur first order of business is to look for abstraction oppurtunity and general cleanup of the codebase so that we can reuse functions in both the tui and the cli. And eventual api or whatever consumer we wish.\n\n---\n\nThe goal of this feature is to have a cli matching the abilities of the tui\n",
+        "due_date": null,
+        "id": "89f6cb27-161b-496a-8736-e7467e8c48a9",
+        "points": null,
+        "position": 49,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "kanban cli",
+        "updated_at": "2025-12-17T01:00:19.535382Z"
       }
     ],
     "columns": [
@@ -4121,8 +4555,21 @@
         "prefix": null,
         "sprint_number": 9,
         "start_date": "2025-12-04T22:00:26.140257Z",
-        "status": "Active",
-        "updated_at": "2025-12-04T22:00:26.140260Z"
+        "status": "Completed",
+        "updated_at": "2025-12-15T20:34:09.695198Z"
+      },
+      {
+        "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
+        "card_prefix": null,
+        "created_at": "2025-12-15T20:35:08.638628Z",
+        "end_date": null,
+        "id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "name_index": 5,
+        "prefix": "KAN",
+        "sprint_number": 10,
+        "start_date": null,
+        "status": "Planning",
+        "updated_at": "2025-12-15T20:35:08.638628Z"
       }
     ]
   }
