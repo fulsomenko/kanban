@@ -41,7 +41,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # CLI framework
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 
 # Logging
 tracing = "0.1"

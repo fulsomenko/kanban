@@ -737,6 +737,8 @@ dependencies = [
  "kanban-domain",
  "kanban-persistence",
  "kanban-tui",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -1,0 +1,202 @@
+use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
+use crate::context::CliContext;
+use crate::output;
+use kanban_domain::{CardFilter, CardPriority, CardStatus, CardUpdate, FieldUpdate, KanbanOperations};
+
+pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {
+    match action {
+        CardAction::Create(args) => {
+            let title = args.title.clone();
+            let mut card = ctx.create_card(args.board_id, args.column_id, title)?;
+
+            if args.description.is_some()
+                || args.priority.is_some()
+                || args.points.is_some()
+                || args.due_date.is_some()
+            {
+                let updates = build_card_update_from_create(&args);
+                card = ctx.update_card(card.id, updates)?;
+            }
+
+            ctx.save().await?;
+            output::output_success(&card);
+        }
+        CardAction::List(args) => {
+            if args.archived {
+                let archived = ctx.list_archived_cards()?;
+                output::output_list(archived);
+            } else {
+                let filter = build_filter(&args);
+                let cards = ctx.list_cards(filter)?;
+                output::output_list(cards);
+            }
+        }
+        CardAction::Get { id } => match ctx.get_card(id)? {
+            Some(card) => output::output_success(&card),
+            None => output::output_error(&format!("Card not found: {}", id)),
+        },
+        CardAction::Update(args) => {
+            let updates = build_card_update(&args);
+            let card = ctx.update_card(args.id, updates)?;
+            ctx.save().await?;
+            output::output_success(&card);
+        }
+        CardAction::Move {
+            id,
+            column_id,
+            position,
+        } => {
+            let card = ctx.move_card(id, column_id, position)?;
+            ctx.save().await?;
+            output::output_success(&card);
+        }
+        CardAction::Archive { id } => {
+            ctx.archive_card(id)?;
+            ctx.save().await?;
+            output::output_success(serde_json::json!({"archived": id.to_string()}));
+        }
+        CardAction::Restore { id, column_id } => {
+            let card = ctx.restore_card(id, column_id)?;
+            ctx.save().await?;
+            output::output_success(&card);
+        }
+        CardAction::Delete { id } => {
+            ctx.delete_card(id)?;
+            ctx.save().await?;
+            output::output_success(serde_json::json!({"deleted": id.to_string()}));
+        }
+        CardAction::AssignSprint { id, sprint_id } => {
+            let card = ctx.assign_card_to_sprint(id, sprint_id)?;
+            ctx.save().await?;
+            output::output_success(&card);
+        }
+        CardAction::UnassignSprint { id } => {
+            let card = ctx.unassign_card_from_sprint(id)?;
+            ctx.save().await?;
+            output::output_success(&card);
+        }
+        CardAction::BranchName { id } => {
+            let branch = ctx.get_card_branch_name(id)?;
+            output::output_success(serde_json::json!({"branch_name": branch}));
+        }
+        CardAction::GitCheckout { id } => {
+            let cmd = ctx.get_card_git_checkout(id)?;
+            output::output_success(serde_json::json!({"command": cmd}));
+        }
+        CardAction::BulkArchive { ids } => {
+            let count = ctx.bulk_archive_cards(ids)?;
+            ctx.save().await?;
+            output::output_success(serde_json::json!({"archived_count": count}));
+        }
+        CardAction::BulkMove { ids, column_id } => {
+            let count = ctx.bulk_move_cards(ids, column_id)?;
+            ctx.save().await?;
+            output::output_success(serde_json::json!({"moved_count": count}));
+        }
+        CardAction::BulkAssignSprint { ids, sprint_id } => {
+            let count = ctx.bulk_assign_sprint(ids, sprint_id)?;
+            ctx.save().await?;
+            output::output_success(serde_json::json!({"assigned_count": count}));
+        }
+    }
+    Ok(())
+}
+
+fn build_filter(args: &CardListArgs) -> CardFilter {
+    CardFilter {
+        board_id: args.board_id,
+        column_id: args.column_id,
+        sprint_id: args.sprint_id,
+        status: args.status.as_ref().and_then(|s| parse_status(s)),
+    }
+}
+
+fn build_card_update_from_create(args: &CardCreateArgs) -> CardUpdate {
+    CardUpdate {
+        title: None,
+        description: args
+            .description
+            .clone()
+            .map(FieldUpdate::Set)
+            .unwrap_or(FieldUpdate::NoChange),
+        priority: args.priority.as_ref().and_then(|p| parse_priority(p)),
+        status: None,
+        position: None,
+        column_id: None,
+        points: args
+            .points
+            .map(FieldUpdate::Set)
+            .unwrap_or(FieldUpdate::NoChange),
+        due_date: args
+            .due_date
+            .as_ref()
+            .and_then(|d| parse_datetime(d))
+            .map(FieldUpdate::Set)
+            .unwrap_or(FieldUpdate::NoChange),
+        sprint_id: FieldUpdate::NoChange,
+        assigned_prefix: FieldUpdate::NoChange,
+        card_prefix: FieldUpdate::NoChange,
+    }
+}
+
+fn build_card_update(args: &CardUpdateArgs) -> CardUpdate {
+    CardUpdate {
+        title: args.title.clone(),
+        description: args
+            .description
+            .clone()
+            .map(FieldUpdate::Set)
+            .unwrap_or(FieldUpdate::NoChange),
+        priority: args.priority.as_ref().and_then(|p| parse_priority(p)),
+        status: args.status.as_ref().and_then(|s| parse_status(s)),
+        position: None,
+        column_id: None,
+        points: args
+            .points
+            .map(FieldUpdate::Set)
+            .unwrap_or(FieldUpdate::NoChange),
+        due_date: if args.clear_due_date {
+            FieldUpdate::Clear
+        } else {
+            args.due_date
+                .as_ref()
+                .and_then(|d| parse_datetime(d))
+                .map(FieldUpdate::Set)
+                .unwrap_or(FieldUpdate::NoChange)
+        },
+        sprint_id: FieldUpdate::NoChange,
+        assigned_prefix: FieldUpdate::NoChange,
+        card_prefix: FieldUpdate::NoChange,
+    }
+}
+
+fn parse_priority(s: &str) -> Option<CardPriority> {
+    match s.to_lowercase().as_str() {
+        "low" => Some(CardPriority::Low),
+        "medium" => Some(CardPriority::Medium),
+        "high" => Some(CardPriority::High),
+        "critical" => Some(CardPriority::Critical),
+        _ => None,
+    }
+}
+
+fn parse_status(s: &str) -> Option<CardStatus> {
+    match s.to_lowercase().replace(['-', '_'], "").as_str() {
+        "todo" => Some(CardStatus::Todo),
+        "inprogress" => Some(CardStatus::InProgress),
+        "blocked" => Some(CardStatus::Blocked),
+        "done" => Some(CardStatus::Done),
+        _ => None,
+    }
+}
+
+fn parse_datetime(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .or_else(|| {
+            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                .ok()
+                .map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc())
+        })
+}
