@@ -18,10 +18,40 @@ pub struct JsonFileStore {
 
 /// Wrapper structure for the JSON file format v2
 #[derive(Debug, Serialize, Deserialize)]
-struct JsonEnvelope {
+pub struct JsonEnvelope {
     version: u32,
     metadata: PersistenceMetadata,
     data: serde_json::Value,
+}
+
+impl JsonEnvelope {
+    /// Create a new V2 format envelope with the given data
+    pub fn new(data: serde_json::Value) -> Self {
+        Self {
+            version: 2,
+            metadata: PersistenceMetadata {
+                instance_id: Uuid::new_v4(),
+                saved_at: chrono::Utc::now(),
+            },
+            data,
+        }
+    }
+
+    /// Create an empty V2 format envelope with default structure
+    pub fn empty() -> Self {
+        Self::new(serde_json::json!({
+            "boards": [],
+            "columns": [],
+            "cards": [],
+            "archived_cards": [],
+            "sprints": []
+        }))
+    }
+
+    /// Serialize to pretty-printed JSON string
+    pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
 }
 
 impl JsonFileStore {
@@ -189,7 +219,7 @@ mod tests {
         let data = json!({ "boards": [], "columns": [] });
         let snapshot = StoreSnapshot {
             data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(2, store.instance_id()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
         };
 
         // Save
@@ -215,7 +245,7 @@ mod tests {
         let data = json!({});
         let snapshot = StoreSnapshot {
             data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(2, store.instance_id()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
         };
         store.save(snapshot).await.unwrap();
 

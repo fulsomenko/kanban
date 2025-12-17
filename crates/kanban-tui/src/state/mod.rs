@@ -243,7 +243,7 @@ impl StateManager {
             let data = snapshot.to_json_bytes()?;
             let persistence_snapshot = StoreSnapshot {
                 data,
-                metadata: PersistenceMetadata::new(2, self.instance_id),
+                metadata: PersistenceMetadata::new(self.instance_id),
             };
 
             store.save(persistence_snapshot).await?;

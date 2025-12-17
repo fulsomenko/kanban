@@ -735,6 +735,7 @@ dependencies = [
  "clap",
  "kanban-core",
  "kanban-domain",
+ "kanban-persistence",
  "kanban-tui",
  "tokio",
  "tracing",

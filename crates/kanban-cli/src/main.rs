@@ -56,26 +56,7 @@ async fn main() -> anyhow::Result<()> {
         None => {
             if let Some(ref file_path) = cli.file {
                 if !std::path::Path::new(file_path).exists() {
-                    let instance_id = uuid::Uuid::new_v4();
-                    let saved_at = chrono::Utc::now();
-                    let empty_state = format!(
-                        r#"{{
-  "version": 2,
-  "metadata": {{
-    "instance_id": "{}",
-    "saved_at": "{}"
-  }},
-  "data": {{
-    "boards": [],
-    "columns": [],
-    "cards": [],
-    "archived_cards": [],
-    "sprints": []
-  }}
-}}"#,
-                        instance_id,
-                        saved_at.to_rfc3339()
-                    );
+                    let empty_state = kanban_persistence::JsonEnvelope::empty().to_json_string()?;
                     std::fs::write(file_path, empty_state)?;
                     tracing::info!("Created new board file: {}", file_path);
                 }

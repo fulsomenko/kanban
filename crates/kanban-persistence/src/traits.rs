@@ -15,7 +15,7 @@ pub struct PersistenceMetadata {
 }
 
 impl PersistenceMetadata {
-    pub fn new(_format_version: u32, instance_id: Uuid) -> Self {
+    pub fn new(instance_id: Uuid) -> Self {
         Self {
             instance_id,
             saved_at: Utc::now(),

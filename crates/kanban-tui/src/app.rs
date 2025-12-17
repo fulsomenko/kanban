@@ -1499,7 +1499,7 @@ impl App {
 
                         let persistence_snapshot = StoreSnapshot {
                             data,
-                            metadata: PersistenceMetadata::new(2, instance_id),
+                            metadata: PersistenceMetadata::new(instance_id),
                         };
 
                         match store.save(persistence_snapshot).await {

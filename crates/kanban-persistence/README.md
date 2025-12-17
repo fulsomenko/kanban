@@ -52,7 +52,7 @@ let instance_id = store.instance_id();
 // Save data
 let snapshot = StoreSnapshot {
     data: serde_json::to_vec(&data)?,
-    metadata: PersistenceMetadata::new(2, instance_id),
+    metadata: PersistenceMetadata::new(instance_id),
 };
 store.save(snapshot).await?;
 
