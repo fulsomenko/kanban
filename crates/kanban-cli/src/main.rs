@@ -73,7 +73,8 @@ async fn main() -> anyhow::Result<()> {
     "sprints": []
   }}
 }}"#,
-                        instance_id, saved_at.to_rfc3339()
+                        instance_id,
+                        saved_at.to_rfc3339()
                     );
                     std::fs::write(file_path, empty_state)?;
                     tracing::info!("Created new board file: {}", file_path);
