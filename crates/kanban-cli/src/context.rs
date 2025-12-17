@@ -366,7 +366,27 @@ impl KanbanOperations for CliContext {
             .iter()
             .find(|ac| ac.card.id == id)
             .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Archived card {}", id)))?;
-        let target_column = column_id.unwrap_or(archived.original_column_id);
+
+        let target_column = if let Some(col_id) = column_id {
+            if !self.columns.iter().any(|c| c.id == col_id) {
+                return Err(kanban_core::KanbanError::NotFound(format!(
+                    "Column {}",
+                    col_id
+                )));
+            }
+            col_id
+        } else if self
+            .columns
+            .iter()
+            .any(|c| c.id == archived.original_column_id)
+        {
+            archived.original_column_id
+        } else {
+            return Err(kanban_core::KanbanError::NotFound(
+                "Original column no longer exists. Specify --column-id to restore to a different column".to_string(),
+            ));
+        };
+
         let position = archived.original_position;
         let cmd = RestoreCard {
             card_id: id,
