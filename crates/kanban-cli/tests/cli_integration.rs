@@ -168,13 +168,7 @@ mod board_tests {
         let board_id = extract_id(&create_json);
 
         let output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "board",
-                "get",
-                "--id",
-                &board_id,
-            ])
+            .args([file.to_str().unwrap(), "board", "get", "--id", &board_id])
             .assert()
             .success()
             .get_output()
@@ -252,13 +246,7 @@ mod board_tests {
         let board_id = extract_id(&create_json);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "board",
-                "delete",
-                "--id",
-                &board_id,
-            ])
+            .args([file.to_str().unwrap(), "board", "delete", "--id", &board_id])
             .assert()
             .success()
             .stdout(predicate::str::contains("\"deleted\""));
@@ -780,24 +768,13 @@ mod card_tests {
         let card_id = extract_id(&create_json);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "card",
-                "archive",
-                "--id",
-                &card_id,
-            ])
+            .args([file.to_str().unwrap(), "card", "archive", "--id", &card_id])
             .assert()
             .success()
             .stdout(predicate::str::contains("\"archived\""));
 
         let archived_output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "card",
-                "list",
-                "--archived",
-            ])
+            .args([file.to_str().unwrap(), "card", "list", "--archived"])
             .assert()
             .success()
             .get_output()
@@ -808,13 +785,7 @@ mod card_tests {
         assert_eq!(archived_json["data"]["count"], 1);
 
         let restore_output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "card",
-                "restore",
-                "--id",
-                &card_id,
-            ])
+            .args([file.to_str().unwrap(), "card", "restore", "--id", &card_id])
             .assert()
             .success()
             .get_output()
@@ -1605,12 +1576,7 @@ mod export_import_tests {
         let board_id = extract_id(&board_json);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "export",
-                "--board-id",
-                &board_id,
-            ])
+            .args([file.to_str().unwrap(), "export", "--board-id", &board_id])
             .assert()
             .success()
             .stdout(predicate::str::contains("\"boards\""))
@@ -1688,13 +1654,7 @@ mod error_tests {
         let file = dir.path().join("test.json");
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "board",
-                "get",
-                "--id",
-                "not-a-uuid",
-            ])
+            .args([file.to_str().unwrap(), "board", "get", "--id", "not-a-uuid"])
             .assert()
             .failure();
     }

@@ -46,12 +46,7 @@ async fn main() -> anyhow::Result<()> {
             app.run(save_rx).await?;
         }
         Some(Commands::Completions { shell }) => {
-            clap_complete::generate(
-                shell,
-                &mut Cli::command(),
-                "kanban",
-                &mut std::io::stdout(),
-            );
+            clap_complete::generate(shell, &mut Cli::command(), "kanban", &mut std::io::stdout());
         }
         Some(cmd) => {
             let file_path = cli.file.ok_or_else(|| {

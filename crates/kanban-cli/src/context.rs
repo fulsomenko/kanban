@@ -331,7 +331,9 @@ impl KanbanOperations for CliContext {
             .boards
             .iter()
             .find(|b| b.id == sprint.board_id)
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Board {}", sprint.board_id)))?;
+            .ok_or_else(|| {
+                kanban_core::KanbanError::NotFound(format!("Board {}", sprint.board_id))
+            })?;
         let sprint_name = sprint.get_name(board).map(|s| s.to_string());
         let cmd = AssignCardToSprint {
             card_id,
@@ -361,12 +363,16 @@ impl KanbanOperations for CliContext {
             .columns
             .iter()
             .find(|c| c.id == card.column_id)
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Column {}", card.column_id)))?;
+            .ok_or_else(|| {
+                kanban_core::KanbanError::NotFound(format!("Column {}", card.column_id))
+            })?;
         let board = self
             .boards
             .iter()
             .find(|b| b.id == column.board_id)
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Board {}", column.board_id)))?;
+            .ok_or_else(|| {
+                kanban_core::KanbanError::NotFound(format!("Board {}", column.board_id))
+            })?;
         Ok(card.branch_name(board, &self.sprints, "task"))
     }
 
@@ -378,12 +384,16 @@ impl KanbanOperations for CliContext {
             .columns
             .iter()
             .find(|c| c.id == card.column_id)
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Column {}", card.column_id)))?;
+            .ok_or_else(|| {
+                kanban_core::KanbanError::NotFound(format!("Column {}", card.column_id))
+            })?;
         let board = self
             .boards
             .iter()
             .find(|b| b.id == column.board_id)
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Board {}", column.board_id)))?;
+            .ok_or_else(|| {
+                kanban_core::KanbanError::NotFound(format!("Board {}", column.board_id))
+            })?;
         Ok(card.git_checkout_command(board, &self.sprints, "task"))
     }
 
@@ -430,9 +440,7 @@ impl KanbanOperations for CliContext {
                 .boards
                 .iter_mut()
                 .find(|b| b.id == board_id)
-                .ok_or_else(|| {
-                    kanban_core::KanbanError::NotFound(format!("Board {}", board_id))
-                })?;
+                .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Board {}", board_id)))?;
 
             let effective_prefix = prefix
                 .or_else(|| board.sprint_prefix.clone())
