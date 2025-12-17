@@ -38,21 +38,13 @@ pub trait KanbanOperations {
     fn reorder_column(&mut self, id: Uuid, new_position: i32) -> KanbanResult<Column>;
 
     // Card operations
-    fn create_card(
-        &mut self,
-        board_id: Uuid,
-        column_id: Uuid,
-        title: String,
-    ) -> KanbanResult<Card>;
+    fn create_card(&mut self, board_id: Uuid, column_id: Uuid, title: String)
+        -> KanbanResult<Card>;
     fn list_cards(&self, filter: CardFilter) -> KanbanResult<Vec<Card>>;
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>>;
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card>;
-    fn move_card(
-        &mut self,
-        id: Uuid,
-        column_id: Uuid,
-        position: Option<i32>,
-    ) -> KanbanResult<Card>;
+    fn move_card(&mut self, id: Uuid, column_id: Uuid, position: Option<i32>)
+        -> KanbanResult<Card>;
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()>;
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card>;
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()>;

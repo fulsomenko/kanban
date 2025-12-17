@@ -1717,7 +1717,11 @@ mod export_import_tests {
             .stdout
             .clone();
 
-        fs::write(&import_file, String::from_utf8_lossy(&export_output).as_ref()).unwrap();
+        fs::write(
+            &import_file,
+            String::from_utf8_lossy(&export_output).as_ref(),
+        )
+        .unwrap();
 
         let new_file = dir.path().join("new.json");
         let output = kanban()

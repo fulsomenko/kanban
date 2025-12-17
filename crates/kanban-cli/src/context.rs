@@ -95,7 +95,6 @@ impl CliContext {
         self.store.save(store_snapshot).await?;
         Ok(())
     }
-
 }
 
 impl KanbanOperations for CliContext {
@@ -546,11 +545,10 @@ impl KanbanOperations for CliContext {
         let imported: DataSnapshot = serde_json::from_str(data)
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
-        let board = imported
-            .boards
-            .first()
-            .cloned()
-            .ok_or_else(|| kanban_core::KanbanError::NotFound("No board in import".to_string()))?;
+        let board =
+            imported.boards.first().cloned().ok_or_else(|| {
+                kanban_core::KanbanError::NotFound("No board in import".to_string())
+            })?;
 
         self.boards.extend(imported.boards);
         self.columns.extend(imported.columns);

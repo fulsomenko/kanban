@@ -1,7 +1,9 @@
 use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
-use kanban_domain::{CardFilter, CardPriority, CardStatus, CardUpdate, FieldUpdate, KanbanOperations};
+use kanban_domain::{
+    CardFilter, CardPriority, CardStatus, CardUpdate, FieldUpdate, KanbanOperations,
+};
 
 pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {
     match action {
