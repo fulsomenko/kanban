@@ -132,36 +132,19 @@ impl App {
                     return false;
                 };
 
-                if let Some(card_idx) = self.active_card_index {
-                    if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.ctx.boards.get(board_idx) {
-                            let board_cards: Vec<_> = self
-                                .ctx
-                                .cards
-                                .iter()
-                                .filter(|card| {
-                                    self.ctx.columns.iter().any(|col| {
-                                        col.id == card.column_id && col.board_id == board.id
-                                    })
-                                })
-                                .collect();
-
-                            if let Some(card) = board_cards.get(card_idx) {
-                                let card_id = card.id;
-                                let cmd = Box::new(crate::state::commands::UpdateCard {
-                                    card_id,
-                                    updates: kanban_domain::CardUpdate {
-                                        points: points.into(),
-                                        ..Default::default()
-                                    },
-                                });
-                                if let Err(e) = self.execute_command(cmd) {
-                                    tracing::error!("Failed to set card points: {}", e);
-                                } else {
-                                    tracing::info!("Set points to: {:?}", points);
-                                }
-                            }
-                        }
+                if let Some(card) = self.get_selected_card_in_context() {
+                    let card_id = card.id;
+                    let cmd = Box::new(crate::state::commands::UpdateCard {
+                        card_id,
+                        updates: kanban_domain::CardUpdate {
+                            points: points.into(),
+                            ..Default::default()
+                        },
+                    });
+                    if let Err(e) = self.execute_command(cmd) {
+                        tracing::error!("Failed to set card points: {}", e);
+                    } else {
+                        tracing::info!("Set points to: {:?}", points);
                     }
                 }
                 self.pop_mode();
