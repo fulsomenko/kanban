@@ -6,6 +6,7 @@ members = [
     "crates/kanban-persistence",
     "crates/kanban-tui",
     "crates/kanban-cli",
+    "crates/kanban-mcp",
 ]
 
 [workspace.package]

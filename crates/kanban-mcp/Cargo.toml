@@ -1,0 +1,44 @@
+[package]
+name = "kanban-mcp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Model Context Protocol server for the kanban project management tool"
+keywords = ["kanban", "mcp", "model-context-protocol", "project-management"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "kanban-mcp"
+path = "src/main.rs"
+
+[dependencies]
+kanban-core = { path = "../kanban-core", version = "^0.1" }
+kanban-domain = { path = "../kanban-domain", version = "^0.1" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.1" }
+
+# MCP SDK
+rmcp = { version = "0.11", features = ["server", "transport-io"] }
+schemars = "1.0"
+
+# Async runtime
+tokio.workspace = true
+async-trait.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Error handling
+anyhow.workspace = true
+thiserror.workspace = true
+
+# UUID and time
+uuid.workspace = true
+chrono.workspace = true
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true

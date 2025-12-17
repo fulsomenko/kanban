@@ -53,6 +53,7 @@
 
         packages = {
           default = pkgs.callPackage ./default.nix {};
+          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {};
           bump-version = bumpVersion;
           publish-crates = publishCrates;
           validate-release = validateRelease;
