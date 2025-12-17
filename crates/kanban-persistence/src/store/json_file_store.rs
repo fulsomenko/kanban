@@ -251,4 +251,18 @@ mod tests {
 
         assert!(store.exists().await);
     }
+
+    #[test]
+    fn test_json_envelope_empty_structure() {
+        let envelope = JsonEnvelope::empty();
+        let json = serde_json::to_value(envelope).unwrap();
+
+        assert_eq!(json["version"], 2);
+        assert!(json["metadata"].is_object());
+        assert!(json["data"]["boards"].is_array());
+        assert!(json["data"]["columns"].is_array());
+        assert!(json["data"]["cards"].is_array());
+        assert!(json["data"]["archived_cards"].is_array());
+        assert!(json["data"]["sprints"].is_array());
+    }
 }
