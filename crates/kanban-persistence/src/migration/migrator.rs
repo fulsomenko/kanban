@@ -4,9 +4,6 @@ use kanban_core::KanbanResult;
 use serde_json::Value;
 use std::path::Path;
 
-#[cfg(test)]
-use serde_json::json;
-
 /// Orchestrates migrations between format versions
 pub struct Migrator;
 
