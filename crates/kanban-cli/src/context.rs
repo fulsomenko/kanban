@@ -125,17 +125,9 @@ impl KanbanOperations for CliContext {
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
-        let column_ids: Vec<_> = self
-            .columns
-            .iter()
-            .filter(|c| c.board_id == id)
-            .map(|c| c.id)
-            .collect();
-        self.boards.retain(|b| b.id != id);
-        self.columns.retain(|c| c.board_id != id);
-        self.cards.retain(|c| !column_ids.contains(&c.column_id));
-        self.sprints.retain(|s| s.board_id != id);
-        Ok(())
+        use kanban_domain::commands::DeleteBoard;
+        let cmd = DeleteBoard { board_id: id };
+        self.execute(Box::new(cmd))
     }
 
     fn create_column(
