@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use kanban_mcp::KanbanMcpServer;
 use rmcp::ServiceExt;
 use rmcp::transport::stdio;
@@ -14,6 +14,27 @@ fn parse_args() -> PathBuf {
     }
 }
 
+fn validate_path(path: &PathBuf) -> Result<PathBuf> {
+    let path_str = path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8 characters"))?;
+
+    if path_str.contains("..") {
+        anyhow::bail!("Path traversal not allowed: path contains '..'");
+    }
+
+    if path.is_absolute() {
+        let canonical = path
+            .canonicalize()
+            .unwrap_or_else(|_| path.clone());
+        Ok(canonical)
+    } else {
+        let cwd = std::env::current_dir().context("Failed to get current directory")?;
+        let full_path = cwd.join(path);
+        Ok(full_path)
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::registry()
@@ -22,8 +43,9 @@ async fn main() -> Result<()> {
         .init();
 
     let data_file_path = parse_args();
+    let validated_path = validate_path(&data_file_path)?;
 
-    let data_file = data_file_path
+    let data_file = validated_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid data file path"))?;
 

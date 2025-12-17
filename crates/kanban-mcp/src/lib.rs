@@ -1,6 +1,8 @@
+use chrono::{DateTime, Utc};
 use kanban_core::KanbanResult;
 use kanban_domain::{
-    ArchivedCard, Board, Card, CardFilter, CardUpdate, Column, KanbanOperations, Sprint,
+    ArchivedCard, Board, Card, CardFilter, CardPriority, CardStatus, CardUpdate, Column,
+    FieldUpdate, KanbanOperations, Sprint,
 };
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use rmcp::{
@@ -230,29 +232,42 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn list_cards(&self, filter: CardFilter) -> KanbanResult<Vec<Card>> {
-        let mut cards: Vec<_> = self.cards.to_vec();
-
-        if let Some(board_id) = filter.board_id {
-            let board_columns: Vec<_> = self
-                .columns
+        let board_columns: Option<Vec<_>> = filter.board_id.map(|board_id| {
+            self.columns
                 .iter()
                 .filter(|c| c.board_id == board_id)
                 .map(|c| c.id)
-                .collect();
-            cards.retain(|card| board_columns.contains(&card.column_id));
-        }
+                .collect()
+        });
 
-        if let Some(column_id) = filter.column_id {
-            cards.retain(|card| card.column_id == column_id);
-        }
-
-        if let Some(sprint_id) = filter.sprint_id {
-            cards.retain(|card| card.sprint_id == Some(sprint_id));
-        }
-
-        if let Some(status) = filter.status {
-            cards.retain(|card| card.status == status);
-        }
+        let cards = self
+            .cards
+            .iter()
+            .filter(|card| {
+                if let Some(ref cols) = board_columns {
+                    if !cols.contains(&card.column_id) {
+                        return false;
+                    }
+                }
+                if let Some(column_id) = filter.column_id {
+                    if card.column_id != column_id {
+                        return false;
+                    }
+                }
+                if let Some(sprint_id) = filter.sprint_id {
+                    if card.sprint_id != Some(sprint_id) {
+                        return false;
+                    }
+                }
+                if let Some(status) = filter.status {
+                    if card.status != status {
+                        return false;
+                    }
+                }
+                true
+            })
+            .cloned()
+            .collect();
 
         Ok(cards)
     }
@@ -616,8 +631,52 @@ pub struct UpdateCardRequest {
     pub card_id: String,
     #[schemars(description = "New title (optional)")]
     pub title: Option<String>,
-    #[schemars(description = "New description (optional)")]
+    #[schemars(description = "New description (optional, use empty string to clear)")]
     pub description: Option<String>,
+    #[schemars(description = "Clear description (set to true to remove description)")]
+    pub clear_description: Option<bool>,
+    #[schemars(description = "Priority: 'low', 'medium', 'high', or 'critical' (optional)")]
+    pub priority: Option<String>,
+    #[schemars(description = "Status: 'todo', 'in_progress', 'blocked', or 'done' (optional)")]
+    pub status: Option<String>,
+    #[schemars(description = "Due date in ISO 8601 format (optional, use clear_due_date to remove)")]
+    pub due_date: Option<String>,
+    #[schemars(description = "Clear due date (set to true to remove due date)")]
+    pub clear_due_date: Option<bool>,
+    #[schemars(description = "Story points (optional, 0-255)")]
+    pub points: Option<u8>,
+    #[schemars(description = "Clear story points (set to true to remove points)")]
+    pub clear_points: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListColumnsRequest {
+    #[schemars(description = "ID of the board to list columns for")]
+    pub board_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteBoardRequest {
+    #[schemars(description = "ID of the board to delete")]
+    pub board_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteColumnRequest {
+    #[schemars(description = "ID of the column to delete")]
+    pub column_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteCardRequest {
+    #[schemars(description = "ID of the card to delete")]
+    pub card_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ArchiveCardRequest {
+    #[schemars(description = "ID of the card to archive")]
+    pub card_id: String,
 }
 
 #[tool_router]
@@ -799,7 +858,7 @@ impl KanbanMcpServer {
         Ok(CallToolResult::success(vec![Content::text(json)]))
     }
 
-    #[tool(description = "Update a card's properties")]
+    #[tool(description = "Update a card's properties (title, description, priority, status, due_date, points)")]
     async fn update_card(
         &self,
         Parameters(req): Parameters<UpdateCardRequest>,
@@ -808,11 +867,57 @@ impl KanbanMcpServer {
             .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
 
         let mut updates = CardUpdate::default();
+
         if let Some(title) = req.title {
-            updates.title = Some(title.into());
+            updates.title = Some(title);
         }
-        if let Some(description) = req.description {
-            updates.description = Some(description).into();
+
+        if req.clear_description == Some(true) {
+            updates.description = FieldUpdate::Clear;
+        } else if let Some(description) = req.description {
+            updates.description = FieldUpdate::Set(description);
+        }
+
+        if let Some(priority_str) = req.priority {
+            let priority = match priority_str.to_lowercase().as_str() {
+                "low" => CardPriority::Low,
+                "medium" => CardPriority::Medium,
+                "high" => CardPriority::High,
+                "critical" => CardPriority::Critical,
+                _ => return Err(McpError::invalid_params(
+                    format!("Invalid priority '{}'. Must be 'low', 'medium', 'high', or 'critical'", priority_str),
+                    None,
+                )),
+            };
+            updates.priority = Some(priority);
+        }
+
+        if let Some(status_str) = req.status {
+            let status = match status_str.to_lowercase().replace('-', "_").as_str() {
+                "todo" => CardStatus::Todo,
+                "in_progress" => CardStatus::InProgress,
+                "blocked" => CardStatus::Blocked,
+                "done" => CardStatus::Done,
+                _ => return Err(McpError::invalid_params(
+                    format!("Invalid status '{}'. Must be 'todo', 'in_progress', 'blocked', or 'done'", status_str),
+                    None,
+                )),
+            };
+            updates.status = Some(status);
+        }
+
+        if req.clear_due_date == Some(true) {
+            updates.due_date = FieldUpdate::Clear;
+        } else if let Some(due_date_str) = req.due_date {
+            let due_date: DateTime<Utc> = due_date_str.parse()
+                .map_err(|e| McpError::invalid_params(format!("Invalid due_date format: {}. Use ISO 8601 format.", e), None))?;
+            updates.due_date = FieldUpdate::Set(due_date);
+        }
+
+        if req.clear_points == Some(true) {
+            updates.points = FieldUpdate::Clear;
+        } else if let Some(points) = req.points {
+            updates.points = FieldUpdate::Set(points);
         }
 
         let mut ctx = self.context.lock().await;
@@ -828,6 +933,109 @@ impl KanbanMcpServer {
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
         Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    #[tool(description = "List all columns in a board")]
+    async fn list_columns(
+        &self,
+        Parameters(req): Parameters<ListColumnsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let board_id = Uuid::parse_str(&req.board_id)
+            .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
+
+        let ctx = self.context.lock().await;
+        let columns = ctx
+            .list_columns(board_id)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        let json = serde_json::to_string_pretty(&columns)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    #[tool(description = "Delete a board and all its columns, cards, and sprints")]
+    async fn delete_board(
+        &self,
+        Parameters(req): Parameters<DeleteBoardRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let board_id = Uuid::parse_str(&req.board_id)
+            .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
+
+        let mut ctx = self.context.lock().await;
+        ctx.delete_board(board_id)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        ctx.save()
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        Ok(CallToolResult::success(vec![Content::text(
+            format!("Board {} deleted successfully", board_id),
+        )]))
+    }
+
+    #[tool(description = "Delete a column and all its cards")]
+    async fn delete_column(
+        &self,
+        Parameters(req): Parameters<DeleteColumnRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let column_id = Uuid::parse_str(&req.column_id)
+            .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
+
+        let mut ctx = self.context.lock().await;
+        ctx.delete_column(column_id)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        ctx.save()
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        Ok(CallToolResult::success(vec![Content::text(
+            format!("Column {} deleted successfully", column_id),
+        )]))
+    }
+
+    #[tool(description = "Delete a card permanently")]
+    async fn delete_card(
+        &self,
+        Parameters(req): Parameters<DeleteCardRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let card_id = Uuid::parse_str(&req.card_id)
+            .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
+
+        let mut ctx = self.context.lock().await;
+        ctx.delete_card(card_id)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        ctx.save()
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        Ok(CallToolResult::success(vec![Content::text(
+            format!("Card {} deleted successfully", card_id),
+        )]))
+    }
+
+    #[tool(description = "Archive a card (move to archive, can be restored later)")]
+    async fn archive_card(
+        &self,
+        Parameters(req): Parameters<ArchiveCardRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let card_id = Uuid::parse_str(&req.card_id)
+            .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
+
+        let mut ctx = self.context.lock().await;
+        ctx.archive_card(card_id)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        ctx.save()
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        Ok(CallToolResult::success(vec![Content::text(
+            format!("Card {} archived successfully", card_id),
+        )]))
     }
 }
 
