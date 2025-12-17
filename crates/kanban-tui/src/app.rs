@@ -1696,8 +1696,28 @@ impl App {
                             std::future::pending().await
                         }
                     } => {
+                        // Check if this is our own write by comparing instance IDs
+                        if let Some(store) = self.state_manager.store() {
+                            match store.load().await {
+                                Ok((_snapshot, metadata)) => {
+                                    // Compare instance IDs
+                                    if metadata.instance_id == self.state_manager.instance_id() {
+                                        tracing::debug!(
+                                            "File change from own instance ({}), ignoring",
+                                            metadata.instance_id
+                                        );
+                                        continue; // Skip reload entirely
+                                    }
+                                    // It's external - proceed with existing logic below
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to load metadata for instance check: {}", e);
+                                    // Fall through to existing logic (safer default)
+                                }
+                            }
+                        }
+
                         // External file change detected - handle smart reload
-                        // (File watcher is paused during our own saves, so this is always external)
                         if !self.state_manager.is_dirty() {
                             // No local changes, auto-reload silently
                             tracing::info!("External change detected, auto-reloading");
