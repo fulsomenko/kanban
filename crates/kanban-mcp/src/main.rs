@@ -51,9 +51,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting Kanban MCP server with data file: {}", data_file);
 
-    let server = KanbanMcpServer::new(data_file)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create server: {}", e))?;
+    let server = KanbanMcpServer::new(data_file);
 
     let service = server.serve(stdio()).await?;
 
