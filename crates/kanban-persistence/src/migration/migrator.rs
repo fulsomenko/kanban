@@ -76,6 +76,69 @@ impl Migrator {
         tokio::fs::write(path, json_str).await?;
 
         tracing::info!("Migrated {} from V1 to V2 format", path.display());
+
+        // Verify migration was successful
+        match Self::verify_migration(path, &v1_data).await {
+            Ok(()) => {
+                // Migration verified - remove backup
+                if let Err(e) = tokio::fs::remove_file(&backup_path).await {
+                    tracing::warn!(
+                        "Migration successful but failed to remove backup at {}: {}",
+                        backup_path.display(),
+                        e
+                    );
+                } else {
+                    tracing::info!("Migration verified, backup removed");
+                }
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Migration verification failed: {}. Backup preserved at {}",
+                    e,
+                    backup_path.display()
+                );
+                Err(e)
+            }
+        }
+    }
+
+    /// Verify that a migration was successful
+    async fn verify_migration(path: &Path, original_data: &Value) -> KanbanResult<()> {
+        // Read the migrated file
+        let migrated_content = tokio::fs::read_to_string(path).await?;
+        let migrated_value: Value = serde_json::from_str(&migrated_content).map_err(|e| {
+            kanban_core::KanbanError::Serialization(format!("Failed to parse migrated file: {}", e))
+        })?;
+
+        // Verify V2 structure
+        if migrated_value.get("version").and_then(|v| v.as_u64()) != Some(2) {
+            return Err(kanban_core::KanbanError::Serialization(
+                "Migrated file missing or invalid version field".to_string(),
+            ));
+        }
+
+        if !migrated_value
+            .get("metadata")
+            .is_some_and(|m| m.is_object())
+        {
+            return Err(kanban_core::KanbanError::Serialization(
+                "Migrated file missing or invalid metadata field".to_string(),
+            ));
+        }
+
+        // Verify data was preserved
+        let migrated_data = migrated_value.get("data").ok_or_else(|| {
+            kanban_core::KanbanError::Serialization("Migrated file missing data field".to_string())
+        })?;
+
+        if migrated_data != original_data {
+            return Err(kanban_core::KanbanError::Serialization(
+                "Migrated data does not match original data".to_string(),
+            ));
+        }
+
+        tracing::debug!("Migration verification passed");
         Ok(())
     }
 }
@@ -150,7 +213,10 @@ mod tests {
         assert!(v2_data["metadata"].is_object());
         assert!(v2_data["data"]["boards"].is_array());
 
-        // Check backup was created
-        assert!(file_path.with_extension("v1.backup").exists());
+        // Check backup was removed after successful verification
+        assert!(
+            !file_path.with_extension("v1.backup").exists(),
+            "Backup should be removed after successful migration"
+        );
     }
 }
