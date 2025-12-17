@@ -168,7 +168,7 @@ mod board_tests {
         let board_id = extract_id(&create_json);
 
         let output = kanban()
-            .args([file.to_str().unwrap(), "board", "get", "--id", &board_id])
+            .args([file.to_str().unwrap(), "board", "get", &board_id])
             .assert()
             .success()
             .get_output()
@@ -246,7 +246,7 @@ mod board_tests {
         let board_id = extract_id(&create_json);
 
         kanban()
-            .args([file.to_str().unwrap(), "board", "delete", "--id", &board_id])
+            .args([file.to_str().unwrap(), "board", "delete", &board_id])
             .assert()
             .success()
             .stdout(predicate::str::contains("\"deleted\""));
@@ -408,7 +408,6 @@ mod column_tests {
                 file.to_str().unwrap(),
                 "column",
                 "reorder",
-                "--id",
                 &col1_id,
                 "--position",
                 "1",
@@ -450,13 +449,7 @@ mod column_tests {
         let column_id = extract_id(&create_json);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "column",
-                "delete",
-                "--id",
-                &column_id,
-            ])
+            .args([file.to_str().unwrap(), "column", "delete", &column_id])
             .assert()
             .success()
             .stdout(predicate::str::contains("\"deleted\""));
@@ -724,7 +717,6 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "move",
-                "--id",
                 &card_id,
                 "--column-id",
                 &col2_id,
@@ -768,7 +760,7 @@ mod card_tests {
         let card_id = extract_id(&create_json);
 
         kanban()
-            .args([file.to_str().unwrap(), "card", "archive", "--id", &card_id])
+            .args([file.to_str().unwrap(), "card", "archive", &card_id])
             .assert()
             .success()
             .stdout(predicate::str::contains("\"archived\""));
@@ -785,7 +777,7 @@ mod card_tests {
         assert_eq!(archived_json["data"]["count"], 1);
 
         let restore_output = kanban()
-            .args([file.to_str().unwrap(), "card", "restore", "--id", &card_id])
+            .args([file.to_str().unwrap(), "card", "restore", &card_id])
             .assert()
             .success()
             .get_output()
@@ -825,13 +817,7 @@ mod card_tests {
         let card_id = extract_id(&create_json);
 
         let output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "card",
-                "branch-name",
-                "--id",
-                &card_id,
-            ])
+            .args([file.to_str().unwrap(), "card", "branch-name", &card_id])
             .assert()
             .success()
             .get_output()
@@ -874,13 +860,7 @@ mod card_tests {
         let card_id = extract_id(&create_json);
 
         let output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "card",
-                "git-checkout",
-                "--id",
-                &card_id,
-            ])
+            .args([file.to_str().unwrap(), "card", "git-checkout", &card_id])
             .assert()
             .success()
             .get_output()
@@ -1197,13 +1177,7 @@ mod sprint_tests {
         let sprint_id = extract_id(&create_json);
 
         let output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "sprint",
-                "activate",
-                "--id",
-                &sprint_id,
-            ])
+            .args([file.to_str().unwrap(), "sprint", "activate", &sprint_id])
             .assert()
             .success()
             .get_output()
@@ -1241,24 +1215,12 @@ mod sprint_tests {
         let sprint_id = extract_id(&create_json);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "sprint",
-                "activate",
-                "--id",
-                &sprint_id,
-            ])
+            .args([file.to_str().unwrap(), "sprint", "activate", &sprint_id])
             .assert()
             .success();
 
         let output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "sprint",
-                "complete",
-                "--id",
-                &sprint_id,
-            ])
+            .args([file.to_str().unwrap(), "sprint", "complete", &sprint_id])
             .assert()
             .success()
             .get_output()
@@ -1294,24 +1256,12 @@ mod sprint_tests {
         let sprint_id = extract_id(&create_json);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "sprint",
-                "activate",
-                "--id",
-                &sprint_id,
-            ])
+            .args([file.to_str().unwrap(), "sprint", "activate", &sprint_id])
             .assert()
             .success();
 
         let output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "sprint",
-                "cancel",
-                "--id",
-                &sprint_id,
-            ])
+            .args([file.to_str().unwrap(), "sprint", "cancel", &sprint_id])
             .assert()
             .success()
             .get_output()
@@ -1387,13 +1337,7 @@ mod sprint_tests {
         let sprint_id = extract_id(&sprint_json);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "sprint",
-                "activate",
-                "--id",
-                &sprint_id,
-            ])
+            .args([file.to_str().unwrap(), "sprint", "activate", &sprint_id])
             .assert()
             .success();
 
@@ -1402,7 +1346,6 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "card",
                 "assign-sprint",
-                "--id",
                 &card_id,
                 "--sprint-id",
                 &sprint_id,
@@ -1482,13 +1425,7 @@ mod sprint_tests {
         let sprint_id = extract_id(&sprint_json);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "sprint",
-                "activate",
-                "--id",
-                &sprint_id,
-            ])
+            .args([file.to_str().unwrap(), "sprint", "activate", &sprint_id])
             .assert()
             .success();
 
@@ -1497,7 +1434,6 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "card",
                 "assign-sprint",
-                "--id",
                 &card_id,
                 "--sprint-id",
                 &sprint_id,
@@ -1506,13 +1442,7 @@ mod sprint_tests {
             .success();
 
         let output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "card",
-                "unassign-sprint",
-                "--id",
-                &card_id,
-            ])
+            .args([file.to_str().unwrap(), "card", "unassign-sprint", &card_id])
             .assert()
             .success()
             .get_output()
@@ -1654,7 +1584,7 @@ mod error_tests {
         let file = dir.path().join("test.json");
 
         kanban()
-            .args([file.to_str().unwrap(), "board", "get", "--id", "not-a-uuid"])
+            .args([file.to_str().unwrap(), "board", "get", "not-a-uuid"])
             .assert()
             .failure();
     }
@@ -1669,7 +1599,6 @@ mod error_tests {
                 file.to_str().unwrap(),
                 "board",
                 "get",
-                "--id",
                 "00000000-0000-0000-0000-000000000000",
             ])
             .assert()
