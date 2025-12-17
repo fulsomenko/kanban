@@ -53,16 +53,16 @@ pub enum BoardAction {
     },
     /// List all boards
     List,
-    /// Get a specific board
+    /// Get a specific board by ID
     Get {
-        #[arg(long)]
+        /// Board ID
         id: Uuid,
     },
     /// Update a board
     Update(BoardUpdateArgs),
-    /// Delete a board
+    /// Delete a board by ID
     Delete {
-        #[arg(long)]
+        /// Board ID
         id: Uuid,
     },
 }
@@ -104,21 +104,21 @@ pub enum ColumnAction {
         #[arg(long)]
         board_id: Uuid,
     },
-    /// Get a specific column
+    /// Get a specific column by ID
     Get {
-        #[arg(long)]
+        /// Column ID
         id: Uuid,
     },
     /// Update a column
     Update(ColumnUpdateArgs),
-    /// Delete a column
+    /// Delete a column by ID
     Delete {
-        #[arg(long)]
+        /// Column ID
         id: Uuid,
     },
-    /// Reorder a column
+    /// Reorder a column by ID
     Reorder {
-        #[arg(long)]
+        /// Column ID
         id: Uuid,
         #[arg(long)]
         position: i32,
@@ -150,59 +150,59 @@ pub enum CardAction {
     Create(CardCreateArgs),
     /// List cards with optional filters
     List(CardListArgs),
-    /// Get a specific card
+    /// Get a specific card by ID
     Get {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
     },
     /// Update a card
     Update(CardUpdateArgs),
     /// Move a card to another column
     Move {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
         #[arg(long)]
         column_id: Uuid,
         #[arg(long)]
         position: Option<i32>,
     },
-    /// Archive a card
+    /// Archive a card by ID
     Archive {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
     },
-    /// Restore an archived card
+    /// Restore an archived card by ID
     Restore {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
         #[arg(long)]
         column_id: Option<Uuid>,
     },
-    /// Permanently delete an archived card
+    /// Permanently delete an archived card by ID
     Delete {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
     },
     /// Assign a card to a sprint
     AssignSprint {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
         #[arg(long)]
         sprint_id: Uuid,
     },
     /// Unassign a card from its sprint
     UnassignSprint {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
     },
     /// Get the branch name for a card
     BranchName {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
     },
     /// Get the git checkout command for a card
     GitCheckout {
-        #[arg(long)]
+        /// Card ID
         id: Uuid,
     },
     /// Archive multiple cards
@@ -301,33 +301,33 @@ pub enum SprintAction {
         #[arg(long)]
         board_id: Uuid,
     },
-    /// Get a specific sprint
+    /// Get a specific sprint by ID
     Get {
-        #[arg(long)]
+        /// Sprint ID
         id: Uuid,
     },
     /// Update a sprint
     Update(SprintUpdateArgs),
-    /// Activate a sprint
+    /// Activate a sprint by ID
     Activate {
-        #[arg(long)]
+        /// Sprint ID
         id: Uuid,
         #[arg(long)]
         duration_days: Option<i32>,
     },
-    /// Complete a sprint
+    /// Complete a sprint by ID
     Complete {
-        #[arg(long)]
+        /// Sprint ID
         id: Uuid,
     },
-    /// Cancel a sprint
+    /// Cancel a sprint by ID
     Cancel {
-        #[arg(long)]
+        /// Sprint ID
         id: Uuid,
     },
-    /// Delete a sprint
+    /// Delete a sprint by ID
     Delete {
-        #[arg(long)]
+        /// Sprint ID
         id: Uuid,
     },
 }
