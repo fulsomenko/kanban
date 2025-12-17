@@ -33,22 +33,26 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
+    // Get file path from either positional arg or --file flag
+    let file = cli.get_file().cloned();
+
     match cli.command {
         None => {
-            if let Some(ref file_path) = cli.file {
+            // TUI mode: kanban [file.json]
+            if let Some(ref file_path) = file {
                 if !std::path::Path::new(file_path).exists() {
                     let empty_state = kanban_persistence::JsonEnvelope::empty().to_json_string()?;
                     std::fs::write(file_path, empty_state)?;
                     tracing::info!("Created new board file: {}", file_path);
                 }
             }
-            let (mut app, save_rx) = App::new(cli.file);
+            let (mut app, save_rx) = App::new(file);
             app.run(save_rx).await?;
         }
         Some(cmd) => {
-            let file_path = cli
-                .file
-                .ok_or_else(|| anyhow::anyhow!("--file is required for CLI operations"))?;
+            // CLI mode: kanban --file <path> <command>
+            let file_path =
+                file.ok_or_else(|| anyhow::anyhow!("--file is required for CLI operations"))?;
 
             let mut ctx = CliContext::load(&file_path).await?;
 
