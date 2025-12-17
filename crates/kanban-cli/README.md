@@ -78,8 +78,8 @@ kanban column list --board-id <BOARD_ID>
 kanban column create --board-id <BOARD_ID> --name "In Progress"
 kanban column create --board-id <BOARD_ID> --name "Review" --position 2
 
-# Reorder columns
-kanban column reorder --board-id <BOARD_ID> --column-ids <ID1> <ID2> <ID3>
+# Reorder a column (change position)
+kanban column reorder <COLUMN_ID> --position 2
 
 # Delete a column
 kanban column delete <COLUMN_ID>
@@ -122,10 +122,10 @@ kanban card unassign-sprint <CARD_ID>
 kanban card branch-name <CARD_ID>
 kanban card git-checkout <CARD_ID>
 
-# Bulk operations
-kanban card bulk-archive <ID1> <ID2> <ID3>
-kanban card bulk-move --column-id <COLUMN_ID> <ID1> <ID2> <ID3>
-kanban card bulk-assign-sprint --sprint-id <SPRINT_ID> <ID1> <ID2> <ID3>
+# Bulk operations (comma-separated IDs)
+kanban card bulk-archive --ids <ID1>,<ID2>,<ID3>
+kanban card bulk-move --ids <ID1>,<ID2>,<ID3> --column-id <COLUMN_ID>
+kanban card bulk-assign-sprint --ids <ID1>,<ID2>,<ID3> --sprint-id <SPRINT_ID>
 ```
 
 ### Sprint Operations
@@ -147,14 +147,15 @@ kanban sprint cancel <SPRINT_ID>
 ### Export/Import
 
 ```bash
-# Export a single board
-kanban export --board-id <BOARD_ID> --output board.json
+# Export a single board (outputs JSON to stdout)
+kanban export --board-id <BOARD_ID>
+kanban export --board-id <BOARD_ID> > board.json
 
 # Export all boards
-kanban export --output all-boards.json
+kanban export > all-boards.json
 
 # Import boards from file
-kanban import --input boards.json
+kanban import --file boards.json
 ```
 
 ### Shell Completions
@@ -170,12 +171,20 @@ kanban completions fish > ~/.config/fish/completions/kanban.fish
 
 All CLI commands output JSON for easy parsing and scripting:
 
-```bash
-# Pretty-printed by default
-kanban board list
+```json
+{
+  "success": true,
+  "api_version": "0.1.13",
+  "data": { ... }
+}
+```
 
+```bash
 # Pipe to jq for processing
-kanban card list --board-id <ID> | jq '.[] | .title'
+kanban card list --board-id <ID> | jq '.data.items[] | .title'
+
+# Check if operation succeeded
+kanban board create --name "Test" | jq '.success'
 ```
 
 ## Environment Variables
