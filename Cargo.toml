@@ -49,6 +49,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Testing
 mockall = "0.13"
+assert_cmd = "2.0"
+predicates = "3.0"
 
 # File watching and atomic operations
 notify = "6.1"
