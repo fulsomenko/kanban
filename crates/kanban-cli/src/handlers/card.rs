@@ -199,6 +199,7 @@ fn parse_datetime(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
         .or_else(|| {
             chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
                 .ok()
-                .map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc())
+                .and_then(|d| d.and_hms_opt(0, 0, 0))
+                .map(|dt| dt.and_utc())
         })
 }
