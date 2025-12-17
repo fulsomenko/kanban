@@ -14,6 +14,7 @@ pub mod input;
 pub mod keybindings;
 pub mod layout_strategy;
 pub mod markdown_renderer;
+pub mod operations;
 pub mod render_strategy;
 pub mod search;
 pub mod selection;
