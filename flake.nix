@@ -53,9 +53,13 @@
           inherit pkgs rustToolchain;
         };
 
-        packages = {
-          default = pkgs.callPackage ./default.nix {};
-          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {};
+        packages = let
+          kanban = pkgs.callPackage ./default.nix {};
+        in {
+          default = kanban;
+          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {
+            inherit kanban;
+          };
           mcp-server-git = servers.packages.${system}.mcp-server-git;
           bump-version = bumpVersion;
           publish-crates = publishCrates;
