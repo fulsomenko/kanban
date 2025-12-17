@@ -888,14 +888,14 @@ impl App {
         let mut restored_count = 0;
 
         for card_id in card_ids {
-            if let Some(pos) = self
+            if let Some(archived_card) = self
                 .ctx
                 .archived_cards
                 .iter()
-                .position(|dc| dc.card.id == card_id)
+                .find(|dc| dc.card.id == card_id)
+                .cloned()
             {
-                let deleted_card = self.ctx.archived_cards.remove(pos);
-                self.restore_card(deleted_card);
+                self.restore_card(archived_card);
                 restored_count += 1;
             }
         }

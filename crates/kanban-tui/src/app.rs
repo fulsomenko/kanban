@@ -892,14 +892,14 @@ impl App {
     }
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
-        if let Some(pos) = self
+        if let Some(archived_card) = self
             .ctx
             .archived_cards
             .iter()
-            .position(|dc| dc.card.id == card_id)
+            .find(|dc| dc.card.id == card_id)
+            .cloned()
         {
-            let deleted_card = self.ctx.archived_cards.remove(pos);
-            self.restore_card(deleted_card);
+            self.restore_card(archived_card);
         }
     }
 
