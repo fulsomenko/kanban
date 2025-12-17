@@ -8,23 +8,17 @@ use uuid::Uuid;
 /// Metadata for persistence operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistenceMetadata {
-    /// Version of the persistence format
-    pub format_version: u32,
     /// ID of the instance that performed the save
     pub instance_id: Uuid,
     /// When this data was saved
     pub saved_at: DateTime<Utc>,
-    /// Schema version for migrations
-    pub schema_version: String,
 }
 
 impl PersistenceMetadata {
-    pub fn new(format_version: u32, instance_id: Uuid) -> Self {
+    pub fn new(instance_id: Uuid) -> Self {
         Self {
-            format_version,
             instance_id,
             saved_at: Utc::now(),
-            schema_version: "2.0.0".to_string(),
         }
     }
 }

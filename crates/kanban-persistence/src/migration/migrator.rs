@@ -1,9 +1,8 @@
+use crate::store::json_file_store::JsonEnvelope;
 use crate::traits::FormatVersion;
-use chrono::Utc;
 use kanban_core::KanbanResult;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::path::Path;
-use uuid::Uuid;
 
 /// Orchestrates migrations between format versions
 pub struct Migrator;
@@ -61,23 +60,82 @@ impl Migrator {
         tracing::info!("Created backup at {}", backup_path.display());
 
         // Transform to V2 format
-        let v2_data = json!({
-            "version": 2,
-            "metadata": {
-                "format_version": 2,
-                "instance_id": Uuid::new_v4().to_string(),
-                "saved_at": Utc::now().to_rfc3339(),
-                "schema_version": "2.0.0"
-            },
-            "data": v1_data
-        });
+        let v2_envelope = JsonEnvelope::new(v1_data.clone());
 
         // Write V2 file
-        let json_str = serde_json::to_string_pretty(&v2_data)
+        let json_str = v2_envelope
+            .to_json_string()
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
         tokio::fs::write(path, json_str).await?;
 
         tracing::info!("Migrated {} from V1 to V2 format", path.display());
+
+        // Verify migration was successful
+        match Self::verify_migration(path, &v1_data).await {
+            Ok(()) => {
+                // Migration verified - remove backup
+                if let Err(e) = tokio::fs::remove_file(&backup_path).await {
+                    tracing::warn!(
+                        "Migration successful but failed to remove backup at {}: {}",
+                        backup_path.display(),
+                        e
+                    );
+                } else {
+                    tracing::info!("Migration verified, backup removed");
+                }
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Migration verification failed: {}. Backup preserved at {}",
+                    e,
+                    backup_path.display()
+                );
+                Err(e)
+            }
+        }
+    }
+
+    /// Verify that a migration was successful
+    async fn verify_migration(path: &Path, original_data: &Value) -> KanbanResult<()> {
+        // Read the migrated file
+        let migrated_content = tokio::fs::read_to_string(path).await?;
+        let migrated_value: Value = serde_json::from_str(&migrated_content).map_err(|e| {
+            kanban_core::KanbanError::Serialization(format!("Failed to parse migrated file: {}", e))
+        })?;
+
+        // Verify V2 structure
+        migrated_value
+            .get("version")
+            .and_then(|v| v.as_u64())
+            .filter(|&v| v == 2)
+            .ok_or_else(|| {
+                kanban_core::KanbanError::Serialization(
+                    "Migrated file missing or invalid version field".to_string(),
+                )
+            })?;
+
+        migrated_value
+            .get("metadata")
+            .filter(|m| m.is_object())
+            .ok_or_else(|| {
+                kanban_core::KanbanError::Serialization(
+                    "Migrated file missing or invalid metadata field".to_string(),
+                )
+            })?;
+
+        // Verify data was preserved
+        let migrated_data = migrated_value.get("data").ok_or_else(|| {
+            kanban_core::KanbanError::Serialization("Migrated file missing data field".to_string())
+        })?;
+
+        if migrated_data != original_data {
+            return Err(kanban_core::KanbanError::Serialization(
+                "Migrated data does not match original data".to_string(),
+            ));
+        }
+
+        tracing::debug!("Migration verification passed");
         Ok(())
     }
 }
@@ -152,7 +210,51 @@ mod tests {
         assert!(v2_data["metadata"].is_object());
         assert!(v2_data["data"]["boards"].is_array());
 
-        // Check backup was created
-        assert!(file_path.with_extension("v1.backup").exists());
+        // Check backup was removed after successful verification
+        assert!(
+            !file_path.with_extension("v1.backup").exists(),
+            "Backup should be removed after successful migration"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_migrate_v1_to_v2_with_backup_handling() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.json");
+
+        // Create V1 data
+        let v1_data = json!({
+            "boards": [{ "id": "1", "name": "Test Board" }],
+            "columns": [],
+            "cards": []
+        });
+
+        tokio::fs::write(&file_path, v1_data.to_string())
+            .await
+            .unwrap();
+
+        // Perform migration
+        Migrator::migrate(FormatVersion::V1, FormatVersion::V2, &file_path)
+            .await
+            .unwrap();
+
+        // Verify migrated file is valid V2
+        let migrated = tokio::fs::read_to_string(&file_path).await.unwrap();
+        let v2_data: Value = serde_json::from_str(&migrated).unwrap();
+        assert_eq!(v2_data["version"], 2);
+        assert_eq!(v2_data["data"], v1_data);
+
+        // Verify backup was cleaned up after successful migration
+        let backup_path = file_path.with_extension("v1.backup");
+        assert!(
+            !backup_path.exists(),
+            "Backup should be removed after successful migration and verification"
+        );
+
+        // Note: The migration code handles backup removal failure gracefully by logging
+        // a warning (lines 82-90 in migrate_v1_to_v2). This is difficult to test with
+        // file permissions as making a directory read-only prevents the entire migration.
+        // The code path exists and is correct - it preserves the backup and logs a warning
+        // if removal fails, which is the desired behavior for reliability.
     }
 }

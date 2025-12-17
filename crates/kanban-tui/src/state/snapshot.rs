@@ -7,10 +7,15 @@ use serde::{Deserialize, Serialize};
 /// Bridges between in-memory App state and persistence format
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataSnapshot {
+    #[serde(default)]
     pub boards: Vec<Board>,
+    #[serde(default)]
     pub columns: Vec<Column>,
+    #[serde(default)]
     pub cards: Vec<Card>,
+    #[serde(default)]
     pub archived_cards: Vec<ArchivedCard>,
+    #[serde(default)]
     pub sprints: Vec<Sprint>,
 }
 
