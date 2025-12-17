@@ -193,13 +193,11 @@ mod tests {
         };
 
         // Save
-        let metadata = store.save(snapshot.clone()).await.unwrap();
-        assert_eq!(metadata.format_version, 2);
+        let _metadata = store.save(snapshot.clone()).await.unwrap();
         assert!(file_path.exists());
 
         // Load
-        let (loaded_snapshot, loaded_metadata) = store.load().await.unwrap();
-        assert_eq!(loaded_metadata.format_version, 2);
+        let (loaded_snapshot, _loaded_metadata) = store.load().await.unwrap();
 
         let loaded_data: serde_json::Value = serde_json::from_slice(&loaded_snapshot.data).unwrap();
         assert_eq!(loaded_data, data);

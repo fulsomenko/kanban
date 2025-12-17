@@ -48,17 +48,13 @@ mod tests {
         let later = now + chrono::Duration::seconds(10);
 
         let local = PersistenceMetadata {
-            format_version: 2,
             instance_id: Uuid::new_v4(),
             saved_at: now,
-            schema_version: "2.0.0".to_string(),
         };
 
         let external = PersistenceMetadata {
-            format_version: 2,
             instance_id: Uuid::new_v4(),
             saved_at: later,
-            schema_version: "2.0.0".to_string(),
         };
 
         assert!(resolver.should_use_external(&local, &external));
@@ -71,17 +67,13 @@ mod tests {
         let earlier = now - chrono::Duration::seconds(10);
 
         let local = PersistenceMetadata {
-            format_version: 2,
             instance_id: Uuid::new_v4(),
             saved_at: now,
-            schema_version: "2.0.0".to_string(),
         };
 
         let external = PersistenceMetadata {
-            format_version: 2,
             instance_id: Uuid::new_v4(),
             saved_at: earlier,
-            schema_version: "2.0.0".to_string(),
         };
 
         assert!(!resolver.should_use_external(&local, &external));
@@ -94,17 +86,13 @@ mod tests {
         let id = Uuid::new_v4();
 
         let local = PersistenceMetadata {
-            format_version: 2,
             instance_id: id,
             saved_at: now,
-            schema_version: "2.0.0".to_string(),
         };
 
         let external = PersistenceMetadata {
-            format_version: 2,
             instance_id: id,
             saved_at: now,
-            schema_version: "2.0.0".to_string(),
         };
 
         // Equal timestamps -> use local

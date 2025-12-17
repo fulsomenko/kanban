@@ -37,7 +37,6 @@ async fn test_conflict_detection_on_concurrent_modification() {
     let modified_data = serde_json::json!({
         "version": 2,
         "metadata": {
-            "format_version": 2,
             "instance_id": uuid::Uuid::new_v4().to_string(),
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
@@ -144,7 +143,6 @@ async fn test_conflict_detection_tracks_file_metadata() {
     let modified_data = serde_json::json!({
         "version": 2,
         "metadata": {
-            "format_version": 2,
             "instance_id": uuid::Uuid::new_v4().to_string(),
             "saved_at": chrono::Utc::now().to_rfc3339()
         },

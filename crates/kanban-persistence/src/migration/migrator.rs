@@ -64,10 +64,8 @@ impl Migrator {
         let v2_data = json!({
             "version": 2,
             "metadata": {
-                "format_version": 2,
                 "instance_id": Uuid::new_v4().to_string(),
-                "saved_at": Utc::now().to_rfc3339(),
-                "schema_version": "2.0.0"
+                "saved_at": Utc::now().to_rfc3339()
             },
             "data": v1_data
         });

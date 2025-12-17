@@ -26,7 +26,6 @@ fn test_import_failure_prevents_empty_state_save() {
     let v2_content = serde_json::json!({
         "version": 2,
         "metadata": {
-            "format_version": 2,
             "instance_id": "test-instance-id",
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
@@ -107,7 +106,6 @@ fn test_v2_format_is_imported_correctly() {
     let v2_content = serde_json::json!({
         "version": 2,
         "metadata": {
-            "format_version": 2,
             "instance_id": "test-instance",
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
