@@ -43,11 +43,11 @@ fn test_import_failure_prevents_empty_state_save() {
 
     // App should load the board from V2 format
     assert_eq!(
-        app.boards.len(),
+        app.ctx.boards.len(),
         1,
         "V2 format should be imported successfully"
     );
-    assert_eq!(app.boards[0].name, "Test Board");
+    assert_eq!(app.ctx.boards[0].name, "Test Board");
     assert!(
         app.save_file.is_some(),
         "save_file should still be enabled after successful V2 import"
@@ -72,7 +72,7 @@ fn test_import_failure_disables_save_file() {
     );
 
     // App should have empty state
-    assert_eq!(app.boards.len(), 0);
+    assert_eq!(app.ctx.boards.len(), 0);
 }
 
 #[test]
@@ -122,11 +122,11 @@ fn test_v2_format_is_imported_correctly() {
     let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
 
     // Should successfully import the board with its column and card
-    assert_eq!(app.boards.len(), 1);
-    assert_eq!(app.boards[0].name, "My Project");
-    assert_eq!(app.columns.len(), 1);
-    assert_eq!(app.cards.len(), 1);
-    assert_eq!(app.cards[0].title, "Important Task");
+    assert_eq!(app.ctx.boards.len(), 1);
+    assert_eq!(app.ctx.boards[0].name, "My Project");
+    assert_eq!(app.ctx.columns.len(), 1);
+    assert_eq!(app.ctx.cards.len(), 1);
+    assert_eq!(app.ctx.cards[0].title, "Important Task");
     assert!(
         app.save_file.is_some(),
         "save_file should remain enabled after successful V2 import"
