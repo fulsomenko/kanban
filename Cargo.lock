@@ -969,20 +969,13 @@ name = "kanban-mcp"
 version = "0.1.13"
 dependencies = [
  "anyhow",
- "async-trait",
- "chrono",
- "kanban-core",
- "kanban-domain",
- "kanban-persistence",
  "rmcp",
  "schemars",
  "serde",
  "serde_json",
- "thiserror 2.0.17",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
