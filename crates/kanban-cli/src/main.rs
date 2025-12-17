@@ -56,7 +56,8 @@ async fn main() -> anyhow::Result<()> {
         None => {
             if let Some(ref file_path) = cli.file {
                 if !std::path::Path::new(file_path).exists() {
-                    std::fs::write(file_path, r#"{"boards":[]}"#)?;
+                    let empty_state = kanban_persistence::JsonEnvelope::empty().to_json_string()?;
+                    std::fs::write(file_path, empty_state)?;
                     tracing::info!("Created new board file: {}", file_path);
                 }
             }

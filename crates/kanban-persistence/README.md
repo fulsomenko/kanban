@@ -52,7 +52,7 @@ let instance_id = store.instance_id();
 // Save data
 let snapshot = StoreSnapshot {
     data: serde_json::to_vec(&data)?,
-    metadata: PersistenceMetadata::new(2, instance_id),
+    metadata: PersistenceMetadata::new(instance_id),
 };
 store.save(snapshot).await?;
 
@@ -145,10 +145,8 @@ Disk (persisted)
 {
   "version": 2,
   "metadata": {
-    "format_version": 2,
     "instance_id": "uuid-here",
-    "saved_at": "2024-01-15T10:30:00Z",
-    "schema_version": "2.0.0"
+    "saved_at": "2024-01-15T10:30:00Z"
   },
   "data": {
     "boards": [],

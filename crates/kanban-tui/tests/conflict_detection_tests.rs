@@ -29,7 +29,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     let data1 = snapshot1.to_json_bytes().unwrap();
     let persist_snapshot1 = StoreSnapshot {
         data: data1,
-        metadata: PersistenceMetadata::new(2, store_id),
+        metadata: PersistenceMetadata::new(store_id),
     };
     store.save(persist_snapshot1).await.unwrap();
 
@@ -37,7 +37,6 @@ async fn test_conflict_detection_on_concurrent_modification() {
     let modified_data = serde_json::json!({
         "version": 2,
         "metadata": {
-            "format_version": 2,
             "instance_id": uuid::Uuid::new_v4().to_string(),
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
@@ -57,7 +56,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     let data2 = snapshot1.to_json_bytes().unwrap();
     let persist_snapshot2 = StoreSnapshot {
         data: data2,
-        metadata: PersistenceMetadata::new(2, store_id),
+        metadata: PersistenceMetadata::new(store_id),
     };
 
     let result = store.save(persist_snapshot2).await;
@@ -96,7 +95,7 @@ async fn test_no_conflict_when_file_unchanged() {
     let data = snapshot.to_json_bytes().unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
-        metadata: PersistenceMetadata::new(2, store.instance_id()),
+        metadata: PersistenceMetadata::new(store.instance_id()),
     };
     store.save(persist_snapshot.clone()).await.unwrap();
 
@@ -130,7 +129,7 @@ async fn test_conflict_detection_tracks_file_metadata() {
     let data = snapshot.to_json_bytes().unwrap();
     let persist_snapshot = StoreSnapshot {
         data,
-        metadata: PersistenceMetadata::new(2, store.instance_id()),
+        metadata: PersistenceMetadata::new(store.instance_id()),
     };
     store.save(persist_snapshot.clone()).await.unwrap();
 
@@ -144,7 +143,6 @@ async fn test_conflict_detection_tracks_file_metadata() {
     let modified_data = serde_json::json!({
         "version": 2,
         "metadata": {
-            "format_version": 2,
             "instance_id": uuid::Uuid::new_v4().to_string(),
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
@@ -190,7 +188,7 @@ async fn test_multiple_instances_with_different_ids() {
     let data = snapshot.to_json_bytes().unwrap();
     let persist_snapshot1 = StoreSnapshot {
         data: data.clone(),
-        metadata: PersistenceMetadata::new(2, store1_id),
+        metadata: PersistenceMetadata::new(store1_id),
     };
     store1.save(persist_snapshot1).await.unwrap();
 
@@ -199,7 +197,7 @@ async fn test_multiple_instances_with_different_ids() {
     let store2 = JsonFileStore::with_instance_id(&file_path, store2_id);
     let persist_snapshot2 = StoreSnapshot {
         data: data.clone(),
-        metadata: PersistenceMetadata::new(2, store2_id),
+        metadata: PersistenceMetadata::new(store2_id),
     };
 
     // Should succeed because it's a different instance
@@ -233,7 +231,7 @@ async fn test_conflict_resolution_with_force_overwrite() {
     let data = snapshot.to_json_bytes().unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
-        metadata: PersistenceMetadata::new(2, store.instance_id()),
+        metadata: PersistenceMetadata::new(store.instance_id()),
     };
     store.save(persist_snapshot.clone()).await.unwrap();
 
@@ -286,7 +284,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     let data = snapshot1.to_json_bytes().unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
-        metadata: PersistenceMetadata::new(2, instance1_id),
+        metadata: PersistenceMetadata::new(instance1_id),
     };
     store1.save(persist_snapshot).await.unwrap();
 
@@ -309,7 +307,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     let data2 = snapshot2.to_json_bytes().unwrap();
     let persist_snapshot2 = StoreSnapshot {
         data: data2,
-        metadata: PersistenceMetadata::new(2, instance2_id),
+        metadata: PersistenceMetadata::new(instance2_id),
     };
 
     // Ensure file modification time changes
@@ -334,7 +332,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     let data3 = snapshot3.to_json_bytes().unwrap();
     let persist_snapshot3 = StoreSnapshot {
         data: data3,
-        metadata: PersistenceMetadata::new(2, instance3_id),
+        metadata: PersistenceMetadata::new(instance3_id),
     };
 
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -349,7 +347,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     // This should fail because file was modified by instances 2 and 3
     let persist_snapshot_retry = StoreSnapshot {
         data: data.clone(),
-        metadata: PersistenceMetadata::new(2, instance1_id),
+        metadata: PersistenceMetadata::new(instance1_id),
     };
     let result1_retry = store1.save(persist_snapshot_retry).await;
     assert!(

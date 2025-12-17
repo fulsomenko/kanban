@@ -731,13 +731,16 @@ name = "kanban-cli"
 version = "0.1.14"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "kanban-core",
  "kanban-domain",
+ "kanban-persistence",
  "kanban-tui",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

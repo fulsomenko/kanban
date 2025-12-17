@@ -18,10 +18,40 @@ pub struct JsonFileStore {
 
 /// Wrapper structure for the JSON file format v2
 #[derive(Debug, Serialize, Deserialize)]
-struct JsonEnvelope {
+pub struct JsonEnvelope {
     version: u32,
     metadata: PersistenceMetadata,
     data: serde_json::Value,
+}
+
+impl JsonEnvelope {
+    /// Create a new V2 format envelope with the given data
+    pub fn new(data: serde_json::Value) -> Self {
+        Self {
+            version: 2,
+            metadata: PersistenceMetadata {
+                instance_id: Uuid::new_v4(),
+                saved_at: chrono::Utc::now(),
+            },
+            data,
+        }
+    }
+
+    /// Create an empty V2 format envelope with default structure
+    pub fn empty() -> Self {
+        Self::new(serde_json::json!({
+            "boards": [],
+            "columns": [],
+            "cards": [],
+            "archived_cards": [],
+            "sprints": []
+        }))
+    }
+
+    /// Serialize to pretty-printed JSON string
+    pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
 }
 
 impl JsonFileStore {
@@ -189,17 +219,15 @@ mod tests {
         let data = json!({ "boards": [], "columns": [] });
         let snapshot = StoreSnapshot {
             data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(2, store.instance_id()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
         };
 
         // Save
-        let metadata = store.save(snapshot.clone()).await.unwrap();
-        assert_eq!(metadata.format_version, 2);
+        let _metadata = store.save(snapshot.clone()).await.unwrap();
         assert!(file_path.exists());
 
         // Load
-        let (loaded_snapshot, loaded_metadata) = store.load().await.unwrap();
-        assert_eq!(loaded_metadata.format_version, 2);
+        let (loaded_snapshot, _loaded_metadata) = store.load().await.unwrap();
 
         let loaded_data: serde_json::Value = serde_json::from_slice(&loaded_snapshot.data).unwrap();
         assert_eq!(loaded_data, data);
@@ -217,10 +245,24 @@ mod tests {
         let data = json!({});
         let snapshot = StoreSnapshot {
             data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(2, store.instance_id()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
         };
         store.save(snapshot).await.unwrap();
 
         assert!(store.exists().await);
+    }
+
+    #[test]
+    fn test_json_envelope_empty_structure() {
+        let envelope = JsonEnvelope::empty();
+        let json = serde_json::to_value(envelope).unwrap();
+
+        assert_eq!(json["version"], 2);
+        assert!(json["metadata"].is_object());
+        assert!(json["data"]["boards"].is_array());
+        assert!(json["data"]["columns"].is_array());
+        assert!(json["data"]["cards"].is_array());
+        assert!(json["data"]["archived_cards"].is_array());
+        assert!(json["data"]["sprints"].is_array());
     }
 }
