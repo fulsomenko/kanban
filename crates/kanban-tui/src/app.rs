@@ -893,7 +893,8 @@ impl App {
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
         if let Some(pos) = self
-            .ctx.archived_cards
+            .ctx
+            .archived_cards
             .iter()
             .position(|dc| dc.card.id == card_id)
         {
@@ -906,7 +907,8 @@ impl App {
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
 
         let cards: Vec<_> = self
-            .ctx.cards
+            .ctx
+            .cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
@@ -1007,7 +1009,8 @@ impl App {
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<&Card> {
         if self.mode == AppMode::ArchivedCardsView {
-            self.ctx.archived_cards
+            self.ctx
+                .archived_cards
                 .iter()
                 .find(|dc| dc.card.id == card_id)
                 .map(|dc| &dc.card)
@@ -1017,7 +1020,8 @@ impl App {
     }
 
     pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        self.ctx.cards
+        self.ctx
+            .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id))
             .collect()
@@ -1155,7 +1159,8 @@ impl App {
 
                 // When in DeletedCardsView, convert deleted cards to Card objects for display
                 let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
-                    self.ctx.archived_cards
+                    self.ctx
+                        .archived_cards
                         .iter()
                         .map(|dc| dc.card.clone())
                         .collect()
@@ -1778,7 +1783,8 @@ impl App {
                             sprint_id,
                             sprint.sprint_number,
                             sprint.name_index.and_then(|idx| {
-                                self.ctx.boards
+                                self.ctx
+                                    .boards
                                     .iter()
                                     .find(|b| b.id == sprint.board_id)
                                     .and_then(|board| board.sprint_names.get(idx).cloned())

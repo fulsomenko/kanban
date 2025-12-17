@@ -428,7 +428,8 @@ impl RenderStrategy for MultiPanelRenderer {
 
                     let column_name =
                         if let crate::card_list::CardListId::Column(column_id) = task_list.id {
-                            app.ctx.columns
+                            app.ctx
+                                .columns
                                 .iter()
                                 .find(|c| c.id == column_id)
                                 .map(|c| c.name.clone())

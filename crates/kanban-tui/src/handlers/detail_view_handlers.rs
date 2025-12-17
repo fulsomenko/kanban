@@ -293,7 +293,8 @@ impl App {
                             .get()
                             .and_then(|idx| self.ctx.boards.get(idx))
                             .map(|board| {
-                                self.ctx.sprints
+                                self.ctx
+                                    .sprints
                                     .iter()
                                     .filter(|s| s.board_id == board.id)
                                     .count()
@@ -442,7 +443,8 @@ impl App {
 
                     match action {
                         CardListAction::Select(card_id) => {
-                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 self.push_mode(AppMode::CardDetail);
@@ -450,7 +452,8 @@ impl App {
                             }
                         }
                         CardListAction::Edit(card_id) => {
-                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 self.push_mode(AppMode::CardDetail);
@@ -480,7 +483,8 @@ impl App {
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
-                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 let priority_idx = self.get_current_priority_selection_index();
@@ -489,7 +493,8 @@ impl App {
                             }
                         }
                         CardListAction::AssignSprint(card_id) => {
-                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.active_board_index {
@@ -511,7 +516,8 @@ impl App {
                             }
                         }
                         CardListAction::ReassignSprint(card_id) => {
-                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.active_board_index {
@@ -556,7 +562,8 @@ impl App {
                             }
                         }
                         CardListAction::MoveColumn(card_id, is_right) => {
-                            if let Some(card_idx) = self.ctx.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 // Extract all necessary data before any command execution
                                 let move_info = {

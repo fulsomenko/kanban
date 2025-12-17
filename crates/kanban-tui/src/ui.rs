@@ -894,7 +894,10 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             // Show active sprint's card prefix override if it exists
             if let Some(sprint_prefix) =
-                crate::board_context::get_active_sprint_card_prefix_override(board, &app.ctx.sprints)
+                crate::board_context::get_active_sprint_card_prefix_override(
+                    board,
+                    &app.ctx.sprints,
+                )
             {
                 settings_lines.push(metadata_line_styled(
                     "Active Sprint Card Prefix",

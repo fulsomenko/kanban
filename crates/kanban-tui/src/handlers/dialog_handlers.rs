@@ -170,7 +170,8 @@ impl App {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.board_selection.get() {
-                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
+                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
+                                {
                                     let cmd = Box::new(crate::state::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
@@ -188,7 +189,8 @@ impl App {
                         }
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                if let Some(sprint_id) =
+                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
@@ -207,7 +209,8 @@ impl App {
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                if let Some(sprint_id) =
+                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
@@ -232,7 +235,8 @@ impl App {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.board_selection.get() {
-                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
+                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
+                                {
                                     let cmd = Box::new(crate::state::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
@@ -256,7 +260,8 @@ impl App {
                         }
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                if let Some(sprint_id) =
+                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,
@@ -284,7 +289,8 @@ impl App {
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.active_sprint_index {
-                                if let Some(sprint_id) = self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                if let Some(sprint_id) =
+                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(crate::state::commands::UpdateSprint {
                                         sprint_id,

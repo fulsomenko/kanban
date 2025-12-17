@@ -62,7 +62,8 @@ impl App {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
                             tracing::info!(
                                 "Activated sprint: {}",
-                                self.ctx.sprints
+                                self.ctx
+                                    .sprints
                                     .get(sprint_idx)
                                     .map(|s| s.formatted_name(board, "sprint"))
                                     .unwrap_or_default()
@@ -136,8 +137,10 @@ impl App {
                         .unwrap_or("sprint")
                         .to_string();
                     // Ensure the counter for this prefix is initialized based on existing sprints
-                    board
-                        .ensure_sprint_counter_initialized(&effective_sprint_prefix, &self.ctx.sprints);
+                    board.ensure_sprint_counter_initialized(
+                        &effective_sprint_prefix,
+                        &self.ctx.sprints,
+                    );
                     let sprint_number = board.get_next_sprint_number(&effective_sprint_prefix);
                     let input_text = self.input.as_str().trim();
                     let name_index = if input_text.is_empty() {

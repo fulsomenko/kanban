@@ -356,8 +356,13 @@ impl App {
             };
 
             // Calculate position in target column before command execution
-            let target_position = target_column_id
-                .map(|col_id| self.ctx.cards.iter().filter(|c| c.column_id == col_id).count() as i32);
+            let target_position = target_column_id.map(|col_id| {
+                self.ctx
+                    .cards
+                    .iter()
+                    .filter(|c| c.column_id == col_id)
+                    .count() as i32
+            });
 
             // Build update with status and optionally column/position
             let mut updates = CardUpdate {
@@ -402,14 +407,19 @@ impl App {
                 let target_column_id = if let Some(focused_col_id) = focused_col_id {
                     Some(focused_col_id)
                 } else {
-                    self.ctx.columns
+                    self.ctx
+                        .columns
                         .iter()
                         .find(|col| col.board_id == bid)
                         .map(|col| col.id)
                 };
 
                 let column = if let Some(col_id) = target_column_id {
-                    self.ctx.columns.iter().find(|col| col.id == col_id).cloned()
+                    self.ctx
+                        .columns
+                        .iter()
+                        .find(|col| col.id == col_id)
+                        .cloned()
                 } else {
                     None
                 };
@@ -470,7 +480,13 @@ impl App {
 
                 // After command execution, find the newly created card
                 if mark_as_complete {
-                    if let Some(card) = self.ctx.cards.iter().rev().find(|c| c.column_id == column.id) {
+                    if let Some(card) = self
+                        .ctx
+                        .cards
+                        .iter()
+                        .rev()
+                        .find(|c| c.column_id == column.id)
+                    {
                         let card_id = card.id;
                         let update_cmd = Box::new(UpdateCard {
                             card_id,
@@ -496,7 +512,13 @@ impl App {
 
                 self.refresh_view();
                 // Select the most recently created card
-                if let Some(card) = self.ctx.cards.iter().rev().find(|c| c.column_id == column.id) {
+                if let Some(card) = self
+                    .ctx
+                    .cards
+                    .iter()
+                    .rev()
+                    .find(|c| c.column_id == column.id)
+                {
                     self.select_card_by_id(card.id);
                 }
             }
@@ -844,7 +866,12 @@ impl App {
         use crate::app::{AnimationType, CardAnimation};
         use std::time::Instant;
 
-        if self.ctx.archived_cards.iter().any(|dc| dc.card.id == card_id) {
+        if self
+            .ctx
+            .archived_cards
+            .iter()
+            .any(|dc| dc.card.id == card_id)
+        {
             self.animating_cards.insert(
                 card_id,
                 CardAnimation {
@@ -885,11 +912,17 @@ impl App {
         let card_title = archived_card.card.title.clone();
 
         // Check if the original column still exists
-        let target_column_id = if self.ctx.columns.iter().any(|col| col.id == original_column_id) {
+        let target_column_id = if self
+            .ctx
+            .columns
+            .iter()
+            .any(|col| col.id == original_column_id)
+        {
             original_column_id
         } else {
             // If original column doesn't exist, use first column
-            self.ctx.columns
+            self.ctx
+                .columns
                 .first()
                 .map(|col| col.id)
                 .unwrap_or(original_column_id)
@@ -934,7 +967,12 @@ impl App {
         use crate::app::{AnimationType, CardAnimation};
         use std::time::Instant;
 
-        if self.ctx.archived_cards.iter().any(|dc| dc.card.id == card_id) {
+        if self
+            .ctx
+            .archived_cards
+            .iter()
+            .any(|dc| dc.card.id == card_id)
+        {
             self.animating_cards.insert(
                 card_id,
                 CardAnimation {
@@ -951,7 +989,12 @@ impl App {
         let mut deleted_count = 0;
 
         for card_id in card_ids {
-            if let Some(card) = self.ctx.archived_cards.iter().find(|dc| dc.card.id == card_id) {
+            if let Some(card) = self
+                .ctx
+                .archived_cards
+                .iter()
+                .find(|dc| dc.card.id == card_id)
+            {
                 let card_title = card.card.title.clone();
 
                 // Execute DeleteCard command

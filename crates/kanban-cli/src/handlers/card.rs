@@ -16,8 +16,8 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 || args.points.is_some()
                 || args.due_date.is_some()
             {
-                let updates = build_card_update_from_create(&args)
-                    .map_err(|e| anyhow::anyhow!(e))?;
+                let updates =
+                    build_card_update_from_create(&args).map_err(|e| anyhow::anyhow!(e))?;
                 card = ctx.update_card(card.id, updates)?;
             }
 
