@@ -42,6 +42,7 @@ crossterm = "0.28"
 
 # CLI framework
 clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
 
 # Logging
 tracing = "0.1"

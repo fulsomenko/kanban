@@ -3,7 +3,7 @@ mod context;
 mod handlers;
 mod output;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use cli::{Cli, Commands};
 use context::CliContext;
 use kanban_tui::App;
@@ -33,26 +33,32 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    // Get file path from either positional arg or --file flag
-    let file = cli.get_file().cloned();
-
     match cli.command {
         None => {
-            // TUI mode: kanban [file.json]
-            if let Some(ref file_path) = file {
+            if let Some(ref file_path) = cli.file {
                 if !std::path::Path::new(file_path).exists() {
                     let empty_state = kanban_persistence::JsonEnvelope::empty().to_json_string()?;
                     std::fs::write(file_path, empty_state)?;
                     tracing::info!("Created new board file: {}", file_path);
                 }
             }
-            let (mut app, save_rx) = App::new(file);
+            let (mut app, save_rx) = App::new(cli.file);
             app.run(save_rx).await?;
         }
+        Some(Commands::Completions { shell }) => {
+            clap_complete::generate(
+                shell,
+                &mut Cli::command(),
+                "kanban",
+                &mut std::io::stdout(),
+            );
+        }
         Some(cmd) => {
-            // CLI mode: kanban --file <path> <command>
-            let file_path =
-                file.ok_or_else(|| anyhow::anyhow!("--file is required for CLI operations"))?;
+            let file_path = cli.file.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "File path required for CLI operations. Provide as argument or set KANBAN_FILE env var."
+                )
+            })?;
 
             let mut ctx = CliContext::load(&file_path).await?;
 
@@ -75,6 +81,7 @@ async fn main() -> anyhow::Result<()> {
                 Commands::Import(args) => {
                     handlers::export::handle_import(&mut ctx, args).await?;
                 }
+                Commands::Completions { .. } => unreachable!(),
             }
         }
     }

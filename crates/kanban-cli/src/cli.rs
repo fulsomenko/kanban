@@ -6,23 +6,12 @@ use uuid::Uuid;
 #[command(about = "A terminal-based kanban board", long_about = None)]
 #[command(version, arg_required_else_help = false)]
 pub struct Cli {
-    /// Path to kanban data file (positional for TUI, or use --file)
-    #[arg(value_name = "FILE")]
-    pub file_positional: Option<String>,
-
-    /// Path to kanban data file (for CLI commands)
-    #[arg(short, long, env = "KANBAN_FILE")]
+    /// Path to kanban data file (or set KANBAN_FILE env var)
+    #[arg(value_name = "FILE", env = "KANBAN_FILE")]
     pub file: Option<String>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
-}
-
-impl Cli {
-    /// Get the file path from either positional or --file flag
-    pub fn get_file(&self) -> Option<&String> {
-        self.file.as_ref().or(self.file_positional.as_ref())
-    }
 }
 
 #[derive(Subcommand)]
@@ -39,6 +28,11 @@ pub enum Commands {
     Export(ExportArgs),
     /// Import board data
     Import(ImportArgs),
+    /// Generate shell completions
+    Completions {
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 // Board commands

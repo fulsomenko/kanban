@@ -27,7 +27,6 @@ mod board_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -52,7 +51,6 @@ mod board_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -70,7 +68,6 @@ mod board_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "update",
@@ -96,7 +93,7 @@ mod board_tests {
         let file = dir.path().join("test.json");
 
         let output = kanban()
-            .args(["--file", file.to_str().unwrap(), "board", "list"])
+            .args([file.to_str().unwrap(), "board", "list"])
             .assert()
             .success()
             .get_output()
@@ -115,7 +112,6 @@ mod board_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -127,7 +123,6 @@ mod board_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -138,7 +133,7 @@ mod board_tests {
             .success();
 
         let output = kanban()
-            .args(["--file", file.to_str().unwrap(), "board", "list"])
+            .args([file.to_str().unwrap(), "board", "list"])
             .assert()
             .success()
             .get_output()
@@ -157,7 +152,6 @@ mod board_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -175,7 +169,6 @@ mod board_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "get",
@@ -200,7 +193,6 @@ mod board_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -218,7 +210,6 @@ mod board_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "update",
@@ -245,7 +236,6 @@ mod board_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -263,7 +253,6 @@ mod board_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "delete",
@@ -275,7 +264,7 @@ mod board_tests {
             .stdout(predicate::str::contains("\"deleted\""));
 
         let list_output = kanban()
-            .args(["--file", file.to_str().unwrap(), "board", "list"])
+            .args([file.to_str().unwrap(), "board", "list"])
             .assert()
             .success()
             .get_output()
@@ -293,7 +282,6 @@ mod column_tests {
     fn setup_board(file: &std::path::Path) -> String {
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -318,7 +306,6 @@ mod column_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -347,7 +334,6 @@ mod column_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -361,7 +347,6 @@ mod column_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -375,7 +360,6 @@ mod column_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "list",
@@ -401,7 +385,6 @@ mod column_tests {
 
         let col1_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -421,7 +404,6 @@ mod column_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -435,7 +417,6 @@ mod column_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "reorder",
@@ -463,7 +444,6 @@ mod column_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -483,7 +463,6 @@ mod column_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "delete",
@@ -502,7 +481,6 @@ mod card_tests {
     fn setup_board_and_column(file: &std::path::Path) -> (String, String) {
         let board_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -520,7 +498,6 @@ mod card_tests {
 
         let column_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -549,7 +526,6 @@ mod card_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -580,7 +556,6 @@ mod card_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -618,7 +593,6 @@ mod card_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -634,7 +608,6 @@ mod card_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -649,7 +622,7 @@ mod card_tests {
             .success();
 
         let output = kanban()
-            .args(["--file", file.to_str().unwrap(), "card", "list"])
+            .args([file.to_str().unwrap(), "card", "list"])
             .assert()
             .success()
             .get_output()
@@ -669,7 +642,6 @@ mod card_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -691,7 +663,6 @@ mod card_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "update",
@@ -722,7 +693,6 @@ mod card_tests {
 
         let col2_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -742,7 +712,6 @@ mod card_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -764,7 +733,6 @@ mod card_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "move",
@@ -792,7 +760,6 @@ mod card_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -814,7 +781,6 @@ mod card_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "archive",
@@ -827,7 +793,6 @@ mod card_tests {
 
         let archived_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "list",
@@ -844,7 +809,6 @@ mod card_tests {
 
         let restore_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "restore",
@@ -870,7 +834,6 @@ mod card_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -892,7 +855,6 @@ mod card_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "branch-name",
@@ -921,7 +883,6 @@ mod card_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -943,7 +904,6 @@ mod card_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "git-checkout",
@@ -972,7 +932,6 @@ mod card_tests {
 
         let card1_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -994,7 +953,6 @@ mod card_tests {
 
         let card2_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -1016,7 +974,6 @@ mod card_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "bulk-archive",
@@ -1042,7 +999,6 @@ mod card_tests {
 
         let col2_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -1062,7 +1018,6 @@ mod card_tests {
 
         let card1_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -1084,7 +1039,6 @@ mod card_tests {
 
         let card2_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -1106,7 +1060,6 @@ mod card_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "bulk-move",
@@ -1133,7 +1086,6 @@ mod sprint_tests {
     fn setup_board(file: &std::path::Path) -> String {
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -1158,7 +1110,6 @@ mod sprint_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1185,7 +1136,6 @@ mod sprint_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1213,7 +1163,6 @@ mod sprint_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1225,7 +1174,6 @@ mod sprint_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1237,7 +1185,6 @@ mod sprint_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "list",
@@ -1263,7 +1210,6 @@ mod sprint_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1281,7 +1227,6 @@ mod sprint_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "activate",
@@ -1309,7 +1254,6 @@ mod sprint_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1327,7 +1271,6 @@ mod sprint_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "activate",
@@ -1339,7 +1282,6 @@ mod sprint_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "complete",
@@ -1365,7 +1307,6 @@ mod sprint_tests {
 
         let create_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1383,7 +1324,6 @@ mod sprint_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "activate",
@@ -1395,7 +1335,6 @@ mod sprint_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "cancel",
@@ -1421,7 +1360,6 @@ mod sprint_tests {
 
         let column_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -1441,7 +1379,6 @@ mod sprint_tests {
 
         let card_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -1463,7 +1400,6 @@ mod sprint_tests {
 
         let sprint_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1481,7 +1417,6 @@ mod sprint_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "activate",
@@ -1493,7 +1428,6 @@ mod sprint_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "assign-sprint",
@@ -1521,7 +1455,6 @@ mod sprint_tests {
 
         let column_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "column",
                 "create",
@@ -1541,7 +1474,6 @@ mod sprint_tests {
 
         let card_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "create",
@@ -1563,7 +1495,6 @@ mod sprint_tests {
 
         let sprint_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
@@ -1581,7 +1512,6 @@ mod sprint_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "sprint",
                 "activate",
@@ -1593,7 +1523,6 @@ mod sprint_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "assign-sprint",
@@ -1607,7 +1536,6 @@ mod sprint_tests {
 
         let output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "card",
                 "unassign-sprint",
@@ -1636,7 +1564,6 @@ mod export_import_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -1647,7 +1574,7 @@ mod export_import_tests {
             .success();
 
         kanban()
-            .args(["--file", file.to_str().unwrap(), "export"])
+            .args([file.to_str().unwrap(), "export"])
             .assert()
             .success()
             .stdout(predicate::str::contains("\"boards\""))
@@ -1662,7 +1589,6 @@ mod export_import_tests {
 
         let board_output = kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -1680,7 +1606,6 @@ mod export_import_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "export",
                 "--board-id",
@@ -1700,7 +1625,6 @@ mod export_import_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "create",
@@ -1711,7 +1635,7 @@ mod export_import_tests {
             .success();
 
         let export_output = kanban()
-            .args(["--file", file.to_str().unwrap(), "export"])
+            .args([file.to_str().unwrap(), "export"])
             .assert()
             .success()
             .get_output()
@@ -1727,7 +1651,6 @@ mod export_import_tests {
         let new_file = dir.path().join("new.json");
         let output = kanban()
             .args([
-                "--file",
                 new_file.to_str().unwrap(),
                 "import",
                 "--file",
@@ -1753,7 +1676,7 @@ mod error_tests {
         let file = dir.path().join("test.json");
 
         kanban()
-            .args(["--file", file.to_str().unwrap(), "board", "create"])
+            .args([file.to_str().unwrap(), "board", "create"])
             .assert()
             .failure()
             .stderr(predicate::str::contains("--name"));
@@ -1766,7 +1689,6 @@ mod error_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "get",
@@ -1784,7 +1706,6 @@ mod error_tests {
 
         kanban()
             .args([
-                "--file",
                 file.to_str().unwrap(),
                 "board",
                 "get",
@@ -1803,7 +1724,7 @@ mod error_tests {
         let file = dir.path().join("test.json");
 
         kanban()
-            .args(["--file", file.to_str().unwrap(), "column", "list"])
+            .args([file.to_str().unwrap(), "column", "list"])
             .assert()
             .failure()
             .stderr(predicate::str::contains("--board-id"));
