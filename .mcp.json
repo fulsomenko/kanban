@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "git": {
+      "command": "nix",
+      "args": ["run", ".#mcp-server-git"]
+    }
+  }
+}

@@ -3,6 +3,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
+    servers.url = "github:fulsomenko/servers";
   };
 
   outputs = {
@@ -10,6 +11,7 @@
     nixpkgs,
     rust-overlay,
     flake-utils,
+    servers,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -54,6 +56,7 @@
         packages = {
           default = pkgs.callPackage ./default.nix {};
           kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {};
+          mcp-server-git = servers.packages.${system}.mcp-server-git;
           bump-version = bumpVersion;
           publish-crates = publishCrates;
           validate-release = validateRelease;
