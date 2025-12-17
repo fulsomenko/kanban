@@ -167,10 +167,11 @@ impl KanbanOperations for CliContext {
         use kanban_domain::commands::CreateBoard;
         let cmd = CreateBoard { name, card_prefix };
         self.execute(Box::new(cmd))?;
-        self.boards
-            .last()
-            .cloned()
-            .ok_or_else(|| kanban_core::KanbanError::Internal("Board creation succeeded but board not found".into()))
+        self.boards.last().cloned().ok_or_else(|| {
+            kanban_core::KanbanError::Internal(
+                "Board creation succeeded but board not found".into(),
+            )
+        })
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
@@ -217,10 +218,11 @@ impl KanbanOperations for CliContext {
             position,
         };
         self.execute(Box::new(cmd))?;
-        self.columns
-            .last()
-            .cloned()
-            .ok_or_else(|| kanban_core::KanbanError::Internal("Column creation succeeded but column not found".into()))
+        self.columns.last().cloned().ok_or_else(|| {
+            kanban_core::KanbanError::Internal(
+                "Column creation succeeded but column not found".into(),
+            )
+        })
     }
 
     fn list_columns(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
@@ -281,10 +283,9 @@ impl KanbanOperations for CliContext {
             position,
         };
         self.execute(Box::new(cmd))?;
-        self.cards
-            .last()
-            .cloned()
-            .ok_or_else(|| kanban_core::KanbanError::Internal("Card creation succeeded but card not found".into()))
+        self.cards.last().cloned().ok_or_else(|| {
+            kanban_core::KanbanError::Internal("Card creation succeeded but card not found".into())
+        })
     }
 
     fn list_cards(&self, filter: CardFilter) -> KanbanResult<Vec<Card>> {
@@ -546,10 +547,11 @@ impl KanbanOperations for CliContext {
             prefix: Some(effective_prefix),
         };
         self.execute(Box::new(cmd))?;
-        self.sprints
-            .last()
-            .cloned()
-            .ok_or_else(|| kanban_core::KanbanError::Internal("Sprint creation succeeded but sprint not found".into()))
+        self.sprints.last().cloned().ok_or_else(|| {
+            kanban_core::KanbanError::Internal(
+                "Sprint creation succeeded but sprint not found".into(),
+            )
+        })
     }
 
     fn list_sprints(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
