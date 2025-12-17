@@ -69,7 +69,7 @@ pub enum BoardAction {
 
 #[derive(Args)]
 pub struct BoardUpdateArgs {
-    #[arg(long)]
+    /// Board ID to update
     pub id: Uuid,
     #[arg(long)]
     pub name: Option<String>,
@@ -127,7 +127,7 @@ pub enum ColumnAction {
 
 #[derive(Args)]
 pub struct ColumnUpdateArgs {
-    #[arg(long)]
+    /// Column ID to update
     pub id: Uuid,
     #[arg(long)]
     pub name: Option<String>,
@@ -260,7 +260,7 @@ pub struct CardListArgs {
 
 #[derive(Args)]
 pub struct CardUpdateArgs {
-    #[arg(long)]
+    /// Card ID to update
     pub id: Uuid,
     #[arg(long)]
     pub title: Option<String>,
@@ -334,7 +334,7 @@ pub enum SprintAction {
 
 #[derive(Args)]
 pub struct SprintUpdateArgs {
-    #[arg(long)]
+    /// Sprint ID to update
     pub id: Uuid,
     #[arg(long)]
     pub prefix: Option<String>,

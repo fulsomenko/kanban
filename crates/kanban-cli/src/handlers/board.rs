@@ -16,7 +16,7 @@ pub async fn handle(ctx: &mut CliContext, action: BoardAction) -> anyhow::Result
         }
         BoardAction::Get { id } => match ctx.get_board(id)? {
             Some(board) => output::output_success(&board),
-            None => output::output_error(&format!("Board not found: {}", id)),
+            None => return output::output_error(&format!("Board not found: {}", id)),
         },
         BoardAction::Update(args) => {
             let board = handle_update(ctx, args).await?;

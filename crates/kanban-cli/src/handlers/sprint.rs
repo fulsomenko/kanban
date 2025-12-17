@@ -20,7 +20,7 @@ pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Resul
         }
         SprintAction::Get { id } => match ctx.get_sprint(id)? {
             Some(sprint) => output::output_success(&sprint),
-            None => output::output_error(&format!("Sprint not found: {}", id)),
+            None => return output::output_error(&format!("Sprint not found: {}", id)),
         },
         SprintAction::Update(args) => {
             let sprint = handle_update(ctx, args).await?;

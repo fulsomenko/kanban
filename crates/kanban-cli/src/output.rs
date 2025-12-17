@@ -32,12 +32,11 @@ pub fn output_list<T: Serialize>(items: Vec<T>) {
     output_success(list);
 }
 
-/// Outputs an error response to stderr and terminates the process.
+/// Outputs an error response to stderr and returns an error for proper propagation.
 ///
-/// This function uses the never type (`!`) because it always exits the process
-/// with code 1 after printing the error. This is intentional CLI behavior to
-/// signal failure to shell scripts and CI pipelines.
-pub fn output_error(message: &str) -> ! {
+/// Returns an `anyhow::Error` to allow callers to handle the error appropriately
+/// and enable proper cleanup. The CLI's main function handles the exit code.
+pub fn output_error(message: &str) -> anyhow::Result<()> {
     let response: CliResponse<()> = CliResponse {
         success: false,
         api_version: env!("CARGO_PKG_VERSION"),
@@ -45,5 +44,5 @@ pub fn output_error(message: &str) -> ! {
         error: Some(message.to_string()),
     };
     eprintln!("{}", serde_json::to_string(&response).unwrap());
-    std::process::exit(1);
+    anyhow::bail!("{}", message)
 }

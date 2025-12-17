@@ -8,6 +8,18 @@ use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, S
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize)]
+pub struct BulkOperationResult {
+    pub succeeded: Vec<Uuid>,
+    pub failed: Vec<BulkOperationFailure>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BulkOperationFailure {
+    pub id: Uuid,
+    pub error: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataSnapshot {
     #[serde(default)]
@@ -95,6 +107,59 @@ impl CliContext {
         self.store.save(store_snapshot).await?;
         Ok(())
     }
+
+    pub fn bulk_archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
+        let mut succeeded = Vec::new();
+        let mut failed = Vec::new();
+        for id in ids {
+            match self.archive_card(id) {
+                Ok(()) => succeeded.push(id),
+                Err(e) => failed.push(BulkOperationFailure {
+                    id,
+                    error: e.to_string(),
+                }),
+            }
+        }
+        BulkOperationResult { succeeded, failed }
+    }
+
+    pub fn bulk_move_cards_detailed(
+        &mut self,
+        ids: Vec<Uuid>,
+        column_id: Uuid,
+    ) -> BulkOperationResult {
+        let mut succeeded = Vec::new();
+        let mut failed = Vec::new();
+        for id in ids {
+            match self.move_card(id, column_id, None) {
+                Ok(_) => succeeded.push(id),
+                Err(e) => failed.push(BulkOperationFailure {
+                    id,
+                    error: e.to_string(),
+                }),
+            }
+        }
+        BulkOperationResult { succeeded, failed }
+    }
+
+    pub fn bulk_assign_sprint_detailed(
+        &mut self,
+        ids: Vec<Uuid>,
+        sprint_id: Uuid,
+    ) -> BulkOperationResult {
+        let mut succeeded = Vec::new();
+        let mut failed = Vec::new();
+        for id in ids {
+            match self.assign_card_to_sprint(id, sprint_id) {
+                Ok(_) => succeeded.push(id),
+                Err(e) => failed.push(BulkOperationFailure {
+                    id,
+                    error: e.to_string(),
+                }),
+            }
+        }
+        BulkOperationResult { succeeded, failed }
+    }
 }
 
 impl KanbanOperations for CliContext {
@@ -102,7 +167,10 @@ impl KanbanOperations for CliContext {
         use kanban_domain::commands::CreateBoard;
         let cmd = CreateBoard { name, card_prefix };
         self.execute(Box::new(cmd))?;
-        Ok(self.boards.last().unwrap().clone())
+        self.boards
+            .last()
+            .cloned()
+            .ok_or_else(|| kanban_core::KanbanError::Internal("Board creation succeeded but board not found".into()))
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
@@ -149,7 +217,10 @@ impl KanbanOperations for CliContext {
             position,
         };
         self.execute(Box::new(cmd))?;
-        Ok(self.columns.last().unwrap().clone())
+        self.columns
+            .last()
+            .cloned()
+            .ok_or_else(|| kanban_core::KanbanError::Internal("Column creation succeeded but column not found".into()))
     }
 
     fn list_columns(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
@@ -210,7 +281,10 @@ impl KanbanOperations for CliContext {
             position,
         };
         self.execute(Box::new(cmd))?;
-        Ok(self.cards.last().unwrap().clone())
+        self.cards
+            .last()
+            .cloned()
+            .ok_or_else(|| kanban_core::KanbanError::Internal("Card creation succeeded but card not found".into()))
     }
 
     fn list_cards(&self, filter: CardFilter) -> KanbanResult<Vec<Card>> {
@@ -452,7 +526,10 @@ impl KanbanOperations for CliContext {
             prefix: Some(effective_prefix),
         };
         self.execute(Box::new(cmd))?;
-        Ok(self.sprints.last().unwrap().clone())
+        self.sprints
+            .last()
+            .cloned()
+            .ok_or_else(|| kanban_core::KanbanError::Internal("Sprint creation succeeded but sprint not found".into()))
     }
 
     fn list_sprints(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {

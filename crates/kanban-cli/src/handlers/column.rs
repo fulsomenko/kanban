@@ -20,7 +20,7 @@ pub async fn handle(ctx: &mut CliContext, action: ColumnAction) -> anyhow::Resul
         }
         ColumnAction::Get { id } => match ctx.get_column(id)? {
             Some(column) => output::output_success(&column),
-            None => output::output_error(&format!("Column not found: {}", id)),
+            None => return output::output_error(&format!("Column not found: {}", id)),
         },
         ColumnAction::Update(args) => {
             let column = handle_update(ctx, args).await?;

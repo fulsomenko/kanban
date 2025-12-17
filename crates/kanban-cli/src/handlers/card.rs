@@ -36,7 +36,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
         }
         CardAction::Get { id } => match ctx.get_card(id)? {
             Some(card) => output::output_success(&card),
-            None => output::output_error(&format!("Card not found: {}", id)),
+            None => return output::output_error(&format!("Card not found: {}", id)),
         },
         CardAction::Update(args) => {
             let updates = build_card_update(&args).map_err(|e| anyhow::anyhow!(e))?;
@@ -87,19 +87,34 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             output::output_success(serde_json::json!({"command": cmd}));
         }
         CardAction::BulkArchive { ids } => {
-            let count = ctx.bulk_archive_cards(ids)?;
+            let result = ctx.bulk_archive_cards_detailed(ids);
             ctx.save().await?;
-            output::output_success(serde_json::json!({"archived_count": count}));
+            output::output_success(serde_json::json!({
+                "succeeded_count": result.succeeded.len(),
+                "failed_count": result.failed.len(),
+                "succeeded": result.succeeded,
+                "failed": result.failed
+            }));
         }
         CardAction::BulkMove { ids, column_id } => {
-            let count = ctx.bulk_move_cards(ids, column_id)?;
+            let result = ctx.bulk_move_cards_detailed(ids, column_id);
             ctx.save().await?;
-            output::output_success(serde_json::json!({"moved_count": count}));
+            output::output_success(serde_json::json!({
+                "succeeded_count": result.succeeded.len(),
+                "failed_count": result.failed.len(),
+                "succeeded": result.succeeded,
+                "failed": result.failed
+            }));
         }
         CardAction::BulkAssignSprint { ids, sprint_id } => {
-            let count = ctx.bulk_assign_sprint(ids, sprint_id)?;
+            let result = ctx.bulk_assign_sprint_detailed(ids, sprint_id);
             ctx.save().await?;
-            output::output_success(serde_json::json!({"assigned_count": count}));
+            output::output_success(serde_json::json!({
+                "succeeded_count": result.succeeded.len(),
+                "failed_count": result.failed.len(),
+                "succeeded": result.succeeded,
+                "failed": result.failed
+            }));
         }
     }
     Ok(())
@@ -138,12 +153,10 @@ fn build_card_update_from_create(args: &CardCreateArgs) -> Result<CardUpdate, St
             .points
             .map(FieldUpdate::Set)
             .unwrap_or(FieldUpdate::NoChange),
-        due_date: args
-            .due_date
-            .as_ref()
-            .and_then(|d| parse_datetime(d))
-            .map(FieldUpdate::Set)
-            .unwrap_or(FieldUpdate::NoChange),
+        due_date: match &args.due_date {
+            Some(d) => FieldUpdate::Set(parse_datetime(d)?),
+            None => FieldUpdate::NoChange,
+        },
         sprint_id: FieldUpdate::NoChange,
         assigned_prefix: FieldUpdate::NoChange,
         card_prefix: FieldUpdate::NoChange,
@@ -177,11 +190,10 @@ fn build_card_update(args: &CardUpdateArgs) -> Result<CardUpdate, String> {
         due_date: if args.clear_due_date {
             FieldUpdate::Clear
         } else {
-            args.due_date
-                .as_ref()
-                .and_then(|d| parse_datetime(d))
-                .map(FieldUpdate::Set)
-                .unwrap_or(FieldUpdate::NoChange)
+            match &args.due_date {
+                Some(d) => FieldUpdate::Set(parse_datetime(d)?),
+                None => FieldUpdate::NoChange,
+            }
         },
         sprint_id: FieldUpdate::NoChange,
         assigned_prefix: FieldUpdate::NoChange,
@@ -215,14 +227,19 @@ fn parse_status(s: &str) -> Result<CardStatus, String> {
     }
 }
 
-fn parse_datetime(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
     chrono::DateTime::parse_from_rfc3339(s)
-        .ok()
         .map(|dt| dt.with_timezone(&chrono::Utc))
-        .or_else(|| {
+        .or_else(|_| {
             chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .ok()
-                .and_then(|d| d.and_hms_opt(0, 0, 0))
+                .map_err(|_| ())
+                .and_then(|d| d.and_hms_opt(0, 0, 0).ok_or(()))
                 .map(|dt| dt.and_utc())
+        })
+        .map_err(|_| {
+            format!(
+                "Invalid date '{}'. Supported formats: YYYY-MM-DD or RFC 3339 (e.g., 2024-01-15T10:30:00Z)",
+                s
+            )
         })
 }

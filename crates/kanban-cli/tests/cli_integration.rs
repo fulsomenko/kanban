@@ -1,12 +1,11 @@
-use assert_cmd::Command;
+use assert_cmd::{cargo_bin_cmd, Command};
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
 use tempfile::tempdir;
 
-#[allow(deprecated)]
 fn kanban() -> Command {
-    Command::cargo_bin("kanban").unwrap()
+    cargo_bin_cmd!("kanban")
 }
 
 fn parse_json_output(output: &str) -> Value {
@@ -71,7 +70,6 @@ mod board_tests {
                 file.to_str().unwrap(),
                 "board",
                 "update",
-                "--id",
                 &board_id,
                 "--card-prefix",
                 "PROJ",
@@ -207,7 +205,6 @@ mod board_tests {
                 file.to_str().unwrap(),
                 "board",
                 "update",
-                "--id",
                 &board_id,
                 "--name",
                 "Updated",
@@ -647,7 +644,6 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "update",
-                "--id",
                 &card_id,
                 "--title",
                 "Updated",
@@ -939,7 +935,8 @@ mod card_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["archived_count"], 2);
+        assert_eq!(json["data"]["succeeded_count"], 2);
+        assert_eq!(json["data"]["failed_count"], 0);
     }
 
     #[test]
@@ -1027,7 +1024,8 @@ mod card_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["moved_count"], 2);
+        assert_eq!(json["data"]["succeeded_count"], 2);
+        assert_eq!(json["data"]["failed_count"], 0);
     }
 }
 
