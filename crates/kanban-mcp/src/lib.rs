@@ -13,7 +13,7 @@ use rmcp::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
-use tools_trait::McpTools;
+use tools_trait::{CreateCardParams, McpTools, UpdateCardParams};
 
 // ============================================================================
 // Request Types (kept for MCP tool schemas)
@@ -285,31 +285,22 @@ impl McpTools for KanbanMcpServer {
 
     // Card Operations
 
-    async fn create_card(
-        &self,
-        board_id: String,
-        column_id: String,
-        title: String,
-        description: Option<String>,
-        priority: Option<String>,
-        points: Option<u8>,
-        due_date: Option<String>,
-    ) -> Result<CallToolResult, McpError> {
+    async fn create_card(&self, params: CreateCardParams) -> Result<CallToolResult, McpError> {
         let mut builder = ArgsBuilder::new(&[
             "card",
             "create",
             "--board-id",
-            &board_id,
+            &params.board_id,
             "--column-id",
-            &column_id,
+            &params.column_id,
             "--title",
-            &title,
+            &params.title,
         ]);
         builder
-            .add_opt("--description", description.as_deref())
-            .add_opt("--priority", priority.as_deref())
-            .add_opt_num("--points", points)
-            .add_opt("--due-date", due_date.as_deref());
+            .add_opt("--description", params.description.as_deref())
+            .add_opt("--priority", params.priority.as_deref())
+            .add_opt_num("--points", params.points)
+            .add_opt("--due-date", params.due_date.as_deref());
         let result: serde_json::Value = self
             .executor
             .execute_with_retry(&builder.build(), 3)
@@ -352,28 +343,17 @@ impl McpTools for KanbanMcpServer {
         Ok(json_result(result))
     }
 
-    async fn update_card(
-        &self,
-        card_id: String,
-        title: Option<String>,
-        description: Option<String>,
-        priority: Option<String>,
-        status: Option<String>,
-        due_date: Option<String>,
-        clear_due_date: Option<bool>,
-        points: Option<u8>,
-        clear_points: Option<bool>,
-    ) -> Result<CallToolResult, McpError> {
-        let mut builder = ArgsBuilder::new(&["card", "update", &card_id]);
+    async fn update_card(&self, params: UpdateCardParams) -> Result<CallToolResult, McpError> {
+        let mut builder = ArgsBuilder::new(&["card", "update", &params.card_id]);
         builder
-            .add_opt("--title", title.as_deref())
-            .add_opt("--description", description.as_deref())
-            .add_opt("--priority", priority.as_deref())
-            .add_opt("--status", status.as_deref())
-            .add_opt("--due-date", due_date.as_deref())
-            .add_opt_num("--points", points)
-            .add_flag("--clear-due-date", clear_due_date)
-            .add_flag("--clear-points", clear_points);
+            .add_opt("--title", params.title.as_deref())
+            .add_opt("--description", params.description.as_deref())
+            .add_opt("--priority", params.priority.as_deref())
+            .add_opt("--status", params.status.as_deref())
+            .add_opt("--due-date", params.due_date.as_deref())
+            .add_opt_num("--points", params.points)
+            .add_flag("--clear-due-date", params.clear_due_date)
+            .add_flag("--clear-points", params.clear_points);
         let result: serde_json::Value = self
             .executor
             .execute_with_retry(&builder.build(), 3)
@@ -470,13 +450,15 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         McpTools::create_card(
             self,
-            req.board_id,
-            req.column_id,
-            req.title,
-            req.description,
-            req.priority,
-            req.points,
-            req.due_date,
+            CreateCardParams {
+                board_id: req.board_id,
+                column_id: req.column_id,
+                title: req.title,
+                description: req.description,
+                priority: req.priority,
+                points: req.points,
+                due_date: req.due_date,
+            },
         )
         .await
     }
@@ -514,15 +496,17 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         McpTools::update_card(
             self,
-            req.card_id,
-            req.title,
-            req.description,
-            req.priority,
-            req.status,
-            req.due_date,
-            req.clear_due_date,
-            req.points,
-            req.clear_points,
+            UpdateCardParams {
+                card_id: req.card_id,
+                title: req.title,
+                description: req.description,
+                priority: req.priority,
+                status: req.status,
+                due_date: req.due_date,
+                clear_due_date: req.clear_due_date,
+                points: req.points,
+                clear_points: req.clear_points,
+            },
         )
         .await
     }

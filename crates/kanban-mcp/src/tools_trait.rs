@@ -1,6 +1,32 @@
 use async_trait::async_trait;
 use rmcp::model::{CallToolResult, ErrorData as McpError};
 
+/// Parameters for creating a card
+#[derive(Debug, Default)]
+pub struct CreateCardParams {
+    pub board_id: String,
+    pub column_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub priority: Option<String>,
+    pub points: Option<u8>,
+    pub due_date: Option<String>,
+}
+
+/// Parameters for updating a card
+#[derive(Debug, Default)]
+pub struct UpdateCardParams {
+    pub card_id: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub priority: Option<String>,
+    pub status: Option<String>,
+    pub due_date: Option<String>,
+    pub clear_due_date: Option<bool>,
+    pub points: Option<u8>,
+    pub clear_points: Option<bool>,
+}
+
 /// Async MCP-compatible operations trait.
 /// Mirrors KanbanOperations from kanban-domain but with MCP return types.
 /// When adding operations to KanbanOperations, add them here too.
@@ -41,16 +67,7 @@ pub trait McpTools {
     // Card Operations
     // ========================================================================
 
-    async fn create_card(
-        &self,
-        board_id: String,
-        column_id: String,
-        title: String,
-        description: Option<String>,
-        priority: Option<String>,
-        points: Option<u8>,
-        due_date: Option<String>,
-    ) -> Result<CallToolResult, McpError>;
+    async fn create_card(&self, params: CreateCardParams) -> Result<CallToolResult, McpError>;
 
     async fn list_cards(
         &self,
@@ -68,18 +85,7 @@ pub trait McpTools {
         position: Option<i32>,
     ) -> Result<CallToolResult, McpError>;
 
-    async fn update_card(
-        &self,
-        card_id: String,
-        title: Option<String>,
-        description: Option<String>,
-        priority: Option<String>,
-        status: Option<String>,
-        due_date: Option<String>,
-        clear_due_date: Option<bool>,
-        points: Option<u8>,
-        clear_points: Option<bool>,
-    ) -> Result<CallToolResult, McpError>;
+    async fn update_card(&self, params: UpdateCardParams) -> Result<CallToolResult, McpError>;
 
     async fn archive_card(&self, card_id: String) -> Result<CallToolResult, McpError>;
 
