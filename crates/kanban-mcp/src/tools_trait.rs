@@ -19,6 +19,7 @@ pub struct UpdateCardParams {
     pub card_id: String,
     pub title: Option<String>,
     pub description: Option<String>,
+    pub clear_description: Option<bool>,
     pub priority: Option<String>,
     pub status: Option<String>,
     pub due_date: Option<String>,

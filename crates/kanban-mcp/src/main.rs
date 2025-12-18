@@ -24,7 +24,14 @@ fn validate_path(path: &PathBuf) -> Result<PathBuf> {
     }
 
     if path.is_absolute() {
-        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+        let canonical = path.canonicalize().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Failed to canonicalize path '{}': {}. Using original path.",
+                path.display(),
+                e
+            );
+            path.clone()
+        });
         Ok(canonical)
     } else {
         let cwd = std::env::current_dir().context("Failed to get current directory")?;

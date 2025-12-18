@@ -9,6 +9,8 @@ use rmcp::model::ErrorData as McpError;
 #[derive(Debug, serde::Deserialize)]
 pub struct CliResponse<T> {
     pub success: bool,
+    /// API version from CLI response. Parsed to validate response format;
+    /// reserved for future version compatibility checks.
     #[allow(dead_code)]
     pub api_version: String,
     pub data: Option<T>,

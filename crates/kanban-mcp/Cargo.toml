@@ -19,7 +19,7 @@ path = "src/main.rs"
 rmcp = { version = "0.11", features = ["server", "transport-io"] }
 schemars = "1.0"
 
-# Async runtime (uses "process" feature for subprocess execution)
+# Async runtime
 tokio.workspace = true
 async-trait.workspace = true
 

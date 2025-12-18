@@ -195,12 +195,14 @@ impl ArgsBuilder {
 
 /// Convert JSON result to MCP CallToolResult
 fn json_result(result: serde_json::Value) -> CallToolResult {
-    CallToolResult::success(vec![Content::text(
-        serde_json::to_string_pretty(&result).unwrap(),
-    )])
+    let json_str = serde_json::to_string_pretty(&result)
+        .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize result: {}\"}}", e));
+    CallToolResult::success(vec![Content::text(json_str)])
 }
 
 impl KanbanMcpServer {
+    const DEFAULT_RETRY_COUNT: u32 = 3;
+
     pub fn new(data_file: &str) -> Self {
         Self {
             executor: Arc::new(CliExecutor::new(data_file.to_string())),
@@ -226,7 +228,7 @@ impl McpTools for KanbanMcpServer {
         builder.add_opt("--card-prefix", card_prefix.as_deref());
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&builder.build(), 3)
+            .execute_with_retry(&builder.build(), Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -244,7 +246,7 @@ impl McpTools for KanbanMcpServer {
     async fn delete_board(&self, board_id: String) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&["board", "delete", &board_id], 3)
+            .execute_with_retry(&["board", "delete", &board_id], Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -262,7 +264,7 @@ impl McpTools for KanbanMcpServer {
         builder.add_opt_num("--position", position);
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&builder.build(), 3)
+            .execute_with_retry(&builder.build(), Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -278,7 +280,7 @@ impl McpTools for KanbanMcpServer {
     async fn delete_column(&self, column_id: String) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&["column", "delete", &column_id], 3)
+            .execute_with_retry(&["column", "delete", &column_id], Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -303,7 +305,7 @@ impl McpTools for KanbanMcpServer {
             .add_opt("--due-date", params.due_date.as_deref());
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&builder.build(), 3)
+            .execute_with_retry(&builder.build(), Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -338,7 +340,7 @@ impl McpTools for KanbanMcpServer {
         builder.add_opt_num("--position", position);
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&builder.build(), 3)
+            .execute_with_retry(&builder.build(), Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -348,6 +350,7 @@ impl McpTools for KanbanMcpServer {
         builder
             .add_opt("--title", params.title.as_deref())
             .add_opt("--description", params.description.as_deref())
+            .add_flag("--clear-description", params.clear_description)
             .add_opt("--priority", params.priority.as_deref())
             .add_opt("--status", params.status.as_deref())
             .add_opt("--due-date", params.due_date.as_deref())
@@ -356,7 +359,7 @@ impl McpTools for KanbanMcpServer {
             .add_flag("--clear-points", params.clear_points);
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&builder.build(), 3)
+            .execute_with_retry(&builder.build(), Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -364,7 +367,7 @@ impl McpTools for KanbanMcpServer {
     async fn archive_card(&self, card_id: String) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&["card", "archive", &card_id], 3)
+            .execute_with_retry(&["card", "archive", &card_id], Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -372,7 +375,7 @@ impl McpTools for KanbanMcpServer {
     async fn delete_card(&self, card_id: String) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&["card", "delete", &card_id], 3)
+            .execute_with_retry(&["card", "delete", &card_id], Self::DEFAULT_RETRY_COUNT)
             .await?;
         Ok(json_result(result))
     }
@@ -500,6 +503,7 @@ impl KanbanMcpServer {
                 card_id: req.card_id,
                 title: req.title,
                 description: req.description,
+                clear_description: req.clear_description,
                 priority: req.priority,
                 status: req.status,
                 due_date: req.due_date,
