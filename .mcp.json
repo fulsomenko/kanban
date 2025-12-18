@@ -3,6 +3,10 @@
     "git": {
       "command": "nix",
       "args": ["run", ".#mcp-server-git"]
+    },
+    "kanban": {
+      "command": "nix",
+      "args": ["run", ".#kanban-mcp", "--", "kanban.json"]
     }
   }
 }
