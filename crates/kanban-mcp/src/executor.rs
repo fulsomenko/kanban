@@ -50,10 +50,7 @@ impl CliExecutor {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let response: CliResponse<T> = serde_json::from_str(&stdout).map_err(|e| {
             McpError::internal_error(
-                format!(
-                    "Failed to parse CLI response: {} (output: {})",
-                    e, stdout
-                ),
+                format!("Failed to parse CLI response: {} (output: {})", e, stdout),
                 None,
             )
         })?;

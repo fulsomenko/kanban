@@ -95,7 +95,9 @@ pub struct UpdateCardRequest {
     pub priority: Option<String>,
     #[schemars(description = "Status: 'todo', 'in_progress', 'blocked', or 'done' (optional)")]
     pub status: Option<String>,
-    #[schemars(description = "Due date in ISO 8601 format (optional, use clear_due_date to remove)")]
+    #[schemars(
+        description = "Due date in ISO 8601 format (optional, use clear_due_date to remove)"
+    )]
     pub due_date: Option<String>,
     #[schemars(description = "Clear due date (set to true to remove due date)")]
     pub clear_due_date: Option<bool>,
@@ -235,10 +237,7 @@ impl McpTools for KanbanMcpServer {
     }
 
     async fn get_board(&self, board_id: String) -> Result<CallToolResult, McpError> {
-        let result: serde_json::Value = self
-            .executor
-            .execute(&["board", "get", &board_id])
-            .await?;
+        let result: serde_json::Value = self.executor.execute(&["board", "get", &board_id]).await?;
         Ok(json_result(result))
     }
 
@@ -258,14 +257,8 @@ impl McpTools for KanbanMcpServer {
         name: String,
         position: Option<i32>,
     ) -> Result<CallToolResult, McpError> {
-        let mut builder = ArgsBuilder::new(&[
-            "column",
-            "create",
-            "--board-id",
-            &board_id,
-            "--name",
-            &name,
-        ]);
+        let mut builder =
+            ArgsBuilder::new(&["column", "create", "--board-id", &board_id, "--name", &name]);
         builder.add_opt_num("--position", position);
         let result: serde_json::Value = self
             .executor
@@ -350,8 +343,7 @@ impl McpTools for KanbanMcpServer {
         column_id: String,
         position: Option<i32>,
     ) -> Result<CallToolResult, McpError> {
-        let mut builder =
-            ArgsBuilder::new(&["card", "move", &card_id, "--column-id", &column_id]);
+        let mut builder = ArgsBuilder::new(&["card", "move", &card_id, "--column-id", &column_id]);
         builder.add_opt_num("--position", position);
         let result: serde_json::Value = self
             .executor
@@ -513,7 +505,9 @@ impl KanbanMcpServer {
         McpTools::move_card(self, req.card_id, req.column_id, req.position).await
     }
 
-    #[tool(description = "Update a card's properties (title, description, priority, status, due_date, points)")]
+    #[tool(
+        description = "Update a card's properties (title, description, priority, status, due_date, points)"
+    )]
     async fn tool_update_card(
         &self,
         Parameters(req): Parameters<UpdateCardRequest>,

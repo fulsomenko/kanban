@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use kanban_mcp::KanbanMcpServer;
-use rmcp::ServiceExt;
 use rmcp::transport::stdio;
+use rmcp::ServiceExt;
 use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -24,9 +24,7 @@ fn validate_path(path: &PathBuf) -> Result<PathBuf> {
     }
 
     if path.is_absolute() {
-        let canonical = path
-            .canonicalize()
-            .unwrap_or_else(|_| path.clone());
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
         Ok(canonical)
     } else {
         let cwd = std::env::current_dir().context("Failed to get current directory")?;
