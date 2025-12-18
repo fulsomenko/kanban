@@ -48,13 +48,20 @@ impl CliExecutor {
                 McpError::internal_error(format!("Failed to execute kanban CLI: {}", e), None)
             })?;
 
-        // Parse stdout as JSON
+        // Parse stdout as JSON, capture stderr for error messages
         let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
         let response: CliResponse<T> = serde_json::from_str(&stdout).map_err(|e| {
-            McpError::internal_error(
-                format!("Failed to parse CLI response: {} (output: {})", e, stdout),
-                None,
-            )
+            let error_detail = if stderr.is_empty() {
+                format!("Failed to parse CLI response: {} (stdout: {})", e, stdout)
+            } else {
+                format!(
+                    "Failed to parse CLI response: {} (stdout: {}, stderr: {})",
+                    e, stdout, stderr
+                )
+            };
+            McpError::internal_error(error_detail, None)
         })?;
 
         if response.success {

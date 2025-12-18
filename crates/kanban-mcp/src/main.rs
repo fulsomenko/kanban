@@ -15,28 +15,26 @@ fn parse_args() -> PathBuf {
 }
 
 fn validate_path(path: &PathBuf) -> Result<PathBuf> {
-    let path_str = path
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8 characters"))?;
-
-    if path_str.contains("..") {
-        anyhow::bail!("Path traversal not allowed: path contains '..'");
-    }
+    let cwd = std::env::current_dir().context("Failed to get current directory")?;
 
     if path.is_absolute() {
-        let canonical = path.canonicalize().unwrap_or_else(|e| {
-            tracing::warn!(
-                "Failed to canonicalize path '{}': {}. Using original path.",
-                path.display(),
-                e
-            );
-            path.clone()
-        });
+        // Absolute paths are allowed - user explicitly chose this location
+        // Canonicalize to resolve symlinks
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
         Ok(canonical)
     } else {
-        let cwd = std::env::current_dir().context("Failed to get current directory")?;
-        let full_path = cwd.join(path);
-        Ok(full_path)
+        // For relative paths, resolve and verify no traversal outside cwd
+        let resolved = cwd.join(path);
+        let canonical = resolved.canonicalize().unwrap_or(resolved.clone());
+
+        // Check that resolved path stays within cwd
+        if !canonical.starts_with(&cwd) {
+            anyhow::bail!(
+                "Path traversal not allowed: '{}' resolves outside current directory",
+                path.display()
+            );
+        }
+        Ok(canonical)
     }
 }
 

@@ -215,6 +215,9 @@ impl KanbanMcpServer {
 // McpTools Trait Implementation (business logic)
 // ============================================================================
 
+// Read operations (list_*, get_*) use execute() without retry because they are
+// idempotent and don't modify state. Write operations use execute_with_retry()
+// to handle transient file conflicts from concurrent access.
 #[async_trait]
 impl McpTools for KanbanMcpServer {
     // Board Operations
