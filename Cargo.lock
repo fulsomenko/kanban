@@ -969,6 +969,7 @@ name = "kanban-mcp"
 version = "0.1.13"
 dependencies = [
  "anyhow",
+ "async-trait",
  "rmcp",
  "schemars",
  "serde",

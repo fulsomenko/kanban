@@ -21,6 +21,7 @@ schemars = "1.0"
 
 # Async runtime (uses "process" feature for subprocess execution)
 tokio.workspace = true
+async-trait.workspace = true
 
 # Serialization
 serde.workspace = true

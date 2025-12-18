@@ -1,5 +1,7 @@
 mod executor;
+mod tools_trait;
 
+use async_trait::async_trait;
 use executor::CliExecutor;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -11,6 +13,7 @@ use rmcp::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
+use tools_trait::McpTools;
 
 // ============================================================================
 // Request Types (kept for MCP tool schemas)
@@ -188,7 +191,13 @@ impl ArgsBuilder {
     }
 }
 
-#[tool_router]
+/// Convert JSON result to MCP CallToolResult
+fn json_result(result: serde_json::Value) -> CallToolResult {
+    CallToolResult::success(vec![Content::text(
+        serde_json::to_string_pretty(&result).unwrap(),
+    )])
+}
+
 impl KanbanMcpServer {
     pub fn new(data_file: &str) -> Self {
         Self {
@@ -196,269 +205,354 @@ impl KanbanMcpServer {
             tool_router: Self::tool_router(),
         }
     }
+}
 
-    // ========================================================================
+// ============================================================================
+// McpTools Trait Implementation (business logic)
+// ============================================================================
+
+#[async_trait]
+impl McpTools for KanbanMcpServer {
     // Board Operations
-    // ========================================================================
 
-    #[tool(description = "Create a new kanban board")]
     async fn create_board(
         &self,
-        Parameters(req): Parameters<CreateBoardRequest>,
+        name: String,
+        card_prefix: Option<String>,
     ) -> Result<CallToolResult, McpError> {
-        let mut builder = ArgsBuilder::new(&["board", "create", "--name", &req.name]);
-        builder.add_opt("--card-prefix", req.card_prefix.as_deref());
-
+        let mut builder = ArgsBuilder::new(&["board", "create", "--name", &name]);
+        builder.add_opt("--card-prefix", card_prefix.as_deref());
         let result: serde_json::Value = self
             .executor
             .execute_with_retry(&builder.build(), 3)
             .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        Ok(json_result(result))
     }
 
-    #[tool(description = "List all kanban boards")]
     async fn list_boards(&self) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self.executor.execute(&["board", "list"]).await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        Ok(json_result(result))
     }
 
-    #[tool(description = "Get a specific board by ID")]
-    async fn get_board(
-        &self,
-        Parameters(req): Parameters<GetBoardRequest>,
-    ) -> Result<CallToolResult, McpError> {
+    async fn get_board(&self, board_id: String) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self
             .executor
-            .execute(&["board", "get", &req.board_id])
+            .execute(&["board", "get", &board_id])
             .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        Ok(json_result(result))
     }
 
-    #[tool(description = "Delete a board and all its columns, cards, and sprints")]
-    async fn delete_board(
-        &self,
-        Parameters(req): Parameters<DeleteBoardRequest>,
-    ) -> Result<CallToolResult, McpError> {
+    async fn delete_board(&self, board_id: String) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&["board", "delete", &req.board_id], 3)
+            .execute_with_retry(&["board", "delete", &board_id], 3)
             .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        Ok(json_result(result))
     }
 
-    // ========================================================================
     // Column Operations
-    // ========================================================================
 
-    #[tool(description = "Create a new column in a board")]
     async fn create_column(
         &self,
-        Parameters(req): Parameters<CreateColumnRequest>,
+        board_id: String,
+        name: String,
+        position: Option<i32>,
     ) -> Result<CallToolResult, McpError> {
         let mut builder = ArgsBuilder::new(&[
             "column",
             "create",
             "--board-id",
-            &req.board_id,
+            &board_id,
             "--name",
-            &req.name,
+            &name,
         ]);
-        builder.add_opt_num("--position", req.position);
-
+        builder.add_opt_num("--position", position);
         let result: serde_json::Value = self
             .executor
             .execute_with_retry(&builder.build(), 3)
             .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        Ok(json_result(result))
     }
 
-    #[tool(description = "List all columns in a board")]
-    async fn list_columns(
-        &self,
-        Parameters(req): Parameters<ListColumnsRequest>,
-    ) -> Result<CallToolResult, McpError> {
+    async fn list_columns(&self, board_id: String) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self
             .executor
-            .execute(&["column", "list", "--board-id", &req.board_id])
+            .execute(&["column", "list", "--board-id", &board_id])
             .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        Ok(json_result(result))
     }
 
-    #[tool(description = "Delete a column and all its cards")]
-    async fn delete_column(
-        &self,
-        Parameters(req): Parameters<DeleteColumnRequest>,
-    ) -> Result<CallToolResult, McpError> {
+    async fn delete_column(&self, column_id: String) -> Result<CallToolResult, McpError> {
         let result: serde_json::Value = self
             .executor
-            .execute_with_retry(&["column", "delete", &req.column_id], 3)
+            .execute_with_retry(&["column", "delete", &column_id], 3)
             .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        Ok(json_result(result))
     }
 
-    // ========================================================================
     // Card Operations
-    // ========================================================================
 
-    #[tool(description = "Create a new card in a column")]
     async fn create_card(
         &self,
-        Parameters(req): Parameters<CreateCardRequest>,
+        board_id: String,
+        column_id: String,
+        title: String,
+        description: Option<String>,
+        priority: Option<String>,
+        points: Option<u8>,
+        due_date: Option<String>,
     ) -> Result<CallToolResult, McpError> {
         let mut builder = ArgsBuilder::new(&[
             "card",
             "create",
             "--board-id",
-            &req.board_id,
+            &board_id,
             "--column-id",
-            &req.column_id,
+            &column_id,
             "--title",
-            &req.title,
+            &title,
         ]);
         builder
-            .add_opt("--description", req.description.as_deref())
-            .add_opt("--priority", req.priority.as_deref())
-            .add_opt_num("--points", req.points)
-            .add_opt("--due-date", req.due_date.as_deref());
-
+            .add_opt("--description", description.as_deref())
+            .add_opt("--priority", priority.as_deref())
+            .add_opt_num("--points", points)
+            .add_opt("--due-date", due_date.as_deref());
         let result: serde_json::Value = self
             .executor
             .execute_with_retry(&builder.build(), 3)
             .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        Ok(json_result(result))
     }
 
-    #[tool(description = "List cards with optional filters")]
     async fn list_cards(
         &self,
-        Parameters(req): Parameters<ListCardsRequest>,
+        board_id: Option<String>,
+        column_id: Option<String>,
+        sprint_id: Option<String>,
     ) -> Result<CallToolResult, McpError> {
         let mut builder = ArgsBuilder::new(&["card", "list"]);
         builder
-            .add_opt("--board-id", req.board_id.as_deref())
-            .add_opt("--column-id", req.column_id.as_deref())
-            .add_opt("--sprint-id", req.sprint_id.as_deref());
-
+            .add_opt("--board-id", board_id.as_deref())
+            .add_opt("--column-id", column_id.as_deref())
+            .add_opt("--sprint-id", sprint_id.as_deref());
         let result: serde_json::Value = self.executor.execute(&builder.build()).await?;
+        Ok(json_result(result))
+    }
 
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+    async fn get_card(&self, card_id: String) -> Result<CallToolResult, McpError> {
+        let result: serde_json::Value = self.executor.execute(&["card", "get", &card_id]).await?;
+        Ok(json_result(result))
+    }
+
+    async fn move_card(
+        &self,
+        card_id: String,
+        column_id: String,
+        position: Option<i32>,
+    ) -> Result<CallToolResult, McpError> {
+        let mut builder =
+            ArgsBuilder::new(&["card", "move", &card_id, "--column-id", &column_id]);
+        builder.add_opt_num("--position", position);
+        let result: serde_json::Value = self
+            .executor
+            .execute_with_retry(&builder.build(), 3)
+            .await?;
+        Ok(json_result(result))
+    }
+
+    async fn update_card(
+        &self,
+        card_id: String,
+        title: Option<String>,
+        description: Option<String>,
+        priority: Option<String>,
+        status: Option<String>,
+        due_date: Option<String>,
+        clear_due_date: Option<bool>,
+        points: Option<u8>,
+        clear_points: Option<bool>,
+    ) -> Result<CallToolResult, McpError> {
+        let mut builder = ArgsBuilder::new(&["card", "update", &card_id]);
+        builder
+            .add_opt("--title", title.as_deref())
+            .add_opt("--description", description.as_deref())
+            .add_opt("--priority", priority.as_deref())
+            .add_opt("--status", status.as_deref())
+            .add_opt("--due-date", due_date.as_deref())
+            .add_opt_num("--points", points)
+            .add_flag("--clear-due-date", clear_due_date)
+            .add_flag("--clear-points", clear_points);
+        let result: serde_json::Value = self
+            .executor
+            .execute_with_retry(&builder.build(), 3)
+            .await?;
+        Ok(json_result(result))
+    }
+
+    async fn archive_card(&self, card_id: String) -> Result<CallToolResult, McpError> {
+        let result: serde_json::Value = self
+            .executor
+            .execute_with_retry(&["card", "archive", &card_id], 3)
+            .await?;
+        Ok(json_result(result))
+    }
+
+    async fn delete_card(&self, card_id: String) -> Result<CallToolResult, McpError> {
+        let result: serde_json::Value = self
+            .executor
+            .execute_with_retry(&["card", "delete", &card_id], 3)
+            .await?;
+        Ok(json_result(result))
+    }
+}
+
+// ============================================================================
+// MCP Tool Wrappers (thin layer exposing trait methods as MCP tools)
+// ============================================================================
+
+#[tool_router]
+impl KanbanMcpServer {
+    // Board Operations
+
+    #[tool(description = "Create a new kanban board")]
+    async fn tool_create_board(
+        &self,
+        Parameters(req): Parameters<CreateBoardRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        McpTools::create_board(self, req.name, req.card_prefix).await
+    }
+
+    #[tool(description = "List all kanban boards")]
+    async fn tool_list_boards(&self) -> Result<CallToolResult, McpError> {
+        McpTools::list_boards(self).await
+    }
+
+    #[tool(description = "Get a specific board by ID")]
+    async fn tool_get_board(
+        &self,
+        Parameters(req): Parameters<GetBoardRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        McpTools::get_board(self, req.board_id).await
+    }
+
+    #[tool(description = "Delete a board and all its columns, cards, and sprints")]
+    async fn tool_delete_board(
+        &self,
+        Parameters(req): Parameters<DeleteBoardRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        McpTools::delete_board(self, req.board_id).await
+    }
+
+    // Column Operations
+
+    #[tool(description = "Create a new column in a board")]
+    async fn tool_create_column(
+        &self,
+        Parameters(req): Parameters<CreateColumnRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        McpTools::create_column(self, req.board_id, req.name, req.position).await
+    }
+
+    #[tool(description = "List all columns in a board")]
+    async fn tool_list_columns(
+        &self,
+        Parameters(req): Parameters<ListColumnsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        McpTools::list_columns(self, req.board_id).await
+    }
+
+    #[tool(description = "Delete a column and all its cards")]
+    async fn tool_delete_column(
+        &self,
+        Parameters(req): Parameters<DeleteColumnRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        McpTools::delete_column(self, req.column_id).await
+    }
+
+    // Card Operations
+
+    #[tool(description = "Create a new card in a column")]
+    async fn tool_create_card(
+        &self,
+        Parameters(req): Parameters<CreateCardRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        McpTools::create_card(
+            self,
+            req.board_id,
+            req.column_id,
+            req.title,
+            req.description,
+            req.priority,
+            req.points,
+            req.due_date,
+        )
+        .await
+    }
+
+    #[tool(description = "List cards with optional filters")]
+    async fn tool_list_cards(
+        &self,
+        Parameters(req): Parameters<ListCardsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        McpTools::list_cards(self, req.board_id, req.column_id, req.sprint_id).await
     }
 
     #[tool(description = "Get a specific card by ID")]
-    async fn get_card(
+    async fn tool_get_card(
         &self,
         Parameters(req): Parameters<GetCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let result: serde_json::Value = self
-            .executor
-            .execute(&["card", "get", &req.card_id])
-            .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        McpTools::get_card(self, req.card_id).await
     }
 
     #[tool(description = "Move a card to a different column")]
-    async fn move_card(
+    async fn tool_move_card(
         &self,
         Parameters(req): Parameters<MoveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let mut builder =
-            ArgsBuilder::new(&["card", "move", &req.card_id, "--column-id", &req.column_id]);
-        builder.add_opt_num("--position", req.position);
-
-        let result: serde_json::Value = self
-            .executor
-            .execute_with_retry(&builder.build(), 3)
-            .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        McpTools::move_card(self, req.card_id, req.column_id, req.position).await
     }
 
     #[tool(description = "Update a card's properties (title, description, priority, status, due_date, points)")]
-    async fn update_card(
+    async fn tool_update_card(
         &self,
         Parameters(req): Parameters<UpdateCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let mut builder = ArgsBuilder::new(&["card", "update", &req.card_id]);
-        builder
-            .add_opt("--title", req.title.as_deref())
-            .add_opt("--description", req.description.as_deref())
-            .add_opt("--priority", req.priority.as_deref())
-            .add_opt("--status", req.status.as_deref())
-            .add_opt("--due-date", req.due_date.as_deref())
-            .add_opt_num("--points", req.points)
-            .add_flag("--clear-due-date", req.clear_due_date);
-
-        let result: serde_json::Value = self
-            .executor
-            .execute_with_retry(&builder.build(), 3)
-            .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        McpTools::update_card(
+            self,
+            req.card_id,
+            req.title,
+            req.description,
+            req.priority,
+            req.status,
+            req.due_date,
+            req.clear_due_date,
+            req.points,
+            req.clear_points,
+        )
+        .await
     }
 
     #[tool(description = "Archive a card (move to archive, can be restored later)")]
-    async fn archive_card(
+    async fn tool_archive_card(
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let result: serde_json::Value = self
-            .executor
-            .execute_with_retry(&["card", "archive", &req.card_id], 3)
-            .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        McpTools::archive_card(self, req.card_id).await
     }
 
     #[tool(description = "Delete a card permanently")]
-    async fn delete_card(
+    async fn tool_delete_card(
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let result: serde_json::Value = self
-            .executor
-            .execute_with_retry(&["card", "delete", &req.card_id], 3)
-            .await?;
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&result).unwrap(),
-        )]))
+        McpTools::delete_card(self, req.card_id).await
     }
 }
+
+// ============================================================================
+// MCP Server Handler
+// ============================================================================
 
 #[tool_handler]
 impl ServerHandler for KanbanMcpServer {
