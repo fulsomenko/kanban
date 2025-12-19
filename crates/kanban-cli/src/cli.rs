@@ -1,10 +1,16 @@
 use clap::{Args, Parser, Subcommand};
 use uuid::Uuid;
 
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    "\ncommit: ",
+    env!("GIT_COMMIT_HASH")
+);
+
 #[derive(Parser)]
 #[command(name = "kanban")]
 #[command(about = "A terminal-based kanban board", long_about = None)]
-#[command(version, arg_required_else_help = false)]
+#[command(version = VERSION, arg_required_else_help = false)]
 pub struct Cli {
     /// Path to kanban data file (or set KANBAN_FILE env var)
     #[arg(value_name = "FILE", env = "KANBAN_FILE")]
