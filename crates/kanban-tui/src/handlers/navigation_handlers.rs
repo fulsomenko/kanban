@@ -234,14 +234,13 @@ impl App {
         let raw_viewport = self.viewport_height;
 
         if let Some(list) = self.view_strategy.get_active_task_list() {
-            // Count scroll indicator overhead
-            let mut indicator_overhead = 0;
-            if list.get_scroll_offset() > 0 {
-                indicator_overhead += 1;
-            }
-            if list.get_scroll_offset() + raw_viewport < list.len() {
-                indicator_overhead += 1;
-            }
+            let scroll_offset = list.get_scroll_offset();
+
+            // Calculate "above" indicator overhead (fixed based on scroll position)
+            let above_indicator = if scroll_offset > 0 { 1 } else { 0 };
+
+            // Start with space available after above indicator
+            let available_space = raw_viewport.saturating_sub(above_indicator);
 
             // Count column header overhead (only in GroupedByColumn view)
             let mut header_overhead = 0;
@@ -265,17 +264,34 @@ impl App {
                         .map(|b| (b.start_index, b.card_count))
                         .collect();
 
+                    // Initial estimate based on available space
+                    let initial_header_count = count_headers_in_viewport(
+                        &column_boundaries,
+                        scroll_offset,
+                        available_space,
+                    );
+
+                    // Refine: count headers for only the cards that will actually be visible
+                    let initial_card_slots = available_space.saturating_sub(initial_header_count);
                     header_overhead = count_headers_in_viewport(
                         &column_boundaries,
-                        list.get_scroll_offset(),
-                        raw_viewport,
+                        scroll_offset,
+                        initial_card_slots,
                     );
                 }
             }
 
-            return raw_viewport
-                .saturating_sub(indicator_overhead)
-                .saturating_sub(header_overhead);
+            // Calculate card slots with refined header count
+            let card_slots = available_space.saturating_sub(header_overhead);
+
+            // Check if we need "below" indicator based on actual visible cards
+            let below_indicator = if scroll_offset + card_slots < list.len() {
+                1
+            } else {
+                0
+            };
+
+            return card_slots.saturating_sub(below_indicator);
         }
 
         raw_viewport
@@ -552,8 +568,12 @@ impl App {
                     if !list.is_empty() {
                         let last_idx = list.len() - 1;
                         list.jump_to(last_idx);
-                        list.ensure_selected_visible(self.viewport_height);
                     }
+                }
+                // Use adjusted viewport to account for column headers and scroll indicators
+                let adjusted_viewport = self.get_adjusted_viewport_height();
+                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    list.ensure_selected_visible(adjusted_viewport);
                 }
             }
         }

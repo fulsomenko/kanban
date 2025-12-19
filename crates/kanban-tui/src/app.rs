@@ -1554,54 +1554,54 @@ impl App {
                                 }
 
                                 // Handle pending conflict resolution actions
-                                if let Some(action) = self.pending_key.take() {
-                                    match action {
-                                        'o' => {
-                                            // Pause file watcher to avoid conflict detection for our own save
-                                            if let Some(ref watcher) = self.file_watcher {
-                                                watcher.pause();
-                                            }
-                                            let snapshot = crate::state::DataSnapshot::from_app(self);
-                                            if let Err(e) = self.ctx.state_manager.force_overwrite(&snapshot).await {
-                                                tracing::error!("Failed to force overwrite: {}", e);
-                                            }
-                                            // Resume file watcher after save completes
-                                            if let Some(ref watcher) = self.file_watcher {
-                                                watcher.resume();
-                                            }
+                                // Only consume pending_key if it matches expected conflict actions
+                                // to avoid breaking multi-key sequences like 'gg'
+                                match self.pending_key {
+                                    Some('o') => {
+                                        self.pending_key = None;
+                                        // Pause file watcher to avoid conflict detection for our own save
+                                        if let Some(ref watcher) = self.file_watcher {
+                                            watcher.pause();
                                         }
-                                        't' => {
-                                            // Reload from disk
-                                            if let Some(store) = self.ctx.state_manager.store() {
-                                                match store.load().await {
-                                                    Ok((snapshot, _metadata)) => {
-                                                        match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
-                                                            Ok(data) => {
-                                                                data.apply_to_app(self);
-                                                                self.ctx.state_manager.clear_conflict();
-                                                                self.refresh_view();
-                                                                tracing::info!("Reloaded state from disk");
-                                                            }
-                                                            Err(e) => {
-                                                                tracing::error!("Failed to deserialize reloaded state: {}", e);
-                                                            }
+                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        if let Err(e) = self.ctx.state_manager.force_overwrite(&snapshot).await {
+                                            tracing::error!("Failed to force overwrite: {}", e);
+                                        }
+                                        // Resume file watcher after save completes
+                                        if let Some(ref watcher) = self.file_watcher {
+                                            watcher.resume();
+                                        }
+                                    }
+                                    Some('t') => {
+                                        self.pending_key = None;
+                                        // Reload from disk
+                                        if let Some(store) = self.ctx.state_manager.store() {
+                                            match store.load().await {
+                                                Ok((snapshot, _metadata)) => {
+                                                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                                                        Ok(data) => {
+                                                            data.apply_to_app(self);
+                                                            self.ctx.state_manager.clear_conflict();
+                                                            self.refresh_view();
+                                                            tracing::info!("Reloaded state from disk");
+                                                        }
+                                                        Err(e) => {
+                                                            tracing::error!("Failed to deserialize reloaded state: {}", e);
                                                         }
                                                     }
-                                                    Err(e) => {
-                                                        tracing::error!("Failed to reload from disk: {}", e);
-                                                    }
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!("Failed to reload from disk: {}", e);
                                                 }
                                             }
                                         }
-                                        _ => {}
                                     }
-                                }
-
-                                // Handle pending external change reload
-                                if let Some(action) = self.pending_key.take() {
-                                    if action == 'r' {
+                                    Some('r') => {
+                                        self.pending_key = None;
                                         self.auto_reload_from_external_change().await;
                                     }
+                                    // Don't consume pending_key for other values (e.g., 'g' for gg sequence)
+                                    _ => {}
                                 }
 
                                 // Check if help menu pending action should execute
