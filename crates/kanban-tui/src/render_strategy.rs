@@ -99,7 +99,8 @@ impl RenderStrategy for SinglePanelRenderer {
                             let above_indicator = if scroll_offset > 0 { 1 } else { 0 };
 
                             // Start with space available after above indicator
-                            let available_space = raw_viewport_height.saturating_sub(above_indicator);
+                            let available_space =
+                                raw_viewport_height.saturating_sub(above_indicator);
 
                             // Initial estimate: count headers based on available space
                             let initial_header_count = count_headers_in_viewport(
@@ -109,7 +110,8 @@ impl RenderStrategy for SinglePanelRenderer {
                             );
 
                             // Calculate card slots after initial header estimate
-                            let initial_card_slots = available_space.saturating_sub(initial_header_count);
+                            let initial_card_slots =
+                                available_space.saturating_sub(initial_header_count);
 
                             // Refine: count headers for only the cards that will actually be visible
                             let refined_header_count = count_headers_in_viewport(
@@ -129,7 +131,8 @@ impl RenderStrategy for SinglePanelRenderer {
                             };
 
                             // Final adjusted viewport: cards minus below indicator
-                            let adjusted_viewport_height = card_slots.saturating_sub(below_indicator);
+                            let adjusted_viewport_height =
+                                card_slots.saturating_sub(below_indicator);
 
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
