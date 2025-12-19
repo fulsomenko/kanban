@@ -237,10 +237,10 @@ impl App {
             let scroll_offset = list.get_scroll_offset();
 
             // Calculate "above" indicator overhead (fixed based on scroll position)
-            let above_indicator = if scroll_offset > 0 { 1 } else { 0 };
+            let above_indicator_height = if scroll_offset > 0 { 1 } else { 0 };
 
             // Start with space available after above indicator
-            let available_space = raw_viewport.saturating_sub(above_indicator);
+            let available_space = raw_viewport.saturating_sub(above_indicator_height);
 
             // Count column header overhead (only in GroupedByColumn view)
             let mut header_overhead = 0;
@@ -285,13 +285,13 @@ impl App {
             let card_slots = available_space.saturating_sub(header_overhead);
 
             // Check if we need "below" indicator based on actual visible cards
-            let below_indicator = if scroll_offset + card_slots < list.len() {
+            let below_indicator_height = if scroll_offset + card_slots < list.len() {
                 1
             } else {
                 0
             };
 
-            return card_slots.saturating_sub(below_indicator);
+            return card_slots.saturating_sub(below_indicator_height);
         }
 
         raw_viewport
@@ -564,15 +564,13 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
+                // Get adjusted viewport first (immutable borrow), then do all mutable work
+                let adjusted_viewport = self.get_adjusted_viewport_height();
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     if !list.is_empty() {
                         let last_idx = list.len() - 1;
                         list.jump_to(last_idx);
                     }
-                }
-                // Use adjusted viewport to account for column headers and scroll indicators
-                let adjusted_viewport = self.get_adjusted_viewport_height();
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     list.ensure_selected_visible(adjusted_viewport);
                 }
             }

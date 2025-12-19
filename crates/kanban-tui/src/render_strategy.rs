@@ -96,11 +96,11 @@ impl RenderStrategy for SinglePanelRenderer {
                             let scroll_offset = task_list.get_scroll_offset();
 
                             // Calculate "above" indicator overhead (fixed based on scroll position)
-                            let above_indicator = if scroll_offset > 0 { 1 } else { 0 };
+                            let above_indicator_height = if scroll_offset > 0 { 1 } else { 0 };
 
                             // Start with space available after above indicator
                             let available_space =
-                                raw_viewport_height.saturating_sub(above_indicator);
+                                raw_viewport_height.saturating_sub(above_indicator_height);
 
                             // Initial estimate: count headers based on available space
                             let initial_header_count = count_headers_in_viewport(
@@ -124,15 +124,16 @@ impl RenderStrategy for SinglePanelRenderer {
                             let card_slots = available_space.saturating_sub(refined_header_count);
 
                             // Check if we need "below" indicator based on actual visible cards
-                            let below_indicator = if scroll_offset + card_slots < task_list.len() {
-                                1
-                            } else {
-                                0
-                            };
+                            let below_indicator_height =
+                                if scroll_offset + card_slots < task_list.len() {
+                                    1
+                                } else {
+                                    0
+                                };
 
                             // Final adjusted viewport: cards minus below indicator
                             let adjusted_viewport_height =
-                                card_slots.saturating_sub(below_indicator);
+                                card_slots.saturating_sub(below_indicator_height);
 
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
