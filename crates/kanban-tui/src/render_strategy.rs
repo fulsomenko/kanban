@@ -93,28 +93,47 @@ impl RenderStrategy for SinglePanelRenderer {
                             lines.push(Line::from(Span::styled(message, label_text())));
                         } else {
                             let raw_viewport_height = area.height.saturating_sub(2) as usize;
+                            let scroll_offset = task_list.get_scroll_offset();
 
-                            // Count column headers that will appear in the viewport
-                            let estimated_header_count = count_headers_in_viewport(
+                            // Calculate "above" indicator overhead (fixed based on scroll position)
+                            let above_indicator_height = if scroll_offset > 0 { 1 } else { 0 };
+
+                            // Start with space available after above indicator
+                            let available_space =
+                                raw_viewport_height.saturating_sub(above_indicator_height);
+
+                            // Initial estimate: count headers based on available space
+                            let initial_header_count = count_headers_in_viewport(
                                 &column_boundaries,
-                                task_list.get_scroll_offset(),
-                                raw_viewport_height,
+                                scroll_offset,
+                                available_space,
                             );
 
-                            // Calculate indicator overhead based on actual position
-                            let mut indicator_overhead = 0;
-                            if task_list.get_scroll_offset() > 0 {
-                                indicator_overhead += 1; // Will show "above" indicator
-                            }
-                            if task_list.get_scroll_offset() + raw_viewport_height < task_list.len()
-                            {
-                                indicator_overhead += 1; // Will show "below" indicator
-                            }
+                            // Calculate card slots after initial header estimate
+                            let initial_card_slots =
+                                available_space.saturating_sub(initial_header_count);
 
-                            // Adjust viewport height to account for headers and indicators
-                            let adjusted_viewport_height = raw_viewport_height
-                                .saturating_sub(estimated_header_count)
-                                .saturating_sub(indicator_overhead);
+                            // Refine: count headers for only the cards that will actually be visible
+                            let refined_header_count = count_headers_in_viewport(
+                                &column_boundaries,
+                                scroll_offset,
+                                initial_card_slots,
+                            );
+
+                            // Calculate card slots with refined header count
+                            let card_slots = available_space.saturating_sub(refined_header_count);
+
+                            // Check if we need "below" indicator based on actual visible cards
+                            let below_indicator_height =
+                                if scroll_offset + card_slots < task_list.len() {
+                                    1
+                                } else {
+                                    0
+                                };
+
+                            // Final adjusted viewport: cards minus below indicator
+                            let adjusted_viewport_height =
+                                card_slots.saturating_sub(below_indicator_height);
 
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
