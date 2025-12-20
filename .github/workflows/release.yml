@@ -30,12 +30,21 @@ jobs:
           echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "last=$LAST_VERSION" >> $GITHUB_OUTPUT
 
-          if [ "$CURRENT_VERSION" != "$LAST_VERSION" ]; then
+          # Check if current version is greater than last version using sort -V
+          version_gt() {
+            [ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$2" ]
+          }
+
+          if version_gt "$CURRENT_VERSION" "$LAST_VERSION"; then
             echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "Version changed: $LAST_VERSION → $CURRENT_VERSION"
-          else
+            echo "Version increased: $LAST_VERSION → $CURRENT_VERSION"
+          elif [ "$CURRENT_VERSION" = "$LAST_VERSION" ]; then
             echo "should_release=false" >> $GITHUB_OUTPUT
             echo "Version unchanged ($CURRENT_VERSION), skipping release"
+          else
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "::error::Version decreased: $LAST_VERSION → $CURRENT_VERSION (must be greater)"
+            exit 1
           fi
 
       - uses: cachix/install-nix-action@v27
