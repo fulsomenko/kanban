@@ -13,7 +13,7 @@ pub mod task_list_view;
 
 pub use archived_card::ArchivedCard;
 pub use board::{Board, BoardId, BoardUpdate, SortField, SortOrder};
-pub use card::{Card, CardId, CardPriority, CardStatus, CardUpdate};
+pub use card::{Card, CardId, CardPriority, CardStatus, CardSummary, CardUpdate};
 pub use column::{Column, ColumnId, ColumnUpdate};
 pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use field_update::FieldUpdate;
