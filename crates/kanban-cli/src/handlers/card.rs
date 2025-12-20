@@ -2,7 +2,7 @@ use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
 use kanban_domain::{
-    CardFilter, CardPriority, CardStatus, CardUpdate, FieldUpdate, KanbanOperations,
+    CardFilter, CardPriority, CardStatus, CardSummary, CardUpdate, FieldUpdate, KanbanOperations,
 };
 
 pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {
@@ -31,7 +31,8 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             } else {
                 let filter = build_filter(&args).map_err(|e| anyhow::anyhow!(e))?;
                 let cards = ctx.list_cards(filter)?;
-                output::output_list(cards);
+                let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
+                output::output_list(summaries);
             }
         }
         CardAction::Get { id } => match ctx.get_card(id)? {
