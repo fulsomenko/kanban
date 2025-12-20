@@ -3,7 +3,9 @@ set -euo pipefail
 
 CRATES=(
   "crates/kanban-core"
+  "crates/kanban-mcp"
   "crates/kanban-domain"
+  "crates/kanban-persistence"
   "crates/kanban-tui"
   "crates/kanban-cli"
 )
@@ -54,6 +56,13 @@ for crate in "${CRATES[@]}"; do
     if ! grep 'kanban-tui = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
       echo "❌ Error: $crate is missing version spec for kanban-tui"
       echo "   Use: kanban-tui = { path = \"../kanban-tui\", version = \"^0.1\" }"
+      exit 1
+    fi
+  fi
+  if grep -q 'kanban-persistence = { path = ' "$crate/Cargo.toml" 2>/dev/null; then
+    if ! grep 'kanban-persistence = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
+      echo "❌ Error: $crate is missing version spec for kanban-persistence"
+      echo "   Use: kanban-persistence = { path = \"../kanban-persistence\", version = \"^0.1\" }"
       exit 1
     fi
   fi

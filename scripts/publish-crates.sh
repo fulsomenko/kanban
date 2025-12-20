@@ -3,7 +3,9 @@ set -euo pipefail
 
 CRATES=(
   "crates/kanban-core"
+  "crates/kanban-mcp"
   "crates/kanban-domain"
+  "crates/kanban-persistence"
   "crates/kanban-tui"
   "crates/kanban-cli"
 )
