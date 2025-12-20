@@ -24,8 +24,14 @@ if [ $# -gt 0 ]; then
 fi
 
 if [ -z "$DESCRIPTION" ]; then
-  BASE_BRANCH="${BASE_BRANCH:-master}"
-  COMMITS=$(git log --oneline "$BASE_BRANCH"..HEAD --pretty=format:"- %s")
+  BASE_BRANCH="${BASE_BRANCH:-develop}"
+  # Find where this branch diverged from base, only show commits since then
+  MERGE_BASE=$(git merge-base "$BASE_BRANCH" HEAD 2>/dev/null || echo "")
+  if [ -n "$MERGE_BASE" ]; then
+    COMMITS=$(git log --oneline "$MERGE_BASE"..HEAD --pretty=format:"- %s")
+  else
+    COMMITS=$(git log --oneline -1 --pretty=format:"- %s")
+  fi
 
   if [ -z "$COMMITS" ]; then
     echo "Error: No commits found and no description provided"
