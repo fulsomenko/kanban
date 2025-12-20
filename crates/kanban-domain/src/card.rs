@@ -49,6 +49,52 @@ pub struct Card {
     pub sprint_logs: Vec<SprintLog>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardSummary {
+    pub id: CardId,
+    pub column_id: ColumnId,
+    pub title: String,
+    pub priority: CardPriority,
+    pub status: CardStatus,
+    pub position: i32,
+    pub due_date: Option<DateTime<Utc>>,
+    pub points: Option<u8>,
+    #[serde(default)]
+    pub card_number: u32,
+    #[serde(default)]
+    pub sprint_id: Option<Uuid>,
+    #[serde(default)]
+    pub assigned_prefix: Option<String>,
+    #[serde(default)]
+    pub card_prefix: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+impl From<&Card> for CardSummary {
+    fn from(card: &Card) -> Self {
+        Self {
+            id: card.id,
+            column_id: card.column_id,
+            title: card.title.clone(),
+            priority: card.priority,
+            status: card.status,
+            position: card.position,
+            due_date: card.due_date,
+            points: card.points,
+            card_number: card.card_number,
+            sprint_id: card.sprint_id,
+            assigned_prefix: card.assigned_prefix.clone(),
+            card_prefix: card.card_prefix.clone(),
+            created_at: card.created_at,
+            updated_at: card.updated_at,
+            completed_at: card.completed_at,
+        }
+    }
+}
+
 impl Card {
     pub fn new(
         board: &mut Board,
