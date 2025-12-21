@@ -17,6 +17,18 @@ CRATES=(
   "crates/kanban-cli"
 )
 
+check_version_exists() {
+  local crate_name=$1
+  local version=$2
+  local response
+  response=$(curl -s "https://crates.io/api/v1/crates/$crate_name/$version")
+  if echo "$response" | grep -q '"version"'; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 echo "🚀 Publishing crates to crates.io..."
 echo ""
 
