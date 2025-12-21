@@ -132,8 +132,13 @@ impl App {
                     return false;
                 };
 
-                if let Some(card) = self.get_selected_card_in_context() {
-                    let card_id = card.id;
+                let card_id = self
+                    .active_card_index
+                    .and_then(|idx| self.ctx.cards.get(idx))
+                    .map(|c| c.id)
+                    .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
+
+                if let Some(card_id) = card_id {
                     let cmd = Box::new(crate::state::commands::UpdateCard {
                         card_id,
                         updates: kanban_domain::CardUpdate {
