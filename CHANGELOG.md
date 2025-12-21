@@ -1,3 +1,77 @@
+## [0.1.14] - 2025-11-17 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
+
+- - refactor: integrate card list into keybinding registry
+- refactor: unify keybinding management for footer and help popup
+- Remove filtering of cards from completed sprints
+- fix: remove auto-hiding of completed sprint cards from app methods
+- fix: remove auto-hiding of completed sprint cards from view strategies
+- A refactoring.
+- refactor: simplify navigation handlers to work with unified view strategy
+- refactor: simplify card handlers to work with unified view strategy
+- refactor: update app initialization to use UnifiedViewStrategy
+- refactor: simplify render_tasks to use unified view strategy
+- refactor: introduce UnifiedViewStrategy to compose layout and render strategies
+- refactor: create render strategy abstraction for card list rendering
+- refactor: create layout strategy abstraction for card list management
+- refactor: extract card filtering and sorting logic into card_filter_service
+- KAN-118/unfilter-tasks-list-on-completed-sprint (#93)
+- KAN-111/sprint-binding-help-is-wrong (#92)
+- KAN-33: Add Help mode with context-aware keybindings (#91)
+- ci: automatically sync develop with master after release (#90)
+- - migration: add reconciliation of branch_prefix and sprint_prefix to migrate old boards
+- migration: add serde default to support migration to archived cards board
+- - feat: Synchronize navigation viewport with grouped view column headers
+- feat: Implement unified scrolling rendering for grouped view
+- feat: Wire up VirtualUnifiedLayout for grouped view mode
+- feat: Add VirtualUnifiedLayout for unified card scrolling in grouped view
+- - fix: help menu keybinding matching for special keys and /
+- fix: implement missing action handlers for help menu
+- refactor: couple keybindings with actions
+- feat: add visual selection to help popup
+- feat: add generic list component
+- - chore: simplify archived cards view keybindings
+- refactor: rename delete to archive, permanent delete to delete
+- refactor: consolidate keybinding providers into CardListProvider
+- feat: add animation state infrastructure and types
+- feat: add yellow border for deleted cards view visual distinction
+- feat: add card deletion from detail view
+- fix: card lookup in DeletedCardsView mode
+- feat: add deleted cards UI rendering
+- feat: add keybindings for card deletion
+- feat: implement card deletion with position compacting
+- feat: add DeletedCardsView mode to App
+- feat: add deleted_cards persistence
+- feat: add DeletedCard domain model
+- Add help dialogue for keybindings.
+- feat: implement Help popup rendering with context-aware keybindings
+- feat: add global ? key handler for help across all modes
+- refactor: make CardFocus and BoardFocus Copy
+- feat: add Help app mode with context preservation
+- feat: create keybinding registry to route contexts
+- feat: implement keybinding providers for all contexts
+- feat: create keybindings module with traits and data structures
+- refactor: add keybindings module to lib
+- ci: automatically sync develop with master after release (#90)
+- - fix: ensure forward progress when viewport shrinks during down navigation
+- fix: correct viewport height calculation across all renderers
+- feat: add viewport calculation infrastructure to CardList
+- fix: allow scrolling down to show the final card
+- feat: update navigation to account for scroll indicator space
+- feat: add scroll indicators showing tasks above and below viewport
+- feat: use actual viewport_height instead of hardcoded value
+- feat: calculate and update viewport_height during rendering
+- feat: add viewport_height tracking to App
+- fix: eliminate selector jitter by moving selection with scroll
+- refactor: remove preemptive ensure_selected_visible calls
+- refactor: update CardListComponent navigate methods for viewport awareness
+- refactor: implement scroll-on-boundary logic in navigate methods
+- feat: wire up automatic scroll adjustment on navigation
+- feat: implement scroll-aware rendering for sprint detail panels
+- feat: implement scroll-aware rendering in all card list views
+- feat: expose scroll management in CardListComponent
+- feat: add scroll offset tracking to CardList
+
+
 ## [0.1.12] - 2025-11-02 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
 - Update release flow
