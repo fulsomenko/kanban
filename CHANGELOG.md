@@ -1,3 +1,8 @@
+## [0.1.16] - 2025-12-21
+
+- chore: bump version to 16
+- fix: points dialog now correctly updates card from detail view
+
 ## [0.1.15] - 2025-12-21
 
 - feat(cli): include git commit hash in version output
