@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Crates must be published in dependency order:
+# - kanban-core: no internal deps
+# - kanban-mcp: no internal deps
+# - kanban-domain: depends on kanban-core
+# - kanban-persistence: depends on kanban-core, kanban-domain
+# - kanban-tui: depends on kanban-core, kanban-domain, kanban-persistence
+# - kanban-cli: depends on all above
 CRATES=(
   "crates/kanban-core"
   "crates/kanban-mcp"

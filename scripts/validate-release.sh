@@ -37,7 +37,7 @@ echo "✓ Version consistency verified"
 
 echo ""
 echo "Step 3: Checking cross-crate dependencies..."
-INTERNAL_DEPS=("kanban-core" "kanban-domain" "kanban-tui" "kanban-persistence" "kanban-mcp")
+INTERNAL_DEPS=("kanban-core" "kanban-mcp" "kanban-domain" "kanban-persistence" "kanban-tui")
 for crate in "${CRATES[@]}"; do
   for dep in "${INTERNAL_DEPS[@]}"; do
     if grep -q "$dep = { path = " "$crate/Cargo.toml" 2>/dev/null; then

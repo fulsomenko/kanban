@@ -31,6 +31,7 @@ jobs:
           echo "last=$LAST_VERSION" >> $GITHUB_OUTPUT
 
           # Check if current version is greater than last version using sort -V
+          # Note: sort -V is a GNU extension, available on Ubuntu runners
           version_gt() {
             [ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$2" ]
           }
