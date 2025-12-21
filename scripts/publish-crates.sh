@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 # Crates must be published in dependency order:
 # - kanban-core: no internal deps
@@ -43,16 +43,20 @@ echo ""
 echo "Publishing crates in dependency order..."
 for crate in "${CRATES[@]}"; do
   crate_name=$(basename "$crate")
+  echo "📦 Publishing $crate_name@$WORKSPACE_VERSION..."
 
-  if check_version_exists "$crate_name" "$WORKSPACE_VERSION"; then
-    echo "⏭️  Skipping $crate_name@$WORKSPACE_VERSION (already published)"
+  cd "$crate"
+  if output=$(cargo publish --allow-dirty 2>&1); then
+    echo "  ✓ Published successfully"
+  elif echo "$output" | grep -q "already exists"; then
+    echo "  ⏭️  Already published, skipping"
   else
-    echo "📦 Publishing $crate_name@$WORKSPACE_VERSION..."
-    cd "$crate"
-    cargo publish --allow-dirty
-    cd - > /dev/null
-    sleep 10
+    echo "  ✗ Failed to publish:"
+    echo "$output"
+    exit 1
   fi
+  cd - > /dev/null
+  sleep 10
 done
 
 echo ""
