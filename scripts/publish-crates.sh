@@ -17,6 +17,18 @@ CRATES=(
   "crates/kanban-cli"
 )
 
+check_version_exists() {
+  local crate_name=$1
+  local version=$2
+  local response
+  response=$(curl -s "https://crates.io/api/v1/crates/$crate_name/$version")
+  if echo "$response" | grep -q '"version"'; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 echo "🚀 Publishing crates to crates.io..."
 echo ""
 
@@ -24,13 +36,23 @@ echo "Running pre-publish validation..."
 validate-release
 echo ""
 
+WORKSPACE_VERSION=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+echo "Workspace version: $WORKSPACE_VERSION"
+echo ""
+
 echo "Publishing crates in dependency order..."
 for crate in "${CRATES[@]}"; do
-  echo "📦 Publishing $crate..."
-  cd "$crate"
-  cargo publish --allow-dirty
-  cd - > /dev/null
-  sleep 10
+  crate_name=$(basename "$crate")
+
+  if check_version_exists "$crate_name" "$WORKSPACE_VERSION"; then
+    echo "⏭️  Skipping $crate_name@$WORKSPACE_VERSION (already published)"
+  else
+    echo "📦 Publishing $crate_name@$WORKSPACE_VERSION..."
+    cd "$crate"
+    cargo publish --allow-dirty
+    cd - > /dev/null
+    sleep 10
+  fi
 done
 
 echo ""
