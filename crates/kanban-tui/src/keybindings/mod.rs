@@ -47,6 +47,10 @@ pub enum KeybindingAction {
     ShowHelp,
     Escape,
     FocusPanel(usize),
+    JumpToTop,
+    JumpToBottom,
+    JumpHalfViewportUp,
+    JumpHalfViewportDown,
 }
 
 #[derive(Debug, Clone)]

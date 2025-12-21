@@ -10,6 +10,7 @@ use crate::{
     search::SearchState,
     selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
+    tui_context::TuiContext,
     ui,
     view_strategy::{UnifiedViewStrategy, ViewRefreshContext, ViewStrategy},
 };
@@ -18,7 +19,8 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
-use kanban_domain::{ArchivedCard, Board, Card, Column, SortField, SortOrder, Sprint};
+use kanban_domain::{Board, Card, SortField, SortOrder, Sprint};
+use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
 use std::io;
@@ -40,17 +42,15 @@ pub struct CardAnimation {
 
 pub struct App {
     pub should_quit: bool,
+    pub quit_with_pending: bool, // Force quit even if saves are pending (second 'q' press)
     pub mode: AppMode,
+    pub mode_stack: Vec<AppMode>,
     pub input: InputState,
-    pub boards: Vec<Board>,
+    pub ctx: TuiContext,
     pub board_selection: SelectionState,
     pub active_board_index: Option<usize>,
     pub active_card_index: Option<usize>,
-    pub columns: Vec<Column>,
-    pub cards: Vec<Card>,
-    pub archived_cards: Vec<ArchivedCard>,
     pub animating_cards: HashMap<uuid::Uuid, CardAnimation>,
-    pub sprints: Vec<Sprint>,
     pub sprint_selection: SelectionState,
     pub active_sprint_index: Option<usize>,
     pub active_sprint_filters: std::collections::HashSet<uuid::Uuid>,
@@ -82,6 +82,12 @@ pub struct App {
     pub search: SearchState,
     pub filter_dialog_state: Option<FilterDialogState>,
     pub viewport_height: usize,
+    pub pending_key: Option<char>,
+    pub file_change_rx: Option<tokio::sync::broadcast::Receiver<kanban_persistence::ChangeEvent>>,
+    pub file_watcher: Option<kanban_persistence::FileWatcher>,
+    pub save_worker_handle: Option<tokio::task::JoinHandle<()>>,
+    pub save_completion_rx: Option<tokio::sync::mpsc::UnboundedReceiver<()>>,
+    pub last_error: Option<(String, Instant)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -123,13 +129,10 @@ pub enum BoardField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AppMode {
-    Normal,
+pub enum DialogMode {
     CreateBoard,
     CreateCard,
-    CardDetail,
     RenameBoard,
-    BoardDetail,
     ExportBoard,
     ExportAll,
     ImportBoard,
@@ -137,7 +140,6 @@ pub enum AppMode {
     SetCardPriority,
     SetBranchPrefix,
     OrderCards,
-    SprintDetail,
     CreateSprint,
     AssignCardToSprint,
     AssignMultipleCardsToSprint,
@@ -145,31 +147,46 @@ pub enum AppMode {
     RenameColumn,
     DeleteColumnConfirm,
     SelectTaskListView,
-    Search,
     SetSprintPrefix,
     SetSprintCardPrefix,
     ConfirmSprintPrefixCollision,
     FilterOptions,
+    ConflictResolution,
+    ExternalChangeDetected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppMode {
+    Normal,
+    CardDetail,
+    BoardDetail,
+    SprintDetail,
+    Search,
     ArchivedCardsView,
     Help(Box<AppMode>),
+    Dialog(DialogMode),
 }
 
 impl App {
-    pub fn new(save_file: Option<String>) -> Self {
+    pub fn new(
+        save_file: Option<String>,
+    ) -> (
+        Self,
+        Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
+    ) {
         let app_config = AppConfig::load();
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone());
         let mut app = Self {
             should_quit: false,
+            quit_with_pending: false,
             mode: AppMode::Normal,
+            mode_stack: Vec::new(),
             input: InputState::new(),
-            boards: Vec::new(),
+            ctx,
             board_selection: SelectionState::new(),
             active_board_index: None,
             active_card_index: None,
-            columns: Vec::new(),
-            cards: Vec::new(),
-            archived_cards: Vec::new(),
             animating_cards: HashMap::new(),
-            sprints: Vec::new(),
             sprint_selection: SelectionState::new(),
             active_sprint_index: None,
             active_sprint_filters: std::collections::HashSet::new(),
@@ -225,6 +242,12 @@ impl App {
             search: SearchState::new(),
             filter_dialog_state: None,
             viewport_height: 20,
+            pending_key: None,
+            file_change_rx: None,
+            file_watcher: None,
+            save_worker_handle: None,
+            save_completion_rx,
+            last_error: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -232,6 +255,7 @@ impl App {
                 if let Err(e) = app.import_board_from_file(filename) {
                     tracing::error!("Failed to load file {}: {}", filename, e);
                     app.save_file = None;
+                    app.ctx.state_manager.clear_store();
                 }
             }
         }
@@ -239,11 +263,52 @@ impl App {
         app.migrate_sprint_logs();
         app.check_ended_sprints();
 
-        app
+        (app, save_rx)
     }
 
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    pub fn push_mode(&mut self, new_mode: AppMode) {
+        self.mode_stack.push(self.mode.clone());
+        self.mode = new_mode;
+    }
+
+    pub fn pop_mode(&mut self) {
+        self.mode = self.mode_stack.pop().unwrap_or(AppMode::Normal);
+    }
+
+    pub fn is_dialog_mode(&self) -> bool {
+        matches!(self.mode, AppMode::Dialog(_))
+    }
+
+    pub fn get_base_mode(&self) -> &AppMode {
+        if self.is_dialog_mode() {
+            self.mode_stack.last().unwrap_or(&AppMode::Normal)
+        } else {
+            &self.mode
+        }
+    }
+
+    pub fn open_dialog(&mut self, dialog: DialogMode) {
+        self.push_mode(AppMode::Dialog(dialog));
+    }
+
+    pub fn set_error(&mut self, message: String) {
+        self.last_error = Some((message, Instant::now()));
+    }
+
+    pub fn clear_error(&mut self) {
+        self.last_error = None;
+    }
+
+    pub fn should_clear_error(&self) -> bool {
+        if let Some((_, instant)) = self.last_error {
+            instant.elapsed().as_secs() >= 5
+        } else {
+            false
+        }
     }
 
     fn keycode_matches_binding_key(
@@ -349,6 +414,10 @@ impl App {
             KeybindingAction::ShowHelp => {}
             KeybindingAction::Escape => self.handle_escape_key(),
             KeybindingAction::FocusPanel(panel) => self.handle_column_or_focus_switch(*panel),
+            KeybindingAction::JumpToTop => self.handle_jump_to_top(),
+            KeybindingAction::JumpToBottom => self.handle_jump_to_bottom(),
+            KeybindingAction::JumpHalfViewportUp => self.handle_jump_half_viewport_up(),
+            KeybindingAction::JumpHalfViewportDown => self.handle_jump_half_viewport_down(),
         }
     }
 
@@ -363,22 +432,35 @@ impl App {
 
         let is_input_mode = matches!(
             self.mode,
-            AppMode::CreateBoard
-                | AppMode::CreateCard
-                | AppMode::CreateSprint
-                | AppMode::RenameBoard
-                | AppMode::ExportBoard
-                | AppMode::ExportAll
-                | AppMode::SetCardPoints
-                | AppMode::SetBranchPrefix
-                | AppMode::CreateColumn
-                | AppMode::RenameColumn
-                | AppMode::Search
-                | AppMode::SetSprintPrefix
-                | AppMode::SetSprintCardPrefix
+            AppMode::Search
+                | AppMode::Dialog(DialogMode::CreateBoard)
+                | AppMode::Dialog(DialogMode::CreateCard)
+                | AppMode::Dialog(DialogMode::CreateSprint)
+                | AppMode::Dialog(DialogMode::RenameBoard)
+                | AppMode::Dialog(DialogMode::ExportBoard)
+                | AppMode::Dialog(DialogMode::ExportAll)
+                | AppMode::Dialog(DialogMode::SetCardPoints)
+                | AppMode::Dialog(DialogMode::SetBranchPrefix)
+                | AppMode::Dialog(DialogMode::CreateColumn)
+                | AppMode::Dialog(DialogMode::RenameColumn)
+                | AppMode::Dialog(DialogMode::SetSprintPrefix)
+                | AppMode::Dialog(DialogMode::SetSprintCardPrefix)
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
+            // Check for pending saves before quitting
+            if self.ctx.state_manager.has_pending_saves() && !self.quit_with_pending {
+                // First quit attempt with pending saves - show warning
+                self.set_error(
+                    "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
+                        .to_string(),
+                );
+                self.quit_with_pending = true;
+                tracing::warn!("Quit attempted with pending saves, requiring confirmation");
+                return false;
+            }
+
+            // Either no pending saves, or user confirmed force quit
             self.quit();
             return false;
         }
@@ -396,65 +478,177 @@ impl App {
         match self.mode {
             AppMode::Normal => match key.code {
                 KeyCode::Char('/') => {
+                    self.pending_key = None;
                     if self.focus == Focus::Cards {
                         self.search.activate();
                         self.mode = AppMode::Search;
                     }
                 }
-                KeyCode::Char('n') => match self.focus {
-                    Focus::Boards => self.handle_create_board_key(),
-                    Focus::Cards => self.handle_create_card_key(),
-                },
-                KeyCode::Char('r') => self.handle_rename_board_key(),
-                KeyCode::Char('e') => match self.focus {
-                    Focus::Boards => self.handle_edit_board_key(),
-                    Focus::Cards => {
-                        should_restart_events = self.handle_edit_card_key(terminal, event_handler);
+                KeyCode::Char('g') => {
+                    if self.pending_key == Some('g') {
+                        self.pending_key = None;
+                        self.handle_jump_to_top();
+                    } else {
+                        self.pending_key = Some('g');
                     }
-                },
-                KeyCode::Char('x') => self.handle_export_board_key(),
-                KeyCode::Char('X') => self.handle_export_all_key(),
-                KeyCode::Char('d') => self.handle_archive_card(),
-                KeyCode::Char('D') => self.handle_toggle_archived_cards_view(),
-                KeyCode::Char('i') => self.handle_import_board_key(),
-                KeyCode::Char('a') => self.handle_assign_to_sprint_key(),
-                KeyCode::Char('c') => self.handle_toggle_card_completion(),
-                KeyCode::Char('o') => self.handle_order_cards_key(),
-                KeyCode::Char('O') => self.handle_toggle_sort_order_key(),
-                KeyCode::Char('T') => self.handle_open_filter_dialog(),
-                KeyCode::Char('t') => self.handle_toggle_sprint_filter(),
-                KeyCode::Char('v') => self.handle_card_selection_toggle(),
-                KeyCode::Char('V') => self.handle_toggle_task_list_view(),
-                KeyCode::Char('H') => self.handle_move_card_left(),
-                KeyCode::Char('L') => self.handle_move_card_right(),
-                KeyCode::Char('h') => self.handle_kanban_column_left(),
-                KeyCode::Char('l') => self.handle_kanban_column_right(),
-                KeyCode::Char('1') => self.handle_column_or_focus_switch(0),
-                KeyCode::Char('2') => self.handle_column_or_focus_switch(1),
-                KeyCode::Char('3') => self.handle_column_or_focus_switch(2),
-                KeyCode::Char('4') => self.handle_column_or_focus_switch(3),
-                KeyCode::Char('5') => self.handle_column_or_focus_switch(4),
-                KeyCode::Char('6') => self.handle_column_or_focus_switch(5),
-                KeyCode::Char('7') => self.handle_column_or_focus_switch(6),
-                KeyCode::Char('8') => self.handle_column_or_focus_switch(7),
-                KeyCode::Char('9') => self.handle_column_or_focus_switch(8),
-                KeyCode::Esc => self.handle_escape_key(),
-                KeyCode::Char('j') | KeyCode::Down => self.handle_navigation_down(),
-                KeyCode::Char('k') | KeyCode::Up => self.handle_navigation_up(),
-                KeyCode::Enter | KeyCode::Char(' ') => self.handle_selection_activate(),
-                _ => {}
+                }
+                KeyCode::Char('G') => {
+                    self.pending_key = None;
+                    self.handle_jump_to_bottom();
+                }
+                KeyCode::Char('{') => {
+                    self.pending_key = None;
+                    self.handle_jump_half_viewport_up();
+                }
+                KeyCode::Char('}') => {
+                    self.pending_key = None;
+                    self.handle_jump_half_viewport_down();
+                }
+                KeyCode::Char('n') => {
+                    self.pending_key = None;
+                    match self.focus {
+                        Focus::Boards => self.handle_create_board_key(),
+                        Focus::Cards => self.handle_create_card_key(),
+                    }
+                }
+                KeyCode::Char('r') => {
+                    self.pending_key = None;
+                    self.handle_rename_board_key();
+                }
+                KeyCode::Char('e') => {
+                    self.pending_key = None;
+                    match self.focus {
+                        Focus::Boards => self.handle_edit_board_key(),
+                        Focus::Cards => {
+                            should_restart_events =
+                                self.handle_edit_card_key(terminal, event_handler);
+                        }
+                    }
+                }
+                KeyCode::Char('x') => {
+                    self.pending_key = None;
+                    self.handle_export_board_key();
+                }
+                KeyCode::Char('X') => {
+                    self.pending_key = None;
+                    self.handle_export_all_key();
+                }
+                KeyCode::Char('d') => {
+                    self.pending_key = None;
+                    self.handle_archive_card();
+                }
+                KeyCode::Char('D') => {
+                    self.pending_key = None;
+                    self.handle_toggle_archived_cards_view();
+                }
+                KeyCode::Char('i') => {
+                    self.pending_key = None;
+                    self.handle_import_board_key();
+                }
+                KeyCode::Char('a') => {
+                    self.pending_key = None;
+                    self.handle_assign_to_sprint_key();
+                }
+                KeyCode::Char('c') => {
+                    self.pending_key = None;
+                    self.handle_toggle_card_completion();
+                }
+                KeyCode::Char('o') => {
+                    self.pending_key = None;
+                    self.handle_order_cards_key();
+                }
+                KeyCode::Char('O') => {
+                    self.pending_key = None;
+                    self.handle_toggle_sort_order_key();
+                }
+                KeyCode::Char('T') => {
+                    self.pending_key = None;
+                    self.handle_open_filter_dialog();
+                }
+                KeyCode::Char('t') => {
+                    self.pending_key = None;
+                    self.handle_toggle_sprint_filter();
+                }
+                KeyCode::Char('v') => {
+                    self.pending_key = None;
+                    self.handle_card_selection_toggle();
+                }
+                KeyCode::Char('V') => {
+                    self.pending_key = None;
+                    self.handle_toggle_task_list_view();
+                }
+                KeyCode::Char('H') => {
+                    self.pending_key = None;
+                    self.handle_move_card_left();
+                }
+                KeyCode::Char('L') => {
+                    self.pending_key = None;
+                    self.handle_move_card_right();
+                }
+                KeyCode::Char('h') => {
+                    self.pending_key = None;
+                    self.handle_kanban_column_left();
+                }
+                KeyCode::Char('l') => {
+                    self.pending_key = None;
+                    self.handle_kanban_column_right();
+                }
+                KeyCode::Char('1') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(0);
+                }
+                KeyCode::Char('2') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(1);
+                }
+                KeyCode::Char('3') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(2);
+                }
+                KeyCode::Char('4') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(3);
+                }
+                KeyCode::Char('5') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(4);
+                }
+                KeyCode::Char('6') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(5);
+                }
+                KeyCode::Char('7') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(6);
+                }
+                KeyCode::Char('8') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(7);
+                }
+                KeyCode::Char('9') => {
+                    self.pending_key = None;
+                    self.handle_column_or_focus_switch(8);
+                }
+                KeyCode::Esc => {
+                    self.pending_key = None;
+                    self.handle_escape_key();
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.pending_key = None;
+                    self.handle_navigation_down();
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.pending_key = None;
+                    self.handle_navigation_up();
+                }
+                KeyCode::Enter | KeyCode::Char(' ') => {
+                    self.pending_key = None;
+                    self.handle_selection_activate();
+                }
+                _ => {
+                    self.pending_key = None;
+                }
             },
-            AppMode::CreateBoard => self.handle_create_board_dialog(key.code),
-            AppMode::CreateCard => self.handle_create_card_dialog(key.code),
-            AppMode::CreateSprint => self.handle_create_sprint_dialog(key.code),
-            AppMode::RenameBoard => self.handle_rename_board_dialog(key.code),
-            AppMode::ExportBoard => self.handle_export_board_dialog(key.code),
-            AppMode::ExportAll => self.handle_export_all_dialog(key.code),
-            AppMode::ImportBoard => self.handle_import_board_popup(key.code),
-            AppMode::SetCardPoints => {
-                should_restart_events = self.handle_set_card_points_dialog(key.code);
-            }
-            AppMode::SetCardPriority => self.handle_set_card_priority_popup(key.code),
             AppMode::CardDetail => {
                 should_restart_events =
                     self.handle_card_detail_key(key.code, terminal, event_handler);
@@ -463,28 +657,49 @@ impl App {
                 should_restart_events =
                     self.handle_board_detail_key(key.code, terminal, event_handler);
             }
-            AppMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
-            AppMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
-            AppMode::SetSprintCardPrefix => self.handle_set_sprint_card_prefix_dialog(key.code),
-            AppMode::OrderCards => {
-                should_restart_events = self.handle_order_cards_popup(key.code);
-            }
             AppMode::SprintDetail => self.handle_sprint_detail_key(key.code),
-            AppMode::AssignCardToSprint => self.handle_assign_card_to_sprint_popup(key.code),
-            AppMode::AssignMultipleCardsToSprint => {
-                self.handle_assign_multiple_cards_to_sprint_popup(key.code)
-            }
-            AppMode::CreateColumn => self.handle_create_column_dialog(key.code),
-            AppMode::RenameColumn => self.handle_rename_column_dialog(key.code),
-            AppMode::DeleteColumnConfirm => self.handle_delete_column_confirm_popup(key.code),
-            AppMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
             AppMode::Search => self.handle_search_mode(key.code),
-            AppMode::ConfirmSprintPrefixCollision => {
-                self.handle_confirm_sprint_prefix_collision_popup(key.code)
-            }
-            AppMode::FilterOptions => self.handle_filter_options_popup(key.code),
             AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
             AppMode::Help(_) => self.handle_help_mode(key.code),
+            AppMode::Dialog(ref dialog) => match dialog {
+                DialogMode::CreateBoard => self.handle_create_board_dialog(key.code),
+                DialogMode::CreateCard => self.handle_create_card_dialog(key.code),
+                DialogMode::CreateSprint => self.handle_create_sprint_dialog(key.code),
+                DialogMode::RenameBoard => self.handle_rename_board_dialog(key.code),
+                DialogMode::ExportBoard => self.handle_export_board_dialog(key.code),
+                DialogMode::ExportAll => self.handle_export_all_dialog(key.code),
+                DialogMode::ImportBoard => self.handle_import_board_popup(key.code),
+                DialogMode::SetCardPoints => {
+                    should_restart_events = self.handle_set_card_points_dialog(key.code);
+                }
+                DialogMode::SetCardPriority => self.handle_set_card_priority_popup(key.code),
+                DialogMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
+                DialogMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
+                DialogMode::SetSprintCardPrefix => {
+                    self.handle_set_sprint_card_prefix_dialog(key.code)
+                }
+                DialogMode::OrderCards => {
+                    should_restart_events = self.handle_order_cards_popup(key.code);
+                }
+                DialogMode::AssignCardToSprint => self.handle_assign_card_to_sprint_popup(key.code),
+                DialogMode::AssignMultipleCardsToSprint => {
+                    self.handle_assign_multiple_cards_to_sprint_popup(key.code)
+                }
+                DialogMode::CreateColumn => self.handle_create_column_dialog(key.code),
+                DialogMode::RenameColumn => self.handle_rename_column_dialog(key.code),
+                DialogMode::DeleteColumnConfirm => {
+                    self.handle_delete_column_confirm_popup(key.code)
+                }
+                DialogMode::SelectTaskListView => self.handle_select_task_list_view_popup(key.code),
+                DialogMode::ConfirmSprintPrefixCollision => {
+                    self.handle_confirm_sprint_prefix_collision_popup(key.code)
+                }
+                DialogMode::FilterOptions => self.handle_filter_options_popup(key.code),
+                DialogMode::ConflictResolution => self.handle_conflict_resolution_popup(key.code),
+                DialogMode::ExternalChangeDetected => {
+                    self.handle_external_change_detected_popup(key.code)
+                }
+            },
         }
         should_restart_events
     }
@@ -603,68 +818,96 @@ impl App {
             }
         }
 
+        // Group animations by type for batch processing
+        let mut archive_cards = Vec::new();
+        let mut restore_cards = Vec::new();
+        let mut delete_cards = Vec::new();
+        let mut last_archive_column = None;
+        let mut last_archive_position = None;
+
         for (card_id, animation_type) in completed_animations {
             self.animating_cards.remove(&card_id);
-            self.complete_animation(card_id, animation_type);
+            match animation_type {
+                AnimationType::Archiving => {
+                    if let Some(card_pos) = self.ctx.cards.iter().position(|c| c.id == card_id) {
+                        let card = self.ctx.cards[card_pos].clone();
+                        last_archive_column = Some(card.column_id);
+                        last_archive_position = Some(card.position);
+                        archive_cards.push(card_id);
+                    }
+                }
+                AnimationType::Restoring => {
+                    restore_cards.push(card_id);
+                }
+                AnimationType::Deleting => {
+                    delete_cards.push(card_id);
+                }
+            }
         }
-    }
 
-    fn complete_animation(&mut self, card_id: uuid::Uuid, animation_type: AnimationType) {
-        match animation_type {
-            AnimationType::Archiving => {
-                self.complete_archive_animation(card_id);
+        let had_archives = !archive_cards.is_empty();
+        let had_deletes = !delete_cards.is_empty();
+        let had_restores = !restore_cards.is_empty();
+
+        // Execute batch archive commands
+        if had_archives {
+            let mut archive_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+            for card_id in archive_cards {
+                let cmd = Box::new(kanban_domain::commands::ArchiveCard { card_id })
+                    as Box<dyn crate::state::commands::Command>;
+                archive_commands.push(cmd);
             }
-            AnimationType::Restoring => {
-                self.complete_restore_animation(card_id);
-            }
-            AnimationType::Deleting => {
-                self.complete_delete_animation(card_id);
+            if let Err(e) = self.execute_commands_batch(archive_commands) {
+                tracing::error!("Failed to archive cards: {}", e);
+            } else if let (Some(column_id), Some(position)) =
+                (last_archive_column, last_archive_position)
+            {
+                self.compact_column_positions(column_id);
+                self.select_card_after_deletion(column_id, position);
             }
         }
-    }
 
-    fn complete_archive_animation(&mut self, card_id: uuid::Uuid) {
-        if let Some(card_pos) = self.cards.iter().position(|c| c.id == card_id) {
-            let card = self.cards.remove(card_pos);
-            let column_id = card.column_id;
-            let position = card.position;
+        // Execute batch delete commands
+        if had_deletes {
+            let mut delete_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+            for card_id in delete_cards {
+                let cmd = Box::new(kanban_domain::commands::DeleteCard { card_id })
+                    as Box<dyn crate::state::commands::Command>;
+                delete_commands.push(cmd);
+            }
+            if let Err(e) = self.execute_commands_batch(delete_commands) {
+                tracing::error!("Failed to delete cards: {}", e);
+            }
+        }
 
-            let archived_card = ArchivedCard::new(card, column_id, position);
-            self.archived_cards.push(archived_card);
+        // Handle restore animations individually (less common)
+        for card_id in restore_cards {
+            self.complete_restore_animation(card_id);
+        }
 
-            self.compact_column_positions(column_id);
-            self.select_card_after_deletion(column_id, position);
+        // Refresh view once at the end
+        if had_archives || had_deletes || had_restores {
             self.refresh_view();
         }
     }
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
-        if let Some(pos) = self
+        if let Some(archived_card) = self
+            .ctx
             .archived_cards
             .iter()
-            .position(|dc| dc.card.id == card_id)
+            .find(|dc| dc.card.id == card_id)
+            .cloned()
         {
-            let deleted_card = self.archived_cards.remove(pos);
-            self.restore_card(deleted_card);
-            self.refresh_view();
-        }
-    }
-
-    fn complete_delete_animation(&mut self, card_id: uuid::Uuid) {
-        if let Some(pos) = self
-            .archived_cards
-            .iter()
-            .position(|dc| dc.card.id == card_id)
-        {
-            self.archived_cards.remove(pos);
-            self.refresh_view();
+            self.restore_card(archived_card);
         }
     }
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
-        let board_filter = BoardFilter::new(board_id, &self.columns);
+        let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
 
         let cards: Vec<_> = self
+            .ctx
             .cards
             .iter()
             .filter(|c| {
@@ -700,10 +943,11 @@ impl App {
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
-        let board = self.boards.iter().find(|b| b.id == board_id).unwrap();
-        let board_filter = BoardFilter::new(board_id, &self.columns);
+        let board = self.ctx.boards.iter().find(|b| b.id == board_id).unwrap();
+        let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
 
         let mut cards: Vec<&Card> = self
+            .ctx
             .cards
             .iter()
             .filter(|c| {
@@ -738,12 +982,13 @@ impl App {
             if let Some(card_id) = task_list.get_selected_card_id() {
                 if self.mode == AppMode::ArchivedCardsView {
                     return self
+                        .ctx
                         .archived_cards
                         .iter()
                         .find(|dc| dc.card.id == card_id)
                         .map(|dc| &dc.card);
                 } else {
-                    return self.cards.iter().find(|c| c.id == card_id);
+                    return self.ctx.cards.iter().find(|c| c.id == card_id);
                 }
             }
         }
@@ -764,17 +1009,19 @@ impl App {
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<&Card> {
         if self.mode == AppMode::ArchivedCardsView {
-            self.archived_cards
+            self.ctx
+                .archived_cards
                 .iter()
                 .find(|dc| dc.card.id == card_id)
                 .map(|dc| &dc.card)
         } else {
-            self.cards.iter().find(|c| c.id == card_id)
+            self.ctx.cards.iter().find(|c| c.id == card_id)
         }
     }
 
     pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        self.cards
+        self.ctx
+            .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id))
             .collect()
@@ -782,6 +1029,7 @@ impl App {
 
     pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
         let cards: Vec<&Card> = self
+            .ctx
             .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
@@ -796,6 +1044,7 @@ impl App {
 
     pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
         let cards: Vec<&Card> = self
+            .ctx
             .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
@@ -810,6 +1059,7 @@ impl App {
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let uncompleted_ids: Vec<uuid::Uuid> = self
+            .ctx
             .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
@@ -817,6 +1067,7 @@ impl App {
             .collect();
 
         let completed_ids: Vec<uuid::Uuid> = self
+            .ctx
             .cards
             .iter()
             .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
@@ -841,12 +1092,12 @@ impl App {
 
         let mut uncompleted_cards: Vec<&Card> = uncompleted_card_ids
             .iter()
-            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .filter_map(|id| self.ctx.cards.iter().find(|c| c.id == *id))
             .collect();
 
         let mut completed_cards: Vec<&Card> = completed_card_ids
             .iter()
-            .filter_map(|id| self.cards.iter().find(|c| c.id == *id))
+            .filter_map(|id| self.ctx.cards.iter().find(|c| c.id == *id))
             .collect();
 
         let sorter = get_sorter_for_field(sort_field);
@@ -877,10 +1128,29 @@ impl App {
             .sum()
     }
 
+    /// Execute multiple commands as a batch with a single pause/resume cycle
+    /// This is the preferred method as it prevents race conditions where rapid successive saves
+    /// detect previous writes as external. For single commands, this still works efficiently.
+    pub fn execute_command(
+        &mut self,
+        command: Box<dyn crate::state::commands::Command>,
+    ) -> KanbanResult<()> {
+        self.execute_commands_batch(vec![command])
+    }
+
+    /// Execute multiple commands as a batch with a single pause/resume cycle
+    /// This prevents race conditions where rapid successive saves detect previous writes as external
+    pub fn execute_commands_batch(
+        &mut self,
+        commands: Vec<Box<dyn crate::state::commands::Command>>,
+    ) -> KanbanResult<()> {
+        self.ctx.execute_commands_batch(commands)
+    }
+
     pub fn refresh_view(&mut self) {
         let board_idx = self.active_board_index.or(self.board_selection.get());
         if let Some(idx) = board_idx {
-            if let Some(board) = self.boards.get(idx) {
+            if let Some(board) = self.ctx.boards.get(idx) {
                 let search_query = if self.search.is_active {
                     Some(self.search.query())
                 } else {
@@ -889,19 +1159,20 @@ impl App {
 
                 // When in DeletedCardsView, convert deleted cards to Card objects for display
                 let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
-                    self.archived_cards
+                    self.ctx
+                        .archived_cards
                         .iter()
                         .map(|dc| dc.card.clone())
                         .collect()
                 } else {
-                    self.cards.clone()
+                    self.ctx.cards.clone()
                 };
 
                 let ctx = ViewRefreshContext {
                     board,
                     all_cards: &cards_for_display,
-                    all_columns: &self.columns,
-                    all_sprints: &self.sprints,
+                    all_columns: &self.ctx.columns,
+                    all_sprints: &self.ctx.sprints,
                     active_sprint_filters: self.active_sprint_filters.clone(),
                     hide_assigned_cards: self.hide_assigned_cards,
                     search_query,
@@ -934,13 +1205,13 @@ impl App {
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards.get(board_idx) {
                 let board_export = BoardExporter::export_board(
                     board,
-                    &self.columns,
-                    &self.cards,
-                    &self.archived_cards,
-                    &self.sprints,
+                    &self.ctx.columns,
+                    &self.ctx.cards,
+                    &self.ctx.archived_cards,
+                    &self.ctx.sprints,
                 );
 
                 let export = crate::export::AllBoardsExport {
@@ -955,11 +1226,11 @@ impl App {
 
     pub fn export_all_boards_with_filename(&self) -> io::Result<()> {
         let export = BoardExporter::export_all_boards(
-            &self.boards,
-            &self.columns,
-            &self.cards,
-            &self.archived_cards,
-            &self.sprints,
+            &self.ctx.boards,
+            &self.ctx.columns,
+            &self.ctx.cards,
+            &self.ctx.archived_cards,
+            &self.ctx.sprints,
         );
         BoardExporter::export_to_file(&export, self.input.as_str())?;
         Ok(())
@@ -968,11 +1239,11 @@ impl App {
     pub fn auto_save(&self) -> io::Result<()> {
         if let Some(ref filename) = self.save_file {
             let export = BoardExporter::export_all_boards(
-                &self.boards,
-                &self.columns,
-                &self.cards,
-                &self.archived_cards,
-                &self.sprints,
+                &self.ctx.boards,
+                &self.ctx.columns,
+                &self.ctx.cards,
+                &self.ctx.archived_cards,
+                &self.ctx.sprints,
             );
             BoardExporter::export_to_file(&export, filename)?;
         }
@@ -980,7 +1251,7 @@ impl App {
     }
 
     fn check_ended_sprints(&self) {
-        let ended_sprints: Vec<_> = self.sprints.iter().filter(|s| s.is_ended()).collect();
+        let ended_sprints: Vec<_> = self.ctx.sprints.iter().filter(|s| s.is_ended()).collect();
 
         if !ended_sprints.is_empty() {
             tracing::warn!(
@@ -988,7 +1259,7 @@ impl App {
                 ended_sprints.len()
             );
             for sprint in &ended_sprints {
-                if let Some(board) = self.boards.iter().find(|b| b.id == sprint.board_id) {
+                if let Some(board) = self.ctx.boards.iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
                         sprint.formatted_name(board, "sprint"),
@@ -1009,7 +1280,7 @@ impl App {
         field: BoardField,
     ) -> io::Result<()> {
         if let Some(board_idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards.get(board_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     BoardField::Name => {
@@ -1028,11 +1299,14 @@ impl App {
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
                     let board_id = board.id;
-                    if let Some(board) = self.boards.iter_mut().find(|b| b.id == board_id) {
+                    if let Some(board) = self.ctx.boards.iter_mut().find(|b| b.id == board_id) {
                         match field {
                             BoardField::Name => {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
+                                    self.ctx.state_manager.mark_dirty();
+                                    let snapshot = crate::state::DataSnapshot::from_app(self);
+                                    self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
                             BoardField::Description => {
@@ -1042,6 +1316,9 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
+                                self.ctx.state_manager.mark_dirty();
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
                     }
@@ -1058,7 +1335,7 @@ impl App {
         field: CardField,
     ) -> io::Result<()> {
         if let Some(card_idx) = self.active_card_index {
-            if let Some(card) = self.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     CardField::Title => {
@@ -1077,11 +1354,14 @@ impl App {
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
                     let card_id = card.id;
-                    if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+                    if let Some(card) = self.ctx.cards.iter_mut().find(|c| c.id == card_id) {
                         match field {
                             CardField::Title => {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
+                                    self.ctx.state_manager.mark_dirty();
+                                    let snapshot = crate::state::DataSnapshot::from_app(self);
+                                    self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
                             CardField::Description => {
@@ -1091,6 +1371,9 @@ impl App {
                                     Some(new_content)
                                 };
                                 card.update_description(desc);
+                                self.ctx.state_manager.mark_dirty();
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
                     }
@@ -1127,8 +1410,125 @@ impl App {
         Ok(())
     }
 
-    pub async fn run(&mut self) -> KanbanResult<()> {
+    pub async fn run(
+        &mut self,
+        save_rx: Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
+    ) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
+
+        // Initialize file watching if a save file is configured
+        // (Done before spawning save worker so worker can pause/resume it)
+        if let Some(ref save_file) = self.save_file {
+            use kanban_persistence::ChangeDetector;
+            tracing::info!("Initializing file watcher for: {}", save_file);
+            let watcher = kanban_persistence::FileWatcher::new();
+            let rx = watcher.subscribe();
+            self.file_change_rx = Some(rx);
+            tracing::debug!("File change broadcast receiver subscribed");
+
+            let path = std::path::PathBuf::from(save_file);
+            if let Err(e) = watcher.start_watching(path.clone()).await {
+                tracing::warn!(
+                    "Failed to start file watching for {}: {}",
+                    path.display(),
+                    e
+                );
+            } else {
+                tracing::info!("File watcher started for: {}", path.display());
+            }
+
+            // Store the watcher to keep the background task alive
+            self.file_watcher = Some(watcher.clone());
+            // Also set it on the state manager (wrapped in Arc) so queue_snapshot can pause it
+            let watcher_arc = std::sync::Arc::new(watcher);
+            self.ctx.state_manager.set_file_watcher(watcher_arc);
+        }
+
+        // Spawn async save worker if save channel is configured
+        if let Some(mut rx) = save_rx {
+            tracing::debug!("Save channel receiver available");
+            if let Some(store) = self.ctx.state_manager.store().cloned() {
+                let instance_id = self.ctx.state_manager.instance_id();
+                let file_watcher = self.file_watcher.clone();
+                let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
+
+                tracing::info!("Spawning save worker to process snapshots");
+                let handle = tokio::spawn(async move {
+                    tracing::info!("Save worker task started, waiting for snapshots");
+                    while let Some(snapshot) = rx.recv().await {
+                        tracing::debug!("Save worker received snapshot, starting save operation");
+
+                        let data = match snapshot.to_json_bytes() {
+                            Ok(d) => d,
+                            Err(e) => {
+                                tracing::error!("Failed to serialize snapshot: {}", e);
+                                // Resume file watching since save is not happening
+                                if let Some(ref watcher) = file_watcher {
+                                    watcher.resume();
+                                }
+                                continue;
+                            }
+                        };
+
+                        let persistence_snapshot = StoreSnapshot {
+                            data,
+                            metadata: PersistenceMetadata::new(instance_id),
+                        };
+
+                        match store.save(persistence_snapshot).await {
+                            Ok(_) => {
+                                tracing::debug!("Save worker completed save");
+                                // Signal that save is complete
+                                if let Some(ref tx) = save_completion_tx {
+                                    if let Err(e) = tx.send(()) {
+                                        tracing::error!(
+                                            "Failed to send save completion signal: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                            Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                                tracing::warn!("Save worker detected conflict at {}", path);
+                                // Signal completion even on conflict
+                                if let Some(ref tx) = save_completion_tx {
+                                    if let Err(e) = tx.send(()) {
+                                        tracing::error!(
+                                            "Failed to send save completion signal: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!("Save worker failed: {}", e);
+                                // Signal completion even on failure
+                                if let Some(ref tx) = save_completion_tx {
+                                    if let Err(e) = tx.send(()) {
+                                        tracing::error!(
+                                            "Failed to send save completion signal: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
+                        // Resume file watching after save completes
+                        // Metadata-based own-write detection filters out our own writes
+                        if let Some(ref watcher) = file_watcher {
+                            watcher.resume();
+                        }
+                    }
+                    tracing::info!("Save worker exited recv loop (channel closed)");
+                });
+                self.save_worker_handle = Some(handle);
+            } else {
+                tracing::warn!("Could not spawn save worker: no store available");
+            }
+        } else {
+            tracing::debug!("No save channel receiver - no saves will be processed");
+        }
 
         while !self.should_quit {
             let mut events = EventHandler::new();
@@ -1136,32 +1536,172 @@ impl App {
             loop {
                 terminal.draw(|frame| ui::render(self, frame))?;
 
-                if let Some(event) = events.next().await {
-                    match event {
-                        Event::Key(key) => {
-                            let should_restart = self.handle_key_event(key, &mut terminal, &events);
-                            if should_restart {
-                                break;
-                            }
-                        }
-                        Event::Tick => {
-                            self.handle_animation_tick();
-
-                            // Check if help menu pending action should execute
-                            if let Some((start_time, action)) = &self.help_pending_action {
-                                if start_time.elapsed().as_millis() >= 100 {
-                                    if let AppMode::Help(previous_mode) = &self.mode {
-                                        self.mode = (**previous_mode).clone();
-                                    } else {
-                                        self.mode = AppMode::Normal;
-                                    }
-                                    self.help_selection.clear();
-
-                                    let action = *action;
-                                    self.help_pending_action = None;
-                                    self.execute_action(&action);
+                tokio::select! {
+                    Some(event) = events.next() => {
+                        match event {
+                            Event::Key(key) => {
+                                let should_restart = self.handle_key_event(key, &mut terminal, &events);
+                                if should_restart {
+                                    break;
                                 }
                             }
+                            Event::Tick => {
+                                self.handle_animation_tick();
+
+                                // Auto-clear errors after 5 seconds
+                                if self.should_clear_error() {
+                                    self.clear_error();
+                                }
+
+                                // Handle pending conflict resolution actions
+                                // Only consume pending_key if it matches expected conflict actions
+                                // to avoid breaking multi-key sequences like 'gg'
+                                match self.pending_key {
+                                    Some('o') => {
+                                        self.pending_key = None;
+                                        // Pause file watcher to avoid conflict detection for our own save
+                                        if let Some(ref watcher) = self.file_watcher {
+                                            watcher.pause();
+                                        }
+                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        if let Err(e) = self.ctx.state_manager.force_overwrite(&snapshot).await {
+                                            tracing::error!("Failed to force overwrite: {}", e);
+                                        }
+                                        // Resume file watcher after save completes
+                                        if let Some(ref watcher) = self.file_watcher {
+                                            watcher.resume();
+                                        }
+                                    }
+                                    Some('t') => {
+                                        self.pending_key = None;
+                                        // Reload from disk
+                                        if let Some(store) = self.ctx.state_manager.store() {
+                                            match store.load().await {
+                                                Ok((snapshot, _metadata)) => {
+                                                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                                                        Ok(data) => {
+                                                            data.apply_to_app(self);
+                                                            self.ctx.state_manager.clear_conflict();
+                                                            self.refresh_view();
+                                                            tracing::info!("Reloaded state from disk");
+                                                        }
+                                                        Err(e) => {
+                                                            tracing::error!("Failed to deserialize reloaded state: {}", e);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!("Failed to reload from disk: {}", e);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Some('r') => {
+                                        self.pending_key = None;
+                                        self.auto_reload_from_external_change().await;
+                                    }
+                                    // Don't consume pending_key for other values (e.g., 'g' for gg sequence)
+                                    _ => {}
+                                }
+
+                                // Check if help menu pending action should execute
+                                if let Some((start_time, action)) = &self.help_pending_action {
+                                    if start_time.elapsed().as_millis() >= 100 {
+                                        if let AppMode::Help(previous_mode) = &self.mode {
+                                            self.mode = (**previous_mode).clone();
+                                        } else {
+                                            self.mode = AppMode::Normal;
+                                        }
+                                        self.help_selection.clear();
+
+                                        let action = *action;
+                                        self.help_pending_action = None;
+                                        self.execute_action(&action);
+                                    }
+                                }
+
+                                // Auto-refresh view if state manager indicates it's needed
+                                if self.ctx.state_manager.needs_refresh() {
+                                    self.refresh_view();
+                                    self.ctx.state_manager.clear_refresh();
+                                }
+                            }
+                        }
+                    }
+                    _ = async {
+                        if let Some(ref mut rx) = &mut self.save_completion_rx {
+                            rx.recv().await
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        // Save operation completed - update dirty flag
+                        tracing::debug!("Save completion signal received");
+                        self.ctx.state_manager.save_completed();
+                        // Reset force quit flag if all saves are now complete
+                        if !self.ctx.state_manager.has_pending_saves() {
+                            self.quit_with_pending = false;
+                        }
+                    }
+                    Some(_change_event) = async {
+                        if let Some(ref mut rx) = &mut self.file_change_rx {
+                            match rx.recv().await {
+                                Ok(event) => {
+                                    tracing::debug!(
+                                        "File change event received at {}",
+                                        event.detected_at
+                                    );
+                                    Some(event)
+                                }
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                                    tracing::warn!(
+                                        "File watcher events lagged: {} events dropped",
+                                        count
+                                    );
+                                    None
+                                }
+                                Err(e) => {
+                                    tracing::error!("File change receiver error: {}", e);
+                                    None
+                                }
+                            }
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        // Check if this is our own write by comparing instance IDs
+                        if let Some(store) = self.ctx.state_manager.store() {
+                            match store.load().await {
+                                Ok((_snapshot, metadata)) => {
+                                    // Compare instance IDs
+                                    if metadata.instance_id == self.ctx.state_manager.instance_id() {
+                                        tracing::debug!(
+                                            "File change from own instance ({}), ignoring",
+                                            metadata.instance_id
+                                        );
+                                        continue; // Skip reload entirely
+                                    }
+                                    // It's external - proceed with existing logic below
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to load metadata for instance check: {}", e);
+                                    // Fall through to existing logic (safer default)
+                                }
+                            }
+                        }
+
+                        // External file change detected - handle smart reload
+                        if !self.ctx.state_manager.is_dirty() {
+                            // No local changes, auto-reload silently
+                            tracing::info!("External change detected, auto-reloading");
+                            self.auto_reload_from_external_change().await;
+                            tracing::info!("Auto-reloaded due to external file change");
+                        } else if self.mode != AppMode::Dialog(DialogMode::ConflictResolution)
+                            && self.mode != AppMode::Dialog(DialogMode::ExternalChangeDetected)
+                        {
+                            // Local changes exist, prompt user
+                            tracing::warn!("External file change detected with local changes");
+                            self.open_dialog(DialogMode::ExternalChangeDetected);
                         }
                     }
                 }
@@ -1176,8 +1716,13 @@ impl App {
             }
         }
 
-        if let Err(e) = self.auto_save() {
-            tracing::error!("Failed to auto-save: {}", e);
+        // Graceful shutdown: ensure all queued saves complete before exit
+        self.ctx.state_manager.close_save_channel(); // Close save_tx channel to signal worker to finish
+
+        // Wait for save worker to finish processing all queued saves
+        if let Some(handle) = self.save_worker_handle.take() {
+            handle.await.ok();
+            tracing::info!("Save worker finished, all saves complete");
         }
 
         restore_terminal(&mut terminal)?;
@@ -1185,16 +1730,16 @@ impl App {
     }
 
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
-        let first_new_index = self.boards.len();
+        let first_new_index = self.ctx.boards.len();
         let import = BoardImporter::import_from_file(filename)?;
         let (boards, columns, cards, deleted_cards, sprints) =
             BoardImporter::extract_entities(import);
 
-        self.boards.extend(boards);
-        self.columns.extend(columns);
-        self.cards.extend(cards);
-        self.archived_cards.extend(deleted_cards);
-        self.sprints.extend(sprints);
+        self.ctx.boards.extend(boards);
+        self.ctx.columns.extend(columns);
+        self.ctx.cards.extend(cards);
+        self.ctx.archived_cards.extend(deleted_cards);
+        self.ctx.sprints.extend(sprints);
 
         self.board_selection.set(Some(first_new_index));
 
@@ -1203,18 +1748,43 @@ impl App {
         Ok(())
     }
 
+    async fn auto_reload_from_external_change(&mut self) {
+        if let Some(store) = self.ctx.state_manager.store() {
+            match store.load().await {
+                Ok((snapshot, _metadata)) => {
+                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                        Ok(data) => {
+                            data.apply_to_app(self);
+                            self.ctx.state_manager.mark_clean();
+                            self.ctx.state_manager.clear_conflict();
+                            self.refresh_view();
+                            tracing::info!("Auto-reloaded state from external file change");
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to deserialize reloaded state: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to reload from disk: {}", e);
+                }
+            }
+        }
+    }
+
     fn migrate_sprint_logs(&mut self) {
         let mut migrated_count = 0;
 
-        for card in &mut self.cards {
+        for card in &mut self.ctx.cards {
             if let Some(sprint_id) = card.sprint_id {
                 if card.sprint_logs.is_empty() {
-                    if let Some(sprint) = self.sprints.iter().find(|s| s.id == sprint_id) {
+                    if let Some(sprint) = self.ctx.sprints.iter().find(|s| s.id == sprint_id) {
                         let sprint_log = kanban_domain::SprintLog::new(
                             sprint_id,
                             sprint.sprint_number,
                             sprint.name_index.and_then(|idx| {
-                                self.boards
+                                self.ctx
+                                    .boards
                                     .iter()
                                     .find(|b| b.id == sprint.board_id)
                                     .and_then(|board| board.sprint_names.get(idx).cloned())
@@ -1240,12 +1810,12 @@ impl App {
     {
         if let Some(card_idx) = self.active_card_index {
             if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.boards.get(board_idx) {
-                    if let Some(card) = self.cards.get(card_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
+                    if let Some(card) = self.ctx.cards.get(card_idx) {
                         let output = get_output(
                             card,
                             board,
-                            &self.sprints,
+                            &self.ctx.sprints,
                             self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&output) {
@@ -1273,7 +1843,7 @@ impl App {
 
     pub fn get_current_priority_selection_index(&self) -> usize {
         if let Some(card_idx) = self.active_card_index {
-            if let Some(card) = self.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
                     CardPriority::Low => 0,
@@ -1288,11 +1858,12 @@ impl App {
 
     pub fn get_current_sprint_selection_index(&self) -> usize {
         if let Some(card_idx) = self.active_card_index {
-            if let Some(card) = self.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.active_board_index {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let board_sprints: Vec<_> = self
+                                .ctx
                                 .sprints
                                 .iter()
                                 .filter(|s| s.board_id == board.id)
@@ -1344,6 +1915,7 @@ fn restore_terminal(
 
 impl Default for App {
     fn default() -> Self {
-        Self::new(None)
+        let (app, _rx) = Self::new(None);
+        app
     }
 }

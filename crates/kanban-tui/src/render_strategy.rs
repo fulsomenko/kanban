@@ -64,7 +64,7 @@ impl RenderStrategy for SinglePanelRenderer {
         let mut lines = vec![];
 
         if let Some(idx) = board_idx {
-            if let Some(board) = app.boards.get(idx) {
+            if let Some(board) = app.ctx.boards.get(idx) {
                 let active_task_list = app.view_strategy.get_active_task_list();
 
                 if self.show_column_headers {
@@ -93,17 +93,47 @@ impl RenderStrategy for SinglePanelRenderer {
                             lines.push(Line::from(Span::styled(message, label_text())));
                         } else {
                             let raw_viewport_height = area.height.saturating_sub(2) as usize;
+                            let scroll_offset = task_list.get_scroll_offset();
 
-                            // Estimate how many column headers will appear in the viewport
-                            let estimated_header_count = count_headers_in_viewport(
+                            // Calculate "above" indicator overhead (fixed based on scroll position)
+                            let above_indicator_height = if scroll_offset > 0 { 1 } else { 0 };
+
+                            // Start with space available after above indicator
+                            let available_space =
+                                raw_viewport_height.saturating_sub(above_indicator_height);
+
+                            // Initial estimate: count headers based on available space
+                            let initial_header_count = count_headers_in_viewport(
                                 &column_boundaries,
-                                task_list.get_scroll_offset(),
-                                raw_viewport_height,
+                                scroll_offset,
+                                available_space,
                             );
 
-                            // Adjust viewport height to account for headers
+                            // Calculate card slots after initial header estimate
+                            let initial_card_slots =
+                                available_space.saturating_sub(initial_header_count);
+
+                            // Refine: count headers for only the cards that will actually be visible
+                            let refined_header_count = count_headers_in_viewport(
+                                &column_boundaries,
+                                scroll_offset,
+                                initial_card_slots,
+                            );
+
+                            // Calculate card slots with refined header count
+                            let card_slots = available_space.saturating_sub(refined_header_count);
+
+                            // Check if we need "below" indicator based on actual visible cards
+                            let below_indicator_height =
+                                if scroll_offset + card_slots < task_list.len() {
+                                    1
+                                } else {
+                                    0
+                                };
+
+                            // Final adjusted viewport: cards minus below indicator
                             let adjusted_viewport_height =
-                                raw_viewport_height.saturating_sub(estimated_header_count);
+                                card_slots.saturating_sub(below_indicator_height);
 
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
@@ -155,7 +185,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         let line = render_card_list_item(CardListItemConfig {
                                             card,
                                             board,
-                                            sprints: &app.sprints,
+                                            sprints: &app.ctx.sprints,
                                             is_selected,
                                             is_focused: app.focus == crate::app::Focus::Cards,
                                             is_multi_selected: app
@@ -180,8 +210,9 @@ impl RenderStrategy for SinglePanelRenderer {
                                 )));
                             }
                         }
-                    } else if let Some(board) = app.boards.get(board_idx.unwrap()) {
+                    } else if let Some(board) = app.ctx.boards.get(board_idx.unwrap()) {
                         let mut board_columns: Vec<_> = app
+                            .ctx
                             .columns
                             .iter()
                             .filter(|col| col.board_id == board.id)
@@ -211,8 +242,22 @@ impl RenderStrategy for SinglePanelRenderer {
                         };
                         lines.push(Line::from(Span::styled(message, label_text())));
                     } else {
-                        let viewport_height = area.height.saturating_sub(2) as usize;
-                        let render_info = task_list.get_render_info(viewport_height);
+                        let raw_viewport_height = area.height.saturating_sub(2) as usize;
+
+                        // Calculate indicator overhead based on actual position
+                        let mut indicator_overhead = 0;
+                        if task_list.get_scroll_offset() > 0 {
+                            indicator_overhead += 1; // Will show "above" indicator
+                        }
+                        if task_list.get_scroll_offset() + raw_viewport_height < task_list.len() {
+                            indicator_overhead += 1; // Will show "below" indicator
+                        }
+
+                        // Adjust viewport height to account for indicators
+                        let adjusted_viewport_height =
+                            raw_viewport_height.saturating_sub(indicator_overhead);
+
+                        let render_info = task_list.get_render_info(adjusted_viewport_height);
 
                         if render_info.show_above_indicator {
                             let count = render_info.cards_above_count;
@@ -232,7 +277,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
-                                        sprints: &app.sprints,
+                                        sprints: &app.ctx.sprints,
                                         is_selected: task_list.get_selected_index()
                                             == Some(*card_idx),
                                         is_focused: app.focus == crate::app::Focus::Cards,
@@ -288,7 +333,7 @@ impl RenderStrategy for MultiPanelRenderer {
         let board_idx = app.active_board_index.or(app.board_selection.get());
 
         if let Some(idx) = board_idx {
-            if let Some(board) = app.boards.get(idx) {
+            if let Some(board) = app.ctx.boards.get(idx) {
                 let task_lists = app.view_strategy.get_all_task_lists();
 
                 if task_lists.is_empty() {
@@ -334,8 +379,23 @@ impl RenderStrategy for MultiPanelRenderer {
                     if task_list.is_empty() {
                         lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
                     } else {
-                        let viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
-                        let render_info = task_list.get_render_info(viewport_height);
+                        let raw_viewport_height = chunks[col_idx].height.saturating_sub(2) as usize;
+
+                        // Calculate indicator overhead based on actual position
+                        // This matches the logic in SinglePanelRenderer and get_adjusted_viewport_height
+                        let mut indicator_overhead = 0;
+                        if task_list.get_scroll_offset() > 0 {
+                            indicator_overhead += 1; // Will show "above" indicator
+                        }
+                        if task_list.get_scroll_offset() + raw_viewport_height < task_list.len() {
+                            indicator_overhead += 1; // Will show "below" indicator
+                        }
+
+                        // Adjust viewport height to account for indicators
+                        let adjusted_viewport_height =
+                            raw_viewport_height.saturating_sub(indicator_overhead);
+
+                        let render_info = task_list.get_render_info(adjusted_viewport_height);
 
                         if render_info.show_above_indicator {
                             let count = render_info.cards_above_count;
@@ -361,7 +421,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
-                                        sprints: &app.sprints,
+                                        sprints: &app.ctx.sprints,
                                         is_selected,
                                         is_focused: app.focus == crate::app::Focus::Cards
                                             && is_focused_column,
@@ -387,7 +447,8 @@ impl RenderStrategy for MultiPanelRenderer {
 
                     let column_name =
                         if let crate::card_list::CardListId::Column(column_id) = task_list.id {
-                            app.columns
+                            app.ctx
+                                .columns
                                 .iter()
                                 .find(|c| c.id == column_id)
                                 .map(|c| c.name.clone())

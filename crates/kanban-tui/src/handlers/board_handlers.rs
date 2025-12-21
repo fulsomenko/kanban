@@ -1,9 +1,11 @@
-use crate::app::{App, AppMode, BoardFocus, Focus};
+use crate::app::{App, AppMode, BoardFocus, DialogMode, Focus};
+use crate::state::commands::{CreateBoard, CreateColumn, UpdateBoard};
+use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {
     pub fn handle_create_board_key(&mut self) {
         if self.focus == Focus::Boards {
-            self.mode = AppMode::CreateBoard;
+            self.open_dialog(DialogMode::CreateBoard);
             self.input.clear();
         }
     }
@@ -11,9 +13,9 @@ impl App {
     pub fn handle_rename_board_key(&mut self) {
         if self.focus == Focus::Boards && self.board_selection.get().is_some() {
             if let Some(board_idx) = self.board_selection.get() {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     self.input.set(board.name.clone());
-                    self.mode = AppMode::RenameBoard;
+                    self.open_dialog(DialogMode::RenameBoard);
                 }
             }
         }
@@ -21,7 +23,7 @@ impl App {
 
     pub fn handle_edit_board_key(&mut self) {
         if self.focus == Focus::Boards && self.board_selection.get().is_some() {
-            self.mode = AppMode::BoardDetail;
+            self.push_mode(AppMode::BoardDetail);
             self.board_focus = BoardFocus::Name;
         }
     }
@@ -29,27 +31,27 @@ impl App {
     pub fn handle_export_board_key(&mut self) {
         if self.focus == Focus::Boards && self.board_selection.get().is_some() {
             if let Some(board_idx) = self.board_selection.get() {
-                if let Some(board) = self.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards.get(board_idx) {
                     let filename = format!(
                         "{}-{}.json",
                         board.name.replace(" ", "-").to_lowercase(),
                         chrono::Utc::now().format("%Y%m%d-%H%M%S")
                     );
                     self.input.set(filename);
-                    self.mode = AppMode::ExportBoard;
+                    self.open_dialog(DialogMode::ExportBoard);
                 }
             }
         }
     }
 
     pub fn handle_export_all_key(&mut self) {
-        if self.focus == Focus::Boards && !self.boards.is_empty() {
+        if self.focus == Focus::Boards && !self.ctx.boards.is_empty() {
             let filename = format!(
                 "kanban-all-{}.json",
                 chrono::Utc::now().format("%Y%m%d-%H%M%S")
             );
             self.input.set(filename);
-            self.mode = AppMode::ExportAll;
+            self.open_dialog(DialogMode::ExportAll);
         }
     }
 
@@ -58,41 +60,82 @@ impl App {
             self.scan_import_files();
             if !self.import_files.is_empty() {
                 self.import_selection.set(Some(0));
-                self.mode = AppMode::ImportBoard;
+                self.open_dialog(DialogMode::ImportBoard);
             }
         }
     }
 
     pub fn create_board(&mut self) {
-        let board = kanban_domain::Board::new(self.input.as_str().to_string(), None);
-        let board_id = board.id;
-        let task_list_view = board.task_list_view;
-        tracing::info!("Creating board: {} (id: {})", board.name, board.id);
+        let board_name = self.input.as_str().to_string();
 
-        self.boards.push(board);
+        // Execute CreateBoard command first to get the board ID
+        let create_board_cmd = Box::new(CreateBoard {
+            name: board_name.clone(),
+            card_prefix: None,
+        });
 
-        let default_columns = vec![("TODO", 0), ("Doing", 1), ("Complete", 2)];
-
-        for (name, position) in default_columns {
-            let column = kanban_domain::Column::new(board_id, name.to_string(), position);
-            tracing::info!(
-                "Creating default column: {} (position: {})",
-                column.name,
-                column.position
-            );
-            self.columns.push(column);
+        if let Err(e) = self.execute_command(create_board_cmd) {
+            tracing::error!("Failed to create board: {}", e);
+            return;
         }
 
-        let new_index = self.boards.len() - 1;
+        // Get the board ID from the newly created board
+        let board_id = if let Some(board) = self.ctx.boards.last() {
+            board.id
+        } else {
+            return;
+        };
+
+        // Now batch the column creation commands
+        let mut column_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+        let default_columns = vec![("TODO", 0i32), ("Doing", 1i32), ("Complete", 2i32)];
+
+        for (name, position) in default_columns {
+            let create_col_cmd = Box::new(CreateColumn {
+                board_id,
+                name: name.to_string(),
+                position,
+            }) as Box<dyn crate::state::commands::Command>;
+            column_commands.push(create_col_cmd);
+        }
+
+        // Execute all column creation commands as a batch (single pause/resume cycle)
+        if let Err(e) = self.execute_commands_batch(column_commands) {
+            tracing::error!("Failed to create default columns: {}", e);
+            return;
+        }
+
+        let task_list_view = TaskListView::default(); // Default view for new boards
+
+        tracing::info!("Created board: {} (id: {})", board_name, board_id);
+        tracing::info!("Created default columns: TODO, Doing, Complete");
+
+        let new_index = self.ctx.boards.len() - 1;
         self.board_selection.set(Some(new_index));
         self.switch_view_strategy(task_list_view);
     }
 
     pub fn rename_board(&mut self) {
         if let Some(idx) = self.board_selection.get() {
-            if let Some(board) = self.boards.get_mut(idx) {
-                board.update_name(self.input.as_str().to_string());
-                tracing::info!("Renamed board to: {}", board.name);
+            if let Some(board) = self.ctx.boards.get(idx) {
+                let board_id = board.id;
+                let new_name = self.input.as_str().to_string();
+
+                // Execute UpdateBoard command
+                let cmd = Box::new(UpdateBoard {
+                    board_id,
+                    updates: BoardUpdate {
+                        name: Some(new_name.clone()),
+                        ..Default::default()
+                    },
+                });
+
+                if let Err(e) = self.execute_command(cmd) {
+                    tracing::error!("Failed to rename board: {}", e);
+                    return;
+                }
+
+                tracing::info!("Renamed board to: {}", new_name);
             }
         }
     }

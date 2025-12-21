@@ -1,105 +1,180 @@
 # kanban-tui
 
-Terminal user interface for the kanban project management tool.
+Terminal user interface for the kanban project management tool. A keyboard-driven, vim-inspired interface for managing your projects.
 
-## Features
+## Installation
 
-- 🖥️ **Beautiful TUI**: Powered by ratatui for rich terminal rendering
-- ⌨️ **Keyboard-Driven**: Vim-like navigation inspired by lazygit
-- 🎨 **Panel-Based Layout**: Multiple views (boards, tasks, details)
-- 🔄 **Real-Time Updates**: Interactive state management with crossterm
-- 📝 **External Editor**: Seamless integration with vim, nvim, nano, etc.
-- 🎯 **Multi-Select**: Bulk operations on cards
-- 📊 **Sprint Filtering**: Toggle views for active sprint focus
+### From crates.io
 
-## Purpose
-
-This crate provides the terminal user interface layer:
-
-- `app` - Application state and main event loop
-- `ui` - Rendering components and ratatui widgets
-- `events` - Keyboard and terminal event handling
-- `editor` - External editor integration for text editing
-
-## Architecture
-
-The TUI layer sits between the CLI and domain, consuming domain models and presenting them in a terminal interface:
-
-```
-kanban-core
-    ↑
-    ├── kanban-domain
-    │       ↑
-    │       └── kanban-tui (TUI layer)
-    │               ↑
-    │               └── kanban-cli
+```bash
+cargo install kanban-cli
+kanban
 ```
 
-## Key Components
+### From Source
 
-### Application State
-- Board and card management
-- Current selection and navigation state
-- Active panel tracking
-- Multi-select mode
+```bash
+git clone https://github.com/fulsomenko/kanban
+cd kanban
+cargo install --path crates/kanban-cli
+```
 
-### UI Panels
-- **Projects Panel**: List of boards with metadata
-- **Tasks Panel**: Cards grouped by column
-- **Detail Views**: Card/board/sprint details with tabs
-- **Dialogs**: Input forms for creation and editing
+## Quick Start
 
-### Event Handling
-- Keyboard shortcuts (vim-style navigation)
-- Context-aware command execution
-- Modal dialog management
-- External editor spawning
+```bash
+kanban                    # Launch the app
+kanban myboard.json       # Load a board from file
+```
+
+**First time?**
+1. Press `n` to create a new board
+2. Press `Enter` to activate it
+3. Add cards with `n` and organize them
+4. Press `?` to see all available shortcuts
 
 ## Keyboard Shortcuts
 
-**Main View:**
-- `q` - Quit
-- `1` / `2` - Switch panels
-- `j` / `k` - Navigate
-- `n` - Create new
-- `r` - Rename
-- `e` - Edit details
-- `v` - Multi-select toggle
-- `a` - Assign to sprint
-- `c` - Toggle completion
-- `t` - Toggle sprint filter
-- `x` / `X` - Export (current/all)
-- `i` - Import
-- `Enter` / `Space` - Activate/view
+> **Tip:** Press `?` at any time to view context-aware help.
 
-**Detail Views:**
-- `ESC` - Return to previous view
-- `1` / `2` / `3` - Switch detail tabs
-- `e` - Edit current panel
+### Navigation
 
-## External Editor Integration
+| Key | Action |
+|-----|--------|
+| `j` / `↓` | Navigate down |
+| `k` / `↑` | Navigate up |
+| `h` / `←` | Previous column |
+| `l` / `→` | Next column |
+| `1` | Switch to Boards panel |
+| `2` | Switch to Tasks panel |
+| `q` | Quit application |
 
-Supports opening external editors for long-form text with automatic fallback:
+### Board Management
 
-1. `$EDITOR` environment variable
-2. Search for: nvim → vim → nano → vi (notepad on Windows)
-3. Fallback: vi (notepad on Windows)
+| Key | Action |
+|-----|--------|
+| `n` | Create new board |
+| `r` | Rename board |
+| `e` | Edit board settings |
+| `Enter` | View board detail |
 
-## Design Pattern
+### Card Management
 
-- Event-driven architecture with crossterm
-- Component-based rendering with ratatui
-- State machine for view navigation
-- Async runtime with tokio
+| Key | Action |
+|-----|--------|
+| `n` | Create new card |
+| `e` | Edit card details |
+| `r` | Rename card |
+| `d` | Archive card |
+| `D` | View archived cards |
+| `c` | Toggle completion (Todo ↔ Done) |
+| `p` | Change priority |
+| `H` / `L` | Move card left/right between columns |
+| `m` | Move card to specific column |
+| `Enter` | View card detail |
 
-## Usage
+### Multi-Select & Bulk Operations
 
-```rust
-use kanban_tui::App;
+| Key | Action |
+|-----|--------|
+| `v` | Toggle selection on current card |
+| `V` | Toggle view mode (Flat/Grouped/Kanban) |
 
-let mut app = App::new(file_path)?;
-app.run().await?;
-```
+### Search & Filter
+
+| Key | Action |
+|-----|--------|
+| `/` | Search cards |
+| `f` | Filter by status, priority, or sprint |
+| `Esc` | Clear search/filter |
+
+### Sprint Management
+
+| Key | Action |
+|-----|--------|
+| `s` | Open sprint management |
+| `a` | Assign card to sprint |
+| `t` | Toggle sprint filter |
+
+### Sorting
+
+| Key | Action |
+|-----|--------|
+| `o` | Sort by field (Points, Priority, Date, Status) |
+| `O` | Toggle sort order (Ascending/Descending) |
+
+### Clipboard & Git Integration
+
+| Key | Action |
+|-----|--------|
+| `y` | Copy branch name to clipboard |
+| `Y` | Copy full git checkout command |
+
+### Import/Export
+
+| Key | Action |
+|-----|--------|
+| `x` | Export current board to JSON |
+| `X` | Export all boards |
+| `i` | Import board from JSON |
+
+### Detail View
+
+| Key | Action |
+|-----|--------|
+| `1` / `2` / `3` | Switch tabs (Title/Metadata/Description) |
+| `e` | Edit in external editor |
+| `Esc` | Return to previous view |
+
+## Features
+
+### Multiple View Modes
+
+Switch between views with `V`:
+- **Flat List**: All cards in a simple list
+- **Grouped by Column**: Cards organized under columns
+- **Kanban Board**: Classic columnar layout
+
+### Search
+
+Press `/` to search:
+- Searches card titles and descriptions
+- Results highlighted in green
+- Real-time, non-blocking search
+
+### Filtering
+
+Press `f` to filter by:
+- Status: Todo, In Progress, Blocked, Done
+- Priority: Low, Medium, High, Critical
+- Sprint assignment
+
+Filters are composable (all conditions combined).
+
+### External Editor Integration
+
+Edit long-form text (descriptions, notes) in your preferred editor:
+1. Respects `$EDITOR` environment variable
+2. Auto-detects: nvim → vim → nano → vi
+3. Full markdown support
+
+### Clipboard Support
+
+Copy branch names formatted for git:
+- `y` → `feature-1/card-title`
+- `Y` → `git checkout -b feature-1/card-title`
+
+### Card Animations
+
+Smooth 150ms animations for:
+- Card archival
+- Card restoration
+- Permanent deletion
+
+### Story Points
+
+Assign 1-5 point estimates with color-coded display:
+- Visual indicators for sprint planning
+- Point totals per column/sprint
 
 ## License
 

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::board::BoardId;
+use crate::field_update::FieldUpdate;
 
 pub type ColumnId = Uuid;
 
@@ -45,4 +46,27 @@ impl Column {
         self.name = name;
         self.updated_at = Utc::now();
     }
+
+    /// Update column with partial changes
+    pub fn update(&mut self, updates: ColumnUpdate) {
+        if let Some(name) = updates.name {
+            self.name = name;
+        }
+        if let Some(position) = updates.position {
+            self.position = position;
+        }
+        updates.wip_limit.apply_to(&mut self.wip_limit);
+        self.updated_at = Utc::now();
+    }
+}
+
+/// Partial update struct for Column
+///
+/// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
+/// See [`FieldUpdate`] documentation for usage examples.
+#[derive(Debug, Clone, Default)]
+pub struct ColumnUpdate {
+    pub name: Option<String>,
+    pub position: Option<i32>,
+    pub wip_limit: FieldUpdate<i32>,
 }

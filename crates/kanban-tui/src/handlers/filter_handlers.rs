@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode, Focus};
+use crate::app::{App, DialogMode, Focus};
 use crate::filters::{CardFilters, FilterDialogSection, FilterDialogState};
 use crossterm::event::KeyCode;
 
@@ -17,7 +17,7 @@ impl App {
         };
 
         self.filter_dialog_state = Some(FilterDialogState::new(filters));
-        self.mode = AppMode::FilterOptions;
+        self.open_dialog(DialogMode::FilterOptions);
     }
 
     pub fn handle_filter_options_popup(&mut self, key_code: KeyCode) {
@@ -27,13 +27,14 @@ impl App {
             match key_code {
                 KeyCode::Esc => {
                     self.filter_dialog_state = None;
-                    self.mode = AppMode::Normal;
+                    self.pop_mode();
                 }
                 KeyCode::Char('j') | KeyCode::Down => match dialog_state.current_section {
                     FilterDialogSection::Sprints => {
                         if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get(board_idx) {
+                            if let Some(board) = self.ctx.boards.get(board_idx) {
                                 let sprint_count = self
+                                    .ctx
                                     .sprints
                                     .iter()
                                     .filter(|s| s.board_id == board.id)
@@ -74,8 +75,9 @@ impl App {
                             );
                             self.apply_filters();
                         } else if let Some(board_idx) = self.active_board_index {
-                            if let Some(board) = self.boards.get(board_idx) {
+                            if let Some(board) = self.ctx.boards.get(board_idx) {
                                 let board_sprints: Vec<_> = self
+                                    .ctx
                                     .sprints
                                     .iter()
                                     .filter(|s| s.board_id == board.id)
@@ -105,7 +107,7 @@ impl App {
                 KeyCode::Enter => {
                     self.apply_filters();
                     self.filter_dialog_state = None;
-                    self.mode = AppMode::Normal;
+                    self.pop_mode();
                 }
                 _ => {}
             }

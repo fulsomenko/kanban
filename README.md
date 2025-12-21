@@ -1,187 +1,166 @@
 # Kanban
 
-A terminal-based kanban/project management tool inspired by [lazygit](https://github.com/jesseduffield/lazygit), built with Rust.
+[![Crates.io](https://img.shields.io/crates/v/kanban-cli.svg)](https://crates.io/crates/kanban-cli)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
+
+A **fast, keyboard-driven kanban tool**
 
 ![Kanban Demo](demo.gif)
 
+**Inspired by**: [lazygit](https://github.com/jesseduffield/lazygit)
+
+**Made possible** by: [ratatui](https://ratatui.rs)
+
 ## Features
 
-- ⚡ **Fast & Responsive**: Written in Rust with async/await
-- 🖥️ **Terminal UI**: Beautiful TUI powered by ratatui
-- 💾 **File Persistence**: JSON import/export with auto-save support
-- ⌨️ **Keyboard-Driven**: Vim-like navigation and shortcuts
-- ✅ **Task Management**: Task completion tracking, priority levels, and story points
-- 🏃 **Sprint Management**: Plan, activate, and filter tasks by sprint
-- 🎯 **Multi-select**: Bulk assign cards to sprints or toggle completion
-- 📊 **Metadata**: Assign story points (1-5), sprint tracking
-- 🔄 **Reproducible Builds**: Nix flakes for development environment
+### 🎯 Core
+- **Board Management**: Create, edit, and organize multiple boards
+- **Custom Columns**: Define your own columns to match your workflow (e.g., **Todo**, **In Progress**, **Blocked**, **Done**)
+- **Rich Cards**: Cards with metadata including priority, story points, due dates, and more
+- **Keyboard-Driven**: Vim-like navigation with hjkl and context-aware shortcuts
+
+### 🚀 Productivity
+- **Search**: Find cards instantly with vim-style `/` search
+- **Multiple Views**: Switch between flat list, grouped by column, or kanban board layout with `V`
+- **External Editor**: Edit in your preferred editor (emacs, nano, vim, etc.)
+
+### 📊 Organization
+- **Sprint Planning**: Plan, start and complete sprints
+- **Story Points**: Assign 1-5 point estimates with color-coded display
+- **Filtering**: Filter by sprint, status, or search results
+- **Card Archiving**: Archive tasks with restoration support
+- **Metadata**: Organize with due dates, priority levels, and timestamps
+
+## Installation
+
+### From crates.io
+```bash
+cargo install kanban-cli
+kanban
+```
+
+### From Source
+```bash
+git clone https://github.com/fulsomenko/kanban
+cd kanban
+cargo install --path crates/kanban-cli
+```
+
+### Using Nix
+```bash
+nix run github:fulsomenko/kanban
+```
 
 ## Quick Start
 
-### Using Nix (Recommended)
+### TUI
 
 ```bash
-# Enter development environment
-nix develop
-
-# Run the application
-cargo run
-
-# Run the app and import boards
-cargo run -- myboard.json
+kanban                 # Launch the app
+kanban myboard.json    # Load a board from file
 ```
 
-### Manual Setup
+**First time?**
+1. Press `n` to create a new board
+2. Press `Enter` to activate it
+3. Add cards with `n` and organize them
+4. Press `x` to export as JSON
 
-Requirements:
-- Rust 1.70+
+### CLI
 
 ```bash
-# Build and run
-cargo build --release
-cargo run --release
+export KANBAN_FILE=myboard.json   # Set data file
 
-# Run with file import
-cargo run --release -- myboard.json
+# Boards
+kanban board list
+kanban board create --name "My Project"
+
+# Cards
+kanban card list --board-id <ID>
+kanban card create --board-id <ID> --column-id <ID> --title "New task"
+kanban card update <CARD_ID> --status done --priority high
+
+# Sprints
+kanban sprint create --board-id <ID>
+kanban sprint activate <SPRINT_ID>
+kanban card assign-sprint <CARD_ID> --sprint-id <SPRINT_ID>
 ```
 
-## Architecture
+All commands output JSON. See `kanban --help` for full reference.
 
-The project follows SOLID principles with a clean layered architecture:
+## Multiple Views
 
-```
-crates/
-├── kanban-core     → Core traits and error handling
-├── kanban-domain   → Domain models (Board, Card, Sprint, Column, Tag)
-├── kanban-tui      → Terminal user interface
-└── kanban-cli      → CLI entry point
-```
-
-## Development
-
-```bash
-# Run with auto-reload
-cargo watch -x run
-
-# Run tests
-cargo test
-
-# Code coverage
-cargo tarpaulin
-
-# Linting
-cargo clippy
-
-# Format code
-cargo fmt
-```
+Switch between view modes with `V`:
+- **Flat List**: See all cards in a simple list with details
+- **Grouped by Column**: Cards organized under their respective columns
+- **Kanban Board**: Classic columnar board layout for visual workflow
 
 ## Usage
 
-```bash
-kanban                # Launch interactive TUI
-kanban boards.json    # Launch with import
+> **Tip:** Press `?` at any time to view the help menu with all available bindings for your current context.
+
+**Navigation**
+- `j`/`k` - Up/down, `h`/`l` - Previous/next column
+- `Enter` - Open card
+
+**Card list**
+- `n` - New card, `e` - Edit, `r` - Rename
+- `d` - Archive, `c` - Toggle done, `p` - Set priority
+
+**Views & Search**
+- `V` - Toggle view mode, `/` - Search
+- `t` - Sprint filter, `D` - Archived cards
+
+**Other**
+- `y` - Copy to clipboard, `H`/`L` - Move card left/right, `q` - Quit
+
+## Architecture
+
+Built with **Rust** for speed and reliability:
+
+```
+crates/
+├── kanban-core        → Shared traits & error handling
+├── kanban-domain      → Domain models (Board, Card, Column, Sprint)
+├── kanban-persistence → JSON storage, versioning & migrations
+├── kanban-tui         → Terminal UI with ratatui
+└── kanban-cli         → CLI entry point
 ```
 
-### Keyboard Shortcuts
+**Key Design Patterns:**
+- **Command Pattern**: All mutations flow through domain commands for persistent tracking
+- **Immediate Saving**: Changes auto-save after each action
+- **Format Versioning**: Automatic V1→V2 migration with backup on first load
+- **Multi-Instance Support**: Last-write-wins conflict resolution for concurrent edits
 
-**Main View:**
-- `q` - Quit application
-- `1` / `2` - Switch between Projects and Tasks panels
-- `j` / `k` - Navigate up/down
-- `n` - Create new board/card (context-aware)
-- `r` - Rename selected board
-- `e` - Edit selected board details
-- `v` - Select/deselect card (multi-select)
-- `a` - Assign selected cards to sprint
-- `c` - Toggle card completion (works with multi-select)
-- `t` - Toggle sprint filter (show active sprint only)
-- `x` - Export current board to JSON file
-- `X` - Export all boards to JSON file
-- `i` - Import board(s) from JSON file
-- `Enter` / `Space` - Activate board or view card details
+## Data & Persistence
 
-**Card Detail View:**
-- `ESC` - Return to main view
-- `q` - Quit application
-- `1` / `2` / `3` - Switch between Title, Metadata, and Description panels
-- `e` - Edit current panel (title, points, or description)
-- `a` - Assign card to sprint
+- **Format**: JSON-based import/export
+- **Automatic Migration**: V1 data files are automatically upgraded to V2 format on load with backup creation
+- **Multi-Instance Support**:
+  - Real-time file watching detects changes from other running instances
+  - Automatic reload when no local changes exist
+  - User prompt when local edits conflict with external changes
+  - Last-write-wins conflict resolution for concurrent edits
+- **Atomic Writes**: Crash-safe write pattern (temp file → atomic rename) prevents data corruption
+- **External Editor**: Automatically detects vim, nvim, nano, or your `$EDITOR` for editing descriptions
+- **Rich Metadata**: Timestamps, priority levels, story points, custom tags
+- **Bounded Save Queue**: Maintains a queue of up to 100 pending snapshots
 
-**Board Detail View:**
-- `ESC` - Return to main view
-- `q` - Quit application
-- `1` / `2` / `3` / `4` - Switch between Name, Description, Settings, and Sprints panels
-- `e` - Edit current panel
-- `s` - Create new sprint (in Sprints panel)
+## Roadmap
 
-**Sprint Detail View:**
-- `ESC` - Return to board detail
-- `a` - Activate sprint (Planning → Active)
-- `c` - Complete sprint
-- `x` - Cancel sprint
+- [x] Progressive auto-save (save changes to board as you make them, not just on exit)
+- [x] Full CLI interface matching TUI operations (scriptable kanban commands)
+- [ ] Card dependencies
+- [ ] Configurable keybindings
+- [ ] Audit log
+- [ ] Multiple storage backends (.md archive, SQL, MongoDB) with pluggable architecture
+- [ ] HTTP API for remote board access and programmatic control
+- [ ] Collaborative features (multi-user, sync)
 
-**Dialogs:**
-- `ESC` - Cancel
-- `Enter` - Confirm
-- Standard text editing for input fields
+## Contributing
 
-## Data Persistence
-
-Kanban uses JSON for all imports and exports:
-
-```json
-{
-  "boards": [
-    {
-      "board": { "id": "...", "name": "My Board", ... },
-      "columns": [ { "id": "...", "name": "Todo", ... } ],
-      "cards": [ { "id": "...", "title": "My Task", ... } ],
-      "sprints": [ { "id": "...", "sprint_number": 1, "status": "Active", ... } ]
-    }
-  ]
-}
-```
-
-When providing a file path:
-- If file exists, boards are loaded on startup
-- If file doesn't exist, it's created with empty boards array: `{"boards":[]}`
-- Changes are automatically saved on exit (`q`)
-
-## Card Metadata
-
-Cards support rich metadata:
-- **Title**: Card title
-- **Description**: Long-form details (supports external editor)
-- **Status**: Todo, InProgress, Blocked, Done
-- **Priority**: Low, Medium, High, Critical
-- **Points**: Story points 1-5 (color-coded: 1=Cyan, 2=Green, 3=Yellow, 4=Magenta, 5=Red)
-- **Sprint**: Optional sprint assignment
-- **Due Date**: Timestamp for deadlines
-- **Created/Updated**: Automatic timestamp tracking
-
-## Sprint Management
-
-Configure sprints at the board level:
-- **Duration**: Sprint length in days (configurable per board)
-- **Prefix**: Custom sprint naming prefix (e.g., "MVP", "Sprint")
-- **Name List**: Pre-defined sprint names automatically consumed on creation
-- **Lifecycle**: Planning → Active → Completed/Cancelled
-- **Filtering**: Toggle task list to show only active sprint cards
-
-### External Editor Support
-
-When editing titles or descriptions, Kanban opens an external editor. The editor is selected with the following fallback:
-
-1. `$EDITOR` environment variable (if set)
-2. Search for installed editors:
-   - **Unix/Linux/macOS**: nvim → vim → nano → vi
-   - **Windows**: nvim → vim → nano → notepad
-3. Default fallback:
-   - **Unix/Linux/macOS**: vi
-   - **Windows**: notepad
-
-**Tip**: Set your preferred editor with `export EDITOR=vim` (or add to your shell profile)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, code style, and testing guidelines.
 
 ## License
 

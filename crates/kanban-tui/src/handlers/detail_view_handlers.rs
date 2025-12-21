@@ -1,4 +1,6 @@
-use crate::app::{App, AppMode, BoardField, BoardFocus, CardField, CardFocus, SprintTaskPanel};
+use crate::app::{
+    App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
+};
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
 use kanban_domain::{BoardSettingsDto, CardMetadataDto};
@@ -15,7 +17,7 @@ impl App {
         let mut should_restart = false;
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.active_card_index = None;
                 self.card_focus = CardFocus::Title;
             }
@@ -66,7 +68,7 @@ impl App {
                 }
                 CardFocus::Metadata => {
                     if let Some(card_idx) = self.active_card_index {
-                        if let Some(card) = self.cards.get_mut(card_idx) {
+                        if let Some(card) = self.ctx.cards.get_mut(card_idx) {
                             let card_id = card.id;
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-card-{}-metadata.json", card_id));
@@ -77,6 +79,10 @@ impl App {
                                 temp_file,
                             ) {
                                 tracing::error!("Failed to edit metadata: {}", e);
+                            } else {
+                                self.ctx.state_manager.mark_dirty();
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
                         }
@@ -85,15 +91,16 @@ impl App {
             },
             KeyCode::Char('d') => {
                 self.handle_archive_card();
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.active_card_index = None;
                 self.card_focus = CardFocus::Title;
                 self.refresh_view();
             }
             KeyCode::Char('a') => {
                 if let Some(board_idx) = self.active_board_index {
-                    if let Some(board) = self.boards.get(board_idx) {
+                    if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = self
+                            .ctx
                             .sprints
                             .iter()
                             .filter(|s| s.board_id == board.id)
@@ -101,18 +108,18 @@ impl App {
                         if sprint_count > 0 {
                             let selection_idx = self.get_current_sprint_selection_index();
                             self.sprint_assign_selection.set(Some(selection_idx));
-                            self.mode = AppMode::AssignCardToSprint;
+                            self.open_dialog(DialogMode::AssignCardToSprint);
                         }
                     }
                 }
             }
             KeyCode::Char('p') => {
-                self.mode = AppMode::SetCardPoints;
+                self.open_dialog(DialogMode::SetCardPoints);
             }
             KeyCode::Char('P') => {
                 let priority_idx = self.get_current_priority_selection_index();
                 self.priority_selection.set(Some(priority_idx));
-                self.mode = AppMode::SetCardPriority;
+                self.open_dialog(DialogMode::SetCardPriority);
             }
             _ => {}
         }
@@ -128,7 +135,7 @@ impl App {
         let mut should_restart = false;
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::Normal;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Name;
             }
             KeyCode::Char('1') => {
@@ -164,7 +171,7 @@ impl App {
                 }
                 BoardFocus::Settings => {
                     if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get_mut(board_idx) {
+                        if let Some(board) = self.ctx.boards.get_mut(board_idx) {
                             let board_id = board.id;
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-board-{}-settings.json", board_id));
@@ -175,6 +182,10 @@ impl App {
                                 temp_file,
                             ) {
                                 tracing::error!("Failed to edit board settings: {}", e);
+                            } else {
+                                self.ctx.state_manager.mark_dirty();
+                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
                         }
@@ -213,14 +224,15 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => match self.board_focus {
                 BoardFocus::Sprints => {
                     if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let sprint_count = self
+                                .ctx
                                 .sprints
                                 .iter()
                                 .filter(|s| s.board_id == board.id)
                                 .count();
                             let current_idx = self.sprint_selection.get().unwrap_or(0);
-                            if current_idx >= sprint_count - 1 && sprint_count > 0 {
+                            if sprint_count == 0 || current_idx >= sprint_count - 1 {
                                 self.board_focus = BoardFocus::Columns;
                                 self.column_selection.set(Some(0));
                             } else {
@@ -231,14 +243,15 @@ impl App {
                 }
                 BoardFocus::Columns => {
                     if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let column_count = self
+                                .ctx
                                 .columns
                                 .iter()
                                 .filter(|col| col.board_id == board.id)
                                 .count();
                             let current_idx = self.column_selection.get().unwrap_or(0);
-                            if current_idx >= column_count - 1 && column_count > 0 {
+                            if column_count > 0 && current_idx >= column_count - 1 {
                                 self.board_focus = BoardFocus::Name;
                                 self.sprint_selection.set(Some(0));
                             } else {
@@ -274,8 +287,24 @@ impl App {
                 BoardFocus::Columns => {
                     let current_idx = self.column_selection.get().unwrap_or(0);
                     if current_idx == 0 {
-                        self.board_focus = BoardFocus::Sprints;
-                        self.sprint_selection.set(Some(0));
+                        let sprint_count = self
+                            .board_selection
+                            .get()
+                            .and_then(|idx| self.ctx.boards.get(idx))
+                            .map(|board| {
+                                self.ctx
+                                    .sprints
+                                    .iter()
+                                    .filter(|s| s.board_id == board.id)
+                                    .count()
+                            })
+                            .unwrap_or(0);
+                        if sprint_count == 0 {
+                            self.board_focus = BoardFocus::Settings;
+                        } else {
+                            self.board_focus = BoardFocus::Sprints;
+                            self.sprint_selection.set(Some(sprint_count - 1));
+                        }
                     } else {
                         self.column_selection.prev();
                     }
@@ -297,8 +326,9 @@ impl App {
                 if self.board_focus == BoardFocus::Sprints {
                     if let Some(sprint_idx) = self.sprint_selection.get() {
                         if let Some(board_idx) = self.board_selection.get() {
-                            if let Some(board) = self.boards.get(board_idx) {
+                            if let Some(board) = self.ctx.boards.get(board_idx) {
                                 let board_sprints: Vec<_> = self
+                                    .ctx
                                     .sprints
                                     .iter()
                                     .enumerate()
@@ -307,10 +337,10 @@ impl App {
                                 if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
                                     self.active_sprint_index = Some(*actual_idx);
                                     self.active_board_index = Some(board_idx);
-                                    if let Some(sprint) = self.sprints.get(*actual_idx) {
+                                    if let Some(sprint) = self.ctx.sprints.get(*actual_idx) {
                                         self.populate_sprint_task_lists(sprint.id);
                                     }
-                                    self.mode = AppMode::SprintDetail;
+                                    self.push_mode(AppMode::SprintDetail);
                                 }
                             }
                         }
@@ -320,11 +350,11 @@ impl App {
             KeyCode::Char('p') => {
                 if self.board_focus == BoardFocus::Settings {
                     if let Some(board_idx) = self.board_selection.get() {
-                        if let Some(board) = self.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards.get(board_idx) {
                             let current_prefix =
                                 board.sprint_prefix.clone().unwrap_or_else(String::new);
                             self.input.set(current_prefix);
-                            self.mode = AppMode::SetBranchPrefix;
+                            self.open_dialog(DialogMode::SetBranchPrefix);
                         }
                     }
                 }
@@ -337,7 +367,7 @@ impl App {
     pub fn handle_sprint_detail_key(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
-                self.mode = AppMode::BoardDetail;
+                self.pop_mode();
                 self.board_focus = BoardFocus::Sprints;
                 self.active_sprint_index = None;
             }
@@ -349,26 +379,26 @@ impl App {
             }
             KeyCode::Char('p') => {
                 if let Some(sprint_idx) = self.active_sprint_index {
-                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         let current_prefix = sprint.prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
-                        self.mode = AppMode::SetSprintPrefix;
+                        self.open_dialog(DialogMode::SetSprintPrefix);
                     }
                 }
             }
             KeyCode::Char('C') => {
                 if let Some(sprint_idx) = self.active_sprint_index {
-                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         let current_prefix = sprint.card_prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
-                        self.mode = AppMode::SetSprintCardPrefix;
+                        self.open_dialog(DialogMode::SetSprintCardPrefix);
                     }
                 }
             }
             KeyCode::Char('o') => {
                 let sort_idx = self.get_current_sort_field_selection_index();
                 self.sort_field_selection.set(Some(sort_idx));
-                self.mode = AppMode::OrderCards;
+                self.open_dialog(DialogMode::OrderCards);
             }
             KeyCode::Char('O') => {
                 if let Some(current_order) = self.current_sort_order {
@@ -386,7 +416,7 @@ impl App {
             }
             KeyCode::Char('h') | KeyCode::Left => {
                 if let Some(sprint_idx) = self.active_sprint_index {
-                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
                             self.sprint_task_panel = SprintTaskPanel::Uncompleted;
                         }
@@ -395,7 +425,7 @@ impl App {
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 if let Some(sprint_idx) = self.active_sprint_index {
-                    if let Some(sprint) = self.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
                             self.sprint_task_panel = SprintTaskPanel::Completed;
                         }
@@ -416,49 +446,64 @@ impl App {
 
                     match action {
                         CardListAction::Select(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
-                                self.mode = AppMode::CardDetail;
+                                self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
                         }
                         CardListAction::Edit(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
-                                self.mode = AppMode::CardDetail;
+                                self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
                         }
                         CardListAction::Complete(card_id) => {
-                            if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
-                                use kanban_domain::CardStatus;
+                            if let Some(card) = self.ctx.cards.iter().find(|c| c.id == card_id) {
+                                use kanban_domain::{CardStatus, CardUpdate};
                                 let new_status = if card.status == CardStatus::Done {
                                     CardStatus::Todo
                                 } else {
                                     CardStatus::Done
                                 };
-                                card.update_status(new_status);
-                                tracing::info!("Card status updated to: {:?}", new_status);
+                                let cmd = Box::new(crate::state::commands::UpdateCard {
+                                    card_id,
+                                    updates: CardUpdate {
+                                        status: Some(new_status),
+                                        ..Default::default()
+                                    },
+                                });
+                                if let Err(e) = self.execute_command(cmd) {
+                                    tracing::error!("Failed to update card status: {}", e);
+                                } else {
+                                    tracing::info!("Card status updated to: {:?}", new_status);
+                                }
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 let priority_idx = self.get_current_priority_selection_index();
                                 self.priority_selection.set(Some(priority_idx));
-                                self.mode = AppMode::SetCardPriority;
+                                self.open_dialog(DialogMode::SetCardPriority);
                             }
                         }
                         CardListAction::AssignSprint(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.active_board_index {
-                                    if let Some(board) = self.boards.get(board_idx) {
+                                    if let Some(board) = self.ctx.boards.get(board_idx) {
                                         let sprint_count = self
+                                            .ctx
                                             .sprints
                                             .iter()
                                             .filter(|s| s.board_id == board.id)
@@ -467,19 +512,21 @@ impl App {
                                             let selection_idx =
                                                 self.get_current_sprint_selection_index();
                                             self.sprint_assign_selection.set(Some(selection_idx));
-                                            self.mode = AppMode::AssignCardToSprint;
+                                            self.open_dialog(DialogMode::AssignCardToSprint);
                                         }
                                     }
                                 }
                             }
                         }
                         CardListAction::ReassignSprint(card_id) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.active_board_index {
-                                    if let Some(board) = self.boards.get(board_idx) {
+                                    if let Some(board) = self.ctx.boards.get(board_idx) {
                                         let sprint_count = self
+                                            .ctx
                                             .sprints
                                             .iter()
                                             .filter(|s| s.board_id == board.id)
@@ -488,7 +535,7 @@ impl App {
                                             let selection_idx =
                                                 self.get_current_sprint_selection_index();
                                             self.sprint_assign_selection.set(Some(selection_idx));
-                                            self.mode = AppMode::AssignCardToSprint;
+                                            self.open_dialog(DialogMode::AssignCardToSprint);
                                         }
                                     }
                                 }
@@ -497,7 +544,7 @@ impl App {
                         CardListAction::Sort => {
                             let sort_idx = self.get_current_sort_field_selection_index();
                             self.sort_field_selection.set(Some(sort_idx));
-                            self.mode = AppMode::OrderCards;
+                            self.open_dialog(DialogMode::OrderCards);
                         }
                         CardListAction::OrderCards => {
                             if let Some(current_order) = self.current_sort_order {
@@ -518,83 +565,148 @@ impl App {
                             }
                         }
                         CardListAction::MoveColumn(card_id, is_right) => {
-                            if let Some(card_idx) = self.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card_idx) =
+                                self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
-                                if let Some(card) = self.cards.get_mut(card_idx) {
-                                    if let Some(board_idx) = self.active_board_index {
-                                        if let Some(board) = self.boards.get(board_idx) {
-                                            let current_col = card.column_id;
-                                            let mut columns: Vec<_> = self
-                                                .columns
-                                                .iter()
-                                                .filter(|c| c.board_id == board.id)
-                                                .collect();
-                                            columns.sort_by_key(|col| col.position);
+                                // Extract all necessary data before any command execution
+                                let move_info = {
+                                    if let Some(card) = self.ctx.cards.get(card_idx) {
+                                        let current_col = card.column_id;
+                                        let current_status = card.status;
+                                        let card_title = card.title.clone();
 
-                                            if let Some(current_idx) =
-                                                columns.iter().position(|c| c.id == current_col)
-                                            {
-                                                let new_idx = if is_right {
-                                                    (current_idx + 1).min(columns.len() - 1)
-                                                } else {
-                                                    current_idx.saturating_sub(1)
-                                                };
+                                        if let Some(board_idx) = self.active_board_index {
+                                            if let Some(board) = self.ctx.boards.get(board_idx) {
+                                                let board_id = board.id;
+                                                let mut columns: Vec<_> = self
+                                                    .ctx
+                                                    .columns
+                                                    .iter()
+                                                    .filter(|c| c.board_id == board_id)
+                                                    .map(|c| (c.id, c.position))
+                                                    .collect();
+                                                columns.sort_by_key(|(_, pos)| *pos);
 
-                                                if let Some(new_col) = columns.get(new_idx) {
-                                                    let was_in_last =
-                                                        current_idx == columns.len() - 1;
-                                                    let moving_to_last =
-                                                        new_idx == columns.len() - 1;
-
-                                                    card.column_id = new_col.id;
-
-                                                    // Update status based on movement
-                                                    if !is_right
-                                                        && was_in_last
-                                                        && columns.len() > 1
-                                                        && card.status
-                                                            == kanban_domain::CardStatus::Done
-                                                    {
-                                                        // Moving left from last column: uncomplete
-                                                        card.update_status(
-                                                            kanban_domain::CardStatus::Todo,
-                                                        );
-                                                        tracing::info!(
-                                                            "Moved card {} left from last column (marked as incomplete)",
-                                                            card.title
-                                                        );
-                                                    } else if is_right
-                                                        && moving_to_last
-                                                        && columns.len() > 1
-                                                        && card.status
-                                                            != kanban_domain::CardStatus::Done
-                                                    {
-                                                        // Moving right to last column: complete
-                                                        card.update_status(
-                                                            kanban_domain::CardStatus::Done,
-                                                        );
-                                                        tracing::info!(
-                                                            "Moved card {} to last column (marked as complete)",
-                                                            card.title
-                                                        );
+                                                if let Some(current_idx) = columns
+                                                    .iter()
+                                                    .position(|(id, _)| *id == current_col)
+                                                {
+                                                    let new_idx = if is_right {
+                                                        (current_idx + 1).min(columns.len() - 1)
                                                     } else {
-                                                        let direction =
-                                                            if is_right { "right" } else { "left" };
-                                                        tracing::info!(
-                                                            "Moved card {} to {}",
-                                                            card.title,
-                                                            direction
-                                                        );
+                                                        current_idx.saturating_sub(1)
+                                                    };
+
+                                                    if let Some((new_col_id, _)) =
+                                                        columns.get(new_idx)
+                                                    {
+                                                        let was_in_last =
+                                                            current_idx == columns.len() - 1;
+                                                        let moving_to_last =
+                                                            new_idx == columns.len() - 1;
+                                                        Some((
+                                                            *new_col_id,
+                                                            was_in_last,
+                                                            moving_to_last,
+                                                            columns.len(),
+                                                            card_title,
+                                                            current_status,
+                                                        ))
+                                                    } else {
+                                                        None
                                                     }
+                                                } else {
+                                                    None
                                                 }
+                                            } else {
+                                                None
                                             }
+                                        } else {
+                                            None
                                         }
+                                    } else {
+                                        None
+                                    }
+                                };
+
+                                if let Some((
+                                    new_col_id,
+                                    was_in_last,
+                                    moving_to_last,
+                                    col_count,
+                                    card_title,
+                                    current_status,
+                                )) = move_info
+                                {
+                                    // Move card using command
+                                    let move_cmd = Box::new(crate::state::commands::MoveCard {
+                                        card_id,
+                                        new_column_id: new_col_id,
+                                        new_position: 0,
+                                    });
+                                    if let Err(e) = self.execute_command(move_cmd) {
+                                        tracing::error!("Failed to move card: {}", e);
+                                        return;
+                                    }
+
+                                    // Update status based on movement
+                                    if !is_right
+                                        && was_in_last
+                                        && col_count > 1
+                                        && current_status == kanban_domain::CardStatus::Done
+                                    {
+                                        // Moving left from last column: uncomplete
+                                        let status_cmd =
+                                            Box::new(crate::state::commands::UpdateCard {
+                                                card_id,
+                                                updates: kanban_domain::CardUpdate {
+                                                    status: Some(kanban_domain::CardStatus::Todo),
+                                                    ..Default::default()
+                                                },
+                                            });
+                                        if let Err(e) = self.execute_command(status_cmd) {
+                                            tracing::error!("Failed to update card status: {}", e);
+                                        } else {
+                                            tracing::info!(
+                                                "Moved card {} left from last column (marked as incomplete)",
+                                                card_title
+                                            );
+                                        }
+                                    } else if is_right
+                                        && moving_to_last
+                                        && col_count > 1
+                                        && current_status != kanban_domain::CardStatus::Done
+                                    {
+                                        // Moving right to last column: complete
+                                        let status_cmd =
+                                            Box::new(crate::state::commands::UpdateCard {
+                                                card_id,
+                                                updates: kanban_domain::CardUpdate {
+                                                    status: Some(kanban_domain::CardStatus::Done),
+                                                    ..Default::default()
+                                                },
+                                            });
+                                        if let Err(e) = self.execute_command(status_cmd) {
+                                            tracing::error!("Failed to update card status: {}", e);
+                                        } else {
+                                            tracing::info!(
+                                                "Moved card {} to last column (marked as complete)",
+                                                card_title
+                                            );
+                                        }
+                                    } else {
+                                        let direction = if is_right { "right" } else { "left" };
+                                        tracing::info!(
+                                            "Moved card {} to {}",
+                                            card_title,
+                                            direction
+                                        );
                                     }
                                 }
                             }
                         }
                         CardListAction::Create => {
-                            self.mode = AppMode::CreateCard;
+                            self.open_dialog(DialogMode::CreateCard);
                             self.input.clear();
                         }
                         CardListAction::ToggleMultiSelect(card_id) => {

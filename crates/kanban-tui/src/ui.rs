@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode, BoardFocus, CardFocus, Focus};
+use crate::app::{App, AppMode, BoardFocus, CardFocus, DialogMode, Focus};
 use crate::components::*;
 use crate::theme::*;
 use crate::view_strategy::UnifiedViewStrategy;
@@ -11,108 +11,100 @@ use ratatui::{
     Frame,
 };
 
+fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some((message, _)) = &app.last_error {
+        let error_style = Style::default()
+            .fg(Color::White)
+            .bg(Color::Red)
+            .add_modifier(Modifier::BOLD);
+
+        let error_widget = Paragraph::new(message.clone())
+            .style(error_style)
+            .alignment(ratatui::layout::Alignment::Center);
+
+        frame.render_widget(error_widget, area);
+    }
+}
+
 pub fn render(app: &mut App, frame: &mut Frame) {
     // Check if we're in Help mode and render underlying view
     let is_help_mode = matches!(app.mode, AppMode::Help(_));
 
     if !is_help_mode {
-        match app.mode {
-            AppMode::CardDetail
-            | AppMode::AssignCardToSprint
-            | AppMode::AssignMultipleCardsToSprint => {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(3)])
+            .split(frame.area());
 
-                render_card_detail_view(app, frame, chunks[0]);
-                render_footer(app, frame, chunks[1]);
+        // Phase 1: Render base view (from stack if in dialog mode)
+        let base_mode = app.get_base_mode();
+        match base_mode {
+            AppMode::CardDetail => render_card_detail_view(app, frame, chunks[0]),
+            AppMode::BoardDetail => render_board_detail_view(app, frame, chunks[0]),
+            AppMode::SprintDetail => render_sprint_detail_view(app, frame, chunks[0]),
+            _ => render_main(app, frame, chunks[0]),
+        }
+        render_footer(app, frame, chunks[1]);
 
-                if app.mode == AppMode::AssignCardToSprint {
-                    render_assign_sprint_popup(app, frame);
+        // Phase 2: Render dialog overlay if active
+        if let AppMode::Dialog(ref dialog) = app.mode {
+            match dialog {
+                DialogMode::CreateBoard => render_create_board_popup(app, frame),
+                DialogMode::CreateCard => render_create_card_popup(app, frame),
+                DialogMode::CreateSprint => render_create_sprint_popup(app, frame),
+                DialogMode::RenameBoard => render_rename_board_popup(app, frame),
+                DialogMode::ExportBoard => render_export_board_popup(app, frame),
+                DialogMode::ExportAll => render_export_all_popup(app, frame),
+                DialogMode::ImportBoard => render_import_board_popup(app, frame),
+                DialogMode::SetCardPoints => render_set_card_points_popup(app, frame),
+                DialogMode::SetCardPriority => render_set_card_priority_popup(app, frame),
+                DialogMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
+                DialogMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
+                DialogMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
+                DialogMode::OrderCards => render_order_cards_popup(app, frame),
+                DialogMode::CreateColumn => render_create_column_popup(app, frame),
+                DialogMode::RenameColumn => render_rename_column_popup(app, frame),
+                DialogMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
+                DialogMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
+                DialogMode::FilterOptions => render_filter_options_popup(app, frame),
+                DialogMode::AssignCardToSprint => render_assign_sprint_popup(app, frame),
+                DialogMode::AssignMultipleCardsToSprint => {
+                    render_assign_multiple_cards_popup(app, frame)
                 }
-
-                if app.mode == AppMode::AssignMultipleCardsToSprint {
-                    render_assign_multiple_cards_popup(app, frame);
+                DialogMode::ConflictResolution => render_conflict_resolution_popup(app, frame),
+                DialogMode::ExternalChangeDetected => {
+                    render_external_change_detected_popup(app, frame)
                 }
-            }
-            AppMode::BoardDetail => {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
-
-                render_board_detail_view(app, frame, chunks[0]);
-                render_footer(app, frame, chunks[1]);
-            }
-            AppMode::SprintDetail => {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
-
-                render_sprint_detail_view(app, frame, chunks[0]);
-                render_footer(app, frame, chunks[1]);
-            }
-            _ => {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
-
-                render_main(app, frame, chunks[0]);
-                render_footer(app, frame, chunks[1]);
-
-                match app.mode {
-                    AppMode::CreateBoard => render_create_board_popup(app, frame),
-                    AppMode::CreateCard => render_create_card_popup(app, frame),
-                    AppMode::CreateSprint => render_create_sprint_popup(app, frame),
-                    AppMode::RenameBoard => render_rename_board_popup(app, frame),
-                    AppMode::ExportBoard => render_export_board_popup(app, frame),
-                    AppMode::ExportAll => render_export_all_popup(app, frame),
-                    AppMode::ImportBoard => render_import_board_popup(app, frame),
-                    AppMode::SetCardPoints => render_set_card_points_popup(app, frame),
-                    AppMode::SetCardPriority => render_set_card_priority_popup(app, frame),
-                    AppMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
-                    AppMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
-                    AppMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
-                    AppMode::OrderCards => render_order_cards_popup(app, frame),
-                    AppMode::CreateColumn => render_create_column_popup(app, frame),
-                    AppMode::RenameColumn => render_rename_column_popup(app, frame),
-                    AppMode::DeleteColumnConfirm => render_delete_column_confirm_popup(app, frame),
-                    AppMode::SelectTaskListView => render_select_task_list_view_popup(app, frame),
-                    AppMode::FilterOptions => render_filter_options_popup(app, frame),
-                    _ => {}
-                }
+                DialogMode::ConfirmSprintPrefixCollision => {}
             }
         }
     } else {
-        // Render underlying view without footer
-        match app.mode {
-            AppMode::CardDetail
-            | AppMode::AssignCardToSprint
-            | AppMode::AssignMultipleCardsToSprint => {
-                render_card_detail_view(app, frame, frame.area());
-            }
-            AppMode::BoardDetail => {
-                render_board_detail_view(app, frame, frame.area());
-            }
-            AppMode::SprintDetail => {
-                render_sprint_detail_view(app, frame, frame.area());
-            }
-            _ => {
-                render_main(app, frame, frame.area());
-            }
+        // Help mode: render base view without footer, then help popup
+        let base_mode = app.get_base_mode();
+        match base_mode {
+            AppMode::CardDetail => render_card_detail_view(app, frame, frame.area()),
+            AppMode::BoardDetail => render_board_detail_view(app, frame, frame.area()),
+            AppMode::SprintDetail => render_sprint_detail_view(app, frame, frame.area()),
+            _ => render_main(app, frame, frame.area()),
         }
-
-        // Render help popup on top
         render_help_popup(app, frame);
+    }
+
+    // Render error banner on top if present
+    if app.last_error.is_some() {
+        let error_area = Rect {
+            x: 0,
+            y: 0,
+            width: frame.area().width,
+            height: 1,
+        };
+        render_error_banner(app, frame, error_area);
     }
 }
 
 fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
     let is_kanban_view = if let Some(idx) = app.active_board_index {
-        if let Some(board) = app.boards.get(idx) {
+        if let Some(board) = app.ctx.boards.get(idx) {
             board.task_list_view == kanban_domain::TaskListView::ColumnView
         } else {
             false
@@ -139,13 +131,13 @@ fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
 fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     let mut lines = vec![];
 
-    if app.boards.is_empty() {
+    if app.ctx.boards.is_empty() {
         lines.push(Line::from(Span::styled(
             "No projects yet. Press 'n' to create one!",
             label_text(),
         )));
     } else {
-        for (idx, board) in app.boards.iter().enumerate() {
+        for (idx, board) in app.ctx.boards.iter().enumerate() {
             let config = ListItemConfig::new()
                 .selected(app.board_selection.get() == Some(idx))
                 .focused(app.focus == Focus::Boards)
@@ -172,8 +164,9 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
 
     if !app.active_sprint_filters.is_empty() {
         if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-            if let Some(board) = app.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
                 let mut sprint_names: Vec<String> = app
+                    .ctx
                     .sprints
                     .iter()
                     .filter(|s| app.active_sprint_filters.contains(&s.id))
@@ -228,9 +221,9 @@ fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(sprint_idx) = app.active_sprint_index {
-        if let Some(sprint) = app.sprints.get(sprint_idx) {
+        if let Some(sprint) = app.ctx.sprints.get(sprint_idx) {
             if let Some(board_idx) = app.active_board_index {
-                if let Some(board) = app.boards.get(board_idx) {
+                if let Some(board) = app.ctx.boards.get(board_idx) {
                     let is_completed = sprint.status == SprintStatus::Completed;
 
                     if is_completed {
@@ -291,6 +284,7 @@ fn render_sprint_detail_metadata(
     lines.push(Line::from(""));
 
     let card_count = app
+        .ctx
         .cards
         .iter()
         .filter(|c| c.sprint_id == Some(sprint.id))
@@ -411,14 +405,14 @@ fn render_sprint_task_panel_with_selection(
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
-                if let Some(card) = app.cards.iter().find(|c| c.id == *card_id) {
+                if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
                     let is_selected = selected_idx == Some(*card_idx) && is_focused;
                     let animation_type =
                         app.animating_cards.get(&card.id).map(|a| a.animation_type);
                     let line = render_card_list_item(CardListItemConfig {
                         card,
                         board,
-                        sprints: &app.sprints,
+                        sprints: &app.ctx.sprints,
                         is_selected,
                         is_focused,
                         is_multi_selected: false,
@@ -444,7 +438,7 @@ fn render_sprint_task_panel_with_selection(
     let cards: Vec<&kanban_domain::Card> = task_list
         .cards
         .iter()
-        .filter_map(|card_id| app.cards.iter().find(|c| c.id == *card_id))
+        .filter_map(|card_id| app.ctx.cards.iter().find(|c| c.id == *card_id))
         .collect();
     let points = App::calculate_points(&cards);
 
@@ -473,7 +467,7 @@ fn render_sprint_task_panel_with_selection(
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let _is_kanban_view =
         if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
-            if let Some(board) = app.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
                 board.task_list_view == kanban_domain::TaskListView::ColumnView
             } else {
                 false
@@ -593,9 +587,9 @@ fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(card_idx) = app.active_card_index {
-        if let Some(card) = app.cards.get(card_idx) {
+        if let Some(card) = app.ctx.cards.get(card_idx) {
             if let Some(board_idx) = app.active_board_index {
-                if let Some(board) = app.boards.get(board_idx) {
+                if let Some(board) = app.ctx.boards.get(board_idx) {
                     let has_sprint_logs = card.sprint_logs.len() > 1;
 
                     let constraints = vec![
@@ -652,7 +646,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                                 "Branch",
                                 card.branch_name(
                                     board,
-                                    &app.sprints,
+                                    &app.ctx.sprints,
                                     app.app_config.effective_default_card_prefix(),
                                 ),
                                 active_item(),
@@ -748,7 +742,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                                 "Branch",
                                 card.branch_name(
                                     board,
-                                    &app.sprints,
+                                    &app.ctx.sprints,
                                     app.app_config.effective_default_card_prefix(),
                                 ),
                                 active_item(),
@@ -836,7 +830,7 @@ fn render_import_board_popup(app: &App, frame: &mut Frame) {
 
 fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(board_idx) = app.board_selection.get() {
-        if let Some(board) = app.boards.get(board_idx) {
+        if let Some(board) = app.ctx.boards.get(board_idx) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -900,7 +894,10 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             // Show active sprint's card prefix override if it exists
             if let Some(sprint_prefix) =
-                crate::board_context::get_active_sprint_card_prefix_override(board, &app.sprints)
+                crate::board_context::get_active_sprint_card_prefix_override(
+                    board,
+                    &app.ctx.sprints,
+                )
             {
                 settings_lines.push(metadata_line_styled(
                     "Active Sprint Card Prefix",
@@ -937,6 +934,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 .focused(app.board_focus == BoardFocus::Sprints);
 
             let board_sprints: Vec<&Sprint> = app
+                .ctx
                 .sprints
                 .iter()
                 .filter(|s| s.board_id == board.id)
@@ -964,6 +962,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let sprint_name = sprint.formatted_name(board, "sprint");
 
                     let card_count = app
+                        .ctx
                         .cards
                         .iter()
                         .filter(|c| c.sprint_id == Some(sprint.id))
@@ -1015,6 +1014,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 .focused(app.board_focus == BoardFocus::Columns);
 
             let mut board_columns: Vec<_> = app
+                .ctx
                 .columns
                 .iter()
                 .filter(|col| col.board_id == board.id)
@@ -1034,6 +1034,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let is_focused = app.board_focus == BoardFocus::Columns;
 
                     let card_count = app
+                        .ctx
                         .cards
                         .iter()
                         .filter(|c| c.column_id == column.id)
@@ -1130,11 +1131,15 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     let mut lines = vec![];
 
     if let Some(board_idx) = app.active_board_index {
-        if let Some(board) = app.boards.get(board_idx) {
+        if let Some(board) = app.ctx.boards.get(board_idx) {
             let board_sprints: Vec<_> = app
+                .ctx
                 .sprints
                 .iter()
                 .filter(|s| s.board_id == board.id)
+                .filter(|s| {
+                    s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled
+                })
                 .collect();
 
             for (idx, sprint_option) in std::iter::once(None)
@@ -1229,7 +1234,7 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
 
     let current_view = app
         .active_board_index
-        .and_then(|idx| app.boards.get(idx))
+        .and_then(|idx| app.ctx.boards.get(idx))
         .map(|board| board.task_list_view);
 
     let items: Vec<ListItem> = views
@@ -1332,8 +1337,9 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
         )));
 
         if let Some(board_idx) = app.active_board_index {
-            if let Some(board) = app.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
                 let board_sprints: Vec<_> = app
+                    .ctx
                     .sprints
                     .iter()
                     .filter(|s| s.board_id == board.id)
@@ -1489,4 +1495,108 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
 
     let content = Paragraph::new(lines);
     frame.render_widget(content, chunks[0]);
+}
+
+fn render_conflict_resolution_popup(_app: &App, frame: &mut Frame) {
+    let area = centered_rect(70, 40, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("File Conflict Detected")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let message = Paragraph::new(
+        "The file was modified by another instance.\nChoose how to resolve this conflict:",
+    )
+    .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(message, chunks[0]);
+
+    let options = vec![
+        Line::from(Span::styled(
+            "(O)verwrite",
+            Style::default().fg(Color::Cyan),
+        )),
+        Line::from(Span::styled(
+            "  Keep your changes and overwrite the file",
+            label_text(),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "(T)ake theirs",
+            Style::default().fg(Color::Cyan),
+        )),
+        Line::from(Span::styled(
+            "  Discard your changes and reload the file",
+            label_text(),
+        )),
+    ];
+    let options_para = Paragraph::new(options);
+    frame.render_widget(options_para, chunks[1]);
+
+    let instructions =
+        Paragraph::new("Press O or T to choose, ESC to retry later").style(label_text());
+    frame.render_widget(instructions, chunks[2]);
+}
+
+fn render_external_change_detected_popup(_app: &App, frame: &mut Frame) {
+    let area = centered_rect(70, 40, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("External File Change Detected")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let message = Paragraph::new(
+        "The file was modified by another instance.\nYou have unsaved changes. Choose an action:",
+    )
+    .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(message, chunks[0]);
+
+    let options = vec![
+        Line::from(Span::styled("(R)eload", Style::default().fg(Color::Cyan))),
+        Line::from(Span::styled(
+            "  Discard your changes and reload the file",
+            label_text(),
+        )),
+        Line::from(""),
+        Line::from(Span::styled("(K)eep", Style::default().fg(Color::Cyan))),
+        Line::from(Span::styled(
+            "  Continue with your changes (save will overwrite)",
+            label_text(),
+        )),
+    ];
+    let options_para = Paragraph::new(options);
+    frame.render_widget(options_para, chunks[1]);
+
+    let instructions =
+        Paragraph::new("Press R or K to choose, ESC to continue").style(label_text());
+    frame.render_widget(instructions, chunks[2]);
 }
