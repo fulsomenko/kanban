@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Model Context Protocol server for the kanban project management tool"
-keywords = ["kanban", "mcp", "model-context-protocol", "project-management"]
+keywords = ["kanban", "mcp", "llm", "project-management"]
 categories = ["command-line-utilities"]
 
 [[bin]]
