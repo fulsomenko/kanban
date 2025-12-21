@@ -29,9 +29,9 @@ DATE=$(date +%Y-%m-%d)
 {
   echo "## [$CURRENT_VERSION] - $DATE"
   echo ""
-  echo -e "$CHANGELOG_ENTRIES"
+  printf '%b' "$CHANGELOG_ENTRIES"
   echo ""
-  cat CHANGELOG.md
+  [ -f CHANGELOG.md ] && cat CHANGELOG.md
 } > CHANGELOG.md.new
 mv CHANGELOG.md.new CHANGELOG.md
 

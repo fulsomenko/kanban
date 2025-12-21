@@ -37,35 +37,17 @@ echo "✓ Version consistency verified"
 
 echo ""
 echo "Step 3: Checking cross-crate dependencies..."
+INTERNAL_DEPS=("kanban-core" "kanban-domain" "kanban-tui" "kanban-persistence" "kanban-mcp")
 for crate in "${CRATES[@]}"; do
-  if grep -q 'kanban-core = { path = ' "$crate/Cargo.toml" 2>/dev/null; then
-    if ! grep 'kanban-core = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
-      echo "❌ Error: $crate is missing version spec for kanban-core"
-      echo "   Use: kanban-core = { path = \"../kanban-core\", version = \"^0.1\" }"
-      exit 1
+  for dep in "${INTERNAL_DEPS[@]}"; do
+    if grep -q "$dep = { path = " "$crate/Cargo.toml" 2>/dev/null; then
+      if ! grep "$dep = { path = " "$crate/Cargo.toml" | grep -q 'version = '; then
+        echo "❌ Error: $crate is missing version spec for $dep"
+        echo "   Use: $dep = { path = \"../$dep\", version = \"^0.1\" }"
+        exit 1
+      fi
     fi
-  fi
-  if grep -q 'kanban-domain = { path = ' "$crate/Cargo.toml" 2>/dev/null; then
-    if ! grep 'kanban-domain = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
-      echo "❌ Error: $crate is missing version spec for kanban-domain"
-      echo "   Use: kanban-domain = { path = \"../kanban-domain\", version = \"^0.1\" }"
-      exit 1
-    fi
-  fi
-  if grep -q 'kanban-tui = { path = ' "$crate/Cargo.toml" 2>/dev/null; then
-    if ! grep 'kanban-tui = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
-      echo "❌ Error: $crate is missing version spec for kanban-tui"
-      echo "   Use: kanban-tui = { path = \"../kanban-tui\", version = \"^0.1\" }"
-      exit 1
-    fi
-  fi
-  if grep -q 'kanban-persistence = { path = ' "$crate/Cargo.toml" 2>/dev/null; then
-    if ! grep 'kanban-persistence = { path = ' "$crate/Cargo.toml" | grep -q 'version = '; then
-      echo "❌ Error: $crate is missing version spec for kanban-persistence"
-      echo "   Use: kanban-persistence = { path = \"../kanban-persistence\", version = \"^0.1\" }"
-      exit 1
-    fi
-  fi
+  done
 done
 echo "✓ Cross-crate dependencies have proper version specs"
 
