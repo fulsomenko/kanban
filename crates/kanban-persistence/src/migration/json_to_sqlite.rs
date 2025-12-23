@@ -7,10 +7,7 @@ use std::path::Path;
 use crate::store::SqliteStore;
 
 #[cfg(feature = "sqlite")]
-pub async fn migrate_json_to_sqlite(
-    json_path: &Path,
-    sqlite_path: &Path,
-) -> KanbanResult<()> {
+pub async fn migrate_json_to_sqlite(json_path: &Path, sqlite_path: &Path) -> KanbanResult<()> {
     if !json_path.exists() {
         return Err(kanban_core::KanbanError::NotFound(format!(
             "JSON file not found: {}",
@@ -45,10 +42,7 @@ pub async fn migrate_json_to_sqlite(
 }
 
 #[cfg(feature = "sqlite")]
-pub async fn auto_migrate_if_needed(
-    json_path: &Path,
-    sqlite_path: &Path,
-) -> KanbanResult<bool> {
+pub async fn auto_migrate_if_needed(json_path: &Path, sqlite_path: &Path) -> KanbanResult<bool> {
     // If SQLite already exists, no migration needed
     if sqlite_path.exists() {
         return Ok(false);
@@ -110,7 +104,9 @@ mod tests {
         json_store.save(snapshot).await.unwrap();
 
         // Migrate
-        migrate_json_to_sqlite(&json_path, &sqlite_path).await.unwrap();
+        migrate_json_to_sqlite(&json_path, &sqlite_path)
+            .await
+            .unwrap();
 
         // Verify SQLite has the data
         let sqlite_store = SqliteStore::new(&sqlite_path);
@@ -142,7 +138,9 @@ mod tests {
         json_store.save(snapshot).await.unwrap();
 
         // Auto migrate
-        let migrated = auto_migrate_if_needed(&json_path, &sqlite_path).await.unwrap();
+        let migrated = auto_migrate_if_needed(&json_path, &sqlite_path)
+            .await
+            .unwrap();
         assert!(migrated);
         assert!(sqlite_path.exists());
     }
@@ -172,7 +170,9 @@ mod tests {
         sqlite_store.save(snapshot).await.unwrap();
 
         // Auto migrate should return false (already exists)
-        let migrated = auto_migrate_if_needed(&json_path, &sqlite_path).await.unwrap();
+        let migrated = auto_migrate_if_needed(&json_path, &sqlite_path)
+            .await
+            .unwrap();
         assert!(!migrated);
     }
 
@@ -182,7 +182,9 @@ mod tests {
         let json_path = dir.path().join("nonexistent.json");
         let sqlite_path = dir.path().join("nonexistent.db");
 
-        let migrated = auto_migrate_if_needed(&json_path, &sqlite_path).await.unwrap();
+        let migrated = auto_migrate_if_needed(&json_path, &sqlite_path)
+            .await
+            .unwrap();
         assert!(!migrated);
     }
 }
