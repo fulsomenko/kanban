@@ -20,7 +20,7 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
 use kanban_domain::{Board, Card, SortField, SortOrder, Sprint};
-use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
 use std::io;

@@ -17,6 +17,9 @@ use kanban_persistence::SqliteStore;
 pub use kanban_domain::commands;
 pub use snapshot::DataSnapshot;
 
+type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
+type SaveChannel = (mpsc::Sender<DataSnapshot>, mpsc::Receiver<DataSnapshot>);
+
 /// Manages state mutations and persistence with immediate auto-saving
 ///
 /// # Save Behavior
@@ -38,7 +41,7 @@ pub use snapshot::DataSnapshot;
 /// state_manager.save(&snapshot).await?;
 /// ```
 pub struct StateManager {
-    store: Option<Arc<dyn PersistenceStore + Send + Sync>>,
+    store: Option<DynStore>,
     command_queue: VecDeque<String>,
     dirty: bool,
     instance_id: uuid::Uuid,
@@ -72,18 +75,14 @@ impl StateManager {
         // If queue is full, save_if_needed() will log a warning instead of blocking
         const SAVE_QUEUE_CAPACITY: usize = 100;
 
-        let (store, instance_id, save_channel): (
-            Option<Arc<dyn PersistenceStore + Send + Sync>>,
-            uuid::Uuid,
-            Option<(mpsc::Sender<DataSnapshot>, mpsc::Receiver<DataSnapshot>)>,
-        ) = if let Some(ref path) = save_file {
-            let (store, id): (Arc<dyn PersistenceStore + Send + Sync>, uuid::Uuid) =
-                Self::create_store(path);
-            let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
-            (Some(store), id, Some((tx, rx)))
-        } else {
-            (None, uuid::Uuid::new_v4(), None)
-        };
+        let (store, instance_id, save_channel): (Option<DynStore>, uuid::Uuid, Option<SaveChannel>) =
+            if let Some(ref path) = save_file {
+                let (store, id) = Self::create_store(path);
+                let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
+                (Some(store), id, Some((tx, rx)))
+            } else {
+                (None, uuid::Uuid::new_v4(), None)
+            };
 
         let (save_tx, save_rx) = if let Some((tx, rx)) = save_channel {
             (Some(tx), Some(rx))
@@ -110,7 +109,7 @@ impl StateManager {
     }
 
     /// Create the appropriate store based on file extension
-    fn create_store(path: &str) -> (Arc<dyn PersistenceStore + Send + Sync>, uuid::Uuid) {
+    fn create_store(path: &str) -> (DynStore, uuid::Uuid) {
         let path_ref = Path::new(path);
         let extension = path_ref
             .extension()
@@ -237,7 +236,7 @@ impl StateManager {
     }
 
     /// Get the store reference
-    pub fn store(&self) -> Option<&Arc<dyn PersistenceStore + Send + Sync>> {
+    pub fn store(&self) -> Option<&DynStore> {
         self.store.as_ref()
     }
 
