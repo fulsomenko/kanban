@@ -1,10 +1,13 @@
+#[cfg(feature = "sqlite")]
 use crate::store::JsonFileStore;
-use crate::traits::PersistenceStore;
-use kanban_core::KanbanResult;
-use std::path::Path;
-
 #[cfg(feature = "sqlite")]
 use crate::store::SqliteStore;
+#[cfg(feature = "sqlite")]
+use crate::traits::PersistenceStore;
+#[cfg(feature = "sqlite")]
+use kanban_core::KanbanResult;
+#[cfg(feature = "sqlite")]
+use std::path::Path;
 
 #[cfg(feature = "sqlite")]
 pub async fn migrate_json_to_sqlite(json_path: &Path, sqlite_path: &Path) -> KanbanResult<()> {

@@ -1,6 +1,9 @@
 -- SQLite schema for kanban persistence
 -- Version: 1
 
+-- Enable WAL mode for better concurrent read performance
+PRAGMA journal_mode=WAL;
+
 -- Metadata table for tracking persistence state and conflict detection
 CREATE TABLE IF NOT EXISTS metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton row
@@ -42,6 +45,22 @@ CREATE TABLE IF NOT EXISTS columns (
     FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
 );
 
+-- Sprints table (defined before cards since cards reference sprints)
+CREATE TABLE IF NOT EXISTS sprints (
+    id TEXT PRIMARY KEY,
+    board_id TEXT NOT NULL,
+    sprint_number INTEGER NOT NULL,
+    name_index INTEGER,
+    prefix TEXT,
+    card_prefix TEXT,
+    status TEXT NOT NULL DEFAULT 'Planning',
+    start_date TEXT,
+    end_date TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+);
+
 -- Cards table
 CREATE TABLE IF NOT EXISTS cards (
     id TEXT PRIMARY KEY,
@@ -65,22 +84,6 @@ CREATE TABLE IF NOT EXISTS cards (
     FOREIGN KEY (sprint_id) REFERENCES sprints(id) ON DELETE SET NULL
 );
 
--- Sprints table
-CREATE TABLE IF NOT EXISTS sprints (
-    id TEXT PRIMARY KEY,
-    board_id TEXT NOT NULL,
-    sprint_number INTEGER NOT NULL,
-    name_index INTEGER,
-    prefix TEXT,
-    card_prefix TEXT,
-    status TEXT NOT NULL DEFAULT 'Planning',
-    start_date TEXT,
-    end_date TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
-);
-
 -- Archived cards table
 CREATE TABLE IF NOT EXISTS archived_cards (
     id TEXT PRIMARY KEY,  -- Same as embedded card.id
@@ -94,14 +97,14 @@ CREATE TABLE IF NOT EXISTS archived_cards (
 CREATE INDEX IF NOT EXISTS idx_columns_board_id ON columns(board_id);
 CREATE INDEX IF NOT EXISTS idx_columns_position ON columns(board_id, position);
 
+CREATE INDEX IF NOT EXISTS idx_sprints_board_id ON sprints(board_id);
+CREATE INDEX IF NOT EXISTS idx_sprints_status ON sprints(status);
+
 CREATE INDEX IF NOT EXISTS idx_cards_column_id ON cards(column_id);
 CREATE INDEX IF NOT EXISTS idx_cards_sprint_id ON cards(sprint_id);
 CREATE INDEX IF NOT EXISTS idx_cards_position ON cards(column_id, position);
 CREATE INDEX IF NOT EXISTS idx_cards_status ON cards(status);
 CREATE INDEX IF NOT EXISTS idx_cards_priority ON cards(priority);
 CREATE INDEX IF NOT EXISTS idx_cards_updated_at ON cards(updated_at);
-
-CREATE INDEX IF NOT EXISTS idx_sprints_board_id ON sprints(board_id);
-CREATE INDEX IF NOT EXISTS idx_sprints_status ON sprints(status);
 
 CREATE INDEX IF NOT EXISTS idx_archived_cards_archived_at ON archived_cards(archived_at);

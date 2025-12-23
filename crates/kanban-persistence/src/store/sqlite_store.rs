@@ -22,13 +22,23 @@ enum Table {
 }
 
 impl Table {
-    const fn as_str(self) -> &'static str {
+    const fn select_ids_sql(self) -> &'static str {
         match self {
-            Table::Boards => "boards",
-            Table::Columns => "columns",
-            Table::Cards => "cards",
-            Table::ArchivedCards => "archived_cards",
-            Table::Sprints => "sprints",
+            Table::Boards => "SELECT id FROM boards",
+            Table::Columns => "SELECT id FROM columns",
+            Table::Cards => "SELECT id FROM cards",
+            Table::ArchivedCards => "SELECT id FROM archived_cards",
+            Table::Sprints => "SELECT id FROM sprints",
+        }
+    }
+
+    const fn delete_by_id_sql(self) -> &'static str {
+        match self {
+            Table::Boards => "DELETE FROM boards WHERE id = ?",
+            Table::Columns => "DELETE FROM columns WHERE id = ?",
+            Table::Cards => "DELETE FROM cards WHERE id = ?",
+            Table::ArchivedCards => "DELETE FROM archived_cards WHERE id = ?",
+            Table::Sprints => "DELETE FROM sprints WHERE id = ?",
         }
     }
 }
@@ -289,24 +299,22 @@ impl SqliteStore {
     where
         F: Fn(&serde_json::Value) -> Option<String>,
     {
-        let table_name = table.as_str();
         let incoming_ids: std::collections::HashSet<String> =
             incoming.iter().filter_map(&id_extractor).collect();
 
-        // Get existing IDs
-        let existing_ids: std::collections::HashSet<String> =
-            sqlx::query(&format!("SELECT id FROM {}", table_name))
-                .fetch_all(&mut **tx)
-                .await
-                .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
-                .into_iter()
-                .map(|row| row.get::<String, _>("id"))
-                .collect();
+        // Get existing IDs using static SQL from Table enum
+        let existing_ids: std::collections::HashSet<String> = sqlx::query(table.select_ids_sql())
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+            .into_iter()
+            .map(|row| row.get::<String, _>("id"))
+            .collect();
 
-        // Delete removed items
+        // Delete removed items using static SQL from Table enum
         let to_delete: Vec<_> = existing_ids.difference(&incoming_ids).collect();
         for id in to_delete {
-            sqlx::query(&format!("DELETE FROM {} WHERE id = ?", table_name))
+            sqlx::query(table.delete_by_id_sql())
                 .bind(id)
                 .execute(&mut **tx)
                 .await

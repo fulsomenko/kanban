@@ -15,3 +15,6 @@ pub use snapshot_serde::{snapshot_from_json_bytes, snapshot_to_json_bytes};
 pub use store::*;
 pub use traits::*;
 pub use watch::*;
+
+#[cfg(feature = "sqlite")]
+pub use store::SqliteStore;
