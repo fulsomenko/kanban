@@ -75,14 +75,17 @@ impl StateManager {
         // If queue is full, save_if_needed() will log a warning instead of blocking
         const SAVE_QUEUE_CAPACITY: usize = 100;
 
-        let (store, instance_id, save_channel): (Option<DynStore>, uuid::Uuid, Option<SaveChannel>) =
-            if let Some(ref path) = save_file {
-                let (store, id) = Self::create_store(path);
-                let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
-                (Some(store), id, Some((tx, rx)))
-            } else {
-                (None, uuid::Uuid::new_v4(), None)
-            };
+        let (store, instance_id, save_channel): (
+            Option<DynStore>,
+            uuid::Uuid,
+            Option<SaveChannel>,
+        ) = if let Some(ref path) = save_file {
+            let (store, id) = Self::create_store(path);
+            let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
+            (Some(store), id, Some((tx, rx)))
+        } else {
+            (None, uuid::Uuid::new_v4(), None)
+        };
 
         let (save_tx, save_rx) = if let Some((tx, rx)) = save_channel {
             (Some(tx), Some(rx))
