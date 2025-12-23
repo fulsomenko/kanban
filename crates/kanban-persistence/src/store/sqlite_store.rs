@@ -54,9 +54,10 @@ impl SqliteStore {
     async fn get_pool(&self) -> KanbanResult<&Pool<Sqlite>> {
         self.pool
             .get_or_try_init(|| async {
-                let options = SqliteConnectOptions::from_str(
-                    &format!("sqlite://{}?mode=rwc", self.path.display())
-                )
+                let options = SqliteConnectOptions::from_str(&format!(
+                    "sqlite://{}?mode=rwc",
+                    self.path.display()
+                ))
                 .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
                 .create_if_missing(true)
                 .foreign_keys(true);
@@ -78,7 +79,10 @@ impl SqliteStore {
             .await
     }
 
-    async fn load_current_state(&self, pool: &Pool<Sqlite>) -> KanbanResult<HashMap<String, serde_json::Value>> {
+    async fn load_current_state(
+        &self,
+        pool: &Pool<Sqlite>,
+    ) -> KanbanResult<HashMap<String, serde_json::Value>> {
         let mut state = HashMap::new();
 
         // Load boards
@@ -86,7 +90,7 @@ impl SqliteStore {
             "SELECT id, name, description, sprint_prefix, card_prefix, task_sort_field,
                     task_sort_order, sprint_duration_days, sprint_names, sprint_name_used_count,
                     next_sprint_number, active_sprint_id, task_list_view, prefix_counters,
-                    sprint_counters, created_at, updated_at FROM boards"
+                    sprint_counters, created_at, updated_at FROM boards",
         )
         .fetch_all(pool)
         .await
@@ -97,7 +101,7 @@ impl SqliteStore {
 
         // Load columns
         let columns: Vec<serde_json::Value> = sqlx::query(
-            "SELECT id, board_id, name, position, wip_limit, created_at, updated_at FROM columns"
+            "SELECT id, board_id, name, position, wip_limit, created_at, updated_at FROM columns",
         )
         .fetch_all(pool)
         .await
@@ -110,7 +114,7 @@ impl SqliteStore {
         let cards: Vec<serde_json::Value> = sqlx::query(
             "SELECT id, column_id, title, description, priority, status, position, due_date,
                     points, card_number, sprint_id, assigned_prefix, card_prefix, created_at,
-                    updated_at, completed_at, sprint_logs FROM cards"
+                    updated_at, completed_at, sprint_logs FROM cards",
         )
         .fetch_all(pool)
         .await
@@ -122,7 +126,7 @@ impl SqliteStore {
         // Load sprints
         let sprints: Vec<serde_json::Value> = sqlx::query(
             "SELECT id, board_id, sprint_number, name_index, prefix, card_prefix, status,
-                    start_date, end_date, created_at, updated_at FROM sprints"
+                    start_date, end_date, created_at, updated_at FROM sprints",
         )
         .fetch_all(pool)
         .await
@@ -143,10 +147,19 @@ impl SqliteStore {
         .collect::<KanbanResult<Vec<_>>>()?;
 
         state.insert("boards".to_string(), serde_json::to_value(boards).unwrap());
-        state.insert("columns".to_string(), serde_json::to_value(columns).unwrap());
+        state.insert(
+            "columns".to_string(),
+            serde_json::to_value(columns).unwrap(),
+        );
         state.insert("cards".to_string(), serde_json::to_value(cards).unwrap());
-        state.insert("sprints".to_string(), serde_json::to_value(sprints).unwrap());
-        state.insert("archived_cards".to_string(), serde_json::to_value(archived_cards).unwrap());
+        state.insert(
+            "sprints".to_string(),
+            serde_json::to_value(sprints).unwrap(),
+        );
+        state.insert(
+            "archived_cards".to_string(),
+            serde_json::to_value(archived_cards).unwrap(),
+        );
 
         Ok(state)
     }
@@ -229,7 +242,10 @@ impl SqliteStore {
         }))
     }
 
-    fn row_to_archived_card(&self, row: &sqlx::sqlite::SqliteRow) -> KanbanResult<serde_json::Value> {
+    fn row_to_archived_card(
+        &self,
+        row: &sqlx::sqlite::SqliteRow,
+    ) -> KanbanResult<serde_json::Value> {
         let card_data: String = row.get("card_data");
         let card: serde_json::Value = serde_json::from_str(&card_data)
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
@@ -252,21 +268,18 @@ impl SqliteStore {
     where
         F: Fn(&serde_json::Value) -> Option<String>,
     {
-        let incoming_ids: std::collections::HashSet<String> = incoming
-            .iter()
-            .filter_map(|v| id_extractor(v))
-            .collect();
+        let incoming_ids: std::collections::HashSet<String> =
+            incoming.iter().filter_map(&id_extractor).collect();
 
         // Get existing IDs
-        let existing_ids: std::collections::HashSet<String> = sqlx::query(&format!(
-            "SELECT id FROM {}", table
-        ))
-        .fetch_all(pool)
-        .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
-        .into_iter()
-        .map(|row| row.get::<String, _>("id"))
-        .collect();
+        let existing_ids: std::collections::HashSet<String> =
+            sqlx::query(&format!("SELECT id FROM {}", table))
+                .fetch_all(pool)
+                .await
+                .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+                .into_iter()
+                .map(|row| row.get::<String, _>("id"))
+                .collect();
 
         // Delete removed items
         let to_delete: Vec<_> = existing_ids.difference(&incoming_ids).collect();
@@ -281,7 +294,11 @@ impl SqliteStore {
         Ok(())
     }
 
-    async fn upsert_board(&self, pool: &Pool<Sqlite>, board: &serde_json::Value) -> KanbanResult<()> {
+    async fn upsert_board(
+        &self,
+        pool: &Pool<Sqlite>,
+        board: &serde_json::Value,
+    ) -> KanbanResult<()> {
         let id = board["id"].as_str().unwrap_or_default();
         let name = board["name"].as_str().unwrap_or_default();
         let description = board["description"].as_str();
@@ -290,13 +307,16 @@ impl SqliteStore {
         let task_sort_field = board["task_sort_field"].as_str().unwrap_or("Default");
         let task_sort_order = board["task_sort_order"].as_str().unwrap_or("Ascending");
         let sprint_duration_days = board["sprint_duration_days"].as_i64().map(|v| v as i32);
-        let sprint_names = serde_json::to_string(&board["sprint_names"]).unwrap_or_else(|_| "[]".to_string());
+        let sprint_names =
+            serde_json::to_string(&board["sprint_names"]).unwrap_or_else(|_| "[]".to_string());
         let sprint_name_used_count = board["sprint_name_used_count"].as_i64().unwrap_or(0) as i32;
         let next_sprint_number = board["next_sprint_number"].as_i64().unwrap_or(1) as i32;
         let active_sprint_id = board["active_sprint_id"].as_str();
         let task_list_view = board["task_list_view"].as_str().unwrap_or("Flat");
-        let prefix_counters = serde_json::to_string(&board["prefix_counters"]).unwrap_or_else(|_| "{}".to_string());
-        let sprint_counters = serde_json::to_string(&board["sprint_counters"]).unwrap_or_else(|_| "{}".to_string());
+        let prefix_counters =
+            serde_json::to_string(&board["prefix_counters"]).unwrap_or_else(|_| "{}".to_string());
+        let sprint_counters =
+            serde_json::to_string(&board["sprint_counters"]).unwrap_or_else(|_| "{}".to_string());
         let created_at = board["created_at"].as_str().unwrap_or_default();
         let updated_at = board["updated_at"].as_str().unwrap_or_default();
 
@@ -347,7 +367,11 @@ impl SqliteStore {
         Ok(())
     }
 
-    async fn upsert_column(&self, pool: &Pool<Sqlite>, column: &serde_json::Value) -> KanbanResult<()> {
+    async fn upsert_column(
+        &self,
+        pool: &Pool<Sqlite>,
+        column: &serde_json::Value,
+    ) -> KanbanResult<()> {
         let id = column["id"].as_str().unwrap_or_default();
         let board_id = column["board_id"].as_str().unwrap_or_default();
         let name = column["name"].as_str().unwrap_or_default();
@@ -364,7 +388,7 @@ impl SqliteStore {
                 name = excluded.name,
                 position = excluded.position,
                 wip_limit = excluded.wip_limit,
-                updated_at = excluded.updated_at"
+                updated_at = excluded.updated_at",
         )
         .bind(id)
         .bind(board_id)
@@ -397,7 +421,8 @@ impl SqliteStore {
         let created_at = card["created_at"].as_str().unwrap_or_default();
         let updated_at = card["updated_at"].as_str().unwrap_or_default();
         let completed_at = card["completed_at"].as_str();
-        let sprint_logs = serde_json::to_string(&card["sprint_logs"]).unwrap_or_else(|_| "[]".to_string());
+        let sprint_logs =
+            serde_json::to_string(&card["sprint_logs"]).unwrap_or_else(|_| "[]".to_string());
 
         sqlx::query(
             "INSERT INTO cards (id, column_id, title, description, priority, status, position,
@@ -419,7 +444,7 @@ impl SqliteStore {
                 card_prefix = excluded.card_prefix,
                 updated_at = excluded.updated_at,
                 completed_at = excluded.completed_at,
-                sprint_logs = excluded.sprint_logs"
+                sprint_logs = excluded.sprint_logs",
         )
         .bind(id)
         .bind(column_id)
@@ -445,7 +470,11 @@ impl SqliteStore {
         Ok(())
     }
 
-    async fn upsert_sprint(&self, pool: &Pool<Sqlite>, sprint: &serde_json::Value) -> KanbanResult<()> {
+    async fn upsert_sprint(
+        &self,
+        pool: &Pool<Sqlite>,
+        sprint: &serde_json::Value,
+    ) -> KanbanResult<()> {
         let id = sprint["id"].as_str().unwrap_or_default();
         let board_id = sprint["board_id"].as_str().unwrap_or_default();
         let sprint_number = sprint["sprint_number"].as_i64().unwrap_or(0) as i32;
@@ -471,7 +500,7 @@ impl SqliteStore {
                 status = excluded.status,
                 start_date = excluded.start_date,
                 end_date = excluded.end_date,
-                updated_at = excluded.updated_at"
+                updated_at = excluded.updated_at",
         )
         .bind(id)
         .bind(board_id)
@@ -491,7 +520,11 @@ impl SqliteStore {
         Ok(())
     }
 
-    async fn upsert_archived_card(&self, pool: &Pool<Sqlite>, archived: &serde_json::Value) -> KanbanResult<()> {
+    async fn upsert_archived_card(
+        &self,
+        pool: &Pool<Sqlite>,
+        archived: &serde_json::Value,
+    ) -> KanbanResult<()> {
         let card = &archived["card"];
         let id = card["id"].as_str().unwrap_or_default();
         let card_data = serde_json::to_string(card)
@@ -535,12 +568,11 @@ impl PersistenceStore for SqliteStore {
         let pool = self.get_pool().await?;
 
         // Check for conflicts using metadata table
-        let existing_meta: Option<(String, String)> = sqlx::query_as(
-            "SELECT instance_id, saved_at FROM metadata WHERE id = 1"
-        )
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+        let existing_meta: Option<(String, String)> =
+            sqlx::query_as("SELECT instance_id, saved_at FROM metadata WHERE id = 1")
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
         if let Some((db_instance_id, db_saved_at)) = existing_meta {
             let guard = self.lock_metadata();
@@ -569,25 +601,32 @@ impl PersistenceStore for SqliteStore {
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
         // Begin transaction
-        let tx = pool.begin().await
+        let tx = pool
+            .begin()
+            .await
             .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
         // Sync deletions first (respecting foreign key order)
         self.sync_table(pool, "archived_cards", &data.archived_cards, |v| {
             v["card"]["id"].as_str().map(String::from)
-        }).await?;
+        })
+        .await?;
         self.sync_table(pool, "cards", &data.cards, |v| {
             v["id"].as_str().map(String::from)
-        }).await?;
+        })
+        .await?;
         self.sync_table(pool, "sprints", &data.sprints, |v| {
             v["id"].as_str().map(String::from)
-        }).await?;
+        })
+        .await?;
         self.sync_table(pool, "columns", &data.columns, |v| {
             v["id"].as_str().map(String::from)
-        }).await?;
+        })
+        .await?;
         self.sync_table(pool, "boards", &data.boards, |v| {
             v["id"].as_str().map(String::from)
-        }).await?;
+        })
+        .await?;
 
         // Upsert in correct order (parents before children)
         for board in &data.boards {
@@ -613,7 +652,7 @@ impl PersistenceStore for SqliteStore {
              VALUES (1, ?, ?, 1)
              ON CONFLICT(id) DO UPDATE SET
                 instance_id = excluded.instance_id,
-                saved_at = excluded.saved_at"
+                saved_at = excluded.saved_at",
         )
         .bind(self.instance_id.to_string())
         .bind(&saved_at_str)
@@ -621,7 +660,8 @@ impl PersistenceStore for SqliteStore {
         .await
         .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
-        tx.commit().await
+        tx.commit()
+            .await
             .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
         // Update last known metadata
@@ -630,10 +670,7 @@ impl PersistenceStore for SqliteStore {
             *guard = Some(snapshot.metadata.clone());
         }
 
-        tracing::info!(
-            "Saved to SQLite database at {}",
-            self.path.display()
-        );
+        tracing::info!("Saved to SQLite database at {}", self.path.display());
 
         Ok(snapshot.metadata)
     }
@@ -642,12 +679,11 @@ impl PersistenceStore for SqliteStore {
         let pool = self.get_pool().await?;
 
         // Load metadata
-        let meta_row: Option<(String, String)> = sqlx::query_as(
-            "SELECT instance_id, saved_at FROM metadata WHERE id = 1"
-        )
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+        let meta_row: Option<(String, String)> =
+            sqlx::query_as("SELECT instance_id, saved_at FROM metadata WHERE id = 1")
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
         let metadata = if let Some((instance_id_str, saved_at_str)) = meta_row {
             let instance_id = Uuid::parse_str(&instance_id_str)
@@ -655,7 +691,10 @@ impl PersistenceStore for SqliteStore {
             let saved_at = chrono::DateTime::parse_from_rfc3339(&saved_at_str)
                 .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc);
-            PersistenceMetadata { instance_id, saved_at }
+            PersistenceMetadata {
+                instance_id,
+                saved_at,
+            }
         } else {
             PersistenceMetadata::new(self.instance_id)
         };
@@ -664,11 +703,18 @@ impl PersistenceStore for SqliteStore {
         let state = self.load_current_state(pool).await?;
 
         let data = SnapshotData {
-            boards: serde_json::from_value(state.get("boards").cloned().unwrap_or_default()).unwrap_or_default(),
-            columns: serde_json::from_value(state.get("columns").cloned().unwrap_or_default()).unwrap_or_default(),
-            cards: serde_json::from_value(state.get("cards").cloned().unwrap_or_default()).unwrap_or_default(),
-            archived_cards: serde_json::from_value(state.get("archived_cards").cloned().unwrap_or_default()).unwrap_or_default(),
-            sprints: serde_json::from_value(state.get("sprints").cloned().unwrap_or_default()).unwrap_or_default(),
+            boards: serde_json::from_value(state.get("boards").cloned().unwrap_or_default())
+                .unwrap_or_default(),
+            columns: serde_json::from_value(state.get("columns").cloned().unwrap_or_default())
+                .unwrap_or_default(),
+            cards: serde_json::from_value(state.get("cards").cloned().unwrap_or_default())
+                .unwrap_or_default(),
+            archived_cards: serde_json::from_value(
+                state.get("archived_cards").cloned().unwrap_or_default(),
+            )
+            .unwrap_or_default(),
+            sprints: serde_json::from_value(state.get("sprints").cloned().unwrap_or_default())
+                .unwrap_or_default(),
         };
 
         let data_bytes = serde_json::to_vec(&data)
@@ -685,10 +731,7 @@ impl PersistenceStore for SqliteStore {
             *guard = Some(metadata.clone());
         }
 
-        tracing::info!(
-            "Loaded from SQLite database at {}",
-            self.path.display()
-        );
+        tracing::info!("Loaded from SQLite database at {}", self.path.display());
 
         Ok((snapshot, metadata))
     }
