@@ -14,6 +14,10 @@ categories = ["command-line-utilities"]
 name = "kanban"
 path = "src/main.rs"
 
+[features]
+default = []
+sqlite = ["kanban-persistence/sqlite", "kanban-tui/sqlite"]
+
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.1" }
 kanban-domain = { path = "../kanban-domain", version = "^0.1" }
