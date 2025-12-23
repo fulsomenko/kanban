@@ -11,3 +11,6 @@ pub use serialization::*;
 pub use store::*;
 pub use traits::*;
 pub use watch::*;
+
+#[cfg(feature = "sqlite")]
+pub use store::SqliteStore;

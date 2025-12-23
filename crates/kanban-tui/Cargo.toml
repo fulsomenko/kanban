@@ -10,6 +10,10 @@ description = "Terminal user interface for the kanban project management tool"
 keywords = ["kanban", "tui", "terminal", "ratatui", "project-management"]
 categories = ["command-line-utilities"]
 
+[features]
+default = []
+sqlite = ["kanban-persistence/sqlite"]
+
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.1" }
 kanban-domain = { path = "../kanban-domain", version = "^0.1" }

@@ -7,11 +7,18 @@ use kanban_domain::commands::CommandContext;
 use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+#[cfg(feature = "sqlite")]
+use kanban_persistence::SqliteStore;
+
 pub use kanban_domain::commands;
 pub use snapshot::DataSnapshot;
+
+type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
+type SaveChannel = (mpsc::Sender<DataSnapshot>, mpsc::Receiver<DataSnapshot>);
 
 /// Manages state mutations and persistence with immediate auto-saving
 ///
@@ -34,7 +41,7 @@ pub use snapshot::DataSnapshot;
 /// state_manager.save(&snapshot).await?;
 /// ```
 pub struct StateManager {
-    store: Option<Arc<JsonFileStore>>,
+    store: Option<DynStore>,
     command_queue: VecDeque<String>,
     dirty: bool,
     instance_id: uuid::Uuid,
@@ -53,6 +60,10 @@ impl StateManager {
     /// - StateManager instance
     /// - Optional receiver for async save processing (snapshots to save)
     /// - Optional receiver for save completion notifications
+    ///
+    /// Storage backend is selected based on file extension:
+    /// - `.db` or `.sqlite` -> SQLite (requires `sqlite` feature)
+    /// - `.json` or other -> JSON file
     pub fn new(
         save_file: Option<String>,
     ) -> (
@@ -64,9 +75,12 @@ impl StateManager {
         // If queue is full, save_if_needed() will log a warning instead of blocking
         const SAVE_QUEUE_CAPACITY: usize = 100;
 
-        let (store, instance_id, save_channel) = if let Some(path) = save_file {
-            let store = Arc::new(JsonFileStore::new(&path));
-            let id = store.instance_id();
+        let (store, instance_id, save_channel): (
+            Option<DynStore>,
+            uuid::Uuid,
+            Option<SaveChannel>,
+        ) = if let Some(ref path) = save_file {
+            let (store, id) = Self::create_store(path);
             let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
             (Some(store), id, Some((tx, rx)))
         } else {
@@ -95,6 +109,31 @@ impl StateManager {
         };
 
         (manager, save_rx, Some(save_completion_rx))
+    }
+
+    /// Create the appropriate store based on file extension
+    fn create_store(path: &str) -> (DynStore, uuid::Uuid) {
+        let path_ref = Path::new(path);
+        let extension = path_ref
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("json");
+
+        match extension {
+            #[cfg(feature = "sqlite")]
+            "db" | "sqlite" => {
+                tracing::info!("Using SQLite storage backend for: {}", path);
+                let store = Arc::new(SqliteStore::new(path));
+                let id = store.instance_id();
+                (store, id)
+            }
+            _ => {
+                tracing::info!("Using JSON file storage backend for: {}", path);
+                let store = Arc::new(JsonFileStore::new(path));
+                let id = store.instance_id();
+                (store, id)
+            }
+        }
     }
 
     /// Execute a command and mark state as dirty
@@ -200,7 +239,7 @@ impl StateManager {
     }
 
     /// Get the store reference
-    pub fn store(&self) -> Option<&Arc<JsonFileStore>> {
+    pub fn store(&self) -> Option<&DynStore> {
         self.store.as_ref()
     }
 
