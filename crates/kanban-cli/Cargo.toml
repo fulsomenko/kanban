@@ -17,6 +17,7 @@ path = "src/main.rs"
 [features]
 default = ["tui"]
 tui = ["dep:kanban-tui"]
+sqlite = ["kanban-persistence/sqlite", "kanban-tui/sqlite"]
 
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
