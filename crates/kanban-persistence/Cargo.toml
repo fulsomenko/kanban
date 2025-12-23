@@ -35,5 +35,14 @@ tempfile.workspace = true
 # Logging
 tracing.workspace = true
 
+[features]
+default = []
+sqlite = ["sqlx"]
+
+[dependencies.sqlx]
+version = "0.8"
+features = ["runtime-tokio", "sqlite"]
+optional = true
+
 [dev-dependencies]
 mockall.workspace = true
