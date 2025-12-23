@@ -12,6 +12,27 @@ use uuid::Uuid;
 
 const SCHEMA: &str = include_str!("../schema.sql");
 
+#[derive(Debug, Clone, Copy)]
+enum Table {
+    Boards,
+    Columns,
+    Cards,
+    ArchivedCards,
+    Sprints,
+}
+
+impl Table {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Table::Boards => "boards",
+            Table::Columns => "columns",
+            Table::Cards => "cards",
+            Table::ArchivedCards => "archived_cards",
+            Table::Sprints => "sprints",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct SnapshotData {
     boards: Vec<serde_json::Value>,
@@ -261,19 +282,20 @@ impl SqliteStore {
     async fn sync_table<F>(
         &self,
         tx: &mut Transaction<'_, Sqlite>,
-        table: &str,
+        table: Table,
         incoming: &[serde_json::Value],
         id_extractor: F,
     ) -> KanbanResult<()>
     where
         F: Fn(&serde_json::Value) -> Option<String>,
     {
+        let table_name = table.as_str();
         let incoming_ids: std::collections::HashSet<String> =
             incoming.iter().filter_map(&id_extractor).collect();
 
         // Get existing IDs
         let existing_ids: std::collections::HashSet<String> =
-            sqlx::query(&format!("SELECT id FROM {}", table))
+            sqlx::query(&format!("SELECT id FROM {}", table_name))
                 .fetch_all(&mut **tx)
                 .await
                 .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
@@ -284,7 +306,7 @@ impl SqliteStore {
         // Delete removed items
         let to_delete: Vec<_> = existing_ids.difference(&incoming_ids).collect();
         for id in to_delete {
-            sqlx::query(&format!("DELETE FROM {} WHERE id = ?", table))
+            sqlx::query(&format!("DELETE FROM {} WHERE id = ?", table_name))
                 .bind(id)
                 .execute(&mut **tx)
                 .await
@@ -611,23 +633,23 @@ impl PersistenceStore for SqliteStore {
             .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
         // Sync deletions first (respecting foreign key order)
-        self.sync_table(&mut tx, "archived_cards", &data.archived_cards, |v| {
+        self.sync_table(&mut tx, Table::ArchivedCards, &data.archived_cards, |v| {
             v["card"]["id"].as_str().map(String::from)
         })
         .await?;
-        self.sync_table(&mut tx, "cards", &data.cards, |v| {
+        self.sync_table(&mut tx, Table::Cards, &data.cards, |v| {
             v["id"].as_str().map(String::from)
         })
         .await?;
-        self.sync_table(&mut tx, "sprints", &data.sprints, |v| {
+        self.sync_table(&mut tx, Table::Sprints, &data.sprints, |v| {
             v["id"].as_str().map(String::from)
         })
         .await?;
-        self.sync_table(&mut tx, "columns", &data.columns, |v| {
+        self.sync_table(&mut tx, Table::Columns, &data.columns, |v| {
             v["id"].as_str().map(String::from)
         })
         .await?;
-        self.sync_table(&mut tx, "boards", &data.boards, |v| {
+        self.sync_table(&mut tx, Table::Boards, &data.boards, |v| {
             v["id"].as_str().map(String::from)
         })
         .await?;
