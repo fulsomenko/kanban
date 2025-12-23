@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use kanban_core::KanbanResult;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Pool, Row, Sqlite};
+use sqlx::{Pool, Row, Sqlite, Transaction};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -260,7 +260,7 @@ impl SqliteStore {
 
     async fn sync_table<F>(
         &self,
-        pool: &Pool<Sqlite>,
+        tx: &mut Transaction<'_, Sqlite>,
         table: &str,
         incoming: &[serde_json::Value],
         id_extractor: F,
@@ -274,7 +274,7 @@ impl SqliteStore {
         // Get existing IDs
         let existing_ids: std::collections::HashSet<String> =
             sqlx::query(&format!("SELECT id FROM {}", table))
-                .fetch_all(pool)
+                .fetch_all(&mut **tx)
                 .await
                 .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
                 .into_iter()
@@ -286,7 +286,7 @@ impl SqliteStore {
         for id in to_delete {
             sqlx::query(&format!("DELETE FROM {} WHERE id = ?", table))
                 .bind(id)
-                .execute(pool)
+                .execute(&mut **tx)
                 .await
                 .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
         }
@@ -296,7 +296,7 @@ impl SqliteStore {
 
     async fn upsert_board(
         &self,
-        pool: &Pool<Sqlite>,
+        tx: &mut Transaction<'_, Sqlite>,
         board: &serde_json::Value,
     ) -> KanbanResult<()> {
         let id = board["id"].as_str().unwrap_or_default();
@@ -360,7 +360,7 @@ impl SqliteStore {
         .bind(&sprint_counters)
         .bind(created_at)
         .bind(updated_at)
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
@@ -369,7 +369,7 @@ impl SqliteStore {
 
     async fn upsert_column(
         &self,
-        pool: &Pool<Sqlite>,
+        tx: &mut Transaction<'_, Sqlite>,
         column: &serde_json::Value,
     ) -> KanbanResult<()> {
         let id = column["id"].as_str().unwrap_or_default();
@@ -397,14 +397,18 @@ impl SqliteStore {
         .bind(wip_limit)
         .bind(created_at)
         .bind(updated_at)
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
         Ok(())
     }
 
-    async fn upsert_card(&self, pool: &Pool<Sqlite>, card: &serde_json::Value) -> KanbanResult<()> {
+    async fn upsert_card(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        card: &serde_json::Value,
+    ) -> KanbanResult<()> {
         let id = card["id"].as_str().unwrap_or_default();
         let column_id = card["column_id"].as_str().unwrap_or_default();
         let title = card["title"].as_str().unwrap_or_default();
@@ -463,7 +467,7 @@ impl SqliteStore {
         .bind(updated_at)
         .bind(completed_at)
         .bind(&sprint_logs)
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
@@ -472,7 +476,7 @@ impl SqliteStore {
 
     async fn upsert_sprint(
         &self,
-        pool: &Pool<Sqlite>,
+        tx: &mut Transaction<'_, Sqlite>,
         sprint: &serde_json::Value,
     ) -> KanbanResult<()> {
         let id = sprint["id"].as_str().unwrap_or_default();
@@ -513,7 +517,7 @@ impl SqliteStore {
         .bind(end_date)
         .bind(created_at)
         .bind(updated_at)
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
@@ -522,7 +526,7 @@ impl SqliteStore {
 
     async fn upsert_archived_card(
         &self,
-        pool: &Pool<Sqlite>,
+        tx: &mut Transaction<'_, Sqlite>,
         archived: &serde_json::Value,
     ) -> KanbanResult<()> {
         let card = &archived["card"];
@@ -547,7 +551,7 @@ impl SqliteStore {
         .bind(archived_at)
         .bind(original_column_id)
         .bind(original_position)
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
@@ -601,48 +605,48 @@ impl PersistenceStore for SqliteStore {
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
         // Begin transaction
-        let tx = pool
+        let mut tx = pool
             .begin()
             .await
             .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
         // Sync deletions first (respecting foreign key order)
-        self.sync_table(pool, "archived_cards", &data.archived_cards, |v| {
+        self.sync_table(&mut tx, "archived_cards", &data.archived_cards, |v| {
             v["card"]["id"].as_str().map(String::from)
         })
         .await?;
-        self.sync_table(pool, "cards", &data.cards, |v| {
+        self.sync_table(&mut tx, "cards", &data.cards, |v| {
             v["id"].as_str().map(String::from)
         })
         .await?;
-        self.sync_table(pool, "sprints", &data.sprints, |v| {
+        self.sync_table(&mut tx, "sprints", &data.sprints, |v| {
             v["id"].as_str().map(String::from)
         })
         .await?;
-        self.sync_table(pool, "columns", &data.columns, |v| {
+        self.sync_table(&mut tx, "columns", &data.columns, |v| {
             v["id"].as_str().map(String::from)
         })
         .await?;
-        self.sync_table(pool, "boards", &data.boards, |v| {
+        self.sync_table(&mut tx, "boards", &data.boards, |v| {
             v["id"].as_str().map(String::from)
         })
         .await?;
 
         // Upsert in correct order (parents before children)
         for board in &data.boards {
-            self.upsert_board(pool, board).await?;
+            self.upsert_board(&mut tx, board).await?;
         }
         for column in &data.columns {
-            self.upsert_column(pool, column).await?;
+            self.upsert_column(&mut tx, column).await?;
         }
         for sprint in &data.sprints {
-            self.upsert_sprint(pool, sprint).await?;
+            self.upsert_sprint(&mut tx, sprint).await?;
         }
         for card in &data.cards {
-            self.upsert_card(pool, card).await?;
+            self.upsert_card(&mut tx, card).await?;
         }
         for archived in &data.archived_cards {
-            self.upsert_archived_card(pool, archived).await?;
+            self.upsert_archived_card(&mut tx, archived).await?;
         }
 
         // Update metadata table
@@ -656,7 +660,7 @@ impl PersistenceStore for SqliteStore {
         )
         .bind(self.instance_id.to_string())
         .bind(&saved_at_str)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
 
