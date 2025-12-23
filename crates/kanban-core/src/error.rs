@@ -17,6 +17,9 @@ pub enum KanbanError {
     #[error("Serialization error: {0}")]
     Serialization(String),
 
+    #[error("Database error: {0}")]
+    Database(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 
