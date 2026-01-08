@@ -9,16 +9,18 @@ pub enum CardEdgeType {
 
     /// General relationship (informational, allows cycles)
     RelatesTo,
+
+    /// Organizational grouping - parent contains child (source is parent, target is child)
+    /// Enforces DAG - no cycles allowed (can't be own ancestor)
+    ParentOf,
     // Future edge types can be added here:
     // Duplicates,
-    // ParentOf,
-    // ChildOf,
 }
 
 impl CardEdgeType {
     /// Whether this edge type enforces DAG (no cycles)
     pub fn requires_dag(&self) -> bool {
-        matches!(self, CardEdgeType::Blocks)
+        matches!(self, CardEdgeType::Blocks | CardEdgeType::ParentOf)
     }
 
     /// Whether this edge type allows cycles
@@ -41,5 +43,11 @@ mod tests {
     fn test_relates_to_allows_cycles() {
         assert!(!CardEdgeType::RelatesTo.requires_dag());
         assert!(CardEdgeType::RelatesTo.allows_cycles());
+    }
+
+    #[test]
+    fn test_parent_of_requires_dag() {
+        assert!(CardEdgeType::ParentOf.requires_dag());
+        assert!(!CardEdgeType::ParentOf.allows_cycles());
     }
 }
