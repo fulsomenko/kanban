@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{board::Board, column::ColumnId, field_update::FieldUpdate, sprint::Sprint, SprintLog};
+use kanban_core::GraphNode;
 
 pub type CardId = Uuid;
 
@@ -319,6 +320,12 @@ pub struct CardUpdate {
     pub sprint_id: FieldUpdate<Uuid>,
     pub assigned_prefix: FieldUpdate<String>,
     pub card_prefix: FieldUpdate<String>,
+}
+
+impl GraphNode for Card {
+    fn node_id(&self) -> Uuid {
+        self.id
+    }
 }
 
 #[cfg(test)]
