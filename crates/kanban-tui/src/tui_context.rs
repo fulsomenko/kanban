@@ -8,7 +8,7 @@ use crate::state::{DataSnapshot, StateManager};
 use kanban_core::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardFilter, CardUpdate, Column, ColumnUpdate,
-    FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -19,6 +19,7 @@ pub struct TuiContext {
     pub cards: Vec<Card>,
     pub archived_cards: Vec<ArchivedCard>,
     pub sprints: Vec<Sprint>,
+    pub graph: DependencyGraph,
     pub state_manager: StateManager,
 }
 
@@ -38,6 +39,7 @@ impl TuiContext {
             cards: Vec::new(),
             archived_cards: Vec::new(),
             sprints: Vec::new(),
+            graph: DependencyGraph::new(),
             state_manager,
         };
 
@@ -56,6 +58,7 @@ impl TuiContext {
                 &mut self.cards,
                 &mut self.sprints,
                 &mut self.archived_cards,
+                &mut self.graph,
                 command,
             )?;
         }
@@ -66,6 +69,7 @@ impl TuiContext {
             cards: self.cards.clone(),
             archived_cards: self.archived_cards.clone(),
             sprints: self.sprints.clone(),
+            graph: self.graph.clone(),
         };
         self.state_manager.queue_snapshot(snapshot);
 
@@ -496,6 +500,7 @@ impl KanbanOperations for TuiContext {
                 cards,
                 archived_cards: vec![],
                 sprints,
+                graph: self.graph.clone(),
             }
         } else {
             DataSnapshot {
@@ -504,6 +509,7 @@ impl KanbanOperations for TuiContext {
                 cards: self.cards.clone(),
                 archived_cards: self.archived_cards.clone(),
                 sprints: self.sprints.clone(),
+                graph: self.graph.clone(),
             }
         };
 
