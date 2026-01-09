@@ -2,7 +2,7 @@ use crate::app::{App, AppMode, BoardFocus, CardFocus, DialogMode, Focus};
 use crate::components::*;
 use crate::theme::*;
 use crate::view_strategy::UnifiedViewStrategy;
-use kanban_domain::{Sprint, SprintStatus};
+use kanban_domain::{dependencies::CardGraphExt, Sprint, SprintStatus};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -76,6 +76,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                     render_external_change_detected_popup(app, frame)
                 }
                 DialogMode::ConfirmSprintPrefixCollision => {}
+                DialogMode::ManageParents => render_manage_parents_popup(app, frame),
+                DialogMode::ManageChildren => render_manage_children_popup(app, frame),
             }
         }
     } else {
@@ -591,11 +593,28 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
             if let Some(board_idx) = app.active_board_index {
                 if let Some(board) = app.ctx.boards.get(board_idx) {
                     let has_sprint_logs = card.sprint_logs.len() > 1;
+                    let card_id = card.id;
+
+                    // Get parent and child information
+                    let parents = app.ctx.graph.cards.parents(card_id);
+                    let children = app.ctx.graph.cards.children(card_id);
+                    let parent_count = parents.len();
+                    let child_count = children.len();
 
                     let constraints = vec![
-                        Constraint::Length(5),
-                        Constraint::Length(6),
-                        Constraint::Min(0),
+                        Constraint::Length(5), // Title
+                        Constraint::Length(6), // Metadata
+                        Constraint::Min(5),    // Description
+                        Constraint::Length(if parent_count > 0 {
+                            (parent_count.min(3) + 2) as u16
+                        } else {
+                            3
+                        }), // Parents
+                        Constraint::Length(if child_count > 0 {
+                            (child_count.min(3) + 2) as u16
+                        } else {
+                            3
+                        }), // Children
                     ];
 
                     let chunks = Layout::default()
@@ -712,6 +731,56 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         };
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
+
+                        // Render Parents section (with sprint logs path)
+                        let parents_config = FieldSectionConfig::new("Parents")
+                            .with_focus_indicator("Parents [4]")
+                            .focused(app.card_focus == CardFocus::Parents);
+                        let parents_lines = if parent_count > 0 {
+                            parents
+                                .iter()
+                                .take(3)
+                                .filter_map(|parent_id| {
+                                    app.ctx.cards.iter().find(|c| c.id == *parent_id).map(|c| {
+                                        Line::from(vec![
+                                            Span::styled("→ ", label_text()),
+                                            Span::styled(c.title.clone(), normal_text()),
+                                        ])
+                                    })
+                                })
+                                .collect()
+                        } else {
+                            vec![Line::from(Span::styled("No parents", label_text()))]
+                        };
+                        let parents_widget =
+                            Paragraph::new(parents_lines).block(parents_config.block());
+                        frame.render_widget(parents_widget, chunks[3]);
+
+                        // Render Children section (with sprint logs path)
+                        let children_title = format!("Children ({})", child_count);
+                        let children_title_focused = format!("Children ({}) [5]", child_count);
+                        let children_config = FieldSectionConfig::new(&children_title)
+                            .with_focus_indicator(&children_title_focused)
+                            .focused(app.card_focus == CardFocus::Children);
+                        let children_lines = if child_count > 0 {
+                            children
+                                .iter()
+                                .take(3)
+                                .filter_map(|child_id| {
+                                    app.ctx.cards.iter().find(|c| c.id == *child_id).map(|c| {
+                                        Line::from(vec![
+                                            Span::styled("→ ", label_text()),
+                                            Span::styled(c.title.clone(), normal_text()),
+                                        ])
+                                    })
+                                })
+                                .collect()
+                        } else {
+                            vec![Line::from(Span::styled("No children", label_text()))]
+                        };
+                        let children_widget =
+                            Paragraph::new(children_lines).block(children_config.block());
+                        frame.render_widget(children_widget, chunks[4]);
                     } else {
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
@@ -762,6 +831,56 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         };
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
+
+                        // Render Parents section
+                        let parents_config = FieldSectionConfig::new("Parents")
+                            .with_focus_indicator("Parents [4]")
+                            .focused(app.card_focus == CardFocus::Parents);
+                        let parents_lines = if parent_count > 0 {
+                            parents
+                                .iter()
+                                .take(3)
+                                .filter_map(|parent_id| {
+                                    app.ctx.cards.iter().find(|c| c.id == *parent_id).map(|c| {
+                                        Line::from(vec![
+                                            Span::styled("→ ", label_text()),
+                                            Span::styled(c.title.clone(), normal_text()),
+                                        ])
+                                    })
+                                })
+                                .collect()
+                        } else {
+                            vec![Line::from(Span::styled("No parents", label_text()))]
+                        };
+                        let parents_widget =
+                            Paragraph::new(parents_lines).block(parents_config.block());
+                        frame.render_widget(parents_widget, chunks[3]);
+
+                        // Render Children section
+                        let children_title_else = format!("Children ({})", child_count);
+                        let children_title_focused_else = format!("Children ({}) [5]", child_count);
+                        let children_config = FieldSectionConfig::new(&children_title_else)
+                            .with_focus_indicator(&children_title_focused_else)
+                            .focused(app.card_focus == CardFocus::Children);
+                        let children_lines = if child_count > 0 {
+                            children
+                                .iter()
+                                .take(3)
+                                .filter_map(|child_id| {
+                                    app.ctx.cards.iter().find(|c| c.id == *child_id).map(|c| {
+                                        Line::from(vec![
+                                            Span::styled("→ ", label_text()),
+                                            Span::styled(c.title.clone(), normal_text()),
+                                        ])
+                                    })
+                                })
+                                .collect()
+                        } else {
+                            vec![Line::from(Span::styled("No children", label_text()))]
+                        };
+                        let children_widget =
+                            Paragraph::new(children_lines).block(children_config.block());
+                        frame.render_widget(children_widget, chunks[4]);
                     }
                 }
             }
@@ -1598,5 +1717,137 @@ fn render_external_change_detected_popup(_app: &App, frame: &mut Frame) {
 
     let instructions =
         Paragraph::new("Press R or K to choose, ESC to continue").style(label_text());
+    frame.render_widget(instructions, chunks[2]);
+}
+
+fn render_manage_parents_popup(app: &App, frame: &mut Frame) {
+    render_relationship_popup(app, frame, "Set Parents", true);
+}
+
+fn render_manage_children_popup(app: &App, frame: &mut Frame) {
+    render_relationship_popup(app, frame, "Set Children", false);
+}
+
+fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_parent_mode: bool) {
+    use crate::components::centered_rect;
+    use ratatui::widgets::Clear;
+
+    let area = centered_rect(60, 70, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(3), // Search box
+            Constraint::Min(0),    // Card list
+            Constraint::Length(1), // Instructions
+        ])
+        .split(inner);
+
+    // Search box
+    let search_border_style = if app.relationship_search_active {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Gray)
+    };
+    let search_block = Block::default()
+        .title("Search")
+        .borders(Borders::ALL)
+        .border_style(search_border_style);
+
+    // Build search text with greyed "/" prefix when not in search mode
+    let search_text: Line = if app.relationship_search_active {
+        // In search mode - show cursor indicator
+        Line::from(vec![
+            Span::styled(&app.relationship_search, Style::default().fg(Color::White)),
+            Span::styled("_", Style::default().fg(Color::Yellow)),
+        ])
+    } else if app.relationship_search.is_empty() {
+        // Not in search mode, empty search - show greyed "/" hint
+        Line::from(Span::styled(
+            "/ to search",
+            Style::default().fg(Color::DarkGray),
+        ))
+    } else {
+        // Not in search mode, has search text
+        Line::from(Span::styled(
+            &app.relationship_search,
+            Style::default().fg(Color::White),
+        ))
+    };
+
+    let search = Paragraph::new(search_text).block(search_block);
+    frame.render_widget(search, chunks[0]);
+
+    // Filter cards by search
+    let filtered_cards: Vec<_> = if app.relationship_search.is_empty() {
+        app.relationship_card_ids.clone()
+    } else {
+        let search_lower = app.relationship_search.to_lowercase();
+        app.relationship_card_ids
+            .iter()
+            .filter(|card_id| {
+                app.ctx
+                    .cards
+                    .iter()
+                    .find(|c| c.id == **card_id)
+                    .map(|c| c.title.to_lowercase().contains(&search_lower))
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect()
+    };
+
+    // Card list
+    let mut lines = vec![];
+    for (idx, card_id) in filtered_cards.iter().enumerate() {
+        if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
+            let is_selected = app.relationship_selection.get() == Some(idx);
+            let is_checked = app.relationship_selected.contains(card_id);
+
+            let checkbox = if is_checked { "[✓]" } else { "[ ]" };
+
+            let style = if is_selected {
+                Style::default().fg(Color::White).bg(Color::Blue)
+            } else if is_checked {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            lines.push(Line::from(Span::styled(
+                format!("{} {}", checkbox, card.title),
+                style,
+            )));
+        }
+    }
+
+    if lines.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No eligible cards found",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    let list = Paragraph::new(lines);
+    frame.render_widget(list, chunks[1]);
+
+    // Instructions
+    let instructions_text = if app.relationship_search_active {
+        "Type to search | Enter/Esc: exit search"
+    } else {
+        "j/k: navigate | Space: toggle | /: search | Esc: close"
+    };
+    let instructions =
+        Paragraph::new(instructions_text).style(Style::default().fg(Color::DarkGray));
     frame.render_widget(instructions, chunks[2]);
 }

@@ -81,6 +81,11 @@ pub struct App {
     pub card_list_component: CardListComponent,
     pub search: SearchState,
     pub filter_dialog_state: Option<FilterDialogState>,
+    pub relationship_card_ids: Vec<uuid::Uuid>,
+    pub relationship_selected: std::collections::HashSet<uuid::Uuid>,
+    pub relationship_selection: SelectionState,
+    pub relationship_search: String,
+    pub relationship_search_active: bool,
     pub viewport_height: usize,
     pub pending_key: Option<char>,
     pub file_change_rx: Option<tokio::sync::broadcast::Receiver<kanban_persistence::ChangeEvent>>,
@@ -101,6 +106,8 @@ pub enum CardFocus {
     Title,
     Metadata,
     Description,
+    Parents,
+    Children,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -153,6 +160,8 @@ pub enum DialogMode {
     FilterOptions,
     ConflictResolution,
     ExternalChangeDetected,
+    ManageParents,
+    ManageChildren,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -241,6 +250,11 @@ impl App {
             ),
             search: SearchState::new(),
             filter_dialog_state: None,
+            relationship_card_ids: Vec::new(),
+            relationship_selected: std::collections::HashSet::new(),
+            relationship_selection: SelectionState::new(),
+            relationship_search: String::new(),
+            relationship_search_active: false,
             viewport_height: 20,
             pending_key: None,
             file_change_rx: None,
@@ -418,6 +432,8 @@ impl App {
             KeybindingAction::JumpToBottom => self.handle_jump_to_bottom(),
             KeybindingAction::JumpHalfViewportUp => self.handle_jump_half_viewport_up(),
             KeybindingAction::JumpHalfViewportDown => self.handle_jump_half_viewport_down(),
+            KeybindingAction::ManageParents => self.handle_manage_parents(),
+            KeybindingAction::ManageChildren => self.handle_manage_children(),
         }
     }
 
@@ -552,6 +568,12 @@ impl App {
                 KeyCode::Char('c') => {
                     self.pending_key = None;
                     self.handle_toggle_card_completion();
+                }
+                KeyCode::Char('s') => {
+                    self.pending_key = None;
+                    if self.focus == Focus::Cards {
+                        self.handle_manage_children_from_list();
+                    }
                 }
                 KeyCode::Char('o') => {
                     self.pending_key = None;
@@ -699,6 +721,8 @@ impl App {
                 DialogMode::ExternalChangeDetected => {
                     self.handle_external_change_detected_popup(key.code)
                 }
+                DialogMode::ManageParents => self.handle_manage_parents_popup(key.code),
+                DialogMode::ManageChildren => self.handle_manage_children_popup(key.code),
             },
         }
         should_restart_events

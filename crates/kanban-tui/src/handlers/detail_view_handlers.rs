@@ -3,7 +3,7 @@ use crate::app::{
 };
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
-use kanban_domain::{BoardSettingsDto, CardMetadataDto};
+use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -30,16 +30,26 @@ impl App {
             KeyCode::Char('3') => {
                 self.card_focus = CardFocus::Description;
             }
+            KeyCode::Char('4') => {
+                self.card_focus = CardFocus::Parents;
+            }
+            KeyCode::Char('5') => {
+                self.card_focus = CardFocus::Children;
+            }
             KeyCode::Char('j') | KeyCode::Down => {
                 self.card_focus = match self.card_focus {
                     CardFocus::Title => CardFocus::Metadata,
                     CardFocus::Metadata => CardFocus::Description,
-                    CardFocus::Description => CardFocus::Title,
+                    CardFocus::Description => CardFocus::Parents,
+                    CardFocus::Parents => CardFocus::Children,
+                    CardFocus::Children => CardFocus::Title,
                 };
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.card_focus = match self.card_focus {
-                    CardFocus::Title => CardFocus::Description,
+                    CardFocus::Title => CardFocus::Children,
+                    CardFocus::Children => CardFocus::Parents,
+                    CardFocus::Parents => CardFocus::Description,
                     CardFocus::Description => CardFocus::Metadata,
                     CardFocus::Metadata => CardFocus::Title,
                 };
@@ -88,6 +98,12 @@ impl App {
                         }
                     }
                 }
+                CardFocus::Parents => {
+                    // Parents section - use 'r' to manage parents
+                }
+                CardFocus::Children => {
+                    // Children section - use 'R' to manage children
+                }
             },
             KeyCode::Char('d') => {
                 self.handle_archive_card();
@@ -120,6 +136,12 @@ impl App {
                 let priority_idx = self.get_current_priority_selection_index();
                 self.priority_selection.set(Some(priority_idx));
                 self.open_dialog(DialogMode::SetCardPriority);
+            }
+            KeyCode::Char('r') => {
+                self.handle_manage_parents();
+            }
+            KeyCode::Char('R') => {
+                self.handle_manage_children();
             }
             _ => {}
         }
@@ -751,6 +773,112 @@ impl App {
                     ),
                 };
                 active_card_list.set_selected_index(active_component.get_selected_index());
+            }
+        }
+    }
+
+    pub(crate) fn handle_manage_parents(&mut self) {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
+                let card_id = card.id;
+                let card_column_id = card.column_id;
+
+                // Get the board for this card's column
+                let board_id = self
+                    .ctx
+                    .columns
+                    .iter()
+                    .find(|c| c.id == card_column_id)
+                    .map(|c| c.board_id);
+
+                if let Some(board_id) = board_id {
+                    // Get all descendants to exclude (to prevent cycles)
+                    let descendants = self.ctx.graph.cards.descendants(card_id);
+
+                    // Get cards from current board, excluding self and descendants
+                    let column_ids: std::collections::HashSet<_> = self
+                        .ctx
+                        .columns
+                        .iter()
+                        .filter(|c| c.board_id == board_id)
+                        .map(|c| c.id)
+                        .collect();
+
+                    let eligible_cards: Vec<_> = self
+                        .ctx
+                        .cards
+                        .iter()
+                        .filter(|c| column_ids.contains(&c.column_id))
+                        .filter(|c| c.id != card_id)
+                        .filter(|c| !descendants.contains(&c.id))
+                        .map(|c| c.id)
+                        .collect();
+
+                    // Get current parents (for checkbox display)
+                    let current_parents: std::collections::HashSet<_> =
+                        self.ctx.graph.cards.parents(card_id).into_iter().collect();
+
+                    // Set up dialog state
+                    self.relationship_card_ids = eligible_cards;
+                    self.relationship_selected = current_parents;
+                    self.relationship_selection.set(Some(0));
+                    self.relationship_search.clear();
+
+                    self.open_dialog(DialogMode::ManageParents);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn handle_manage_children(&mut self) {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
+                let card_id = card.id;
+                let card_column_id = card.column_id;
+
+                // Get the board for this card's column
+                let board_id = self
+                    .ctx
+                    .columns
+                    .iter()
+                    .find(|c| c.id == card_column_id)
+                    .map(|c| c.board_id);
+
+                if let Some(board_id) = board_id {
+                    // Get all ancestors to exclude (to prevent cycles)
+                    let ancestors = self.ctx.graph.cards.ancestors(card_id);
+
+                    // Get cards from current board, excluding self and ancestors
+                    let column_ids: std::collections::HashSet<_> = self
+                        .ctx
+                        .columns
+                        .iter()
+                        .filter(|c| c.board_id == board_id)
+                        .map(|c| c.id)
+                        .collect();
+
+                    let eligible_cards: Vec<_> = self
+                        .ctx
+                        .cards
+                        .iter()
+                        .filter(|c| column_ids.contains(&c.column_id))
+                        .filter(|c| c.id != card_id)
+                        .filter(|c| !ancestors.contains(&c.id))
+                        .map(|c| c.id)
+                        .collect();
+
+                    // Get current children (for checkbox display)
+                    let current_children: std::collections::HashSet<_> =
+                        self.ctx.graph.cards.children(card_id).into_iter().collect();
+
+                    // Set up dialog state
+                    self.relationship_card_ids = eligible_cards;
+                    self.relationship_selected = current_children;
+                    self.relationship_selection.set(Some(0));
+                    self.relationship_search.clear();
+
+                    self.open_dialog(DialogMode::ManageChildren);
+                }
             }
         }
     }
