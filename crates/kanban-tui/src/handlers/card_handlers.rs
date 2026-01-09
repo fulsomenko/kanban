@@ -1063,4 +1063,62 @@ impl App {
             _ => {}
         }
     }
+
+    pub fn handle_manage_children_from_list(&mut self) {
+        use kanban_domain::dependencies::CardGraphExt;
+
+        // Get the currently selected card from the list view
+        let card = match self.get_selected_card_in_context() {
+            Some(c) => c,
+            None => return,
+        };
+
+        let card_id = card.id;
+
+        // Get the board ID for filtering
+        let board_id = match self.active_board_index {
+            Some(idx) => match self.ctx.boards.get(idx) {
+                Some(board) => board.id,
+                None => return,
+            },
+            None => return,
+        };
+
+        // Get ancestors to exclude (would create cycle)
+        let ancestors = self.ctx.graph.cards.ancestors(card_id);
+
+        // Get cards from current board, excluding self and ancestors
+        let column_ids: std::collections::HashSet<_> = self
+            .ctx
+            .columns
+            .iter()
+            .filter(|c| c.board_id == board_id)
+            .map(|c| c.id)
+            .collect();
+
+        let eligible_cards: Vec<_> = self
+            .ctx
+            .cards
+            .iter()
+            .filter(|c| column_ids.contains(&c.column_id))
+            .filter(|c| c.id != card_id)
+            .filter(|c| !ancestors.contains(&c.id))
+            .map(|c| c.id)
+            .collect();
+
+        // Get current children (for checkbox display)
+        let current_children: std::collections::HashSet<_> =
+            self.ctx.graph.cards.children(card_id).into_iter().collect();
+
+        // Store the card index so the popup knows which card we're managing
+        self.active_card_index = self.ctx.cards.iter().position(|c| c.id == card_id);
+
+        // Set up dialog state
+        self.relationship_card_ids = eligible_cards;
+        self.relationship_selected = current_children;
+        self.relationship_selection.set(Some(0));
+        self.relationship_search.clear();
+
+        self.open_dialog(DialogMode::ManageChildren);
+    }
 }

@@ -1,6 +1,6 @@
 use crate::app::App;
 use kanban_core::KanbanResult;
-use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
+use kanban_domain::{ArchivedCard, Board, Card, Column, DependencyGraph, Sprint};
 use serde::{Deserialize, Serialize};
 
 /// Point-in-time snapshot of all data
@@ -17,6 +17,8 @@ pub struct DataSnapshot {
     pub archived_cards: Vec<ArchivedCard>,
     #[serde(default)]
     pub sprints: Vec<Sprint>,
+    #[serde(default)]
+    pub graph: DependencyGraph,
 }
 
 impl DataSnapshot {
@@ -28,6 +30,7 @@ impl DataSnapshot {
             cards: app.ctx.cards.clone(),
             archived_cards: app.ctx.archived_cards.clone(),
             sprints: app.ctx.sprints.clone(),
+            graph: app.ctx.graph.clone(),
         }
     }
 
@@ -38,6 +41,7 @@ impl DataSnapshot {
         app.ctx.cards = self.cards.clone();
         app.ctx.archived_cards = self.archived_cards.clone();
         app.ctx.sprints = self.sprints.clone();
+        app.ctx.graph = self.graph.clone();
     }
 
     /// Serialize snapshot to JSON bytes
@@ -67,6 +71,7 @@ mod tests {
             cards: vec![],
             archived_cards: vec![],
             sprints: vec![],
+            graph: DependencyGraph::new(),
         };
 
         let bytes = snapshot.to_json_bytes().unwrap();

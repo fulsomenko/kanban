@@ -99,6 +99,7 @@ impl StateManager {
 
     /// Execute a command and mark state as dirty
     /// Takes individual mutable references to avoid borrow checker issues when called from App methods
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_with_context(
         &mut self,
         boards: &mut Vec<Board>,
@@ -106,6 +107,7 @@ impl StateManager {
         cards: &mut Vec<Card>,
         sprints: &mut Vec<Sprint>,
         archived_cards: &mut Vec<ArchivedCard>,
+        graph: &mut kanban_domain::DependencyGraph,
         command: Box<dyn Command>,
     ) -> KanbanResult<()> {
         let description = command.description();
@@ -118,6 +120,7 @@ impl StateManager {
             cards,
             sprints,
             archived_cards,
+            graph,
         };
 
         // Execute business logic
@@ -142,6 +145,7 @@ impl StateManager {
             &mut app.ctx.cards,
             &mut app.ctx.sprints,
             &mut app.ctx.archived_cards,
+            &mut app.ctx.graph,
             command,
         )?;
 

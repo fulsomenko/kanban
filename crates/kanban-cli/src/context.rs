@@ -2,7 +2,7 @@ use kanban_core::KanbanResult;
 use kanban_domain::commands::{Command, CommandContext};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardFilter, CardUpdate, Column, ColumnUpdate,
-    FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use serde::{Deserialize, Serialize};
@@ -32,6 +32,8 @@ pub struct DataSnapshot {
     pub archived_cards: Vec<ArchivedCard>,
     #[serde(default)]
     pub sprints: Vec<Sprint>,
+    #[serde(default)]
+    pub graph: DependencyGraph,
 }
 
 pub struct CliContext {
@@ -40,6 +42,7 @@ pub struct CliContext {
     pub cards: Vec<Card>,
     pub sprints: Vec<Sprint>,
     pub archived_cards: Vec<ArchivedCard>,
+    pub graph: DependencyGraph,
     store: JsonFileStore,
 }
 
@@ -61,6 +64,7 @@ impl CliContext {
             cards: data.cards,
             sprints: data.sprints,
             archived_cards: data.archived_cards,
+            graph: data.graph,
             store,
         })
     }
@@ -72,6 +76,7 @@ impl CliContext {
             cards: Vec::new(),
             sprints: Vec::new(),
             archived_cards: Vec::new(),
+            graph: DependencyGraph::new(),
             store,
         }
     }
@@ -83,6 +88,7 @@ impl CliContext {
             cards: &mut self.cards,
             sprints: &mut self.sprints,
             archived_cards: &mut self.archived_cards,
+            graph: &mut self.graph,
         };
         command.execute(&mut ctx)
     }
@@ -94,6 +100,7 @@ impl CliContext {
             cards: self.cards.clone(),
             archived_cards: self.archived_cards.clone(),
             sprints: self.sprints.clone(),
+            graph: self.graph.clone(),
         };
 
         let bytes = serde_json::to_vec_pretty(&snapshot)
@@ -640,6 +647,7 @@ impl KanbanOperations for CliContext {
                 cards,
                 archived_cards: vec![],
                 sprints,
+                graph: self.graph.clone(),
             }
         } else {
             DataSnapshot {
@@ -648,6 +656,7 @@ impl KanbanOperations for CliContext {
                 cards: self.cards.clone(),
                 archived_cards: self.archived_cards.clone(),
                 sprints: self.sprints.clone(),
+                graph: self.graph.clone(),
             }
         };
 

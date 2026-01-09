@@ -21,6 +21,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
         columns: vec![column.clone()],
         cards: vec![card.clone()],
         sprints: vec![],
+        graph: kanban_domain::DependencyGraph::new(),
         archived_cards: vec![],
     };
 
@@ -88,6 +89,7 @@ async fn test_no_conflict_when_file_unchanged() {
         columns: vec![column.clone()],
         cards: vec![card.clone()],
         sprints: vec![],
+        graph: kanban_domain::DependencyGraph::new(),
         archived_cards: vec![],
     };
 
@@ -122,6 +124,7 @@ async fn test_conflict_detection_tracks_file_metadata() {
         columns: vec![column.clone()],
         cards: vec![],
         sprints: vec![],
+        graph: kanban_domain::DependencyGraph::new(),
         archived_cards: vec![],
     };
 
@@ -179,6 +182,7 @@ async fn test_multiple_instances_with_different_ids() {
         columns: vec![column.clone()],
         cards: vec![card],
         sprints: vec![],
+        graph: kanban_domain::DependencyGraph::new(),
         archived_cards: vec![],
     };
 
@@ -222,6 +226,7 @@ async fn test_conflict_resolution_with_force_overwrite() {
         columns: vec![column.clone()],
         cards: vec![card],
         sprints: vec![],
+        graph: kanban_domain::DependencyGraph::new(),
         archived_cards: vec![],
     };
 
@@ -278,6 +283,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
         columns: vec![column1.clone(), column2.clone()],
         cards: vec![card1.clone(), card2.clone()],
         sprints: vec![],
+        graph: kanban_domain::DependencyGraph::new(),
         archived_cards: vec![],
     };
 

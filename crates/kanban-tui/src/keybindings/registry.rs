@@ -87,6 +87,10 @@ impl KeybindingRegistry {
                 DialogMode::ExternalChangeDetected => {
                     Box::new(DialogSelectionProvider::new("External Change"))
                 }
+                DialogMode::ManageParents => Box::new(DialogSelectionProvider::new("Set Parents")),
+                DialogMode::ManageChildren => {
+                    Box::new(DialogSelectionProvider::new("Set Children"))
+                }
             },
         }
     }

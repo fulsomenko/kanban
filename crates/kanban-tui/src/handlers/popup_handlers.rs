@@ -1,6 +1,6 @@
 use crate::app::App;
 use crossterm::event::KeyCode;
-use kanban_domain::{FieldUpdate, SortField, SortOrder};
+use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, SortField, SortOrder};
 
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
@@ -409,6 +409,167 @@ impl App {
                 self.selected_cards.clear();
             }
             _ => {}
+        }
+    }
+
+    pub fn handle_manage_parents_popup(&mut self, key_code: KeyCode) {
+        self.handle_relationship_popup(key_code, true);
+    }
+
+    pub fn handle_manage_children_popup(&mut self, key_code: KeyCode) {
+        self.handle_relationship_popup(key_code, false);
+    }
+
+    fn handle_relationship_popup(&mut self, key_code: KeyCode, is_parent_mode: bool) {
+        // Filter cards by search
+        let filtered_cards: Vec<_> = if self.relationship_search.is_empty() {
+            self.relationship_card_ids.clone()
+        } else {
+            let search_lower = self.relationship_search.to_lowercase();
+            self.relationship_card_ids
+                .iter()
+                .filter(|card_id| {
+                    self.ctx
+                        .cards
+                        .iter()
+                        .find(|c| c.id == **card_id)
+                        .map(|c| c.title.to_lowercase().contains(&search_lower))
+                        .unwrap_or(false)
+                })
+                .copied()
+                .collect()
+        };
+
+        let list_len = filtered_cards.len();
+
+        // Handle search mode separately
+        if self.relationship_search_active {
+            match key_code {
+                KeyCode::Esc => {
+                    // Exit search mode but stay in dialog
+                    self.relationship_search_active = false;
+                }
+                KeyCode::Enter => {
+                    // Confirm search and exit search mode
+                    self.relationship_search_active = false;
+                }
+                KeyCode::Backspace => {
+                    self.relationship_search.pop();
+                    self.update_relationship_selection_after_search();
+                }
+                KeyCode::Char(c) => {
+                    self.relationship_search.push(c);
+                    self.update_relationship_selection_after_search();
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Navigation mode
+        match key_code {
+            KeyCode::Esc => {
+                self.pop_mode();
+                self.relationship_card_ids.clear();
+                self.relationship_selected.clear();
+                self.relationship_selection.clear();
+                self.relationship_search.clear();
+                self.relationship_search_active = false;
+            }
+            KeyCode::Char('/') => {
+                // Enter search mode
+                self.relationship_search_active = true;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.relationship_selection.next(list_len);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.relationship_selection.prev();
+            }
+            KeyCode::Char(' ') | KeyCode::Enter => {
+                // Toggle relationship
+                if let Some(idx) = self.relationship_selection.get() {
+                    if let Some(selected_card_id) = filtered_cards.get(idx).copied() {
+                        if let Some(card_idx) = self.active_card_index {
+                            if let Some(current_card) = self.ctx.cards.get(card_idx) {
+                                let current_card_id = current_card.id;
+
+                                if self.relationship_selected.contains(&selected_card_id) {
+                                    // Remove relationship
+                                    let result = if is_parent_mode {
+                                        // Current card is child, selected card is parent
+                                        self.ctx
+                                            .graph
+                                            .cards
+                                            .remove_parent(current_card_id, selected_card_id)
+                                    } else {
+                                        // Current card is parent, selected card is child
+                                        self.ctx
+                                            .graph
+                                            .cards
+                                            .remove_parent(selected_card_id, current_card_id)
+                                    };
+
+                                    if result.is_ok() {
+                                        self.relationship_selected.remove(&selected_card_id);
+                                        self.ctx.state_manager.mark_dirty();
+                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        self.ctx.state_manager.queue_snapshot(snapshot);
+                                    }
+                                } else {
+                                    // Add relationship
+                                    let result = if is_parent_mode {
+                                        // Current card is child, selected card is parent
+                                        self.ctx
+                                            .graph
+                                            .cards
+                                            .set_parent(current_card_id, selected_card_id)
+                                    } else {
+                                        // Current card is parent, selected card is child
+                                        self.ctx
+                                            .graph
+                                            .cards
+                                            .set_parent(selected_card_id, current_card_id)
+                                    };
+
+                                    if result.is_ok() {
+                                        self.relationship_selected.insert(selected_card_id);
+                                        self.ctx.state_manager.mark_dirty();
+                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        self.ctx.state_manager.queue_snapshot(snapshot);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn update_relationship_selection_after_search(&mut self) {
+        let filtered_count = if self.relationship_search.is_empty() {
+            self.relationship_card_ids.len()
+        } else {
+            let search_lower = self.relationship_search.to_lowercase();
+            self.relationship_card_ids
+                .iter()
+                .filter(|card_id| {
+                    self.ctx
+                        .cards
+                        .iter()
+                        .find(|c| c.id == **card_id)
+                        .map(|c| c.title.to_lowercase().contains(&search_lower))
+                        .unwrap_or(false)
+                })
+                .count()
+        };
+
+        if filtered_count > 0 {
+            self.relationship_selection.set(Some(0));
+        } else {
+            self.relationship_selection.clear();
         }
     }
 }
