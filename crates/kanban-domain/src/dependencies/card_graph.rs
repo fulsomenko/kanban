@@ -212,11 +212,9 @@ impl CardGraphExt for CardDependencyGraph {
         while let Some(node) = queue.pop_front() {
             // Get parents of this node
             for edge in self.incoming_active(node) {
-                if edge.edge_type == CardEdgeType::ParentOf {
-                    if visited.insert(edge.source) {
-                        ancestors.push(edge.source);
-                        queue.push_back(edge.source);
-                    }
+                if edge.edge_type == CardEdgeType::ParentOf && visited.insert(edge.source) {
+                    ancestors.push(edge.source);
+                    queue.push_back(edge.source);
                 }
             }
         }

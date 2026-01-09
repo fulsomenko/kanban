@@ -1,8 +1,8 @@
 pub mod algorithms;
+pub mod core;
 pub mod edge;
-pub mod graph;
 pub mod traits;
 
+pub use core::Graph;
 pub use edge::{Edge, EdgeDirection};
-pub use graph::Graph;
 pub use traits::GraphNode;

@@ -45,10 +45,9 @@ pub fn has_cycle(adj_list: &HashMap<Uuid, Vec<Uuid>>) -> bool {
     let mut rec_stack = HashSet::new();
 
     for &node in adj_list.keys() {
-        if !visited.contains(&node) {
-            if has_cycle_util(adj_list, node, &mut visited, &mut rec_stack) {
-                return true;
-            }
+        if !visited.contains(&node) && has_cycle_util(adj_list, node, &mut visited, &mut rec_stack)
+        {
+            return true;
         }
     }
 
@@ -196,7 +195,7 @@ mod tests {
     #[test]
     fn test_reachable_from_isolated() {
         let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
+        let _b = Uuid::new_v4();
 
         let adj_list = HashMap::new();
 

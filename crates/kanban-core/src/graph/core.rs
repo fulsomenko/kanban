@@ -148,16 +148,10 @@ impl<E> Graph<E> {
         let mut adj_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
 
         for edge in self.edges.iter().filter(|e| e.is_active()) {
-            adj_list
-                .entry(edge.source)
-                .or_insert_with(Vec::new)
-                .push(edge.target);
+            adj_list.entry(edge.source).or_default().push(edge.target);
 
             if edge.direction == EdgeDirection::Bidirectional {
-                adj_list
-                    .entry(edge.target)
-                    .or_insert_with(Vec::new)
-                    .push(edge.source);
+                adj_list.entry(edge.target).or_default().push(edge.source);
             }
         }
 

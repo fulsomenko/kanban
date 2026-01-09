@@ -99,6 +99,7 @@ impl StateManager {
 
     /// Execute a command and mark state as dirty
     /// Takes individual mutable references to avoid borrow checker issues when called from App methods
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_with_context(
         &mut self,
         boards: &mut Vec<Board>,
