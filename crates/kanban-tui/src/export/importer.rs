@@ -13,6 +13,18 @@ pub type ImportedEntities = (
 pub struct BoardImporter;
 
 impl BoardImporter {
+    /// Try to load as V2 DataSnapshot directly (preserves graph)
+    pub fn try_load_snapshot(json: &str) -> Option<crate::state::DataSnapshot> {
+        let envelope: serde_json::Value = serde_json::from_str(json).ok()?;
+        let version = envelope.get("version")?.as_u64()?;
+        if version == 2 {
+            let data = envelope.get("data")?;
+            serde_json::from_value(data.clone()).ok()
+        } else {
+            None
+        }
+    }
+
     pub fn import_from_json(json: &str) -> Result<AllBoardsExport, io::Error> {
         // Try V2 format first
         if let Ok(envelope) = serde_json::from_str::<serde_json::Value>(json) {

@@ -1754,8 +1754,28 @@ impl App {
     }
 
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
+        let content = std::fs::read_to_string(filename)?;
+
+        // Try V2 format first (preserves graph)
+        if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
+            let first_new_index = self.ctx.boards.len();
+
+            self.ctx.boards.extend(snapshot.boards);
+            self.ctx.columns.extend(snapshot.columns);
+            self.ctx.cards.extend(snapshot.cards);
+            self.ctx.archived_cards.extend(snapshot.archived_cards);
+            self.ctx.sprints.extend(snapshot.sprints);
+            self.ctx.graph = snapshot.graph;
+
+            self.board_selection.set(Some(first_new_index));
+            self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
+
+            return Ok(());
+        }
+
+        // Fall back to V1 format (no graph)
         let first_new_index = self.ctx.boards.len();
-        let import = BoardImporter::import_from_file(filename)?;
+        let import = BoardImporter::import_from_json(&content)?;
         let (boards, columns, cards, deleted_cards, sprints) =
             BoardImporter::extract_entities(import);
 
