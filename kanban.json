@@ -1,8 +1,8 @@
 {
   "version": 2,
   "metadata": {
-    "instance_id": "2485375f-465f-44c8-988a-db4e9e6b35a6",
-    "saved_at": "2026-01-10T00:51:33.552084Z"
+    "instance_id": "e6a4a5ba-99b6-4248-ae4d-da44d7f3b4b1",
+    "saved_at": "2026-01-10T10:37:07.064081Z"
   },
   "data": {
     "archived_cards": [
@@ -4119,14 +4119,14 @@
         "assigned_prefix": "KAN",
         "card_number": 134,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-01-10T02:34:01.947587Z",
         "created_at": "2025-11-17T23:09:18.569124Z",
-        "description": "hitting like `c` is easy and we can loose track of cards that go across columns if we have not read the card name\n\nIt would be nice to have an undo function\n",
+        "description": "hitting like `c` is easy and we can loose track of cards that go across columns if we have not read the card name\n\nor performing any action is easy and it would be beneficial to quickly undo an action. in any context. `u` for keybind. command patterna and audit log dependencies? What is needed to make this happen?\n\nIt would be nice to have an undo function\n",
         "due_date": null,
         "id": "23b91acd-d6a8-4972-9065-8d0f0d2ba12f",
         "points": 4,
-        "position": 35,
+        "position": 98,
         "priority": "High",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -4147,9 +4147,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "undo action",
-        "updated_at": "2025-12-15T20:35:57.264709Z"
+        "updated_at": "2026-01-10T02:34:01.947588Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5050,6 +5050,11 @@
         "wip_limit": null
       }
     ],
+    "graph": {
+      "cards": {
+        "edges": []
+      }
+    },
     "sprints": [
       {
         "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
