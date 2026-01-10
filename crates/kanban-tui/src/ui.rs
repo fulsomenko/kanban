@@ -613,7 +613,6 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     // Get parent and child information
                     let parents = app.ctx.graph.cards.parents(card_id);
                     let children = app.ctx.graph.cards.children(card_id);
-                    let parent_count = parents.len();
                     let child_count = children.len();
 
                     let relationship_height = 5u16;
@@ -677,26 +676,13 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let parents_config = FieldSectionConfig::new("Parents")
                             .with_focus_indicator("Parents [4]")
                             .focused(app.card_focus == CardFocus::Parents);
-                        let mut parents_lines = if parent_count > 0 {
-                            parents
-                                .iter()
-                                .take(3)
-                                .filter_map(|parent_id| {
-                                    app.ctx.cards.iter().find(|c| c.id == *parent_id).map(|c| {
-                                        Line::from(vec![
-                                            Span::styled("→ ", label_text()),
-                                            Span::styled(c.title.clone(), normal_text()),
-                                        ])
-                                    })
-                                })
-                                .collect()
-                        } else {
-                            vec![Line::from(Span::styled("No parents", label_text()))]
-                        };
-                        // Pad with blank lines to always show 3 lines of content
-                        while parents_lines.len() < 3 {
-                            parents_lines.push(Line::from(""));
-                        }
+                        let (parents_lines, _) = render_relationship_section(
+                            &parents,
+                            &app.ctx.cards,
+                            "Parents",
+                            app.card_focus == CardFocus::Parents,
+                            &app.parents_selection,
+                        );
                         let parents_widget =
                             Paragraph::new(parents_lines).block(parents_config.block());
                         frame.render_widget(parents_widget, relationship_chunks[0]);
@@ -707,26 +693,13 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let children_config = FieldSectionConfig::new(&children_title)
                             .with_focus_indicator(&children_title_focused)
                             .focused(app.card_focus == CardFocus::Children);
-                        let mut children_lines = if child_count > 0 {
-                            children
-                                .iter()
-                                .take(3)
-                                .filter_map(|child_id| {
-                                    app.ctx.cards.iter().find(|c| c.id == *child_id).map(|c| {
-                                        Line::from(vec![
-                                            Span::styled("→ ", label_text()),
-                                            Span::styled(c.title.clone(), normal_text()),
-                                        ])
-                                    })
-                                })
-                                .collect()
-                        } else {
-                            vec![Line::from(Span::styled("No children", label_text()))]
-                        };
-                        // Pad with blank lines to always show 3 lines of content
-                        while children_lines.len() < 3 {
-                            children_lines.push(Line::from(""));
-                        }
+                        let (children_lines, _) = render_relationship_section(
+                            &children,
+                            &app.ctx.cards,
+                            "Children",
+                            app.card_focus == CardFocus::Children,
+                            &app.children_selection,
+                        );
                         let children_widget =
                             Paragraph::new(children_lines).block(children_config.block());
                         frame.render_widget(children_widget, relationship_chunks[1]);
@@ -757,26 +730,13 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let parents_config = FieldSectionConfig::new("Parents")
                             .with_focus_indicator("Parents [4]")
                             .focused(app.card_focus == CardFocus::Parents);
-                        let mut parents_lines = if parent_count > 0 {
-                            parents
-                                .iter()
-                                .take(3)
-                                .filter_map(|parent_id| {
-                                    app.ctx.cards.iter().find(|c| c.id == *parent_id).map(|c| {
-                                        Line::from(vec![
-                                            Span::styled("→ ", label_text()),
-                                            Span::styled(c.title.clone(), normal_text()),
-                                        ])
-                                    })
-                                })
-                                .collect()
-                        } else {
-                            vec![Line::from(Span::styled("No parents", label_text()))]
-                        };
-                        // Pad with blank lines to always show 3 lines of content
-                        while parents_lines.len() < 3 {
-                            parents_lines.push(Line::from(""));
-                        }
+                        let (parents_lines, _) = render_relationship_section(
+                            &parents,
+                            &app.ctx.cards,
+                            "Parents",
+                            app.card_focus == CardFocus::Parents,
+                            &app.parents_selection,
+                        );
                         let parents_widget =
                             Paragraph::new(parents_lines).block(parents_config.block());
                         frame.render_widget(parents_widget, relationship_chunks[0]);
@@ -787,26 +747,13 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let children_config = FieldSectionConfig::new(&children_title_else)
                             .with_focus_indicator(&children_title_focused_else)
                             .focused(app.card_focus == CardFocus::Children);
-                        let mut children_lines = if child_count > 0 {
-                            children
-                                .iter()
-                                .take(3)
-                                .filter_map(|child_id| {
-                                    app.ctx.cards.iter().find(|c| c.id == *child_id).map(|c| {
-                                        Line::from(vec![
-                                            Span::styled("→ ", label_text()),
-                                            Span::styled(c.title.clone(), normal_text()),
-                                        ])
-                                    })
-                                })
-                                .collect()
-                        } else {
-                            vec![Line::from(Span::styled("No children", label_text()))]
-                        };
-                        // Pad with blank lines to always show 3 lines of content
-                        while children_lines.len() < 3 {
-                            children_lines.push(Line::from(""));
-                        }
+                        let (children_lines, _) = render_relationship_section(
+                            &children,
+                            &app.ctx.cards,
+                            "Children",
+                            app.card_focus == CardFocus::Children,
+                            &app.children_selection,
+                        );
                         let children_widget =
                             Paragraph::new(children_lines).block(children_config.block());
                         frame.render_widget(children_widget, relationship_chunks[1]);
