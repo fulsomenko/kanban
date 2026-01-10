@@ -587,6 +587,11 @@ impl App {
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
+                                // Initialize list components with item counts
+                                let parents = self.get_current_card_parents();
+                                let children = self.get_current_card_children();
+                                self.parents_list.update_item_count(parents.len());
+                                self.children_list.update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
@@ -596,6 +601,11 @@ impl App {
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
+                                // Initialize list components with item counts
+                                let parents = self.get_current_card_parents();
+                                let children = self.get_current_card_children();
+                                self.parents_list.update_item_count(parents.len());
+                                self.children_list.update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
