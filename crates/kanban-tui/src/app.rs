@@ -434,6 +434,16 @@ impl App {
             KeybindingAction::JumpHalfViewportDown => self.handle_jump_half_viewport_down(),
             KeybindingAction::ManageParents => self.handle_manage_parents(),
             KeybindingAction::ManageChildren => self.handle_manage_children(),
+            KeybindingAction::Undo => {
+                if let Err(e) = self.undo() {
+                    self.set_error(format!("Undo failed: {}", e));
+                }
+            }
+            KeybindingAction::Redo => {
+                if let Err(e) = self.redo() {
+                    self.set_error(format!("Redo failed: {}", e));
+                }
+            }
         }
     }
 
@@ -666,6 +676,18 @@ impl App {
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     self.pending_key = None;
                     self.handle_selection_activate();
+                }
+                KeyCode::Char('u') => {
+                    self.pending_key = None;
+                    if let Err(e) = self.undo() {
+                        self.set_error(format!("Undo failed: {}", e));
+                    }
+                }
+                KeyCode::Char('U') => {
+                    self.pending_key = None;
+                    if let Err(e) = self.redo() {
+                        self.set_error(format!("Redo failed: {}", e));
+                    }
                 }
                 _ => {
                     self.pending_key = None;
@@ -1205,6 +1227,66 @@ impl App {
             }
         }
         self.sync_card_list_component();
+    }
+
+    /// Undo the last action
+    pub fn undo(&mut self) -> KanbanResult<()> {
+        if !self.ctx.state_manager.can_undo() {
+            self.set_error("Nothing to undo".to_string());
+            return Ok(());
+        }
+
+        // Suppress history capture during restore
+        self.ctx.state_manager.history_mut().suppress();
+
+        // Save current state to redo stack
+        let current_snapshot = crate::state::DataSnapshot::from_app(self);
+        self.ctx.state_manager.history_mut().push_redo(current_snapshot);
+
+        // Restore previous state from undo stack
+        if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_undo() {
+            snapshot.apply_to_app(self);
+            self.refresh_view();
+
+            // Queue snapshot for persistence
+            let save_snapshot = crate::state::DataSnapshot::from_app(self);
+            self.ctx.state_manager.queue_snapshot(save_snapshot);
+        }
+
+        // Re-enable history capture
+        self.ctx.state_manager.history_mut().unsuppress();
+
+        Ok(())
+    }
+
+    /// Redo the last undone action
+    pub fn redo(&mut self) -> KanbanResult<()> {
+        if !self.ctx.state_manager.can_redo() {
+            self.set_error("Nothing to redo".to_string());
+            return Ok(());
+        }
+
+        // Suppress history capture during restore
+        self.ctx.state_manager.history_mut().suppress();
+
+        // Save current state to undo stack
+        let current_snapshot = crate::state::DataSnapshot::from_app(self);
+        self.ctx.state_manager.history_mut().push_undo(current_snapshot);
+
+        // Restore next state from redo stack
+        if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_redo() {
+            snapshot.apply_to_app(self);
+            self.refresh_view();
+
+            // Queue snapshot for persistence
+            let save_snapshot = crate::state::DataSnapshot::from_app(self);
+            self.ctx.state_manager.queue_snapshot(save_snapshot);
+        }
+
+        // Re-enable history capture
+        self.ctx.state_manager.history_mut().unsuppress();
+
+        Ok(())
     }
 
     pub fn sync_card_list_component(&mut self) {
@@ -1756,6 +1838,10 @@ impl App {
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         let content = std::fs::read_to_string(filename)?;
 
+        // Capture snapshot before import for undo history
+        let before_snapshot = crate::state::DataSnapshot::from_app(self);
+        self.ctx.state_manager.capture_before_command(before_snapshot);
+
         // Try V2 format first (preserves graph)
         if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
             let first_new_index = self.ctx.boards.len();
@@ -1769,6 +1855,10 @@ impl App {
 
             self.board_selection.set(Some(first_new_index));
             self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
+
+            // Queue snapshot for persistence
+            let save_snapshot = crate::state::DataSnapshot::from_app(self);
+            self.ctx.state_manager.queue_snapshot(save_snapshot);
 
             return Ok(());
         }
@@ -1788,6 +1878,10 @@ impl App {
         self.board_selection.set(Some(first_new_index));
 
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
+
+        // Queue snapshot for persistence
+        let save_snapshot = crate::state::DataSnapshot::from_app(self);
+        self.ctx.state_manager.queue_snapshot(save_snapshot);
 
         Ok(())
     }
