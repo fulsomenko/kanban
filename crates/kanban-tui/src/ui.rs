@@ -673,15 +673,17 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             .split(chunks[3]);
 
                         // Render Parents section (with sprint logs path)
+                        let viewport_height = chunks[3].height.saturating_sub(2) as usize;
                         let parents_config = FieldSectionConfig::new("Parents")
                             .with_focus_indicator("Parents [4]")
                             .focused(app.card_focus == CardFocus::Parents);
-                        let (parents_lines, _) = render_relationship_section(
+                        let parents_lines = render_relationship_section(
                             &parents,
                             &app.ctx.cards,
                             "Parents",
                             app.card_focus == CardFocus::Parents,
-                            &app.parents_selection,
+                            &app.parents_list,
+                            viewport_height,
                         );
                         let parents_widget =
                             Paragraph::new(parents_lines).block(parents_config.block());
@@ -693,12 +695,13 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let children_config = FieldSectionConfig::new(&children_title)
                             .with_focus_indicator(&children_title_focused)
                             .focused(app.card_focus == CardFocus::Children);
-                        let (children_lines, _) = render_relationship_section(
+                        let children_lines = render_relationship_section(
                             &children,
                             &app.ctx.cards,
                             "Children",
                             app.card_focus == CardFocus::Children,
-                            &app.children_selection,
+                            &app.children_list,
+                            viewport_height,
                         );
                         let children_widget =
                             Paragraph::new(children_lines).block(children_config.block());
@@ -727,15 +730,17 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             .split(chunks[3]);
 
                         // Render Parents section
+                        let viewport_height = chunks[3].height.saturating_sub(2) as usize;
                         let parents_config = FieldSectionConfig::new("Parents")
                             .with_focus_indicator("Parents [4]")
                             .focused(app.card_focus == CardFocus::Parents);
-                        let (parents_lines, _) = render_relationship_section(
+                        let parents_lines = render_relationship_section(
                             &parents,
                             &app.ctx.cards,
                             "Parents",
                             app.card_focus == CardFocus::Parents,
-                            &app.parents_selection,
+                            &app.parents_list,
+                            viewport_height,
                         );
                         let parents_widget =
                             Paragraph::new(parents_lines).block(parents_config.block());
@@ -747,12 +752,13 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let children_config = FieldSectionConfig::new(&children_title_else)
                             .with_focus_indicator(&children_title_focused_else)
                             .focused(app.card_focus == CardFocus::Children);
-                        let (children_lines, _) = render_relationship_section(
+                        let children_lines = render_relationship_section(
                             &children,
                             &app.ctx.cards,
                             "Children",
                             app.card_focus == CardFocus::Children,
-                            &app.children_selection,
+                            &app.children_list,
+                            viewport_height,
                         );
                         let children_widget =
                             Paragraph::new(children_lines).block(children_config.block());
