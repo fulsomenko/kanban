@@ -270,6 +270,9 @@ impl App {
                     tracing::error!("Failed to load file {}: {}", filename, e);
                     app.save_file = None;
                     app.ctx.state_manager.clear_store();
+                } else {
+                    // Clear undo/redo history after initial file load (not an undoable action)
+                    app.ctx.state_manager.clear_history();
                 }
             }
         }

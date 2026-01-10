@@ -411,6 +411,11 @@ impl StateManager {
         &mut self.history
     }
 
+    /// Clear undo/redo history (called after initial file load)
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+    }
+
     /// Set the file watcher for coordinating pause/resume with saves
     /// Called after the file watcher is initialized in App::run()
     pub fn set_file_watcher(&mut self, watcher: Arc<kanban_persistence::FileWatcher>) {
