@@ -157,6 +157,8 @@ impl KeybindingProvider for CardListProvider {
                     "Manage child cards",
                     KeybindingAction::ManageChildren,
                 ),
+                Keybinding::new("u", "undo", "Undo last action", KeybindingAction::Undo),
+                Keybinding::new("U", "redo", "Redo last undone action", KeybindingAction::Redo),
             ],
         )
     }
