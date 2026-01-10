@@ -616,12 +616,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let parent_count = parents.len();
                     let child_count = children.len();
 
-                    let relationship_height = if parent_count > 0 || child_count > 0 {
-                        let max_count = parent_count.max(child_count);
-                        (max_count.min(3) + 4) as u16
-                    } else {
-                        5
-                    };
+                    let relationship_height = 5u16;
 
                     let constraints = vec![
                         Constraint::Length(5),                   // Title
@@ -635,10 +630,11 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         .constraints(constraints)
                         .split(area);
 
+                    // Render title section
                     let title_config = FieldSectionConfig::new("Task Title")
                         .with_focus_indicator("Task Title [1]")
                         .focused(app.card_focus == CardFocus::Title);
-                    let title = Paragraph::new(card.title.clone())
+                    let title = Paragraph::new(build_title_lines(card))
                         .style(bold_highlight())
                         .block(title_config.block());
                     frame.render_widget(title, chunks[0]);
@@ -649,99 +645,25 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                             .split(chunks[1]);
 
+                        // Render metadata
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.card_focus == CardFocus::Metadata);
-
-                        let meta_lines = vec![
-                            metadata_line_multi(vec![
-                                ("Priority", format!("{:?}", card.priority), normal_text()),
-                                ("Status", format!("{:?}", card.status), normal_text()),
-                                (
-                                    "Points",
-                                    card.points
-                                        .map(|p| p.to_string())
-                                        .unwrap_or_else(|| "-".to_string()),
-                                    normal_text(),
-                                ),
-                            ]),
-                            if let Some(due_date) = card.due_date {
-                                metadata_line_styled(
-                                    "Due",
-                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
-                                    Style::default().fg(Color::Red),
-                                )
-                            } else {
-                                Line::from(Span::styled("No due date", label_text()))
-                            },
-                            metadata_line_styled(
-                                "Branch",
-                                card.branch_name(
-                                    board,
-                                    &app.ctx.sprints,
-                                    app.app_config.effective_default_card_prefix(),
-                                ),
-                                active_item(),
-                            ),
-                        ];
-
+                        let meta_lines = build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
 
+                        // Render sprint logs
                         let sprint_logs_config = FieldSectionConfig::new("Sprint History");
-                        let mut sprint_log_lines = vec![];
-
-                        let max_visible = 3;
-                        let total_logs = card.sprint_logs.len();
-                        let start_idx = total_logs.saturating_sub(max_visible);
-
-                        for (display_idx, log) in card.sprint_logs[start_idx..].iter().enumerate() {
-                            let absolute_idx = start_idx + display_idx;
-                            let sprint_name_str = log
-                                .sprint_name
-                                .as_deref()
-                                .unwrap_or(&log.sprint_number.to_string())
-                                .to_string();
-                            let started = log.started_at.format("%m-%d %H:%M").to_string();
-                            let status_str = if let Some(ended) = log.ended_at {
-                                let ended_fmt = ended.format("%m-%d %H:%M").to_string();
-                                format!("{} → {}", started, ended_fmt)
-                            } else {
-                                format!("{} → (current)", started)
-                            };
-
-                            sprint_log_lines.push(Line::from(vec![
-                                Span::styled(format!("{}. ", absolute_idx + 1), label_text()),
-                                Span::styled(
-                                    format!("{} ", sprint_name_str),
-                                    Style::default().fg(Color::Cyan),
-                                ),
-                                Span::styled(status_str, label_text()),
-                            ]));
-                        }
-
-                        if start_idx > 0 {
-                            sprint_log_lines.insert(
-                                0,
-                                Line::from(Span::styled(
-                                    format!("... ({} earlier entries)", start_idx),
-                                    label_text(),
-                                )),
-                            );
-                        }
-
-                        let sprint_logs =
-                            Paragraph::new(sprint_log_lines).block(sprint_logs_config.block());
+                        let sprint_log_lines = build_sprint_logs_lines(card);
+                        let sprint_logs = Paragraph::new(sprint_log_lines).block(sprint_logs_config.block());
                         frame.render_widget(sprint_logs, meta_chunks[1]);
 
+                        // Render description
                         let desc_config = FieldSectionConfig::new("Description")
                             .with_focus_indicator("Description [3]")
                             .focused(app.card_focus == CardFocus::Description);
-                        let desc_lines = if let Some(desc_text) = &card.description {
-                            crate::markdown_renderer::render_markdown(desc_text)
-                        } else {
-                            vec![Line::from(Span::styled("No description", label_text()))]
-                        };
+                        let desc_lines = build_description_lines(card);
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
 
@@ -755,7 +677,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let parents_config = FieldSectionConfig::new("Parents")
                             .with_focus_indicator("Parents [4]")
                             .focused(app.card_focus == CardFocus::Parents);
-                        let parents_lines = if parent_count > 0 {
+                        let mut parents_lines = if parent_count > 0 {
                             parents
                                 .iter()
                                 .take(3)
@@ -771,6 +693,10 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         } else {
                             vec![Line::from(Span::styled("No parents", label_text()))]
                         };
+                        // Pad with blank lines to always show 3 lines of content
+                        while parents_lines.len() < 3 {
+                            parents_lines.push(Line::from(""));
+                        }
                         let parents_widget =
                             Paragraph::new(parents_lines).block(parents_config.block());
                         frame.render_widget(parents_widget, relationship_chunks[0]);
@@ -781,7 +707,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let children_config = FieldSectionConfig::new(&children_title)
                             .with_focus_indicator(&children_title_focused)
                             .focused(app.card_focus == CardFocus::Children);
-                        let children_lines = if child_count > 0 {
+                        let mut children_lines = if child_count > 0 {
                             children
                                 .iter()
                                 .take(3)
@@ -797,57 +723,27 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         } else {
                             vec![Line::from(Span::styled("No children", label_text()))]
                         };
+                        // Pad with blank lines to always show 3 lines of content
+                        while children_lines.len() < 3 {
+                            children_lines.push(Line::from(""));
+                        }
                         let children_widget =
                             Paragraph::new(children_lines).block(children_config.block());
                         frame.render_widget(children_widget, relationship_chunks[1]);
                     } else {
+                        // Render metadata section
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.card_focus == CardFocus::Metadata);
-
-                        let meta_lines = vec![
-                            metadata_line_multi(vec![
-                                ("Priority", format!("{:?}", card.priority), normal_text()),
-                                ("Status", format!("{:?}", card.status), normal_text()),
-                                (
-                                    "Points",
-                                    card.points
-                                        .map(|p| p.to_string())
-                                        .unwrap_or_else(|| "-".to_string()),
-                                    normal_text(),
-                                ),
-                            ]),
-                            if let Some(due_date) = card.due_date {
-                                metadata_line_styled(
-                                    "Due",
-                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
-                                    Style::default().fg(Color::Red),
-                                )
-                            } else {
-                                Line::from(Span::styled("No due date", label_text()))
-                            },
-                            metadata_line_styled(
-                                "Branch",
-                                card.branch_name(
-                                    board,
-                                    &app.ctx.sprints,
-                                    app.app_config.effective_default_card_prefix(),
-                                ),
-                                active_item(),
-                            ),
-                        ];
-
+                        let meta_lines = build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
 
+                        // Render description section
                         let desc_config = FieldSectionConfig::new("Description")
                             .with_focus_indicator("Description [3]")
                             .focused(app.card_focus == CardFocus::Description);
-                        let desc_lines = if let Some(desc_text) = &card.description {
-                            crate::markdown_renderer::render_markdown(desc_text)
-                        } else {
-                            vec![Line::from(Span::styled("No description", label_text()))]
-                        };
+                        let desc_lines = build_description_lines(card);
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
 
@@ -861,7 +757,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let parents_config = FieldSectionConfig::new("Parents")
                             .with_focus_indicator("Parents [4]")
                             .focused(app.card_focus == CardFocus::Parents);
-                        let parents_lines = if parent_count > 0 {
+                        let mut parents_lines = if parent_count > 0 {
                             parents
                                 .iter()
                                 .take(3)
@@ -877,6 +773,10 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         } else {
                             vec![Line::from(Span::styled("No parents", label_text()))]
                         };
+                        // Pad with blank lines to always show 3 lines of content
+                        while parents_lines.len() < 3 {
+                            parents_lines.push(Line::from(""));
+                        }
                         let parents_widget =
                             Paragraph::new(parents_lines).block(parents_config.block());
                         frame.render_widget(parents_widget, relationship_chunks[0]);
@@ -887,7 +787,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let children_config = FieldSectionConfig::new(&children_title_else)
                             .with_focus_indicator(&children_title_focused_else)
                             .focused(app.card_focus == CardFocus::Children);
-                        let children_lines = if child_count > 0 {
+                        let mut children_lines = if child_count > 0 {
                             children
                                 .iter()
                                 .take(3)
@@ -903,6 +803,10 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         } else {
                             vec![Line::from(Span::styled("No children", label_text()))]
                         };
+                        // Pad with blank lines to always show 3 lines of content
+                        while children_lines.len() < 3 {
+                            children_lines.push(Line::from(""));
+                        }
                         let children_widget =
                             Paragraph::new(children_lines).block(children_config.block());
                         frame.render_widget(children_widget, relationship_chunks[1]);
