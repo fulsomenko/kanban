@@ -616,20 +616,18 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let parent_count = parents.len();
                     let child_count = children.len();
 
+                    let relationship_height = if parent_count > 0 || child_count > 0 {
+                        let max_count = parent_count.max(child_count);
+                        (max_count.min(3) + 4) as u16
+                    } else {
+                        5
+                    };
+
                     let constraints = vec![
                         Constraint::Length(5), // Title
                         Constraint::Length(6), // Metadata
                         Constraint::Min(5),    // Description
-                        Constraint::Length(if parent_count > 0 {
-                            (parent_count.min(3) + 2) as u16
-                        } else {
-                            3
-                        }), // Parents
-                        Constraint::Length(if child_count > 0 {
-                            (child_count.min(3) + 2) as u16
-                        } else {
-                            3
-                        }), // Children
+                        Constraint::Length(relationship_height), // Relationships
                     ];
 
                     let chunks = Layout::default()
@@ -747,6 +745,15 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
 
+                        // Create horizontal layout for relationships
+                        let relationship_chunks = Layout::default()
+                            .direction(Direction::Horizontal)
+                            .constraints([
+                                Constraint::Percentage(50),
+                                Constraint::Percentage(50)
+                            ])
+                            .split(chunks[3]);
+
                         // Render Parents section (with sprint logs path)
                         let parents_config = FieldSectionConfig::new("Parents")
                             .with_focus_indicator("Parents [4]")
@@ -769,7 +776,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         };
                         let parents_widget =
                             Paragraph::new(parents_lines).block(parents_config.block());
-                        frame.render_widget(parents_widget, chunks[3]);
+                        frame.render_widget(parents_widget, relationship_chunks[0]);
 
                         // Render Children section (with sprint logs path)
                         let children_title = format!("Children ({})", child_count);
@@ -795,7 +802,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         };
                         let children_widget =
                             Paragraph::new(children_lines).block(children_config.block());
-                        frame.render_widget(children_widget, chunks[4]);
+                        frame.render_widget(children_widget, relationship_chunks[1]);
                     } else {
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
@@ -847,6 +854,15 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
 
+                        // Create horizontal layout for relationships
+                        let relationship_chunks = Layout::default()
+                            .direction(Direction::Horizontal)
+                            .constraints([
+                                Constraint::Percentage(50),
+                                Constraint::Percentage(50)
+                            ])
+                            .split(chunks[3]);
+
                         // Render Parents section
                         let parents_config = FieldSectionConfig::new("Parents")
                             .with_focus_indicator("Parents [4]")
@@ -869,7 +885,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         };
                         let parents_widget =
                             Paragraph::new(parents_lines).block(parents_config.block());
-                        frame.render_widget(parents_widget, chunks[3]);
+                        frame.render_widget(parents_widget, relationship_chunks[0]);
 
                         // Render Children section
                         let children_title_else = format!("Children ({})", child_count);
@@ -895,7 +911,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         };
                         let children_widget =
                             Paragraph::new(children_lines).block(children_config.block());
-                        frame.render_widget(children_widget, chunks[4]);
+                        frame.render_widget(children_widget, relationship_chunks[1]);
                     }
                 }
             }
