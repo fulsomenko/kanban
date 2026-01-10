@@ -470,6 +470,11 @@ impl App {
                     let card_id = selected_card.id;
                     let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
                     self.active_card_index = actual_idx;
+                    // Initialize list components with item counts
+                    let parents = self.get_current_card_parents();
+                    let children = self.get_current_card_children();
+                    self.parents_list.update_item_count(parents.len());
+                    self.children_list.update_item_count(children.len());
                     self.push_mode(AppMode::CardDetail);
                 }
             }

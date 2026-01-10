@@ -1008,7 +1008,7 @@ impl App {
         }
     }
 
-    fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
+    pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
         if let Some(card_idx) = self.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 return self.ctx.graph.cards.parents(card.id);
@@ -1017,7 +1017,7 @@ impl App {
         Vec::new()
     }
 
-    fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
+    pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
         if let Some(card_idx) = self.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 return self.ctx.graph.cards.children(card.id);
