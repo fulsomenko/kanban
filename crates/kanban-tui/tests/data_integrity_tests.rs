@@ -488,3 +488,197 @@ fn test_delete_column_succeeds_when_empty() {
 
     assert!(!columns.iter().any(|c| c.id == column_id));
 }
+
+#[test]
+fn test_cycle_detection_parent_child() {
+    let mut boards = vec![Board::new("Test Board".to_string(), None)];
+    let mut columns = vec![Column::new(boards[0].id, "Todo".to_string(), 0)];
+    let mut cards = vec![];
+    let mut sprints = vec![];
+    let mut archived_cards = vec![];
+    let mut graph = DependencyGraph::new();
+
+    let board_id = boards[0].id;
+    let column_id = columns[0].id;
+
+    let card_a = {
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "Card A".to_string(),
+            position: 0,
+        };
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        cmd.execute(&mut ctx).unwrap();
+        cards.last().unwrap().id
+    };
+
+    let card_b = {
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "Card B".to_string(),
+            position: 1,
+        };
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        cmd.execute(&mut ctx).unwrap();
+        cards.last().unwrap().id
+    };
+
+    let card_c = {
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "Card C".to_string(),
+            position: 2,
+        };
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        cmd.execute(&mut ctx).unwrap();
+        cards.last().unwrap().id
+    };
+
+    {
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        ctx.graph.cards.set_parent(card_b, card_a).unwrap();
+        ctx.graph.cards.set_parent(card_c, card_b).unwrap();
+    }
+
+    {
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        let result = ctx.graph.cards.set_parent(card_a, card_c);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(kanban_core::KanbanError::CycleDetected)));
+    }
+}
+
+#[test]
+fn test_cycle_detection_blocks() {
+    let mut boards = vec![Board::new("Test Board".to_string(), None)];
+    let mut columns = vec![Column::new(boards[0].id, "Todo".to_string(), 0)];
+    let mut cards = vec![];
+    let mut sprints = vec![];
+    let mut archived_cards = vec![];
+    let mut graph = DependencyGraph::new();
+
+    let board_id = boards[0].id;
+    let column_id = columns[0].id;
+
+    let card_a = {
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "Card A".to_string(),
+            position: 0,
+        };
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        cmd.execute(&mut ctx).unwrap();
+        cards.last().unwrap().id
+    };
+
+    let card_b = {
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "Card B".to_string(),
+            position: 1,
+        };
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        cmd.execute(&mut ctx).unwrap();
+        cards.last().unwrap().id
+    };
+
+    let card_c = {
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "Card C".to_string(),
+            position: 2,
+        };
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        cmd.execute(&mut ctx).unwrap();
+        cards.last().unwrap().id
+    };
+
+    {
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        ctx.graph.cards.add_blocks(card_a, card_b).unwrap();
+        ctx.graph.cards.add_blocks(card_b, card_c).unwrap();
+    }
+
+    {
+        let mut ctx = CommandContext {
+            boards: &mut boards,
+            columns: &mut columns,
+            cards: &mut cards,
+            sprints: &mut sprints,
+            archived_cards: &mut archived_cards,
+            graph: &mut graph,
+        };
+        let result = ctx.graph.cards.add_blocks(card_c, card_a);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(kanban_core::KanbanError::CycleDetected)));
+    }
+}
