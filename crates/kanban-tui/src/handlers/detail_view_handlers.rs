@@ -145,6 +145,8 @@ impl App {
                         self.children_list.update_item_count(children.len());
                         if !children.is_empty() {
                             self.children_list.selection.jump_to_last(children.len());
+                            let viewport = self.children_list.get_adjusted_viewport_height(5);
+                            self.children_list.ensure_selected_visible(viewport);
                         }
                     }
                     _ => {
