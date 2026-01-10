@@ -7,6 +7,9 @@ use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDt
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
+// Viewport height for parent/child relationship boxes (fixed box height 7 - 2 borders)
+const RELATIONSHIP_VIEWPORT_HEIGHT: usize = 5;
+
 impl App {
     pub fn handle_card_detail_key(
         &mut self,
@@ -46,6 +49,7 @@ impl App {
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
                             let was_at_boundary = self.parents_list.navigate_down();
+                            self.parents_list.ensure_selected_visible(RELATIONSHIP_VIEWPORT_HEIGHT);
 
                             if was_at_boundary {
                                 // At last parent, wrap to Children section
@@ -68,6 +72,7 @@ impl App {
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
                             let was_at_boundary = self.children_list.navigate_down();
+                            self.children_list.ensure_selected_visible(RELATIONSHIP_VIEWPORT_HEIGHT);
 
                             if was_at_boundary {
                                 // At last child, wrap to Title section
@@ -98,6 +103,7 @@ impl App {
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
                             let was_at_boundary = self.parents_list.navigate_up();
+                            self.parents_list.ensure_selected_visible(RELATIONSHIP_VIEWPORT_HEIGHT);
 
                             if was_at_boundary {
                                 // At first parent or no selection, wrap to Description section
@@ -114,6 +120,7 @@ impl App {
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
                             let was_at_boundary = self.children_list.navigate_up();
+                            self.children_list.ensure_selected_visible(RELATIONSHIP_VIEWPORT_HEIGHT);
 
                             if was_at_boundary {
                                 // At first child or no selection, wrap to Parents section

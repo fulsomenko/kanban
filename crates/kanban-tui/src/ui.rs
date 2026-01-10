@@ -615,7 +615,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let children = app.ctx.graph.cards.children(card_id);
                     let child_count = children.len();
 
-                    let relationship_height = 5u16;
+                    let relationship_height = 7u16;
 
                     let constraints = vec![
                         Constraint::Length(5),                   // Title
