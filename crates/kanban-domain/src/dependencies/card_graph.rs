@@ -54,6 +54,12 @@ pub trait CardGraphExt {
 
     /// Count of direct children (for [N] badge)
     fn child_count(&self, parent_id: CardId) -> usize;
+
+    /// Remove all dependency edges for a card (for permanent deletion)
+    fn remove_card_edges(&mut self, card_id: CardId);
+
+    /// Archive all dependency edges for a card (for soft deletion)
+    fn archive_card_edges(&mut self, card_id: CardId);
 }
 
 impl CardGraphExt for CardDependencyGraph {
@@ -245,6 +251,14 @@ impl CardGraphExt for CardDependencyGraph {
 
     fn child_count(&self, parent_id: CardId) -> usize {
         self.children(parent_id).len()
+    }
+
+    fn remove_card_edges(&mut self, card_id: CardId) {
+        self.remove_node(card_id);
+    }
+
+    fn archive_card_edges(&mut self, card_id: CardId) {
+        self.archive_node(card_id);
     }
 }
 
