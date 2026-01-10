@@ -559,7 +559,7 @@ fn test_cycle_detection_parent_child() {
     };
 
     {
-        let mut ctx = CommandContext {
+        let ctx = CommandContext {
             boards: &mut boards,
             columns: &mut columns,
             cards: &mut cards,
@@ -572,7 +572,7 @@ fn test_cycle_detection_parent_child() {
     }
 
     {
-        let mut ctx = CommandContext {
+        let ctx = CommandContext {
             boards: &mut boards,
             columns: &mut columns,
             cards: &mut cards,
@@ -659,7 +659,7 @@ fn test_cycle_detection_blocks() {
     };
 
     {
-        let mut ctx = CommandContext {
+        let ctx = CommandContext {
             boards: &mut boards,
             columns: &mut columns,
             cards: &mut cards,
@@ -672,7 +672,7 @@ fn test_cycle_detection_blocks() {
     }
 
     {
-        let mut ctx = CommandContext {
+        let ctx = CommandContext {
             boards: &mut boards,
             columns: &mut columns,
             cards: &mut cards,
