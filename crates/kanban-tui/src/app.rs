@@ -1241,7 +1241,10 @@ impl App {
 
         // Save current state to redo stack
         let current_snapshot = crate::state::DataSnapshot::from_app(self);
-        self.ctx.state_manager.history_mut().push_redo(current_snapshot);
+        self.ctx
+            .state_manager
+            .history_mut()
+            .push_redo(current_snapshot);
 
         // Restore previous state from undo stack
         if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_undo() {
@@ -1271,7 +1274,10 @@ impl App {
 
         // Save current state to undo stack
         let current_snapshot = crate::state::DataSnapshot::from_app(self);
-        self.ctx.state_manager.history_mut().push_undo(current_snapshot);
+        self.ctx
+            .state_manager
+            .history_mut()
+            .push_undo(current_snapshot);
 
         // Restore next state from redo stack
         if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_redo() {
@@ -1840,7 +1846,9 @@ impl App {
 
         // Capture snapshot before import for undo history
         let before_snapshot = crate::state::DataSnapshot::from_app(self);
-        self.ctx.state_manager.capture_before_command(before_snapshot);
+        self.ctx
+            .state_manager
+            .capture_before_command(before_snapshot);
 
         // Try V2 format first (preserves graph)
         if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {

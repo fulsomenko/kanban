@@ -78,7 +78,12 @@ impl KeybindingProvider for NormalModeBoardsProvider {
                     KeybindingAction::SelectItem,
                 ),
                 Keybinding::new("u", "undo", "Undo last action", KeybindingAction::Undo),
-                Keybinding::new("U", "redo", "Redo last undone action", KeybindingAction::Redo),
+                Keybinding::new(
+                    "U",
+                    "redo",
+                    "Redo last undone action",
+                    KeybindingAction::Redo,
+                ),
             ],
         )
     }
@@ -149,7 +154,12 @@ impl KeybindingProvider for ArchivedCardsViewProvider {
                     KeybindingAction::Escape,
                 ),
                 Keybinding::new("u", "undo", "Undo last action", KeybindingAction::Undo),
-                Keybinding::new("U", "redo", "Redo last undone action", KeybindingAction::Redo),
+                Keybinding::new(
+                    "U",
+                    "redo",
+                    "Redo last undone action",
+                    KeybindingAction::Redo,
+                ),
             ],
         )
     }

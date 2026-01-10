@@ -78,7 +78,12 @@ impl KeybindingProvider for BoardDetailProvider {
                 KeybindingAction::EditBoard,
             ),
             Keybinding::new("u", "undo", "Undo last action", KeybindingAction::Undo),
-            Keybinding::new("U", "redo", "Redo last undone action", KeybindingAction::Redo),
+            Keybinding::new(
+                "U",
+                "redo",
+                "Redo last undone action",
+                KeybindingAction::Redo,
+            ),
         ];
 
         match self.focus {

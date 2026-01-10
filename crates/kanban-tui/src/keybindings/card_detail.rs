@@ -134,7 +134,12 @@ impl KeybindingProvider for CardDetailProvider {
                 KeybindingAction::AssignToSprint,
             ),
             Keybinding::new("u", "undo", "Undo last action", KeybindingAction::Undo),
-            Keybinding::new("U", "redo", "Redo last undone action", KeybindingAction::Redo),
+            Keybinding::new(
+                "U",
+                "redo",
+                "Redo last undone action",
+                KeybindingAction::Redo,
+            ),
         ]);
 
         KeybindingContext::new(format!("Card Detail - {} Panel", focus_name), bindings)

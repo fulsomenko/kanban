@@ -1,5 +1,5 @@
-pub mod snapshot;
 pub mod history;
+pub mod snapshot;
 
 use crate::app::App;
 use kanban_core::KanbanResult;
@@ -11,9 +11,9 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+pub use history::HistoryManager;
 pub use kanban_domain::commands;
 pub use snapshot::DataSnapshot;
-pub use history::HistoryManager;
 
 /// Manages state mutations and persistence with immediate auto-saving
 ///
