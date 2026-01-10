@@ -321,11 +321,7 @@ impl App {
     }
 
     pub fn should_clear_error(&self) -> bool {
-        if let Some((_, instant)) = self.last_error {
-            instant.elapsed().as_secs() >= 5
-        } else {
-            false
-        }
+        false
     }
 
     fn keycode_matches_binding_key(
@@ -458,6 +454,12 @@ impl App {
     ) -> bool {
         use crossterm::event::KeyCode;
         let mut should_restart_events = false;
+
+        // Clear error on any key press
+        if self.last_error.is_some() {
+            self.clear_error();
+            return false;
+        }
 
         let is_input_mode = matches!(
             self.mode,

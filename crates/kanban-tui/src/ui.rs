@@ -18,11 +18,26 @@ fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
             .bg(Color::Red)
             .add_modifier(Modifier::BOLD);
 
-        let error_widget = Paragraph::new(message.clone())
+        // Calculate width needed for message + padding (1 char on each side)
+        let message_width = (message.len() + 2).min(area.width as usize) as u16;
+        let centered_x = if area.width > message_width {
+            (area.width - message_width) / 2
+        } else {
+            0
+        };
+
+        let error_area = Rect {
+            x: area.x + centered_x,
+            y: area.y,
+            width: message_width,
+            height: 1,
+        };
+
+        let error_widget = Paragraph::new(format!(" {} ", message))
             .style(error_style)
             .alignment(ratatui::layout::Alignment::Center);
 
-        frame.render_widget(error_widget, area);
+        frame.render_widget(error_widget, error_area);
     }
 }
 
