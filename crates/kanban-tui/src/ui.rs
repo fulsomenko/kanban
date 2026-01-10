@@ -624,9 +624,9 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     };
 
                     let constraints = vec![
-                        Constraint::Length(5), // Title
-                        Constraint::Length(6), // Metadata
-                        Constraint::Min(5),    // Description
+                        Constraint::Length(5),                   // Title
+                        Constraint::Length(6),                   // Metadata
+                        Constraint::Min(5),                      // Description
                         Constraint::Length(relationship_height), // Relationships
                     ];
 
@@ -748,10 +748,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         // Create horizontal layout for relationships
                         let relationship_chunks = Layout::default()
                             .direction(Direction::Horizontal)
-                            .constraints([
-                                Constraint::Percentage(50),
-                                Constraint::Percentage(50)
-                            ])
+                            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                             .split(chunks[3]);
 
                         // Render Parents section (with sprint logs path)
@@ -857,10 +854,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         // Create horizontal layout for relationships
                         let relationship_chunks = Layout::default()
                             .direction(Direction::Horizontal)
-                            .constraints([
-                                Constraint::Percentage(50),
-                                Constraint::Percentage(50)
-                            ])
+                            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                             .split(chunks[3]);
 
                         // Render Parents section
