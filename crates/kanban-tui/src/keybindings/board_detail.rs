@@ -77,6 +77,8 @@ impl KeybindingProvider for BoardDetailProvider {
                 "Set branch prefix",
                 KeybindingAction::EditBoard,
             ),
+            Keybinding::new("u", "undo", "Undo last action", KeybindingAction::Undo),
+            Keybinding::new("U", "redo", "Redo last undone action", KeybindingAction::Redo),
         ];
 
         match self.focus {
