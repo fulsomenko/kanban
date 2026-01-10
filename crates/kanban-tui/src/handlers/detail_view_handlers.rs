@@ -138,14 +138,22 @@ impl App {
                             self.card_focus = CardFocus::Parents;
                         }
                     }
+                    CardFocus::Title => {
+                        // When at Title, wrap backward to Children and select last child
+                        let children = self.get_current_card_children();
+                        self.card_focus = CardFocus::Children;
+                        self.children_list.update_item_count(children.len());
+                        if !children.is_empty() {
+                            self.children_list.selection.jump_to_last(children.len());
+                        }
+                    }
                     _ => {
-                        // Navigate between sections
+                        // Navigate between remaining sections (Metadata, Description)
                         self.card_focus = match self.card_focus {
-                            CardFocus::Title => CardFocus::Children,
-                            CardFocus::Children => CardFocus::Parents,
-                            CardFocus::Parents => CardFocus::Description,
                             CardFocus::Description => CardFocus::Metadata,
                             CardFocus::Metadata => CardFocus::Title,
+                            // Other cases won't reach here due to explicit handling above
+                            _ => CardFocus::Title,
                         };
                     }
                 }
