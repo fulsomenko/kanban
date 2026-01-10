@@ -1,5 +1,6 @@
 use super::{Command, CommandContext};
 use crate::SprintUpdate;
+use chrono::Utc;
 use kanban_core::KanbanResult;
 use uuid::Uuid;
 
@@ -109,6 +110,21 @@ pub struct DeleteSprint {
 
 impl Command for DeleteSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        let now = Utc::now();
+        for card in context.cards.iter_mut() {
+            if card.sprint_id == Some(self.sprint_id) {
+                card.sprint_id = None;
+                card.updated_at = now;
+            }
+        }
+
+        for archived_card in context.archived_cards.iter_mut() {
+            if archived_card.card.sprint_id == Some(self.sprint_id) {
+                archived_card.card.sprint_id = None;
+                archived_card.card.updated_at = now;
+            }
+        }
+
         context.sprints.retain(|s| s.id != self.sprint_id);
         Ok(())
     }
