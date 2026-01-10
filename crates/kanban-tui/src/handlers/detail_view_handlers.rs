@@ -42,17 +42,44 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 match self.card_focus {
                     CardFocus::Parents => {
-                        // Navigate within parents list
+                        // Navigate within parents list or wrap to next section
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
-                            self.parents_selection.next(parents.len());
+                            let current_selection = self.parents_selection.get();
+                            let is_at_last = current_selection == Some(parents.len() - 1);
+
+                            if is_at_last {
+                                // At last parent, move to Children section
+                                self.card_focus = CardFocus::Children;
+                                self.parents_selection.clear();
+                                self.children_selection.jump_to_first();
+                            } else {
+                                // Navigate within list
+                                self.parents_selection.next(parents.len());
+                            }
+                        } else {
+                            // No parents, move to Children section
+                            self.card_focus = CardFocus::Children;
                         }
                     }
                     CardFocus::Children => {
-                        // Navigate within children list
+                        // Navigate within children list or wrap to next section
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
-                            self.children_selection.next(children.len());
+                            let current_selection = self.children_selection.get();
+                            let is_at_last = current_selection == Some(children.len() - 1);
+
+                            if is_at_last {
+                                // At last child, move to Title section
+                                self.card_focus = CardFocus::Title;
+                                self.children_selection.clear();
+                            } else {
+                                // Navigate within list
+                                self.children_selection.next(children.len());
+                            }
+                        } else {
+                            // No children, move to Title section
+                            self.card_focus = CardFocus::Title;
                         }
                     }
                     _ => {
@@ -70,17 +97,47 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => {
                 match self.card_focus {
                     CardFocus::Parents => {
-                        // Navigate within parents list
+                        // Navigate within parents list or wrap to previous section
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
-                            self.parents_selection.prev();
+                            let current_selection = self.parents_selection.get();
+                            let is_at_first = current_selection.is_none() || current_selection == Some(0);
+
+                            if is_at_first {
+                                // At first parent or no selection, move to Description section
+                                self.card_focus = CardFocus::Description;
+                                self.parents_selection.clear();
+                            } else {
+                                // Navigate within list
+                                self.parents_selection.prev();
+                            }
+                        } else {
+                            // No parents, move to Description section
+                            self.card_focus = CardFocus::Description;
                         }
                     }
                     CardFocus::Children => {
-                        // Navigate within children list
+                        // Navigate within children list or wrap to previous section
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
-                            self.children_selection.prev();
+                            let current_selection = self.children_selection.get();
+                            let is_at_first = current_selection.is_none() || current_selection == Some(0);
+
+                            if is_at_first {
+                                // At first child or no selection, move to Parents section
+                                let parents = self.get_current_card_parents();
+                                self.card_focus = CardFocus::Parents;
+                                self.children_selection.clear();
+                                if !parents.is_empty() {
+                                    self.parents_selection.jump_to_last(parents.len());
+                                }
+                            } else {
+                                // Navigate within list
+                                self.children_selection.prev();
+                            }
+                        } else {
+                            // No children, move to Parents section
+                            self.card_focus = CardFocus::Parents;
                         }
                     }
                     _ => {
