@@ -582,7 +582,10 @@ fn test_cycle_detection_parent_child() {
         };
         let result = ctx.graph.cards.set_parent(card_a, card_c);
         assert!(result.is_err());
-        assert!(matches!(result, Err(kanban_core::KanbanError::CycleDetected)));
+        assert!(matches!(
+            result,
+            Err(kanban_core::KanbanError::CycleDetected)
+        ));
     }
 }
 
@@ -679,6 +682,9 @@ fn test_cycle_detection_blocks() {
         };
         let result = ctx.graph.cards.add_blocks(card_c, card_a);
         assert!(result.is_err());
-        assert!(matches!(result, Err(kanban_core::KanbanError::CycleDetected)));
+        assert!(matches!(
+            result,
+            Err(kanban_core::KanbanError::CycleDetected)
+        ));
     }
 }
