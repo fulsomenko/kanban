@@ -7,6 +7,9 @@ use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDt
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
+// Viewport constants (must match ui.rs values)
+const RELATIONSHIP_VIEWPORT_RAW: usize = 5;
+
 impl App {
     pub fn handle_card_detail_key(
         &mut self,
@@ -46,7 +49,7 @@ impl App {
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
                             let was_at_boundary = self.parents_list.navigate_down();
-                            let viewport = self.parents_list.get_adjusted_viewport_height(5);
+                            let viewport = self.parents_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.parents_list.ensure_selected_visible(viewport);
 
                             if was_at_boundary {
@@ -70,7 +73,7 @@ impl App {
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
                             let was_at_boundary = self.children_list.navigate_down();
-                            let viewport = self.children_list.get_adjusted_viewport_height(5);
+                            let viewport = self.children_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.children_list.ensure_selected_visible(viewport);
 
                             if was_at_boundary {
@@ -102,7 +105,7 @@ impl App {
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
                             let was_at_boundary = self.parents_list.navigate_up();
-                            let viewport = self.parents_list.get_adjusted_viewport_height(5);
+                            let viewport = self.parents_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.parents_list.ensure_selected_visible(viewport);
 
                             if was_at_boundary {
@@ -120,7 +123,7 @@ impl App {
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
                             let was_at_boundary = self.children_list.navigate_up();
-                            let viewport = self.children_list.get_adjusted_viewport_height(5);
+                            let viewport = self.children_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.children_list.ensure_selected_visible(viewport);
 
                             if was_at_boundary {
@@ -145,7 +148,7 @@ impl App {
                         self.children_list.update_item_count(children.len());
                         if !children.is_empty() {
                             self.children_list.selection.jump_to_last(children.len());
-                            let viewport = self.children_list.get_adjusted_viewport_height(5);
+                            let viewport = self.children_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.children_list.ensure_selected_visible(viewport);
                         }
                     }

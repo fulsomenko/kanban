@@ -10,6 +10,11 @@ use ratatui::{
     widgets::{Block, Borders, Clear, ListItem, Paragraph},
     Frame,
 };
+use uuid::Uuid;
+
+// Card detail view layout constants
+const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
+const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
 
 fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
     if let Some((message, _)) = &app.last_error {
@@ -602,6 +607,54 @@ fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
     dialog.render(app, frame);
 }
 
+fn render_relationship_boxes(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    parents: &[Uuid],
+    children: &[Uuid],
+    child_count: usize,
+) {
+    let relationship_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(area);
+
+    let viewport_height = area.height.saturating_sub(RELATIONSHIP_VIEWPORT_BORDER_HEIGHT as u16) as usize;
+
+    // Render Parents section
+    let parents_config = FieldSectionConfig::new("Parents")
+        .with_focus_indicator("Parents [4]")
+        .focused(app.card_focus == CardFocus::Parents);
+    let parents_lines = render_relationship_section(
+        parents,
+        &app.ctx.cards,
+        "Parents",
+        app.card_focus == CardFocus::Parents,
+        &app.parents_list,
+        viewport_height,
+    );
+    let parents_widget = Paragraph::new(parents_lines).block(parents_config.block());
+    frame.render_widget(parents_widget, relationship_chunks[0]);
+
+    // Render Children section
+    let children_title = format!("Children ({})", child_count);
+    let children_title_focused = format!("Children ({}) [5]", child_count);
+    let children_config = FieldSectionConfig::new(&children_title)
+        .with_focus_indicator(&children_title_focused)
+        .focused(app.card_focus == CardFocus::Children);
+    let children_lines = render_relationship_section(
+        children,
+        &app.ctx.cards,
+        "Children",
+        app.card_focus == CardFocus::Children,
+        &app.children_list,
+        viewport_height,
+    );
+    let children_widget = Paragraph::new(children_lines).block(children_config.block());
+    frame.render_widget(children_widget, relationship_chunks[1]);
+}
+
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(card_idx) = app.active_card_index {
         if let Some(card) = app.ctx.cards.get(card_idx) {
@@ -615,13 +668,11 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let children = app.ctx.graph.cards.children(card_id);
                     let child_count = children.len();
 
-                    let relationship_height = 7u16;
-
                     let constraints = vec![
-                        Constraint::Length(5),                   // Title
-                        Constraint::Length(6),                   // Metadata
-                        Constraint::Min(5),                      // Description
-                        Constraint::Length(relationship_height), // Relationships
+                        Constraint::Length(5),                        // Title
+                        Constraint::Length(6),                        // Metadata
+                        Constraint::Min(5),                           // Description
+                        Constraint::Length(RELATIONSHIP_BOX_HEIGHT),  // Relationships
                     ];
 
                     let chunks = Layout::default()
@@ -666,46 +717,8 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
 
-                        // Create horizontal layout for relationships
-                        let relationship_chunks = Layout::default()
-                            .direction(Direction::Horizontal)
-                            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                            .split(chunks[3]);
-
-                        // Render Parents section (with sprint logs path)
-                        let viewport_height = chunks[3].height.saturating_sub(2) as usize;
-                        let parents_config = FieldSectionConfig::new("Parents")
-                            .with_focus_indicator("Parents [4]")
-                            .focused(app.card_focus == CardFocus::Parents);
-                        let parents_lines = render_relationship_section(
-                            &parents,
-                            &app.ctx.cards,
-                            "Parents",
-                            app.card_focus == CardFocus::Parents,
-                            &app.parents_list,
-                            viewport_height,
-                        );
-                        let parents_widget =
-                            Paragraph::new(parents_lines).block(parents_config.block());
-                        frame.render_widget(parents_widget, relationship_chunks[0]);
-
-                        // Render Children section (with sprint logs path)
-                        let children_title = format!("Children ({})", child_count);
-                        let children_title_focused = format!("Children ({}) [5]", child_count);
-                        let children_config = FieldSectionConfig::new(&children_title)
-                            .with_focus_indicator(&children_title_focused)
-                            .focused(app.card_focus == CardFocus::Children);
-                        let children_lines = render_relationship_section(
-                            &children,
-                            &app.ctx.cards,
-                            "Children",
-                            app.card_focus == CardFocus::Children,
-                            &app.children_list,
-                            viewport_height,
-                        );
-                        let children_widget =
-                            Paragraph::new(children_lines).block(children_config.block());
-                        frame.render_widget(children_widget, relationship_chunks[1]);
+                        // Render relationship boxes
+                        render_relationship_boxes(app, frame, chunks[3], &parents, &children, child_count);
                     } else {
                         // Render metadata section
                         let meta_config = FieldSectionConfig::new("Metadata")
@@ -723,46 +736,8 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
 
-                        // Create horizontal layout for relationships
-                        let relationship_chunks = Layout::default()
-                            .direction(Direction::Horizontal)
-                            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                            .split(chunks[3]);
-
-                        // Render Parents section
-                        let viewport_height = chunks[3].height.saturating_sub(2) as usize;
-                        let parents_config = FieldSectionConfig::new("Parents")
-                            .with_focus_indicator("Parents [4]")
-                            .focused(app.card_focus == CardFocus::Parents);
-                        let parents_lines = render_relationship_section(
-                            &parents,
-                            &app.ctx.cards,
-                            "Parents",
-                            app.card_focus == CardFocus::Parents,
-                            &app.parents_list,
-                            viewport_height,
-                        );
-                        let parents_widget =
-                            Paragraph::new(parents_lines).block(parents_config.block());
-                        frame.render_widget(parents_widget, relationship_chunks[0]);
-
-                        // Render Children section
-                        let children_title_else = format!("Children ({})", child_count);
-                        let children_title_focused_else = format!("Children ({}) [5]", child_count);
-                        let children_config = FieldSectionConfig::new(&children_title_else)
-                            .with_focus_indicator(&children_title_focused_else)
-                            .focused(app.card_focus == CardFocus::Children);
-                        let children_lines = render_relationship_section(
-                            &children,
-                            &app.ctx.cards,
-                            "Children",
-                            app.card_focus == CardFocus::Children,
-                            &app.children_list,
-                            viewport_height,
-                        );
-                        let children_widget =
-                            Paragraph::new(children_lines).block(children_config.block());
-                        frame.render_widget(children_widget, relationship_chunks[1]);
+                        // Render relationship boxes
+                        render_relationship_boxes(app, frame, chunks[3], &parents, &children, child_count);
                     }
                 }
             }
