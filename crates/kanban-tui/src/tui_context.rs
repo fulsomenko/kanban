@@ -51,6 +51,17 @@ impl TuiContext {
     }
 
     pub fn execute_commands_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
+        // Capture snapshot BEFORE execution for undo history
+        let before_snapshot = DataSnapshot {
+            boards: self.boards.clone(),
+            columns: self.columns.clone(),
+            cards: self.cards.clone(),
+            archived_cards: self.archived_cards.clone(),
+            sprints: self.sprints.clone(),
+            graph: self.graph.clone(),
+        };
+        self.state_manager.capture_before_command(before_snapshot);
+
         for command in commands {
             self.state_manager.execute_with_context(
                 &mut self.boards,

@@ -1,3 +1,4 @@
+pub mod history;
 pub mod snapshot;
 
 use crate::app::App;
@@ -10,6 +11,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+pub use history::HistoryManager;
 pub use kanban_domain::commands;
 pub use snapshot::DataSnapshot;
 
@@ -44,6 +46,7 @@ pub struct StateManager {
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
     file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
+    history: HistoryManager,
 }
 
 impl StateManager {
@@ -92,6 +95,7 @@ impl StateManager {
             save_completion_tx: Some(save_completion_tx),
             pending_saves: 0,
             file_watcher: None,
+            history: HistoryManager::new(),
         };
 
         (manager, save_rx, Some(save_completion_rx))
@@ -275,8 +279,9 @@ impl StateManager {
 
             self.dirty = false;
             self.command_queue.clear();
+            self.history.clear();
 
-            tracing::info!("Reloaded state from disk");
+            tracing::info!("Reloaded state from disk - undo history cleared");
         }
 
         Ok(())
@@ -384,6 +389,31 @@ impl StateManager {
     /// Get the save completion sender for the worker to use
     pub fn save_completion_tx(&self) -> Option<&mpsc::UnboundedSender<()>> {
         self.save_completion_tx.as_ref()
+    }
+
+    /// Capture snapshot before command execution (for undo history)
+    pub fn capture_before_command(&mut self, snapshot: DataSnapshot) {
+        self.history.capture_before_command(snapshot);
+    }
+
+    /// Check if undo is available
+    pub fn can_undo(&self) -> bool {
+        self.history.can_undo()
+    }
+
+    /// Check if redo is available
+    pub fn can_redo(&self) -> bool {
+        self.history.can_redo()
+    }
+
+    /// Access to history manager for undo/redo operations
+    pub fn history_mut(&mut self) -> &mut HistoryManager {
+        &mut self.history
+    }
+
+    /// Clear undo/redo history (called after initial file load)
+    pub fn clear_history(&mut self) {
+        self.history.clear();
     }
 
     /// Set the file watcher for coordinating pause/resume with saves
