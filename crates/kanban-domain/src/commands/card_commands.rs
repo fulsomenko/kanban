@@ -1,4 +1,5 @@
 use super::{Command, CommandContext};
+use crate::dependencies::card_graph::CardGraphExt;
 use crate::CardUpdate;
 use chrono::Utc;
 use kanban_core::KanbanResult;
@@ -97,6 +98,7 @@ impl Command for ArchiveCard {
             let original_position = card.position;
             let archived = crate::ArchivedCard::new(card, original_column_id, original_position);
             context.archived_cards.push(archived);
+            context.graph.cards.archive_card_edges(self.card_id);
         }
         Ok(())
     }
@@ -126,6 +128,7 @@ impl Command for RestoreCard {
             card.position = self.position;
             card.updated_at = Utc::now();
             context.cards.push(card);
+            context.graph.cards.unarchive_node(self.card_id);
         }
         Ok(())
     }
@@ -143,6 +146,7 @@ pub struct DeleteCard {
 impl Command for DeleteCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context.archived_cards.retain(|c| c.card.id != self.card_id);
+        context.graph.cards.remove_card_edges(self.card_id);
         Ok(())
     }
 
