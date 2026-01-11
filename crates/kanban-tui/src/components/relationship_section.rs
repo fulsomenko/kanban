@@ -1,5 +1,5 @@
-use crate::components::ListItemConfig;
 use crate::components::generic_list::ListComponent;
+use crate::components::ListItemConfig;
 use crate::theme::*;
 use kanban_domain::Card;
 use ratatui::style::{Color, Style};

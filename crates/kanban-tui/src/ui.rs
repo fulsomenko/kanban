@@ -620,7 +620,9 @@ fn render_relationship_boxes(
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
-    let viewport_height = area.height.saturating_sub(RELATIONSHIP_VIEWPORT_BORDER_HEIGHT as u16) as usize;
+    let viewport_height =
+        area.height
+            .saturating_sub(RELATIONSHIP_VIEWPORT_BORDER_HEIGHT as u16) as usize;
 
     // Render Parents section
     let parents_config = FieldSectionConfig::new("Parents")
@@ -669,10 +671,10 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     let child_count = children.len();
 
                     let constraints = vec![
-                        Constraint::Length(5),                        // Title
-                        Constraint::Length(6),                        // Metadata
-                        Constraint::Min(5),                           // Description
-                        Constraint::Length(RELATIONSHIP_BOX_HEIGHT),  // Relationships
+                        Constraint::Length(5),                       // Title
+                        Constraint::Length(6),                       // Metadata
+                        Constraint::Min(5),                          // Description
+                        Constraint::Length(RELATIONSHIP_BOX_HEIGHT), // Relationships
                     ];
 
                     let chunks = Layout::default()
@@ -699,14 +701,16 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.card_focus == CardFocus::Metadata);
-                        let meta_lines = build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
+                        let meta_lines =
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
 
                         // Render sprint logs
                         let sprint_logs_config = FieldSectionConfig::new("Sprint History");
                         let sprint_log_lines = build_sprint_logs_lines(card);
-                        let sprint_logs = Paragraph::new(sprint_log_lines).block(sprint_logs_config.block());
+                        let sprint_logs =
+                            Paragraph::new(sprint_log_lines).block(sprint_logs_config.block());
                         frame.render_widget(sprint_logs, meta_chunks[1]);
 
                         // Render description
@@ -718,13 +722,21 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         frame.render_widget(desc, chunks[2]);
 
                         // Render relationship boxes
-                        render_relationship_boxes(app, frame, chunks[3], &parents, &children, child_count);
+                        render_relationship_boxes(
+                            app,
+                            frame,
+                            chunks[3],
+                            &parents,
+                            &children,
+                            child_count,
+                        );
                     } else {
                         // Render metadata section
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.card_focus == CardFocus::Metadata);
-                        let meta_lines = build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
+                        let meta_lines =
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
 
@@ -737,7 +749,14 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         frame.render_widget(desc, chunks[2]);
 
                         // Render relationship boxes
-                        render_relationship_boxes(app, frame, chunks[3], &parents, &children, child_count);
+                        render_relationship_boxes(
+                            app,
+                            frame,
+                            chunks[3],
+                            &parents,
+                            &children,
+                            child_count,
+                        );
                     }
                 }
             }

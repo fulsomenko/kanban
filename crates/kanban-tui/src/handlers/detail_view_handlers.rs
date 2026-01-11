@@ -49,7 +49,9 @@ impl App {
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
                             let was_at_boundary = self.parents_list.navigate_down();
-                            let viewport = self.parents_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            let viewport = self
+                                .parents_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.parents_list.ensure_selected_visible(viewport);
 
                             if was_at_boundary {
@@ -73,7 +75,9 @@ impl App {
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
                             let was_at_boundary = self.children_list.navigate_down();
-                            let viewport = self.children_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.children_list.ensure_selected_visible(viewport);
 
                             if was_at_boundary {
@@ -105,7 +109,9 @@ impl App {
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
                             let was_at_boundary = self.parents_list.navigate_up();
-                            let viewport = self.parents_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            let viewport = self
+                                .parents_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.parents_list.ensure_selected_visible(viewport);
 
                             if was_at_boundary {
@@ -123,7 +129,9 @@ impl App {
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
                             let was_at_boundary = self.children_list.navigate_up();
-                            let viewport = self.children_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.children_list.ensure_selected_visible(viewport);
 
                             if was_at_boundary {
@@ -148,7 +156,9 @@ impl App {
                         self.children_list.update_item_count(children.len());
                         if !children.is_empty() {
                             self.children_list.selection.jump_to_last(children.len());
-                            let viewport = self.children_list.get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
                             self.children_list.ensure_selected_visible(viewport);
                         }
                     }
@@ -252,22 +262,24 @@ impl App {
             KeyCode::Char('R') => {
                 self.handle_manage_children();
             }
-            KeyCode::Enter => {
-                match self.card_focus {
-                    CardFocus::Parents => {
-                        if let Some(current_idx) = self.active_card_index {
-                            self.navigate_to_selected_parent(current_idx);
-                        }
+            KeyCode::Enter => match self.card_focus {
+                CardFocus::Parents => {
+                    if let Some(current_idx) = self.active_card_index {
+                        self.navigate_to_selected_parent(current_idx);
                     }
-                    CardFocus::Children => {
-                        if let Some(current_idx) = self.active_card_index {
-                            self.navigate_to_selected_child(current_idx);
-                        }
-                    }
-                    _ => {}
                 }
-            }
-            KeyCode::Backspace | KeyCode::Char('h') if self.card_focus != CardFocus::Title && self.card_focus != CardFocus::Metadata && self.card_focus != CardFocus::Description => {
+                CardFocus::Children => {
+                    if let Some(current_idx) = self.active_card_index {
+                        self.navigate_to_selected_child(current_idx);
+                    }
+                }
+                _ => {}
+            },
+            KeyCode::Backspace | KeyCode::Char('h')
+                if self.card_focus != CardFocus::Title
+                    && self.card_focus != CardFocus::Metadata
+                    && self.card_focus != CardFocus::Description =>
+            {
                 // Allow backspace for back navigation in parents/children, but not in text editing sections
                 if let Some(previous_idx) = self.card_navigation_history.pop() {
                     self.active_card_index = Some(previous_idx);

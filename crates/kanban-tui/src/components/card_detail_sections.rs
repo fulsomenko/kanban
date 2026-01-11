@@ -1,7 +1,7 @@
-use crate::theme::*;
 use crate::components::metadata_line_multi;
-use kanban_domain::{Card, Board, Sprint};
+use crate::theme::*;
 use kanban_core::AppConfig;
+use kanban_domain::{Board, Card, Sprint};
 use ratatui::{
     style::{Color, Style},
     text::{Line, Span},
