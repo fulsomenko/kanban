@@ -7,6 +7,9 @@ use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDt
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
+// Viewport constants (must match ui.rs values)
+const RELATIONSHIP_VIEWPORT_RAW: usize = 5;
+
 impl App {
     pub fn handle_card_detail_key(
         &mut self,
@@ -20,6 +23,9 @@ impl App {
                 self.pop_mode();
                 self.active_card_index = None;
                 self.card_focus = CardFocus::Title;
+                self.parents_list.selection.clear();
+                self.children_list.selection.clear();
+                self.card_navigation_history.clear();
             }
             KeyCode::Char('1') => {
                 self.card_focus = CardFocus::Title;
@@ -37,22 +43,135 @@ impl App {
                 self.card_focus = CardFocus::Children;
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.card_focus = match self.card_focus {
-                    CardFocus::Title => CardFocus::Metadata,
-                    CardFocus::Metadata => CardFocus::Description,
-                    CardFocus::Description => CardFocus::Parents,
-                    CardFocus::Parents => CardFocus::Children,
-                    CardFocus::Children => CardFocus::Title,
-                };
+                match self.card_focus {
+                    CardFocus::Parents => {
+                        // Navigate within parents list or wrap to next section
+                        let parents = self.get_current_card_parents();
+                        if !parents.is_empty() {
+                            let was_at_boundary = self.parents_list.navigate_down();
+                            let viewport = self
+                                .parents_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.parents_list.ensure_selected_visible(viewport);
+
+                            if was_at_boundary {
+                                // At last parent, wrap to Children section
+                                self.card_focus = CardFocus::Children;
+                                self.parents_list.selection.clear();
+
+                                let children = self.get_current_card_children();
+                                self.children_list.update_item_count(children.len());
+                                if !children.is_empty() {
+                                    self.children_list.selection.jump_to_first();
+                                }
+                            }
+                        } else {
+                            // No parents, move to Children section
+                            self.card_focus = CardFocus::Children;
+                        }
+                    }
+                    CardFocus::Children => {
+                        // Navigate within children list or wrap to next section
+                        let children = self.get_current_card_children();
+                        if !children.is_empty() {
+                            let was_at_boundary = self.children_list.navigate_down();
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.children_list.ensure_selected_visible(viewport);
+
+                            if was_at_boundary {
+                                // At last child, wrap to Title section
+                                self.card_focus = CardFocus::Title;
+                                self.children_list.selection.clear();
+                            }
+                        } else {
+                            // No children, move to Title section
+                            self.card_focus = CardFocus::Title;
+                        }
+                    }
+                    _ => {
+                        // Navigate between sections
+                        self.card_focus = match self.card_focus {
+                            CardFocus::Title => CardFocus::Metadata,
+                            CardFocus::Metadata => CardFocus::Description,
+                            CardFocus::Description => CardFocus::Parents,
+                            CardFocus::Parents => CardFocus::Children,
+                            CardFocus::Children => CardFocus::Title,
+                        };
+                    }
+                }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.card_focus = match self.card_focus {
-                    CardFocus::Title => CardFocus::Children,
-                    CardFocus::Children => CardFocus::Parents,
-                    CardFocus::Parents => CardFocus::Description,
-                    CardFocus::Description => CardFocus::Metadata,
-                    CardFocus::Metadata => CardFocus::Title,
-                };
+                match self.card_focus {
+                    CardFocus::Parents => {
+                        // Navigate within parents list or wrap to previous section
+                        let parents = self.get_current_card_parents();
+                        if !parents.is_empty() {
+                            let was_at_boundary = self.parents_list.navigate_up();
+                            let viewport = self
+                                .parents_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.parents_list.ensure_selected_visible(viewport);
+
+                            if was_at_boundary {
+                                // At first parent or no selection, wrap to Description section
+                                self.card_focus = CardFocus::Description;
+                                self.parents_list.selection.clear();
+                            }
+                        } else {
+                            // No parents, move to Description section
+                            self.card_focus = CardFocus::Description;
+                        }
+                    }
+                    CardFocus::Children => {
+                        // Navigate within children list or wrap to previous section
+                        let children = self.get_current_card_children();
+                        if !children.is_empty() {
+                            let was_at_boundary = self.children_list.navigate_up();
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.children_list.ensure_selected_visible(viewport);
+
+                            if was_at_boundary {
+                                // At first child or no selection, wrap to Parents section
+                                let parents = self.get_current_card_parents();
+                                self.card_focus = CardFocus::Parents;
+                                self.children_list.selection.clear();
+                                self.parents_list.update_item_count(parents.len());
+                                if !parents.is_empty() {
+                                    self.parents_list.selection.jump_to_last(parents.len());
+                                }
+                            }
+                        } else {
+                            // No children, move to Parents section
+                            self.card_focus = CardFocus::Parents;
+                        }
+                    }
+                    CardFocus::Title => {
+                        // When at Title, wrap backward to Children and select last child
+                        let children = self.get_current_card_children();
+                        self.card_focus = CardFocus::Children;
+                        self.children_list.update_item_count(children.len());
+                        if !children.is_empty() {
+                            self.children_list.selection.jump_to_last(children.len());
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.children_list.ensure_selected_visible(viewport);
+                        }
+                    }
+                    _ => {
+                        // Navigate between remaining sections (Metadata, Description)
+                        self.card_focus = match self.card_focus {
+                            CardFocus::Description => CardFocus::Metadata,
+                            CardFocus::Metadata => CardFocus::Title,
+                            // Other cases won't reach here due to explicit handling above
+                            _ => CardFocus::Title,
+                        };
+                    }
+                }
             }
             KeyCode::Char('y') => {
                 self.copy_branch_name();
@@ -142,6 +261,35 @@ impl App {
             }
             KeyCode::Char('R') => {
                 self.handle_manage_children();
+            }
+            KeyCode::Enter => match self.card_focus {
+                CardFocus::Parents => {
+                    if let Some(current_idx) = self.active_card_index {
+                        self.navigate_to_selected_parent(current_idx);
+                    }
+                }
+                CardFocus::Children => {
+                    if let Some(current_idx) = self.active_card_index {
+                        self.navigate_to_selected_child(current_idx);
+                    }
+                }
+                _ => {}
+            },
+            KeyCode::Backspace | KeyCode::Char('h')
+                if self.card_focus != CardFocus::Title
+                    && self.card_focus != CardFocus::Metadata
+                    && self.card_focus != CardFocus::Description =>
+            {
+                // Allow backspace for back navigation in parents/children, but not in text editing sections
+                if let Some(previous_idx) = self.card_navigation_history.pop() {
+                    self.active_card_index = Some(previous_idx);
+                    self.card_focus = CardFocus::Title;
+                    // Update item counts for the card we're returning to
+                    let parents = self.get_current_card_parents();
+                    let children = self.get_current_card_children();
+                    self.parents_list.update_item_count(parents.len());
+                    self.children_list.update_item_count(children.len());
+                }
             }
             _ => {}
         }
@@ -472,6 +620,11 @@ impl App {
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
+                                // Initialize list components with item counts
+                                let parents = self.get_current_card_parents();
+                                let children = self.get_current_card_children();
+                                self.parents_list.update_item_count(parents.len());
+                                self.children_list.update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
@@ -481,6 +634,11 @@ impl App {
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
+                                // Initialize list components with item counts
+                                let parents = self.get_current_card_parents();
+                                let children = self.get_current_card_children();
+                                self.parents_list.update_item_count(parents.len());
+                                self.children_list.update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
@@ -879,6 +1037,92 @@ impl App {
 
                     self.open_dialog(DialogMode::ManageChildren);
                 }
+            }
+        }
+    }
+
+    pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
+                return self.ctx.graph.cards.parents(card.id);
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
+                return self.ctx.graph.cards.children(card.id);
+            }
+        }
+        Vec::new()
+    }
+
+    fn navigate_to_selected_parent(&mut self, current_card_idx: usize) {
+        let parents = self.get_current_card_parents();
+        if let Some(selected_idx) = self.parents_list.selection.get() {
+            if let Some(&parent_id) = parents.get(selected_idx) {
+                if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parent_id) {
+                    // Push current card to history
+                    self.card_navigation_history.push(current_card_idx);
+                    // Navigate to parent
+                    self.active_card_index = Some(parent_idx);
+                    self.card_focus = CardFocus::Title;
+                    // Update item counts for new card
+                    let new_parents = self.get_current_card_parents();
+                    let new_children = self.get_current_card_children();
+                    self.parents_list.update_item_count(new_parents.len());
+                    self.children_list.update_item_count(new_children.len());
+                    return;
+                }
+            }
+        }
+        // If no valid selection, navigate to first parent if available
+        if !parents.is_empty() {
+            if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parents[0]) {
+                self.card_navigation_history.push(current_card_idx);
+                self.active_card_index = Some(parent_idx);
+                self.card_focus = CardFocus::Title;
+                // Update item counts for new card
+                let new_parents = self.get_current_card_parents();
+                let new_children = self.get_current_card_children();
+                self.parents_list.update_item_count(new_parents.len());
+                self.children_list.update_item_count(new_children.len());
+            }
+        }
+    }
+
+    fn navigate_to_selected_child(&mut self, current_card_idx: usize) {
+        let children = self.get_current_card_children();
+        if let Some(selected_idx) = self.children_list.selection.get() {
+            if let Some(&child_id) = children.get(selected_idx) {
+                if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == child_id) {
+                    // Push current card to history
+                    self.card_navigation_history.push(current_card_idx);
+                    // Navigate to child
+                    self.active_card_index = Some(child_idx);
+                    self.card_focus = CardFocus::Title;
+                    // Update item counts for new card
+                    let new_parents = self.get_current_card_parents();
+                    let new_children = self.get_current_card_children();
+                    self.parents_list.update_item_count(new_parents.len());
+                    self.children_list.update_item_count(new_children.len());
+                    return;
+                }
+            }
+        }
+        // If no valid selection, navigate to first child if available
+        if !children.is_empty() {
+            if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == children[0]) {
+                self.card_navigation_history.push(current_card_idx);
+                self.active_card_index = Some(child_idx);
+                self.card_focus = CardFocus::Title;
+                // Update item counts for new card
+                let new_parents = self.get_current_card_parents();
+                let new_children = self.get_current_card_children();
+                self.parents_list.update_item_count(new_parents.len());
+                self.children_list.update_item_count(new_children.len());
             }
         }
     }

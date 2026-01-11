@@ -10,6 +10,11 @@ use ratatui::{
     widgets::{Block, Borders, Clear, ListItem, Paragraph},
     Frame,
 };
+use uuid::Uuid;
+
+// Card detail view layout constants
+const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
+const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
 
 fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
     if let Some((message, _)) = &app.last_error {
@@ -602,6 +607,56 @@ fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
     dialog.render(app, frame);
 }
 
+fn render_relationship_boxes(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    parents: &[Uuid],
+    children: &[Uuid],
+    child_count: usize,
+) {
+    let relationship_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(area);
+
+    let viewport_height =
+        area.height
+            .saturating_sub(RELATIONSHIP_VIEWPORT_BORDER_HEIGHT as u16) as usize;
+
+    // Render Parents section
+    let parents_config = FieldSectionConfig::new("Parents")
+        .with_focus_indicator("Parents [4]")
+        .focused(app.card_focus == CardFocus::Parents);
+    let parents_lines = render_relationship_section(
+        parents,
+        &app.ctx.cards,
+        "Parents",
+        app.card_focus == CardFocus::Parents,
+        &app.parents_list,
+        viewport_height,
+    );
+    let parents_widget = Paragraph::new(parents_lines).block(parents_config.block());
+    frame.render_widget(parents_widget, relationship_chunks[0]);
+
+    // Render Children section
+    let children_title = format!("Children ({})", child_count);
+    let children_title_focused = format!("Children ({}) [5]", child_count);
+    let children_config = FieldSectionConfig::new(&children_title)
+        .with_focus_indicator(&children_title_focused)
+        .focused(app.card_focus == CardFocus::Children);
+    let children_lines = render_relationship_section(
+        children,
+        &app.ctx.cards,
+        "Children",
+        app.card_focus == CardFocus::Children,
+        &app.children_list,
+        viewport_height,
+    );
+    let children_widget = Paragraph::new(children_lines).block(children_config.block());
+    frame.render_widget(children_widget, relationship_chunks[1]);
+}
+
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(card_idx) = app.active_card_index {
         if let Some(card) = app.ctx.cards.get(card_idx) {
@@ -613,23 +668,13 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     // Get parent and child information
                     let parents = app.ctx.graph.cards.parents(card_id);
                     let children = app.ctx.graph.cards.children(card_id);
-                    let parent_count = parents.len();
                     let child_count = children.len();
 
                     let constraints = vec![
-                        Constraint::Length(5), // Title
-                        Constraint::Length(6), // Metadata
-                        Constraint::Min(5),    // Description
-                        Constraint::Length(if parent_count > 0 {
-                            (parent_count.min(3) + 2) as u16
-                        } else {
-                            3
-                        }), // Parents
-                        Constraint::Length(if child_count > 0 {
-                            (child_count.min(3) + 2) as u16
-                        } else {
-                            3
-                        }), // Children
+                        Constraint::Length(5),                       // Title
+                        Constraint::Length(6),                       // Metadata
+                        Constraint::Min(5),                          // Description
+                        Constraint::Length(RELATIONSHIP_BOX_HEIGHT), // Relationships
                     ];
 
                     let chunks = Layout::default()
@@ -637,10 +682,11 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         .constraints(constraints)
                         .split(area);
 
+                    // Render title section
                     let title_config = FieldSectionConfig::new("Task Title")
                         .with_focus_indicator("Task Title [1]")
                         .focused(app.card_focus == CardFocus::Title);
-                    let title = Paragraph::new(card.title.clone())
+                    let title = Paragraph::new(build_title_lines(card))
                         .style(bold_highlight())
                         .block(title_config.block());
                     frame.render_widget(title, chunks[0]);
@@ -651,251 +697,66 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                             .split(chunks[1]);
 
+                        // Render metadata
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.card_focus == CardFocus::Metadata);
-
-                        let meta_lines = vec![
-                            metadata_line_multi(vec![
-                                ("Priority", format!("{:?}", card.priority), normal_text()),
-                                ("Status", format!("{:?}", card.status), normal_text()),
-                                (
-                                    "Points",
-                                    card.points
-                                        .map(|p| p.to_string())
-                                        .unwrap_or_else(|| "-".to_string()),
-                                    normal_text(),
-                                ),
-                            ]),
-                            if let Some(due_date) = card.due_date {
-                                metadata_line_styled(
-                                    "Due",
-                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
-                                    Style::default().fg(Color::Red),
-                                )
-                            } else {
-                                Line::from(Span::styled("No due date", label_text()))
-                            },
-                            metadata_line_styled(
-                                "Branch",
-                                card.branch_name(
-                                    board,
-                                    &app.ctx.sprints,
-                                    app.app_config.effective_default_card_prefix(),
-                                ),
-                                active_item(),
-                            ),
-                        ];
-
+                        let meta_lines =
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
 
+                        // Render sprint logs
                         let sprint_logs_config = FieldSectionConfig::new("Sprint History");
-                        let mut sprint_log_lines = vec![];
-
-                        let max_visible = 3;
-                        let total_logs = card.sprint_logs.len();
-                        let start_idx = total_logs.saturating_sub(max_visible);
-
-                        for (display_idx, log) in card.sprint_logs[start_idx..].iter().enumerate() {
-                            let absolute_idx = start_idx + display_idx;
-                            let sprint_name_str = log
-                                .sprint_name
-                                .as_deref()
-                                .unwrap_or(&log.sprint_number.to_string())
-                                .to_string();
-                            let started = log.started_at.format("%m-%d %H:%M").to_string();
-                            let status_str = if let Some(ended) = log.ended_at {
-                                let ended_fmt = ended.format("%m-%d %H:%M").to_string();
-                                format!("{} → {}", started, ended_fmt)
-                            } else {
-                                format!("{} → (current)", started)
-                            };
-
-                            sprint_log_lines.push(Line::from(vec![
-                                Span::styled(format!("{}. ", absolute_idx + 1), label_text()),
-                                Span::styled(
-                                    format!("{} ", sprint_name_str),
-                                    Style::default().fg(Color::Cyan),
-                                ),
-                                Span::styled(status_str, label_text()),
-                            ]));
-                        }
-
-                        if start_idx > 0 {
-                            sprint_log_lines.insert(
-                                0,
-                                Line::from(Span::styled(
-                                    format!("... ({} earlier entries)", start_idx),
-                                    label_text(),
-                                )),
-                            );
-                        }
-
+                        let sprint_log_lines = build_sprint_logs_lines(card);
                         let sprint_logs =
                             Paragraph::new(sprint_log_lines).block(sprint_logs_config.block());
                         frame.render_widget(sprint_logs, meta_chunks[1]);
 
+                        // Render description
                         let desc_config = FieldSectionConfig::new("Description")
                             .with_focus_indicator("Description [3]")
                             .focused(app.card_focus == CardFocus::Description);
-                        let desc_lines = if let Some(desc_text) = &card.description {
-                            crate::markdown_renderer::render_markdown(desc_text)
-                        } else {
-                            vec![Line::from(Span::styled("No description", label_text()))]
-                        };
+                        let desc_lines = build_description_lines(card);
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
 
-                        // Render Parents section (with sprint logs path)
-                        let parents_config = FieldSectionConfig::new("Parents")
-                            .with_focus_indicator("Parents [4]")
-                            .focused(app.card_focus == CardFocus::Parents);
-                        let parents_lines = if parent_count > 0 {
-                            parents
-                                .iter()
-                                .take(3)
-                                .filter_map(|parent_id| {
-                                    app.ctx.cards.iter().find(|c| c.id == *parent_id).map(|c| {
-                                        Line::from(vec![
-                                            Span::styled("→ ", label_text()),
-                                            Span::styled(c.title.clone(), normal_text()),
-                                        ])
-                                    })
-                                })
-                                .collect()
-                        } else {
-                            vec![Line::from(Span::styled("No parents", label_text()))]
-                        };
-                        let parents_widget =
-                            Paragraph::new(parents_lines).block(parents_config.block());
-                        frame.render_widget(parents_widget, chunks[3]);
-
-                        // Render Children section (with sprint logs path)
-                        let children_title = format!("Children ({})", child_count);
-                        let children_title_focused = format!("Children ({}) [5]", child_count);
-                        let children_config = FieldSectionConfig::new(&children_title)
-                            .with_focus_indicator(&children_title_focused)
-                            .focused(app.card_focus == CardFocus::Children);
-                        let children_lines = if child_count > 0 {
-                            children
-                                .iter()
-                                .take(3)
-                                .filter_map(|child_id| {
-                                    app.ctx.cards.iter().find(|c| c.id == *child_id).map(|c| {
-                                        Line::from(vec![
-                                            Span::styled("→ ", label_text()),
-                                            Span::styled(c.title.clone(), normal_text()),
-                                        ])
-                                    })
-                                })
-                                .collect()
-                        } else {
-                            vec![Line::from(Span::styled("No children", label_text()))]
-                        };
-                        let children_widget =
-                            Paragraph::new(children_lines).block(children_config.block());
-                        frame.render_widget(children_widget, chunks[4]);
+                        // Render relationship boxes
+                        render_relationship_boxes(
+                            app,
+                            frame,
+                            chunks[3],
+                            &parents,
+                            &children,
+                            child_count,
+                        );
                     } else {
+                        // Render metadata section
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.card_focus == CardFocus::Metadata);
-
-                        let meta_lines = vec![
-                            metadata_line_multi(vec![
-                                ("Priority", format!("{:?}", card.priority), normal_text()),
-                                ("Status", format!("{:?}", card.status), normal_text()),
-                                (
-                                    "Points",
-                                    card.points
-                                        .map(|p| p.to_string())
-                                        .unwrap_or_else(|| "-".to_string()),
-                                    normal_text(),
-                                ),
-                            ]),
-                            if let Some(due_date) = card.due_date {
-                                metadata_line_styled(
-                                    "Due",
-                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
-                                    Style::default().fg(Color::Red),
-                                )
-                            } else {
-                                Line::from(Span::styled("No due date", label_text()))
-                            },
-                            metadata_line_styled(
-                                "Branch",
-                                card.branch_name(
-                                    board,
-                                    &app.ctx.sprints,
-                                    app.app_config.effective_default_card_prefix(),
-                                ),
-                                active_item(),
-                            ),
-                        ];
-
+                        let meta_lines =
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
 
+                        // Render description section
                         let desc_config = FieldSectionConfig::new("Description")
                             .with_focus_indicator("Description [3]")
                             .focused(app.card_focus == CardFocus::Description);
-                        let desc_lines = if let Some(desc_text) = &card.description {
-                            crate::markdown_renderer::render_markdown(desc_text)
-                        } else {
-                            vec![Line::from(Span::styled("No description", label_text()))]
-                        };
+                        let desc_lines = build_description_lines(card);
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
 
-                        // Render Parents section
-                        let parents_config = FieldSectionConfig::new("Parents")
-                            .with_focus_indicator("Parents [4]")
-                            .focused(app.card_focus == CardFocus::Parents);
-                        let parents_lines = if parent_count > 0 {
-                            parents
-                                .iter()
-                                .take(3)
-                                .filter_map(|parent_id| {
-                                    app.ctx.cards.iter().find(|c| c.id == *parent_id).map(|c| {
-                                        Line::from(vec![
-                                            Span::styled("→ ", label_text()),
-                                            Span::styled(c.title.clone(), normal_text()),
-                                        ])
-                                    })
-                                })
-                                .collect()
-                        } else {
-                            vec![Line::from(Span::styled("No parents", label_text()))]
-                        };
-                        let parents_widget =
-                            Paragraph::new(parents_lines).block(parents_config.block());
-                        frame.render_widget(parents_widget, chunks[3]);
-
-                        // Render Children section
-                        let children_title_else = format!("Children ({})", child_count);
-                        let children_title_focused_else = format!("Children ({}) [5]", child_count);
-                        let children_config = FieldSectionConfig::new(&children_title_else)
-                            .with_focus_indicator(&children_title_focused_else)
-                            .focused(app.card_focus == CardFocus::Children);
-                        let children_lines = if child_count > 0 {
-                            children
-                                .iter()
-                                .take(3)
-                                .filter_map(|child_id| {
-                                    app.ctx.cards.iter().find(|c| c.id == *child_id).map(|c| {
-                                        Line::from(vec![
-                                            Span::styled("→ ", label_text()),
-                                            Span::styled(c.title.clone(), normal_text()),
-                                        ])
-                                    })
-                                })
-                                .collect()
-                        } else {
-                            vec![Line::from(Span::styled("No children", label_text()))]
-                        };
-                        let children_widget =
-                            Paragraph::new(children_lines).block(children_config.block());
-                        frame.render_widget(children_widget, chunks[4]);
+                        // Render relationship boxes
+                        render_relationship_boxes(
+                            app,
+                            frame,
+                            chunks[3],
+                            &parents,
+                            &children,
+                            child_count,
+                        );
                     }
                 }
             }
