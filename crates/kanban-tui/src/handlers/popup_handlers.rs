@@ -81,7 +81,7 @@ impl App {
                 false
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.sort_field_selection.next(6);
+                self.sort_field_selection.next(7);
                 false
             }
             KeyCode::Char('k') | KeyCode::Up => {
@@ -96,7 +96,8 @@ impl App {
                         2 => SortField::CreatedAt,
                         3 => SortField::UpdatedAt,
                         4 => SortField::Status,
-                        5 => SortField::Default,
+                        5 => SortField::Position,
+                        6 => SortField::Default,
                         _ => return false,
                     };
 

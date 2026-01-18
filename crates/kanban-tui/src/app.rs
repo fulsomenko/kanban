@@ -2047,7 +2047,8 @@ impl App {
                 SortField::CreatedAt => 2,
                 SortField::UpdatedAt => 3,
                 SortField::Status => 4,
-                SortField::Default => 5,
+                SortField::Position => 5,
+                SortField::Default => 6,
             };
         }
         0
