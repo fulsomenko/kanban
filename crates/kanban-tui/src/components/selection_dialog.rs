@@ -67,7 +67,7 @@ impl SelectionDialog for SortFieldDialog {
     }
 
     fn options_count(&self, _app: &App) -> usize {
-        6 // Points, Priority, CreatedAt, UpdatedAt, Status, Default
+        7 // Points, Priority, CreatedAt, UpdatedAt, Status, Position, Default
     }
 
     fn render(&self, app: &App, frame: &mut Frame) {
@@ -80,6 +80,7 @@ impl SelectionDialog for SortFieldDialog {
             SortField::CreatedAt,
             SortField::UpdatedAt,
             SortField::Status,
+            SortField::Position,
             SortField::Default,
         ];
 
@@ -100,6 +101,7 @@ impl SelectionDialog for SortFieldDialog {
                     SortField::UpdatedAt => "Date Updated",
                     SortField::Default => "Task Number",
                     SortField::Status => "Status",
+                    SortField::Position => "Position",
                 };
 
                 let order_indicator = if is_active {

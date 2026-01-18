@@ -384,11 +384,8 @@ mod tests {
             list.navigate_down();
             let after_idx = list.get_selected_index();
 
-            if before_idx.is_some() && after_idx.is_some() {
-                assert!(
-                    after_idx.unwrap() >= before_idx.unwrap(),
-                    "Selection should move down or stay"
-                );
+            if let (Some(before), Some(after)) = (before_idx, after_idx) {
+                assert!(after >= before, "Selection should move down or stay");
             }
         }
 
