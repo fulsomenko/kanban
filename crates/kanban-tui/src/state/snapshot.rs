@@ -105,9 +105,11 @@ mod tests {
         };
 
         // Create a minimal app with active_board_index set
-        let mut app = App::default();
-        app.active_board_index = Some(0);
-        app.current_sort_field = Some(SortField::Default); // Old value
+        let mut app = App {
+            active_board_index: Some(0),
+            current_sort_field: Some(SortField::Default), // Old value
+            ..Default::default()
+        };
 
         // Apply snapshot - should sync sort field from board
         snapshot.apply_to_app(&mut app);
