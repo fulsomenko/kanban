@@ -200,8 +200,8 @@ mod tests {
             kanban_domain::Card::new(&mut board_mut, column.id, "Second".to_string(), 10, "task");
 
         let sorter = PositionSorter;
-        assert_eq!(sorter.compare(&card2, &card3), Ordering::Less);   // 5 < 10
-        assert_eq!(sorter.compare(&card3, &card1), Ordering::Less);   // 10 < 20
+        assert_eq!(sorter.compare(&card2, &card3), Ordering::Less); // 5 < 10
+        assert_eq!(sorter.compare(&card3, &card1), Ordering::Less); // 10 < 20
         assert_eq!(sorter.compare(&card1, &card2), Ordering::Greater); // 20 > 5
     }
 
@@ -222,9 +222,9 @@ mod tests {
         let sorter = OrderedSorter::new(Box::new(PositionSorter), SortOrder::Ascending);
         sorter.sort(&mut cards);
 
-        assert_eq!(cards[0].title, "First");  // position 5
+        assert_eq!(cards[0].title, "First"); // position 5
         assert_eq!(cards[1].title, "Second"); // position 10
-        assert_eq!(cards[2].title, "Third");  // position 20
+        assert_eq!(cards[2].title, "Third"); // position 20
     }
 
     #[test]
@@ -236,7 +236,8 @@ mod tests {
         let column = kanban_domain::Column::new(board.id, "Todo".to_string(), 0);
         let mut board_mut = board.clone();
 
-        let card1 = kanban_domain::Card::new(&mut board_mut, column.id, "A".to_string(), 10, "task");
+        let card1 =
+            kanban_domain::Card::new(&mut board_mut, column.id, "A".to_string(), 10, "task");
         let card2 = kanban_domain::Card::new(&mut board_mut, column.id, "B".to_string(), 5, "task");
 
         // Position 5 < Position 10, so card2 should come before card1
@@ -257,15 +258,11 @@ mod tests {
             SortField::Default,
         ];
 
-        let position_idx = sort_fields
-            .iter()
-            .position(|f| *f == SortField::Position);
+        let position_idx = sort_fields.iter().position(|f| *f == SortField::Position);
 
         assert_eq!(position_idx, Some(5), "Position should be at index 5");
 
-        let default_idx = sort_fields
-            .iter()
-            .position(|f| *f == SortField::Default);
+        let default_idx = sort_fields.iter().position(|f| *f == SortField::Default);
 
         assert_eq!(default_idx, Some(6), "Default should be at index 6");
     }

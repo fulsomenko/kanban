@@ -42,6 +42,14 @@ impl DataSnapshot {
         app.ctx.archived_cards = self.archived_cards.clone();
         app.ctx.sprints = self.sprints.clone();
         app.ctx.graph = self.graph.clone();
+
+        // Sync sort field/order from active board to preserve user's selection after reload
+        if let Some(board_idx) = app.active_board_index {
+            if let Some(board) = app.ctx.boards.get(board_idx) {
+                app.current_sort_field = Some(board.task_sort_field);
+                app.current_sort_order = Some(board.task_sort_order);
+            }
+        }
     }
 
     /// Serialize snapshot to JSON bytes
@@ -62,6 +70,7 @@ impl DataSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kanban_domain::SortField;
 
     #[test]
     fn test_snapshot_serialization() {
@@ -78,5 +87,36 @@ mod tests {
         let restored = DataSnapshot::from_json_bytes(&bytes).unwrap();
 
         assert_eq!(restored.boards.len(), 0);
+    }
+
+    #[test]
+    fn test_apply_to_app_syncs_sort_field_from_board() {
+        // Create a board with Position sort field
+        let mut board = Board::new("Test".to_string(), None);
+        board.update_task_sort(SortField::Position, kanban_domain::SortOrder::Ascending);
+
+        let snapshot = DataSnapshot {
+            boards: vec![board],
+            columns: vec![],
+            cards: vec![],
+            archived_cards: vec![],
+            sprints: vec![],
+            graph: DependencyGraph::new(),
+        };
+
+        // Create a minimal app with active_board_index set
+        let mut app = App::default();
+        app.active_board_index = Some(0);
+        app.current_sort_field = Some(SortField::Default); // Old value
+
+        // Apply snapshot - should sync sort field from board
+        snapshot.apply_to_app(&mut app);
+
+        // After apply, current_sort_field should match the board's task_sort_field
+        assert_eq!(
+            app.current_sort_field,
+            Some(SortField::Position),
+            "apply_to_app should sync current_sort_field from active board"
+        );
     }
 }

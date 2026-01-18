@@ -780,28 +780,36 @@ mod tests {
 #[cfg(test)]
 mod sort_field_serialization_tests {
     use super::*;
-    
+
     #[test]
     fn test_position_serializes_correctly() {
         let field = SortField::Position;
         let json = serde_json::to_string(&field).unwrap();
         assert_eq!(json, "\"Position\"");
     }
-    
+
     #[test]
     fn test_position_deserializes_correctly() {
         let json = "\"Position\"";
         let field: SortField = serde_json::from_str(json).unwrap();
         assert_eq!(field, SortField::Position);
     }
-    
+
     #[test]
     fn test_board_with_position_sort_serializes() {
         let mut board = Board::new("Test".to_string(), None);
         board.update_task_sort(SortField::Position, SortOrder::Descending);
-        
+
         let json = serde_json::to_string(&board).unwrap();
-        assert!(json.contains("\"task_sort_field\":\"Position\""), "Expected Position in JSON, got: {}", json);
-        assert!(json.contains("\"task_sort_order\":\"Descending\""), "Expected Descending in JSON, got: {}", json);
+        assert!(
+            json.contains("\"task_sort_field\":\"Position\""),
+            "Expected Position in JSON, got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"task_sort_order\":\"Descending\""),
+            "Expected Descending in JSON, got: {}",
+            json
+        );
     }
 }
