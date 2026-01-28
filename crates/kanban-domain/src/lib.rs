@@ -7,6 +7,7 @@ pub mod dependencies;
 pub mod editable;
 pub mod field_update;
 pub mod operations;
+pub mod snapshot;
 pub mod sprint;
 pub mod sprint_log;
 pub mod tag;
@@ -20,6 +21,7 @@ pub use dependencies::{CardDependencyGraph, CardEdgeType, CardGraphExt, Dependen
 pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use field_update::FieldUpdate;
 pub use operations::{CardFilter, KanbanOperations};
+pub use snapshot::Snapshot;
 pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
