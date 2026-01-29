@@ -30,6 +30,7 @@ pub use dependencies::{CardDependencyGraph, CardEdgeType, CardGraphExt, Dependen
 pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, ImportedEntities};
 pub use field_update::FieldUpdate;
+pub use filter::CardFilters;
 pub use history::HistoryManager;
 pub use operations::{CardFilter, KanbanOperations};
 pub use query::{
