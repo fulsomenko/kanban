@@ -9,7 +9,6 @@ use crate::{
     filters::FilterDialogState,
     input::InputState,
     search::SearchState,
-    selection::SelectionState,
     services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
     state::SnapshotExt,
     tui_context::TuiContext,
@@ -20,7 +19,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, Editable, KanbanResult};
+use kanban_core::{AppConfig, Editable, KanbanResult, SelectionState};
 use kanban_domain::{
     get_sprint_completed_cards, get_sprint_uncompleted_cards, partition_sprint_cards,
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,

@@ -1,4 +1,4 @@
-use crate::selection::SelectionState;
+use kanban_core::SelectionState;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

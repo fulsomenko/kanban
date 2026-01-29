@@ -1,5 +1,5 @@
 use crate::components::{Page, PageInfo};
-use crate::selection::SelectionState;
+use kanban_core::SelectionState;
 use std::collections::HashSet;
 
 pub type ListRenderInfo = PageInfo;
