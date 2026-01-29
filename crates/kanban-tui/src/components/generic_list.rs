@@ -128,7 +128,7 @@ impl ListComponent {
     pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
         if let Some(selected_idx) = self.selection.get() {
             self.page
-                .scroll_to_make_visible(selected_idx, viewport_height);
+                .scroll_to_visible(selected_idx, viewport_height);
         }
     }
 
@@ -313,7 +313,7 @@ mod tests {
         let info = list.get_render_info(3);
 
         assert!(!info.show_above_indicator);
-        assert_eq!(info.visible_item_indices, vec![0, 1, 2]);
+        assert_eq!(info.visible_indices, vec![0, 1, 2]);
         assert!(info.show_below_indicator);
     }
 
@@ -324,7 +324,7 @@ mod tests {
 
         let info = list.get_render_info(3);
         assert!(info.show_above_indicator);
-        assert_eq!(info.items_above_count, 3);
+        assert_eq!(info.items_above, 3);
     }
 
     #[test]
@@ -350,7 +350,7 @@ mod tests {
         list.ensure_selected_visible(5);
 
         let info = list.get_render_info(5);
-        assert!(info.visible_item_indices.contains(&15));
+        assert!(info.visible_indices.contains(&15));
     }
 
     #[test]
@@ -378,9 +378,9 @@ mod tests {
         // Verify card 10 is visible with the adjusted viewport
         let info = list.get_render_info(adjusted_viewport);
         assert!(
-            info.visible_item_indices.contains(&10),
+            info.visible_indices.contains(&10),
             "Card 10 should be visible. Visible indices: {:?}, scroll_offset: {}",
-            info.visible_item_indices,
+            info.visible_indices,
             list.get_scroll_offset()
         );
 
@@ -413,7 +413,7 @@ mod tests {
 
         // Verify it's visible
         let info = list.get_render_info(adjusted_viewport);
-        assert!(info.visible_item_indices.contains(&5));
+        assert!(info.visible_indices.contains(&5));
 
         // Navigate up back to card 0
         for _ in 0..5 {
@@ -426,7 +426,7 @@ mod tests {
 
         // Verify card 0 is visible and not scrolled past indicator
         let info = list.get_render_info(adjusted_viewport);
-        assert!(info.visible_item_indices.contains(&0));
+        assert!(info.visible_indices.contains(&0));
         assert_eq!(list.get_scroll_offset(), 0, "Should be at top of list");
     }
 
@@ -515,9 +515,9 @@ mod tests {
         // Verify card 5 is visible
         let info = list.get_render_info(adjusted_viewport);
         assert!(
-            info.visible_item_indices.contains(&5),
+            info.visible_indices.contains(&5),
             "Card 5 should be visible. Visible: {:?}, scroll: {}, viewport: {}",
-            info.visible_item_indices,
+            info.visible_indices,
             list.get_scroll_offset(),
             adjusted_viewport
         );
