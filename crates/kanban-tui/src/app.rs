@@ -21,7 +21,10 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, Editable, KanbanResult};
-use kanban_domain::{Board, Card, SortField, SortOrder, Sprint};
+use kanban_domain::{
+    get_sprint_completed_cards, get_sprint_uncompleted_cards, partition_sprint_cards,
+    sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
+};
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
@@ -1079,20 +1082,11 @@ impl App {
     }
 
     pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        self.ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id))
-            .collect()
+        kanban_domain::get_sprint_cards(sprint_id, &self.ctx.cards)
     }
 
     pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        let cards: Vec<&Card> = self
-            .ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
-            .collect();
+        let cards = get_sprint_completed_cards(sprint_id, &self.ctx.cards);
         tracing::debug!(
             "get_sprint_completed_cards({}): found {} cards",
             sprint_id,
@@ -1102,12 +1096,7 @@ impl App {
     }
 
     pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        let cards: Vec<&Card> = self
-            .ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
-            .collect();
+        let cards = get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards);
         tracing::debug!(
             "get_sprint_uncompleted_cards({}): found {} cards",
             sprint_id,
@@ -1117,21 +1106,8 @@ impl App {
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
-        let uncompleted_ids: Vec<uuid::Uuid> = self
-            .ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
-            .map(|card| card.id)
-            .collect();
-
-        let completed_ids: Vec<uuid::Uuid> = self
-            .ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
-            .map(|card| card.id)
-            .collect();
+        let (uncompleted_ids, completed_ids) =
+            partition_sprint_cards(sprint_id, &self.ctx.cards);
 
         self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
         self.sprint_completed_cards.update_cards(completed_ids);
@@ -1146,28 +1122,18 @@ impl App {
     }
 
     pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
-        let uncompleted_card_ids: Vec<uuid::Uuid> = self.sprint_uncompleted_cards.cards.clone();
-        let completed_card_ids: Vec<uuid::Uuid> = self.sprint_completed_cards.cards.clone();
-
-        let mut uncompleted_cards: Vec<&Card> = uncompleted_card_ids
-            .iter()
-            .filter_map(|id| self.ctx.cards.iter().find(|c| c.id == *id))
-            .collect();
-
-        let mut completed_cards: Vec<&Card> = completed_card_ids
-            .iter()
-            .filter_map(|id| self.ctx.cards.iter().find(|c| c.id == *id))
-            .collect();
-
-        let sorter = get_sorter_for_field(sort_field);
-        let ordered_sorter = OrderedSorter::new(sorter, sort_order);
-
-        ordered_sorter.sort(&mut uncompleted_cards);
-        ordered_sorter.sort(&mut completed_cards);
-
-        let sorted_uncompleted_ids: Vec<uuid::Uuid> =
-            uncompleted_cards.iter().map(|c| c.id).collect();
-        let sorted_completed_ids: Vec<uuid::Uuid> = completed_cards.iter().map(|c| c.id).collect();
+        let sorted_uncompleted_ids = sort_card_ids(
+            &self.sprint_uncompleted_cards.cards,
+            &self.ctx.cards,
+            sort_field,
+            sort_order,
+        );
+        let sorted_completed_ids = sort_card_ids(
+            &self.sprint_completed_cards.cards,
+            &self.ctx.cards,
+            sort_field,
+            sort_order,
+        );
 
         self.sprint_uncompleted_cards
             .update_cards(sorted_uncompleted_ids);
@@ -1178,13 +1144,6 @@ impl App {
             .update_cards(self.sprint_uncompleted_cards.cards.clone());
         self.sprint_completed_component
             .update_cards(self.sprint_completed_cards.cards.clone());
-    }
-
-    pub fn calculate_points(cards: &[&Card]) -> u32 {
-        cards
-            .iter()
-            .filter_map(|card| card.points.map(|p| p as u32))
-            .sum()
     }
 
     /// Execute multiple commands as a batch with a single pause/resume cycle

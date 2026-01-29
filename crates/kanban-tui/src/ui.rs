@@ -462,7 +462,7 @@ fn render_sprint_task_panel_with_selection(
         .iter()
         .filter_map(|card_id| app.ctx.cards.iter().find(|c| c.id == *card_id))
         .collect();
-    let points = App::calculate_points(&cards);
+    let points = kanban_domain::calculate_points(&cards);
 
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
