@@ -1,7 +1,7 @@
 use crate::search::{CardSearcher, CompositeCardSearcher};
-use crate::services::filter::CardFilter;
-use crate::services::{get_sorter_for_field, BoardFilter, OrderedSorter};
+use crate::services::{get_sorter_for_field, OrderedSorter};
 use crate::view_strategy::ViewRefreshContext;
+use kanban_domain::filter::{BoardFilter, CardFilter};
 use kanban_domain::Card;
 use uuid::Uuid;
 
