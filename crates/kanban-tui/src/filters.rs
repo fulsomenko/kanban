@@ -1,19 +1,10 @@
-use std::collections::HashSet;
+pub use kanban_domain::CardFilters;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FilterDialogSection {
     Sprints,
     DateRange,
     Tags,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct CardFilters {
-    pub show_unassigned_sprints: bool,
-    pub selected_sprint_ids: HashSet<uuid::Uuid>,
-    pub date_from: Option<String>,
-    pub date_to: Option<String>,
-    pub selected_tags: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
