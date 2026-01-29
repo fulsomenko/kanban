@@ -5,7 +5,6 @@ use crate::{
     components::generic_list::ListComponent,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
-    export::{BoardExporter, BoardImporter},
     filters::FilterDialogState,
     input::InputState,
     search::SearchState,
@@ -20,6 +19,7 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, KanbanResult, SelectionState};
 use kanban_domain::{
+    export::{AllBoardsExport, BoardExporter, BoardImporter},
     filter::{BoardFilter, CardFilter},
     get_sprint_completed_cards, get_sprint_uncompleted_cards, partition_sprint_cards,
     sort::{get_sorter_for_field, OrderedSorter},
@@ -1292,7 +1292,7 @@ impl App {
                     &self.ctx.sprints,
                 );
 
-                let export = crate::export::AllBoardsExport {
+                let export = AllBoardsExport {
                     boards: vec![board_export],
                 };
 
