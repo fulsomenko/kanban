@@ -1,5 +1,5 @@
-use kanban_core::InputState;
 use crossterm::event::KeyCode;
+use kanban_core::InputState;
 
 pub fn handle_dialog_input(
     input: &mut InputState,

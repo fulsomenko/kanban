@@ -17,6 +17,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use kanban_core::{AppConfig, Editable, InputState, KanbanResult, SelectionState};
+use kanban_domain::AnimationType;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
     filter::{BoardFilter, CardFilter},
@@ -24,7 +25,6 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
-use kanban_domain::AnimationType;
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
@@ -1099,8 +1099,7 @@ impl App {
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
-        let (uncompleted_ids, completed_ids) =
-            partition_sprint_cards(sprint_id, &self.ctx.cards);
+        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &self.ctx.cards);
 
         self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
         self.sprint_completed_cards.update_cards(completed_ids);

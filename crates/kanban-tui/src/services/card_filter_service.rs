@@ -1,6 +1,6 @@
-use kanban_domain::search::{CardSearcher, CompositeSearcher};
 use crate::view_strategy::ViewRefreshContext;
 use kanban_domain::filter::{BoardFilter, CardFilter};
+use kanban_domain::search::{CardSearcher, CompositeSearcher};
 use kanban_domain::sort::{get_sorter_for_field, OrderedSorter};
 use kanban_domain::Card;
 use uuid::Uuid;

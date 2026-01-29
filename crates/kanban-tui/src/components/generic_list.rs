@@ -1,5 +1,5 @@
-use kanban_core::{Page, PageInfo};
 use kanban_core::SelectionState;
+use kanban_core::{Page, PageInfo};
 use std::collections::HashSet;
 
 pub type ListRenderInfo = PageInfo;
