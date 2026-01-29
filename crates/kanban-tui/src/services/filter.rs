@@ -1,25 +1,8 @@
-use kanban_domain::{Card, Column};
-use uuid::Uuid;
+//! Card filtering - re-exports from domain.
+//!
+//! The filtering logic has moved to kanban-domain.
+//! This module provides re-exports for backward compatibility.
 
-pub trait CardFilter {
-    fn matches(&self, card: &Card) -> bool;
-}
-
-pub struct BoardFilter<'a> {
-    board_id: Uuid,
-    columns: &'a [Column],
-}
-
-impl<'a> BoardFilter<'a> {
-    pub fn new(board_id: Uuid, columns: &'a [Column]) -> Self {
-        Self { board_id, columns }
-    }
-}
-
-impl CardFilter for BoardFilter<'_> {
-    fn matches(&self, card: &Card) -> bool {
-        self.columns
-            .iter()
-            .any(|col| col.id == card.column_id && col.board_id == self.board_id)
-    }
-}
+pub use kanban_domain::filter::{
+    BoardFilter, CardFilter, ColumnFilter, CompositeFilter, SprintFilter, UnassignedOnlyFilter,
+};
