@@ -1,17 +1,15 @@
-pub mod history;
 pub mod snapshot;
 
 use crate::app::App;
 use kanban_core::KanbanResult;
 use kanban_domain::commands::Command;
 use kanban_domain::commands::CommandContext;
-use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
+use kanban_domain::{ArchivedCard, Board, Card, Column, HistoryManager, Sprint};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-pub use history::HistoryManager;
 pub use kanban_domain::commands;
 pub use snapshot::{DataSnapshot, Snapshot, SnapshotExt};
 
