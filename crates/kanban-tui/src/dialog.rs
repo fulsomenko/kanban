@@ -1,4 +1,4 @@
-use crate::input::InputState;
+use kanban_core::InputState;
 use crossterm::event::KeyCode;
 
 pub fn handle_dialog_input(

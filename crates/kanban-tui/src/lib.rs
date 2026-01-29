@@ -9,7 +9,6 @@ pub mod editor;
 pub mod events;
 pub mod filters;
 pub mod handlers;
-pub mod input;
 pub mod keybindings;
 pub mod layout_strategy;
 pub mod markdown_renderer;

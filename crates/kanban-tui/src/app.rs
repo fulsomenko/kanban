@@ -6,7 +6,6 @@ use crate::{
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
     filters::FilterDialogState,
-    input::InputState,
     search::SearchState,
     state::SnapshotExt,
     tui_context::TuiContext,
@@ -17,7 +16,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, Editable, KanbanResult, SelectionState};
+use kanban_core::{AppConfig, Editable, InputState, KanbanResult, SelectionState};
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
     filter::{BoardFilter, CardFilter},

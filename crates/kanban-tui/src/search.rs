@@ -2,7 +2,7 @@
 //!
 //! Re-exports domain search types and provides TUI-specific SearchState.
 
-use crate::input::InputState;
+use kanban_core::InputState;
 
 // Re-export domain search types
 pub use kanban_domain::search::{
