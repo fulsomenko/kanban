@@ -29,7 +29,9 @@ pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, Imp
 pub use field_update::FieldUpdate;
 pub use history::HistoryManager;
 pub use operations::{CardFilter, KanbanOperations};
-pub use query::{filter_and_sort_cards, filter_and_sort_cards_by_column, CardQueryBuilder};
+pub use query::{
+    filter_and_sort_cards, filter_and_sort_cards_by_column, CardFilterOptions, CardQueryBuilder,
+};
 pub use search::{BranchNameSearcher, CardSearcher, CompositeSearcher, TitleSearcher};
 pub use snapshot::Snapshot;
 pub use sort::{

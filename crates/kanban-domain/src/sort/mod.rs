@@ -104,7 +104,7 @@ impl OrderedSorter {
     }
 
     /// Sort a vector of cards in place.
-    pub fn sort_owned(&self, cards: &mut Vec<Card>) {
+    pub fn sort_owned(&self, cards: &mut [Card]) {
         cards.sort_by(|a, b| {
             let cmp = self.sorter.compare(a, b);
             match self.order {

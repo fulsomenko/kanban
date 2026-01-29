@@ -78,7 +78,7 @@ impl SprintFilter {
 impl CardFilter for SprintFilter {
     fn matches(&self, card: &Card) -> bool {
         card.sprint_id
-            .map_or(false, |id| self.sprint_ids.contains(&id))
+            .is_some_and(|id| self.sprint_ids.contains(&id))
     }
 }
 
