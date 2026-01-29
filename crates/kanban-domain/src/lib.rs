@@ -6,6 +6,7 @@ pub mod commands;
 pub mod dependencies;
 pub mod editable;
 pub mod field_update;
+pub mod filter;
 pub mod history;
 pub mod operations;
 pub mod snapshot;
