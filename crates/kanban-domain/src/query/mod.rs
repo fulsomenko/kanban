@@ -223,13 +223,7 @@ impl<'a> CardQueryBuilder<'a> {
                 &options,
             )
         } else {
-            filter_and_sort_cards(
-                self.cards,
-                self.columns,
-                self.sprints,
-                self.board,
-                &options,
-            )
+            filter_and_sort_cards(self.cards, self.columns, self.sprints, self.board, &options)
         }
     }
 }
@@ -263,13 +257,8 @@ mod tests {
         let columns = vec![column.clone()];
         let cards = vec![card1.clone(), card2.clone()];
 
-        let result = filter_and_sort_cards(
-            &cards,
-            &columns,
-            &[],
-            &board,
-            &CardFilterOptions::default(),
-        );
+        let result =
+            filter_and_sort_cards(&cards, &columns, &[], &board, &CardFilterOptions::default());
 
         assert_eq!(result.len(), 2);
         assert!(result.contains(&card1.id));

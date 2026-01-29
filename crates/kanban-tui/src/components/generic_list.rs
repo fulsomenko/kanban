@@ -127,8 +127,7 @@ impl ListComponent {
     /// Ensure selected item is visible by scrolling if needed
     pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
         if let Some(selected_idx) = self.selection.get() {
-            self.page
-                .scroll_to_visible(selected_idx, viewport_height);
+            self.page.scroll_to_visible(selected_idx, viewport_height);
         }
     }
 
