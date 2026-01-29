@@ -1,4 +1,4 @@
-use crate::app::AnimationType;
+use kanban_domain::AnimationType;
 use crate::theme::*;
 use kanban_domain::{Board, Card, CardStatus, Sprint};
 use ratatui::{

@@ -24,7 +24,7 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
-pub use kanban_domain::AnimationType;
+use kanban_domain::AnimationType;
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;

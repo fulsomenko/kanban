@@ -756,7 +756,8 @@ impl App {
     }
 
     fn start_delete_animation(&mut self, card_id: uuid::Uuid) {
-        use crate::app::{AnimationType, CardAnimation};
+        use crate::app::CardAnimation;
+        use kanban_domain::AnimationType;
         use std::time::Instant;
 
         if self.ctx.cards.iter().any(|c| c.id == card_id) {
@@ -863,7 +864,8 @@ impl App {
     }
 
     fn start_restore_animation(&mut self, card_id: uuid::Uuid) {
-        use crate::app::{AnimationType, CardAnimation};
+        use crate::app::CardAnimation;
+        use kanban_domain::AnimationType;
         use std::time::Instant;
 
         if self
@@ -964,7 +966,8 @@ impl App {
     }
 
     fn start_permanent_delete_animation(&mut self, card_id: uuid::Uuid) {
-        use crate::app::{AnimationType, CardAnimation};
+        use crate::app::CardAnimation;
+        use kanban_domain::AnimationType;
         use std::time::Instant;
 
         if self
