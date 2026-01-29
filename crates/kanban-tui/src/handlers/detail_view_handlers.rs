@@ -2,7 +2,7 @@ use crate::app::{
     App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
 };
 use crate::events::EventHandler;
-use crate::state::SnapshotExt;
+use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
 use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto};
 use ratatui::{backend::CrosstermBackend, Terminal};

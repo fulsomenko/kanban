@@ -7,7 +7,7 @@ use crate::{
     events::{Event, EventHandler},
     filters::FilterDialogState,
     search::SearchState,
-    state::SnapshotExt,
+    state::TuiSnapshot,
     tui_context::TuiContext,
     ui,
     view_strategy::{UnifiedViewStrategy, ViewRefreshContext, ViewStrategy},

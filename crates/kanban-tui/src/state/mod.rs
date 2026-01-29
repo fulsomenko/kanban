@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub use kanban_domain::commands;
-pub use snapshot::{Snapshot, SnapshotExt};
+pub use snapshot::{Snapshot, TuiSnapshot};
 
 /// Manages state mutations and persistence with immediate auto-saving
 ///

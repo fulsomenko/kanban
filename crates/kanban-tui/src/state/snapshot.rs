@@ -12,7 +12,7 @@ pub use kanban_domain::Snapshot;
 /// Extension trait for App-specific snapshot operations.
 ///
 /// These methods bridge between the domain Snapshot and the TUI App.
-pub trait SnapshotExt {
+pub trait TuiSnapshot {
     /// Create a snapshot from current app state.
     fn from_app(app: &App) -> Self;
 
@@ -26,7 +26,7 @@ pub trait SnapshotExt {
     fn from_json_bytes(bytes: &[u8]) -> KanbanResult<Snapshot>;
 }
 
-impl SnapshotExt for Snapshot {
+impl TuiSnapshot for Snapshot {
     fn from_app(app: &App) -> Self {
         Self {
             boards: app.ctx.boards.clone(),
