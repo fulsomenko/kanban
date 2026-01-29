@@ -7,7 +7,7 @@ use crate::{Card, SortField, SortOrder};
 use uuid::Uuid;
 
 /// Get all cards assigned to a sprint.
-pub fn get_sprint_cards<'a>(sprint_id: Uuid, cards: &'a [Card]) -> Vec<&'a Card> {
+pub fn get_sprint_cards(sprint_id: Uuid, cards: &[Card]) -> Vec<&Card> {
     cards
         .iter()
         .filter(|card| card.sprint_id == Some(sprint_id))
@@ -15,7 +15,7 @@ pub fn get_sprint_cards<'a>(sprint_id: Uuid, cards: &'a [Card]) -> Vec<&'a Card>
 }
 
 /// Get completed cards assigned to a sprint.
-pub fn get_sprint_completed_cards<'a>(sprint_id: Uuid, cards: &'a [Card]) -> Vec<&'a Card> {
+pub fn get_sprint_completed_cards(sprint_id: Uuid, cards: &[Card]) -> Vec<&Card> {
     cards
         .iter()
         .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
@@ -23,7 +23,7 @@ pub fn get_sprint_completed_cards<'a>(sprint_id: Uuid, cards: &'a [Card]) -> Vec
 }
 
 /// Get uncompleted cards assigned to a sprint.
-pub fn get_sprint_uncompleted_cards<'a>(sprint_id: Uuid, cards: &'a [Card]) -> Vec<&'a Card> {
+pub fn get_sprint_uncompleted_cards(sprint_id: Uuid, cards: &[Card]) -> Vec<&Card> {
     cards
         .iter()
         .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())

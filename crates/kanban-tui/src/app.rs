@@ -25,6 +25,7 @@ use kanban_domain::{
     get_sprint_completed_cards, get_sprint_uncompleted_cards, partition_sprint_cards,
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
+pub use kanban_domain::AnimationType;
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
@@ -32,13 +33,6 @@ use std::io;
 use std::time::Instant;
 
 const ANIMATION_DURATION_MS: u128 = 150;
-
-#[derive(Debug, Clone, Copy)]
-pub enum AnimationType {
-    Archiving,
-    Restoring,
-    Deleting,
-}
 
 pub struct CardAnimation {
     pub animation_type: AnimationType,
