@@ -1,7 +1,9 @@
-pub mod exporter;
-pub mod importer;
-pub mod models;
+//! Export functionality - re-exports from domain.
+//!
+//! The export/import logic has moved to kanban-domain.
+//! This module provides re-exports for backward compatibility.
 
-pub use exporter::*;
-pub use importer::*;
-pub use models::*;
+// Re-export everything from domain export module
+pub use kanban_domain::export::{
+    AllBoardsExport, BoardExport, BoardExporter, BoardImporter, ImportedEntities,
+};
