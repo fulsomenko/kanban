@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::state::SnapshotExt;
 use crossterm::event::KeyCode;
 use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, SortField, SortOrder};
 
