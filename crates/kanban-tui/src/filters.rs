@@ -1,4 +1,4 @@
-pub use kanban_domain::CardFilters;
+use kanban_domain::CardFilters;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FilterDialogSection {
