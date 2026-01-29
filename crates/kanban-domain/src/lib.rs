@@ -33,7 +33,12 @@ pub use field_update::FieldUpdate;
 pub use history::HistoryManager;
 pub use operations::{CardFilter, KanbanOperations};
 pub use query::{
-    filter_and_sort_cards, filter_and_sort_cards_by_column, CardFilterOptions, CardQueryBuilder,
+    filter_and_sort_cards, filter_and_sort_cards_by_column,
+    sprint::{
+        calculate_points, calculate_points_by_ids, get_sprint_cards, get_sprint_completed_cards,
+        get_sprint_uncompleted_cards, partition_sprint_cards, sort_card_ids,
+    },
+    CardFilterOptions, CardQueryBuilder,
 };
 pub use search::{BranchNameSearcher, CardSearcher, CompositeSearcher, TitleSearcher};
 pub use snapshot::Snapshot;

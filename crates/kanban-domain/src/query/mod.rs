@@ -3,6 +3,8 @@
 //! Provides functions for filtering and sorting cards with explicit parameters.
 //! The TUI layer wraps these with ViewRefreshContext for convenience.
 
+pub mod sprint;
+
 use crate::filter::{BoardFilter, CardFilter, ColumnFilter};
 use crate::search::{CardSearcher, CompositeSearcher};
 use crate::sort::{get_sorter_for_field, OrderedSorter};
