@@ -1,18 +1,4 @@
-//! Search functionality for the TUI.
-//!
-//! Re-exports domain search types and provides TUI-specific SearchState.
-
 use kanban_core::InputState;
-
-// Re-export domain search types
-pub use kanban_domain::search::{
-    BranchNameSearcher, CardSearcher, CompositeSearcher, TitleSearcher,
-};
-
-// Type aliases for backward compatibility
-pub type CardTitleSearcher = TitleSearcher;
-pub type CardBranchNameSearcher = BranchNameSearcher;
-pub type CompositeCardSearcher = CompositeSearcher;
 
 /// UI state for search mode.
 ///

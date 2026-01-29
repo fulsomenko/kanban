@@ -1,4 +1,4 @@
-use crate::search::{CardSearcher, CompositeCardSearcher};
+use kanban_domain::search::{CardSearcher, CompositeSearcher};
 use crate::view_strategy::ViewRefreshContext;
 use kanban_domain::filter::{BoardFilter, CardFilter};
 use kanban_domain::sort::{get_sorter_for_field, OrderedSorter};
@@ -9,7 +9,7 @@ fn apply_card_filters<'a>(
     cards: &'a [Card],
     ctx: &'a ViewRefreshContext<'a>,
     board_filter: &'a BoardFilter<'a>,
-    search_filter: &'a Option<CompositeCardSearcher>,
+    search_filter: &'a Option<CompositeSearcher>,
 ) -> Vec<&'a Card> {
     cards
         .iter()
@@ -43,7 +43,7 @@ pub fn filter_and_sort_cards(ctx: &ViewRefreshContext) -> Vec<Uuid> {
     let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
     let search_filter = ctx
         .search_query
-        .map(|q| CompositeCardSearcher::new(q.to_string()));
+        .map(|q| CompositeSearcher::new(q.to_string()));
 
     let mut filtered_cards = apply_card_filters(ctx.all_cards, ctx, &board_filter, &search_filter);
 
@@ -58,7 +58,7 @@ pub fn filter_and_sort_cards_by_column(ctx: &ViewRefreshContext, column_id: Uuid
     let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
     let search_filter = ctx
         .search_query
-        .map(|q| CompositeCardSearcher::new(q.to_string()));
+        .map(|q| CompositeSearcher::new(q.to_string()));
 
     let filtered_cards = apply_card_filters(ctx.all_cards, ctx, &board_filter, &search_filter);
 
