@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 
 pub use history::HistoryManager;
 pub use kanban_domain::commands;
-pub use snapshot::DataSnapshot;
+pub use snapshot::{DataSnapshot, Snapshot, SnapshotExt};
 
 /// Manages state mutations and persistence with immediate auto-saving
 ///
