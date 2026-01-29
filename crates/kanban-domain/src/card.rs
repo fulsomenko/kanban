@@ -23,6 +23,15 @@ pub enum CardStatus {
     Done,
 }
 
+/// Represents card lifecycle operation types.
+/// Used for visual feedback during card operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimationType {
+    Archiving,
+    Restoring,
+    Deleting,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Card {
     pub id: CardId,

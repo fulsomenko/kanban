@@ -24,7 +24,7 @@ pub use board::{
     get_active_sprint_card_prefix_override, get_active_sprint_prefix_override, Board, BoardId,
     BoardUpdate, SortField, SortOrder,
 };
-pub use card::{Card, CardId, CardPriority, CardStatus, CardSummary, CardUpdate};
+pub use card::{AnimationType, Card, CardId, CardPriority, CardStatus, CardSummary, CardUpdate};
 pub use column::{Column, ColumnId, ColumnUpdate};
 pub use dependencies::{CardDependencyGraph, CardEdgeType, CardGraphExt, DependencyGraph};
 pub use editable::{BoardSettingsDto, CardMetadataDto};
