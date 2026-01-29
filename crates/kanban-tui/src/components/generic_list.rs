@@ -1,4 +1,4 @@
-use crate::components::{Page, PageInfo};
+use kanban_core::{Page, PageInfo};
 use kanban_core::SelectionState;
 use std::collections::HashSet;
 
