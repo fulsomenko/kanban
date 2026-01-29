@@ -9,7 +9,6 @@ use crate::{
     filters::FilterDialogState,
     input::InputState,
     search::SearchState,
-    services::{get_sorter_for_field, OrderedSorter},
     state::SnapshotExt,
     tui_context::TuiContext,
     ui,
@@ -23,6 +22,7 @@ use kanban_core::{AppConfig, Editable, KanbanResult, SelectionState};
 use kanban_domain::{
     filter::{BoardFilter, CardFilter},
     get_sprint_completed_cards, get_sprint_uncompleted_cards, partition_sprint_cards,
+    sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
 pub use kanban_domain::AnimationType;
