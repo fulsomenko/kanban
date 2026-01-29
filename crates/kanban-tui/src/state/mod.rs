@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub use kanban_domain::commands;
-pub use snapshot::{DataSnapshot, Snapshot, SnapshotExt};
+pub use snapshot::{Snapshot, SnapshotExt};
 
 /// Manages state mutations and persistence with immediate auto-saving
 ///
@@ -40,7 +40,7 @@ pub struct StateManager {
     instance_id: uuid::Uuid,
     conflict_pending: bool,
     needs_refresh: bool,
-    save_tx: Option<mpsc::Sender<DataSnapshot>>,
+    save_tx: Option<mpsc::Sender<Snapshot>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
     file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
@@ -58,7 +58,7 @@ impl StateManager {
         save_file: Option<String>,
     ) -> (
         Self,
-        Option<mpsc::Receiver<DataSnapshot>>,
+        Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
         // Use bounded channel (capacity: 100) to prevent unbounded memory growth
@@ -153,7 +153,7 @@ impl StateManager {
 
         // Queue snapshot for async save if channel is available
         if let Some(ref tx) = self.save_tx {
-            let snapshot = DataSnapshot::from_app(app);
+            let snapshot = Snapshot::from_app(app);
             tracing::debug!("Queueing snapshot for async save");
             // Use try_send (non-blocking) since we're in a synchronous context
             // Backpressure is handled by queue_snapshot method
@@ -242,7 +242,7 @@ impl StateManager {
     }
 
     /// Force overwrite external changes (user chose to keep their changes)
-    pub async fn force_overwrite(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
+    pub async fn force_overwrite(&mut self, snapshot: &Snapshot) -> KanbanResult<()> {
         self.conflict_pending = false;
 
         if let Some(ref store) = self.store {
@@ -270,7 +270,7 @@ impl StateManager {
             let (snapshot, _metadata) = store.load().await?;
 
             // Deserialize and apply loaded data to app
-            let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
+            let data: Snapshot = serde_json::from_slice(&snapshot.data)
                 .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
             data.apply_to_app(app);
@@ -312,7 +312,7 @@ impl StateManager {
     ///
     /// Uses try_send to handle bounded channel capacity (100 snapshots).
     /// If channel is full, logs warning and skips save to prevent blocking UI.
-    pub fn queue_snapshot(&mut self, snapshot: DataSnapshot) {
+    pub fn queue_snapshot(&mut self, snapshot: Snapshot) {
         // Pause file watching before queuing save to prevent detecting our own writes
         if let Some(ref watcher) = self.file_watcher {
             watcher.pause();
@@ -390,7 +390,7 @@ impl StateManager {
     }
 
     /// Capture snapshot before command execution (for undo history)
-    pub fn capture_before_command(&mut self, snapshot: DataSnapshot) {
+    pub fn capture_before_command(&mut self, snapshot: Snapshot) {
         self.history.capture_before_command(snapshot);
     }
 

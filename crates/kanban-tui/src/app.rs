@@ -182,7 +182,7 @@ impl App {
         save_file: Option<String>,
     ) -> (
         Self,
-        Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
+        Option<tokio::sync::mpsc::Receiver<crate::state::Snapshot>>,
     ) {
         let app_config = AppConfig::load();
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone());
@@ -1205,7 +1205,7 @@ impl App {
         self.ctx.state_manager.history_mut().suppress();
 
         // Save current state to redo stack
-        let current_snapshot = crate::state::DataSnapshot::from_app(self);
+        let current_snapshot = crate::state::Snapshot::from_app(self);
         self.ctx
             .state_manager
             .history_mut()
@@ -1217,7 +1217,7 @@ impl App {
             self.refresh_view();
 
             // Queue snapshot for persistence
-            let save_snapshot = crate::state::DataSnapshot::from_app(self);
+            let save_snapshot = crate::state::Snapshot::from_app(self);
             self.ctx.state_manager.queue_snapshot(save_snapshot);
         }
 
@@ -1238,7 +1238,7 @@ impl App {
         self.ctx.state_manager.history_mut().suppress();
 
         // Save current state to undo stack
-        let current_snapshot = crate::state::DataSnapshot::from_app(self);
+        let current_snapshot = crate::state::Snapshot::from_app(self);
         self.ctx
             .state_manager
             .history_mut()
@@ -1250,7 +1250,7 @@ impl App {
             self.refresh_view();
 
             // Queue snapshot for persistence
-            let save_snapshot = crate::state::DataSnapshot::from_app(self);
+            let save_snapshot = crate::state::Snapshot::from_app(self);
             self.ctx.state_manager.queue_snapshot(save_snapshot);
         }
 
@@ -1382,7 +1382,7 @@ impl App {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
                                     self.ctx.state_manager.mark_dirty();
-                                    let snapshot = crate::state::DataSnapshot::from_app(self);
+                                    let snapshot = crate::state::Snapshot::from_app(self);
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
@@ -1394,7 +1394,7 @@ impl App {
                                 };
                                 board.update_description(desc);
                                 self.ctx.state_manager.mark_dirty();
-                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                let snapshot = crate::state::Snapshot::from_app(self);
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
@@ -1437,7 +1437,7 @@ impl App {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
                                     self.ctx.state_manager.mark_dirty();
-                                    let snapshot = crate::state::DataSnapshot::from_app(self);
+                                    let snapshot = crate::state::Snapshot::from_app(self);
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
@@ -1449,7 +1449,7 @@ impl App {
                                 };
                                 card.update_description(desc);
                                 self.ctx.state_manager.mark_dirty();
-                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                let snapshot = crate::state::Snapshot::from_app(self);
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
@@ -1489,7 +1489,7 @@ impl App {
 
     pub async fn run(
         &mut self,
-        save_rx: Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
+        save_rx: Option<tokio::sync::mpsc::Receiver<crate::state::Snapshot>>,
     ) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
 
@@ -1640,7 +1640,7 @@ impl App {
                                         if let Some(ref watcher) = self.file_watcher {
                                             watcher.pause();
                                         }
-                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        let snapshot = crate::state::Snapshot::from_app(self);
                                         if let Err(e) = self.ctx.state_manager.force_overwrite(&snapshot).await {
                                             tracing::error!("Failed to force overwrite: {}", e);
                                         }
@@ -1655,7 +1655,7 @@ impl App {
                                         if let Some(store) = self.ctx.state_manager.store() {
                                             match store.load().await {
                                                 Ok((snapshot, _metadata)) => {
-                                                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                                                    match serde_json::from_slice::<crate::state::Snapshot>(&snapshot.data) {
                                                         Ok(data) => {
                                                             data.apply_to_app(self);
                                                             self.ctx.state_manager.clear_conflict();
@@ -1810,7 +1810,7 @@ impl App {
         let content = std::fs::read_to_string(filename)?;
 
         // Capture snapshot before import for undo history
-        let before_snapshot = crate::state::DataSnapshot::from_app(self);
+        let before_snapshot = crate::state::Snapshot::from_app(self);
         self.ctx
             .state_manager
             .capture_before_command(before_snapshot);
@@ -1830,7 +1830,7 @@ impl App {
             self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
             // Queue snapshot for persistence
-            let save_snapshot = crate::state::DataSnapshot::from_app(self);
+            let save_snapshot = crate::state::Snapshot::from_app(self);
             self.ctx.state_manager.queue_snapshot(save_snapshot);
 
             return Ok(());
@@ -1853,7 +1853,7 @@ impl App {
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
         // Queue snapshot for persistence
-        let save_snapshot = crate::state::DataSnapshot::from_app(self);
+        let save_snapshot = crate::state::Snapshot::from_app(self);
         self.ctx.state_manager.queue_snapshot(save_snapshot);
 
         Ok(())
@@ -1863,7 +1863,7 @@ impl App {
         if let Some(store) = self.ctx.state_manager.store() {
             match store.load().await {
                 Ok((snapshot, _metadata)) => {
-                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                    match serde_json::from_slice::<crate::state::Snapshot>(&snapshot.data) {
                         Ok(data) => {
                             data.apply_to_app(self);
                             self.ctx.state_manager.mark_clean();

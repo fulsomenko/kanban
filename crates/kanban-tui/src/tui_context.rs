@@ -4,7 +4,7 @@ use crate::state::commands::{
     DeleteSprint, MoveCard, RestoreCard, UnassignCardFromSprint, UpdateBoard, UpdateCard,
     UpdateColumn, UpdateSprint,
 };
-use crate::state::{DataSnapshot, StateManager};
+use crate::state::{Snapshot, StateManager};
 use kanban_core::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardFilter, CardUpdate, Column, ColumnUpdate,
@@ -28,7 +28,7 @@ impl TuiContext {
         save_file: Option<String>,
     ) -> (
         Self,
-        Option<mpsc::Receiver<DataSnapshot>>,
+        Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
         let (state_manager, save_rx, completion_rx) = StateManager::new(save_file);
@@ -52,7 +52,7 @@ impl TuiContext {
 
     pub fn execute_commands_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
         // Capture snapshot BEFORE execution for undo history
-        let before_snapshot = DataSnapshot {
+        let before_snapshot = Snapshot {
             boards: self.boards.clone(),
             columns: self.columns.clone(),
             cards: self.cards.clone(),
@@ -74,7 +74,7 @@ impl TuiContext {
             )?;
         }
 
-        let snapshot = DataSnapshot {
+        let snapshot = Snapshot {
             boards: self.boards.clone(),
             columns: self.columns.clone(),
             cards: self.cards.clone(),
@@ -505,7 +505,7 @@ impl KanbanOperations for TuiContext {
                 .filter(|s| s.board_id == id)
                 .cloned()
                 .collect();
-            DataSnapshot {
+            Snapshot {
                 boards,
                 columns,
                 cards,
@@ -514,7 +514,7 @@ impl KanbanOperations for TuiContext {
                 graph: self.graph.clone(),
             }
         } else {
-            DataSnapshot {
+            Snapshot {
                 boards: self.boards.clone(),
                 columns: self.columns.clone(),
                 cards: self.cards.clone(),
@@ -529,7 +529,7 @@ impl KanbanOperations for TuiContext {
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        let imported: DataSnapshot = serde_json::from_str(data)
+        let imported: Snapshot = serde_json::from_str(data)
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
         let board =

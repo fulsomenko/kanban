@@ -9,9 +9,6 @@ use kanban_core::KanbanResult;
 // Re-export domain Snapshot
 pub use kanban_domain::Snapshot;
 
-/// Type alias for backward compatibility.
-pub type DataSnapshot = Snapshot;
-
 /// Extension trait for App-specific snapshot operations.
 ///
 /// These methods bridge between the domain Snapshot and the TUI App.

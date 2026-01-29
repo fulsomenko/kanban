@@ -515,7 +515,7 @@ impl App {
                                     if result.is_ok() {
                                         self.relationship_selected.remove(&selected_card_id);
                                         self.ctx.state_manager.mark_dirty();
-                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        let snapshot = crate::state::Snapshot::from_app(self);
                                         self.ctx.state_manager.queue_snapshot(snapshot);
                                     }
                                 } else {
@@ -537,7 +537,7 @@ impl App {
                                     if result.is_ok() {
                                         self.relationship_selected.insert(selected_card_id);
                                         self.ctx.state_manager.mark_dirty();
-                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        let snapshot = crate::state::Snapshot::from_app(self);
                                         self.ctx.state_manager.queue_snapshot(snapshot);
                                     }
                                 }
