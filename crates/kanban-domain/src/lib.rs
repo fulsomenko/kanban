@@ -9,6 +9,7 @@ pub mod field_update;
 pub mod history;
 pub mod operations;
 pub mod snapshot;
+pub mod sort;
 pub mod sprint;
 pub mod sprint_log;
 pub mod tag;
@@ -24,6 +25,10 @@ pub use field_update::FieldUpdate;
 pub use history::HistoryManager;
 pub use operations::{CardFilter, KanbanOperations};
 pub use snapshot::Snapshot;
+pub use sort::{
+    get_sorter_for_field, CardNumberSorter, CardSorter, CreatedAtSorter, OrderedSorter,
+    PointsSorter, PositionSorter, PrioritySorter, StatusSorter, UpdatedAtSorter,
+};
 pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
