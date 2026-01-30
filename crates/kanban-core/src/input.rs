@@ -70,7 +70,7 @@ impl InputState {
         &self.buffer
     }
 
-    pub fn cursor_pos(&self) -> usize {
+    pub fn cursor_byte_offset(&self) -> usize {
         self.cursor
     }
 }
@@ -89,7 +89,7 @@ mod tests {
     fn test_new_is_empty() {
         let input = InputState::new();
         assert!(input.is_empty());
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
         assert_eq!(input.as_str(), "");
     }
 
@@ -100,7 +100,7 @@ mod tests {
         input.insert_char('b');
         input.insert_char('c');
         assert_eq!(input.as_str(), "abc");
-        assert_eq!(input.cursor_pos(), 3);
+        assert_eq!(input.cursor_byte_offset(), 3);
     }
 
     #[test]
@@ -110,7 +110,7 @@ mod tests {
         input.move_home();
         input.insert_char('a');
         assert_eq!(input.as_str(), "ab");
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
         input.move_left();
         input.insert_char('b');
         assert_eq!(input.as_str(), "abc");
-        assert_eq!(input.cursor_pos(), 2);
+        assert_eq!(input.cursor_byte_offset(), 2);
     }
 
     #[test]
@@ -129,13 +129,13 @@ mod tests {
         let mut input = InputState::new();
         input.backspace();
         assert_eq!(input.as_str(), "");
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
 
         input.insert_char('a');
         input.move_home();
         input.backspace();
         assert_eq!(input.as_str(), "a");
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
     }
 
     #[test]
@@ -147,7 +147,7 @@ mod tests {
         input.move_left();
         input.backspace();
         assert_eq!(input.as_str(), "ac");
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
     }
 
     #[test]
@@ -157,7 +157,7 @@ mod tests {
         input.insert_char('b');
         input.backspace();
         assert_eq!(input.as_str(), "a");
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
     }
 
     #[test]
@@ -169,7 +169,7 @@ mod tests {
         input.insert_char('a');
         input.delete();
         assert_eq!(input.as_str(), "a");
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
     }
 
     #[test]
@@ -181,19 +181,19 @@ mod tests {
         input.move_home();
         input.delete();
         assert_eq!(input.as_str(), "bc");
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
     }
 
     #[test]
     fn test_move_left_at_zero_is_noop() {
         let input = InputState::new();
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
 
         let mut input = InputState::new();
         input.insert_char('a');
         input.move_home();
         input.move_left();
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
     }
 
     #[test]
@@ -202,20 +202,20 @@ mod tests {
         input.insert_char('a');
         input.insert_char('b');
         input.move_left();
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
         input.move_left();
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
     }
 
     #[test]
     fn test_move_right_at_end_is_noop() {
         let mut input = InputState::new();
         input.move_right();
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
 
         input.insert_char('a');
         input.move_right();
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
     }
 
     #[test]
@@ -225,9 +225,9 @@ mod tests {
         input.insert_char('b');
         input.move_home();
         input.move_right();
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
         input.move_right();
-        assert_eq!(input.cursor_pos(), 2);
+        assert_eq!(input.cursor_byte_offset(), 2);
     }
 
     #[test]
@@ -236,9 +236,9 @@ mod tests {
         input.insert_char('a');
         input.insert_char('b');
         input.insert_char('c');
-        assert_eq!(input.cursor_pos(), 3);
+        assert_eq!(input.cursor_byte_offset(), 3);
         input.move_home();
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
     }
 
     #[test]
@@ -247,9 +247,9 @@ mod tests {
         input.insert_char('a');
         input.insert_char('b');
         input.move_home();
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
         input.move_end();
-        assert_eq!(input.cursor_pos(), 2);
+        assert_eq!(input.cursor_byte_offset(), 2);
     }
 
     #[test]
@@ -259,7 +259,7 @@ mod tests {
         input.insert_char('b');
         input.clear();
         assert!(input.is_empty());
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
         assert_eq!(input.as_str(), "");
     }
 
@@ -268,7 +268,7 @@ mod tests {
         let mut input = InputState::new();
         input.set("hello".to_string());
         assert_eq!(input.as_str(), "hello");
-        assert_eq!(input.cursor_pos(), 5);
+        assert_eq!(input.cursor_byte_offset(), 5);
     }
 
     #[test]
@@ -298,15 +298,15 @@ mod tests {
         input.insert_char('\u{00e9}'); // e-acute, 2 bytes
         input.insert_char('b');
         assert_eq!(input.as_str(), "a\u{00e9}b");
-        assert_eq!(input.cursor_pos(), 4); // 1 + 2 + 1
+        assert_eq!(input.cursor_byte_offset(), 4); // 1 + 2 + 1
 
         let mut input = InputState::new();
         input.insert_char('\u{4e16}'); // CJK character, 3 bytes
-        assert_eq!(input.cursor_pos(), 3);
+        assert_eq!(input.cursor_byte_offset(), 3);
 
         let mut input = InputState::new();
         input.insert_char('\u{1f600}'); // emoji, 4 bytes
-        assert_eq!(input.cursor_pos(), 4);
+        assert_eq!(input.cursor_byte_offset(), 4);
     }
 
     #[test]
@@ -317,10 +317,10 @@ mod tests {
         input.insert_char('b');
         input.backspace();
         assert_eq!(input.as_str(), "a\u{00e9}");
-        assert_eq!(input.cursor_pos(), 3);
+        assert_eq!(input.cursor_byte_offset(), 3);
         input.backspace();
         assert_eq!(input.as_str(), "a");
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
     }
 
     #[test]
@@ -333,7 +333,7 @@ mod tests {
         input.move_right(); // past 'a'
         input.delete(); // delete e-acute
         assert_eq!(input.as_str(), "ab");
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
     }
 
     #[test]
@@ -344,11 +344,11 @@ mod tests {
         input.insert_char('b');
         // cursor at 4 (end)
         input.move_left(); // back over 'b' (1 byte)
-        assert_eq!(input.cursor_pos(), 3);
+        assert_eq!(input.cursor_byte_offset(), 3);
         input.move_left(); // back over e-acute (2 bytes)
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
         input.move_left(); // back over 'a' (1 byte)
-        assert_eq!(input.cursor_pos(), 0);
+        assert_eq!(input.cursor_byte_offset(), 0);
     }
 
     #[test]
@@ -359,11 +359,11 @@ mod tests {
         input.insert_char('b');
         input.move_home();
         input.move_right(); // past 'a'
-        assert_eq!(input.cursor_pos(), 1);
+        assert_eq!(input.cursor_byte_offset(), 1);
         input.move_right(); // past e-acute (2 bytes)
-        assert_eq!(input.cursor_pos(), 3);
+        assert_eq!(input.cursor_byte_offset(), 3);
         input.move_right(); // past 'b'
-        assert_eq!(input.cursor_pos(), 4);
+        assert_eq!(input.cursor_byte_offset(), 4);
     }
 
     #[test]

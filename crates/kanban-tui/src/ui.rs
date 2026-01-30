@@ -567,7 +567,7 @@ fn render_create_board_popup(app: &App, frame: &mut Frame) {
         "Create New Project",
         "Project Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -577,7 +577,7 @@ fn render_create_card_popup(app: &App, frame: &mut Frame) {
         "Create New Task",
         "Task Title:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -587,7 +587,7 @@ fn render_create_sprint_popup(app: &App, frame: &mut Frame) {
         "Create New Sprint",
         "Sprint Name (optional):",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -597,7 +597,7 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
         "Set Points",
         "Points (1-5 or empty):",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -770,7 +770,7 @@ fn render_rename_board_popup(app: &App, frame: &mut Frame) {
         "Rename Project",
         "New Project Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -780,7 +780,7 @@ fn render_export_board_popup(app: &App, frame: &mut Frame) {
         "Export Project",
         "Filename:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -790,7 +790,7 @@ fn render_export_all_popup(app: &App, frame: &mut Frame) {
         "Export All Projects",
         "Filename:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1059,7 +1059,7 @@ fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Branch Prefix",
         "Branch Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1069,7 +1069,7 @@ fn render_set_sprint_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Sprint Prefix",
         "Sprint Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1079,7 +1079,7 @@ fn render_set_sprint_card_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Card Prefix Override",
         "Card Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1172,7 +1172,7 @@ fn render_create_column_popup(app: &App, frame: &mut Frame) {
         "Create New Column",
         "Column Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1182,7 +1182,7 @@ fn render_rename_column_popup(app: &App, frame: &mut Frame) {
         "Rename Column",
         "New Column Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
