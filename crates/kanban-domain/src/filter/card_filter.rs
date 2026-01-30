@@ -110,11 +110,6 @@ impl CompositeFilter {
         self
     }
 
-    /// Add a filter to the composite (mutable).
-    pub fn add_filter(&mut self, filter: Box<dyn CardFilter>) {
-        self.filters.push(filter);
-    }
-
     /// Check if the composite has no filters.
     pub fn is_empty(&self) -> bool {
         self.filters.is_empty()
