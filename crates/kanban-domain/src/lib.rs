@@ -32,21 +32,17 @@ pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, Imp
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
 pub use history::HistoryManager;
-pub use operations::{CardFilter, KanbanOperations};
+pub use operations::{CardListFilter, KanbanOperations};
 pub use query::{
-    filter_and_sort_cards, filter_and_sort_cards_by_column,
     sprint::{
         calculate_points, calculate_points_by_ids, get_sprint_cards, get_sprint_completed_cards,
         get_sprint_uncompleted_cards, partition_sprint_cards, sort_card_ids,
     },
-    CardFilterOptions, CardQueryBuilder,
+    CardQueryBuilder,
 };
 pub use search::{BranchNameSearcher, CardSearcher, CompositeSearcher, TitleSearcher};
 pub use snapshot::Snapshot;
-pub use sort::{
-    get_sorter_for_field, CardNumberSorter, CardSorter, CreatedAtSorter, OrderedSorter,
-    PointsSorter, PositionSorter, PrioritySorter, StatusSorter, UpdatedAtSorter,
-};
+pub use sort::{get_sorter_for_field, CardSorter, OrderedSorter, SortBy};
 pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};

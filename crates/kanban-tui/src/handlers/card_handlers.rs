@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use crate::state::commands::{
+use kanban_domain::commands::{
     ArchiveCard, CreateCard, DeleteCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard,
 };
 use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, Column, SortOrder};
@@ -311,7 +311,7 @@ impl App {
         };
 
         // Batch all card updates to avoid race conditions with file watcher
-        let mut update_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+        let mut update_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
 
         for card_id in card_ids {
             // First, get card info without mutable borrow
@@ -377,7 +377,7 @@ impl App {
 
             // Add to batch
             let cmd = Box::new(UpdateCard { card_id, updates })
-                as Box<dyn crate::state::commands::Command>;
+                as Box<dyn kanban_domain::commands::Command>;
             update_commands.push(cmd);
             toggled_count += 1;
         }
@@ -463,14 +463,14 @@ impl App {
                 };
 
                 // Build batch: CreateCard + optional status update
-                let mut commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+                let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
 
                 let create_cmd = Box::new(CreateCard {
                     board_id: bid,
                     column_id: column.id,
                     title: self.input.as_str().to_string(),
                     position,
-                }) as Box<dyn crate::state::commands::Command>;
+                }) as Box<dyn kanban_domain::commands::Command>;
                 commands.push(create_cmd);
 
                 if let Err(e) = self.execute_commands_batch(commands) {
@@ -495,7 +495,7 @@ impl App {
                                 ..Default::default()
                             },
                         })
-                            as Box<dyn crate::state::commands::Command>;
+                            as Box<dyn kanban_domain::commands::Command>;
 
                         if let Err(e) = self.execute_command(update_cmd) {
                             tracing::error!("Failed to update card status: {}", e);
@@ -567,7 +567,7 @@ impl App {
                                 .count() as i32;
 
                             // Build batch with MoveCard and optional status update
-                            let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                            let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
                                 Vec::new();
 
                             let move_cmd = Box::new(MoveCard {
@@ -575,7 +575,7 @@ impl App {
                                 new_column_id: target_column_id,
                                 new_position,
                             })
-                                as Box<dyn crate::state::commands::Command>;
+                                as Box<dyn kanban_domain::commands::Command>;
                             commands.push(move_cmd);
 
                             // If moving from last column and card is Done, mark as Todo
@@ -590,7 +590,7 @@ impl App {
                                         ..Default::default()
                                     },
                                 })
-                                    as Box<dyn crate::state::commands::Command>;
+                                    as Box<dyn kanban_domain::commands::Command>;
                                 commands.push(status_cmd);
                             }
 
@@ -673,7 +673,7 @@ impl App {
                                 .count() as i32;
 
                             // Build batch with MoveCard and optional status update
-                            let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                            let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
                                 Vec::new();
 
                             let move_cmd = Box::new(MoveCard {
@@ -681,7 +681,7 @@ impl App {
                                 new_column_id: target_column_id,
                                 new_position,
                             })
-                                as Box<dyn crate::state::commands::Command>;
+                                as Box<dyn kanban_domain::commands::Command>;
                             commands.push(move_cmd);
 
                             // If moving to last column and card is not Done, mark as Done
@@ -696,7 +696,7 @@ impl App {
                                         ..Default::default()
                                     },
                                 })
-                                    as Box<dyn crate::state::commands::Command>;
+                                    as Box<dyn kanban_domain::commands::Command>;
                                 commands.push(status_cmd);
                             }
 

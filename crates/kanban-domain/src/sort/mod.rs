@@ -4,6 +4,7 @@
 //! Used by both TUI and API for consistent sorting behavior.
 
 use crate::{Card, CardPriority, CardStatus, SortField, SortOrder};
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 
 /// Trait for comparing cards for sorting purposes.
@@ -80,33 +81,55 @@ impl CardSorter for PositionSorter {
     }
 }
 
-/// Wrapper that applies sort order (ascending/descending) to a sorter.
+/// Enum dispatch for sorting cards by a specific field.
+///
+/// Replaces `Box<dyn CardSorter>` with zero-cost enum dispatch for the
+/// built-in sort fields. All variants are stateless — the sort field is
+/// encoded in the enum discriminant.
+pub enum SortBy {
+    Points,
+    Priority,
+    CreatedAt,
+    UpdatedAt,
+    Status,
+    CardNumber,
+    Position,
+}
+
+impl SortBy {
+    pub fn compare(&self, a: &Card, b: &Card) -> Ordering {
+        match self {
+            Self::Points => match (a.points, b.points) {
+                (Some(ap), Some(bp)) => ap.cmp(&bp),
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            },
+            Self::Priority => priority_value(&a.priority).cmp(&priority_value(&b.priority)),
+            Self::CreatedAt => a.created_at.cmp(&b.created_at),
+            Self::UpdatedAt => a.updated_at.cmp(&b.updated_at),
+            Self::Status => status_value(&a.status).cmp(&status_value(&b.status)),
+            Self::CardNumber => a.card_number.cmp(&b.card_number),
+            Self::Position => a.position.cmp(&b.position),
+        }
+    }
+}
+
+/// Wrapper that applies sort order (ascending/descending) to a sort field.
 pub struct OrderedSorter {
-    sorter: Box<dyn CardSorter>,
+    sorter: SortBy,
     order: SortOrder,
 }
 
 impl OrderedSorter {
-    /// Create a new ordered sorter.
-    pub fn new(sorter: Box<dyn CardSorter>, order: SortOrder) -> Self {
+    pub fn new(sorter: SortBy, order: SortOrder) -> Self {
         Self { sorter, order }
     }
 
-    /// Sort a slice of card references in place.
-    pub fn sort(&self, cards: &mut [&Card]) {
+    /// Sort a slice in place. Works with both `&Card` and `Card` elements.
+    pub fn sort_by<T: Borrow<Card>>(&self, cards: &mut [T]) {
         cards.sort_by(|a, b| {
-            let cmp = self.sorter.compare(a, b);
-            match self.order {
-                SortOrder::Ascending => cmp,
-                SortOrder::Descending => cmp.reverse(),
-            }
-        });
-    }
-
-    /// Sort a vector of cards in place.
-    pub fn sort_owned(&self, cards: &mut [Card]) {
-        cards.sort_by(|a, b| {
-            let cmp = self.sorter.compare(a, b);
+            let cmp = self.sorter.compare(a.borrow(), b.borrow());
             match self.order {
                 SortOrder::Ascending => cmp,
                 SortOrder::Descending => cmp.reverse(),
@@ -116,15 +139,15 @@ impl OrderedSorter {
 }
 
 /// Get the appropriate sorter for a sort field.
-pub fn get_sorter_for_field(field: SortField) -> Box<dyn CardSorter> {
+pub fn get_sorter_for_field(field: SortField) -> SortBy {
     match field {
-        SortField::Points => Box::new(PointsSorter),
-        SortField::Priority => Box::new(PrioritySorter),
-        SortField::CreatedAt => Box::new(CreatedAtSorter),
-        SortField::UpdatedAt => Box::new(UpdatedAtSorter),
-        SortField::Status => Box::new(StatusSorter),
-        SortField::Position => Box::new(PositionSorter),
-        SortField::Default => Box::new(CardNumberSorter),
+        SortField::Points => SortBy::Points,
+        SortField::Priority => SortBy::Priority,
+        SortField::CreatedAt => SortBy::CreatedAt,
+        SortField::UpdatedAt => SortBy::UpdatedAt,
+        SortField::Status => SortBy::Status,
+        SortField::Position => SortBy::Position,
+        SortField::Default => SortBy::CardNumber,
     }
 }
 
@@ -184,8 +207,8 @@ mod tests {
         card2.update_priority(CardPriority::Low);
 
         let mut cards = vec![&card1, &card2];
-        let sorter = OrderedSorter::new(Box::new(PrioritySorter), SortOrder::Ascending);
-        sorter.sort(&mut cards);
+        let sorter = OrderedSorter::new(SortBy::Priority, SortOrder::Ascending);
+        sorter.sort_by(&mut cards);
 
         assert_eq!(cards[0].title, "Second"); // Low priority
         assert_eq!(cards[1].title, "First"); // High priority
@@ -199,8 +222,8 @@ mod tests {
         card2.update_priority(CardPriority::High);
 
         let mut cards = vec![&card1, &card2];
-        let sorter = OrderedSorter::new(Box::new(PrioritySorter), SortOrder::Descending);
-        sorter.sort(&mut cards);
+        let sorter = OrderedSorter::new(SortBy::Priority, SortOrder::Descending);
+        sorter.sort_by(&mut cards);
 
         assert_eq!(cards[0].title, "Second"); // High priority
         assert_eq!(cards[1].title, "First"); // Low priority

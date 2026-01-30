@@ -1,13 +1,13 @@
-use crate::state::commands::{
+use crate::state::{Snapshot, StateManager};
+use kanban_core::KanbanResult;
+use kanban_domain::commands::{
     ActivateSprint, ArchiveCard, AssignCardToSprint, CancelSprint, Command, CompleteSprint,
     CreateBoard, CreateCard, CreateColumn, CreateSprint, DeleteBoard, DeleteCard, DeleteColumn,
     DeleteSprint, MoveCard, RestoreCard, UnassignCardFromSprint, UpdateBoard, UpdateCard,
     UpdateColumn, UpdateSprint,
 };
-use crate::state::{Snapshot, StateManager};
-use kanban_core::KanbanResult;
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardFilter, CardUpdate, Column, ColumnUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardUpdate, Column, ColumnUpdate,
     DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use tokio::sync::mpsc;
@@ -197,7 +197,7 @@ impl KanbanOperations for TuiContext {
         Ok(self.cards.last().unwrap().clone())
     }
 
-    fn list_cards(&self, filter: CardFilter) -> KanbanResult<Vec<Card>> {
+    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {
         let mut cards: Vec<_> = self.cards.clone();
 
         if let Some(board_id) = filter.board_id {

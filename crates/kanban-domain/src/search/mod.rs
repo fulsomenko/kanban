@@ -113,29 +113,33 @@ pub struct CompositeSearcher {
 }
 
 impl CompositeSearcher {
-    /// Create a new composite searcher with the given query.
-    ///
-    /// Includes both `TitleSearcher` and `BranchNameSearcher` by default.
-    pub fn new(query: impl Into<String>) -> Self {
-        let query = query.into();
-        let searchers: Vec<Box<dyn CardSearcher>> = vec![
-            Box::new(TitleSearcher::new(query.clone())),
-            Box::new(BranchNameSearcher::new(query)),
-        ];
-        Self { searchers }
-    }
-
     /// Create an empty composite searcher (matches all cards).
-    pub fn empty() -> Self {
+    pub fn new() -> Self {
         Self {
             searchers: Vec::new(),
         }
     }
 
-    /// Add a searcher to the composite.
+    /// Create a composite searcher with all built-in searchers.
+    ///
+    /// Includes both `TitleSearcher` and `BranchNameSearcher`.
+    pub fn all(query: impl Into<String>) -> Self {
+        let query = query.into();
+        Self::new()
+            .with_searcher(Box::new(TitleSearcher::new(query.clone())))
+            .with_searcher(Box::new(BranchNameSearcher::new(query)))
+    }
+
+    /// Add a searcher to the composite (builder pattern).
     pub fn with_searcher(mut self, searcher: Box<dyn CardSearcher>) -> Self {
         self.searchers.push(searcher);
         self
+    }
+}
+
+impl Default for CompositeSearcher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -198,11 +202,11 @@ mod tests {
         let card = create_test_card(&mut board, "Fix bug");
 
         // Should match because title contains "bug"
-        let searcher = CompositeSearcher::new("bug");
+        let searcher = CompositeSearcher::all("bug");
         assert!(searcher.matches(&card, &board, &[]));
 
         // Should match because branch name contains "feature" prefix
-        let searcher = CompositeSearcher::new("feature");
+        let searcher = CompositeSearcher::all("feature");
         assert!(searcher.matches(&card, &board, &[]));
     }
 
@@ -211,7 +215,7 @@ mod tests {
         let mut board = Board::new("Test".to_string(), None);
         let card = create_test_card(&mut board, "Any card");
 
-        let searcher = CompositeSearcher::empty();
+        let searcher = CompositeSearcher::new();
         assert!(searcher.matches(&card, &board, &[]));
     }
 }

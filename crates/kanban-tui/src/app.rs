@@ -906,10 +906,10 @@ impl App {
 
         // Execute batch archive commands
         if had_archives {
-            let mut archive_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+            let mut archive_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
             for card_id in archive_cards {
                 let cmd = Box::new(kanban_domain::commands::ArchiveCard { card_id })
-                    as Box<dyn crate::state::commands::Command>;
+                    as Box<dyn kanban_domain::commands::Command>;
                 archive_commands.push(cmd);
             }
             if let Err(e) = self.execute_commands_batch(archive_commands) {
@@ -924,10 +924,10 @@ impl App {
 
         // Execute batch delete commands
         if had_deletes {
-            let mut delete_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+            let mut delete_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
             for card_id in delete_cards {
                 let cmd = Box::new(kanban_domain::commands::DeleteCard { card_id })
-                    as Box<dyn crate::state::commands::Command>;
+                    as Box<dyn kanban_domain::commands::Command>;
                 delete_commands.push(cmd);
             }
             if let Err(e) = self.execute_commands_batch(delete_commands) {
@@ -1027,7 +1027,7 @@ impl App {
 
         let sorter = get_sorter_for_field(board.task_sort_field);
         let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
-        ordered_sorter.sort(&mut cards);
+        ordered_sorter.sort_by(&mut cards);
 
         cards
     }
@@ -1143,7 +1143,7 @@ impl App {
     /// detect previous writes as external. For single commands, this still works efficiently.
     pub fn execute_command(
         &mut self,
-        command: Box<dyn crate::state::commands::Command>,
+        command: Box<dyn kanban_domain::commands::Command>,
     ) -> KanbanResult<()> {
         self.execute_commands_batch(vec![command])
     }
@@ -1152,7 +1152,7 @@ impl App {
     /// This prevents race conditions where rapid successive saves detect previous writes as external
     pub fn execute_commands_batch(
         &mut self,
-        commands: Vec<Box<dyn crate::state::commands::Command>>,
+        commands: Vec<Box<dyn kanban_domain::commands::Command>>,
     ) -> KanbanResult<()> {
         self.ctx.execute_commands_batch(commands)
     }

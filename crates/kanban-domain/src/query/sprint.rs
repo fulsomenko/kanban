@@ -65,7 +65,7 @@ pub fn sort_card_ids(
 
     let sorter = get_sorter_for_field(sort_field);
     let ordered_sorter = OrderedSorter::new(sorter, sort_order);
-    ordered_sorter.sort(&mut card_refs);
+    ordered_sorter.sort_by(&mut card_refs);
 
     card_refs.iter().map(|c| c.id).collect()
 }

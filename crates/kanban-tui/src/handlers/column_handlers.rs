@@ -1,7 +1,8 @@
 use crate::app::{App, BoardFocus, DialogMode};
-use crate::state::commands::{CreateColumn, DeleteColumn, SetBoardTaskListView, UpdateColumn};
 use crossterm::event::KeyCode;
-use kanban_domain::commands::MoveCard;
+use kanban_domain::commands::{
+    CreateColumn, DeleteColumn, MoveCard, SetBoardTaskListView, UpdateColumn,
+};
 use kanban_domain::{ColumnUpdate, TaskListView};
 
 impl App {
@@ -89,7 +90,7 @@ impl App {
                                     ..Default::default()
                                 },
                             })
-                                as Box<dyn crate::state::commands::Command>;
+                                as Box<dyn kanban_domain::commands::Command>;
 
                             let cmd2 = Box::new(UpdateColumn {
                                 column_id: curr_col_id,
@@ -98,7 +99,7 @@ impl App {
                                     ..Default::default()
                                 },
                             })
-                                as Box<dyn crate::state::commands::Command>;
+                                as Box<dyn kanban_domain::commands::Command>;
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
@@ -144,7 +145,7 @@ impl App {
                                     ..Default::default()
                                 },
                             })
-                                as Box<dyn crate::state::commands::Command>;
+                                as Box<dyn kanban_domain::commands::Command>;
 
                             let cmd2 = Box::new(UpdateColumn {
                                 column_id: curr_col_id,
@@ -153,7 +154,7 @@ impl App {
                                     ..Default::default()
                                 },
                             })
-                                as Box<dyn crate::state::commands::Command>;
+                                as Box<dyn kanban_domain::commands::Command>;
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
@@ -342,7 +343,7 @@ impl App {
                         let card_count = cards_to_move.len();
 
                         // Batch all card moves together to avoid race conditions
-                        let mut move_commands: Vec<Box<dyn crate::state::commands::Command>> =
+                        let mut move_commands: Vec<Box<dyn kanban_domain::commands::Command>> =
                             Vec::new();
                         for (card_id, position) in cards_to_move {
                             let cmd = Box::new(MoveCard {
@@ -350,7 +351,7 @@ impl App {
                                 new_column_id: target_column_id,
                                 new_position: position,
                             })
-                                as Box<dyn crate::state::commands::Command>;
+                                as Box<dyn kanban_domain::commands::Command>;
                             move_commands.push(cmd);
                         }
 

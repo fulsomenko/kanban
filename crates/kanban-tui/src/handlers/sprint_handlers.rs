@@ -1,5 +1,5 @@
 use crate::app::{App, BoardFocus, DialogMode};
-use crate::state::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
+use kanban_domain::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
 use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
 
 impl App {
@@ -43,7 +43,7 @@ impl App {
                             sprint_id,
                             duration_days: duration,
                         })
-                            as Box<dyn crate::state::commands::Command>;
+                            as Box<dyn kanban_domain::commands::Command>;
 
                         let board_cmd = Box::new(UpdateBoard {
                             board_id,
@@ -52,7 +52,7 @@ impl App {
                                 ..Default::default()
                             },
                         })
-                            as Box<dyn crate::state::commands::Command>;
+                            as Box<dyn kanban_domain::commands::Command>;
 
                         if let Err(e) = self.execute_commands_batch(vec![activate_cmd, board_cmd]) {
                             tracing::error!("Failed to activate sprint: {}", e);
@@ -100,7 +100,7 @@ impl App {
             if let Some((sprint_id, board_id, sprint_name)) = sprint_info {
                 // Execute CompleteSprint and UpdateBoard as batch
                 let complete_cmd = Box::new(CompleteSprint { sprint_id })
-                    as Box<dyn crate::state::commands::Command>;
+                    as Box<dyn kanban_domain::commands::Command>;
 
                 let board_cmd = Box::new(UpdateBoard {
                     board_id,
@@ -108,7 +108,7 @@ impl App {
                         active_sprint_id: FieldUpdate::Clear,
                         ..Default::default()
                     },
-                }) as Box<dyn crate::state::commands::Command>;
+                }) as Box<dyn kanban_domain::commands::Command>;
 
                 if let Err(e) = self.execute_commands_batch(vec![complete_cmd, board_cmd]) {
                     tracing::error!("Failed to complete sprint: {}", e);

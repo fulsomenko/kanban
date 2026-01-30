@@ -1,62 +1,37 @@
 //! Card query and filtering functionality.
 //!
-//! Provides functions for filtering and sorting cards with explicit parameters.
+//! Provides `CardQueryBuilder` for filtering and sorting cards with a fluent API.
 //! The TUI layer wraps these with ViewRefreshContext for convenience.
 
 pub mod sprint;
 
-use crate::filter::{BoardFilter, CardFilter, ColumnFilter};
+use crate::filter::{BoardFilter, CardFilter, ColumnFilter, SprintFilter, UnassignedOnlyFilter};
 use crate::search::{CardSearcher, CompositeSearcher};
 use crate::sort::{get_sorter_for_field, OrderedSorter};
 use crate::{Board, Card, Column, Sprint};
 use std::collections::HashSet;
 use uuid::Uuid;
 
-/// Options for filtering cards.
-#[derive(Debug, Clone, Default)]
-pub struct CardFilterOptions<'a> {
-    /// Optional set of sprint IDs to filter by
-    pub sprint_filter: Option<&'a HashSet<Uuid>>,
-    /// If true, hide cards assigned to any sprint
-    pub hide_assigned: bool,
-    /// Optional search query
-    pub search_query: Option<&'a str>,
-}
-
-impl<'a> CardFilterOptions<'a> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn with_sprint_filter(mut self, filter: &'a HashSet<Uuid>) -> Self {
-        self.sprint_filter = Some(filter);
-        self
-    }
-
-    pub fn with_hide_assigned(mut self, hide: bool) -> Self {
-        self.hide_assigned = hide;
-        self
-    }
-
-    pub fn with_search(mut self, query: &'a str) -> Self {
-        self.search_query = Some(query);
-        self
-    }
-}
-
-/// Filter and sort cards for a board view.
+/// Filter and sort cards for a board view, optionally scoped to a column.
 ///
-/// Applies board membership filter, sprint filter, search filter, and sorting.
-/// Returns card IDs in sorted order.
-pub fn filter_and_sort_cards(
+/// Applies board membership filter, optional column filter, sprint filter,
+/// search filter, and sorting. Returns card IDs in sorted order.
+#[allow(clippy::too_many_arguments)]
+fn filter_and_sort_cards(
     cards: &[Card],
     columns: &[Column],
     sprints: &[Sprint],
     board: &Board,
-    options: &CardFilterOptions<'_>,
+    column_id: Option<Uuid>,
+    sprint_filter: Option<&HashSet<Uuid>>,
+    hide_assigned: bool,
+    search_query: Option<&str>,
 ) -> Vec<Uuid> {
     let board_filter = BoardFilter::new(board.id, columns);
-    let search_filter = options.search_query.map(CompositeSearcher::new);
+    let column_filter = column_id.map(ColumnFilter::new);
+    let sprint_member_filter = sprint_filter
+        .and_then(|ids| (!ids.is_empty()).then(|| SprintFilter::in_sprints(ids.iter().copied())));
+    let search_filter = search_query.map(CompositeSearcher::all);
 
     let mut filtered_cards: Vec<&Card> = cards
         .iter()
@@ -64,18 +39,17 @@ pub fn filter_and_sort_cards(
             if !board_filter.matches(c) {
                 return false;
             }
-            if let Some(filters) = options.sprint_filter {
-                if !filters.is_empty() {
-                    if let Some(sprint_id) = c.sprint_id {
-                        if !filters.contains(&sprint_id) {
-                            return false;
-                        }
-                    } else {
-                        return false;
-                    }
+            if let Some(ref cf) = column_filter {
+                if !cf.matches(c) {
+                    return false;
                 }
             }
-            if options.hide_assigned && c.sprint_id.is_some() {
+            if let Some(ref sf) = sprint_member_filter {
+                if !sf.matches(c) {
+                    return false;
+                }
+            }
+            if hide_assigned && !UnassignedOnlyFilter.matches(c) {
                 return false;
             }
             if let Some(ref searcher) = search_filter {
@@ -89,61 +63,7 @@ pub fn filter_and_sort_cards(
 
     let sorter = get_sorter_for_field(board.task_sort_field);
     let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
-    ordered_sorter.sort(&mut filtered_cards);
-
-    filtered_cards.iter().map(|c| c.id).collect()
-}
-
-/// Filter and sort cards for a specific column.
-///
-/// Same as `filter_and_sort_cards` but additionally filters by column ID.
-pub fn filter_and_sort_cards_by_column(
-    cards: &[Card],
-    columns: &[Column],
-    sprints: &[Sprint],
-    board: &Board,
-    column_id: Uuid,
-    options: &CardFilterOptions<'_>,
-) -> Vec<Uuid> {
-    let board_filter = BoardFilter::new(board.id, columns);
-    let column_filter = ColumnFilter::new(column_id);
-    let search_filter = options.search_query.map(CompositeSearcher::new);
-
-    let mut filtered_cards: Vec<&Card> = cards
-        .iter()
-        .filter(|c| {
-            if !board_filter.matches(c) {
-                return false;
-            }
-            if !column_filter.matches(c) {
-                return false;
-            }
-            if let Some(filters) = options.sprint_filter {
-                if !filters.is_empty() {
-                    if let Some(sprint_id) = c.sprint_id {
-                        if !filters.contains(&sprint_id) {
-                            return false;
-                        }
-                    } else {
-                        return false;
-                    }
-                }
-            }
-            if options.hide_assigned && c.sprint_id.is_some() {
-                return false;
-            }
-            if let Some(ref searcher) = search_filter {
-                if !searcher.matches(c, board, sprints) {
-                    return false;
-                }
-            }
-            true
-        })
-        .collect();
-
-    let sorter = get_sorter_for_field(board.task_sort_field);
-    let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
-    ordered_sorter.sort(&mut filtered_cards);
+    ordered_sorter.sort_by(&mut filtered_cards);
 
     filtered_cards.iter().map(|c| c.id).collect()
 }
@@ -209,24 +129,16 @@ impl<'a> CardQueryBuilder<'a> {
 
     /// Execute the query and return matching card IDs.
     pub fn execute(self) -> Vec<Uuid> {
-        let options = CardFilterOptions {
-            sprint_filter: self.sprint_filter.as_ref(),
-            hide_assigned: self.hide_assigned,
-            search_query: self.search_query.as_deref(),
-        };
-
-        if let Some(column_id) = self.column_id {
-            filter_and_sort_cards_by_column(
-                self.cards,
-                self.columns,
-                self.sprints,
-                self.board,
-                column_id,
-                &options,
-            )
-        } else {
-            filter_and_sort_cards(self.cards, self.columns, self.sprints, self.board, &options)
-        }
+        filter_and_sort_cards(
+            self.cards,
+            self.columns,
+            self.sprints,
+            self.board,
+            self.column_id,
+            self.sprint_filter.as_ref(),
+            self.hide_assigned,
+            self.search_query.as_deref(),
+        )
     }
 }
 
@@ -259,8 +171,7 @@ mod tests {
         let columns = vec![column.clone()];
         let cards = vec![card1.clone(), card2.clone()];
 
-        let result =
-            filter_and_sort_cards(&cards, &columns, &[], &board, &CardFilterOptions::default());
+        let result = CardQueryBuilder::new(&cards, &columns, &[], &board).execute();
 
         assert_eq!(result.len(), 2);
         assert!(result.contains(&card1.id));
@@ -278,14 +189,9 @@ mod tests {
         let columns = vec![column1.clone(), column2.clone()];
         let cards = vec![card1.clone(), card2.clone()];
 
-        let result = filter_and_sort_cards_by_column(
-            &cards,
-            &columns,
-            &[],
-            &board,
-            column1.id,
-            &CardFilterOptions::default(),
-        );
+        let result = CardQueryBuilder::new(&cards, &columns, &[], &board)
+            .in_column(column1.id)
+            .execute();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], card1.id);
@@ -301,8 +207,9 @@ mod tests {
         let columns = vec![column.clone()];
         let cards = vec![card1.clone(), card2.clone()];
 
-        let options = CardFilterOptions::new().with_search("bug");
-        let result = filter_and_sort_cards(&cards, &columns, &[], &board, &options);
+        let result = CardQueryBuilder::new(&cards, &columns, &[], &board)
+            .search("bug")
+            .execute();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], card1.id);
@@ -319,8 +226,9 @@ mod tests {
         let columns = vec![column.clone()];
         let cards = vec![card1.clone(), card2.clone()];
 
-        let options = CardFilterOptions::new().with_hide_assigned(true);
-        let result = filter_and_sort_cards(&cards, &columns, &[], &board, &options);
+        let result = CardQueryBuilder::new(&cards, &columns, &[], &board)
+            .hide_assigned()
+            .execute();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], card2.id);

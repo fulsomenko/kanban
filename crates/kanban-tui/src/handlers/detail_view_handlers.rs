@@ -652,7 +652,7 @@ impl App {
                                 } else {
                                     CardStatus::Done
                                 };
-                                let cmd = Box::new(crate::state::commands::UpdateCard {
+                                let cmd = Box::new(kanban_domain::commands::UpdateCard {
                                     card_id,
                                     updates: CardUpdate {
                                         status: Some(new_status),
@@ -820,7 +820,7 @@ impl App {
                                 )) = move_info
                                 {
                                     // Move card using command
-                                    let move_cmd = Box::new(crate::state::commands::MoveCard {
+                                    let move_cmd = Box::new(kanban_domain::commands::MoveCard {
                                         card_id,
                                         new_column_id: new_col_id,
                                         new_position: 0,
@@ -838,7 +838,7 @@ impl App {
                                     {
                                         // Moving left from last column: uncomplete
                                         let status_cmd =
-                                            Box::new(crate::state::commands::UpdateCard {
+                                            Box::new(kanban_domain::commands::UpdateCard {
                                                 card_id,
                                                 updates: kanban_domain::CardUpdate {
                                                     status: Some(kanban_domain::CardStatus::Todo),
@@ -860,7 +860,7 @@ impl App {
                                     {
                                         // Moving right to last column: complete
                                         let status_cmd =
-                                            Box::new(crate::state::commands::UpdateCard {
+                                            Box::new(kanban_domain::commands::UpdateCard {
                                                 card_id,
                                                 updates: kanban_domain::CardUpdate {
                                                     status: Some(kanban_domain::CardStatus::Done),

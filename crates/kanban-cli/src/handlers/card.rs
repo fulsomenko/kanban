@@ -2,7 +2,8 @@ use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
 use kanban_domain::{
-    CardFilter, CardPriority, CardStatus, CardSummary, CardUpdate, FieldUpdate, KanbanOperations,
+    CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate, FieldUpdate,
+    KanbanOperations,
 };
 
 pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {
@@ -121,12 +122,12 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
     Ok(())
 }
 
-fn build_filter(args: &CardListArgs) -> Result<CardFilter, String> {
+fn build_filter(args: &CardListArgs) -> Result<CardListFilter, String> {
     let status = match &args.status {
         Some(s) => Some(parse_status(s)?),
         None => None,
     };
-    Ok(CardFilter {
+    Ok(CardListFilter {
         board_id: args.board_id,
         column_id: args.column_id,
         sprint_id: args.sprint_id,

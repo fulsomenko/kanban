@@ -43,13 +43,13 @@ pub fn filter_and_sort_cards(ctx: &ViewRefreshContext) -> Vec<Uuid> {
     let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
     let search_filter = ctx
         .search_query
-        .map(|q| CompositeSearcher::new(q.to_string()));
+        .map(|q| CompositeSearcher::all(q.to_string()));
 
     let mut filtered_cards = apply_card_filters(ctx.all_cards, ctx, &board_filter, &search_filter);
 
     let sorter = get_sorter_for_field(ctx.board.task_sort_field);
     let ordered_sorter = OrderedSorter::new(sorter, ctx.board.task_sort_order);
-    ordered_sorter.sort(&mut filtered_cards);
+    ordered_sorter.sort_by(&mut filtered_cards);
 
     filtered_cards.iter().map(|c| c.id).collect()
 }
@@ -58,7 +58,7 @@ pub fn filter_and_sort_cards_by_column(ctx: &ViewRefreshContext, column_id: Uuid
     let board_filter = BoardFilter::new(ctx.board.id, ctx.all_columns);
     let search_filter = ctx
         .search_query
-        .map(|q| CompositeSearcher::new(q.to_string()));
+        .map(|q| CompositeSearcher::all(q.to_string()));
 
     let filtered_cards = apply_card_filters(ctx.all_cards, ctx, &board_filter, &search_filter);
 
@@ -70,7 +70,7 @@ pub fn filter_and_sort_cards_by_column(ctx: &ViewRefreshContext, column_id: Uuid
 
     let sorter = get_sorter_for_field(ctx.board.task_sort_field);
     let ordered_sorter = OrderedSorter::new(sorter, ctx.board.task_sort_order);
-    ordered_sorter.sort(&mut column_cards);
+    ordered_sorter.sort_by(&mut column_cards);
 
     column_cards.iter().map(|c| c.id).collect()
 }
