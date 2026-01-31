@@ -173,5 +173,4 @@ mod tests {
         assert!(!filter.matches(&assigned_card));
         assert!(filter.matches(&unassigned_card));
     }
-
 }

@@ -1068,7 +1068,6 @@ impl App {
         }
     }
 
-
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &self.ctx.cards);
 
