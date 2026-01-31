@@ -1,65 +1,65 @@
 pub struct InputState {
     buffer: String,
-    cursor: usize,
+    cursor_byte_offset: usize,
 }
 
 impl InputState {
     pub fn new() -> Self {
         Self {
             buffer: String::new(),
-            cursor: 0,
+            cursor_byte_offset: 0,
         }
     }
 
     pub fn insert_char(&mut self, c: char) {
-        self.buffer.insert(self.cursor, c);
-        self.cursor += c.len_utf8();
+        self.buffer.insert(self.cursor_byte_offset, c);
+        self.cursor_byte_offset += c.len_utf8();
     }
 
     pub fn backspace(&mut self) {
-        if self.cursor > 0 {
-            let prev = self.buffer[..self.cursor].chars().next_back().unwrap();
-            self.cursor -= prev.len_utf8();
-            self.buffer.remove(self.cursor);
+        if self.cursor_byte_offset > 0 {
+            let prev = self.buffer[..self.cursor_byte_offset].chars().next_back().unwrap();
+            self.cursor_byte_offset -= prev.len_utf8();
+            self.buffer.remove(self.cursor_byte_offset);
         }
     }
 
     pub fn delete(&mut self) {
-        if self.cursor < self.buffer.len() {
-            self.buffer.remove(self.cursor);
+        if self.cursor_byte_offset < self.buffer.len() {
+            self.buffer.remove(self.cursor_byte_offset);
         }
     }
 
     pub fn move_left(&mut self) {
-        if self.cursor > 0 {
-            let prev = self.buffer[..self.cursor].chars().next_back().unwrap();
-            self.cursor -= prev.len_utf8();
+        if self.cursor_byte_offset > 0 {
+            let prev = self.buffer[..self.cursor_byte_offset].chars().next_back().unwrap();
+            self.cursor_byte_offset -= prev.len_utf8();
         }
     }
 
     pub fn move_right(&mut self) {
-        if self.cursor < self.buffer.len() {
-            let next = self.buffer[self.cursor..].chars().next().unwrap();
-            self.cursor += next.len_utf8();
+        if self.cursor_byte_offset < self.buffer.len() {
+            let next = self.buffer[self.cursor_byte_offset..].chars().next().unwrap();
+            self.cursor_byte_offset += next.len_utf8();
         }
     }
 
     pub fn move_home(&mut self) {
-        self.cursor = 0;
+        self.cursor_byte_offset = 0;
     }
 
     pub fn move_end(&mut self) {
-        self.cursor = self.buffer.len();
+        self.cursor_byte_offset = self.buffer.len();
     }
 
     pub fn clear(&mut self) {
         self.buffer.clear();
-        self.cursor = 0;
+        self.cursor_byte_offset = 0;
     }
 
     pub fn set(&mut self, text: String) {
         self.buffer = text;
-        self.cursor = self.buffer.len();
+        self.cursor_byte_offset = self.buffer.len();
     }
 
     pub fn is_empty(&self) -> bool {
@@ -71,7 +71,7 @@ impl InputState {
     }
 
     pub fn cursor_byte_offset(&self) -> usize {
-        self.cursor
+        self.cursor_byte_offset
     }
 }
 
