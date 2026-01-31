@@ -6,8 +6,7 @@
 use crate::app::App;
 use kanban_core::KanbanResult;
 
-// Re-export domain Snapshot
-pub use kanban_domain::Snapshot;
+use kanban_domain::Snapshot;
 
 /// Extension trait for App-specific snapshot operations.
 ///

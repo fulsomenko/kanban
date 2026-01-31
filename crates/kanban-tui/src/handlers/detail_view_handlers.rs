@@ -4,7 +4,7 @@ use crate::app::{
 use crate::events::EventHandler;
 use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
-use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto};
+use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto, Snapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -211,7 +211,7 @@ impl App {
                                 tracing::error!("Failed to edit metadata: {}", e);
                             } else {
                                 self.ctx.state_manager.mark_dirty();
-                                let snapshot = crate::state::Snapshot::from_app(self);
+                                let snapshot = Snapshot::from_app(self);
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
@@ -355,7 +355,7 @@ impl App {
                                 tracing::error!("Failed to edit board settings: {}", e);
                             } else {
                                 self.ctx.state_manager.mark_dirty();
-                                let snapshot = crate::state::Snapshot::from_app(self);
+                                let snapshot = Snapshot::from_app(self);
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;

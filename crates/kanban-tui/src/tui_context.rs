@@ -1,4 +1,5 @@
-use crate::state::{Snapshot, StateManager};
+use crate::state::StateManager;
+use kanban_domain::Snapshot;
 use kanban_core::KanbanResult;
 use kanban_domain::commands::{
     ActivateSprint, ArchiveCard, AssignCardToSprint, CancelSprint, Command, CompleteSprint,

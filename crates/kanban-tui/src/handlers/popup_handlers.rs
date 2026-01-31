@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
-use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, SortField, SortOrder};
+use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder};
 
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
@@ -515,7 +515,7 @@ impl App {
                                     if result.is_ok() {
                                         self.relationship_selected.remove(&selected_card_id);
                                         self.ctx.state_manager.mark_dirty();
-                                        let snapshot = crate::state::Snapshot::from_app(self);
+                                        let snapshot = Snapshot::from_app(self);
                                         self.ctx.state_manager.queue_snapshot(snapshot);
                                     }
                                 } else {
@@ -537,7 +537,7 @@ impl App {
                                     if result.is_ok() {
                                         self.relationship_selected.insert(selected_card_id);
                                         self.ctx.state_manager.mark_dirty();
-                                        let snapshot = crate::state::Snapshot::from_app(self);
+                                        let snapshot = Snapshot::from_app(self);
                                         self.ctx.state_manager.queue_snapshot(snapshot);
                                     }
                                 }

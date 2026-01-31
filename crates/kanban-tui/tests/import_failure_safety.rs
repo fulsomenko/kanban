@@ -1,5 +1,5 @@
-use kanban_domain::{Board, Card, Column};
-use kanban_tui::{state::Snapshot, App};
+use kanban_domain::{Board, Card, Column, Snapshot};
+use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
 
@@ -13,7 +13,7 @@ fn test_import_failure_prevents_empty_state_save() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
 
     // Create snapshot with one board
-    let snapshot = kanban_tui::state::Snapshot {
+    let snapshot = Snapshot {
         boards: vec![board.clone()],
         columns: vec![column.clone()],
         cards: vec![],
