@@ -54,6 +54,8 @@ pub struct Board {
     pub prefix_counters: HashMap<String, u32>,
     #[serde(default)]
     pub sprint_counters: HashMap<String, u32>,
+    #[serde(default)]
+    pub completion_column_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -94,6 +96,8 @@ impl<'de> Deserialize<'de> for Board {
             pub prefix_counters: HashMap<String, u32>,
             #[serde(default)]
             pub sprint_counters: HashMap<String, u32>,
+            #[serde(default)]
+            pub completion_column_id: Option<Uuid>,
             pub created_at: DateTime<Utc>,
             pub updated_at: DateTime<Utc>,
             #[serde(default)]
@@ -118,6 +122,7 @@ impl<'de> Deserialize<'de> for Board {
             task_list_view: helper.task_list_view,
             prefix_counters: helper.prefix_counters,
             sprint_counters: helper.sprint_counters,
+            completion_column_id: helper.completion_column_id,
             created_at: helper.created_at,
             updated_at: helper.updated_at,
         };
@@ -165,6 +170,7 @@ impl Board {
             task_list_view: TaskListView::default(),
             prefix_counters: HashMap::new(),
             sprint_counters: HashMap::new(),
+            completion_column_id: None,
             created_at: now,
             updated_at: now,
         }
@@ -284,6 +290,25 @@ impl Board {
         self.sprint_counters.get(prefix).copied()
     }
 
+    pub fn resolve_completion_column(&self, columns: &[crate::Column]) -> Option<Uuid> {
+        if let Some(id) = self.completion_column_id {
+            if columns.iter().any(|c| c.id == id && c.board_id == self.id) {
+                return Some(id);
+            }
+        }
+        // Fallback: last column by position for this board
+        columns
+            .iter()
+            .filter(|c| c.board_id == self.id)
+            .max_by_key(|c| c.position)
+            .map(|c| c.id)
+    }
+
+    pub fn update_completion_column_id(&mut self, column_id: Option<Uuid>) {
+        self.completion_column_id = column_id;
+        self.updated_at = Utc::now();
+    }
+
     pub fn ensure_sprint_counter_initialized(
         &mut self,
         prefix: &str,
@@ -366,6 +391,9 @@ impl Board {
         updates
             .active_sprint_id
             .apply_to(&mut self.active_sprint_id);
+        updates
+            .completion_column_id
+            .apply_to(&mut self.completion_column_id);
         self.updated_at = Utc::now();
     }
 }
@@ -385,6 +413,7 @@ pub struct BoardUpdate {
     pub sprint_duration_days: FieldUpdate<u32>,
     pub task_list_view: Option<TaskListView>,
     pub active_sprint_id: FieldUpdate<Uuid>,
+    pub completion_column_id: FieldUpdate<Uuid>,
 }
 
 /// Get the active sprint's card prefix override if one exists.
@@ -468,6 +497,50 @@ mod tests {
         let mut board = Board::new("Test".to_string(), None);
         board.update_sprint_prefix(Some("custom".to_string()));
         assert_eq!(board.effective_branch_prefix("default"), "custom");
+    }
+
+    #[test]
+    fn test_resolve_completion_column_fallback() {
+        let board = Board::new("Test".to_string(), None);
+        let col1 = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let col2 = crate::Column::new(board.id, "In Progress".to_string(), 1);
+        let col3 = crate::Column::new(board.id, "Done".to_string(), 2);
+        let columns = vec![col1, col2, col3.clone()];
+
+        // No explicit completion_column_id, should fall back to last by position
+        assert_eq!(board.resolve_completion_column(&columns), Some(col3.id));
+    }
+
+    #[test]
+    fn test_resolve_completion_column_explicit() {
+        let mut board = Board::new("Test".to_string(), None);
+        let col1 = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
+        let col3 = crate::Column::new(board.id, "Archive".to_string(), 2);
+        let columns = vec![col1, col2.clone(), col3];
+
+        // Set explicit completion column to col2 (not the last one)
+        board.update_completion_column_id(Some(col2.id));
+        assert_eq!(board.resolve_completion_column(&columns), Some(col2.id));
+    }
+
+    #[test]
+    fn test_resolve_completion_column_stale_id_falls_back() {
+        let mut board = Board::new("Test".to_string(), None);
+        let col1 = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
+        let columns = vec![col1, col2.clone()];
+
+        // Set completion_column_id to a non-existent UUID
+        board.update_completion_column_id(Some(Uuid::new_v4()));
+        // Should fall back to last column
+        assert_eq!(board.resolve_completion_column(&columns), Some(col2.id));
+    }
+
+    #[test]
+    fn test_resolve_completion_column_empty_columns() {
+        let board = Board::new("Test".to_string(), None);
+        assert_eq!(board.resolve_completion_column(&[]), None);
     }
 
     #[test]

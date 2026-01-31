@@ -1,6 +1,7 @@
 pub mod archived_card;
 pub mod board;
 pub mod card;
+pub mod card_lifecycle;
 pub mod column;
 pub mod commands;
 pub mod dependencies;
