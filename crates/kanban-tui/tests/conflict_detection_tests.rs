@@ -1,7 +1,6 @@
 use kanban_core::KanbanError;
 use kanban_domain::{Board, Card, Column, Snapshot};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
-use kanban_tui::state::TuiSnapshot;
 use std::fs;
 use std::time::Duration;
 use tempfile::tempdir;

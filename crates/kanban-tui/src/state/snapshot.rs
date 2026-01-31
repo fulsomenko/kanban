@@ -2,9 +2,9 @@
 //!
 //! The core Snapshot type is in kanban-domain. This module provides
 //! TUI-specific extension methods for App integration.
+//! Serialization (to_json_bytes/from_json_bytes) lives on domain Snapshot directly.
 
 use crate::app::App;
-use kanban_core::KanbanResult;
 
 use kanban_domain::Snapshot;
 
@@ -17,12 +17,6 @@ pub trait TuiSnapshot {
 
     /// Apply snapshot to app state (overwrites).
     fn apply_to_app(&self, app: &mut App);
-
-    /// Serialize snapshot to JSON bytes.
-    fn to_json_bytes(&self) -> KanbanResult<Vec<u8>>;
-
-    /// Deserialize snapshot from JSON bytes.
-    fn from_json_bytes(bytes: &[u8]) -> KanbanResult<Snapshot>;
 }
 
 impl TuiSnapshot for Snapshot {
@@ -52,18 +46,6 @@ impl TuiSnapshot for Snapshot {
                 app.current_sort_order = Some(board.task_sort_order);
             }
         }
-    }
-
-    fn to_json_bytes(&self) -> KanbanResult<Vec<u8>> {
-        let json = serde_json::to_vec_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(json)
-    }
-
-    fn from_json_bytes(bytes: &[u8]) -> KanbanResult<Snapshot> {
-        let snapshot = serde_json::from_slice(bytes)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(snapshot)
     }
 }
 

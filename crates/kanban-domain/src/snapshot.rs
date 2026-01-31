@@ -77,6 +77,20 @@ impl Snapshot {
             && self.archived_cards.is_empty()
             && self.sprints.is_empty()
     }
+
+    /// Serialize snapshot to JSON bytes.
+    pub fn to_json_bytes(&self) -> kanban_core::KanbanResult<Vec<u8>> {
+        let json = serde_json::to_vec_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        Ok(json)
+    }
+
+    /// Deserialize snapshot from JSON bytes.
+    pub fn from_json_bytes(bytes: &[u8]) -> kanban_core::KanbanResult<Snapshot> {
+        let snapshot = serde_json::from_slice(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        Ok(snapshot)
+    }
 }
 
 #[cfg(test)]
