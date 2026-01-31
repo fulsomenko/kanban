@@ -20,7 +20,7 @@ use kanban_core::{AppConfig, Editable, InputState, KanbanResult, SelectionState}
 use kanban_domain::AnimationType;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
-    filter::{BoardFilter, CardFilter},
+    filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter},
     get_sprint_completed_cards, get_sprint_uncompleted_cards, partition_sprint_cards,
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
@@ -960,36 +960,25 @@ impl App {
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
+        let sprint_filter = if !self.active_sprint_filters.is_empty() {
+            Some(SprintFilter::in_sprints(self.active_sprint_filters.iter().copied()))
+        } else {
+            None
+        };
 
-        let cards: Vec<_> = self
-            .ctx
+        self.ctx
             .cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
                 }
-                true
-            })
-            .collect();
-
-        if self.active_sprint_filters.is_empty() && !self.hide_assigned_cards {
-            return cards.len();
-        }
-
-        cards
-            .iter()
-            .filter(|c| {
-                if !self.active_sprint_filters.is_empty() {
-                    if let Some(sprint_id) = c.sprint_id {
-                        if !self.active_sprint_filters.contains(&sprint_id) {
-                            return false;
-                        }
-                    } else {
+                if let Some(ref sf) = sprint_filter {
+                    if !sf.matches(c) {
                         return false;
                     }
                 }
-                if self.hide_assigned_cards && c.sprint_id.is_some() {
+                if self.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
                     return false;
                 }
                 true
@@ -1000,6 +989,11 @@ impl App {
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
         let board = self.ctx.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
+        let sprint_filter = if !self.active_sprint_filters.is_empty() {
+            Some(SprintFilter::in_sprints(self.active_sprint_filters.iter().copied()))
+        } else {
+            None
+        };
 
         let mut cards: Vec<&Card> = self
             .ctx
@@ -1009,16 +1003,12 @@ impl App {
                 if !board_filter.matches(c) {
                     return false;
                 }
-                if !self.active_sprint_filters.is_empty() {
-                    if let Some(sprint_id) = c.sprint_id {
-                        if !self.active_sprint_filters.contains(&sprint_id) {
-                            return false;
-                        }
-                    } else {
+                if let Some(ref sf) = sprint_filter {
+                    if !sf.matches(c) {
                         return false;
                     }
                 }
-                if self.hide_assigned_cards && c.sprint_id.is_some() {
+                if self.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
                     return false;
                 }
                 true

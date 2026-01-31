@@ -1,5 +1,5 @@
 use crate::view_strategy::ViewRefreshContext;
-use kanban_domain::filter::{BoardFilter, CardFilter};
+use kanban_domain::filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter};
 use kanban_domain::search::{CardSearcher, CompositeSearcher};
 use kanban_domain::sort::{get_sorter_for_field, OrderedSorter};
 use kanban_domain::Card;
@@ -11,22 +11,24 @@ fn apply_card_filters<'a>(
     board_filter: &'a BoardFilter<'a>,
     search_filter: &'a Option<CompositeSearcher>,
 ) -> Vec<&'a Card> {
+    let sprint_filter = if !ctx.active_sprint_filters.is_empty() {
+        Some(SprintFilter::in_sprints(ctx.active_sprint_filters.iter().copied()))
+    } else {
+        None
+    };
+
     cards
         .iter()
         .filter(|c| {
             if !board_filter.matches(c) {
                 return false;
             }
-            if !ctx.active_sprint_filters.is_empty() {
-                if let Some(sprint_id) = c.sprint_id {
-                    if !ctx.active_sprint_filters.contains(&sprint_id) {
-                        return false;
-                    }
-                } else {
+            if let Some(ref sf) = sprint_filter {
+                if !sf.matches(c) {
                     return false;
                 }
             }
-            if ctx.hide_assigned_cards && c.sprint_id.is_some() {
+            if ctx.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
                 return false;
             }
             if let Some(ref searcher) = search_filter {
