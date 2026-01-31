@@ -273,8 +273,35 @@ impl KanbanOperations for TuiContext {
             .iter()
             .find(|ac| ac.card.id == id)
             .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Archived card {}", id)))?;
-        let target_column = column_id.unwrap_or(archived.original_column_id);
+        let original_column_id = archived.original_column_id;
         let position = archived.original_position;
+
+        let target_column = if let Some(col_id) = column_id {
+            col_id
+        } else {
+            // Derive board_id from the original column
+            let board_id = self
+                .columns
+                .iter()
+                .find(|c| c.id == original_column_id)
+                .map(|c| c.board_id);
+
+            if let Some(bid) = board_id {
+                kanban_domain::card_lifecycle::resolve_restore_column(
+                    original_column_id,
+                    bid,
+                    &self.columns,
+                )
+                .unwrap_or(original_column_id)
+            } else {
+                // Column was deleted; try first board's first column as fallback
+                self.columns
+                    .first()
+                    .map(|c| c.id)
+                    .unwrap_or(original_column_id)
+            }
+        };
+
         let cmd = Box::new(RestoreCard {
             card_id: id,
             column_id: target_column,

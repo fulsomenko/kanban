@@ -1882,33 +1882,14 @@ impl App {
     }
 
     fn migrate_sprint_logs(&mut self) {
-        let mut migrated_count = 0;
+        let count = kanban_domain::card_lifecycle::migrate_sprint_logs(
+            &mut self.ctx.cards,
+            &self.ctx.sprints,
+            &self.ctx.boards,
+        );
 
-        for card in &mut self.ctx.cards {
-            if let Some(sprint_id) = card.sprint_id {
-                if card.sprint_logs.is_empty() {
-                    if let Some(sprint) = self.ctx.sprints.iter().find(|s| s.id == sprint_id) {
-                        let sprint_log = kanban_domain::SprintLog::new(
-                            sprint_id,
-                            sprint.sprint_number,
-                            sprint.name_index.and_then(|idx| {
-                                self.ctx
-                                    .boards
-                                    .iter()
-                                    .find(|b| b.id == sprint.board_id)
-                                    .and_then(|board| board.sprint_names.get(idx).cloned())
-                            }),
-                            format!("{:?}", sprint.status),
-                        );
-                        card.sprint_logs.push(sprint_log);
-                        migrated_count += 1;
-                    }
-                }
-            }
-        }
-
-        if migrated_count > 0 {
-            tracing::info!("Migrated sprint logs for {} cards", migrated_count);
+        if count > 0 {
+            tracing::info!("Migrated sprint logs for {} cards", count);
         }
     }
 

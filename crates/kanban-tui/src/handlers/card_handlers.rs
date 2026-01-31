@@ -185,95 +185,34 @@ impl App {
     fn toggle_card_completion(&mut self) {
         if let Some(card) = self.get_selected_card_in_context() {
             let card_id = card.id;
-            let old_column_id = card.column_id;
             let new_status = if card.status == CardStatus::Done {
                 CardStatus::Todo
             } else {
                 CardStatus::Done
             };
 
-            // Calculate target column and position before calling execute_command
-            let target_column_and_position = if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
-                    // Get sorted column IDs
-                    let mut cols_with_pos: Vec<_> = self
-                        .ctx
-                        .columns
-                        .iter()
-                        .filter(|col| col.board_id == board.id)
-                        .map(|col| (col.id, col.position))
-                        .collect();
-                    cols_with_pos.sort_by_key(|(_, pos)| *pos);
-                    let board_columns: Vec<uuid::Uuid> =
-                        cols_with_pos.into_iter().map(|(id, _)| id).collect();
+            let toggle_result = self.active_board_index.and_then(|idx| {
+                self.ctx.boards.get(idx).and_then(|board| {
+                    kanban_domain::card_lifecycle::compute_completion_toggle(
+                        card,
+                        board,
+                        &self.ctx.columns,
+                        &self.ctx.cards,
+                    )
+                })
+            });
 
-                    let current_column_pos = board_columns
-                        .iter()
-                        .position(|col_id| *col_id == old_column_id);
-
-                    if new_status == CardStatus::Done {
-                        // Moving to Done: move to last column
-                        if let Some(last_col) = board_columns.last() {
-                            if *last_col != old_column_id {
-                                let position = self
-                                    .ctx
-                                    .cards
-                                    .iter()
-                                    .filter(|c| c.column_id == *last_col)
-                                    .count() as i32;
-                                Some((*last_col, position, "last"))
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    } else {
-                        // Moving from Done to Todo: move to second-to-last column if in last column
-                        if let Some(pos) = current_column_pos {
-                            if pos == board_columns.len() - 1 && board_columns.len() > 1 {
-                                // Currently in last column, move to second-to-last
-                                let target_col = board_columns[board_columns.len() - 2];
-                                let position = self
-                                    .ctx
-                                    .cards
-                                    .iter()
-                                    .filter(|c| c.column_id == target_col)
-                                    .count() as i32;
-                                Some((target_col, position, "second-to-last"))
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            // Build update with status and optionally column/position
             let mut updates = CardUpdate {
                 status: Some(new_status),
                 ..Default::default()
             };
 
-            if let Some((target_column_id, position, column_desc)) = target_column_and_position {
-                updates.column_id = Some(target_column_id);
-                updates.position = Some(position);
-                tracing::info!(
-                    "Moving card to {} column (status: {:?})",
-                    column_desc,
-                    new_status
-                );
-            } else {
-                tracing::info!("Toggling card to status: {:?}", new_status);
+            if let Some(ref result) = toggle_result {
+                updates.column_id = Some(result.target_column_id);
+                updates.position = Some(result.new_position);
+                updates.status = Some(result.new_status);
             }
 
-            // Execute UpdateCard command
             let cmd = Box::new(UpdateCard { card_id, updates });
             if let Err(e) = self.execute_command(cmd) {
                 tracing::error!("Failed to toggle card completion: {}", e);
@@ -290,99 +229,48 @@ impl App {
         let mut toggled_count = 0;
         let first_card_id = card_ids.first().copied();
 
-        // Build list of column IDs for target calculations
-        let board_column_ids: Vec<uuid::Uuid> = if let Some(board_idx) = self.active_board_index {
-            if let Some(board) = self.ctx.boards.get(board_idx) {
-                // Sort by position
-                let mut cols_with_pos: Vec<_> = self
-                    .ctx
-                    .columns
-                    .iter()
-                    .filter(|col| col.board_id == board.id)
-                    .map(|col| (col.id, col.position))
-                    .collect();
-                cols_with_pos.sort_by_key(|(_, pos)| *pos);
-                cols_with_pos.into_iter().map(|(id, _)| id).collect()
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        };
-
-        // Batch all card updates to avoid race conditions with file watcher
         let mut update_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
 
         for card_id in card_ids {
-            // First, get card info without mutable borrow
-            let (old_column_id, old_status) =
-                if let Some(card) = self.ctx.cards.iter().find(|c| c.id == card_id) {
-                    (card.column_id, card.status)
-                } else {
-                    continue;
-                };
+            let card = match self.ctx.cards.iter().find(|c| c.id == card_id) {
+                Some(c) => c.clone(),
+                None => continue,
+            };
 
-            let new_status = if old_status == CardStatus::Done {
+            let new_status = if card.status == CardStatus::Done {
                 CardStatus::Todo
             } else {
                 CardStatus::Done
             };
 
-            let current_column_pos = board_column_ids
-                .iter()
-                .position(|col_id| *col_id == old_column_id);
-
-            // Determine target column
-            let target_column_id = if new_status == CardStatus::Done {
-                // Moving to Done: move to last column
-                board_column_ids.last().and_then(|last_col| {
-                    if *last_col != old_column_id {
-                        Some(*last_col)
-                    } else {
-                        None
-                    }
+            let toggle_result = self.active_board_index.and_then(|idx| {
+                self.ctx.boards.get(idx).and_then(|board| {
+                    kanban_domain::card_lifecycle::compute_completion_toggle(
+                        &card,
+                        board,
+                        &self.ctx.columns,
+                        &self.ctx.cards,
+                    )
                 })
-            } else {
-                // Moving from Done to Todo: move to second-to-last column if in last column
-                if let Some(pos) = current_column_pos {
-                    if pos == board_column_ids.len() - 1 && board_column_ids.len() > 1 {
-                        Some(board_column_ids[board_column_ids.len() - 2])
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            };
-
-            // Calculate position in target column before command execution
-            let target_position = target_column_id.map(|col_id| {
-                self.ctx
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == col_id)
-                    .count() as i32
             });
 
-            // Build update with status and optionally column/position
             let mut updates = CardUpdate {
                 status: Some(new_status),
                 ..Default::default()
             };
 
-            if let (Some(target_col_id), Some(position)) = (target_column_id, target_position) {
-                updates.column_id = Some(target_col_id);
-                updates.position = Some(position);
+            if let Some(ref result) = toggle_result {
+                updates.column_id = Some(result.target_column_id);
+                updates.position = Some(result.new_position);
+                updates.status = Some(result.new_status);
             }
 
-            // Add to batch
             let cmd = Box::new(UpdateCard { card_id, updates })
                 as Box<dyn kanban_domain::commands::Command>;
             update_commands.push(cmd);
             toggled_count += 1;
         }
 
-        // Execute all updates as a batch
         if !update_commands.is_empty() {
             if let Err(e) = self.execute_commands_batch(update_commands) {
                 tracing::error!("Failed to toggle card completion: {}", e);
@@ -440,45 +328,31 @@ impl App {
                     .filter(|c| c.column_id == column.id)
                     .count() as i32;
 
-                let column_name = column.name.clone();
-
-                // Determine if we need to mark as complete (if in last column)
-                let board_columns: Vec<_> = self
+                let mark_as_complete = self
                     .ctx
-                    .columns
-                    .iter()
-                    .filter(|col| col.board_id == bid)
-                    .collect();
-
-                let mark_as_complete = if board_columns.len() > 2 {
-                    let mut sorted_cols = board_columns.clone();
-                    sorted_cols.sort_by_key(|col| col.position);
-                    if let Some(last_col) = sorted_cols.last() {
-                        last_col.id == column.id
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-
-                // Build batch: CreateCard + optional status update
-                let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+                    .boards
+                    .get(idx)
+                    .map(|board| {
+                        kanban_domain::card_lifecycle::should_auto_complete_new_card(
+                            column.id,
+                            board,
+                            &self.ctx.columns,
+                        )
+                    })
+                    .unwrap_or(false);
 
                 let create_cmd = Box::new(CreateCard {
                     board_id: bid,
                     column_id: column.id,
                     title: self.input.as_str().to_string(),
                     position,
-                }) as Box<dyn kanban_domain::commands::Command>;
-                commands.push(create_cmd);
+                });
 
-                if let Err(e) = self.execute_commands_batch(commands) {
+                if let Err(e) = self.execute_command(create_cmd) {
                     tracing::error!("Failed to create card: {}", e);
                     return;
                 }
 
-                // After command execution, find the newly created card
                 if mark_as_complete {
                     if let Some(card) = self
                         .ctx
@@ -494,20 +368,12 @@ impl App {
                                 status: Some(CardStatus::Done),
                                 ..Default::default()
                             },
-                        })
-                            as Box<dyn kanban_domain::commands::Command>;
+                        });
 
                         if let Err(e) = self.execute_command(update_cmd) {
                             tracing::error!("Failed to update card status: {}", e);
                         }
-
-                        tracing::info!(
-                            "Creating card in column: {} [marked as complete]",
-                            column_name
-                        );
                     }
-                } else {
-                    tracing::info!("Creating card in column: {}", column_name);
                 }
 
                 self.refresh_view();
@@ -526,212 +392,98 @@ impl App {
     }
 
     pub fn handle_move_card_left(&mut self) {
-        if self.focus != Focus::Cards {
-            return;
-        }
-
-        if let Some(card) = self.get_selected_card_in_context() {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
-                    let card_id = card.id;
-                    let current_column_id = card.column_id;
-                    let current_status = card.status;
-
-                    // Collect and sort column IDs before command execution
-                    let mut cols_with_pos: Vec<_> = self
-                        .ctx
-                        .columns
-                        .iter()
-                        .filter(|col| col.board_id == board.id)
-                        .map(|col| (col.id, col.position))
-                        .collect();
-                    cols_with_pos.sort_by_key(|(_, pos)| *pos);
-                    let board_column_ids: Vec<uuid::Uuid> =
-                        cols_with_pos.into_iter().map(|(id, _)| id).collect();
-
-                    let current_position = board_column_ids
-                        .iter()
-                        .position(|col_id| *col_id == current_column_id);
-
-                    if let Some(pos) = current_position {
-                        if pos > 0 {
-                            let target_column_id = board_column_ids[pos - 1];
-                            let is_moving_from_last = pos == board_column_ids.len() - 1;
-                            let num_cols = board_column_ids.len();
-
-                            let new_position = self
-                                .ctx
-                                .cards
-                                .iter()
-                                .filter(|c| c.column_id == target_column_id)
-                                .count() as i32;
-
-                            // Build batch with MoveCard and optional status update
-                            let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
-                                Vec::new();
-
-                            let move_cmd = Box::new(MoveCard {
-                                card_id,
-                                new_column_id: target_column_id,
-                                new_position,
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
-                            commands.push(move_cmd);
-
-                            // If moving from last column and card is Done, mark as Todo
-                            if is_moving_from_last
-                                && num_cols > 1
-                                && current_status == CardStatus::Done
-                            {
-                                let status_cmd = Box::new(UpdateCard {
-                                    card_id,
-                                    updates: CardUpdate {
-                                        status: Some(CardStatus::Todo),
-                                        ..Default::default()
-                                    },
-                                })
-                                    as Box<dyn kanban_domain::commands::Command>;
-                                commands.push(status_cmd);
-                            }
-
-                            if let Err(e) = self.execute_commands_batch(commands) {
-                                tracing::error!("Failed to move card left: {}", e);
-                                return;
-                            }
-
-                            if is_moving_from_last
-                                && num_cols > 1
-                                && current_status == CardStatus::Done
-                            {
-                                tracing::info!(
-                                    "Moved card from last column (unmarked as complete)"
-                                );
-                            } else {
-                                tracing::info!("Moved card to previous column");
-                            }
-
-                            if self.is_kanban_view() {
-                                if let Some(current_col_idx) = self.column_selection.get() {
-                                    if current_col_idx > 0 {
-                                        self.column_selection.set(Some(current_col_idx - 1));
-                                    }
-                                }
-                                self.refresh_view();
-                                self.select_card_by_id(card_id);
-                            } else {
-                                self.refresh_view();
-                                self.select_card_by_id(card_id);
-                            }
-                        } else {
-                            tracing::warn!("Card is already in the first column");
-                        }
-                    }
-                }
-            }
-        }
+        self.handle_move_card(kanban_domain::card_lifecycle::MoveDirection::Left);
     }
 
     pub fn handle_move_card_right(&mut self) {
+        self.handle_move_card(kanban_domain::card_lifecycle::MoveDirection::Right);
+    }
+
+    fn handle_move_card(&mut self, direction: kanban_domain::card_lifecycle::MoveDirection) {
         if self.focus != Focus::Cards {
             return;
         }
 
         if let Some(card) = self.get_selected_card_in_context() {
-            if let Some(board_idx) = self.active_board_index {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
-                    let card_id = card.id;
-                    let current_column_id = card.column_id;
-                    let current_status = card.status;
+            let board = self
+                .active_board_index
+                .and_then(|idx| self.ctx.boards.get(idx));
+            let board = match board {
+                Some(b) => b,
+                None => return,
+            };
 
-                    // Collect and sort column IDs before command execution
-                    let mut cols_with_pos: Vec<_> = self
-                        .ctx
-                        .columns
-                        .iter()
-                        .filter(|col| col.board_id == board.id)
-                        .map(|col| (col.id, col.position))
-                        .collect();
-                    cols_with_pos.sort_by_key(|(_, pos)| *pos);
-                    let board_column_ids: Vec<uuid::Uuid> =
-                        cols_with_pos.into_iter().map(|(id, _)| id).collect();
+            let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
+                card,
+                board,
+                &self.ctx.columns,
+                &self.ctx.cards,
+                direction,
+            );
 
-                    let current_position = board_column_ids
-                        .iter()
-                        .position(|col_id| *col_id == current_column_id);
+            let move_result = match move_result {
+                Some(r) => r,
+                None => return,
+            };
 
-                    if let Some(pos) = current_position {
-                        if pos < board_column_ids.len() - 1 {
-                            let target_column_id = board_column_ids[pos + 1];
-                            let is_moving_to_last = pos + 1 == board_column_ids.len() - 1;
-                            let num_cols = board_column_ids.len();
+            let card_id = card.id;
+            let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
 
-                            let new_position = self
-                                .ctx
-                                .cards
-                                .iter()
-                                .filter(|c| c.column_id == target_column_id)
-                                .count() as i32;
+            commands.push(Box::new(MoveCard {
+                card_id,
+                new_column_id: move_result.target_column_id,
+                new_position: move_result.new_position,
+            }));
 
-                            // Build batch with MoveCard and optional status update
-                            let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
-                                Vec::new();
+            if let Some(new_status) = move_result.new_status {
+                commands.push(Box::new(UpdateCard {
+                    card_id,
+                    updates: CardUpdate {
+                        status: Some(new_status),
+                        ..Default::default()
+                    },
+                }));
+            }
 
-                            let move_cmd = Box::new(MoveCard {
-                                card_id,
-                                new_column_id: target_column_id,
-                                new_position,
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
-                            commands.push(move_cmd);
+            if let Err(e) = self.execute_commands_batch(commands) {
+                let dir = match direction {
+                    kanban_domain::card_lifecycle::MoveDirection::Left => "left",
+                    kanban_domain::card_lifecycle::MoveDirection::Right => "right",
+                };
+                tracing::error!("Failed to move card {}: {}", dir, e);
+                return;
+            }
 
-                            // If moving to last column and card is not Done, mark as Done
-                            if is_moving_to_last
-                                && num_cols > 1
-                                && current_status != CardStatus::Done
-                            {
-                                let status_cmd = Box::new(UpdateCard {
-                                    card_id,
-                                    updates: CardUpdate {
-                                        status: Some(CardStatus::Done),
-                                        ..Default::default()
-                                    },
+            if self.is_kanban_view() {
+                if let Some(current_col_idx) = self.column_selection.get() {
+                    match direction {
+                        kanban_domain::card_lifecycle::MoveDirection::Left => {
+                            if current_col_idx > 0 {
+                                self.column_selection.set(Some(current_col_idx - 1));
+                            }
+                        }
+                        kanban_domain::card_lifecycle::MoveDirection::Right => {
+                            let num_cols = self
+                                .active_board_index
+                                .and_then(|idx| self.ctx.boards.get(idx))
+                                .map(|b| {
+                                    self.ctx
+                                        .columns
+                                        .iter()
+                                        .filter(|c| c.board_id == b.id)
+                                        .count()
                                 })
-                                    as Box<dyn kanban_domain::commands::Command>;
-                                commands.push(status_cmd);
+                                .unwrap_or(0);
+                            if current_col_idx < num_cols - 1 {
+                                self.column_selection.set(Some(current_col_idx + 1));
                             }
-
-                            if let Err(e) = self.execute_commands_batch(commands) {
-                                tracing::error!("Failed to move card right: {}", e);
-                                return;
-                            }
-
-                            if is_moving_to_last
-                                && num_cols > 1
-                                && current_status != CardStatus::Done
-                            {
-                                tracing::info!("Moved card to last column (marked as complete)");
-                            } else {
-                                tracing::info!("Moved card to next column");
-                            }
-
-                            if self.is_kanban_view() {
-                                if let Some(current_col_idx) = self.column_selection.get() {
-                                    if current_col_idx < num_cols - 1 {
-                                        self.column_selection.set(Some(current_col_idx + 1));
-                                    }
-                                }
-                                self.refresh_view();
-                                self.select_card_by_id(card_id);
-                            } else {
-                                self.refresh_view();
-                                self.select_card_by_id(card_id);
-                            }
-                        } else {
-                            tracing::warn!("Card is already in the last column");
                         }
                     }
                 }
             }
+
+            self.refresh_view();
+            self.select_card_by_id(card_id);
         }
     }
 
@@ -802,19 +554,7 @@ impl App {
     }
 
     pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
-        // Get all cards in this column and sort by position
-        let mut column_cards: Vec<_> = self
-            .ctx
-            .cards
-            .iter_mut()
-            .filter(|c| c.column_id == column_id)
-            .collect();
-        column_cards.sort_by_key(|c| c.position);
-
-        // Reassign positions sequentially (0, 1, 2, ...)
-        for (new_pos, card) in column_cards.iter_mut().enumerate() {
-            card.position = new_pos as i32;
-        }
+        kanban_domain::card_lifecycle::compact_column_positions(&mut self.ctx.cards, column_id);
     }
 
     pub fn select_card_after_deletion(
@@ -913,24 +653,21 @@ impl App {
         let original_position = archived_card.original_position;
         let card_title = archived_card.card.title.clone();
 
-        // Check if the original column still exists
-        let target_column_id = if self
-            .ctx
-            .columns
-            .iter()
-            .any(|col| col.id == original_column_id)
-        {
-            original_column_id
-        } else {
-            // If original column doesn't exist, use first column
-            self.ctx
-                .columns
-                .first()
-                .map(|col| col.id)
-                .unwrap_or(original_column_id)
-        };
+        let board_id = self
+            .active_board_index
+            .and_then(|idx| self.ctx.boards.get(idx))
+            .map(|b| b.id);
 
-        // Execute RestoreCard command
+        let target_column_id = board_id
+            .and_then(|bid| {
+                kanban_domain::card_lifecycle::resolve_restore_column(
+                    original_column_id,
+                    bid,
+                    &self.ctx.columns,
+                )
+            })
+            .unwrap_or(original_column_id);
+
         let cmd = Box::new(RestoreCard {
             card_id,
             column_id: target_column_id,
