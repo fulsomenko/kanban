@@ -7,6 +7,8 @@
 use crate::Snapshot;
 use std::collections::VecDeque;
 
+const MAX_HISTORY_DEPTH: usize = 100;
+
 /// Manages undo/redo history using snapshot-based approach.
 ///
 /// Before each mutation, capture the current state with `capture_before_command`.
@@ -44,6 +46,9 @@ impl HistoryManager {
         }
 
         self.undo_stack.push_back(snapshot);
+        if self.undo_stack.len() > MAX_HISTORY_DEPTH {
+            self.undo_stack.pop_front();
+        }
         // Any new action clears the redo history
         self.redo_stack.clear();
     }
@@ -66,6 +71,9 @@ impl HistoryManager {
     /// Push current state to undo stack (before applying redo).
     pub fn push_undo(&mut self, snapshot: Snapshot) {
         self.undo_stack.push_back(snapshot);
+        if self.undo_stack.len() > MAX_HISTORY_DEPTH {
+            self.undo_stack.pop_front();
+        }
     }
 
     /// Check if undo is available.
@@ -199,6 +207,17 @@ mod tests {
         history.clear();
         assert!(!history.can_undo());
         assert!(!history.can_redo());
+    }
+
+    #[test]
+    fn test_undo_stack_is_bounded() {
+        let mut history = HistoryManager::new();
+
+        for _ in 0..MAX_HISTORY_DEPTH + 50 {
+            history.capture_before_command(create_test_snapshot());
+        }
+
+        assert_eq!(history.undo_depth(), MAX_HISTORY_DEPTH);
     }
 
     #[test]
