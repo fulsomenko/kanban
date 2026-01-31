@@ -298,7 +298,7 @@ mod tests {
         let cols = add_columns(&board, &["Todo", "In Progress", "Done"]);
         let card = test_card(&mut board, &cols[0], "Task", 0);
 
-        let result = compute_completion_toggle(&card, &board, &cols, &[card.clone()]).unwrap();
+        let result = compute_completion_toggle(&card, &board, &cols, std::slice::from_ref(&card)).unwrap();
         assert_eq!(result.new_status, CardStatus::Done);
         assert_eq!(result.target_column_id, cols[2].id);
     }
@@ -310,7 +310,7 @@ mod tests {
         let mut card = test_card(&mut board, &cols[2], "Task", 0);
         card.status = CardStatus::Done;
 
-        let result = compute_completion_toggle(&card, &board, &cols, &[card.clone()]).unwrap();
+        let result = compute_completion_toggle(&card, &board, &cols, std::slice::from_ref(&card)).unwrap();
         assert_eq!(result.new_status, CardStatus::Todo);
         assert_eq!(result.target_column_id, cols[1].id);
     }
@@ -321,7 +321,7 @@ mod tests {
         let cols = add_columns(&board, &["Only"]);
         let card = test_card(&mut board, &cols[0], "Task", 0);
 
-        assert!(compute_completion_toggle(&card, &board, &cols, &[card.clone()]).is_none());
+        assert!(compute_completion_toggle(&card, &board, &cols, std::slice::from_ref(&card)).is_none());
     }
 
     #[test]
@@ -333,7 +333,7 @@ mod tests {
 
         let card = test_card(&mut board, &cols[0], "Task", 0);
 
-        let result = compute_completion_toggle(&card, &board, &cols, &[card.clone()]).unwrap();
+        let result = compute_completion_toggle(&card, &board, &cols, std::slice::from_ref(&card)).unwrap();
         assert_eq!(result.new_status, CardStatus::Done);
         assert_eq!(result.target_column_id, cols[1].id);
     }
@@ -347,7 +347,7 @@ mod tests {
         let mut card = test_card(&mut board, &cols[1], "Task", 0);
         card.status = CardStatus::Done;
 
-        let result = compute_completion_toggle(&card, &board, &cols, &[card.clone()]).unwrap();
+        let result = compute_completion_toggle(&card, &board, &cols, std::slice::from_ref(&card)).unwrap();
         assert_eq!(result.new_status, CardStatus::Todo);
         assert_eq!(result.target_column_id, cols[0].id);
     }
@@ -361,7 +361,7 @@ mod tests {
         let card = test_card(&mut board, &cols[0], "Task", 0);
 
         let result =
-            compute_card_column_move(&card, &board, &cols, &[card.clone()], MoveDirection::Right)
+            compute_card_column_move(&card, &board, &cols, std::slice::from_ref(&card), MoveDirection::Right)
                 .unwrap();
         assert_eq!(result.target_column_id, cols[1].id);
         assert_eq!(result.new_status, Some(CardStatus::Done));
@@ -375,7 +375,7 @@ mod tests {
         card.status = CardStatus::Done;
 
         let result =
-            compute_card_column_move(&card, &board, &cols, &[card.clone()], MoveDirection::Left)
+            compute_card_column_move(&card, &board, &cols, std::slice::from_ref(&card), MoveDirection::Left)
                 .unwrap();
         assert_eq!(result.target_column_id, cols[0].id);
         assert_eq!(result.new_status, Some(CardStatus::Todo));
@@ -391,7 +391,7 @@ mod tests {
             &card,
             &board,
             &cols,
-            &[card.clone()],
+            std::slice::from_ref(&card),
             MoveDirection::Right
         )
         .is_none());
@@ -407,7 +407,7 @@ mod tests {
             &card,
             &board,
             &cols,
-            &[card.clone()],
+            std::slice::from_ref(&card),
             MoveDirection::Left
         )
         .is_none());
@@ -420,7 +420,7 @@ mod tests {
         let card = test_card(&mut board, &cols[0], "Task", 0);
 
         let result =
-            compute_card_column_move(&card, &board, &cols, &[card.clone()], MoveDirection::Right)
+            compute_card_column_move(&card, &board, &cols, std::slice::from_ref(&card), MoveDirection::Right)
                 .unwrap();
         assert_eq!(result.target_column_id, cols[1].id);
         assert_eq!(result.new_status, None);
