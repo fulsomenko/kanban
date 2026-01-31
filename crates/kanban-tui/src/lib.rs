@@ -13,7 +13,6 @@ pub mod layout_strategy;
 pub mod markdown_renderer;
 pub mod render_strategy;
 pub mod search;
-pub mod services;
 pub mod state;
 pub mod theme;
 pub mod tui_context;

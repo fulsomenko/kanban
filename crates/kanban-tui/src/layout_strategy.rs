@@ -1,7 +1,22 @@
 use crate::card_list::{CardList, CardListId};
-use crate::services::filter_and_sort_cards_by_column;
 use crate::view_strategy::ViewRefreshContext;
+use kanban_domain::CardQueryBuilder;
 use uuid::Uuid;
+
+fn build_query<'a>(ctx: &'a ViewRefreshContext<'a>) -> CardQueryBuilder<'a> {
+    let mut builder =
+        CardQueryBuilder::new(ctx.all_cards, ctx.all_columns, ctx.all_sprints, ctx.board);
+    if !ctx.active_sprint_filters.is_empty() {
+        builder = builder.in_sprints(ctx.active_sprint_filters.iter().copied());
+    }
+    if ctx.hide_assigned_cards {
+        builder = builder.hide_assigned();
+    }
+    if let Some(query) = ctx.search_query {
+        builder = builder.search(query);
+    }
+    builder
+}
 
 #[derive(Clone)]
 pub struct ColumnBoundary {
@@ -62,9 +77,7 @@ impl LayoutStrategy for SingleListLayout {
     }
 
     fn refresh_lists(&mut self, ctx: &ViewRefreshContext) {
-        use crate::services::filter_and_sort_cards;
-
-        let card_ids = filter_and_sort_cards(ctx);
+        let card_ids = build_query(ctx).execute();
         self.task_list.update_cards(card_ids);
     }
 
@@ -167,7 +180,7 @@ impl LayoutStrategy for ColumnListsLayout {
         let mut new_column_lists = Vec::new();
 
         for column in board_columns.iter() {
-            let card_ids = filter_and_sort_cards_by_column(ctx, column.id);
+            let card_ids = build_query(ctx).in_column(column.id).execute();
 
             let existing_list = self
                 .column_lists
@@ -261,7 +274,7 @@ impl LayoutStrategy for VirtualUnifiedLayout {
         let mut new_boundaries = Vec::new();
 
         for column in board_columns.iter() {
-            let card_ids = filter_and_sort_cards_by_column(ctx, column.id);
+            let card_ids = build_query(ctx).in_column(column.id).execute();
             let card_count = card_ids.len();
 
             if card_count > 0 {
