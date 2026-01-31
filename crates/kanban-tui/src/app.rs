@@ -21,7 +21,7 @@ use kanban_domain::AnimationType;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
     filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter},
-    get_sprint_completed_cards, get_sprint_uncompleted_cards, partition_sprint_cards,
+    partition_sprint_cards,
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
@@ -1068,29 +1068,6 @@ impl App {
         }
     }
 
-    pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        kanban_domain::get_sprint_cards(sprint_id, &self.ctx.cards)
-    }
-
-    pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        let cards = get_sprint_completed_cards(sprint_id, &self.ctx.cards);
-        tracing::debug!(
-            "get_sprint_completed_cards({}): found {} cards",
-            sprint_id,
-            cards.len()
-        );
-        cards
-    }
-
-    pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        let cards = get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards);
-        tracing::debug!(
-            "get_sprint_uncompleted_cards({}): found {} cards",
-            sprint_id,
-            cards.len()
-        );
-        cards
-    }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &self.ctx.cards);
