@@ -39,7 +39,7 @@ pub fn sorted_board_columns(board_id: Uuid, columns: &[Column]) -> Vec<&Column> 
 }
 
 /// Count cards in a column and return the next append position.
-fn next_position_in_column(cards: &[Card], column_id: Uuid) -> i32 {
+pub fn next_position_in_column(cards: &[Card], column_id: Uuid) -> i32 {
     cards.iter().filter(|c| c.column_id == column_id).count() as i32
 }
 

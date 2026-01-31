@@ -321,12 +321,7 @@ impl App {
                     }
                 };
 
-                let position = self
-                    .ctx
-                    .cards
-                    .iter()
-                    .filter(|c| c.column_id == column.id)
-                    .count() as i32;
+                let position = kanban_domain::card_lifecycle::next_position_in_column(&self.ctx.cards, column.id);
 
                 let mark_as_complete = self
                     .ctx

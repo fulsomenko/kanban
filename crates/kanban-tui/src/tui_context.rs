@@ -183,11 +183,7 @@ impl KanbanOperations for TuiContext {
         column_id: Uuid,
         title: String,
     ) -> KanbanResult<Card> {
-        let position = self
-            .cards
-            .iter()
-            .filter(|c| c.column_id == column_id)
-            .count() as i32;
+        let position = kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
         let cmd = Box::new(CreateCard {
             board_id,
             column_id,
@@ -247,10 +243,7 @@ impl KanbanOperations for TuiContext {
         position: Option<i32>,
     ) -> KanbanResult<Card> {
         let position = position.unwrap_or_else(|| {
-            self.cards
-                .iter()
-                .filter(|c| c.column_id == column_id)
-                .count() as i32
+            kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id)
         });
         let cmd = Box::new(MoveCard {
             card_id: id,
