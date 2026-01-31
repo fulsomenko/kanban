@@ -18,7 +18,10 @@ impl InputState {
 
     pub fn backspace(&mut self) {
         if self.cursor_byte_offset > 0 {
-            let prev = self.buffer[..self.cursor_byte_offset].chars().next_back().unwrap();
+            let prev = self.buffer[..self.cursor_byte_offset]
+                .chars()
+                .next_back()
+                .unwrap();
             self.cursor_byte_offset -= prev.len_utf8();
             self.buffer.remove(self.cursor_byte_offset);
         }
@@ -32,14 +35,20 @@ impl InputState {
 
     pub fn move_left(&mut self) {
         if self.cursor_byte_offset > 0 {
-            let prev = self.buffer[..self.cursor_byte_offset].chars().next_back().unwrap();
+            let prev = self.buffer[..self.cursor_byte_offset]
+                .chars()
+                .next_back()
+                .unwrap();
             self.cursor_byte_offset -= prev.len_utf8();
         }
     }
 
     pub fn move_right(&mut self) {
         if self.cursor_byte_offset < self.buffer.len() {
-            let next = self.buffer[self.cursor_byte_offset..].chars().next().unwrap();
+            let next = self.buffer[self.cursor_byte_offset..]
+                .chars()
+                .next()
+                .unwrap();
             self.cursor_byte_offset += next.len_utf8();
         }
     }

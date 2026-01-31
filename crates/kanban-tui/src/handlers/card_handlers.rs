@@ -321,7 +321,10 @@ impl App {
                     }
                 };
 
-                let position = kanban_domain::card_lifecycle::next_position_in_column(&self.ctx.cards, column.id);
+                let position = kanban_domain::card_lifecycle::next_position_in_column(
+                    &self.ctx.cards,
+                    column.id,
+                );
 
                 let mark_as_complete = self
                     .ctx

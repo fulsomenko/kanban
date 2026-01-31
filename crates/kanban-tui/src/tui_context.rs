@@ -1,5 +1,4 @@
 use crate::state::StateManager;
-use kanban_domain::Snapshot;
 use kanban_core::KanbanResult;
 use kanban_domain::commands::{
     ActivateSprint, ArchiveCard, AssignCardToSprint, CancelSprint, Command, CompleteSprint,
@@ -7,6 +6,7 @@ use kanban_domain::commands::{
     DeleteSprint, MoveCard, RestoreCard, UnassignCardFromSprint, UpdateBoard, UpdateCard,
     UpdateColumn, UpdateSprint,
 };
+use kanban_domain::Snapshot;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardUpdate, Column, ColumnUpdate,
     DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
@@ -183,7 +183,8 @@ impl KanbanOperations for TuiContext {
         column_id: Uuid,
         title: String,
     ) -> KanbanResult<Card> {
-        let position = kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
+        let position =
+            kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
         let cmd = Box::new(CreateCard {
             board_id,
             column_id,

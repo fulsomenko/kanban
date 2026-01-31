@@ -786,12 +786,11 @@ impl App {
                                 });
 
                                 if let Some(result) = move_result {
-                                    let move_cmd =
-                                        Box::new(kanban_domain::commands::MoveCard {
-                                            card_id,
-                                            new_column_id: result.target_column_id,
-                                            new_position: result.new_position,
-                                        });
+                                    let move_cmd = Box::new(kanban_domain::commands::MoveCard {
+                                        card_id,
+                                        new_column_id: result.target_column_id,
+                                        new_position: result.new_position,
+                                    });
                                     if let Err(e) = self.execute_command(move_cmd) {
                                         tracing::error!("Failed to move card: {}", e);
                                         return;
@@ -807,10 +806,7 @@ impl App {
                                                 },
                                             });
                                         if let Err(e) = self.execute_command(status_cmd) {
-                                            tracing::error!(
-                                                "Failed to update card status: {}",
-                                                e
-                                            );
+                                            tracing::error!("Failed to update card status: {}", e);
                                         }
                                     }
                                 }

@@ -12,7 +12,9 @@ fn apply_card_filters<'a>(
     search_filter: &'a Option<CompositeSearcher>,
 ) -> Vec<&'a Card> {
     let sprint_filter = if !ctx.active_sprint_filters.is_empty() {
-        Some(SprintFilter::in_sprints(ctx.active_sprint_filters.iter().copied()))
+        Some(SprintFilter::in_sprints(
+            ctx.active_sprint_filters.iter().copied(),
+        ))
     } else {
         None
     };

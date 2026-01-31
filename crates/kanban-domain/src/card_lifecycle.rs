@@ -65,10 +65,8 @@ pub fn compute_completion_toggle(
 
     if card.status == CardStatus::Done {
         // Moving from Done → Todo: go to second-to-last column
-        let is_in_completion_col = sorted
-            .iter()
-            .position(|c| c.id == completion_col_id)
-            == Some(current_idx);
+        let is_in_completion_col =
+            sorted.iter().position(|c| c.id == completion_col_id) == Some(current_idx);
 
         if is_in_completion_col && sorted.len() > 1 {
             let completion_idx = sorted.iter().position(|c| c.id == completion_col_id)?;
@@ -141,9 +139,8 @@ pub fn compute_card_column_move(
     let new_status = if sorted.len() > 1 {
         if let Some(comp_id) = completion_col_id {
             let is_moving_to_completion = target_col.id == comp_id;
-            let is_moving_from_completion = sorted
-                .get(current_idx)
-                .is_some_and(|c| c.id == comp_id);
+            let is_moving_from_completion =
+                sorted.get(current_idx).is_some_and(|c| c.id == comp_id);
 
             if is_moving_to_completion && card.status != CardStatus::Done {
                 Some(CardStatus::Done)
@@ -186,11 +183,7 @@ pub fn compact_column_positions(cards: &mut [Card], column_id: Uuid) {
 /// Determine if a new card created in the given column should be auto-completed.
 ///
 /// Returns true when the column is the completion column and the board has more than 2 columns.
-pub fn should_auto_complete_new_card(
-    column_id: Uuid,
-    board: &Board,
-    columns: &[Column],
-) -> bool {
+pub fn should_auto_complete_new_card(column_id: Uuid, board: &Board, columns: &[Column]) -> bool {
     let board_cols = sorted_board_columns(board.id, columns);
     if board_cols.len() <= 2 {
         return false;
@@ -219,11 +212,7 @@ pub fn resolve_restore_column(
 /// Backfill sprint_logs for cards that have a sprint_id but empty logs.
 ///
 /// Returns the count of cards that were migrated.
-pub fn migrate_sprint_logs(
-    cards: &mut [Card],
-    sprints: &[Sprint],
-    boards: &[Board],
-) -> usize {
+pub fn migrate_sprint_logs(cards: &mut [Card], sprints: &[Sprint], boards: &[Board]) -> usize {
     let mut migrated = 0;
 
     for card in cards.iter_mut() {
@@ -398,10 +387,14 @@ mod tests {
         let cols = add_columns(&board, &["Todo", "Done"]);
         let card = test_card(&mut board, &cols[1], "Task", 0);
 
-        assert!(
-            compute_card_column_move(&card, &board, &cols, &[card.clone()], MoveDirection::Right)
-                .is_none()
-        );
+        assert!(compute_card_column_move(
+            &card,
+            &board,
+            &cols,
+            &[card.clone()],
+            MoveDirection::Right
+        )
+        .is_none());
     }
 
     #[test]
@@ -410,10 +403,14 @@ mod tests {
         let cols = add_columns(&board, &["Todo", "Done"]);
         let card = test_card(&mut board, &cols[0], "Task", 0);
 
-        assert!(
-            compute_card_column_move(&card, &board, &cols, &[card.clone()], MoveDirection::Left)
-                .is_none()
-        );
+        assert!(compute_card_column_move(
+            &card,
+            &board,
+            &cols,
+            &[card.clone()],
+            MoveDirection::Left
+        )
+        .is_none());
     }
 
     #[test]

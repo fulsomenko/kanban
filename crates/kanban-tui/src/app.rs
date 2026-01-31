@@ -961,7 +961,9 @@ impl App {
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
         let sprint_filter = if !self.active_sprint_filters.is_empty() {
-            Some(SprintFilter::in_sprints(self.active_sprint_filters.iter().copied()))
+            Some(SprintFilter::in_sprints(
+                self.active_sprint_filters.iter().copied(),
+            ))
         } else {
             None
         };
@@ -990,7 +992,9 @@ impl App {
         let board = self.ctx.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
         let sprint_filter = if !self.active_sprint_filters.is_empty() {
-            Some(SprintFilter::in_sprints(self.active_sprint_filters.iter().copied()))
+            Some(SprintFilter::in_sprints(
+                self.active_sprint_filters.iter().copied(),
+            ))
         } else {
             None
         };
