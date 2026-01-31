@@ -6,14 +6,14 @@ use super::models::{AllBoardsExport, BoardExport};
 use crate::{ArchivedCard, Board, Card, Column, Snapshot, Sprint};
 use std::io;
 
-/// Tuple of extracted entities from an import.
-pub type ImportedEntities = (
-    Vec<Board>,
-    Vec<Column>,
-    Vec<Card>,
-    Vec<ArchivedCard>,
-    Vec<Sprint>,
-);
+/// Extracted entities from an import.
+pub struct ImportedEntities {
+    pub boards: Vec<Board>,
+    pub columns: Vec<Column>,
+    pub cards: Vec<Card>,
+    pub archived_cards: Vec<ArchivedCard>,
+    pub sprints: Vec<Sprint>,
+}
 
 /// Imports boards from JSON files.
 pub struct BoardImporter;
@@ -145,7 +145,13 @@ impl BoardImporter {
             sprints.extend(board_data.sprints);
         }
 
-        (boards, columns, cards, archived_cards, sprints)
+        ImportedEntities {
+            boards,
+            columns,
+            cards,
+            archived_cards,
+            sprints,
+        }
     }
 }
 
@@ -218,14 +224,13 @@ mod tests {
             }],
         };
 
-        let (boards, columns, cards, archived_cards, sprints) =
-            BoardImporter::extract_entities(export);
+        let entities = BoardImporter::extract_entities(export);
 
-        assert_eq!(boards.len(), 1);
-        assert_eq!(columns.len(), 1);
-        assert_eq!(cards.len(), 1);
-        assert_eq!(archived_cards.len(), 0);
-        assert_eq!(sprints.len(), 0);
+        assert_eq!(entities.boards.len(), 1);
+        assert_eq!(entities.columns.len(), 1);
+        assert_eq!(entities.cards.len(), 1);
+        assert_eq!(entities.archived_cards.len(), 0);
+        assert_eq!(entities.sprints.len(), 0);
     }
 
     #[test]

@@ -1838,14 +1838,13 @@ impl App {
         // Fall back to V1 format (no graph)
         let first_new_index = self.ctx.boards.len();
         let import = BoardImporter::import_from_json(&content)?;
-        let (boards, columns, cards, deleted_cards, sprints) =
-            BoardImporter::extract_entities(import);
+        let entities = BoardImporter::extract_entities(import);
 
-        self.ctx.boards.extend(boards);
-        self.ctx.columns.extend(columns);
-        self.ctx.cards.extend(cards);
-        self.ctx.archived_cards.extend(deleted_cards);
-        self.ctx.sprints.extend(sprints);
+        self.ctx.boards.extend(entities.boards);
+        self.ctx.columns.extend(entities.columns);
+        self.ctx.cards.extend(entities.cards);
+        self.ctx.archived_cards.extend(entities.archived_cards);
+        self.ctx.sprints.extend(entities.sprints);
 
         self.board_selection.set(Some(first_new_index));
 
