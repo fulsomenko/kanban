@@ -105,11 +105,26 @@ impl CardSearcher for BranchNameSearcher {
     }
 }
 
+/// Enum dispatch for searching cards by a specific field.
+pub enum SearchBy {
+    Title(TitleSearcher),
+    BranchName(BranchNameSearcher),
+}
+
+impl SearchBy {
+    fn matches(&self, card: &Card, board: &Board, sprints: &[Sprint]) -> bool {
+        match self {
+            Self::Title(s) => s.matches(card, board, sprints),
+            Self::BranchName(s) => s.matches(card, board, sprints),
+        }
+    }
+}
+
 /// Composite searcher that matches if any sub-searcher matches.
 ///
 /// By default, includes both title and branch name searchers.
 pub struct CompositeSearcher {
-    searchers: Vec<Box<dyn CardSearcher>>,
+    searchers: Vec<SearchBy>,
 }
 
 impl CompositeSearcher {
@@ -125,13 +140,16 @@ impl CompositeSearcher {
     /// Includes both `TitleSearcher` and `BranchNameSearcher`.
     pub fn all(query: impl Into<String>) -> Self {
         let query = query.into();
-        Self::new()
-            .with_searcher(Box::new(TitleSearcher::new(query.clone())))
-            .with_searcher(Box::new(BranchNameSearcher::new(query)))
+        Self {
+            searchers: vec![
+                SearchBy::Title(TitleSearcher::new(query.clone())),
+                SearchBy::BranchName(BranchNameSearcher::new(query)),
+            ],
+        }
     }
 
     /// Add a searcher to the composite (builder pattern).
-    pub fn with_searcher(mut self, searcher: Box<dyn CardSearcher>) -> Self {
+    pub fn with_search(mut self, searcher: SearchBy) -> Self {
         self.searchers.push(searcher);
         self
     }
