@@ -42,7 +42,7 @@ pub use query::{
 };
 pub use search::{BranchNameSearcher, CardSearcher, CompositeSearcher, TitleSearcher};
 pub use snapshot::Snapshot;
-pub use sort::{get_sorter_for_field, CardSorter, OrderedSorter, SortBy};
+pub use sort::{get_sorter_for_field, OrderedSorter, SortBy};
 pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};

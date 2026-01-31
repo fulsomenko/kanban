@@ -7,85 +7,10 @@ use crate::{Card, CardPriority, CardStatus, SortField, SortOrder};
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 
-/// Trait for comparing cards for sorting purposes.
-pub trait CardSorter {
-    /// Compare two cards, returning their ordering.
-    fn compare(&self, a: &Card, b: &Card) -> Ordering;
-}
-
-/// Sort cards by points (None values sort last).
-pub struct PointsSorter;
-
-impl CardSorter for PointsSorter {
-    fn compare(&self, a: &Card, b: &Card) -> Ordering {
-        match (a.points, b.points) {
-            (Some(ap), Some(bp)) => ap.cmp(&bp),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        }
-    }
-}
-
-/// Sort cards by priority.
-pub struct PrioritySorter;
-
-impl CardSorter for PrioritySorter {
-    fn compare(&self, a: &Card, b: &Card) -> Ordering {
-        priority_value(&a.priority).cmp(&priority_value(&b.priority))
-    }
-}
-
-/// Sort cards by creation date.
-pub struct CreatedAtSorter;
-
-impl CardSorter for CreatedAtSorter {
-    fn compare(&self, a: &Card, b: &Card) -> Ordering {
-        a.created_at.cmp(&b.created_at)
-    }
-}
-
-/// Sort cards by last update date.
-pub struct UpdatedAtSorter;
-
-impl CardSorter for UpdatedAtSorter {
-    fn compare(&self, a: &Card, b: &Card) -> Ordering {
-        a.updated_at.cmp(&b.updated_at)
-    }
-}
-
-/// Sort cards by status.
-pub struct StatusSorter;
-
-impl CardSorter for StatusSorter {
-    fn compare(&self, a: &Card, b: &Card) -> Ordering {
-        status_value(&a.status).cmp(&status_value(&b.status))
-    }
-}
-
-/// Sort cards by card number (default ordering).
-pub struct CardNumberSorter;
-
-impl CardSorter for CardNumberSorter {
-    fn compare(&self, a: &Card, b: &Card) -> Ordering {
-        a.card_number.cmp(&b.card_number)
-    }
-}
-
-/// Sort cards by position within column.
-pub struct PositionSorter;
-
-impl CardSorter for PositionSorter {
-    fn compare(&self, a: &Card, b: &Card) -> Ordering {
-        a.position.cmp(&b.position)
-    }
-}
-
 /// Enum dispatch for sorting cards by a specific field.
 ///
-/// Replaces `Box<dyn CardSorter>` with zero-cost enum dispatch for the
-/// built-in sort fields. All variants are stateless — the sort field is
-/// encoded in the enum discriminant.
+/// All variants are stateless — the sort field is encoded in the
+/// enum discriminant.
 pub enum SortBy {
     Points,
     Priority,
@@ -194,9 +119,8 @@ mod tests {
         card1.update_priority(CardPriority::Low);
         card2.update_priority(CardPriority::High);
 
-        let sorter = PrioritySorter;
-        assert_eq!(sorter.compare(&card1, &card2), Ordering::Less);
-        assert_eq!(sorter.compare(&card2, &card1), Ordering::Greater);
+        assert_eq!(SortBy::Priority.compare(&card1, &card2), Ordering::Less);
+        assert_eq!(SortBy::Priority.compare(&card2, &card1), Ordering::Greater);
     }
 
     #[test]
@@ -239,9 +163,8 @@ mod tests {
         let card2 = Card::new(&mut board_mut, column.id, "First".to_string(), 5, "task");
         let card3 = Card::new(&mut board_mut, column.id, "Second".to_string(), 10, "task");
 
-        let sorter = PositionSorter;
-        assert_eq!(sorter.compare(&card2, &card3), Ordering::Less); // 5 < 10
-        assert_eq!(sorter.compare(&card3, &card1), Ordering::Less); // 10 < 20
+        assert_eq!(SortBy::Position.compare(&card2, &card3), Ordering::Less); // 5 < 10
+        assert_eq!(SortBy::Position.compare(&card3, &card1), Ordering::Less); // 10 < 20
     }
 
     #[test]
@@ -265,11 +188,10 @@ mod tests {
         card1.points = Some(3);
         card2.points = None;
 
-        let sorter = PointsSorter;
-        assert_eq!(sorter.compare(&card1, &card2), Ordering::Less);
-        assert_eq!(sorter.compare(&card2, &card1), Ordering::Greater);
+        assert_eq!(SortBy::Points.compare(&card1, &card2), Ordering::Less);
+        assert_eq!(SortBy::Points.compare(&card2, &card1), Ordering::Greater);
 
         card1.points = None;
-        assert_eq!(sorter.compare(&card1, &card2), Ordering::Equal);
+        assert_eq!(SortBy::Points.compare(&card1, &card2), Ordering::Equal);
     }
 }
