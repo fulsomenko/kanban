@@ -12,62 +12,6 @@ use crate::{Board, Card, Column, Sprint};
 use std::collections::HashSet;
 use uuid::Uuid;
 
-/// Filter and sort cards for a board view, optionally scoped to a column.
-///
-/// Applies board membership filter, optional column filter, sprint filter,
-/// search filter, and sorting. Returns card IDs in sorted order.
-#[allow(clippy::too_many_arguments)]
-fn filter_and_sort_cards(
-    cards: &[Card],
-    columns: &[Column],
-    sprints: &[Sprint],
-    board: &Board,
-    column_id: Option<Uuid>,
-    sprint_filter: Option<&HashSet<Uuid>>,
-    hide_assigned: bool,
-    search_query: Option<&str>,
-) -> Vec<Uuid> {
-    let board_filter = BoardFilter::new(board.id, columns);
-    let column_filter = column_id.map(ColumnFilter::new);
-    let sprint_member_filter = sprint_filter
-        .and_then(|ids| (!ids.is_empty()).then(|| SprintFilter::in_sprints(ids.iter().copied())));
-    let search_filter = search_query.map(CompositeSearcher::all);
-
-    let mut filtered_cards: Vec<&Card> = cards
-        .iter()
-        .filter(|c| {
-            if !board_filter.matches(c) {
-                return false;
-            }
-            if let Some(ref cf) = column_filter {
-                if !cf.matches(c) {
-                    return false;
-                }
-            }
-            if let Some(ref sf) = sprint_member_filter {
-                if !sf.matches(c) {
-                    return false;
-                }
-            }
-            if hide_assigned && !UnassignedOnlyFilter.matches(c) {
-                return false;
-            }
-            if let Some(ref searcher) = search_filter {
-                if !searcher.matches(c, board, sprints) {
-                    return false;
-                }
-            }
-            true
-        })
-        .collect();
-
-    let sorter = get_sorter_for_field(board.task_sort_field);
-    let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
-    ordered_sorter.sort_by(&mut filtered_cards);
-
-    filtered_cards.iter().map(|c| c.id).collect()
-}
-
 /// Builder for constructing card queries with fluent API.
 pub struct CardQueryBuilder<'a> {
     cards: &'a [Card],
@@ -129,16 +73,47 @@ impl<'a> CardQueryBuilder<'a> {
 
     /// Execute the query and return matching card IDs.
     pub fn execute(self) -> Vec<Uuid> {
-        filter_and_sort_cards(
-            self.cards,
-            self.columns,
-            self.sprints,
-            self.board,
-            self.column_id,
-            self.sprint_filter.as_ref(),
-            self.hide_assigned,
-            self.search_query.as_deref(),
-        )
+        let board_filter = BoardFilter::new(self.board.id, self.columns);
+        let column_filter = self.column_id.map(ColumnFilter::new);
+        let sprint_member_filter = self.sprint_filter.as_ref().and_then(|ids| {
+            (!ids.is_empty()).then(|| SprintFilter::in_sprints(ids.iter().copied()))
+        });
+        let search_filter = self.search_query.as_deref().map(CompositeSearcher::all);
+
+        let mut filtered_cards: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|c| {
+                if !board_filter.matches(c) {
+                    return false;
+                }
+                if let Some(ref cf) = column_filter {
+                    if !cf.matches(c) {
+                        return false;
+                    }
+                }
+                if let Some(ref sf) = sprint_member_filter {
+                    if !sf.matches(c) {
+                        return false;
+                    }
+                }
+                if self.hide_assigned && !UnassignedOnlyFilter.matches(c) {
+                    return false;
+                }
+                if let Some(ref searcher) = search_filter {
+                    if !searcher.matches(c, self.board, self.sprints) {
+                        return false;
+                    }
+                }
+                true
+            })
+            .collect();
+
+        let sorter = get_sorter_for_field(self.board.task_sort_field);
+        let ordered_sorter = OrderedSorter::new(sorter, self.board.task_sort_order);
+        ordered_sorter.sort_by(&mut filtered_cards);
+
+        filtered_cards.iter().map(|c| c.id).collect()
     }
 }
 
