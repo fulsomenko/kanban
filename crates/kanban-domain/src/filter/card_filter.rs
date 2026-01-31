@@ -91,47 +91,6 @@ impl CardFilter for UnassignedOnlyFilter {
     }
 }
 
-/// Combine multiple filters with AND logic.
-///
-/// A card matches only if it passes all filters.
-pub struct CompositeFilter {
-    filters: Vec<Box<dyn CardFilter>>,
-}
-
-impl CompositeFilter {
-    /// Create an empty composite filter (matches all cards).
-    pub fn new() -> Self {
-        Self { filters: vec![] }
-    }
-
-    /// Add a filter to the composite (builder pattern).
-    pub fn with_filter(mut self, filter: Box<dyn CardFilter>) -> Self {
-        self.filters.push(filter);
-        self
-    }
-
-    /// Check if the composite has no filters.
-    pub fn is_empty(&self) -> bool {
-        self.filters.is_empty()
-    }
-}
-
-impl Default for CompositeFilter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl CardFilter for CompositeFilter {
-    fn matches(&self, card: &Card) -> bool {
-        // Empty filter matches all cards
-        if self.filters.is_empty() {
-            return true;
-        }
-        self.filters.iter().all(|f| f.matches(card))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,35 +174,4 @@ mod tests {
         assert!(filter.matches(&unassigned_card));
     }
 
-    #[test]
-    fn test_composite_filter() {
-        let board = Board::new("Test Board".to_string(), None);
-        let column1 = Column::new(board.id, "Todo".to_string(), 0);
-        let column2 = Column::new(board.id, "Done".to_string(), 1);
-
-        let mut board_mut = board.clone();
-        let mut card = create_test_card(&mut board_mut, column1.id);
-        card.sprint_id = None;
-
-        // Empty composite matches all
-        let empty_filter = CompositeFilter::new();
-        assert!(empty_filter.matches(&card));
-
-        // Single filter
-        let single_filter =
-            CompositeFilter::new().with_filter(Box::new(ColumnFilter::new(column1.id)));
-        assert!(single_filter.matches(&card));
-
-        // Multiple filters (AND)
-        let composite = CompositeFilter::new()
-            .with_filter(Box::new(ColumnFilter::new(column1.id)))
-            .with_filter(Box::new(UnassignedOnlyFilter));
-        assert!(composite.matches(&card));
-
-        // Fails one filter
-        let failing_composite = CompositeFilter::new()
-            .with_filter(Box::new(ColumnFilter::new(column2.id))) // Wrong column
-            .with_filter(Box::new(UnassignedOnlyFilter));
-        assert!(!failing_composite.matches(&card));
-    }
 }
