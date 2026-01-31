@@ -652,17 +652,35 @@ impl App {
                                 } else {
                                     CardStatus::Done
                                 };
+
+                                let toggle_result = self.active_board_index.and_then(|idx| {
+                                    self.ctx.boards.get(idx).and_then(|board| {
+                                        kanban_domain::card_lifecycle::compute_completion_toggle(
+                                            card,
+                                            board,
+                                            &self.ctx.columns,
+                                            &self.ctx.cards,
+                                        )
+                                    })
+                                });
+
+                                let mut updates = CardUpdate {
+                                    status: Some(new_status),
+                                    ..Default::default()
+                                };
+
+                                if let Some(ref result) = toggle_result {
+                                    updates.column_id = Some(result.target_column_id);
+                                    updates.position = Some(result.new_position);
+                                    updates.status = Some(result.new_status);
+                                }
+
                                 let cmd = Box::new(kanban_domain::commands::UpdateCard {
                                     card_id,
-                                    updates: CardUpdate {
-                                        status: Some(new_status),
-                                        ..Default::default()
-                                    },
+                                    updates,
                                 });
                                 if let Err(e) = self.execute_command(cmd) {
-                                    tracing::error!("Failed to update card status: {}", e);
-                                } else {
-                                    tracing::info!("Card status updated to: {:?}", new_status);
+                                    tracing::error!("Failed to toggle card completion: {}", e);
                                 }
                             }
                         }
