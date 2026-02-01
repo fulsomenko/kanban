@@ -28,8 +28,8 @@ for changeset in .changeset/*.md; do
   [ -e "$changeset" ] || continue
   [ "$(basename "$changeset")" = "README.md" ] && continue
 
-  description=$(sed -n '/^---$/,/^---$/!p' "$changeset" | sed '/^---$/d' | sed '/^$/d' | sed 's/^- //')
-  CHANGELOG_ENTRIES+="- $description\n"
+  description=$(sed -n '/^---$/,/^---$/!p' "$changeset" | sed '/^---$/d' | sed '/^$/d' | sed 's/^- //' | sed 's/^/- /')
+  CHANGELOG_ENTRIES+="$description\n"
 done
 
 DATE=$(date +%Y-%m-%d)
