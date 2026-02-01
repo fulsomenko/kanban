@@ -2,7 +2,7 @@ use crate::app::{App, AppMode, BoardFocus, CardFocus, DialogMode, Focus};
 use crate::components::*;
 use crate::theme::*;
 use crate::view_strategy::UnifiedViewStrategy;
-use kanban_domain::{Sprint, SprintStatus};
+use kanban_domain::{dependencies::CardGraphExt, Sprint, SprintStatus};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -10,6 +10,11 @@ use ratatui::{
     widgets::{Block, Borders, Clear, ListItem, Paragraph},
     Frame,
 };
+use uuid::Uuid;
+
+// Card detail view layout constants
+const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
+const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
 
 fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
     if let Some((message, _)) = &app.last_error {
@@ -18,11 +23,26 @@ fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
             .bg(Color::Red)
             .add_modifier(Modifier::BOLD);
 
-        let error_widget = Paragraph::new(message.clone())
+        // Calculate width needed for message + padding (1 char on each side)
+        let message_width = (message.len() + 2).min(area.width as usize) as u16;
+        let centered_x = if area.width > message_width {
+            (area.width - message_width) / 2
+        } else {
+            0
+        };
+
+        let error_area = Rect {
+            x: area.x + centered_x,
+            y: area.y,
+            width: message_width,
+            height: 1,
+        };
+
+        let error_widget = Paragraph::new(format!(" {} ", message))
             .style(error_style)
             .alignment(ratatui::layout::Alignment::Center);
 
-        frame.render_widget(error_widget, area);
+        frame.render_widget(error_widget, error_area);
     }
 }
 
@@ -76,6 +96,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                     render_external_change_detected_popup(app, frame)
                 }
                 DialogMode::ConfirmSprintPrefixCollision => {}
+                DialogMode::ManageParents => render_manage_parents_popup(app, frame),
+                DialogMode::ManageChildren => render_manage_children_popup(app, frame),
             }
         }
     } else {
@@ -440,7 +462,7 @@ fn render_sprint_task_panel_with_selection(
         .iter()
         .filter_map(|card_id| app.ctx.cards.iter().find(|c| c.id == *card_id))
         .collect();
-    let points = App::calculate_points(&cards);
+    let points = kanban_domain::calculate_points(&cards);
 
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
@@ -545,7 +567,7 @@ fn render_create_board_popup(app: &App, frame: &mut Frame) {
         "Create New Project",
         "Project Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -555,7 +577,7 @@ fn render_create_card_popup(app: &App, frame: &mut Frame) {
         "Create New Task",
         "Task Title:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -565,7 +587,7 @@ fn render_create_sprint_popup(app: &App, frame: &mut Frame) {
         "Create New Sprint",
         "Sprint Name (optional):",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -575,7 +597,7 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
         "Set Points",
         "Points (1-5 or empty):",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -585,17 +607,74 @@ fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
     dialog.render(app, frame);
 }
 
+fn render_relationship_boxes(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    parents: &[Uuid],
+    children: &[Uuid],
+    child_count: usize,
+) {
+    let relationship_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(area);
+
+    let viewport_height =
+        area.height
+            .saturating_sub(RELATIONSHIP_VIEWPORT_BORDER_HEIGHT as u16) as usize;
+
+    // Render Parents section
+    let parents_config = FieldSectionConfig::new("Parents")
+        .with_focus_indicator("Parents [4]")
+        .focused(app.card_focus == CardFocus::Parents);
+    let parents_lines = render_relationship_section(
+        parents,
+        &app.ctx.cards,
+        "Parents",
+        app.card_focus == CardFocus::Parents,
+        &app.parents_list,
+        viewport_height,
+    );
+    let parents_widget = Paragraph::new(parents_lines).block(parents_config.block());
+    frame.render_widget(parents_widget, relationship_chunks[0]);
+
+    // Render Children section
+    let children_title = format!("Children ({})", child_count);
+    let children_title_focused = format!("Children ({}) [5]", child_count);
+    let children_config = FieldSectionConfig::new(&children_title)
+        .with_focus_indicator(&children_title_focused)
+        .focused(app.card_focus == CardFocus::Children);
+    let children_lines = render_relationship_section(
+        children,
+        &app.ctx.cards,
+        "Children",
+        app.card_focus == CardFocus::Children,
+        &app.children_list,
+        viewport_height,
+    );
+    let children_widget = Paragraph::new(children_lines).block(children_config.block());
+    frame.render_widget(children_widget, relationship_chunks[1]);
+}
+
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(card_idx) = app.active_card_index {
         if let Some(card) = app.ctx.cards.get(card_idx) {
             if let Some(board_idx) = app.active_board_index {
                 if let Some(board) = app.ctx.boards.get(board_idx) {
                     let has_sprint_logs = card.sprint_logs.len() > 1;
+                    let card_id = card.id;
+
+                    // Get parent and child information
+                    let parents = app.ctx.graph.cards.parents(card_id);
+                    let children = app.ctx.graph.cards.children(card_id);
+                    let child_count = children.len();
 
                     let constraints = vec![
-                        Constraint::Length(5),
-                        Constraint::Length(6),
-                        Constraint::Min(0),
+                        Constraint::Length(5),                       // Title
+                        Constraint::Length(6),                       // Metadata
+                        Constraint::Min(5),                          // Description
+                        Constraint::Length(RELATIONSHIP_BOX_HEIGHT), // Relationships
                     ];
 
                     let chunks = Layout::default()
@@ -603,10 +682,11 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         .constraints(constraints)
                         .split(area);
 
+                    // Render title section
                     let title_config = FieldSectionConfig::new("Task Title")
                         .with_focus_indicator("Task Title [1]")
                         .focused(app.card_focus == CardFocus::Title);
-                    let title = Paragraph::new(card.title.clone())
+                    let title = Paragraph::new(build_title_lines(card))
                         .style(bold_highlight())
                         .block(title_config.block());
                     frame.render_widget(title, chunks[0]);
@@ -617,151 +697,66 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                             .split(chunks[1]);
 
+                        // Render metadata
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.card_focus == CardFocus::Metadata);
-
-                        let meta_lines = vec![
-                            metadata_line_multi(vec![
-                                ("Priority", format!("{:?}", card.priority), normal_text()),
-                                ("Status", format!("{:?}", card.status), normal_text()),
-                                (
-                                    "Points",
-                                    card.points
-                                        .map(|p| p.to_string())
-                                        .unwrap_or_else(|| "-".to_string()),
-                                    normal_text(),
-                                ),
-                            ]),
-                            if let Some(due_date) = card.due_date {
-                                metadata_line_styled(
-                                    "Due",
-                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
-                                    Style::default().fg(Color::Red),
-                                )
-                            } else {
-                                Line::from(Span::styled("No due date", label_text()))
-                            },
-                            metadata_line_styled(
-                                "Branch",
-                                card.branch_name(
-                                    board,
-                                    &app.ctx.sprints,
-                                    app.app_config.effective_default_card_prefix(),
-                                ),
-                                active_item(),
-                            ),
-                        ];
-
+                        let meta_lines =
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
 
+                        // Render sprint logs
                         let sprint_logs_config = FieldSectionConfig::new("Sprint History");
-                        let mut sprint_log_lines = vec![];
-
-                        let max_visible = 3;
-                        let total_logs = card.sprint_logs.len();
-                        let start_idx = total_logs.saturating_sub(max_visible);
-
-                        for (display_idx, log) in card.sprint_logs[start_idx..].iter().enumerate() {
-                            let absolute_idx = start_idx + display_idx;
-                            let sprint_name_str = log
-                                .sprint_name
-                                .as_deref()
-                                .unwrap_or(&log.sprint_number.to_string())
-                                .to_string();
-                            let started = log.started_at.format("%m-%d %H:%M").to_string();
-                            let status_str = if let Some(ended) = log.ended_at {
-                                let ended_fmt = ended.format("%m-%d %H:%M").to_string();
-                                format!("{} → {}", started, ended_fmt)
-                            } else {
-                                format!("{} → (current)", started)
-                            };
-
-                            sprint_log_lines.push(Line::from(vec![
-                                Span::styled(format!("{}. ", absolute_idx + 1), label_text()),
-                                Span::styled(
-                                    format!("{} ", sprint_name_str),
-                                    Style::default().fg(Color::Cyan),
-                                ),
-                                Span::styled(status_str, label_text()),
-                            ]));
-                        }
-
-                        if start_idx > 0 {
-                            sprint_log_lines.insert(
-                                0,
-                                Line::from(Span::styled(
-                                    format!("... ({} earlier entries)", start_idx),
-                                    label_text(),
-                                )),
-                            );
-                        }
-
+                        let sprint_log_lines = build_sprint_logs_lines(card);
                         let sprint_logs =
                             Paragraph::new(sprint_log_lines).block(sprint_logs_config.block());
                         frame.render_widget(sprint_logs, meta_chunks[1]);
 
+                        // Render description
                         let desc_config = FieldSectionConfig::new("Description")
                             .with_focus_indicator("Description [3]")
                             .focused(app.card_focus == CardFocus::Description);
-                        let desc_lines = if let Some(desc_text) = &card.description {
-                            crate::markdown_renderer::render_markdown(desc_text)
-                        } else {
-                            vec![Line::from(Span::styled("No description", label_text()))]
-                        };
+                        let desc_lines = build_description_lines(card);
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
+
+                        // Render relationship boxes
+                        render_relationship_boxes(
+                            app,
+                            frame,
+                            chunks[3],
+                            &parents,
+                            &children,
+                            child_count,
+                        );
                     } else {
+                        // Render metadata section
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.card_focus == CardFocus::Metadata);
-
-                        let meta_lines = vec![
-                            metadata_line_multi(vec![
-                                ("Priority", format!("{:?}", card.priority), normal_text()),
-                                ("Status", format!("{:?}", card.status), normal_text()),
-                                (
-                                    "Points",
-                                    card.points
-                                        .map(|p| p.to_string())
-                                        .unwrap_or_else(|| "-".to_string()),
-                                    normal_text(),
-                                ),
-                            ]),
-                            if let Some(due_date) = card.due_date {
-                                metadata_line_styled(
-                                    "Due",
-                                    due_date.format("%Y-%m-%d %H:%M").to_string(),
-                                    Style::default().fg(Color::Red),
-                                )
-                            } else {
-                                Line::from(Span::styled("No due date", label_text()))
-                            },
-                            metadata_line_styled(
-                                "Branch",
-                                card.branch_name(
-                                    board,
-                                    &app.ctx.sprints,
-                                    app.app_config.effective_default_card_prefix(),
-                                ),
-                                active_item(),
-                            ),
-                        ];
-
+                        let meta_lines =
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
 
+                        // Render description section
                         let desc_config = FieldSectionConfig::new("Description")
                             .with_focus_indicator("Description [3]")
                             .focused(app.card_focus == CardFocus::Description);
-                        let desc_lines = if let Some(desc_text) = &card.description {
-                            crate::markdown_renderer::render_markdown(desc_text)
-                        } else {
-                            vec![Line::from(Span::styled("No description", label_text()))]
-                        };
+                        let desc_lines = build_description_lines(card);
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
+
+                        // Render relationship boxes
+                        render_relationship_boxes(
+                            app,
+                            frame,
+                            chunks[3],
+                            &parents,
+                            &children,
+                            child_count,
+                        );
                     }
                 }
             }
@@ -775,7 +770,7 @@ fn render_rename_board_popup(app: &App, frame: &mut Frame) {
         "Rename Project",
         "New Project Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -785,7 +780,7 @@ fn render_export_board_popup(app: &App, frame: &mut Frame) {
         "Export Project",
         "Filename:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -795,7 +790,7 @@ fn render_export_all_popup(app: &App, frame: &mut Frame) {
         "Export All Projects",
         "Filename:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -894,10 +889,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             // Show active sprint's card prefix override if it exists
             if let Some(sprint_prefix) =
-                crate::board_context::get_active_sprint_card_prefix_override(
-                    board,
-                    &app.ctx.sprints,
-                )
+                kanban_domain::get_active_sprint_card_prefix_override(board, &app.ctx.sprints)
             {
                 settings_lines.push(metadata_line_styled(
                     "Active Sprint Card Prefix",
@@ -1067,7 +1059,7 @@ fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Branch Prefix",
         "Branch Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1077,7 +1069,7 @@ fn render_set_sprint_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Sprint Prefix",
         "Sprint Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1087,7 +1079,7 @@ fn render_set_sprint_card_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Card Prefix Override",
         "Card Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1180,7 +1172,7 @@ fn render_create_column_popup(app: &App, frame: &mut Frame) {
         "Create New Column",
         "Column Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1190,7 +1182,7 @@ fn render_rename_column_popup(app: &App, frame: &mut Frame) {
         "Rename Column",
         "New Column Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1598,5 +1590,137 @@ fn render_external_change_detected_popup(_app: &App, frame: &mut Frame) {
 
     let instructions =
         Paragraph::new("Press R or K to choose, ESC to continue").style(label_text());
+    frame.render_widget(instructions, chunks[2]);
+}
+
+fn render_manage_parents_popup(app: &App, frame: &mut Frame) {
+    render_relationship_popup(app, frame, "Set Parents", true);
+}
+
+fn render_manage_children_popup(app: &App, frame: &mut Frame) {
+    render_relationship_popup(app, frame, "Set Children", false);
+}
+
+fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_parent_mode: bool) {
+    use crate::components::centered_rect;
+    use ratatui::widgets::Clear;
+
+    let area = centered_rect(60, 70, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(3), // Search box
+            Constraint::Min(0),    // Card list
+            Constraint::Length(1), // Instructions
+        ])
+        .split(inner);
+
+    // Search box
+    let search_border_style = if app.relationship_search_active {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Gray)
+    };
+    let search_block = Block::default()
+        .title("Search")
+        .borders(Borders::ALL)
+        .border_style(search_border_style);
+
+    // Build search text with greyed "/" prefix when not in search mode
+    let search_text: Line = if app.relationship_search_active {
+        // In search mode - show cursor indicator
+        Line::from(vec![
+            Span::styled(&app.relationship_search, Style::default().fg(Color::White)),
+            Span::styled("_", Style::default().fg(Color::Yellow)),
+        ])
+    } else if app.relationship_search.is_empty() {
+        // Not in search mode, empty search - show greyed "/" hint
+        Line::from(Span::styled(
+            "/ to search",
+            Style::default().fg(Color::DarkGray),
+        ))
+    } else {
+        // Not in search mode, has search text
+        Line::from(Span::styled(
+            &app.relationship_search,
+            Style::default().fg(Color::White),
+        ))
+    };
+
+    let search = Paragraph::new(search_text).block(search_block);
+    frame.render_widget(search, chunks[0]);
+
+    // Filter cards by search
+    let filtered_cards: Vec<_> = if app.relationship_search.is_empty() {
+        app.relationship_card_ids.clone()
+    } else {
+        let search_lower = app.relationship_search.to_lowercase();
+        app.relationship_card_ids
+            .iter()
+            .filter(|card_id| {
+                app.ctx
+                    .cards
+                    .iter()
+                    .find(|c| c.id == **card_id)
+                    .map(|c| c.title.to_lowercase().contains(&search_lower))
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect()
+    };
+
+    // Card list
+    let mut lines = vec![];
+    for (idx, card_id) in filtered_cards.iter().enumerate() {
+        if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
+            let is_selected = app.relationship_selection.get() == Some(idx);
+            let is_checked = app.relationship_selected.contains(card_id);
+
+            let checkbox = if is_checked { "[✓]" } else { "[ ]" };
+
+            let style = if is_selected {
+                Style::default().fg(Color::White).bg(Color::Blue)
+            } else if is_checked {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            lines.push(Line::from(Span::styled(
+                format!("{} {}", checkbox, card.title),
+                style,
+            )));
+        }
+    }
+
+    if lines.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No eligible cards found",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    let list = Paragraph::new(lines);
+    frame.render_widget(list, chunks[1]);
+
+    // Instructions
+    let instructions_text = if app.relationship_search_active {
+        "Type to search | Enter/Esc: exit search"
+    } else {
+        "j/k: navigate | Space: toggle | /: search | Esc: close"
+    };
+    let instructions =
+        Paragraph::new(instructions_text).style(Style::default().fg(Color::DarkGray));
     frame.render_widget(instructions, chunks[2]);
 }

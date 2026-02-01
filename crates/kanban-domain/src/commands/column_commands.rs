@@ -1,6 +1,6 @@
 use super::{Command, CommandContext};
 use crate::ColumnUpdate;
-use kanban_core::KanbanResult;
+use kanban_core::{KanbanError, KanbanResult};
 use uuid::Uuid;
 
 /// Update column properties (name, position, wip_limit)
@@ -48,6 +48,25 @@ pub struct DeleteColumn {
 
 impl Command for DeleteColumn {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        let has_cards = context.cards.iter().any(|c| c.column_id == self.column_id);
+        if has_cards {
+            return Err(KanbanError::Validation(format!(
+                "Cannot delete column {}: column contains cards",
+                self.column_id
+            )));
+        }
+
+        let has_archived_cards = context
+            .archived_cards
+            .iter()
+            .any(|ac| ac.original_column_id == self.column_id);
+        if has_archived_cards {
+            return Err(KanbanError::Validation(format!(
+                "Cannot delete column {}: column contains archived cards",
+                self.column_id
+            )));
+        }
+
         context.columns.retain(|c| c.id != self.column_id);
         Ok(())
     }

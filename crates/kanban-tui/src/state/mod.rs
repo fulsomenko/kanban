@@ -4,14 +4,13 @@ use crate::app::App;
 use kanban_core::KanbanResult;
 use kanban_domain::commands::Command;
 use kanban_domain::commands::CommandContext;
-use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
+use kanban_domain::{ArchivedCard, Board, Card, Column, HistoryManager, Snapshot, Sprint};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-pub use kanban_domain::commands;
-pub use snapshot::DataSnapshot;
+pub use snapshot::TuiSnapshot;
 
 /// Manages state mutations and persistence with immediate auto-saving
 ///
@@ -40,10 +39,11 @@ pub struct StateManager {
     instance_id: uuid::Uuid,
     conflict_pending: bool,
     needs_refresh: bool,
-    save_tx: Option<mpsc::Sender<DataSnapshot>>,
+    save_tx: Option<mpsc::Sender<Snapshot>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
     file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
+    history: HistoryManager,
 }
 
 impl StateManager {
@@ -57,7 +57,7 @@ impl StateManager {
         save_file: Option<String>,
     ) -> (
         Self,
-        Option<mpsc::Receiver<DataSnapshot>>,
+        Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
         // Use bounded channel (capacity: 100) to prevent unbounded memory growth
@@ -92,6 +92,7 @@ impl StateManager {
             save_completion_tx: Some(save_completion_tx),
             pending_saves: 0,
             file_watcher: None,
+            history: HistoryManager::new(),
         };
 
         (manager, save_rx, Some(save_completion_rx))
@@ -99,6 +100,7 @@ impl StateManager {
 
     /// Execute a command and mark state as dirty
     /// Takes individual mutable references to avoid borrow checker issues when called from App methods
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_with_context(
         &mut self,
         boards: &mut Vec<Board>,
@@ -106,6 +108,7 @@ impl StateManager {
         cards: &mut Vec<Card>,
         sprints: &mut Vec<Sprint>,
         archived_cards: &mut Vec<ArchivedCard>,
+        graph: &mut kanban_domain::DependencyGraph,
         command: Box<dyn Command>,
     ) -> KanbanResult<()> {
         let description = command.description();
@@ -118,6 +121,7 @@ impl StateManager {
             cards,
             sprints,
             archived_cards,
+            graph,
         };
 
         // Execute business logic
@@ -142,12 +146,13 @@ impl StateManager {
             &mut app.ctx.cards,
             &mut app.ctx.sprints,
             &mut app.ctx.archived_cards,
+            &mut app.ctx.graph,
             command,
         )?;
 
         // Queue snapshot for async save if channel is available
         if let Some(ref tx) = self.save_tx {
-            let snapshot = DataSnapshot::from_app(app);
+            let snapshot = Snapshot::from_app(app);
             tracing::debug!("Queueing snapshot for async save");
             // Use try_send (non-blocking) since we're in a synchronous context
             // Backpressure is handled by queue_snapshot method
@@ -236,7 +241,7 @@ impl StateManager {
     }
 
     /// Force overwrite external changes (user chose to keep their changes)
-    pub async fn force_overwrite(&mut self, snapshot: &DataSnapshot) -> KanbanResult<()> {
+    pub async fn force_overwrite(&mut self, snapshot: &Snapshot) -> KanbanResult<()> {
         self.conflict_pending = false;
 
         if let Some(ref store) = self.store {
@@ -264,15 +269,16 @@ impl StateManager {
             let (snapshot, _metadata) = store.load().await?;
 
             // Deserialize and apply loaded data to app
-            let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
+            let data: Snapshot = serde_json::from_slice(&snapshot.data)
                 .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
             data.apply_to_app(app);
 
             self.dirty = false;
             self.command_queue.clear();
+            self.history.clear();
 
-            tracing::info!("Reloaded state from disk");
+            tracing::info!("Reloaded state from disk - undo history cleared");
         }
 
         Ok(())
@@ -305,7 +311,7 @@ impl StateManager {
     ///
     /// Uses try_send to handle bounded channel capacity (100 snapshots).
     /// If channel is full, logs warning and skips save to prevent blocking UI.
-    pub fn queue_snapshot(&mut self, snapshot: DataSnapshot) {
+    pub fn queue_snapshot(&mut self, snapshot: Snapshot) {
         // Pause file watching before queuing save to prevent detecting our own writes
         if let Some(ref watcher) = self.file_watcher {
             watcher.pause();
@@ -380,6 +386,31 @@ impl StateManager {
     /// Get the save completion sender for the worker to use
     pub fn save_completion_tx(&self) -> Option<&mpsc::UnboundedSender<()>> {
         self.save_completion_tx.as_ref()
+    }
+
+    /// Capture snapshot before command execution (for undo history)
+    pub fn capture_before_command(&mut self, snapshot: Snapshot) {
+        self.history.capture_before_command(snapshot);
+    }
+
+    /// Check if undo is available
+    pub fn can_undo(&self) -> bool {
+        self.history.can_undo()
+    }
+
+    /// Check if redo is available
+    pub fn can_redo(&self) -> bool {
+        self.history.can_redo()
+    }
+
+    /// Access to history manager for undo/redo operations
+    pub fn history_mut(&mut self) -> &mut HistoryManager {
+        &mut self.history
+    }
+
+    /// Clear undo/redo history (called after initial file load)
+    pub fn clear_history(&mut self) {
+        self.history.clear();
     }
 
     /// Set the file watcher for coordinating pause/resume with saves

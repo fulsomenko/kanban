@@ -1,5 +1,5 @@
-use crate::components::{Page, PageInfo};
-use crate::selection::SelectionState;
+use kanban_core::SelectionState;
+use kanban_core::{Page, PageInfo};
 use std::collections::HashSet;
 
 pub type ListRenderInfo = PageInfo;
@@ -127,9 +127,43 @@ impl ListComponent {
     /// Ensure selected item is visible by scrolling if needed
     pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
         if let Some(selected_idx) = self.selection.get() {
-            self.page
-                .scroll_to_make_visible(selected_idx, viewport_height);
+            self.page.scroll_to_visible(selected_idx, viewport_height);
         }
+    }
+
+    /// Calculate viewport height adjusted for scroll indicators
+    ///
+    /// This accounts for the visual overhead of "X items above" and "X items below"
+    /// indicators that appear when scrolling. The adjusted viewport represents the
+    /// actual number of content lines available for rendering items.
+    ///
+    /// # Arguments
+    /// * `raw_viewport_height` - The total height available (excluding borders)
+    ///
+    /// # Returns
+    /// The number of lines available for actual item content after accounting for indicators
+    pub fn get_adjusted_viewport_height(&self, raw_viewport_height: usize) -> usize {
+        if self.page.total_items == 0 || raw_viewport_height == 0 {
+            return raw_viewport_height;
+        }
+
+        let scroll_offset = self.page.scroll_offset;
+
+        // Calculate "above" indicator overhead (1 line if scrolled down)
+        let above_indicator_height = if scroll_offset > 0 { 1 } else { 0 };
+
+        // Start with space available after above indicator
+        let available_space = raw_viewport_height.saturating_sub(above_indicator_height);
+
+        // Calculate if we need "below" indicator (1 line if more items exist)
+        let below_indicator_height = if scroll_offset + available_space < self.page.total_items {
+            1
+        } else {
+            0
+        };
+
+        // Return actual content slots
+        available_space.saturating_sub(below_indicator_height)
     }
 
     /// Get rendering information given a viewport height (raw lines, all overhead pre-accounted)
@@ -278,7 +312,7 @@ mod tests {
         let info = list.get_render_info(3);
 
         assert!(!info.show_above_indicator);
-        assert_eq!(info.visible_item_indices, vec![0, 1, 2]);
+        assert_eq!(info.visible_indices, vec![0, 1, 2]);
         assert!(info.show_below_indicator);
     }
 
@@ -289,7 +323,7 @@ mod tests {
 
         let info = list.get_render_info(3);
         assert!(info.show_above_indicator);
-        assert_eq!(info.items_above_count, 3);
+        assert_eq!(info.items_above, 3);
     }
 
     #[test]
@@ -315,7 +349,7 @@ mod tests {
         list.ensure_selected_visible(5);
 
         let info = list.get_render_info(5);
-        assert!(info.visible_item_indices.contains(&15));
+        assert!(info.visible_indices.contains(&15));
     }
 
     #[test]
@@ -343,9 +377,9 @@ mod tests {
         // Verify card 10 is visible with the adjusted viewport
         let info = list.get_render_info(adjusted_viewport);
         assert!(
-            info.visible_item_indices.contains(&10),
+            info.visible_indices.contains(&10),
             "Card 10 should be visible. Visible indices: {:?}, scroll_offset: {}",
-            info.visible_item_indices,
+            info.visible_indices,
             list.get_scroll_offset()
         );
 
@@ -378,7 +412,7 @@ mod tests {
 
         // Verify it's visible
         let info = list.get_render_info(adjusted_viewport);
-        assert!(info.visible_item_indices.contains(&5));
+        assert!(info.visible_indices.contains(&5));
 
         // Navigate up back to card 0
         for _ in 0..5 {
@@ -391,7 +425,100 @@ mod tests {
 
         // Verify card 0 is visible and not scrolled past indicator
         let info = list.get_render_info(adjusted_viewport);
-        assert!(info.visible_item_indices.contains(&0));
+        assert!(info.visible_indices.contains(&0));
         assert_eq!(list.get_scroll_offset(), 0, "Should be at top of list");
+    }
+
+    #[test]
+    fn test_get_adjusted_viewport_height_no_scroll() {
+        // When not scrolled, no "above" indicator, but check for "below"
+        let list = create_test_list(10);
+
+        // Raw viewport 5, items 0-4 visible (5 total)
+        // Remaining: 5 items below → show "below" indicator
+        // Adjusted: 5 - 0 (above) - 1 (below) = 4
+        let adjusted = list.get_adjusted_viewport_height(5);
+        assert_eq!(adjusted, 4);
+    }
+
+    #[test]
+    fn test_get_adjusted_viewport_height_scrolled_middle() {
+        // When scrolled in middle, both indicators shown
+        let mut list = create_test_list(10);
+        list.set_scroll_offset(3);
+
+        // Raw viewport 5
+        // Above indicator: 1 (scrolled)
+        // Available: 5 - 1 = 4
+        // Items 3-6 would be visible (4 total)
+        // Remaining: 3 items below (7-9) → show "below" indicator
+        // Adjusted: 4 - 1 (below) = 3
+        let adjusted = list.get_adjusted_viewport_height(5);
+        assert_eq!(adjusted, 3);
+    }
+
+    #[test]
+    fn test_get_adjusted_viewport_height_scrolled_end() {
+        // When scrolled to end, only "above" indicator
+        let mut list = create_test_list(10);
+        list.set_scroll_offset(6);
+
+        // Raw viewport 5
+        // Above indicator: 1 (scrolled)
+        // Available: 5 - 1 = 4
+        // Items 6-9 would be visible (4 total) - exactly fits!
+        // Remaining: 0 items below → no "below" indicator
+        // Adjusted: 4 - 0 (below) = 4
+        let adjusted = list.get_adjusted_viewport_height(5);
+        assert_eq!(adjusted, 4);
+    }
+
+    #[test]
+    fn test_get_adjusted_viewport_height_all_fit() {
+        // When all items fit, no indicators
+        let list = create_test_list(5);
+
+        // Raw viewport 5, all items fit
+        // No indicators needed
+        // Adjusted: 5
+        let adjusted = list.get_adjusted_viewport_height(5);
+        assert_eq!(adjusted, 5);
+    }
+
+    #[test]
+    fn test_get_adjusted_viewport_height_empty_list() {
+        let list = create_test_list(0);
+        let adjusted = list.get_adjusted_viewport_height(5);
+        assert_eq!(adjusted, 5); // No adjustment for empty list
+    }
+
+    #[test]
+    fn test_navigation_with_adjusted_viewport_bug_scenario() {
+        // Exact bug scenario: 6 cards in viewport 5
+        // User reports card 6 not visible when scrolling
+        let mut list = create_test_list(6);
+
+        // Start at card 0
+        assert_eq!(list.get_selected_index(), Some(0));
+
+        // Navigate down to card 5 (6th card)
+        for _ in 0..5 {
+            list.navigate_down();
+        }
+        assert_eq!(list.get_selected_index(), Some(5));
+
+        // Use adjusted viewport (should account for indicators)
+        let adjusted_viewport = list.get_adjusted_viewport_height(5);
+        list.ensure_selected_visible(adjusted_viewport);
+
+        // Verify card 5 is visible
+        let info = list.get_render_info(adjusted_viewport);
+        assert!(
+            info.visible_indices.contains(&5),
+            "Card 5 should be visible. Visible: {:?}, scroll: {}, viewport: {}",
+            info.visible_indices,
+            list.get_scroll_offset(),
+            adjusted_viewport
+        );
     }
 }

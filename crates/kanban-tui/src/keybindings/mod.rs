@@ -51,6 +51,10 @@ pub enum KeybindingAction {
     JumpToBottom,
     JumpHalfViewportUp,
     JumpHalfViewportDown,
+    ManageParents,
+    ManageChildren,
+    Undo,
+    Redo,
 }
 
 #[derive(Debug, Clone)]

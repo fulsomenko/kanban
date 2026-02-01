@@ -26,4 +26,13 @@ pub enum KanbanError {
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
+
+    #[error("Cycle detected: adding this edge would create a circular dependency")]
+    CycleDetected,
+
+    #[error("Self-reference not allowed")]
+    SelfReference,
+
+    #[error("Edge not found")]
+    EdgeNotFound,
 }

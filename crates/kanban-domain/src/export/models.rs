@@ -1,0 +1,35 @@
+//! Export data models.
+//!
+//! These DTOs represent the structure for import/export operations.
+
+use crate::{ArchivedCard, Board, Card, Column, Sprint};
+use serde::{Deserialize, Serialize};
+
+/// Export format for a single board with all its data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoardExport {
+    pub board: Board,
+    pub columns: Vec<Column>,
+    pub cards: Vec<Card>,
+    pub sprints: Vec<Sprint>,
+    #[serde(default)]
+    pub archived_cards: Vec<ArchivedCard>,
+}
+
+/// Export format for all boards.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllBoardsExport {
+    pub boards: Vec<BoardExport>,
+}
+
+impl AllBoardsExport {
+    /// Create an empty export.
+    pub fn empty() -> Self {
+        Self { boards: Vec::new() }
+    }
+
+    /// Create from a list of board exports.
+    pub fn from_boards(boards: Vec<BoardExport>) -> Self {
+        Self { boards }
+    }
+}

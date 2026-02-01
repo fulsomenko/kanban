@@ -1,185 +1,58 @@
+## [0.2.0] - 2026-02-01
+
+- - feat(tui): register undo/redo keybindings in CardList provider
+- feat(tui): register undo/redo keybindings in BoardDetail provider
+- feat(tui): register undo/redo keybindings in CardDetail provider
+- feat(tui): register undo/redo keybindings in NormalMode providers
+- feat(tui): add Undo and Redo KeybindingAction variants
+- feat(tui): add undo() and redo() methods to App
+- feat(tui): capture snapshots before command execution for undo history
+- feat(tui): integrate HistoryManager into StateManager
+- feat(tui): create HistoryManager module for undo/redo support
+- - test: add cycle detection tests for dependency graph
+- test: add integration tests for cascade cleanup operations
+- feat(domain): unassign cards when deleting sprints
+- feat(domain): add validation to DeleteColumn command
+- feat(domain): implement cascade cleanup in card deletion and archival
+- feat(domain): add cascade cleanup methods to DependencyGraph trait
+- - feat(tui): implement backward wrap-around navigation from title to children
+- feat(tui): add scrolling support to parent/child relationship boxes
+- feat(tui): Implement interactive navigation for parent/child relationship boxes
+- feat(tui): add infrastructure for parent/child relationship navigation
+- feat(tui): Display parent/child relationship boxes side-by-side with increased height
+- Extract business logic from kanban-tui into kanban-domain and kanban-core, establishing a clean layered architecture.
+### kanban-core
+- Add `InputState`, `SelectionState`, and `PageInfo` modules for reusable UI-agnostic state primitives
+### kanban-domain
+- Add `sort`, `filter`, `search`, and `query` modules for card filtering/sorting pipeline
+- Add `CardQueryBuilder` with fluent API for composing card queries
+- Add `card_lifecycle` module for card movement, completion toggling, and archival logic
+- Add `HistoryManager` for bounded undo/redo (capped at 100 entries)
+- Add `export`/`import` modules with `BoardExporter` and `BoardImporter`
+- Add `Snapshot` serialization (`to_json_bytes`/`from_json_bytes`) directly on the domain type
+- Add sprint query functions and `CardFilters` struct
+- Replace dyn dispatch with enum dispatch in search and sort
+### kanban-tui
+- Remove re-export wrappers and thin delegation layers that proxied domain logic
+- Replace inline business logic in handlers with `card_lifecycle` calls
+- Replace duplicated filter/sort service with `CardQueryBuilder`
+- Fix multi-byte UTF-8 cursor handling via core `InputState`
+- - feat(tui): Add TUI for managing parent-child card relationships
+- feat(domain): Add commands for parent-child card relationships
+- feat(domain): Add ParentOf edge type for hierarchical card grouping
+- feat(tui,cli): integrate dependency graph into persistence
+- feat(domain): add dependency management commands
+- feat(domain): add card dependency graph types
+- feat(core): add graph-related error variants
+- feat(core): add graph cycle detection algorithms
+- feat(core): add generic Graph<E> data structure
+- feat(core): add graph module with edge types and GraphNode trait
+
+
 ## [0.1.16] - 2025-12-21
 
 - chore: bump version to 16
 - fix: points dialog now correctly updates card from detail view
-
-## [0.1.15] - 2025-12-21
-
-- feat(cli): include git commit hash in version output
-- fix(tui): skip empty sprints section when navigating board details
-- fix: filter out completed and cancelled sprints from assign list
-- fix: navigate to last sprint when scrolling up from columns in board settings
-- fix: preserve navigation mode during auto-reload from external changes
-- chore: cargo fmt
-- fix(tui): fix gg/G vim navigation in grouped-by-column view
-- chore: remove wip file
-- fix: prevent premature column switching in handle_navigation_down
-- fix: Centralize file watcher pause/resume in StateManager
-- feat: add kanban-mcp server
-- feat(mcp): add McpTools trait for compile-time parity with KanbanOperations
-- docs(mcp): add subprocess architecture documentation and Nix wrapper
-- feat(mcp): add CLI executor for subprocess-based operations
-- feat(mcp): enhance card operations and add delete/archive functionality
-- feat: add kanban-mcp: Model Context Protocol server implementation
-- fix: batch card creation with optional status update
-- fix: batch card movements with conditional status updates
-- fix: batch sprint activation and completion with board updates
-- fix: batch column position swaps
-- fix: batch card unassignment from sprint
-- fix: batch card completion toggles
-- fix: batch card moves when deleting column
-- fix: batch default column creation to prevent conflict dialog on new board
-- refactor: use batch command execution in sprint assignment handlers
-- feat: add execute_commands_batch for race-free command execution
-- fix: enhance AssignCardToSprint to handle sprint log transitions
-- fix: batch card archive and delete operations in animation completion
-- feat(persistence): create kanban-persistence crate structure
-- feat(state): create Command trait and StateManager
-- feat(domain): add CreateBoard command
-- feat(domain): add active_sprint_id field to BoardUpdate
-- feat(state): add debouncing to StateManager::save_if_needed()
-- feat(persistence): add automatic V1→V2 migration on load
-- feat(core,persistence): add conflict detection for multi-instance saves
-- feat(persistence): detect file conflicts before save
-- feat(state): propagate conflict errors in StateManager
-- feat(tui): Implement conflict resolution dialog and event loop integration
-- feat(tui): Integrate FileWatcher with App event loop
-- feat(state): Add view refresh tracking to StateManager
-- feat(tui): Add ExternalChangeDetected dialog
-- feat(tui): add user-visible error display banner
-- feat(app): prevent quit with pending saves
-- feat(app): add save completion receiver to App struct
-- feat(state): add bidirectional save completion channel
-- feat: Add migration verification and automatic backup cleanup
-- fix: Add instance ID check to file watcher to prevent false positives
-- fix: Remove redundant version fields from PersistenceMetadata
-- fix(tui): restoring restoring cards
-- fix(cli): restoring to a non existing column
-- docs: add CLI quick start section to root README
-- docs: update CLI README with command documentation
-- fix: use get_selected_card_in_context for points dialog
-- feat: add TuiContext struct with KanbanOperations implementation
-- feat: implement KanbanOperations trait for TUI App
-- test: update CLI tests for positional ID arguments
-- feat: make ID positional argument for single-resource commands
-- fix: return descriptive errors for invalid priority and status values
-- feat: add API version to CLI output and document never type
-- feat: simplify CLI file argument and add shell completions
-- fix: CLI context bugs and improve error messages
-- fix: Support positional file argument for TUI mode
-- test: Add comprehensive integration tests for CLI
-- feat: Implement full CLI with subcommand interface
-- feat: Add KanbanOperations trait for TUI/CLI feature parity
-- feat(mcp): omit description and sprint_logs from card list responses
-- feat(cli): include git commit hash in version output (#132)
-- fix: stabilize release pipeline for v0.1.15
-Jumping cards
-- fix: jump by actual visible cards count from render_info, not cards_to_show
-- feat: add vim jump motions to normal mode keybinding display
-- feat: add vim jump motions to card list keybinding display
-- feat: wire up vim jump motions to keybinding handlers
-- feat: add jump motion handlers
-- feat: add jump methods to CardList
-- feat: add jump_to_first and jump_to_last methods to SelectionState
-- feat: add jump action variants to KeybindingAction enum
-- feat: add pending_key field to App struct for multi-key sequences
-Refactored dialog mode handling to use nested AppMode::Dialog(DialogMode) enum
-for type-safe dialog management. Dialogs now correctly display their parent
-view in the background instead of hardcoded destinations.
-- Added DialogMode enum with all 23 dialog variants
-- Simplified is_dialog_mode() to matches!(self.mode, AppMode::Dialog(_))
-- Added get_base_mode() to determine parent view from mode_stack
-- Two-phase rendering: base view first, then dialog overlay
-- Converted all push_mode(AppMode::X) calls to open_dialog(DialogMode::X)
-
-## [0.1.15] - 2025-12-21
-
-- feat(cli): include git commit hash in version output
-- fix(tui): skip empty sprints section when navigating board details
-- fix: filter out completed and cancelled sprints from assign list
-- fix: navigate to last sprint when scrolling up from columns in board settings
-- fix: preserve navigation mode during auto-reload from external changes
-- chore: cargo fmt
-- fix(tui): fix gg/G vim navigation in grouped-by-column view
-- chore: remove wip file
-- fix: prevent premature column switching in handle_navigation_down
-- fix: Centralize file watcher pause/resume in StateManager
-- feat: add kanban-mcp server
-- feat(mcp): add McpTools trait for compile-time parity with KanbanOperations
-- docs(mcp): add subprocess architecture documentation and Nix wrapper
-- feat(mcp): add CLI executor for subprocess-based operations
-- feat(mcp): enhance card operations and add delete/archive functionality
-- feat: add kanban-mcp: Model Context Protocol server implementation
-- fix: batch card creation with optional status update
-- fix: batch card movements with conditional status updates
-- fix: batch sprint activation and completion with board updates
-- fix: batch column position swaps
-- fix: batch card unassignment from sprint
-- fix: batch card completion toggles
-- fix: batch card moves when deleting column
-- fix: batch default column creation to prevent conflict dialog on new board
-- refactor: use batch command execution in sprint assignment handlers
-- feat: add execute_commands_batch for race-free command execution
-- fix: enhance AssignCardToSprint to handle sprint log transitions
-- fix: batch card archive and delete operations in animation completion
-- feat(persistence): create kanban-persistence crate structure
-- feat(state): create Command trait and StateManager
-- feat(domain): add CreateBoard command
-- feat(domain): add active_sprint_id field to BoardUpdate
-- feat(state): add debouncing to StateManager::save_if_needed()
-- feat(persistence): add automatic V1→V2 migration on load
-- feat(core,persistence): add conflict detection for multi-instance saves
-- feat(persistence): detect file conflicts before save
-- feat(state): propagate conflict errors in StateManager
-- feat(tui): Implement conflict resolution dialog and event loop integration
-- feat(tui): Integrate FileWatcher with App event loop
-- feat(state): Add view refresh tracking to StateManager
-- feat(tui): Add ExternalChangeDetected dialog
-- feat(tui): add user-visible error display banner
-- feat(app): prevent quit with pending saves
-- feat(app): add save completion receiver to App struct
-- feat(state): add bidirectional save completion channel
-- feat: Add migration verification and automatic backup cleanup
-- fix: Add instance ID check to file watcher to prevent false positives
-- fix: Remove redundant version fields from PersistenceMetadata
-- fix(tui): restoring restoring cards
-- fix(cli): restoring to a non existing column
-- docs: add CLI quick start section to root README
-- docs: update CLI README with command documentation
-- fix: use get_selected_card_in_context for points dialog
-- feat: add TuiContext struct with KanbanOperations implementation
-- feat: implement KanbanOperations trait for TUI App
-- test: update CLI tests for positional ID arguments
-- feat: make ID positional argument for single-resource commands
-- fix: return descriptive errors for invalid priority and status values
-- feat: add API version to CLI output and document never type
-- feat: simplify CLI file argument and add shell completions
-- fix: CLI context bugs and improve error messages
-- fix: Support positional file argument for TUI mode
-- test: Add comprehensive integration tests for CLI
-- feat: Implement full CLI with subcommand interface
-- feat: Add KanbanOperations trait for TUI/CLI feature parity
-- feat(mcp): omit description and sprint_logs from card list responses
-- feat(cli): include git commit hash in version output (#132)
-- fix: stabilize release pipeline for v0.1.15
-Jumping cards
-- fix: jump by actual visible cards count from render_info, not cards_to_show
-- feat: add vim jump motions to normal mode keybinding display
-- feat: add vim jump motions to card list keybinding display
-- feat: wire up vim jump motions to keybinding handlers
-- feat: add jump motion handlers
-- feat: add jump methods to CardList
-- feat: add jump_to_first and jump_to_last methods to SelectionState
-- feat: add jump action variants to KeybindingAction enum
-- feat: add pending_key field to App struct for multi-key sequences
-Refactored dialog mode handling to use nested AppMode::Dialog(DialogMode) enum
-for type-safe dialog management. Dialogs now correctly display their parent
-view in the background instead of hardcoded destinations.
-- Added DialogMode enum with all 23 dialog variants
-- Simplified is_dialog_mode() to matches!(self.mode, AppMode::Dialog(_))
-- Added get_base_mode() to determine parent view from mode_stack
-- Two-phase rendering: base view first, then dialog overlay
-- Converted all push_mode(AppMode::X) calls to open_dialog(DialogMode::X)
 
 ## [0.1.15] - 2025-12-21
 

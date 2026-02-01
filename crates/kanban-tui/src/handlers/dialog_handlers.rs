@@ -139,7 +139,7 @@ impl App {
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
 
                 if let Some(card_id) = card_id {
-                    let cmd = Box::new(crate::state::commands::UpdateCard {
+                    let cmd = Box::new(kanban_domain::commands::UpdateCard {
                         card_id,
                         updates: kanban_domain::CardUpdate {
                             points: points.into(),
@@ -177,7 +177,7 @@ impl App {
                             if let Some(board_idx) = self.board_selection.get() {
                                 if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
                                 {
-                                    let cmd = Box::new(crate::state::commands::UpdateBoard {
+                                    let cmd = Box::new(kanban_domain::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
                                             sprint_prefix: FieldUpdate::Clear,
@@ -197,7 +197,7 @@ impl App {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(crate::state::commands::UpdateSprint {
+                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
                                             prefix: FieldUpdate::Clear,
@@ -217,7 +217,7 @@ impl App {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(crate::state::commands::UpdateSprint {
+                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
                                             card_prefix: FieldUpdate::Clear,
@@ -242,7 +242,7 @@ impl App {
                             if let Some(board_idx) = self.board_selection.get() {
                                 if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
                                 {
-                                    let cmd = Box::new(crate::state::commands::UpdateBoard {
+                                    let cmd = Box::new(kanban_domain::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
                                             sprint_prefix: FieldUpdate::Set(prefix_str.clone()),
@@ -268,7 +268,7 @@ impl App {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(crate::state::commands::UpdateSprint {
+                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
                                             prefix: FieldUpdate::Set(prefix_str.clone()),
@@ -297,7 +297,7 @@ impl App {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(crate::state::commands::UpdateSprint {
+                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
                                             card_prefix: FieldUpdate::Set(prefix_str.clone()),

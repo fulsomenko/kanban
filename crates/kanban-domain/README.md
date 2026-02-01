@@ -30,7 +30,7 @@ pub struct Board {
     // ...more fields
 }
 
-pub enum SortField { Points, Priority, CreatedAt, UpdatedAt, Status, Default }
+pub enum SortField { Points, Priority, CreatedAt, UpdatedAt, Status, Position, Default }
 pub enum SortOrder { Ascending, Descending }
 ```
 
@@ -130,6 +130,82 @@ pub struct CardMetadataDto {
     pub due_date: Option<DateTime<Utc>>,
 }
 ```
+
+### Card Dependencies
+
+Directed graph system for card relationships:
+
+```rust
+pub enum CardEdgeType {
+    ParentOf,    // Hierarchical parent-child grouping
+    Blocks,      // Blocking dependency (acyclic)
+    RelatesTo,   // Informational link (allows cycles)
+}
+
+pub trait DependencyGraph {
+    fn add_edge(&mut self, ...) -> KanbanResult<()>;
+    fn remove_edge(&mut self, ...);
+    fn get_parents(&self, card_id: CardId) -> Vec<CardId>;
+    fn get_children(&self, card_id: CardId) -> Vec<CardId>;
+    fn remove_card_edges(&mut self, card_id: CardId);
+    fn archive_card_edges(&mut self, card_id: CardId);
+}
+```
+
+- `ParentOf` and `Blocks` enforce DAG constraints (cycle detection)
+- Edges referencing a deleted or archived card are automatically cleaned up
+- Integrated into board persistence (import/export)
+
+### Sorting & Filtering
+
+**SortBy** — Enum dispatch for card sorting:
+
+```rust
+pub enum SortBy {
+    Points, Priority, CreatedAt, UpdatedAt, Status, Position, CardNumber
+}
+```
+
+**CardFilter** trait + concrete filters:
+
+```rust
+pub trait CardFilter {
+    fn matches(&self, card: &Card) -> bool;
+}
+// Implementations: BoardFilter, ColumnFilter, SprintFilter, UnassignedOnlyFilter
+```
+
+### Query Builder
+
+Fluent API composing filter + sort + search:
+
+```rust
+let cards = CardQueryBuilder::new(&all_cards)
+    .filter_by_column(column_id)
+    .filter_by_sprint(sprint_id)
+    .search("bug fix")
+    .sort(SortBy::Priority)
+    .sort_order(SortOrder::Descending)
+    .execute();
+```
+
+### History & Snapshots
+
+```rust
+pub struct HistoryManager { /* undo/redo stacks */ }
+pub struct Snapshot { /* point-in-time state of all kanban data */ }
+```
+
+`HistoryManager` maintains undo and redo stacks of `Snapshot` values. Each snapshot captures the full board state and can be serialized to/from JSON bytes.
+
+### Export / Import
+
+```rust
+pub struct BoardExporter;
+pub struct BoardImporter;
+```
+
+`BoardExporter` produces single-board or all-boards JSON exports. `BoardImporter` reads JSON with automatic V1/V2 format detection and migration.
 
 ## Architecture
 

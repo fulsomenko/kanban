@@ -1,5 +1,5 @@
-use kanban_domain::{Board, Card, Column};
-use kanban_tui::{state::DataSnapshot, App};
+use kanban_domain::{Board, Card, Column, Snapshot};
+use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
 
@@ -13,12 +13,13 @@ fn test_import_failure_prevents_empty_state_save() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
 
     // Create snapshot with one board
-    let snapshot = kanban_tui::state::DataSnapshot {
+    let snapshot = Snapshot {
         boards: vec![board.clone()],
         columns: vec![column.clone()],
         cards: vec![],
         archived_cards: vec![],
         sprints: vec![],
+        graph: kanban_domain::DependencyGraph::new(),
     };
 
     // Manually create V2 format JSON
@@ -93,12 +94,13 @@ fn test_v2_format_is_imported_correctly() {
     );
 
     // Create snapshot with board, column, and card
-    let snapshot = DataSnapshot {
+    let snapshot = Snapshot {
         boards: vec![board],
         columns: vec![column],
         cards: vec![card],
         archived_cards: vec![],
         sprints: vec![],
+        graph: kanban_domain::DependencyGraph::new(),
     };
 
     // Manually create V2 format JSON

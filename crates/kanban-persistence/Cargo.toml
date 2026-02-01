@@ -11,8 +11,8 @@ keywords = ["kanban", "persistence", "storage", "file-watching"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-kanban-core = { path = "../kanban-core", version = "^0.1" }
-kanban-domain = { path = "../kanban-domain", version = "^0.1" }
+kanban-core = { path = "../kanban-core", version = "^0.2" }
+kanban-domain = { path = "../kanban-domain", version = "^0.2" }
 
 # Core async and error handling
 tokio.workspace = true

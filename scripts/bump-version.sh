@@ -73,6 +73,19 @@ for crate in crates/*/Cargo.toml; do
   mv "$crate.tmp" "$crate"
 done
 
+# Update inter-crate dependency version requirements (e.g., version = "^0.1" -> "^0.2")
+OLD_COMPAT="^${MAJOR}.${MINOR}"
+IFS='.' read -r NEW_MAJOR NEW_MINOR _ <<< "$NEW_VERSION"
+NEW_COMPAT="^${NEW_MAJOR}.${NEW_MINOR}"
+
+if [ "$OLD_COMPAT" != "$NEW_COMPAT" ]; then
+  echo "Updating inter-crate dependency versions: $OLD_COMPAT → $NEW_COMPAT"
+  for crate in crates/*/Cargo.toml; do
+    sed "s/version = \"${OLD_COMPAT}\"/version = \"${NEW_COMPAT}\"/g" "$crate" > "$crate.tmp"
+    mv "$crate.tmp" "$crate"
+  done
+fi
+
 cargo update --workspace
 
 find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -delete

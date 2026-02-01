@@ -120,11 +120,11 @@ impl CardList {
         let render_info = self.list.get_render_info(viewport_height);
 
         CardListRenderInfo {
-            visible_card_indices: render_info.visible_item_indices,
+            visible_card_indices: render_info.visible_indices,
             show_above_indicator: render_info.show_above_indicator,
-            cards_above_count: render_info.items_above_count,
+            cards_above_count: render_info.items_above,
             show_below_indicator: render_info.show_below_indicator,
-            cards_below_count: render_info.items_below_count,
+            cards_below_count: render_info.items_below,
         }
     }
 
@@ -384,11 +384,8 @@ mod tests {
             list.navigate_down();
             let after_idx = list.get_selected_index();
 
-            if before_idx.is_some() && after_idx.is_some() {
-                assert!(
-                    after_idx.unwrap() >= before_idx.unwrap(),
-                    "Selection should move down or stay"
-                );
+            if let (Some(before), Some(after)) = (before_idx, after_idx) {
+                assert!(after >= before, "Selection should move down or stay");
             }
         }
 

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{board::Board, column::ColumnId, field_update::FieldUpdate, sprint::Sprint, SprintLog};
+use kanban_core::GraphNode;
 
 pub type CardId = Uuid;
 
@@ -20,6 +21,15 @@ pub enum CardStatus {
     InProgress,
     Blocked,
     Done,
+}
+
+/// Represents card lifecycle operation types.
+/// Used for visual feedback during card operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimationType {
+    Archiving,
+    Restoring,
+    Deleting,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -319,6 +329,12 @@ pub struct CardUpdate {
     pub sprint_id: FieldUpdate<Uuid>,
     pub assigned_prefix: FieldUpdate<String>,
     pub card_prefix: FieldUpdate<String>,
+}
+
+impl GraphNode for Card {
+    fn node_id(&self) -> Uuid {
+        self.id
+    }
 }
 
 #[cfg(test)]

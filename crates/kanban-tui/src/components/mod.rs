@@ -1,19 +1,21 @@
+pub mod card_detail_sections;
 pub mod card_list_item;
 pub mod detail_view;
 pub mod generic_list;
 pub mod list;
-pub mod page;
 pub mod panel;
 pub mod popup;
+pub mod relationship_section;
 pub mod selection_dialog;
 pub mod selection_list;
 
+pub use card_detail_sections::*;
 pub use card_list_item::*;
 pub use detail_view::*;
 pub use generic_list::*;
 pub use list::*;
-pub use page::*;
 pub use panel::*;
 pub use popup::*;
+pub use relationship_section::*;
 pub use selection_dialog::*;
 pub use selection_list::*;

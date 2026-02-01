@@ -2,14 +2,12 @@ use crate::{
     card_list::{CardList, CardListId},
     card_list_component::{CardListComponent, CardListComponentConfig},
     clipboard,
+    components::generic_list::ListComponent,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
-    export::{BoardExporter, BoardImporter},
     filters::FilterDialogState,
-    input::InputState,
     search::SearchState,
-    selection::SelectionState,
-    services::{filter::CardFilter, get_sorter_for_field, BoardFilter, OrderedSorter},
+    state::TuiSnapshot,
     tui_context::TuiContext,
     ui,
     view_strategy::{UnifiedViewStrategy, ViewRefreshContext, ViewStrategy},
@@ -18,8 +16,15 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, Editable, KanbanResult};
-use kanban_domain::{Board, Card, SortField, SortOrder, Sprint};
+use kanban_core::{AppConfig, Editable, InputState, KanbanResult, SelectionState};
+use kanban_domain::AnimationType;
+use kanban_domain::{
+    export::{AllBoardsExport, BoardExporter, BoardImporter},
+    filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter},
+    partition_sprint_cards,
+    sort::{get_sorter_for_field, OrderedSorter},
+    sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
+};
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::collections::HashMap;
@@ -27,13 +32,6 @@ use std::io;
 use std::time::Instant;
 
 const ANIMATION_DURATION_MS: u128 = 150;
-
-#[derive(Debug, Clone, Copy)]
-pub enum AnimationType {
-    Archiving,
-    Restoring,
-    Deleting,
-}
 
 pub struct CardAnimation {
     pub animation_type: AnimationType,
@@ -81,6 +79,14 @@ pub struct App {
     pub card_list_component: CardListComponent,
     pub search: SearchState,
     pub filter_dialog_state: Option<FilterDialogState>,
+    pub relationship_card_ids: Vec<uuid::Uuid>,
+    pub relationship_selected: std::collections::HashSet<uuid::Uuid>,
+    pub relationship_selection: SelectionState,
+    pub relationship_search: String,
+    pub relationship_search_active: bool,
+    pub parents_list: ListComponent,
+    pub children_list: ListComponent,
+    pub card_navigation_history: Vec<usize>,
     pub viewport_height: usize,
     pub pending_key: Option<char>,
     pub file_change_rx: Option<tokio::sync::broadcast::Receiver<kanban_persistence::ChangeEvent>>,
@@ -101,6 +107,8 @@ pub enum CardFocus {
     Title,
     Metadata,
     Description,
+    Parents,
+    Children,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -153,6 +161,8 @@ pub enum DialogMode {
     FilterOptions,
     ConflictResolution,
     ExternalChangeDetected,
+    ManageParents,
+    ManageChildren,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -172,7 +182,7 @@ impl App {
         save_file: Option<String>,
     ) -> (
         Self,
-        Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
+        Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     ) {
         let app_config = AppConfig::load();
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone());
@@ -241,6 +251,14 @@ impl App {
             ),
             search: SearchState::new(),
             filter_dialog_state: None,
+            relationship_card_ids: Vec::new(),
+            relationship_selected: std::collections::HashSet::new(),
+            relationship_selection: SelectionState::new(),
+            relationship_search: String::new(),
+            relationship_search_active: false,
+            parents_list: ListComponent::new(false),
+            children_list: ListComponent::new(false),
+            card_navigation_history: Vec::new(),
             viewport_height: 20,
             pending_key: None,
             file_change_rx: None,
@@ -256,6 +274,9 @@ impl App {
                     tracing::error!("Failed to load file {}: {}", filename, e);
                     app.save_file = None;
                     app.ctx.state_manager.clear_store();
+                } else {
+                    // Clear undo/redo history after initial file load (not an undoable action)
+                    app.ctx.state_manager.clear_history();
                 }
             }
         }
@@ -304,11 +325,7 @@ impl App {
     }
 
     pub fn should_clear_error(&self) -> bool {
-        if let Some((_, instant)) = self.last_error {
-            instant.elapsed().as_secs() >= 5
-        } else {
-            false
-        }
+        false
     }
 
     fn keycode_matches_binding_key(
@@ -418,6 +435,18 @@ impl App {
             KeybindingAction::JumpToBottom => self.handle_jump_to_bottom(),
             KeybindingAction::JumpHalfViewportUp => self.handle_jump_half_viewport_up(),
             KeybindingAction::JumpHalfViewportDown => self.handle_jump_half_viewport_down(),
+            KeybindingAction::ManageParents => self.handle_manage_parents(),
+            KeybindingAction::ManageChildren => self.handle_manage_children(),
+            KeybindingAction::Undo => {
+                if let Err(e) = self.undo() {
+                    self.set_error(format!("Undo failed: {}", e));
+                }
+            }
+            KeybindingAction::Redo => {
+                if let Err(e) = self.redo() {
+                    self.set_error(format!("Redo failed: {}", e));
+                }
+            }
         }
     }
 
@@ -429,6 +458,12 @@ impl App {
     ) -> bool {
         use crossterm::event::KeyCode;
         let mut should_restart_events = false;
+
+        // Clear error on any key press
+        if self.last_error.is_some() {
+            self.clear_error();
+            return false;
+        }
 
         let is_input_mode = matches!(
             self.mode,
@@ -553,6 +588,12 @@ impl App {
                     self.pending_key = None;
                     self.handle_toggle_card_completion();
                 }
+                KeyCode::Char('s') => {
+                    self.pending_key = None;
+                    if self.focus == Focus::Cards {
+                        self.handle_manage_children_from_list();
+                    }
+                }
                 KeyCode::Char('o') => {
                     self.pending_key = None;
                     self.handle_order_cards_key();
@@ -645,6 +686,18 @@ impl App {
                     self.pending_key = None;
                     self.handle_selection_activate();
                 }
+                KeyCode::Char('u') => {
+                    self.pending_key = None;
+                    if let Err(e) = self.undo() {
+                        self.set_error(format!("Undo failed: {}", e));
+                    }
+                }
+                KeyCode::Char('U') => {
+                    self.pending_key = None;
+                    if let Err(e) = self.redo() {
+                        self.set_error(format!("Redo failed: {}", e));
+                    }
+                }
                 _ => {
                     self.pending_key = None;
                 }
@@ -699,6 +752,8 @@ impl App {
                 DialogMode::ExternalChangeDetected => {
                     self.handle_external_change_detected_popup(key.code)
                 }
+                DialogMode::ManageParents => self.handle_manage_parents_popup(key.code),
+                DialogMode::ManageChildren => self.handle_manage_children_popup(key.code),
             },
         }
         should_restart_events
@@ -851,10 +906,10 @@ impl App {
 
         // Execute batch archive commands
         if had_archives {
-            let mut archive_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+            let mut archive_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
             for card_id in archive_cards {
                 let cmd = Box::new(kanban_domain::commands::ArchiveCard { card_id })
-                    as Box<dyn crate::state::commands::Command>;
+                    as Box<dyn kanban_domain::commands::Command>;
                 archive_commands.push(cmd);
             }
             if let Err(e) = self.execute_commands_batch(archive_commands) {
@@ -869,10 +924,10 @@ impl App {
 
         // Execute batch delete commands
         if had_deletes {
-            let mut delete_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+            let mut delete_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
             for card_id in delete_cards {
                 let cmd = Box::new(kanban_domain::commands::DeleteCard { card_id })
-                    as Box<dyn crate::state::commands::Command>;
+                    as Box<dyn kanban_domain::commands::Command>;
                 delete_commands.push(cmd);
             }
             if let Err(e) = self.execute_commands_batch(delete_commands) {
@@ -905,36 +960,27 @@ impl App {
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
+        let sprint_filter = if !self.active_sprint_filters.is_empty() {
+            Some(SprintFilter::in_sprints(
+                self.active_sprint_filters.iter().copied(),
+            ))
+        } else {
+            None
+        };
 
-        let cards: Vec<_> = self
-            .ctx
+        self.ctx
             .cards
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
                     return false;
                 }
-                true
-            })
-            .collect();
-
-        if self.active_sprint_filters.is_empty() && !self.hide_assigned_cards {
-            return cards.len();
-        }
-
-        cards
-            .iter()
-            .filter(|c| {
-                if !self.active_sprint_filters.is_empty() {
-                    if let Some(sprint_id) = c.sprint_id {
-                        if !self.active_sprint_filters.contains(&sprint_id) {
-                            return false;
-                        }
-                    } else {
+                if let Some(ref sf) = sprint_filter {
+                    if !sf.matches(c) {
                         return false;
                     }
                 }
-                if self.hide_assigned_cards && c.sprint_id.is_some() {
+                if self.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
                     return false;
                 }
                 true
@@ -945,6 +991,13 @@ impl App {
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
         let board = self.ctx.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
+        let sprint_filter = if !self.active_sprint_filters.is_empty() {
+            Some(SprintFilter::in_sprints(
+                self.active_sprint_filters.iter().copied(),
+            ))
+        } else {
+            None
+        };
 
         let mut cards: Vec<&Card> = self
             .ctx
@@ -954,16 +1007,12 @@ impl App {
                 if !board_filter.matches(c) {
                     return false;
                 }
-                if !self.active_sprint_filters.is_empty() {
-                    if let Some(sprint_id) = c.sprint_id {
-                        if !self.active_sprint_filters.contains(&sprint_id) {
-                            return false;
-                        }
-                    } else {
+                if let Some(ref sf) = sprint_filter {
+                    if !sf.matches(c) {
                         return false;
                     }
                 }
-                if self.hide_assigned_cards && c.sprint_id.is_some() {
+                if self.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
                     return false;
                 }
                 true
@@ -972,7 +1021,7 @@ impl App {
 
         let sorter = get_sorter_for_field(board.task_sort_field);
         let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
-        ordered_sorter.sort(&mut cards);
+        ordered_sorter.sort_by(&mut cards);
 
         cards
     }
@@ -1019,60 +1068,8 @@ impl App {
         }
     }
 
-    pub fn get_sprint_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        self.ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id))
-            .collect()
-    }
-
-    pub fn get_sprint_completed_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        let cards: Vec<&Card> = self
-            .ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
-            .collect();
-        tracing::debug!(
-            "get_sprint_completed_cards({}): found {} cards",
-            sprint_id,
-            cards.len()
-        );
-        cards
-    }
-
-    pub fn get_sprint_uncompleted_cards(&self, sprint_id: uuid::Uuid) -> Vec<&Card> {
-        let cards: Vec<&Card> = self
-            .ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
-            .collect();
-        tracing::debug!(
-            "get_sprint_uncompleted_cards({}): found {} cards",
-            sprint_id,
-            cards.len()
-        );
-        cards
-    }
-
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
-        let uncompleted_ids: Vec<uuid::Uuid> = self
-            .ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id) && !card.is_completed())
-            .map(|card| card.id)
-            .collect();
-
-        let completed_ids: Vec<uuid::Uuid> = self
-            .ctx
-            .cards
-            .iter()
-            .filter(|card| card.sprint_id == Some(sprint_id) && card.is_completed())
-            .map(|card| card.id)
-            .collect();
+        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &self.ctx.cards);
 
         self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
         self.sprint_completed_cards.update_cards(completed_ids);
@@ -1087,28 +1084,18 @@ impl App {
     }
 
     pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
-        let uncompleted_card_ids: Vec<uuid::Uuid> = self.sprint_uncompleted_cards.cards.clone();
-        let completed_card_ids: Vec<uuid::Uuid> = self.sprint_completed_cards.cards.clone();
-
-        let mut uncompleted_cards: Vec<&Card> = uncompleted_card_ids
-            .iter()
-            .filter_map(|id| self.ctx.cards.iter().find(|c| c.id == *id))
-            .collect();
-
-        let mut completed_cards: Vec<&Card> = completed_card_ids
-            .iter()
-            .filter_map(|id| self.ctx.cards.iter().find(|c| c.id == *id))
-            .collect();
-
-        let sorter = get_sorter_for_field(sort_field);
-        let ordered_sorter = OrderedSorter::new(sorter, sort_order);
-
-        ordered_sorter.sort(&mut uncompleted_cards);
-        ordered_sorter.sort(&mut completed_cards);
-
-        let sorted_uncompleted_ids: Vec<uuid::Uuid> =
-            uncompleted_cards.iter().map(|c| c.id).collect();
-        let sorted_completed_ids: Vec<uuid::Uuid> = completed_cards.iter().map(|c| c.id).collect();
+        let sorted_uncompleted_ids = sort_card_ids(
+            &self.sprint_uncompleted_cards.cards,
+            &self.ctx.cards,
+            sort_field,
+            sort_order,
+        );
+        let sorted_completed_ids = sort_card_ids(
+            &self.sprint_completed_cards.cards,
+            &self.ctx.cards,
+            sort_field,
+            sort_order,
+        );
 
         self.sprint_uncompleted_cards
             .update_cards(sorted_uncompleted_ids);
@@ -1121,19 +1108,12 @@ impl App {
             .update_cards(self.sprint_completed_cards.cards.clone());
     }
 
-    pub fn calculate_points(cards: &[&Card]) -> u32 {
-        cards
-            .iter()
-            .filter_map(|card| card.points.map(|p| p as u32))
-            .sum()
-    }
-
     /// Execute multiple commands as a batch with a single pause/resume cycle
     /// This is the preferred method as it prevents race conditions where rapid successive saves
     /// detect previous writes as external. For single commands, this still works efficiently.
     pub fn execute_command(
         &mut self,
-        command: Box<dyn crate::state::commands::Command>,
+        command: Box<dyn kanban_domain::commands::Command>,
     ) -> KanbanResult<()> {
         self.execute_commands_batch(vec![command])
     }
@@ -1142,7 +1122,7 @@ impl App {
     /// This prevents race conditions where rapid successive saves detect previous writes as external
     pub fn execute_commands_batch(
         &mut self,
-        commands: Vec<Box<dyn crate::state::commands::Command>>,
+        commands: Vec<Box<dyn kanban_domain::commands::Command>>,
     ) -> KanbanResult<()> {
         self.ctx.execute_commands_batch(commands)
     }
@@ -1183,6 +1163,72 @@ impl App {
         self.sync_card_list_component();
     }
 
+    /// Undo the last action
+    pub fn undo(&mut self) -> KanbanResult<()> {
+        if !self.ctx.state_manager.can_undo() {
+            self.set_error("Nothing to undo".to_string());
+            return Ok(());
+        }
+
+        // Suppress history capture during restore
+        self.ctx.state_manager.history_mut().suppress();
+
+        // Save current state to redo stack
+        let current_snapshot = kanban_domain::Snapshot::from_app(self);
+        self.ctx
+            .state_manager
+            .history_mut()
+            .push_redo(current_snapshot);
+
+        // Restore previous state from undo stack
+        if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_undo() {
+            snapshot.apply_to_app(self);
+            self.refresh_view();
+
+            // Queue snapshot for persistence
+            let save_snapshot = kanban_domain::Snapshot::from_app(self);
+            self.ctx.state_manager.queue_snapshot(save_snapshot);
+        }
+
+        // Re-enable history capture
+        self.ctx.state_manager.history_mut().unsuppress();
+
+        Ok(())
+    }
+
+    /// Redo the last undone action
+    pub fn redo(&mut self) -> KanbanResult<()> {
+        if !self.ctx.state_manager.can_redo() {
+            self.set_error("Nothing to redo".to_string());
+            return Ok(());
+        }
+
+        // Suppress history capture during restore
+        self.ctx.state_manager.history_mut().suppress();
+
+        // Save current state to undo stack
+        let current_snapshot = kanban_domain::Snapshot::from_app(self);
+        self.ctx
+            .state_manager
+            .history_mut()
+            .push_undo(current_snapshot);
+
+        // Restore next state from redo stack
+        if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_redo() {
+            snapshot.apply_to_app(self);
+            self.refresh_view();
+
+            // Queue snapshot for persistence
+            let save_snapshot = kanban_domain::Snapshot::from_app(self);
+            self.ctx.state_manager.queue_snapshot(save_snapshot);
+        }
+
+        // Re-enable history capture
+        self.ctx.state_manager.history_mut().unsuppress();
+
+        Ok(())
+    }
+
     pub fn sync_card_list_component(&mut self) {
         if let Some(active_list) = self.view_strategy.get_active_task_list() {
             self.card_list_component
@@ -1214,7 +1260,7 @@ impl App {
                     &self.ctx.sprints,
                 );
 
-                let export = crate::export::AllBoardsExport {
+                let export = AllBoardsExport {
                     boards: vec![board_export],
                 };
 
@@ -1305,7 +1351,7 @@ impl App {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
                                     self.ctx.state_manager.mark_dirty();
-                                    let snapshot = crate::state::DataSnapshot::from_app(self);
+                                    let snapshot = kanban_domain::Snapshot::from_app(self);
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
@@ -1317,7 +1363,7 @@ impl App {
                                 };
                                 board.update_description(desc);
                                 self.ctx.state_manager.mark_dirty();
-                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                let snapshot = kanban_domain::Snapshot::from_app(self);
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
@@ -1360,7 +1406,7 @@ impl App {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
                                     self.ctx.state_manager.mark_dirty();
-                                    let snapshot = crate::state::DataSnapshot::from_app(self);
+                                    let snapshot = kanban_domain::Snapshot::from_app(self);
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
@@ -1372,7 +1418,7 @@ impl App {
                                 };
                                 card.update_description(desc);
                                 self.ctx.state_manager.mark_dirty();
-                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                let snapshot = kanban_domain::Snapshot::from_app(self);
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
@@ -1412,7 +1458,7 @@ impl App {
 
     pub async fn run(
         &mut self,
-        save_rx: Option<tokio::sync::mpsc::Receiver<crate::state::DataSnapshot>>,
+        save_rx: Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     ) -> KanbanResult<()> {
         let mut terminal = setup_terminal()?;
 
@@ -1563,7 +1609,7 @@ impl App {
                                         if let Some(ref watcher) = self.file_watcher {
                                             watcher.pause();
                                         }
-                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        let snapshot = kanban_domain::Snapshot::from_app(self);
                                         if let Err(e) = self.ctx.state_manager.force_overwrite(&snapshot).await {
                                             tracing::error!("Failed to force overwrite: {}", e);
                                         }
@@ -1578,7 +1624,7 @@ impl App {
                                         if let Some(store) = self.ctx.state_manager.store() {
                                             match store.load().await {
                                                 Ok((snapshot, _metadata)) => {
-                                                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                                                    match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                                                         Ok(data) => {
                                                             data.apply_to_app(self);
                                                             self.ctx.state_manager.clear_conflict();
@@ -1730,20 +1776,53 @@ impl App {
     }
 
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
-        let first_new_index = self.ctx.boards.len();
-        let import = BoardImporter::import_from_file(filename)?;
-        let (boards, columns, cards, deleted_cards, sprints) =
-            BoardImporter::extract_entities(import);
+        let content = std::fs::read_to_string(filename)?;
 
-        self.ctx.boards.extend(boards);
-        self.ctx.columns.extend(columns);
-        self.ctx.cards.extend(cards);
-        self.ctx.archived_cards.extend(deleted_cards);
-        self.ctx.sprints.extend(sprints);
+        // Capture snapshot before import for undo history
+        let before_snapshot = kanban_domain::Snapshot::from_app(self);
+        self.ctx
+            .state_manager
+            .capture_before_command(before_snapshot);
+
+        // Try V2 format first (preserves graph)
+        if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
+            let first_new_index = self.ctx.boards.len();
+
+            self.ctx.boards.extend(snapshot.boards);
+            self.ctx.columns.extend(snapshot.columns);
+            self.ctx.cards.extend(snapshot.cards);
+            self.ctx.archived_cards.extend(snapshot.archived_cards);
+            self.ctx.sprints.extend(snapshot.sprints);
+            self.ctx.graph = snapshot.graph;
+
+            self.board_selection.set(Some(first_new_index));
+            self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
+
+            // Queue snapshot for persistence
+            let save_snapshot = kanban_domain::Snapshot::from_app(self);
+            self.ctx.state_manager.queue_snapshot(save_snapshot);
+
+            return Ok(());
+        }
+
+        // Fall back to V1 format (no graph)
+        let first_new_index = self.ctx.boards.len();
+        let import = BoardImporter::import_from_json(&content)?;
+        let entities = BoardImporter::extract_entities(import);
+
+        self.ctx.boards.extend(entities.boards);
+        self.ctx.columns.extend(entities.columns);
+        self.ctx.cards.extend(entities.cards);
+        self.ctx.archived_cards.extend(entities.archived_cards);
+        self.ctx.sprints.extend(entities.sprints);
 
         self.board_selection.set(Some(first_new_index));
 
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
+
+        // Queue snapshot for persistence
+        let save_snapshot = kanban_domain::Snapshot::from_app(self);
+        self.ctx.state_manager.queue_snapshot(save_snapshot);
 
         Ok(())
     }
@@ -1752,7 +1831,7 @@ impl App {
         if let Some(store) = self.ctx.state_manager.store() {
             match store.load().await {
                 Ok((snapshot, _metadata)) => {
-                    match serde_json::from_slice::<crate::state::DataSnapshot>(&snapshot.data) {
+                    match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                         Ok(data) => {
                             data.apply_to_app(self);
                             self.ctx.state_manager.mark_clean();
@@ -1773,33 +1852,14 @@ impl App {
     }
 
     fn migrate_sprint_logs(&mut self) {
-        let mut migrated_count = 0;
+        let count = kanban_domain::card_lifecycle::migrate_sprint_logs(
+            &mut self.ctx.cards,
+            &self.ctx.sprints,
+            &self.ctx.boards,
+        );
 
-        for card in &mut self.ctx.cards {
-            if let Some(sprint_id) = card.sprint_id {
-                if card.sprint_logs.is_empty() {
-                    if let Some(sprint) = self.ctx.sprints.iter().find(|s| s.id == sprint_id) {
-                        let sprint_log = kanban_domain::SprintLog::new(
-                            sprint_id,
-                            sprint.sprint_number,
-                            sprint.name_index.and_then(|idx| {
-                                self.ctx
-                                    .boards
-                                    .iter()
-                                    .find(|b| b.id == sprint.board_id)
-                                    .and_then(|board| board.sprint_names.get(idx).cloned())
-                            }),
-                            format!("{:?}", sprint.status),
-                        );
-                        card.sprint_logs.push(sprint_log);
-                        migrated_count += 1;
-                    }
-                }
-            }
-        }
-
-        if migrated_count > 0 {
-            tracing::info!("Migrated sprint logs for {} cards", migrated_count);
+        if count > 0 {
+            tracing::info!("Migrated sprint logs for {} cards", count);
         }
     }
 
@@ -1889,7 +1949,8 @@ impl App {
                 SortField::CreatedAt => 2,
                 SortField::UpdatedAt => 3,
                 SortField::Status => 4,
-                SortField::Default => 5,
+                SortField::Position => 5,
+                SortField::Default => 6,
             };
         }
         0

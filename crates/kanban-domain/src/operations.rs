@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 /// Filter options for listing cards
 #[derive(Default, Clone)]
-pub struct CardFilter {
+pub struct CardListFilter {
     pub board_id: Option<Uuid>,
     pub column_id: Option<Uuid>,
     pub sprint_id: Option<Uuid>,
@@ -40,7 +40,7 @@ pub trait KanbanOperations {
     // Card operations
     fn create_card(&mut self, board_id: Uuid, column_id: Uuid, title: String)
         -> KanbanResult<Card>;
-    fn list_cards(&self, filter: CardFilter) -> KanbanResult<Vec<Card>>;
+    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>>;
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>>;
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card>;
     fn move_card(&mut self, id: Uuid, column_id: Uuid, position: Option<i32>)

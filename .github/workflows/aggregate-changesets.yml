@@ -15,6 +15,8 @@ jobs:
   aggregate:
     name: Aggregate Changesets
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: github.event.pull_request.merged == true
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +24,49 @@ jobs:
           fetch-depth: 0
           ref: develop
 
-      - name: Aggregate changesets
+      - name: Check for changesets
+        id: check
         run: |
-          bash scripts/aggregate-changesets.sh
-          echo "✅ Changesets validated and aggregated"
+          CHANGESETS=$(find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" 2>/dev/null || true)
+          if [ -z "$CHANGESETS" ]; then
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+            echo "No changesets found, skipping version bump"
+          else
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+            echo "Found changesets:"
+            echo "$CHANGESETS"
+          fi
+
+      - uses: cachix/install-nix-action@v27
+        if: steps.check.outputs.has_changesets == 'true'
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Setup SSH deploy key
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Configure Git
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin git@github.com:fulsomenko/kanban.git
+
+      - name: Bump version from changesets
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          nix develop --command bash scripts/bump-version.sh "${{ github.event.pull_request.number }}"
+
+      - name: Push version bump
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+        run: |
+          git push origin develop

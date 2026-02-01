@@ -1,8 +1,8 @@
 {
   "version": 2,
   "metadata": {
-    "instance_id": "b654593c-9b03-4928-828f-ed90ba9349dc",
-    "saved_at": "2025-12-17T01:00:19.549405Z"
+    "instance_id": "b858dc4c-2281-4abd-8724-6f73ccfcdfe4",
+    "saved_at": "2026-01-29T13:25:18.482874Z"
   },
   "data": {
     "archived_cards": [
@@ -29,6 +29,195 @@
         },
         "original_column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
         "original_position": 51
+      },
+      {
+        "archived_at": "2025-12-19T23:41:37.542339Z",
+        "card": {
+          "assigned_prefix": "KAN",
+          "card_number": 126,
+          "card_prefix": null,
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "completed_at": null,
+          "created_at": "2025-11-03T17:06:55.650586Z",
+          "description": "filtering by any option should not include unassigned cards unless explictly specified\n",
+          "due_date": null,
+          "id": "08176c32-e5fe-4753-a3b5-6eff5434862a",
+          "points": null,
+          "position": 32,
+          "priority": "Medium",
+          "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+          "sprint_logs": [
+            {
+              "ended_at": "2025-12-15T20:35:57.264769Z",
+              "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+              "sprint_name": "full-bowling",
+              "sprint_number": 9,
+              "started_at": "2025-12-04T21:30:07.245016Z",
+              "status": "Planning"
+            },
+            {
+              "ended_at": null,
+              "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+              "sprint_name": "a-merry-christmas",
+              "sprint_number": 10,
+              "started_at": "2025-12-15T20:35:57.264769Z",
+              "status": "Planning"
+            }
+          ],
+          "status": "Todo",
+          "title": "when filtering by sprint x, dont include unassigned cards.",
+          "updated_at": "2025-12-15T20:35:57.264770Z"
+        },
+        "original_column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "original_position": 32
+      },
+      {
+        "archived_at": "2025-12-19T23:43:18.062364Z",
+        "card": {
+          "assigned_prefix": "KAN",
+          "card_number": 137,
+          "card_prefix": null,
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "completed_at": null,
+          "created_at": "2025-11-27T21:19:19.195159Z",
+          "description": "it would be cool with an indicator of what page I am on out of how many \n\n(1/3)\n\n(45/99)\n",
+          "due_date": null,
+          "id": "777f9c87-af5c-408d-b796-cedca10475c7",
+          "points": 1,
+          "position": 44,
+          "priority": "Low",
+          "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+          "sprint_logs": [
+            {
+              "ended_at": "2025-12-15T20:35:57.264712Z",
+              "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+              "sprint_name": "full-bowling",
+              "sprint_number": 9,
+              "started_at": "2025-12-04T21:30:07.245017Z",
+              "status": "Planning"
+            },
+            {
+              "ended_at": null,
+              "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+              "sprint_name": "a-merry-christmas",
+              "sprint_number": 10,
+              "started_at": "2025-12-15T20:35:57.264713Z",
+              "status": "Planning"
+            }
+          ],
+          "status": "Todo",
+          "title": "page indicator",
+          "updated_at": "2025-12-19T23:41:29.819676Z"
+        },
+        "original_column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "original_position": 44
+      },
+      {
+        "archived_at": "2025-12-20T00:11:06.895107Z",
+        "card": {
+          "assigned_prefix": "KAN",
+          "card_number": 37,
+          "card_prefix": null,
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "completed_at": null,
+          "created_at": "2025-10-12T14:49:41.587356Z",
+          "description": "The current ui is a bit unintuitive when wanting to navigate to the task list.\n\nI first have to select the board (enter/space) and then I can change to the task list using 2.\n\nIt would probably feel more natural to just have the activation when hitting 2 and activating the currently highlighted board.\n\n2025-10-31 18:49:26\n---\n\nDon't know if we should pursue this card.\n\n2025-12-20 00:41:00\n---\n\nDropping this until further notice\n",
+          "due_date": null,
+          "id": "3b771805-ec2a-4b6a-bc3d-57b1528e3742",
+          "points": 1,
+          "position": 7,
+          "priority": "Low",
+          "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+          "sprint_logs": [
+            {
+              "ended_at": "2025-12-15T20:35:57.264750Z",
+              "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
+              "sprint_name": "full-bowling",
+              "sprint_number": 9,
+              "started_at": "2025-12-04T21:30:07.245014Z",
+              "status": "Planning"
+            },
+            {
+              "ended_at": null,
+              "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+              "sprint_name": "a-merry-christmas",
+              "sprint_number": 10,
+              "started_at": "2025-12-15T20:35:57.264750Z",
+              "status": "Planning"
+            }
+          ],
+          "status": "Todo",
+          "title": "hitting 2 should activate the highlighted board",
+          "updated_at": "2025-12-19T23:41:14.460414Z"
+        },
+        "original_column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "original_position": 7
+      },
+      {
+        "archived_at": "2025-12-23T00:33:14.088487Z",
+        "card": {
+          "assigned_prefix": "KAN",
+          "card_number": 162,
+          "card_prefix": null,
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "completed_at": null,
+          "created_at": "2025-12-23T00:30:55.018557Z",
+          "description": "Currently have flake.nix, shell.nix, default.nix, AND .envrc. This is tooling sprawl. \nPick one canonical approach (recommend flake.nix only) and document it clearly. \nRemove redundant files or document why all are needed.\n",
+          "due_date": null,
+          "id": "26fc7b1c-643a-4281-9795-1ebc0eddfc98",
+          "points": null,
+          "position": 43,
+          "priority": "Medium",
+          "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+          "sprint_logs": [
+            {
+              "ended_at": null,
+              "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+              "sprint_name": "a-new-year",
+              "sprint_number": 11,
+              "started_at": "2025-12-23T00:31:51.248420Z",
+              "status": "Planning"
+            }
+          ],
+          "status": "Todo",
+          "title": "Consolidate Nix tooling",
+          "updated_at": "2025-12-23T00:33:05.998566Z"
+        },
+        "original_column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "original_position": 43
+      },
+      {
+        "archived_at": "2026-01-10T00:51:33.548251Z",
+        "card": {
+          "assigned_prefix": "KAN",
+          "card_number": 169,
+          "card_prefix": null,
+          "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+          "completed_at": null,
+          "created_at": "2025-12-23T00:35:10.326255Z",
+          "description": "Currently have flake.nix, shell.nix, default.nix, AND .envrc. This is tooling sprawl. Pick one canonical approach (recommend flake.nix only) and document it clearly. Remove redundant files or document why all are needed.",
+          "due_date": null,
+          "id": "d1f52601-6f95-48f3-8a04-7b711870ed7c",
+          "points": 3,
+          "position": 49,
+          "priority": "Medium",
+          "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+          "sprint_logs": [
+            {
+              "ended_at": null,
+              "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+              "sprint_name": "a-new-year",
+              "sprint_number": 11,
+              "started_at": "2025-12-23T00:35:15.812859Z",
+              "status": "Planning"
+            }
+          ],
+          "status": "Todo",
+          "title": "Consolidate Nix tooling",
+          "updated_at": "2025-12-23T00:35:15.812860Z"
+        },
+        "original_column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "original_position": 49
       }
     ],
     "boards": [
@@ -41,26 +230,46 @@
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 152
+          "KAN": 181
         },
         "sprint_counters": {
-          "KAN": 11
+          "KAN": 12
         },
         "sprint_duration_days": 7,
-        "sprint_name_used_count": 6,
+        "sprint_name_used_count": 7,
         "sprint_names": [
           "an-eventful-october",
           "an-experience-to-remember",
           "a-hallowed-week",
           "progression-is-progress",
           "full-bowling",
-          "a-merry-christmas"
+          "a-merry-christmas",
+          "a-new-year"
         ],
         "sprint_prefix": "KAN",
         "task_list_view": "ColumnView",
         "task_sort_field": "Priority",
         "task_sort_order": "Descending",
-        "updated_at": "2025-12-17T00:57:48.068855Z"
+        "updated_at": "2026-01-29T13:19:38.832301Z"
+      },
+      {
+        "active_sprint_id": null,
+        "card_prefix": null,
+        "created_at": "2025-12-20T02:29:13.679707Z",
+        "description": null,
+        "id": "82e0d16a-5d79-42e5-aba1-886c63d8f323",
+        "name": "test",
+        "next_sprint_number": 1,
+        "prefix_counters": {},
+        "sprint_counters": {},
+        "sprint_duration_days": null,
+        "sprint_name_used_count": 0,
+        "sprint_names": [],
+        "sprint_prefix": null,
+        "task_list_view": "Flat",
+        "task_sort_field": "Default",
+        "task_sort_order": "Ascending",
+        "updated_at": "2025-12-20T02:29:13.679707Z"
       }
     ],
     "cards": [
@@ -208,14 +417,14 @@
         "assigned_prefix": "KAN",
         "card_number": 6,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-01-09T01:11:28.387265Z",
         "created_at": "2025-10-10T22:05:04.607714Z",
         "description": "Introduce two features\n\n# Block\n\n- Add blocked by card\n- Add create blocker. Creating the new card that would be the blocker.\n\n# Grouping of cards under one card\n\nI would like to keep things flat but I would like card meta data where I can group cards by a top level card.\n\nThe interface would present the grouping as nested to begin with and we see how it behaves?\n\nExample\n\n```\nImplement Card Grouping ...\n```\n\nWhich would when hit enter or space on expand into\n\n```\nImplement Card Grouping\n  Create ui\n  Add metadata\n```\n\n# Duplicate cards\n\nWhen two cards propose changes that are two sides of the same coin. Be able to add them as siblings. \n\nBut when two cards propose changes that are the same side of the same coin, we want to merge them together. Creating a new card by editing the description and title in a git conflict type way\n\nThe merging will ofcourse be handled by opening EDITOR and injecting the content into their respective section.\n\nExample\n---\n\nTitle\n\n```\n<<<<<<< KAN-0001\nCard Background\n=======\nCard Background Color\n>>>>>>> KAN-0002\n```\n\nDescription\n\n```\nWe want to introduce a new feature that\n<<<<<<< KAN-0001\nMakes card background purple\n=======\nMakes card background green\n>>>>>>> KAN-0002\n```\n",
         "due_date": null,
         "id": "e96684a5-4645-443e-8e2c-6bb646e248c6",
         "points": 5,
-        "position": 44,
+        "position": 96,
         "priority": "High",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -252,9 +461,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "Card dependencies",
-        "updated_at": "2025-12-15T20:35:57.264744Z"
+        "updated_at": "2026-01-09T01:11:28.387265Z"
       },
       {
         "assigned_prefix": null,
@@ -295,7 +504,7 @@
         "due_date": null,
         "id": "86c1b649-03bc-4da8-87c3-e20a2c56a640",
         "points": 1,
-        "position": 47,
+        "position": 36,
         "priority": "Medium",
         "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
@@ -379,9 +588,9 @@
         "due_date": null,
         "id": "454144d2-27ac-4abf-8632-407908fa8f80",
         "points": 1,
-        "position": 4,
+        "position": 3,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-04T00:22:28.640552Z",
@@ -408,30 +617,38 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374923Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264687Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374925Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "Be able to scroll in the card description",
-        "updated_at": "2025-12-15T20:35:57.264687Z"
+        "updated_at": "2026-01-10T15:31:10.374926Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 12,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-01-10T00:49:29.134517Z",
         "created_at": "2025-10-10T22:56:04.200355Z",
-        "description": "# Steps to Add Your Project to Nixpkgs\n\n## 1. Add Yourself as a Maintainer\n\nFirst, you'll need to add yourself to the maintainer list in maintainers/maintainer-list.nix with a separate commit titled \"maintainers: add <your-handle>\".\n\n## 2. Create the Package Expression\n\nSince your Kanban is a Rust project, you'll use buildRustPackage from rustPlatform nixpkgs/doc/languages-frameworks/rust.section.md at master · NixOS/nixpkgs\n\n[default.nix](./default.nix) \n\n## 3. Determine Package Location\n\nDecide which pkgs/ subfolder your expression should live in, then add your expression under a directory like pkgs/applications/misc/kanban/default.nix or similar\n\n## 4. Add to Package Index\n\nAdd an entry in pkgs/top-level/all-packages.nix so nixpkgs can find your package \n\n## 5. Fork and Test\n\nFork the nixpkgs repository, make your changes in a local branch, then build from the root of nixpkgs with nix-build -A kanban Nixpkgs/Contributing - NixOS Wiki\n\n## 6. Handle the Hash Values\n\nFor the cargoHash, you can initially use an empty string or fake hash, and Nix will tell you the correct hash when you try to build nixpkgs/doc/languages-frameworks/rust.section.md at master · NixOS/nixpkgs\n\n## 7. Submit a Pull Request\n\nOnce your package builds successfully, format your code with a Nix formatter like alejandra, then open a PR on GitHub with the title format \"kanban: init at <version>\" \n\n## 8. Wait for Review\n\nBe patient - it's normal for PRs to sit for weeks. If you need help, you can reach out on NixOS Discourse or the Matrix channels\n\n## Important Considerations\n\nRead the commit conventions specific to pkgs and include relevant information in your commit messages so others can understand why changes were made \n\nThe maintainers field is for you as the Nix expression maintainer, not the project maintainer. By submitting this package, you're taking responsibility for ongoing maintenance like version bumps \n\n2025-10-31 18:44:57\n---\n\nI tried packaging my application in nixpkgs and submitting the pull request.\n\nThere are resources in the stash documenting the process I followed\n\nTLDR; I need more users to the repo.\n\nAs a repo with just a couple of users is not enough to justify the package being published into nixpkgs.\n\nIt was a good learning experience. I got some feedback on my pull request regarding the packaging.\n\nTODO\n---\n\nCorrect the packaging job in my nixpkgs fork\n\nGet more users to the application\n\nHow can we make this product worthy?\n\nImplementation of cli possibly\n\nMake an api to manage the app\n\n",
+        "description": "# Steps to Add Your Project to Nixpkgs\n\n## 1. Add Yourself as a Maintainer\n\nFirst, you'll need to add yourself to the maintainer list in maintainers/maintainer-list.nix with a separate commit titled \"maintainers: add <your-handle>\".\n\n## 2. Create the Package Expression\n\nSince your Kanban is a Rust project, you'll use buildRustPackage from rustPlatform nixpkgs/doc/languages-frameworks/rust.section.md at master · NixOS/nixpkgs\n\n[default.nix](./default.nix) \n\n## 3. Determine Package Location\n\nDecide which pkgs/ subfolder your expression should live in, then add your expression under a directory like pkgs/applications/misc/kanban/default.nix or similar\n\n## 4. Add to Package Index\n\nAdd an entry in pkgs/top-level/all-packages.nix so nixpkgs can find your package \n\n## 5. Fork and Test\n\nFork the nixpkgs repository, make your changes in a local branch, then build from the root of nixpkgs with nix-build -A kanban Nixpkgs/Contributing - NixOS Wiki\n\n## 6. Handle the Hash Values\n\nFor the cargoHash, you can initially use an empty string or fake hash, and Nix will tell you the correct hash when you try to build nixpkgs/doc/languages-frameworks/rust.section.md at master · NixOS/nixpkgs\n\n## 7. Submit a Pull Request\n\nOnce your package builds successfully, format your code with a Nix formatter like alejandra, then open a PR on GitHub with the title format \"kanban: init at <version>\" \n\n## 8. Wait for Review\n\nBe patient - it's normal for PRs to sit for weeks. If you need help, you can reach out on NixOS Discourse or the Matrix channels\n\n## Important Considerations\n\nRead the commit conventions specific to pkgs and include relevant information in your commit messages so others can understand why changes were made \n\nThe maintainers field is for you as the Nix expression maintainer, not the project maintainer. By submitting this package, you're taking responsibility for ongoing maintenance like version bumps \n\n2025-10-31 18:44:57\n---\n\nI tried packaging my application in nixpkgs and submitting the pull request.\n\nThere are resources in the stash documenting the process I followed\n\nTLDR; I need more users to the repo.\n\nAs a repo with just a couple of users is not enough to justify the package being published into nixpkgs.\n\nIt was a good learning experience. I got some feedback on my pull request regarding the packaging.\n\nTODO\n---\n\nCorrect the packaging job in my nixpkgs fork\n\nGet more users to the application\n\nHow can we make this product worthy?\n\nImplementation of cli possibly\n\nMake an api to manage the app\n\n2025-12-20 23:47:18\n---\n\nTry to get this through again, and see if we can make a new release of the app\n\n  Suggestions for Improvement\n\n  1. Consider adding changelog to meta:\n  changelog = \"https://github.com/fulsomenko/kanban/releases/tag/v${finalAttrs.version}\";\n\n  2. Platform specificity: The package uses lib.platforms.all, but since it's a TUI application using crossterm, it may only work on Unix-like systems. Consider testing on Windows or using lib.platforms.unix if Windows support is uncertain.\n\n  Second point is valid. Wonder if this will show up in an eventual review\n\n2026-01-10 01:46\n---\n\nWe did it ! Hi nixpkgs. glad to be here. Hope to help out if I can.\n[Merged](https://github.com/NixOS/nixpkgs/pull/456042)\n",
         "due_date": null,
         "id": "d48f9085-57ff-42c5-9f42-3cbb3cafde93",
-        "points": 5,
-        "position": 51,
+        "points": 1,
+        "position": 97,
         "priority": "Critical",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -468,9 +685,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "Publish on nixpkgs",
-        "updated_at": "2025-12-15T20:58:58.965839Z"
+        "updated_at": "2026-01-10T00:49:29.134518Z"
       },
       {
         "assigned_prefix": null,
@@ -686,9 +903,9 @@
         "due_date": null,
         "id": "f4c31d5d-7f78-451c-b7db-f26e4931fae4",
         "points": 3,
-        "position": 24,
+        "position": 19,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448943Z",
@@ -715,30 +932,38 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374920Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264721Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374921Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "Link to pull request",
-        "updated_at": "2025-12-15T20:35:57.264722Z"
+        "updated_at": "2026-01-10T15:31:10.374922Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 20,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-19T23:42:20.064240Z",
         "created_at": "2025-10-11T19:23:32.612472Z",
         "description": "Be able to drop a card \n",
         "due_date": null,
         "id": "8ecc1849-bde7-4f97-99f7-44b7d9158bbf",
         "points": 2,
-        "position": 0,
+        "position": 90,
         "priority": "Low",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -775,9 +1000,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "Remove a card",
-        "updated_at": "2025-12-15T20:35:57.264734Z"
+        "updated_at": "2025-12-19T23:42:20.064240Z"
       },
       {
         "assigned_prefix": null,
@@ -930,9 +1155,9 @@
         "due_date": null,
         "id": "5e247e41-efdf-43cc-aa0f-daf25830fd1c",
         "points": 2,
-        "position": 1,
+        "position": 0,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448941Z",
@@ -959,17 +1184,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374943Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264681Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374943Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "When titles are too long. they don't fit the tasks list",
-        "updated_at": "2025-12-15T20:35:57.264685Z"
+        "updated_at": "2026-01-10T15:31:10.374949Z"
       },
       {
         "assigned_prefix": null,
@@ -1010,9 +1243,9 @@
         "due_date": null,
         "id": "ed48cbd0-7488-4b61-afe5-71851ed565c0",
         "points": 4,
-        "position": 2,
+        "position": 1,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448927Z",
@@ -1039,17 +1272,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374994Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264771Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374994Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "When setting the priority, the card details are closed and the lists are shown",
-        "updated_at": "2025-12-15T20:35:57.264772Z"
+        "updated_at": "2026-01-10T15:31:10.374995Z"
       },
       {
         "assigned_prefix": null,
@@ -1288,9 +1529,9 @@
         "due_date": null,
         "id": "cdaed89e-ddb8-4a99-9567-b1096f6aaca2",
         "points": 5,
-        "position": 7,
-        "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "position": 5,
+        "priority": "High",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:15.760147Z",
@@ -1309,53 +1550,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.375003Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264729Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.375004Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "audit history - keep a log of changes",
-        "updated_at": "2025-12-15T20:35:57.264730Z"
-      },
-      {
-        "assigned_prefix": "KAN",
-        "card_number": 37,
-        "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
-        "created_at": "2025-10-12T14:49:41.587356Z",
-        "description": "The current ui is a bit unintuitive when wanting to navigate to the task list.\n\nI first have to select the board (enter/space) and then I can change to the task list using 2.\n\nIt would probably feel more natural to just have the activation when hitting 2 and activating the currently highlighted board.\n\n2025-10-31 18:49:26\n---\n\nDon't know if we should pursue this card.\n",
-        "due_date": null,
-        "id": "3b771805-ec2a-4b6a-bc3d-57b1528e3742",
-        "points": 1,
-        "position": 9,
-        "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
-        "sprint_logs": [
-          {
-            "ended_at": "2025-12-15T20:35:57.264750Z",
-            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-            "sprint_name": "full-bowling",
-            "sprint_number": 9,
-            "started_at": "2025-12-04T21:30:07.245014Z",
-            "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
-            "sprint_name": "a-merry-christmas",
-            "sprint_number": 10,
-            "started_at": "2025-12-15T20:35:57.264750Z",
-            "status": "Planning"
-          }
-        ],
-        "status": "Todo",
-        "title": "hitting 2 should activate the highlighted board",
-        "updated_at": "2025-12-15T20:35:57.264751Z"
+        "updated_at": "2026-01-10T15:31:10.375005Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1368,9 +1581,9 @@
         "due_date": null,
         "id": "8099e29b-21d9-404c-a716-47c659773f69",
         "points": 2,
-        "position": 11,
+        "position": 8,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:17.501321Z",
@@ -1389,17 +1602,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374927Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264726Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374929Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "branch name doesnt reflected the used version",
-        "updated_at": "2025-12-15T20:35:57.264726Z"
+        "updated_at": "2026-01-10T15:31:10.374932Z"
       },
       {
         "assigned_prefix": null,
@@ -1412,7 +1633,7 @@
         "due_date": null,
         "id": "8be94a1d-a915-46d1-a7f1-020da9307cd9",
         "points": 5,
-        "position": 14,
+        "position": 11,
         "priority": "Critical",
         "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
@@ -1468,9 +1689,9 @@
         "due_date": null,
         "id": "21ef5706-4393-458e-93c2-a8ca7792afa8",
         "points": 2,
-        "position": 33,
+        "position": 27,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264745Z",
@@ -1481,17 +1702,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374910Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264745Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374910Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "Add retrospective note on completed tasks",
-        "updated_at": "2025-12-15T20:35:57.264746Z"
+        "updated_at": "2026-01-10T15:31:10.374911Z"
       },
       {
         "assigned_prefix": null,
@@ -1504,7 +1733,7 @@
         "due_date": null,
         "id": "5b43a7e3-b056-4370-882a-bdad4bb9e0ed",
         "points": 2,
-        "position": 16,
+        "position": 13,
         "priority": "Low",
         "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
@@ -1607,9 +1836,9 @@
         "due_date": null,
         "id": "5418bcd1-4b9a-4be9-aa12-6b43254def2b",
         "points": 2,
-        "position": 22,
+        "position": 17,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448934Z",
@@ -1636,17 +1865,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374901Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264706Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374903Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "Syntax highlighting for card description",
-        "updated_at": "2025-12-15T20:35:57.264707Z"
+        "updated_at": "2026-01-10T15:31:10.374904Z"
       },
       {
         "assigned_prefix": null,
@@ -1706,9 +1943,9 @@
         "due_date": null,
         "id": "4b875d66-a9a2-48b9-83e6-3b879ade8b4e",
         "points": 1,
-        "position": 5,
+        "position": 4,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:20.088757Z",
@@ -1727,17 +1964,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.375Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264775Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.375001Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "cards without priority should be order following low priority",
-        "updated_at": "2025-12-15T20:35:57.264776Z"
+        "updated_at": "2026-01-10T15:31:10.375002Z"
       },
       {
         "assigned_prefix": null,
@@ -1769,7 +2014,7 @@
         "due_date": null,
         "id": "5a1655e1-3ee3-4987-b352-3334686418b9",
         "points": 4,
-        "position": 36,
+        "position": 28,
         "priority": "Medium",
         "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
@@ -1948,7 +2193,7 @@
         ],
         "status": "Done",
         "title": "moving card to last column doesnt set complete",
-        "updated_at": "2025-10-16T22:25:41.421736Z"
+        "updated_at": "2025-12-20T10:08:51.150208Z"
       },
       {
         "assigned_prefix": null,
@@ -2120,9 +2365,9 @@
         "due_date": null,
         "id": "68a45e0c-b223-4e06-a5a7-d367979f5967",
         "points": 2,
-        "position": 3,
+        "position": 2,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448937Z",
@@ -2149,17 +2394,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374888Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264692Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374890Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "Create new card from card",
-        "updated_at": "2025-12-15T20:35:57.264693Z"
+        "updated_at": "2026-01-10T15:31:10.374895Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2265,14 +2518,14 @@
         "assigned_prefix": "KAN",
         "card_number": 78,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-20T02:01:43.030502Z",
         "created_at": "2025-10-22T03:24:52.753403Z",
         "description": "Our test coverage is currently lacking.\n\nLet us try to hit more lines\n\nkan 64 we started\n---\n```sh\n═══════════════════════════════════════════════════════════════════════════════\n                     FEATURE IMPLEMENTATION COMPLETE ✅\n═══════════════════════════════════════════════════════════════════════════════\n\n⏺ 🎉 Complete Feature Implementation Summary\n\n  I've successfully implemented the card creation feature with comprehensive tests and\n  following all CONTRIBUTING.md guidelines:\n\n  ✅ 4 Atomic Commits Created\n\n  Feature Implementation (3 commits):\n  1. Helper method for getting focused column ID\n  2. Card creation in focused columns (Grouped & Kanban views)\n  3. Auto-complete cards in last column (when >2 columns)\n\n  Testing (1 commit):\n  4. 7 comprehensive integration tests covering all scenarios\n\n  ✅ Test Coverage\n\n  - 7 new integration tests - all passing ✓\n  - 32 total tests - all passing ✓\n  - Tests cover:\n    - Default first column creation\n    - Focused column creation (GroupedView & KanbanView)\n    - Auto-complete with 3+ columns\n    - No auto-complete with 2 or fewer columns\n    - Multiple cards in same column\n    - Edge cases\n\n  ✅ Code Quality\n\n  - Follows semantic commit format\n  - Each commit is independent and buildable\n  - No warnings or errors\n  - PR #62 has comprehensive description with What/Why/How sections\n  - All existing functionality preserved\n  ```\n",
         "due_date": null,
         "id": "b98a6b72-f3b0-464d-a904-37dcd2fb0eb9",
         "points": 3,
-        "position": 8,
+        "position": 92,
         "priority": "Medium",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -2293,9 +2546,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "extend test coverage",
-        "updated_at": "2025-12-15T20:35:57.264768Z"
+        "updated_at": "2025-12-20T02:01:43.030506Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2308,9 +2561,9 @@
         "due_date": null,
         "id": "3baa4c7a-1b7f-47da-9b7f-2ba593e9d9b7",
         "points": 3,
-        "position": 19,
+        "position": 15,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264710Z",
@@ -2321,17 +2574,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374975Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264710Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374975Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "Assignee for cards",
-        "updated_at": "2025-12-15T20:35:57.264711Z"
+        "updated_at": "2026-01-10T15:31:10.374977Z"
       },
       {
         "assigned_prefix": null,
@@ -2382,58 +2643,6 @@
       },
       {
         "assigned_prefix": "KAN",
-        "card_number": 83,
-        "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
-        "created_at": "2025-10-22T19:37:16.156456Z",
-        "description": "In task details I would like to edit the meta data panel by json interface like we do in the board details\n\nthe current `e` binding that opens a dialog to set the points with will move to `p` and `e` will instead open up $EDITOR with the json for the task metadata\n",
-        "due_date": null,
-        "id": "522289ef-1126-4076-a192-85a4ea40570b",
-        "points": 4,
-        "position": 10,
-        "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
-        "sprint_logs": [
-          {
-            "ended_at": "2025-11-02T16:56:23.898897Z",
-            "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
-            "sprint_name": "an-experience-to-remember",
-            "sprint_number": 6,
-            "started_at": "2025-11-01T09:30:06.155917Z",
-            "status": "Active"
-          },
-          {
-            "ended_at": "2025-11-17T22:41:26.665302Z",
-            "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
-            "sprint_name": "a-hallowed-week",
-            "sprint_number": 7,
-            "started_at": "2025-11-02T16:56:23.898910Z",
-            "status": "Planning"
-          },
-          {
-            "ended_at": "2025-12-15T20:35:57.264749Z",
-            "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
-            "sprint_name": "progression-is-progress",
-            "sprint_number": 8,
-            "started_at": "2025-11-17T22:41:26.665309Z",
-            "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
-            "sprint_name": "a-merry-christmas",
-            "sprint_number": 10,
-            "started_at": "2025-12-15T20:35:57.264749Z",
-            "status": "Planning"
-          }
-        ],
-        "status": "Todo",
-        "title": "editing task settings by json",
-        "updated_at": "2025-12-15T20:35:57.264750Z"
-      },
-      {
-        "assigned_prefix": "KAN",
         "card_number": 84,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -2443,9 +2652,9 @@
         "due_date": null,
         "id": "9d7ee9b3-205a-4fab-997d-5b944805c2c9",
         "points": 2,
-        "position": 12,
+        "position": 9,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264761Z",
@@ -2456,17 +2665,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374964Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264761Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374964Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "a sprint can only be completed after the duration is over",
-        "updated_at": "2025-12-16T02:02:39.964489Z"
+        "updated_at": "2026-01-10T15:31:10.374966Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2479,9 +2696,9 @@
         "due_date": null,
         "id": "f07db1d7-20c9-40e0-8e59-847811675040",
         "points": 1,
-        "position": 13,
+        "position": 10,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898919Z",
@@ -2508,17 +2725,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374933Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264694Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374935Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "bring the task columns, completed non completed into sprint details",
-        "updated_at": "2025-12-15T20:35:57.264695Z"
+        "updated_at": "2026-01-10T15:31:10.374938Z"
       },
       {
         "assigned_prefix": null,
@@ -2578,9 +2803,9 @@
         "due_date": null,
         "id": "b3c18895-1fe4-45c2-8379-5c4b08e90f30",
         "points": 3,
-        "position": 15,
+        "position": 12,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264757Z",
@@ -2591,17 +2816,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.375016Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264757Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.375017Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "automatic sprint completion",
-        "updated_at": "2025-12-15T20:35:57.264758Z"
+        "updated_at": "2026-01-10T15:31:10.375018Z"
       },
       {
         "assigned_prefix": null,
@@ -2670,9 +2903,9 @@
         "due_date": null,
         "id": "56f6aa35-2958-45a2-84fe-4d0347d1c7ab",
         "points": 3,
-        "position": 17,
+        "position": 14,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898916Z",
@@ -2699,17 +2932,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374986Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264759Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374987Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "in card creation show a list of cards fuzzily matching the proposed title",
-        "updated_at": "2025-12-15T20:35:57.264760Z"
+        "updated_at": "2026-01-10T15:31:10.374988Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2722,9 +2963,9 @@
         "due_date": null,
         "id": "3420b2cb-ab66-43ef-a222-87e62e703710",
         "points": 2,
-        "position": 20,
+        "position": 16,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327389Z",
@@ -2743,17 +2984,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374913Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264765Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374917Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "highlight cards that have moved from the first column to the second but are not in the last and are missing points or priority",
-        "updated_at": "2025-12-15T20:35:57.264766Z"
+        "updated_at": "2026-01-10T15:31:10.374919Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2866,9 +3115,9 @@
         "due_date": null,
         "id": "13e8d3f8-94d2-410b-8d36-02d8894e5fb7",
         "points": 4,
-        "position": 29,
+        "position": 23,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327391Z",
@@ -2887,17 +3136,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374971Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264739Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374972Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "unify the sprint details view",
-        "updated_at": "2025-12-15T20:35:57.264740Z"
+        "updated_at": "2026-01-10T15:31:10.374973Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2910,9 +3167,9 @@
         "due_date": null,
         "id": "8009a2a1-564d-47b2-930c-bc9db5fbcf44",
         "points": 3,
-        "position": 30,
+        "position": 24,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327392Z",
@@ -2931,17 +3188,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374968Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264728Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374968Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "set a due date for a card",
-        "updated_at": "2025-12-15T20:35:57.264728Z"
+        "updated_at": "2026-01-10T15:31:10.374969Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2954,9 +3219,9 @@
         "due_date": null,
         "id": "e0196360-d4a2-4b56-b6d0-5f9ded4e7aee",
         "points": 1,
-        "position": 31,
+        "position": 25,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327385Z",
@@ -2975,17 +3240,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374940Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264753Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374940Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "assigning cards to sprint doesnt remove it from unsprinted cards list",
-        "updated_at": "2025-12-15T20:35:57.264754Z"
+        "updated_at": "2026-01-10T15:31:10.374942Z"
       },
       {
         "assigned_prefix": null,
@@ -3045,9 +3318,9 @@
         "due_date": null,
         "id": "70f9d448-4017-4faf-8d8c-fc14610807e7",
         "points": 2,
-        "position": 37,
+        "position": 29,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327394Z",
@@ -3066,17 +3339,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374983Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264755Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374983Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "default sprint and branch prefixes",
-        "updated_at": "2025-12-15T20:35:57.264756Z"
+        "updated_at": "2026-01-10T15:31:10.374985Z"
       },
       {
         "assigned_prefix": null,
@@ -3127,9 +3408,9 @@
         "due_date": null,
         "id": "2e477ffa-3714-4858-bfd7-3f188ba66a11",
         "points": 2,
-        "position": 23,
+        "position": 18,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327386Z",
@@ -3148,17 +3429,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374897Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264689Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374897Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "moving and item between columns should also move the selector along with the card",
-        "updated_at": "2025-12-15T20:35:57.264690Z"
+        "updated_at": "2026-01-10T15:31:10.374899Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3171,9 +3460,9 @@
         "due_date": null,
         "id": "b987e0e8-904e-4bd3-8330-409c02a2cf97",
         "points": 2,
-        "position": 26,
+        "position": 20,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:14.917359Z",
@@ -3200,17 +3489,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374868Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264742Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374877Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "when changing place of columns",
-        "updated_at": "2025-12-15T20:35:57.264743Z"
+        "updated_at": "2026-01-10T15:31:10.374886Z"
       },
       {
         "assigned_prefix": null,
@@ -3439,7 +3736,7 @@
         "due_date": null,
         "id": "3791f095-3aee-456b-a42e-f5a18f102c20",
         "points": 4,
-        "position": 39,
+        "position": 30,
         "priority": "Medium",
         "sprint_id": "c272f2b0-db50-4877-94db-dcdc06b84116",
         "sprint_logs": [
@@ -3467,9 +3764,9 @@
         "due_date": null,
         "id": "a896867e-0123-4899-ad6c-afff9b80e32f",
         "points": 1,
-        "position": 42,
+        "position": 31,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327398Z",
@@ -3488,17 +3785,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374997Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264747Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374997Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "it is not apparent enough that we are entered into a board",
-        "updated_at": "2025-12-15T20:35:57.264748Z"
+        "updated_at": "2026-01-10T15:31:10.374999Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3511,9 +3816,9 @@
         "due_date": null,
         "id": "7e050ec1-2048-4666-84c1-aa0165277528",
         "points": 1,
-        "position": 50,
+        "position": 38,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:01.506770Z",
@@ -3532,17 +3837,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.375007Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264717Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.375007Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "filter out completed sprint from sprint assign",
-        "updated_at": "2025-12-15T20:35:57.264718Z"
+        "updated_at": "2026-01-10T15:31:10.375015Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3602,9 +3915,9 @@
         "due_date": null,
         "id": "d41d8908-1945-4f9f-87f1-9156995cd389",
         "points": null,
-        "position": 27,
+        "position": 21,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264763Z",
@@ -3615,17 +3928,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374990Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264763Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374991Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "ui module refactor",
-        "updated_at": "2025-12-15T20:35:57.264764Z"
+        "updated_at": "2026-01-10T15:31:10.374992Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3687,16 +4008,16 @@
         "assigned_prefix": "KAN",
         "card_number": 122,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
         "completed_at": null,
         "created_at": "2025-11-03T16:57:47.239961Z",
         "description": "the same seems to apply for actions across the board\n",
         "due_date": null,
         "id": "3eab8853-aa3e-46db-a305-379d1ab72490",
-        "points": null,
-        "position": 28,
+        "points": 1,
+        "position": 1,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264701Z",
@@ -3707,32 +4028,40 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374906Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264701Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374906Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "dont reset search on scroll",
-        "updated_at": "2025-12-15T20:35:57.264702Z"
+        "updated_at": "2026-01-29T13:18:00.090832Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 123,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
         "completed_at": null,
         "created_at": "2025-11-03T16:58:06.579445Z",
         "description": "It would be cool to emulate the vim search binding with `escape` to clear search, `enter` to apply search and `n` to go to next hit. ofcourse with highlighting of the search string on the hit element\n\nlike I hit c to complete the task and it took me away from the search results. search should only clear explicitly by hitting escape\n",
         "due_date": null,
         "id": "c401de4c-5d33-4fb3-a955-05074785c28d",
-        "points": null,
-        "position": 32,
+        "points": 1,
+        "position": 0,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264719Z",
@@ -3743,17 +4072,25 @@
             "status": "Active"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374955Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264720Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374956Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "escape bind to clear search, enter to apply",
-        "updated_at": "2025-12-15T20:35:57.264720Z"
+        "updated_at": "2026-01-29T13:18:07.075383Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3813,42 +4150,6 @@
       },
       {
         "assigned_prefix": "KAN",
-        "card_number": 126,
-        "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
-        "created_at": "2025-11-03T17:06:55.650586Z",
-        "description": "filtering by any option should not include unassigned cards unless explictly specified\n",
-        "due_date": null,
-        "id": "08176c32-e5fe-4753-a3b5-6eff5434862a",
-        "points": null,
-        "position": 40,
-        "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
-        "sprint_logs": [
-          {
-            "ended_at": "2025-12-15T20:35:57.264769Z",
-            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-            "sprint_name": "full-bowling",
-            "sprint_number": 9,
-            "started_at": "2025-12-04T21:30:07.245016Z",
-            "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
-            "sprint_name": "a-merry-christmas",
-            "sprint_number": 10,
-            "started_at": "2025-12-15T20:35:57.264769Z",
-            "status": "Planning"
-          }
-        ],
-        "status": "Todo",
-        "title": "when filtering by sprint x, dont include unassigned cards.",
-        "updated_at": "2025-12-15T20:35:57.264770Z"
-      },
-      {
-        "assigned_prefix": "KAN",
         "card_number": 127,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -3858,9 +4159,9 @@
         "due_date": null,
         "id": "dfa9fcd6-23f9-4ed2-8c7e-9baf344a7d14",
         "points": null,
-        "position": 43,
+        "position": 32,
         "priority": "Medium",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264735Z",
@@ -3871,30 +4172,38 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374951Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264735Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374951Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "add filter for completed cards",
-        "updated_at": "2025-12-15T20:35:57.264736Z"
+        "updated_at": "2026-01-10T15:31:10.374953Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 128,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-19T23:40:38.871324Z",
         "created_at": "2025-11-05T12:33:50.536195Z",
         "description": "we need a way to handle schema revisions.\n\nas we have recently noticed.\n\nDuring the change from board level sprint prefix settings to the fork with sprint fix and counters per prefix etc..\n\nwe broke the application during import of the old schema\n\nwe should introduce versioning of the schema? and do migrations from version x -> y\n\n2025-12-16 03:03:18\n---\n\nsomewhere along the line we implemented v2 of the json schema\n\nThere is a bug with starting the app and providing a file path to a non existant file\n\nI think we take on this next\n",
         "due_date": null,
         "id": "7a9bfecc-6ed4-41d8-81ba-8a2dbb51e345",
         "points": null,
-        "position": 48,
+        "position": 88,
         "priority": "Medium",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -3915,22 +4224,22 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "migrations one",
-        "updated_at": "2025-12-16T02:04:14.709503Z"
+        "updated_at": "2025-12-19T23:40:38.871324Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 129,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-20T00:10:54.557844Z",
         "created_at": "2025-11-05T12:45:35.141584Z",
-        "description": "as the versioning doesnt tell exaclty what version of the source code the application is.\n\nLet us include the commit hash of the build to kanban -V output\n\n```sh\ndotfiles [test] > kanban -V             \nkanban 0.1.11 506a0f7\n```\n\nThis example is with short commit but why not just make it long commit\n\nand even add the commit as seperate line\n\n```sh\ndotfiles [test] > kanban -V\nkanban 0.1.11 \ncommit: 506a0f7\n```\n",
+        "description": "as the versioning doesnt tell exaclty what version of the source code the application is.\n\nLet us include the commit hash of the build to kanban -V output\n\n```sh\ndotfiles [test] > kanban -V             \nkanban 0.1.11 506a0f7\n```\n\nThis example is with short commit but why not just make it long commit\n\nand even add the commit as seperate line\n\n```sh\ndotfiles [test] > kanban -V\nkanban 0.1.11 \ncommit: 506a0f7\n```\n\n2025-12-20 00:43:33\n---\n\nas releases are not on par with the `develop` branch. I would like to include the commit hash in the -V parameter to the app\n",
         "due_date": null,
         "id": "c716d996-f478-4b41-9edd-7632fdbcc7d2",
         "points": 1,
-        "position": 45,
+        "position": 91,
         "priority": "Low",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -3951,9 +4260,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "include commit hash in -V",
-        "updated_at": "2025-12-15T20:35:57.264700Z"
+        "updated_at": "2025-12-20T00:10:54.557845Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4034,14 +4343,14 @@
         "assigned_prefix": "KAN",
         "card_number": 134,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-01-10T02:34:01.947587Z",
         "created_at": "2025-11-17T23:09:18.569124Z",
-        "description": "hitting like `c` is easy and we can loose track of cards that go across columns if we have not read the card name\n\nIt would be nice to have an undo function\n",
+        "description": "hitting like `c` is easy and we can loose track of cards that go across columns if we have not read the card name\n\nor performing any action is easy and it would be beneficial to quickly undo an action. in any context. `u` for keybind. command patterna and audit log dependencies? What is needed to make this happen?\n\nIt would be nice to have an undo function\n",
         "due_date": null,
         "id": "23b91acd-d6a8-4972-9065-8d0f0d2ba12f",
         "points": 4,
-        "position": 46,
+        "position": 98,
         "priority": "High",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -4062,9 +4371,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "undo action",
-        "updated_at": "2025-12-15T20:35:57.264709Z"
+        "updated_at": "2026-01-10T02:34:01.947588Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4077,9 +4386,9 @@
         "due_date": null,
         "id": "eb98fd1c-78a5-4a11-8e3d-91a2a15fbfda",
         "points": 1,
-        "position": 49,
+        "position": 37,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264731Z",
@@ -4090,53 +4399,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374979Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264731Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374979Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "update package README.md's",
-        "updated_at": "2025-12-15T20:35:57.264732Z"
-      },
-      {
-        "assigned_prefix": "KAN",
-        "card_number": 137,
-        "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
-        "created_at": "2025-11-27T21:19:19.195159Z",
-        "description": "it would be cool with an indicator of what page I am on out of how many \n\n(1/3)\n\n(45/99)\n",
-        "due_date": null,
-        "id": "777f9c87-af5c-408d-b796-cedca10475c7",
-        "points": 1,
-        "position": 49,
-        "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
-        "sprint_logs": [
-          {
-            "ended_at": "2025-12-15T20:35:57.264712Z",
-            "sprint_id": "98901eb9-91ab-43aa-8f82-b2a0b42c03cd",
-            "sprint_name": "full-bowling",
-            "sprint_number": 9,
-            "started_at": "2025-12-04T21:30:07.245017Z",
-            "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
-            "sprint_name": "a-merry-christmas",
-            "sprint_number": 10,
-            "started_at": "2025-12-15T20:35:57.264713Z",
-            "status": "Planning"
-          }
-        ],
-        "status": "Todo",
-        "title": "page indicator",
-        "updated_at": "2025-12-16T02:00:32.249776Z"
+        "updated_at": "2026-01-10T15:31:10.374981Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4149,9 +4430,9 @@
         "due_date": null,
         "id": "74fa27ca-332c-4f31-8990-6f0ece3d32da",
         "points": 2,
-        "position": 51,
+        "position": 40,
         "priority": "Low",
-        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264723Z",
@@ -4162,30 +4443,38 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-01-10T15:31:10.374960Z",
             "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
             "sprint_name": "a-merry-christmas",
             "sprint_number": 10,
             "started_at": "2025-12-15T20:35:57.264724Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-10T15:31:10.374960Z",
+            "status": "Completed"
           }
         ],
         "status": "Todo",
         "title": "Saving improvements",
-        "updated_at": "2025-12-16T02:00:54.211081Z"
+        "updated_at": "2026-01-10T15:31:10.374962Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 139,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-20T10:08:42.489300Z",
         "created_at": "2025-12-04T21:30:21.011908Z",
         "description": null,
         "due_date": null,
         "id": "b818d480-5b41-41b7-aa8b-ae599a443247",
         "points": 1,
-        "position": 52,
+        "position": 94,
         "priority": "Low",
         "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "sprint_logs": [
@@ -4206,9 +4495,9 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "if no sprints, cant scroll to column settings",
-        "updated_at": "2025-12-15T20:35:57.264697Z"
+        "updated_at": "2025-12-20T10:08:42.489302Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4314,20 +4603,20 @@
         "assigned_prefix": "KAN",
         "card_number": 143,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-19T23:37:15.162390Z",
         "created_at": "2025-12-04T22:35:04.074325Z",
-        "description": null,
+        "description": "gg works to get to the bottom\n\nG doesnt work to get to the top\n",
         "due_date": null,
         "id": "c89e3ee2-dba2-4008-be8a-469abc42d680",
         "points": null,
-        "position": 53,
+        "position": 86,
         "priority": "Medium",
         "sprint_id": null,
         "sprint_logs": [],
-        "status": "Todo",
+        "status": "Done",
         "title": "`gg` | `G` works poorly",
-        "updated_at": "2025-12-04T22:35:04.074325Z"
+        "updated_at": "2025-12-19T23:37:15.162391Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4371,20 +4660,20 @@
         "assigned_prefix": "KAN",
         "card_number": 146,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-19T21:39:21.518507Z",
         "created_at": "2025-12-04T23:03:58.581895Z",
         "description": "Create an mcp server.\n\nDepends on kanban cli?\n\n",
         "due_date": null,
         "id": "b8d92ecb-1f96-4d5d-8c37-18f13a31497b",
         "points": 3,
-        "position": 52,
+        "position": 85,
         "priority": "Medium",
         "sprint_id": null,
         "sprint_logs": [],
-        "status": "Todo",
+        "status": "Done",
         "title": "Kanban MCP",
-        "updated_at": "2025-12-04T23:04:47.048526Z"
+        "updated_at": "2025-12-19T21:39:21.518507Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4409,58 +4698,821 @@
         "assigned_prefix": "KAN",
         "card_number": 148,
         "card_prefix": null,
-        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-19T21:39:10.303390Z",
         "created_at": "2025-12-06T10:58:26.968309Z",
         "description": "Something is wrong using the app with \n\n`kanban filepath.json`\n\nthe thing just crashes\n",
         "due_date": null,
         "id": "d4904952-c37a-4796-adb2-f744c8959930",
         "points": 1,
-        "position": 1,
+        "position": 83,
         "priority": "Medium",
         "sprint_id": null,
         "sprint_logs": [],
-        "status": "Todo",
+        "status": "Done",
         "title": "kanban filepath.json crashes",
-        "updated_at": "2025-12-16T02:08:07.340060Z"
+        "updated_at": "2025-12-19T21:39:10.303390Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 150,
         "card_prefix": null,
-        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-19T21:39:13.850088Z",
         "created_at": "2025-12-16T02:04:22.114571Z",
         "description": "There is a bug with starting the app and providing a file path to a non existant file\n",
         "due_date": null,
         "id": "da91abfd-e6bf-4a62-968c-24368f8b78bc",
         "points": 2,
-        "position": 0,
+        "position": 84,
         "priority": "Medium",
         "sprint_id": null,
         "sprint_logs": [],
-        "status": "Todo",
+        "status": "Done",
         "title": "file path to a non existant file crashes the app",
-        "updated_at": "2025-12-16T02:07:12.487188Z"
+        "updated_at": "2025-12-19T21:39:13.850088Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 151,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-19T23:40:03.832086Z",
         "created_at": "2025-12-17T00:57:48.068843Z",
         "description": "2025-12-17 01:58:29\n---\n\nThe time has come.\n\nIt is time to initiate the kanban cli for command line kanbanning\n\nOur first order of business is to look for abstraction oppurtunity and general cleanup of the codebase so that we can reuse functions in both the tui and the cli. And eventual api or whatever consumer we wish.\n\n---\n\nThe goal of this feature is to have a cli matching the abilities of the tui\n",
         "due_date": null,
         "id": "89f6cb27-161b-496a-8736-e7467e8c48a9",
         "points": null,
+        "position": 87,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Done",
+        "title": "kanban cli",
+        "updated_at": "2025-12-19T23:40:03.832087Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 83,
+        "card_prefix": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-19T23:42:10.427707Z",
+        "created_at": "2025-10-22T19:37:16.156456Z",
+        "description": "In task details I would like to edit the meta data panel by json interface like we do in the board details\n\nthe current `e` binding that opens a dialog to set the points with will move to `p` and `e` will instead open up $EDITOR with the json for the task metadata\n",
+        "due_date": null,
+        "id": "522289ef-1126-4076-a192-85a4ea40570b",
+        "points": 4,
+        "position": 89,
+        "priority": "Medium",
+        "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+        "sprint_logs": [
+          {
+            "ended_at": "2025-11-02T16:56:23.898897Z",
+            "sprint_id": "737b04e6-52e2-4a40-bbaa-e2c9bcc84249",
+            "sprint_name": "an-experience-to-remember",
+            "sprint_number": 6,
+            "started_at": "2025-11-01T09:30:06.155917Z",
+            "status": "Active"
+          },
+          {
+            "ended_at": "2025-11-17T22:41:26.665302Z",
+            "sprint_id": "ce752be4-efce-40fe-bfa7-d0b313497feb",
+            "sprint_name": "a-hallowed-week",
+            "sprint_number": 7,
+            "started_at": "2025-11-02T16:56:23.898910Z",
+            "status": "Planning"
+          },
+          {
+            "ended_at": "2025-12-15T20:35:57.264749Z",
+            "sprint_id": "a61d4a55-5870-4493-9015-9854d8f583cf",
+            "sprint_name": "progression-is-progress",
+            "sprint_number": 8,
+            "started_at": "2025-11-17T22:41:26.665309Z",
+            "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
+            "sprint_name": "a-merry-christmas",
+            "sprint_number": 10,
+            "started_at": "2025-12-15T20:35:57.264749Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Done",
+        "title": "editing task settings by json",
+        "updated_at": "2025-12-19T23:42:10.427707Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 152,
+        "card_prefix": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-20T02:28:50.352652Z",
+        "created_at": "2025-12-20T02:02:55.493122Z",
+        "description": "I wonder if this has any other impact.\n\nAnywho\n\nI noticed with the mcp that it consumed way many tokens when just asking it to pick a card from the cards of a board.\n\nI think we make get cards omit the description of the card to lessen the json\n",
+        "due_date": null,
+        "id": "9c08bacc-4ec3-46a0-9eae-f35f3253ff2e",
+        "points": null,
+        "position": 93,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Done",
+        "title": "dont include description of card for get cards ",
+        "updated_at": "2025-12-20T02:28:50.352652Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 153,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-20T10:09:44.351593Z",
+        "description": "multi select is good and all. I think I would prefer the behaviour would be a toggle.\n\nso one could scroll to select multiple cards.\n\nbut what if one doesnt which to multi select cards in sequence?\n\nhow to handle either case? support both? `v` and `V` perhaps...\n",
+        "due_date": null,
+        "id": "d84ac61b-462e-40c6-b1c3-6b0589173ba1",
+        "points": 1,
+        "position": 36,
+        "priority": "Low",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-28T08:47:10.923200Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "make multi select behave like a toggle",
+        "updated_at": "2026-01-28T08:47:10.923201Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 154,
+        "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2025-12-20T10:11:56.291765Z",
+        "description": "using the `p` dialog to set the points for a card doesnt apply the value to the card\n",
+        "due_date": null,
+        "id": "c75f59b1-b3ee-43ef-87b0-703ed470bdbe",
+        "points": 1,
+        "position": 3,
+        "priority": "Low",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2025-12-23T00:35:00.539909Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "`p` dialog does not correctly set points",
+        "updated_at": "2025-12-23T00:35:00.539916Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 155,
+        "card_prefix": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2025-12-23T00:35:35.806108Z",
+        "created_at": "2025-12-20T22:47:49.093885Z",
+        "description": "Getting this ready for a new attempt of nixpkgs\n\nKAN-155/publish-new-version\n---\n\n> Getting this ready for a new attempt of nixpkgs\n> I would like to have a new version published in github tags and for all packages in crates.io\n> It should become v0.1.15 but there was a missmatch in our release pipelines. the publish failed last time around and I would rather like to get the stable publish up again\n\nI intend to do a release tonight. going to 0.1.15 from 0.1.14\n\nLast time we did the release it failed in some unforeseen way.\n\nI had intended to push 0.1.13 but it failed and on retry we ended up pushing 0.1.14\n\nversioning flows and the actual push flows. tags and crates. look for any logical flaws in the release.\n\nThese pages and the logs contained within may be able to give some clues in the pipe logs. \n\nhttps://github.com/fulsomenko/kanban/actions?page=5\nhttps://github.com/fulsomenko/kanban/actions?page=6\n\n----\n\nWe ended up releasing 0.1.14 -> 0.1.15 -> 0.1.16\n",
+        "due_date": null,
+        "id": "46168902-d495-4be0-afbc-03cf5435829b",
+        "points": 3,
+        "position": 95,
+        "priority": "Medium",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2025-12-23T00:34:54.645296Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Done",
+        "title": "publish new version",
+        "updated_at": "2025-12-23T00:37:14.657061Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 156,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:29:33.873922Z",
+        "description": "## Context\nThe current conflict resolution uses `LastWriteWinsResolver` in `kanban-persistence/src/conflict/resolver.rs`. When external file changes are detected via `FileWatcher` (`watch/file_watcher.rs`), the system compares `saved_at` timestamps from `PersistenceMetadata`.\n\n## Current Behavior\n1. `JsonFileStore::save()` checks `last_known_metadata` (Mutex-wrapped) before writing\n2. If file changed externally, `KanbanError::ConflictDetected` is raised\n3. TUI shows dialog: \"Keep Local\" or \"Reload from Disk\"\n4. Last-write-wins means the newer `saved_at` timestamp wins\n\n## Documentation Required\nCreate `docs/CONFLICT_RESOLUTION.md` covering:\n- How conflict detection works (mtime + size + content hash triple-check)\n- Scenarios where data loss occurs:\n  - Two instances edit different cards simultaneously → one set of changes lost\n  - Rapid saves within same second → timestamp collision possible\n  - Network filesystems with clock skew\n- Why proper solutions (OT/CRDT) are complex for this use case\n- Recommendation: \"Single-instance recommended for data integrity\"\n\n## Files to Reference\n- `crates/kanban-persistence/src/conflict/detector.rs` - FileMetadata struct\n- `crates/kanban-persistence/src/conflict/resolver.rs` - LastWriteWinsResolver\n- `crates/kanban-persistence/src/watch/file_watcher.rs` - ChangeDetector trait\n- `crates/kanban-tui/src/app.rs` - conflict dialog handling\n\n## Acceptance Criteria\n- [ ] New docs/CONFLICT_RESOLUTION.md with clear warnings\n- [ ] README.md updated with link and brief warning\n- [ ] Code comments in resolver.rs explaining limitations",
+        "due_date": null,
+        "id": "70c361c5-f5f8-4ec6-a206-e29ca5911f2a",
+        "points": 3,
+        "position": 37,
+        "priority": "High",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248218Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Document conflict resolution limitations",
+        "updated_at": "2026-01-10T16:35:25.535113Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 157,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:30:04.003607Z",
+        "description": "## Context\nThe save queue is implemented in `kanban-tui/src/state/mod.rs`:\n- `SAVE_QUEUE_CAPACITY = 100` bounded MPSC channel\n- Uses `try_send()` which returns `TrySendError::Full` when capacity reached\n- Currently logs warning and DROPS the save silently\n\n## Current Problem\nWhen queue is full, saves are dropped with just a warning log. This causes silent data loss.\n\n## Implementation Options\n1. **Block writes** - Change to `send().await` (requires async refactor)\n2. **Drop oldest** - Replace channel with `VecDeque`, evict oldest on overflow\n3. **Expand queue** - Use unbounded channel (memory risk)\n4. **Backpressure** - Disable UI input when queue > 80% full\n\n## Recommended Approach\nImplement backpressure with clear user feedback:\n1. Add `queue_pressure()` method returning 0.0-1.0 ratio\n2. Show warning in status bar when > 80%\n3. Block new commands when queue full (not silent drop)\n4. Document the behavior in README\n\n## SOLID Considerations\n- Single Responsibility: Keep save queue logic in dedicated `SaveQueue` struct\n- Open/Closed: Make overflow strategy configurable via trait\n- Extract `SaveQueueStrategy` trait for different behaviors\n\n## Files to Modify\n- `crates/kanban-tui/src/state/mod.rs` - StateManager save queue\n- `crates/kanban-tui/src/ui/status_bar.rs` - queue pressure indicator\n- `crates/kanban-core/src/traits.rs` - SaveQueueStrategy trait (new)\n\n## Acceptance Criteria\n- [ ] No silent data loss on queue overflow\n- [ ] User-visible feedback when queue is filling\n- [ ] Configurable overflow strategy\n- [ ] Unit tests for overflow scenarios",
+        "due_date": null,
+        "id": "3d3a1709-06d7-40e4-b37e-37838d1f02a0",
+        "points": 5,
+        "position": 38,
+        "priority": "High",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248407Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Implement bounded save queue overflow handling",
+        "updated_at": "2025-12-23T00:47:42.193175Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 158,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:30:07.747773Z",
+        "description": "## Context\nCurrent tests are example-based only. No property-based testing despite complex domain logic.\n\n## Areas Requiring Property-Based Tests\n\n### 1. Migration Paths (V1→V2)\nLocation: `kanban-persistence/src/migration/migrator.rs`\n- Roundtrip: migrate then demigrate equals original\n- Migration preserves all board/card/column counts\n- Migration never loses data (bijective mapping)\n\n### 2. Card Ordering Logic\nLocation: `kanban-domain/src/card.rs`, `column.rs`\n- Positions are contiguous after any operation\n- No duplicate positions in same column\n- Reorder operations maintain invariants\n\n### 3. Sprint Calculations\nLocation: `kanban-domain/src/sprint.rs`\n- activate(sprint, days).end_date == start_date + days\n- Sprint status transitions follow state machine\n- Sprint numbers are monotonically increasing per board\n\n### 4. Board State Consistency\nLocation: `kanban-domain/src/board.rs`\n- prefix_counters always >= max card_number for that prefix\n- Cards always reference valid column_id within same board\n- Archived cards maintain referential integrity\n\n## Implementation Plan\n1. Add `proptest` to dev-dependencies in relevant crates\n2. Create `tests/property_tests.rs` in each crate\n3. Use `proptest::arbitrary::Arbitrary` derive for domain types\n4. Generate random valid states, apply operations, verify invariants\n\n## SOLID Considerations\n- Create `Invariant` trait for testable properties\n- Each domain type implements `Arbitrary` for generation\n- Reuse arbitraries across test modules\n\n## Files to Create/Modify\n- `crates/kanban-domain/Cargo.toml` - add proptest dev-dep\n- `crates/kanban-domain/tests/property_tests.rs` - new\n- `crates/kanban-persistence/tests/migration_properties.rs` - new\n- `crates/kanban-domain/src/arbitrary.rs` - Arbitrary impls (new)\n\n## Acceptance Criteria\n- [ ] proptest configured in workspace\n- [ ] >=10 property tests for migration\n- [ ] >=10 property tests for card ordering\n- [ ] >=5 property tests for sprint logic\n- [ ] >=5 property tests for board consistency\n- [ ] CI runs property tests with sufficient iterations",
+        "due_date": null,
+        "id": "b0b8af7d-b07c-4b43-ad28-972e68f9019a",
+        "points": 8,
+        "position": 39,
+        "priority": "High",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248410Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Add property-based tests for domain logic",
+        "updated_at": "2025-12-23T00:47:42.364073Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 159,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:30:12.829780Z",
+        "description": "## Context\nCurrent `JsonFileStore` loads entire state into memory and serializes full JSON on every save. This is O(n) for both read and write, blocking scalability past ~1000 cards.\n\n## Architecture: Implement Behind PersistenceStore Trait\nThe `PersistenceStore` trait in `kanban-persistence/src/traits.rs` is the seam for adding new storage backends.\n\n## Implementation Plan\n\n### Phase 1: Schema Design\nCreate `schema.sql` with tables for: metadata, boards, columns, cards, sprints, archived_cards. Add indexes for common queries (cards by column, cards by sprint).\n\n### Phase 2: SqliteStore Implementation\nNew file: `kanban-persistence/src/store/sqlite_store.rs`\n- Use `sqlx` with SQLite driver (async-compatible)\n- Implement `PersistenceStore` trait\n- Transaction wrapping for atomic operations\n- Connection pooling for concurrent access\n\n### Phase 3: Incremental Saves (Key Optimization)\nInstead of full-state snapshots:\n- Track dirty entities in `DirtyTracker` struct\n- Only INSERT/UPDATE/DELETE changed rows\n- Use `updated_at` timestamps for conflict detection\n\n### Phase 4: Migration from JSON\n- Detect `.json` vs `.db` file extension\n- Auto-migrate: load JSON -> create SQLite -> write all entities\n- Keep JSON as backup until verified\n\n## SOLID Considerations\n- **Single Responsibility**: SqliteStore only handles persistence, not domain logic\n- **Open/Closed**: Add new store without modifying existing code\n- **Liskov**: SqliteStore substitutable for JsonFileStore via trait\n- **Dependency Inversion**: TUI/CLI depend on PersistenceStore trait, not concrete impl\n\n## Abstraction for JSON vs SQL\nCreate shared `StoreOperations` trait for common patterns that both JsonFileStore and SqliteStore implement.\n\n## Files to Create/Modify\n- `crates/kanban-persistence/Cargo.toml` - add sqlx, feature flag\n- `crates/kanban-persistence/src/store/sqlite_store.rs` - new\n- `crates/kanban-persistence/src/store/mod.rs` - export SqliteStore\n- `crates/kanban-persistence/src/schema.sql` - DDL\n- `crates/kanban-persistence/src/migration/json_to_sqlite.rs` - new\n- `crates/kanban-cli/src/main.rs` - store selection logic\n\n## Acceptance Criteria\n- [ ] SqliteStore implements PersistenceStore trait\n- [ ] Feature flag: `--features sqlite` to enable\n- [ ] JSON->SQLite migration preserves all data\n- [ ] Incremental saves (not full snapshots)\n- [ ] Concurrent read safety via connection pool\n- [ ] Benchmarks showing improvement over JSON",
+        "due_date": null,
+        "id": "3e7b10cd-81f0-4fd6-a8ad-3f861331cc77",
+        "points": 13,
+        "position": 40,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248412Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Implement SQLite storage backend",
+        "updated_at": "2025-12-23T00:48:41.959550Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 160,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:30:15.988617Z",
+        "description": "## Context\nCLI outputs JSON for scripting, but schema is undocumented. Users need stable guarantees.\n\n## Current JSON Structures (from codebase analysis)\n\n### Board Export\nFields: id (uuid), name, description, sprint_prefix, card_prefix, task_sort_field (enum), task_sort_order (enum), prefix_counters (map), sprint_counters (map), created_at, updated_at\n\n### Card Structure\nFields: id, column_id, title, description, priority (Low|Medium|High|Critical), status (Todo|InProgress|Blocked|Done), position, points (0-255), card_number, sprint_id, assigned_prefix, card_prefix, sprint_logs, completed_at, created_at, updated_at\n\n### Column Structure\nFields: id, board_id, name, position, wip_limit, created_at, updated_at\n\n### Sprint Structure\nFields: id, board_id, sprint_number, name_index, prefix, card_prefix, status (Planning|Active|Completed|Cancelled), start_date, end_date, created_at, updated_at\n\n## Documentation to Create\n1. `docs/JSON_SCHEMA.md` - Human-readable with examples\n2. `schemas/` directory with JSON Schema files for validation\n3. Versioning strategy (SemVer for schema changes)\n\n## Files to Create\n- `docs/JSON_SCHEMA.md` - comprehensive schema docs\n- `schemas/board.schema.json` - JSON Schema for Board\n- `schemas/card.schema.json` - JSON Schema for Card\n- `schemas/column.schema.json` - JSON Schema for Column\n- `schemas/sprint.schema.json` - JSON Schema for Sprint\n- `schemas/envelope.schema.json` - V2 file format wrapper\n\n## Acceptance Criteria\n- [ ] All domain types documented with examples\n- [ ] JSON Schema files for programmatic validation\n- [ ] CLI `--schema` flag to output schema\n- [ ] Version field in schema for compatibility tracking",
+        "due_date": null,
+        "id": "2d2f65ed-22d3-4f27-85cf-3b6bbb71db14",
+        "points": 3,
+        "position": 41,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248415Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Document JSON export schema",
+        "updated_at": "2025-12-23T00:48:42.133028Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 161,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:30:20.014007Z",
+        "description": "## Context\nError handling uses `KanbanError` enum in `kanban-core/src/error.rs` with `thiserror`. Recovery procedures are undocumented.\n\n## Error Types to Document\n- Connection(String) - Future: DB/network errors\n- NotFound(String) - Entity lookup failures\n- Validation(String) - Invalid input\n- Io(std::io::Error) - File operations\n- Serialization(String) - JSON parse/write failures\n- Internal(String) - Unexpected states\n- ConflictDetected { path, source } - External file modification\n\n## Failure Scenarios to Document\n\n### 1. Corrupted JSON File\n- Cause: Disk corruption, incomplete write, manual edit error\n- Current behavior: Serialization error, app won't start\n- Recovery: Check for .v1.backup, use kanban export, manual JSON repair\n\n### 2. Disk Full During Atomic Write\n- Cause: Filesystem at capacity during temp file write\n- Current behavior: Io error in atomic_writer.rs\n- Recovery: Original file preserved, free disk space and retry\n\n### 3. External Editor Crash\n- Cause: $EDITOR crashes during card description edit\n- Current behavior: Edit cancelled, original preserved\n- Recovery: Automatic - no data loss\n\n### 4. File Permission Errors\n- Cause: Read-only file, directory permissions\n- Current behavior: Io error with OS message\n- Recovery: chmod fix, check directory ownership\n\n### 5. File Watcher Failure\n- Cause: Too many watches (ulimit), unsupported filesystem\n- Current behavior: Warning logged, continues without watching\n- Recovery: Increase ulimit, use polling mode\n\n## Documentation to Create\n- `docs/ERROR_HANDLING.md` with all scenarios\n- Troubleshooting section in README\n- Error codes table with recovery steps\n\n## Acceptance Criteria\n- [ ] All KanbanError variants documented\n- [ ] Recovery procedure for each failure mode\n- [ ] Troubleshooting guide with common issues\n- [ ] Error messages improved with actionable hints",
+        "due_date": null,
+        "id": "2ecf443d-8347-4e78-b923-981a9758e7da",
+        "points": 3,
+        "position": 42,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248418Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Document error handling behavior",
+        "updated_at": "2025-12-23T00:48:42.306608Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 163,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:31:01.453382Z",
+        "description": "## Context\nClaude is listed as a contributor. Transparency about AI-assisted development builds trust.\n\n## Content to Add to CONTRIBUTING.md\n\n### Section: \"AI-Assisted Development\"\n\nThis project uses AI assistance (Claude by Anthropic) for:\n- Code generation and refactoring\n- Documentation writing\n- Test case generation\n- Code review suggestions\n\n### Review Process for AI-Generated Code\nAll AI-generated code undergoes the same review as human contributions:\n1. Automated CI checks (clippy, tests, formatting)\n2. Human review for correctness and style\n3. Integration testing before merge\n\n### Patterns to Watch For\nAI-generated code may exhibit:\n- Over-abstraction (unnecessary traits/generics)\n- Verbose error handling\n- Missing edge cases in generated tests\n- Documentation that restates code instead of explaining intent\n\n### Attribution\nAI-assisted commits are attributed to the human who reviewed and approved them.\nThe AI tool is listed in commit trailers when significant generation occurred.\n\n## Files to Modify\n- `CONTRIBUTING.md` - add new section\n\n## Acceptance Criteria\n- [ ] Clear disclosure of AI tool usage\n- [ ] Review process documented\n- [ ] Common AI patterns listed for reviewers\n- [ ] Attribution policy clarified",
+        "due_date": null,
+        "id": "43cd8d8f-3ffa-4f8e-a0e1-4fc80cad4444",
+        "points": 1,
+        "position": 44,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248422Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Add AI contribution disclosure to CONTRIBUTING.md",
+        "updated_at": "2025-12-23T00:49:30.085523Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 164,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:31:04.124060Z",
+        "description": "## Context\nCurrent architecture (JSON + last-write-wins) fundamentally supports single-user only.\nRoadmap mentions HTTP API, collaboration, sync - these require different foundations.\n\n## Decision Framework\n\n### Option A: Personal Tool (Recommended)\nKeep current architecture, optimize for single-user experience:\n- SQLite for performance (not collaboration)\n- No server component\n- File sync via external tools (Dropbox, git)\n- Document limitations clearly\n\nImplications: Remove collaboration from roadmap, focus on offline-first, simpler maintenance\n\n### Option B: Team Tool\nRewrite for collaboration:\n- PostgreSQL or similar server DB\n- HTTP API with authentication\n- Real-time sync (WebSockets)\n- CRDT or OT for conflict resolution\n\nImplications: 6-12 month rewrite, different deployment model, hosting concerns\n\n### Option C: Hybrid\nPersonal-first with optional sync:\n- SQLite locally\n- Optional sync to remote server\n- Conflict resolution for sync only\n\nImplications: Complexity of both approaches, edge cases in sync logic\n\n## Decision Process\n1. Write ADR (Architecture Decision Record) in `docs/adr/`\n2. Update README with chosen scope\n3. Update roadmap to match\n4. Close/adjust related issues\n\n## Files to Create/Modify\n- `docs/adr/001-project-scope.md` - new ADR\n- `README.md` - update project description\n- `ROADMAP.md` - align features with scope\n\n## Acceptance Criteria\n- [ ] ADR documenting decision and rationale\n- [ ] README clearly states scope\n- [ ] Roadmap updated to match\n- [ ] Collaboration features removed or deferred",
+        "due_date": null,
+        "id": "6aba041e-bc89-4ffd-aa60-efc6b2cb690a",
+        "points": 2,
+        "position": 45,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248424Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Decide project scope: personal vs team tool",
+        "updated_at": "2025-12-23T00:49:30.259278Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 165,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:31:07.798189Z",
+        "description": "## Context\nDomain layer uses command pattern (`kanban-domain/src/commands/`), but commands are not persisted. Need to evaluate if this adds value or just complexity.\n\n## Current Implementation Analysis\n\n### What Exists\n- `Command` trait with `execute()` and `description()`\n- Commands for all CRUD operations\n- `CommandContext` with mutable refs to all state\n- Command descriptions logged to `VecDeque<String>` (audit only)\n\n### What's Missing for Event Sourcing\n- Commands not persisted to storage\n- No replay mechanism\n- No event versioning\n- No projection rebuilding\n- No undo/redo\n\n### Questions to Answer\n1. Are commands persisted? -> No, only snapshots\n2. Is this event-sourcing? -> No, just structural pattern\n3. Can we implement undo/redo? -> Not without persisting commands\n4. Does the abstraction help? -> Provides uniform API, but adds indirection\n\n## Evaluation Criteria\n- Keep if: Command pattern enables future undo/redo, improves testability\n- Simplify if: Just adding boilerplate without benefit\n\n## Recommendation\nKeep command pattern BUT document its purpose:\n- Enables uniform operation interface for TUI/CLI\n- Provides audit log via descriptions\n- Future-proofs for undo/redo if commands are persisted\n- Add `Undoable` trait for commands that support reversal\n\n## Files to Analyze\n- `crates/kanban-domain/src/commands/mod.rs`\n- `crates/kanban-domain/src/commands/*.rs` - all command impls\n- `crates/kanban-tui/src/state/mod.rs` - command execution\n\n## Acceptance Criteria\n- [ ] Document command pattern purpose in code comments\n- [ ] Add `Undoable` trait (empty for now, marks intent)\n- [ ] Create `docs/ARCHITECTURE.md` explaining design decisions\n- [ ] Decision: keep, simplify, or extend for undo/redo",
+        "due_date": null,
+        "id": "708e88ba-e8c9-4bba-bfa3-b525d1efc231",
+        "points": 3,
+        "position": 46,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248427Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Evaluate command pattern implementation",
+        "updated_at": "2025-12-23T00:49:30.434063Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 166,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:31:10.491074Z",
+        "description": "## Context\nSprint model exists but is basic. No velocity tracking, burndown data, or retrospective artifacts.\n\n## Current Sprint State\n```rust\npub struct Sprint {\n    id, board_id, sprint_number, name_index,\n    prefix, card_prefix, status,\n    start_date, end_date,\n    created_at, updated_at\n}\n```\n\n## Missing Features\n\n### 1. Velocity Tracking\nAdd fields:\n- committed_points: Option<u32> - Points at sprint start\n- completed_points: Option<u32> - Points marked done\n- velocity_history: Vec<u32> - Rolling average data\n\n### 2. Burndown Data\nAdd structure:\n- BurndownEntry { date, remaining_points, completed_points }\n- burndown: Vec<BurndownEntry>\n\n### 3. Sprint Goals\nAdd fields:\n- goal: Option<String> - Sprint objective\n- retrospective: Option<String> - Post-sprint notes\n\n## Implementation Approach\n\n### Option A: Full Agile (8 points)\nImplement all above + TUI charts for burndown\n\n### Option B: Minimal (3 points)\nJust card grouping + basic completion tracking\n\n### Recommended: Option A with phased rollout\n1. Add data model fields (this ticket)\n2. Capture burndown data on card status changes\n3. Add velocity calculation on sprint complete\n4. TUI visualization (separate ticket)\n\n## SOLID Considerations\n- `SprintMetrics` struct for calculations (SRP)\n- `MetricsCalculator` trait for different methodologies\n- Keep Sprint struct focused on state, metrics in separate module\n\n## Files to Modify\n- `crates/kanban-domain/src/sprint.rs` - add fields\n- `crates/kanban-domain/src/sprint_metrics.rs` - new\n- `crates/kanban-persistence/src/migration/` - V2->V3 migration\n- `crates/kanban-tui/src/ui/sprint_view.rs` - display metrics\n\n## Acceptance Criteria\n- [ ] Sprint tracks committed vs completed points\n- [ ] Burndown data captured daily (or on change)\n- [ ] Velocity calculated on sprint completion\n- [ ] Migration handles existing sprints gracefully",
+        "due_date": null,
+        "id": "c62fa2d3-6a66-4fca-8cb5-d45b00d3de60",
+        "points": 8,
+        "position": 47,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248429Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Complete sprint feature implementation",
+        "updated_at": "2025-12-23T00:50:04.502873Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 167,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:31:12.954868Z",
+        "description": "## Context\nUnit tests exist but integration tests are limited. Need tests that verify full system behavior.\n\n## Test Scenarios Required\n\n### 1. Full Board Lifecycle\ncreate board -> add columns -> create cards -> move cards ->\narchive cards -> export JSON -> delete board -> reimport -> verify equality\n\n### 2. Multi-File Scenarios\n- Switch between different kanban files\n- Ensure no state leakage between files\n- Verify file watcher correctly tracks active file\n\n### 3. External Editor Integration\n- Set $EDITOR to test script\n- Verify edit flow works\n- Test editor crash recovery\n\n### 4. File Watcher Behavior\n- Modify file externally during session\n- Verify conflict detection triggers\n- Test \"reload\" vs \"keep local\" paths\n\n### 5. Migration Scenarios\n- Create V1 format file\n- Load with current version\n- Verify auto-migration\n- Check backup creation\n\n### 6. Sprint Lifecycle\n- Create sprint -> assign cards -> activate -> complete\n- Verify card sprint_logs updated\n- Test sprint cancellation\n\n## Implementation Plan\n\n### Test Infrastructure\n- Use `tempfile` for isolated test directories\n- Create `TestHarness` struct for common setup\n- Use `assert_cmd` for CLI black-box tests\n- Mock external editor with script\n\n### Test Organization\n```\ntests/\n  integration/\n    board_lifecycle.rs\n    multi_file.rs\n    external_editor.rs\n    file_watcher.rs\n    migration.rs\n    sprint_lifecycle.rs\n  helpers/\n    mod.rs\n    harness.rs\n    fixtures.rs\n```\n\n## SOLID Considerations\n- `TestHarness` trait for reusable setup (DIP)\n- Fixture builders for test data (Builder pattern)\n- Each test file focused on one scenario (SRP)\n\n## Files to Create\n- `crates/kanban-cli/tests/integration/` - test directory\n- `crates/kanban-cli/tests/helpers/harness.rs` - TestHarness\n- Individual test files per scenario\n\n## Acceptance Criteria\n- [ ] >=1 test per scenario above\n- [ ] Tests run in CI\n- [ ] Tests isolated (no shared state)\n- [ ] Test helpers reusable across scenarios\n- [ ] Coverage report includes integration tests",
+        "due_date": null,
+        "id": "f5bac667-fcb6-4ee8-ab52-985d1f8850d7",
+        "points": 8,
+        "position": 48,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2025-12-23T00:31:51.248432Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Add integration test suite",
+        "updated_at": "2025-12-23T00:50:04.674052Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 168,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2025-12-23T00:34:22.507242Z",
+        "description": null,
+        "due_date": null,
+        "id": "92517164-5172-4536-9fb0-68670b2e0860",
+        "points": null,
+        "position": 48,
+        "priority": "Medium",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2025-12-23T00:34:45.449843Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "scrolling in sprint list",
+        "updated_at": "2025-12-23T00:34:45.449850Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 170,
+        "card_prefix": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-01-10T15:27:50.315970Z",
+        "created_at": "2026-01-10T12:08:03.000251Z",
+        "description": "## Challenge\nDeleting cards/columns/sprints leaves orphaned data and broken relationships.\n\n## Impact\n- Orphaned dependency edges in graph\n- Cards become invisible in UI (deleted column reference)\n- Corrupted audit trail (deleted sprint references)\n\n## Tasks\n1. Add `remove_card_edges()` method to DependencyGraph\n2. Update DeleteCard command to clean graph edges\n3. Update ArchiveCard command to clean graph edges\n4. Update DeleteColumn to prevent deletion if cards exist\n5. Update DeleteSprint to unassign cards before deletion\n\n## Files to Modify\n- `crates/kanban-domain/src/dependencies/card_graph.rs`\n- `crates/kanban-domain/src/commands/card_commands.rs`\n- `crates/kanban-domain/src/commands/column_commands.rs`\n- `crates/kanban-domain/src/commands/sprint_commands.rs`\n\n## Acceptance Criteria\n- [ ] Graph edges cleaned when card deleted/archived\n- [ ] DeleteColumn fails if column has cards\n- [ ] DeleteSprint unassigns all cards\n- [ ] Integration test: delete_card_cleans_dependencies passes\n- [ ] Integration test: delete_column_with_cards_fails passes\n- [ ] Integration test: delete_sprint_unassigns_cards passes\n",
+        "due_date": null,
+        "id": "9f556627-d261-48f0-9e2d-ea7bcc722a6f",
+        "points": 3,
+        "position": 99,
+        "priority": "Critical",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Done",
+        "title": "Implement Cascade Cleanup for Delete Operations",
+        "updated_at": "2026-01-10T15:27:50.315970Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 171,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-10T12:08:03.107070Z",
+        "description": "## Problem\nCommands return `Ok(())` even when target entity doesn't exist. Failed operations go undetected with no audit trail.\n\n## Impact\n- Silent data loss\n- No error feedback to users\n- Debugging impossible\n\n## Tasks\n1. Add NotFound and Validation error variants to KanbanError\n2. Add helper methods to CommandContext:\n   - `get_board_mut(id) -> Result<&mut Board>`\n   - `get_card_mut(id) -> Result<&mut Card>`\n   - `get_column_mut(id) -> Result<&mut Column>`\n   - `get_sprint_mut(id) -> Result<&mut Sprint>`\n3. Update all command execute() methods (14 locations)\n\n## Files to Modify\n- `crates/kanban-core/src/error.rs`\n- `crates/kanban-domain/src/commands/context.rs`\n- `crates/kanban-domain/src/commands/board_commands.rs`\n- `crates/kanban-domain/src/commands/card_commands.rs`\n- `crates/kanban-domain/src/commands/column_commands.rs`\n- `crates/kanban-domain/src/commands/sprint_commands.rs`\n\n## Acceptance Criteria\n- [ ] KanbanError has NotFound and Validation variants\n- [ ] CommandContext has all 4 helper methods\n- [ ] All 14 command locations updated\n- [ ] Integration test: update_nonexistent_card_fails passes\n- [ ] Error messages are descriptive",
+        "due_date": null,
+        "id": "821df106-c0a7-408b-81fa-50eb4ae93b96",
+        "points": 2,
+        "position": 47,
+        "priority": "High",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-28T08:47:10.923205Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "Replace Silent Failures with Proper Errors",
+        "updated_at": "2026-01-28T08:47:10.923206Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 172,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-10T12:08:03.195036Z",
+        "description": "## Problem\n100-capacity bounded queue silently drops commands when full. User rapidly executing 101+ commands loses data with no warning.\n\n## Impact\n- Silent data loss under normal load\n- No user notification\n- Only discoverable in logs\n\n## Tasks\n1. Remove SAVE_QUEUE_CAPACITY constant\n2. Change from bounded to unbounded channel in StateManager\n3. Update execute() to use unbounded send\n4. Add fatal error handling if channel disconnected\n5. Add monitoring: track max_pending_saves\n6. Log warning if queue exceeds 1000\n\n## Files to Modify\n- `crates/kanban-tui/src/state/mod.rs`\n\n## Changes\n- Line ~66-68: Remove capacity constant\n- Line ~170: Change to `unbounded_channel()`\n- Line ~335-346: Update send logic with proper error handling\n\n## Acceptance Criteria\n- [ ] Queue is unbounded\n- [ ] Never drops commands\n- [ ] Fatal error if channel disconnected\n- [ ] Monitoring tracks max_pending_saves\n- [ ] Integration test: unbounded_save_queue_never_drops passes",
+        "due_date": null,
+        "id": "3c3a45d4-4d10-4dbe-8249-2b9f637c6b2e",
+        "points": 2,
+        "position": 48,
+        "priority": "High",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-28T08:47:10.923181Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "Fix Save Queue Overflow - Use Unbounded Queue",
+        "updated_at": "2026-01-28T08:47:10.923187Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 173,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-10T12:08:03.263878Z",
+        "description": "## Problem\nImport accepts corrupted JSON where references point to non-existent entities. Cards become invisible, relationships break.\n\n## Impact\n- Invisible cards (invalid column_id)\n- Broken relationships (invalid sprint_id)\n- Orphaned graph edges\n- Silent data corruption\n\n## Tasks\n1. Create new validation module with comprehensive checks\n2. Implement validate_referential_integrity() function:\n   - Check card.column_id exists in columns\n   - Check card.sprint_id exists in sprints\n   - Check dependency graph edges reference existing cards\n   - Check archived_cards reference valid columns\n3. Call validation after import (fail import if invalid)\n4. Call validation after load (warn only, don't fail)\n5. Return detailed error messages listing all issues\n\n## Files to Create/Modify\n- `crates/kanban-domain/src/validation.rs` (NEW)\n- `crates/kanban-domain/src/lib.rs` (add pub mod validation)\n- `crates/kanban-tui/src/export/importer.rs`\n- `crates/kanban-tui/src/state/mod.rs`\n\n## Acceptance Criteria\n- [ ] Validation module created\n- [ ] All 6 validation checks implemented\n- [ ] Import fails with detailed errors for invalid data\n- [ ] Load warns but doesn't fail\n- [ ] Integration test: import_with_invalid_references_fails passes\n- [ ] Error messages list all issues, not just first one",
+        "due_date": null,
+        "id": "627a516a-3104-4e08-8351-f30d6b4f8de3",
+        "points": 3,
         "position": 49,
+        "priority": "High",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-28T08:47:10.923192Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "Add Referential Integrity Validation on Import/Load",
+        "updated_at": "2026-01-28T08:47:10.923193Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 174,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-10T12:08:03.335353Z",
+        "description": "## Problem\nSave errors only logged, not visible to user. User unaware that changes weren't persisted.\n\n## Impact\n- User loses data unknowingly\n- Thinks changes are saved when they're not\n- No way to retry\n\n## Tasks\n1. Add error channel to App struct\n2. Create unbounded error channel in run()\n3. Update save worker to send errors to channel:\n   - ConflictDetected errors\n   - Save failures (disk full, permissions, etc.)\n4. Add error_rx.recv() branch to tokio::select!\n5. Update UI to display save errors prominently:\n   - Red background for critical errors\n   - Display in footer or top of screen\n   - Show ⚠ warning icon\n\n## Files to Modify\n- `crates/kanban-tui/src/app.rs`\n- `crates/kanban-tui/src/ui.rs`\n\n## UI Requirements\n- Save errors must be RED with warning icon\n- Must be visible without scrolling\n- Should persist until user acknowledges or new save succeeds\n\n## Acceptance Criteria\n- [ ] Error channel created\n- [ ] Save worker sends all errors to UI\n- [ ] UI displays errors prominently\n- [ ] Manual test: Disk full error shows in UI\n- [ ] Manual test: Conflict error shows in UI",
+        "due_date": null,
+        "id": "ef45e88d-4c8d-4a3b-a26b-3d0b4e719f34",
+        "points": 1,
+        "position": 50,
+        "priority": "High",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-28T08:47:10.923203Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "Add User-Visible Save Error Notifications",
+        "updated_at": "2026-01-28T08:47:10.923204Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 175,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-10T12:08:03.406110Z",
+        "description": "## Purpose\nVerify all 5 phases work correctly with integration tests.\n\n## Tests to Add\nCreate new file: `crates/kanban-tui/tests/data_integrity_tests.rs`\n\n1. test_delete_card_cleans_dependencies\n   - Create card A blocking card B\n   - Delete card A\n   - Verify: graph no longer has blocker edge\n\n2. test_delete_column_with_cards_fails\n   - Create column with cards\n   - Attempt to delete column\n   - Verify: returns error, column still exists\n\n3. test_delete_sprint_unassigns_cards\n   - Create sprint with assigned cards\n   - Delete sprint\n   - Verify: cards no longer have sprint_id\n\n4. test_update_nonexistent_card_fails\n   - Attempt to update card that doesn't exist\n   - Verify: returns NotFound error\n\n5. test_import_with_invalid_references_fails\n   - Create JSON with card referencing non-existent column\n   - Attempt import\n   - Verify: returns validation error with details\n\n6. test_unbounded_save_queue_never_drops\n   - Queue 200+ saves rapidly\n   - Verify: all saves complete, none dropped\n\n## Acceptance Criteria\n- [ ] All 6 tests written\n- [ ] All tests pass\n- [ ] Tests use realistic data\n- [ ] Error messages are checked, not just success/failure",
+        "due_date": null,
+        "id": "6f52316a-d9d7-4c5d-97ae-e19688c52c0c",
+        "points": 2,
+        "position": 51,
+        "priority": "High",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-28T08:47:10.923208Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "Add Integration Tests for Data Integrity Fixes",
+        "updated_at": "2026-01-28T08:47:10.923209Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 176,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-10T12:08:03.476164Z",
+        "description": "## Purpose\nUse property-based testing to verify invariants hold under all conditions.\n\n## Setup\nAdd to `crates/kanban-domain/Cargo.toml`:\n```\n[dev-dependencies]\nquickcheck = \"1.0\"\nquickcheck_macros = \"1.0\"\n```\n\n## Properties to Test\nCreate new file: `crates/kanban-domain/tests/property_tests.rs`\n\n1. prop_validation_catches_orphaned_cards\n   - Property: If card references non-existent column, validation must catch it\n\n2. prop_cascade_delete_removes_all_edges\n   - Property: After removing card's edges, no edges should reference that card\n\n3. prop_delete_column_with_cards_always_fails\n   - Property: DeleteColumn must fail if any cards reference the column\n\n4. prop_validation_is_idempotent\n   - Property: Running validation twice gives same result\n\n## Arbitrary Implementations Needed\n- impl Arbitrary for Board\n- impl Arbitrary for Column\n- impl Arbitrary for Card\n- impl Arbitrary for DependencyGraph\n\n## Acceptance Criteria\n- [ ] QuickCheck dependencies added\n- [ ] All 4 properties implemented\n- [ ] All Arbitrary implementations added\n- [ ] Tests pass with 100+ random inputs\n- [ ] Properties catch edge cases not in integration tests",
+        "due_date": null,
+        "id": "ce6e4fbc-580c-49b0-8a9a-acef4a3ffcf8",
+        "points": 2,
+        "position": 52,
+        "priority": "Medium",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-28T08:47:10.923189Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "Add QuickCheck Property Tests for Validation",
+        "updated_at": "2026-01-28T08:47:10.923190Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 177,
+        "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2026-01-10T16:36:13.799550Z",
+        "description": "I would like to change the layout of the parent / child relationship boxes in the card details.\n\nFrom having them in seperate rows. to positioning them in columns on the same row.\n\nAlso increase their height by 2 rows\n",
+        "due_date": null,
+        "id": "4c00deb1-c13b-4172-938d-f1eb1fc8a4df",
+        "points": 1,
+        "position": 3,
+        "priority": "Low",
+        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-01-28T08:47:10.923195Z",
+            "status": "Completed"
+          }
+        ],
+        "status": "Todo",
+        "title": "parent and child relationship boxes layout",
+        "updated_at": "2026-01-28T08:47:10.923196Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 178,
+        "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2026-01-29T13:14:49.316081Z",
+        "description": "## Overview\n\nExtract business logic from `kanban-tui` to `kanban-domain` and `kanban-core` crates for reuse by other consumers (API server, CLI).\n\n## Why This Migration?\n\nThe TUI crate contained business logic (filtering, sorting, searching, export/import) that should be reusable by:\n- Future API server\n- CLI tools\n- Other UI implementations\n\nBy moving this logic to domain/core, we follow proper layered architecture and enable code reuse.\n\n---\n\n## Files Changed\n\n### New Domain Files (`kanban-domain`)\n\n**`crates/kanban-domain/src/search/mod.rs`** (NEW)\n- `CardSearcher` trait - abstraction for searching cards\n- `TitleSearcher` - searches card titles (case-insensitive)\n- `BranchNameSearcher` - searches sprint branch names\n- `CompositeSearcher` - combines title + branch name search\n\n**`crates/kanban-domain/src/query/mod.rs`** (NEW)\n- `CardFilterOptions` - struct grouping filter parameters (sprint_filter, hide_assigned, search_query)\n- `filter_and_sort_cards()` - filter cards for a board view\n- `filter_and_sort_cards_by_column()` - filter cards for a specific column\n- `CardQueryBuilder` - fluent API for building card queries\n\n**`crates/kanban-domain/src/export/mod.rs`** (NEW)\n- Re-exports BoardExporter, BoardImporter, models\n\n**`crates/kanban-domain/src/export/exporter.rs`** (NEW)\n- `BoardExporter` - exports boards to JSON format\n- Handles single board and all-boards export\n\n**`crates/kanban-domain/src/export/importer.rs`** (NEW)\n- `BoardImporter` - imports boards from JSON\n- Supports V1 (legacy) and V2 format detection\n- `ImportedEntities` - returned struct with imported data\n\n**`crates/kanban-domain/src/export/models.rs`** (NEW)\n- `BoardExport` - DTO for single board export\n- `AllBoardsExport` - DTO for multi-board export\n\n**`crates/kanban-domain/src/lib.rs`** (MODIFIED)\n- Added module declarations: search, query, export\n- Added public exports for all new types\n\n---\n\n### New Core Files (`kanban-core`)\n\n**`crates/kanban-core/src/pagination.rs`** (NEW - previous commits)\n- `Page` - tracks scroll position and total items\n- `PageInfo` - viewport info with visible_indices, items_above, items_below\n- Used for virtual list rendering in any UI\n\n**`crates/kanban-core/src/selection.rs`** (NEW - previous commits)\n- `SelectionState` - single-item selection state machine\n- Navigation helpers: next, prev, jump_to, clear\n\n---\n\n### TUI Files Changed\n\n**`crates/kanban-tui/src/search.rs`** (MODIFIED)\n- Now re-exports `CardSearcher`, `TitleSearcher`, `BranchNameSearcher`, `CompositeSearcher` from domain\n- Keeps `SearchState` in TUI (depends on TUI's InputState)\n\n**`crates/kanban-tui/src/export/mod.rs`** (MODIFIED)\n- Now re-exports everything from `kanban_domain::export`\n\n**`crates/kanban-tui/src/export/exporter.rs`** (DELETED)\n- Moved to domain\n\n**`crates/kanban-tui/src/export/importer.rs`** (DELETED)\n- Moved to domain\n\n**`crates/kanban-tui/src/export/models.rs`** (DELETED)\n- Moved to domain\n\n**`crates/kanban-tui/src/services/filter.rs`** (MODIFIED)\n- Re-exports filter types from domain\n\n**`crates/kanban-tui/src/services/sort.rs`** (MODIFIED)\n- Re-exports sort types from domain\n\n**`crates/kanban-tui/src/state/snapshot.rs`** (MODIFIED)\n- Uses `kanban_domain::Snapshot` as base type\n- Adds `SnapshotExt` trait for TUI-specific methods (`to_json_bytes`, `from_json_bytes`)\n- Type alias: `DataSnapshot = Snapshot`\n\n**`crates/kanban-tui/src/state/history.rs`** (MODIFIED)\n- Re-exports `HistoryManager` from domain\n\n**`crates/kanban-tui/src/state/mod.rs`** (MODIFIED)\n- Updated exports to include `SnapshotExt`\n\n**`crates/kanban-tui/src/selection.rs`** (MODIFIED)\n- Re-exports `SelectionState` from kanban_core\n\n**`crates/kanban-tui/src/components/page.rs`** (MODIFIED)\n- Re-exports `Page`, `PageInfo` from kanban_core\n\n**`crates/kanban-tui/src/card_list.rs`** (MODIFIED)\n- Updated field names: `visible_indices`, `items_above`, `items_below`\n\n**`crates/kanban-tui/src/components/generic_list.rs`** (MODIFIED)\n- Updated to use `scroll_to_visible` method name\n- Updated field references for PageInfo\n\n**`crates/kanban-tui/src/components/relationship_section.rs`** (MODIFIED)\n- Updated field references for PageInfo\n\n**`crates/kanban-tui/src/app.rs`** (MODIFIED)\n- Added `use crate::state::SnapshotExt` import\n\n**`crates/kanban-tui/src/handlers/detail_view_handlers.rs`** (MODIFIED)\n- Added `SnapshotExt` import for serialization\n\n**`crates/kanban-tui/src/handlers/popup_handlers.rs`** (MODIFIED)\n- Added `SnapshotExt` import for serialization\n\n**`crates/kanban-tui/tests/conflict_detection_tests.rs`** (MODIFIED)\n- Added `SnapshotExt` import for test serialization\n\n---\n\n### Domain Clippy Fixes\n\n**`crates/kanban-domain/src/filter/card_filter.rs`** (MODIFIED)\n- Changed `map_or(false, ...)` to `is_some_and(...)` per clippy\n\n**`crates/kanban-domain/src/sort/mod.rs`** (MODIFIED)\n- Changed `&mut Vec<Card>` to `&mut [Card]` per clippy\n\n---\n\n## Status\n- 15 commits on develop branch\n- Build: ✓ `cargo build --workspace`\n- Tests: ✓ `cargo test --workspace`\n- Clippy: ✓ `cargo clippy --all-targets --all-features -- -D warnings`\n\n## Pending\n- Smoke test manual verification\n- Push to origin",
+        "due_date": null,
+        "id": "b859d609-9b17-46fc-9ffd-6f7778c398d7",
+        "points": 4,
+        "position": 4,
+        "priority": "High",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "TUI-to-Domain Refactoring Migration",
+        "updated_at": "2026-01-29T13:25:18.480118Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 179,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T13:18:27.527506Z",
+        "description": "The status meta data field doesnt reflect which column the card is in.\n\nEither we drop this field or make it actually signify what column the card is in. What else would it be good for?\n",
+        "due_date": null,
+        "id": "cc4a82bf-5ede-4968-b7fa-798f5824cdf0",
+        "points": null,
+        "position": 52,
         "priority": "Medium",
         "sprint_id": null,
         "sprint_logs": [],
         "status": "Todo",
-        "title": "kanban cli",
-        "updated_at": "2025-12-17T01:00:19.535382Z"
+        "title": "Status metadata field doesnt reflect column",
+        "updated_at": "2026-01-29T13:19:19.560998Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 180,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T13:19:38.832299Z",
+        "description": "I think the time has come to do work for dates of cards and make due date set on cards significant \n\n",
+        "due_date": null,
+        "id": "daec9371-85e1-49a7-b46f-def5be365f17",
+        "points": 3,
+        "position": 53,
+        "priority": "High",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "due dates",
+        "updated_at": "2026-01-29T13:20:34.071548Z"
       }
     ],
     "columns": [
@@ -4489,6 +5541,33 @@
         "name": "Complete",
         "position": 2,
         "updated_at": "2025-10-30T18:52:12.692465Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "82e0d16a-5d79-42e5-aba1-886c63d8f323",
+        "created_at": "2025-12-20T02:29:13.681550Z",
+        "id": "edcb2af0-091f-424b-a699-d0c9da3bd189",
+        "name": "TODO",
+        "position": 0,
+        "updated_at": "2025-12-20T02:29:13.681550Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "82e0d16a-5d79-42e5-aba1-886c63d8f323",
+        "created_at": "2025-12-20T02:29:13.681555Z",
+        "id": "0d932fb7-0632-44bd-8903-1f5de355f644",
+        "name": "Doing",
+        "position": 1,
+        "updated_at": "2025-12-20T02:29:13.681555Z",
+        "wip_limit": null
+      },
+      {
+        "board_id": "82e0d16a-5d79-42e5-aba1-886c63d8f323",
+        "created_at": "2025-12-20T02:29:13.681558Z",
+        "id": "eb3d88cc-fb53-481d-a14c-8732b5b10c47",
+        "name": "Complete",
+        "position": 2,
+        "updated_at": "2025-12-20T02:29:13.681558Z",
         "wip_limit": null
       }
     ],
@@ -4562,14 +5641,27 @@
         "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
         "card_prefix": null,
         "created_at": "2025-12-15T20:35:08.638628Z",
-        "end_date": null,
+        "end_date": "2025-12-26T23:39:23.797322Z",
         "id": "63d7a91a-cd0f-42fa-8fac-73ae015431f8",
         "name_index": 5,
         "prefix": "KAN",
         "sprint_number": 10,
+        "start_date": "2025-12-19T23:39:23.797322Z",
+        "status": "Completed",
+        "updated_at": "2026-01-10T15:30:06.674Z"
+      },
+      {
+        "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
+        "card_prefix": null,
+        "created_at": "2025-12-23T00:28:48.615812Z",
+        "end_date": null,
+        "id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "name_index": 6,
+        "prefix": "KAN",
+        "sprint_number": 11,
         "start_date": null,
         "status": "Planning",
-        "updated_at": "2025-12-15T20:35:08.638628Z"
+        "updated_at": "2025-12-23T00:28:48.615812Z"
       }
     ]
   }

@@ -95,11 +95,18 @@ kanban myboard.json       # Load a board from file
 | `a` | Assign card to sprint |
 | `t` | Toggle sprint filter |
 
+### Undo / Redo
+
+| Key | Action |
+|-----|--------|
+| `u` | Undo last action |
+| `U` | Redo last undone action |
+
 ### Sorting
 
 | Key | Action |
 |-----|--------|
-| `o` | Sort by field (Points, Priority, Date, Status) |
+| `o` | Sort by field (Points, Priority, Date, Status, Position) |
 | `O` | Toggle sort order (Ascending/Descending) |
 
 ### Clipboard & Git Integration
@@ -121,6 +128,7 @@ kanban myboard.json       # Load a board from file
 
 | Key | Action |
 |-----|--------|
+| `j` / `k` | Navigate between sections (and within parent/child lists) |
 | `1` / `2` / `3` | Switch tabs (Title/Metadata/Description) |
 | `e` | Edit in external editor |
 | `Esc` | Return to previous view |

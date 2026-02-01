@@ -1,14 +1,15 @@
-use crate::state::commands::{
+use crate::state::StateManager;
+use kanban_core::KanbanResult;
+use kanban_domain::commands::{
     ActivateSprint, ArchiveCard, AssignCardToSprint, CancelSprint, Command, CompleteSprint,
     CreateBoard, CreateCard, CreateColumn, CreateSprint, DeleteBoard, DeleteCard, DeleteColumn,
     DeleteSprint, MoveCard, RestoreCard, UnassignCardFromSprint, UpdateBoard, UpdateCard,
     UpdateColumn, UpdateSprint,
 };
-use crate::state::{DataSnapshot, StateManager};
-use kanban_core::KanbanResult;
+use kanban_domain::Snapshot;
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardFilter, CardUpdate, Column, ColumnUpdate,
-    FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardUpdate, Column, ColumnUpdate,
+    DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -19,6 +20,7 @@ pub struct TuiContext {
     pub cards: Vec<Card>,
     pub archived_cards: Vec<ArchivedCard>,
     pub sprints: Vec<Sprint>,
+    pub graph: DependencyGraph,
     pub state_manager: StateManager,
 }
 
@@ -27,7 +29,7 @@ impl TuiContext {
         save_file: Option<String>,
     ) -> (
         Self,
-        Option<mpsc::Receiver<DataSnapshot>>,
+        Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
         let (state_manager, save_rx, completion_rx) = StateManager::new(save_file);
@@ -38,6 +40,7 @@ impl TuiContext {
             cards: Vec::new(),
             archived_cards: Vec::new(),
             sprints: Vec::new(),
+            graph: DependencyGraph::new(),
             state_manager,
         };
 
@@ -49,6 +52,17 @@ impl TuiContext {
     }
 
     pub fn execute_commands_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
+        // Capture snapshot BEFORE execution for undo history
+        let before_snapshot = Snapshot {
+            boards: self.boards.clone(),
+            columns: self.columns.clone(),
+            cards: self.cards.clone(),
+            archived_cards: self.archived_cards.clone(),
+            sprints: self.sprints.clone(),
+            graph: self.graph.clone(),
+        };
+        self.state_manager.capture_before_command(before_snapshot);
+
         for command in commands {
             self.state_manager.execute_with_context(
                 &mut self.boards,
@@ -56,16 +70,18 @@ impl TuiContext {
                 &mut self.cards,
                 &mut self.sprints,
                 &mut self.archived_cards,
+                &mut self.graph,
                 command,
             )?;
         }
 
-        let snapshot = DataSnapshot {
+        let snapshot = Snapshot {
             boards: self.boards.clone(),
             columns: self.columns.clone(),
             cards: self.cards.clone(),
             archived_cards: self.archived_cards.clone(),
             sprints: self.sprints.clone(),
+            graph: self.graph.clone(),
         };
         self.state_manager.queue_snapshot(snapshot);
 
@@ -167,11 +183,8 @@ impl KanbanOperations for TuiContext {
         column_id: Uuid,
         title: String,
     ) -> KanbanResult<Card> {
-        let position = self
-            .cards
-            .iter()
-            .filter(|c| c.column_id == column_id)
-            .count() as i32;
+        let position =
+            kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
         let cmd = Box::new(CreateCard {
             board_id,
             column_id,
@@ -182,7 +195,7 @@ impl KanbanOperations for TuiContext {
         Ok(self.cards.last().unwrap().clone())
     }
 
-    fn list_cards(&self, filter: CardFilter) -> KanbanResult<Vec<Card>> {
+    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {
         let mut cards: Vec<_> = self.cards.clone();
 
         if let Some(board_id) = filter.board_id {
@@ -231,10 +244,7 @@ impl KanbanOperations for TuiContext {
         position: Option<i32>,
     ) -> KanbanResult<Card> {
         let position = position.unwrap_or_else(|| {
-            self.cards
-                .iter()
-                .filter(|c| c.column_id == column_id)
-                .count() as i32
+            kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id)
         });
         let cmd = Box::new(MoveCard {
             card_id: id,
@@ -257,8 +267,35 @@ impl KanbanOperations for TuiContext {
             .iter()
             .find(|ac| ac.card.id == id)
             .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Archived card {}", id)))?;
-        let target_column = column_id.unwrap_or(archived.original_column_id);
+        let original_column_id = archived.original_column_id;
         let position = archived.original_position;
+
+        let target_column = if let Some(col_id) = column_id {
+            col_id
+        } else {
+            // Derive board_id from the original column
+            let board_id = self
+                .columns
+                .iter()
+                .find(|c| c.id == original_column_id)
+                .map(|c| c.board_id);
+
+            if let Some(bid) = board_id {
+                kanban_domain::card_lifecycle::resolve_restore_column(
+                    original_column_id,
+                    bid,
+                    &self.columns,
+                )
+                .unwrap_or(original_column_id)
+            } else {
+                // Column was deleted; try first board's first column as fallback
+                self.columns
+                    .first()
+                    .map(|c| c.id)
+                    .unwrap_or(original_column_id)
+            }
+        };
+
         let cmd = Box::new(RestoreCard {
             card_id: id,
             column_id: target_column,
@@ -490,20 +527,22 @@ impl KanbanOperations for TuiContext {
                 .filter(|s| s.board_id == id)
                 .cloned()
                 .collect();
-            DataSnapshot {
+            Snapshot {
                 boards,
                 columns,
                 cards,
                 archived_cards: vec![],
                 sprints,
+                graph: self.graph.clone(),
             }
         } else {
-            DataSnapshot {
+            Snapshot {
                 boards: self.boards.clone(),
                 columns: self.columns.clone(),
                 cards: self.cards.clone(),
                 archived_cards: self.archived_cards.clone(),
                 sprints: self.sprints.clone(),
+                graph: self.graph.clone(),
             }
         };
 
@@ -512,7 +551,7 @@ impl KanbanOperations for TuiContext {
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        let imported: DataSnapshot = serde_json::from_str(data)
+        let imported: Snapshot = serde_json::from_str(data)
             .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
 
         let board =

@@ -15,10 +15,10 @@ name = "kanban"
 path = "src/main.rs"
 
 [dependencies]
-kanban-core = { path = "../kanban-core", version = "^0.1" }
-kanban-domain = { path = "../kanban-domain", version = "^0.1" }
-kanban-persistence = { path = "../kanban-persistence", version = "^0.1" }
-kanban-tui = { path = "../kanban-tui", version = "^0.1" }
+kanban-core = { path = "../kanban-core", version = "^0.2" }
+kanban-domain = { path = "../kanban-domain", version = "^0.2" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.2" }
+kanban-tui = { path = "../kanban-tui", version = "^0.2" }
 clap.workspace = true
 clap_complete.workspace = true
 tokio.workspace = true

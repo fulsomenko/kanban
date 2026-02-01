@@ -2,10 +2,14 @@ use crate::app::{
     App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
 };
 use crate::events::EventHandler;
+use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
-use kanban_domain::{BoardSettingsDto, CardMetadataDto};
+use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto, Snapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
+
+// Viewport constants (must match ui.rs values)
+const RELATIONSHIP_VIEWPORT_RAW: usize = 5;
 
 impl App {
     pub fn handle_card_detail_key(
@@ -20,6 +24,9 @@ impl App {
                 self.pop_mode();
                 self.active_card_index = None;
                 self.card_focus = CardFocus::Title;
+                self.parents_list.selection.clear();
+                self.children_list.selection.clear();
+                self.card_navigation_history.clear();
             }
             KeyCode::Char('1') => {
                 self.card_focus = CardFocus::Title;
@@ -30,19 +37,142 @@ impl App {
             KeyCode::Char('3') => {
                 self.card_focus = CardFocus::Description;
             }
+            KeyCode::Char('4') => {
+                self.card_focus = CardFocus::Parents;
+            }
+            KeyCode::Char('5') => {
+                self.card_focus = CardFocus::Children;
+            }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.card_focus = match self.card_focus {
-                    CardFocus::Title => CardFocus::Metadata,
-                    CardFocus::Metadata => CardFocus::Description,
-                    CardFocus::Description => CardFocus::Title,
-                };
+                match self.card_focus {
+                    CardFocus::Parents => {
+                        // Navigate within parents list or wrap to next section
+                        let parents = self.get_current_card_parents();
+                        if !parents.is_empty() {
+                            let was_at_boundary = self.parents_list.navigate_down();
+                            let viewport = self
+                                .parents_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.parents_list.ensure_selected_visible(viewport);
+
+                            if was_at_boundary {
+                                // At last parent, wrap to Children section
+                                self.card_focus = CardFocus::Children;
+                                self.parents_list.selection.clear();
+
+                                let children = self.get_current_card_children();
+                                self.children_list.update_item_count(children.len());
+                                if !children.is_empty() {
+                                    self.children_list.selection.jump_to_first();
+                                }
+                            }
+                        } else {
+                            // No parents, move to Children section
+                            self.card_focus = CardFocus::Children;
+                        }
+                    }
+                    CardFocus::Children => {
+                        // Navigate within children list or wrap to next section
+                        let children = self.get_current_card_children();
+                        if !children.is_empty() {
+                            let was_at_boundary = self.children_list.navigate_down();
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.children_list.ensure_selected_visible(viewport);
+
+                            if was_at_boundary {
+                                // At last child, wrap to Title section
+                                self.card_focus = CardFocus::Title;
+                                self.children_list.selection.clear();
+                            }
+                        } else {
+                            // No children, move to Title section
+                            self.card_focus = CardFocus::Title;
+                        }
+                    }
+                    _ => {
+                        // Navigate between sections
+                        self.card_focus = match self.card_focus {
+                            CardFocus::Title => CardFocus::Metadata,
+                            CardFocus::Metadata => CardFocus::Description,
+                            CardFocus::Description => CardFocus::Parents,
+                            CardFocus::Parents => CardFocus::Children,
+                            CardFocus::Children => CardFocus::Title,
+                        };
+                    }
+                }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.card_focus = match self.card_focus {
-                    CardFocus::Title => CardFocus::Description,
-                    CardFocus::Description => CardFocus::Metadata,
-                    CardFocus::Metadata => CardFocus::Title,
-                };
+                match self.card_focus {
+                    CardFocus::Parents => {
+                        // Navigate within parents list or wrap to previous section
+                        let parents = self.get_current_card_parents();
+                        if !parents.is_empty() {
+                            let was_at_boundary = self.parents_list.navigate_up();
+                            let viewport = self
+                                .parents_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.parents_list.ensure_selected_visible(viewport);
+
+                            if was_at_boundary {
+                                // At first parent or no selection, wrap to Description section
+                                self.card_focus = CardFocus::Description;
+                                self.parents_list.selection.clear();
+                            }
+                        } else {
+                            // No parents, move to Description section
+                            self.card_focus = CardFocus::Description;
+                        }
+                    }
+                    CardFocus::Children => {
+                        // Navigate within children list or wrap to previous section
+                        let children = self.get_current_card_children();
+                        if !children.is_empty() {
+                            let was_at_boundary = self.children_list.navigate_up();
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.children_list.ensure_selected_visible(viewport);
+
+                            if was_at_boundary {
+                                // At first child or no selection, wrap to Parents section
+                                let parents = self.get_current_card_parents();
+                                self.card_focus = CardFocus::Parents;
+                                self.children_list.selection.clear();
+                                self.parents_list.update_item_count(parents.len());
+                                if !parents.is_empty() {
+                                    self.parents_list.selection.jump_to_last(parents.len());
+                                }
+                            }
+                        } else {
+                            // No children, move to Parents section
+                            self.card_focus = CardFocus::Parents;
+                        }
+                    }
+                    CardFocus::Title => {
+                        // When at Title, wrap backward to Children and select last child
+                        let children = self.get_current_card_children();
+                        self.card_focus = CardFocus::Children;
+                        self.children_list.update_item_count(children.len());
+                        if !children.is_empty() {
+                            self.children_list.selection.jump_to_last(children.len());
+                            let viewport = self
+                                .children_list
+                                .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
+                            self.children_list.ensure_selected_visible(viewport);
+                        }
+                    }
+                    _ => {
+                        // Navigate between remaining sections (Metadata, Description)
+                        self.card_focus = match self.card_focus {
+                            CardFocus::Description => CardFocus::Metadata,
+                            CardFocus::Metadata => CardFocus::Title,
+                            // Other cases won't reach here due to explicit handling above
+                            _ => CardFocus::Title,
+                        };
+                    }
+                }
             }
             KeyCode::Char('y') => {
                 self.copy_branch_name();
@@ -81,12 +211,18 @@ impl App {
                                 tracing::error!("Failed to edit metadata: {}", e);
                             } else {
                                 self.ctx.state_manager.mark_dirty();
-                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                let snapshot = Snapshot::from_app(self);
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
                         }
                     }
+                }
+                CardFocus::Parents => {
+                    // Parents section - use 'r' to manage parents
+                }
+                CardFocus::Children => {
+                    // Children section - use 'R' to manage children
                 }
             },
             KeyCode::Char('d') => {
@@ -120,6 +256,41 @@ impl App {
                 let priority_idx = self.get_current_priority_selection_index();
                 self.priority_selection.set(Some(priority_idx));
                 self.open_dialog(DialogMode::SetCardPriority);
+            }
+            KeyCode::Char('r') => {
+                self.handle_manage_parents();
+            }
+            KeyCode::Char('R') => {
+                self.handle_manage_children();
+            }
+            KeyCode::Enter => match self.card_focus {
+                CardFocus::Parents => {
+                    if let Some(current_idx) = self.active_card_index {
+                        self.navigate_to_selected_parent(current_idx);
+                    }
+                }
+                CardFocus::Children => {
+                    if let Some(current_idx) = self.active_card_index {
+                        self.navigate_to_selected_child(current_idx);
+                    }
+                }
+                _ => {}
+            },
+            KeyCode::Backspace | KeyCode::Char('h')
+                if self.card_focus != CardFocus::Title
+                    && self.card_focus != CardFocus::Metadata
+                    && self.card_focus != CardFocus::Description =>
+            {
+                // Allow backspace for back navigation in parents/children, but not in text editing sections
+                if let Some(previous_idx) = self.card_navigation_history.pop() {
+                    self.active_card_index = Some(previous_idx);
+                    self.card_focus = CardFocus::Title;
+                    // Update item counts for the card we're returning to
+                    let parents = self.get_current_card_parents();
+                    let children = self.get_current_card_children();
+                    self.parents_list.update_item_count(parents.len());
+                    self.children_list.update_item_count(children.len());
+                }
             }
             _ => {}
         }
@@ -184,7 +355,7 @@ impl App {
                                 tracing::error!("Failed to edit board settings: {}", e);
                             } else {
                                 self.ctx.state_manager.mark_dirty();
-                                let snapshot = crate::state::DataSnapshot::from_app(self);
+                                let snapshot = Snapshot::from_app(self);
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
@@ -450,6 +621,11 @@ impl App {
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
+                                // Initialize list components with item counts
+                                let parents = self.get_current_card_parents();
+                                let children = self.get_current_card_children();
+                                self.parents_list.update_item_count(parents.len());
+                                self.children_list.update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
@@ -459,6 +635,11 @@ impl App {
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
                                 self.active_card_index = Some(card_idx);
+                                // Initialize list components with item counts
+                                let parents = self.get_current_card_parents();
+                                let children = self.get_current_card_children();
+                                self.parents_list.update_item_count(parents.len());
+                                self.children_list.update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
                                 self.card_focus = CardFocus::Title;
                             }
@@ -471,17 +652,35 @@ impl App {
                                 } else {
                                     CardStatus::Done
                                 };
-                                let cmd = Box::new(crate::state::commands::UpdateCard {
+
+                                let toggle_result = self.active_board_index.and_then(|idx| {
+                                    self.ctx.boards.get(idx).and_then(|board| {
+                                        kanban_domain::card_lifecycle::compute_completion_toggle(
+                                            card,
+                                            board,
+                                            &self.ctx.columns,
+                                            &self.ctx.cards,
+                                        )
+                                    })
+                                });
+
+                                let mut updates = CardUpdate {
+                                    status: Some(new_status),
+                                    ..Default::default()
+                                };
+
+                                if let Some(ref result) = toggle_result {
+                                    updates.column_id = Some(result.target_column_id);
+                                    updates.position = Some(result.new_position);
+                                    updates.status = Some(result.new_status);
+                                }
+
+                                let cmd = Box::new(kanban_domain::commands::UpdateCard {
                                     card_id,
-                                    updates: CardUpdate {
-                                        status: Some(new_status),
-                                        ..Default::default()
-                                    },
+                                    updates,
                                 });
                                 if let Err(e) = self.execute_command(cmd) {
-                                    tracing::error!("Failed to update card status: {}", e);
-                                } else {
-                                    tracing::info!("Card status updated to: {:?}", new_status);
+                                    tracing::error!("Failed to toggle card completion: {}", e);
                                 }
                             }
                         }
@@ -565,142 +764,50 @@ impl App {
                             }
                         }
                         CardListAction::MoveColumn(card_id, is_right) => {
-                            if let Some(card_idx) =
-                                self.ctx.cards.iter().position(|c| c.id == card_id)
+                            if let Some(card) =
+                                self.ctx.cards.iter().find(|c| c.id == card_id).cloned()
                             {
-                                // Extract all necessary data before any command execution
-                                let move_info = {
-                                    if let Some(card) = self.ctx.cards.get(card_idx) {
-                                        let current_col = card.column_id;
-                                        let current_status = card.status;
-                                        let card_title = card.title.clone();
-
-                                        if let Some(board_idx) = self.active_board_index {
-                                            if let Some(board) = self.ctx.boards.get(board_idx) {
-                                                let board_id = board.id;
-                                                let mut columns: Vec<_> = self
-                                                    .ctx
-                                                    .columns
-                                                    .iter()
-                                                    .filter(|c| c.board_id == board_id)
-                                                    .map(|c| (c.id, c.position))
-                                                    .collect();
-                                                columns.sort_by_key(|(_, pos)| *pos);
-
-                                                if let Some(current_idx) = columns
-                                                    .iter()
-                                                    .position(|(id, _)| *id == current_col)
-                                                {
-                                                    let new_idx = if is_right {
-                                                        (current_idx + 1).min(columns.len() - 1)
-                                                    } else {
-                                                        current_idx.saturating_sub(1)
-                                                    };
-
-                                                    if let Some((new_col_id, _)) =
-                                                        columns.get(new_idx)
-                                                    {
-                                                        let was_in_last =
-                                                            current_idx == columns.len() - 1;
-                                                        let moving_to_last =
-                                                            new_idx == columns.len() - 1;
-                                                        Some((
-                                                            *new_col_id,
-                                                            was_in_last,
-                                                            moving_to_last,
-                                                            columns.len(),
-                                                            card_title,
-                                                            current_status,
-                                                        ))
-                                                    } else {
-                                                        None
-                                                    }
-                                                } else {
-                                                    None
-                                                }
-                                            } else {
-                                                None
-                                            }
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
+                                let direction = if is_right {
+                                    kanban_domain::card_lifecycle::MoveDirection::Right
+                                } else {
+                                    kanban_domain::card_lifecycle::MoveDirection::Left
                                 };
 
-                                if let Some((
-                                    new_col_id,
-                                    was_in_last,
-                                    moving_to_last,
-                                    col_count,
-                                    card_title,
-                                    current_status,
-                                )) = move_info
-                                {
-                                    // Move card using command
-                                    let move_cmd = Box::new(crate::state::commands::MoveCard {
+                                let move_result = self.active_board_index.and_then(|idx| {
+                                    self.ctx.boards.get(idx).and_then(|board| {
+                                        kanban_domain::card_lifecycle::compute_card_column_move(
+                                            &card,
+                                            board,
+                                            &self.ctx.columns,
+                                            &self.ctx.cards,
+                                            direction,
+                                        )
+                                    })
+                                });
+
+                                if let Some(result) = move_result {
+                                    let move_cmd = Box::new(kanban_domain::commands::MoveCard {
                                         card_id,
-                                        new_column_id: new_col_id,
-                                        new_position: 0,
+                                        new_column_id: result.target_column_id,
+                                        new_position: result.new_position,
                                     });
                                     if let Err(e) = self.execute_command(move_cmd) {
                                         tracing::error!("Failed to move card: {}", e);
                                         return;
                                     }
 
-                                    // Update status based on movement
-                                    if !is_right
-                                        && was_in_last
-                                        && col_count > 1
-                                        && current_status == kanban_domain::CardStatus::Done
-                                    {
-                                        // Moving left from last column: uncomplete
+                                    if let Some(new_status) = result.new_status {
                                         let status_cmd =
-                                            Box::new(crate::state::commands::UpdateCard {
+                                            Box::new(kanban_domain::commands::UpdateCard {
                                                 card_id,
                                                 updates: kanban_domain::CardUpdate {
-                                                    status: Some(kanban_domain::CardStatus::Todo),
+                                                    status: Some(new_status),
                                                     ..Default::default()
                                                 },
                                             });
                                         if let Err(e) = self.execute_command(status_cmd) {
                                             tracing::error!("Failed to update card status: {}", e);
-                                        } else {
-                                            tracing::info!(
-                                                "Moved card {} left from last column (marked as incomplete)",
-                                                card_title
-                                            );
                                         }
-                                    } else if is_right
-                                        && moving_to_last
-                                        && col_count > 1
-                                        && current_status != kanban_domain::CardStatus::Done
-                                    {
-                                        // Moving right to last column: complete
-                                        let status_cmd =
-                                            Box::new(crate::state::commands::UpdateCard {
-                                                card_id,
-                                                updates: kanban_domain::CardUpdate {
-                                                    status: Some(kanban_domain::CardStatus::Done),
-                                                    ..Default::default()
-                                                },
-                                            });
-                                        if let Err(e) = self.execute_command(status_cmd) {
-                                            tracing::error!("Failed to update card status: {}", e);
-                                        } else {
-                                            tracing::info!(
-                                                "Moved card {} to last column (marked as complete)",
-                                                card_title
-                                            );
-                                        }
-                                    } else {
-                                        let direction = if is_right { "right" } else { "left" };
-                                        tracing::info!(
-                                            "Moved card {} to {}",
-                                            card_title,
-                                            direction
-                                        );
                                     }
                                 }
                             }
@@ -751,6 +858,198 @@ impl App {
                     ),
                 };
                 active_card_list.set_selected_index(active_component.get_selected_index());
+            }
+        }
+    }
+
+    pub(crate) fn handle_manage_parents(&mut self) {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
+                let card_id = card.id;
+                let card_column_id = card.column_id;
+
+                // Get the board for this card's column
+                let board_id = self
+                    .ctx
+                    .columns
+                    .iter()
+                    .find(|c| c.id == card_column_id)
+                    .map(|c| c.board_id);
+
+                if let Some(board_id) = board_id {
+                    // Get all descendants to exclude (to prevent cycles)
+                    let descendants = self.ctx.graph.cards.descendants(card_id);
+
+                    // Get cards from current board, excluding self and descendants
+                    let column_ids: std::collections::HashSet<_> = self
+                        .ctx
+                        .columns
+                        .iter()
+                        .filter(|c| c.board_id == board_id)
+                        .map(|c| c.id)
+                        .collect();
+
+                    let eligible_cards: Vec<_> = self
+                        .ctx
+                        .cards
+                        .iter()
+                        .filter(|c| column_ids.contains(&c.column_id))
+                        .filter(|c| c.id != card_id)
+                        .filter(|c| !descendants.contains(&c.id))
+                        .map(|c| c.id)
+                        .collect();
+
+                    // Get current parents (for checkbox display)
+                    let current_parents: std::collections::HashSet<_> =
+                        self.ctx.graph.cards.parents(card_id).into_iter().collect();
+
+                    // Set up dialog state
+                    self.relationship_card_ids = eligible_cards;
+                    self.relationship_selected = current_parents;
+                    self.relationship_selection.set(Some(0));
+                    self.relationship_search.clear();
+
+                    self.open_dialog(DialogMode::ManageParents);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn handle_manage_children(&mut self) {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
+                let card_id = card.id;
+                let card_column_id = card.column_id;
+
+                // Get the board for this card's column
+                let board_id = self
+                    .ctx
+                    .columns
+                    .iter()
+                    .find(|c| c.id == card_column_id)
+                    .map(|c| c.board_id);
+
+                if let Some(board_id) = board_id {
+                    // Get all ancestors to exclude (to prevent cycles)
+                    let ancestors = self.ctx.graph.cards.ancestors(card_id);
+
+                    // Get cards from current board, excluding self and ancestors
+                    let column_ids: std::collections::HashSet<_> = self
+                        .ctx
+                        .columns
+                        .iter()
+                        .filter(|c| c.board_id == board_id)
+                        .map(|c| c.id)
+                        .collect();
+
+                    let eligible_cards: Vec<_> = self
+                        .ctx
+                        .cards
+                        .iter()
+                        .filter(|c| column_ids.contains(&c.column_id))
+                        .filter(|c| c.id != card_id)
+                        .filter(|c| !ancestors.contains(&c.id))
+                        .map(|c| c.id)
+                        .collect();
+
+                    // Get current children (for checkbox display)
+                    let current_children: std::collections::HashSet<_> =
+                        self.ctx.graph.cards.children(card_id).into_iter().collect();
+
+                    // Set up dialog state
+                    self.relationship_card_ids = eligible_cards;
+                    self.relationship_selected = current_children;
+                    self.relationship_selection.set(Some(0));
+                    self.relationship_search.clear();
+
+                    self.open_dialog(DialogMode::ManageChildren);
+                }
+            }
+        }
+    }
+
+    pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
+                return self.ctx.graph.cards.parents(card.id);
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
+        if let Some(card_idx) = self.active_card_index {
+            if let Some(card) = self.ctx.cards.get(card_idx) {
+                return self.ctx.graph.cards.children(card.id);
+            }
+        }
+        Vec::new()
+    }
+
+    fn navigate_to_selected_parent(&mut self, current_card_idx: usize) {
+        let parents = self.get_current_card_parents();
+        if let Some(selected_idx) = self.parents_list.selection.get() {
+            if let Some(&parent_id) = parents.get(selected_idx) {
+                if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parent_id) {
+                    // Push current card to history
+                    self.card_navigation_history.push(current_card_idx);
+                    // Navigate to parent
+                    self.active_card_index = Some(parent_idx);
+                    self.card_focus = CardFocus::Title;
+                    // Update item counts for new card
+                    let new_parents = self.get_current_card_parents();
+                    let new_children = self.get_current_card_children();
+                    self.parents_list.update_item_count(new_parents.len());
+                    self.children_list.update_item_count(new_children.len());
+                    return;
+                }
+            }
+        }
+        // If no valid selection, navigate to first parent if available
+        if !parents.is_empty() {
+            if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parents[0]) {
+                self.card_navigation_history.push(current_card_idx);
+                self.active_card_index = Some(parent_idx);
+                self.card_focus = CardFocus::Title;
+                // Update item counts for new card
+                let new_parents = self.get_current_card_parents();
+                let new_children = self.get_current_card_children();
+                self.parents_list.update_item_count(new_parents.len());
+                self.children_list.update_item_count(new_children.len());
+            }
+        }
+    }
+
+    fn navigate_to_selected_child(&mut self, current_card_idx: usize) {
+        let children = self.get_current_card_children();
+        if let Some(selected_idx) = self.children_list.selection.get() {
+            if let Some(&child_id) = children.get(selected_idx) {
+                if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == child_id) {
+                    // Push current card to history
+                    self.card_navigation_history.push(current_card_idx);
+                    // Navigate to child
+                    self.active_card_index = Some(child_idx);
+                    self.card_focus = CardFocus::Title;
+                    // Update item counts for new card
+                    let new_parents = self.get_current_card_parents();
+                    let new_children = self.get_current_card_children();
+                    self.parents_list.update_item_count(new_parents.len());
+                    self.children_list.update_item_count(new_children.len());
+                    return;
+                }
+            }
+        }
+        // If no valid selection, navigate to first child if available
+        if !children.is_empty() {
+            if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == children[0]) {
+                self.card_navigation_history.push(current_card_idx);
+                self.active_card_index = Some(child_idx);
+                self.card_focus = CardFocus::Title;
+                // Update item counts for new card
+                let new_parents = self.get_current_card_parents();
+                let new_children = self.get_current_card_children();
+                self.parents_list.update_item_count(new_parents.len());
+                self.children_list.update_item_count(new_children.len());
             }
         }
     }

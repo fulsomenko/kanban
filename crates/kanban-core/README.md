@@ -31,6 +31,10 @@ Standard result type used throughout the workspace for consistent error handling
 - `Io(std::io::Error)` - File system and I/O errors
 - `Serialization(String)` - JSON/serde errors
 - `Internal(String)` - Unexpected internal errors
+- `ConflictDetected { path, source }` - File modified by another instance
+- `CycleDetected` - Adding an edge would create a circular dependency
+- `SelfReference` - Self-referencing edge not allowed
+- `EdgeNotFound` - Graph edge not found
 
 ### Configuration
 
@@ -103,6 +107,18 @@ pub trait Service<T, Id>: Send + Sync {
     async fn delete(&mut self, id: Id) -> KanbanResult<()>;
 }
 ```
+
+### Graph
+
+Generic directed graph (`Graph<E>`) for modeling relationships between entities. Used by `kanban-domain` for card dependencies. Edge types implement the `Edge` trait, which declares whether cycles are allowed — the graph enforces DAG constraints automatically for acyclic edge types.
+
+### State Primitives
+
+UI-agnostic building blocks used by the TUI and available to any consumer:
+
+- **`InputState`** — Text input buffer with cursor tracking and multi-byte UTF-8 support
+- **`SelectionState`** — Single-item selection for navigable lists (next/prev, jump to first/last, clamp to bounds)
+- **`Page` / `PageInfo`** — Viewport pagination that calculates visible items, scroll offset, and above/below counts
 
 ## Architecture
 
