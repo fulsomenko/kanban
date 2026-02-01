@@ -161,11 +161,13 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
+                        use kanban_domain::SprintStatus;
                         let sprint_count = self
                             .ctx
                             .sprints
                             .iter()
                             .filter(|s| s.board_id == board.id)
+                            .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
                             .count();
                         self.sprint_assign_selection.next(sprint_count + 1);
                     }
@@ -206,11 +208,13 @@ impl App {
                             }
                         } else if let Some(board_idx) = self.active_board_index {
                             if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
+                                use kanban_domain::SprintStatus;
                                 let board_sprints: Vec<_> = self
                                     .ctx
                                     .sprints
                                     .iter()
                                     .filter(|s| s.board_id == board_id)
+                                    .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
                                     .collect();
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                     let sprint_id = sprint.id;
@@ -295,11 +299,13 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
+                        use kanban_domain::SprintStatus;
                         let sprint_count = self
                             .ctx
                             .sprints
                             .iter()
                             .filter(|s| s.board_id == board.id)
+                            .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
                             .count();
                         self.sprint_assign_selection.next(sprint_count + 1);
                     }
@@ -334,11 +340,13 @@ impl App {
                         }
                     } else if let Some(board_idx) = self.active_board_index {
                         if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
+                            use kanban_domain::SprintStatus;
                             let board_sprints: Vec<_> = self
                                 .ctx
                                 .sprints
                                 .iter()
                                 .filter(|s| s.board_id == board_id)
+                                .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
                                 .collect();
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;

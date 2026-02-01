@@ -1922,11 +1922,13 @@ impl App {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.active_board_index {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
+                            use kanban_domain::SprintStatus;
                             let board_sprints: Vec<_> = self
                                 .ctx
                                 .sprints
                                 .iter()
                                 .filter(|s| s.board_id == board.id)
+                                .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
                                 .collect();
                             for (idx, sprint) in board_sprints.iter().enumerate() {
                                 if sprint.id == card_sprint_id {

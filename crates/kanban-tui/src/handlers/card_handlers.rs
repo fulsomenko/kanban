@@ -61,11 +61,13 @@ impl App {
         } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
+                    use kanban_domain::SprintStatus;
                     let sprint_count = self
                         .ctx
                         .sprints
                         .iter()
                         .filter(|s| s.board_id == board.id)
+                        .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
                         .count();
                     if sprint_count > 0 {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
