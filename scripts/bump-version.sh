@@ -88,7 +88,9 @@ fi
 
 cargo update --workspace
 
-find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -delete
+if [ -d ".changeset" ]; then
+  find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -delete
+fi
 
 echo "Version bumped to $NEW_VERSION"
 echo "CHANGELOG.md updated"
