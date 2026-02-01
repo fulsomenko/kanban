@@ -313,7 +313,13 @@ mod tests {
         let mut board = Board::new("Test".to_string(), None);
         board.card_prefix = Some("KAN".to_string());
         let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Unrelated title".to_string(), 0, "KAN");
+        let card = Card::new(
+            &mut board,
+            column.id,
+            "Unrelated title".to_string(),
+            0,
+            "KAN",
+        );
 
         // Title doesn't contain "KAN-1", but identifier does
         let searcher = CompositeSearcher::all("KAN-1");
