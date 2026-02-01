@@ -68,12 +68,12 @@ jobs:
       - name: Bump version from changesets
         if: steps.check.outputs.has_changesets == 'true'
         run: |
-          nix develop --command bash scripts/bump-version.sh
+          nix develop --command bump-version
 
       - name: Aggregate changelog
         if: steps.check.outputs.has_changesets == 'true'
         run: |
-          bash scripts/aggregate-changelog.sh "${{ github.event.pull_request.number }}"
+          nix develop --command aggregate-changelog "${{ github.event.pull_request.number }}"
 
       - name: Commit release changes
         if: steps.check.outputs.has_changesets == 'true'
@@ -93,7 +93,7 @@ jobs:
       - name: Validate release build
         if: steps.check.outputs.has_changesets == 'true'
         run: |
-          nix develop --command bash scripts/validate-release.sh
+          nix develop --command validate-release
 
       - name: Push release commit
         if: steps.check.outputs.has_changesets == 'true'

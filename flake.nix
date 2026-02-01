@@ -43,6 +43,12 @@
           text = builtins.readFile ./scripts/publish-crates.sh;
         };
 
+        aggregateChangelog = pkgs.writeShellApplication {
+          name = "aggregate-changelog";
+          runtimeInputs = with pkgs; [coreutils gnugrep gnused git findutils];
+          text = builtins.readFile ./scripts/aggregate-changelog.sh;
+        };
+
         validateRelease = pkgs.writeShellApplication {
           name = "validate-release";
           runtimeInputs = with pkgs; [rustToolchain cargo coreutils gnugrep gnused];
@@ -51,6 +57,7 @@
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
+          inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease;
         };
 
         packages = let
@@ -61,6 +68,7 @@
             inherit kanban;
           };
           mcp-server-git = servers.packages.${system}.mcp-server-git;
+          aggregate-changelog = aggregateChangelog;
           bump-version = bumpVersion;
           publish-crates = publishCrates;
           validate-release = validateRelease;

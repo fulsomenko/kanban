@@ -167,4 +167,4 @@ jobs:
 
       - name: Validate release build
         run: |
-          nix develop --command bash scripts/validate-release.sh
+          nix develop --command validate-release
