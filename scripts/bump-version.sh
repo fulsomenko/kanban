@@ -5,7 +5,7 @@ PR_NUMBER="${1:-}"
 
 CURRENT_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
 
-if [ -z "$(ls -A .changeset/*.md 2>/dev/null)" ]; then
+if [ -z "$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' 2>/dev/null)" ]; then
   echo "Error: No changesets found in .changeset/"
   exit 1
 fi
@@ -15,6 +15,7 @@ CHANGELOG_ENTRIES=""
 
 for changeset in .changeset/*.md; do
   [ -e "$changeset" ] || continue
+  [ "$(basename "$changeset")" = "README.md" ] && continue
 
   bump=$(grep -A1 "^---$" "$changeset" | grep "^bump:" | cut -d' ' -f2 | tr -d '\r\n')
   description=$(sed -n '/^---$/,/^---$/!p' "$changeset" | sed '/^---$/d' | sed '/^$/d')
