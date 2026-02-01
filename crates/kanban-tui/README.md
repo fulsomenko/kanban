@@ -191,14 +191,6 @@ Snapshot-based undo and redo:
 - State captured automatically before every command
 - Bounded history (100 entries) to prevent unbounded memory growth
 
-### Cascade Cleanup
-
-Safe deletion that maintains data integrity:
-- Deleting a card removes all its dependency edges
-- Archiving preserves edges; restoring unarchives them
-- Column deletion blocked if active or archived cards remain
-- Sprint deletion unassigns all cards first
-
 ## License
 
 Apache 2.0 - See [LICENSE.md](../../LICENSE.md) for details
