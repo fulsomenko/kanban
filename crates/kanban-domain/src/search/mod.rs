@@ -105,10 +105,46 @@ impl CardSearcher for BranchNameSearcher {
     }
 }
 
+/// Search cards by card identifier (e.g. "KAN-164", "164").
+pub struct CardIdentifierSearcher {
+    query: String,
+}
+
+impl CardIdentifierSearcher {
+    pub fn new(query: impl Into<String>) -> Self {
+        Self {
+            query: query.into().to_lowercase(),
+        }
+    }
+
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
+    fn get_identifier(&self, card: &Card, board: &Board) -> String {
+        let prefix = card
+            .assigned_prefix
+            .as_deref()
+            .or(board.card_prefix.as_deref())
+            .unwrap_or("task");
+        format!("{}-{}", prefix, card.card_number).to_lowercase()
+    }
+}
+
+impl CardSearcher for CardIdentifierSearcher {
+    fn matches(&self, card: &Card, board: &Board, _sprints: &[Sprint]) -> bool {
+        if self.query.is_empty() {
+            return true;
+        }
+        self.get_identifier(card, board).contains(&self.query)
+    }
+}
+
 /// Enum dispatch for searching cards by a specific field.
 pub enum SearchBy {
     Title(TitleSearcher),
     BranchName(BranchNameSearcher),
+    CardIdentifier(CardIdentifierSearcher),
 }
 
 impl SearchBy {
@@ -116,6 +152,7 @@ impl SearchBy {
         match self {
             Self::Title(s) => s.matches(card, board, sprints),
             Self::BranchName(s) => s.matches(card, board, sprints),
+            Self::CardIdentifier(s) => s.matches(card, board, sprints),
         }
     }
 }
@@ -136,14 +173,13 @@ impl CompositeSearcher {
     }
 
     /// Create a composite searcher with all built-in searchers.
-    ///
-    /// Includes both `TitleSearcher` and `BranchNameSearcher`.
     pub fn all(query: impl Into<String>) -> Self {
         let query = query.into();
         Self {
             searchers: vec![
                 SearchBy::Title(TitleSearcher::new(query.clone())),
-                SearchBy::BranchName(BranchNameSearcher::new(query)),
+                SearchBy::BranchName(BranchNameSearcher::new(query.clone())),
+                SearchBy::CardIdentifier(CardIdentifierSearcher::new(query)),
             ],
         }
     }
@@ -234,6 +270,59 @@ mod tests {
         let card = create_test_card(&mut board, "Any card");
 
         let searcher = CompositeSearcher::new();
+        assert!(searcher.matches(&card, &board, &[]));
+    }
+
+    #[test]
+    fn test_card_identifier_searcher_with_prefix() {
+        let mut board = Board::new("Test".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0, "KAN");
+
+        let searcher = CardIdentifierSearcher::new("KAN-1");
+        assert!(searcher.matches(&card, &board, &[]));
+
+        let searcher = CardIdentifierSearcher::new("kan-1");
+        assert!(searcher.matches(&card, &board, &[]));
+
+        let searcher = CardIdentifierSearcher::new("1");
+        assert!(searcher.matches(&card, &board, &[]));
+
+        let searcher = CardIdentifierSearcher::new("MVP-1");
+        assert!(!searcher.matches(&card, &board, &[]));
+    }
+
+    #[test]
+    fn test_card_identifier_searcher_number_only() {
+        let mut board = Board::new("Test".to_string(), None);
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let _card1 = Card::new(&mut board, column.id, "First".to_string(), 0, "task");
+        let card2 = Card::new(&mut board, column.id, "Second".to_string(), 1, "task");
+
+        // card2 has card_number=2
+        let searcher = CardIdentifierSearcher::new("2");
+        assert!(searcher.matches(&card2, &board, &[]));
+
+        let searcher = CardIdentifierSearcher::new("task-2");
+        assert!(searcher.matches(&card2, &board, &[]));
+    }
+
+    #[test]
+    fn test_composite_searcher_matches_by_identifier() {
+        let mut board = Board::new("Test".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(
+            &mut board,
+            column.id,
+            "Unrelated title".to_string(),
+            0,
+            "KAN",
+        );
+
+        // Title doesn't contain "KAN-1", but identifier does
+        let searcher = CompositeSearcher::all("KAN-1");
         assert!(searcher.matches(&card, &board, &[]));
     }
 }
