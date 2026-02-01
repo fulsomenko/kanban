@@ -156,29 +156,13 @@ pub trait DependencyGraph {
 - Edges referencing a deleted or archived card are automatically cleaned up
 - Integrated into board persistence (import/export)
 
-### Card Lifecycle
-
-Pure domain functions for card state transitions:
-
-```rust
-pub fn compute_completion_toggle(card: &Card, board: &Board) -> ToggleResult;
-pub fn compute_move_to_column(card: &Card, target_column_id: ColumnId, board: &Board) -> MoveResult;
-pub fn compute_auto_completion_on_create(column_id: ColumnId, board: &Board) -> CardStatus;
-pub fn compact_positions(cards: &mut [Card]);
-pub fn next_position_in_column(cards: &[Card], column_id: ColumnId) -> u32;
-```
-
 ### Sorting & Filtering
 
-**SortBy** — Enum dispatch for card sorting (no dyn dispatch):
+**SortBy** — Enum dispatch for card sorting:
 
 ```rust
 pub enum SortBy {
     Points, Priority, CreatedAt, UpdatedAt, Status, Position, CardNumber
-}
-
-impl SortBy {
-    pub fn sort_by(&self, cards: &mut [Card]);
 }
 ```
 
@@ -208,40 +192,20 @@ let cards = CardQueryBuilder::new(&all_cards)
 ### History & Snapshots
 
 ```rust
-pub struct HistoryManager { /* bounded undo/redo stacks, max 100 entries */ }
+pub struct HistoryManager { /* undo/redo stacks */ }
 pub struct Snapshot { /* point-in-time state of all kanban data */ }
-
-impl HistoryManager {
-    pub fn push_undo(&mut self, snapshot: Snapshot);
-    pub fn undo(&mut self) -> Option<Snapshot>;
-    pub fn redo(&mut self) -> Option<Snapshot>;
-    pub fn can_undo(&self) -> bool;
-    pub fn can_redo(&self) -> bool;
-}
-
-impl Snapshot {
-    pub fn to_json_bytes(&self) -> KanbanResult<Vec<u8>>;
-    pub fn from_json_bytes(bytes: &[u8]) -> KanbanResult<Self>;
-}
 ```
+
+`HistoryManager` maintains undo and redo stacks of `Snapshot` values. Each snapshot captures the full board state and can be serialized to/from JSON bytes.
 
 ### Export / Import
 
 ```rust
 pub struct BoardExporter;
 pub struct BoardImporter;
-
-impl BoardExporter {
-    pub fn export_board(board: &Board, ...) -> BoardExport;
-    pub fn export_all_boards(...) -> AllBoardsExport;
-}
-
-impl BoardImporter {
-    pub fn import(data: &str) -> KanbanResult<ImportedEntities>;
-}
 ```
 
-Supports V1 and V2 format detection with automatic migration.
+`BoardExporter` produces single-board or all-boards JSON exports. `BoardImporter` reads JSON with automatic V1/V2 format detection and migration.
 
 ## Architecture
 
