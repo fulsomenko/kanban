@@ -1,6 +1,7 @@
 use crate::app::App;
+use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
-use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, SortField, SortOrder};
+use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder};
 
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
@@ -54,7 +55,7 @@ impl App {
                                 _ => CardPriority::Medium,
                             };
                             let card_id = card.id;
-                            let cmd = Box::new(crate::state::commands::UpdateCard {
+                            let cmd = Box::new(kanban_domain::commands::UpdateCard {
                                 card_id,
                                 updates: CardUpdate {
                                     priority: Some(priority),
@@ -122,7 +123,7 @@ impl App {
                     if let Some(board_idx) = self.active_board_index {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
                             let board_id = board.id;
-                            let cmd = Box::new(crate::state::commands::SetBoardTaskSort {
+                            let cmd = Box::new(kanban_domain::commands::SetBoardTaskSort {
                                 board_id,
                                 field,
                                 order,
@@ -186,7 +187,7 @@ impl App {
 
                         if selection_idx == 0 {
                             // Unassign from sprint
-                            let cmd = Box::new(crate::state::commands::UpdateCard {
+                            let cmd = Box::new(kanban_domain::commands::UpdateCard {
                                 card_id,
                                 updates: kanban_domain::CardUpdate {
                                     sprint_id: FieldUpdate::Clear,
@@ -235,7 +236,7 @@ impl App {
 
                                     // Build batch of commands
                                     let mut commands: Vec<
-                                        Box<dyn crate::state::commands::Command>,
+                                        Box<dyn kanban_domain::commands::Command>,
                                     > = Vec::new();
 
                                     // First, assign to sprint
@@ -247,11 +248,11 @@ impl App {
                                             sprint_name,
                                             sprint_status,
                                         })
-                                            as Box<dyn crate::state::commands::Command>;
+                                            as Box<dyn kanban_domain::commands::Command>;
                                     commands.push(assign_cmd);
 
                                     // Then, update the assigned prefix
-                                    let update_cmd = Box::new(crate::state::commands::UpdateCard {
+                                    let update_cmd = Box::new(kanban_domain::commands::UpdateCard {
                                         card_id,
                                         updates: kanban_domain::CardUpdate {
                                             assigned_prefix: FieldUpdate::Set(
@@ -260,7 +261,7 @@ impl App {
                                             ..Default::default()
                                         },
                                     })
-                                        as Box<dyn crate::state::commands::Command>;
+                                        as Box<dyn kanban_domain::commands::Command>;
                                     commands.push(update_cmd);
 
                                     // Execute all commands as a batch
@@ -313,13 +314,13 @@ impl App {
 
                     if selection_idx == 0 {
                         // Unassign cards from sprint - batch all unassignments
-                        let mut unassign_commands: Vec<Box<dyn crate::state::commands::Command>> =
+                        let mut unassign_commands: Vec<Box<dyn kanban_domain::commands::Command>> =
                             Vec::new();
                         for card_id in &card_ids {
                             let cmd = Box::new(kanban_domain::commands::UnassignCardFromSprint {
                                 card_id: *card_id,
                             })
-                                as Box<dyn crate::state::commands::Command>;
+                                as Box<dyn kanban_domain::commands::Command>;
                             unassign_commands.push(cmd);
                         }
 
@@ -362,7 +363,7 @@ impl App {
                                 };
 
                                 // Build batch of commands for all cards
-                                let mut commands: Vec<Box<dyn crate::state::commands::Command>> =
+                                let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
                                     Vec::new();
                                 for card_id in &card_ids {
                                     // First, assign to sprint
@@ -374,11 +375,11 @@ impl App {
                                             sprint_name: sprint_name.clone(),
                                             sprint_status: sprint_status.clone(),
                                         })
-                                            as Box<dyn crate::state::commands::Command>;
+                                            as Box<dyn kanban_domain::commands::Command>;
                                     commands.push(assign_cmd);
 
                                     // Then, update the assigned prefix
-                                    let update_cmd = Box::new(crate::state::commands::UpdateCard {
+                                    let update_cmd = Box::new(kanban_domain::commands::UpdateCard {
                                         card_id: *card_id,
                                         updates: kanban_domain::CardUpdate {
                                             assigned_prefix: FieldUpdate::Set(
@@ -387,7 +388,7 @@ impl App {
                                             ..Default::default()
                                         },
                                     })
-                                        as Box<dyn crate::state::commands::Command>;
+                                        as Box<dyn kanban_domain::commands::Command>;
                                     commands.push(update_cmd);
                                 }
 
@@ -514,7 +515,7 @@ impl App {
                                     if result.is_ok() {
                                         self.relationship_selected.remove(&selected_card_id);
                                         self.ctx.state_manager.mark_dirty();
-                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        let snapshot = Snapshot::from_app(self);
                                         self.ctx.state_manager.queue_snapshot(snapshot);
                                     }
                                 } else {
@@ -536,7 +537,7 @@ impl App {
                                     if result.is_ok() {
                                         self.relationship_selected.insert(selected_card_id);
                                         self.ctx.state_manager.mark_dirty();
-                                        let snapshot = crate::state::DataSnapshot::from_app(self);
+                                        let snapshot = Snapshot::from_app(self);
                                         self.ctx.state_manager.queue_snapshot(snapshot);
                                     }
                                 }

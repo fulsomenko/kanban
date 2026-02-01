@@ -1,7 +1,6 @@
 use kanban_core::KanbanError;
-use kanban_domain::{Board, Card, Column};
+use kanban_domain::{Board, Card, Column, Snapshot};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
-use kanban_tui::state::DataSnapshot;
 use std::fs;
 use std::time::Duration;
 use tempfile::tempdir;
@@ -16,7 +15,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
 
-    let snapshot1 = DataSnapshot {
+    let snapshot1 = Snapshot {
         boards: vec![board.clone()],
         columns: vec![column.clone()],
         cards: vec![card.clone()],
@@ -84,7 +83,7 @@ async fn test_no_conflict_when_file_unchanged() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
 
-    let snapshot = DataSnapshot {
+    let snapshot = Snapshot {
         boards: vec![board.clone()],
         columns: vec![column.clone()],
         cards: vec![card.clone()],
@@ -119,7 +118,7 @@ async fn test_conflict_detection_tracks_file_metadata() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let _card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
 
-    let snapshot = DataSnapshot {
+    let snapshot = Snapshot {
         boards: vec![board.clone()],
         columns: vec![column.clone()],
         cards: vec![],
@@ -177,7 +176,7 @@ async fn test_multiple_instances_with_different_ids() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
 
-    let snapshot = DataSnapshot {
+    let snapshot = Snapshot {
         boards: vec![board.clone()],
         columns: vec![column.clone()],
         cards: vec![card],
@@ -221,7 +220,7 @@ async fn test_conflict_resolution_with_force_overwrite() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
 
-    let snapshot = DataSnapshot {
+    let snapshot = Snapshot {
         boards: vec![board.clone()],
         columns: vec![column.clone()],
         cards: vec![card],
@@ -278,7 +277,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     let card1 = Card::new(&mut board1, column1.id, "Task A".to_string(), 0, "feature");
     let card2 = Card::new(&mut board1, column2.id, "Task B".to_string(), 0, "bug");
 
-    let snapshot1 = DataSnapshot {
+    let snapshot1 = Snapshot {
         boards: vec![board1.clone()],
         columns: vec![column1.clone(), column2.clone()],
         cards: vec![card1.clone(), card2.clone()],
@@ -299,7 +298,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     let store2 = JsonFileStore::with_instance_id(&file_path, instance2_id);
 
     let (loaded_snap, _) = store2.load().await.unwrap();
-    let mut snapshot2: DataSnapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
+    let mut snapshot2: Snapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
 
     let new_card = Card::new(
         &mut snapshot2.boards[0],
@@ -330,7 +329,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     let store3 = JsonFileStore::with_instance_id(&file_path, instance3_id);
 
     let (loaded_snap3, _) = store3.load().await.unwrap();
-    let mut snapshot3: DataSnapshot = serde_json::from_slice(&loaded_snap3.data).unwrap();
+    let mut snapshot3: Snapshot = serde_json::from_slice(&loaded_snap3.data).unwrap();
 
     // Rename the first card
     snapshot3.cards[0].title = "Task A - Updated by Instance 3".to_string();
@@ -370,7 +369,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
 
     // Verify final state: Instance 3's save wins (last write)
     let (final_snap, _) = store3.load().await.unwrap();
-    let final_data: DataSnapshot = serde_json::from_slice(&final_snap.data).unwrap();
+    let final_data: Snapshot = serde_json::from_slice(&final_snap.data).unwrap();
 
     // Should have 2 cards (Instance 2 added one, Instance 3 renamed another)
     assert_eq!(final_data.cards.len(), 3, "Should have 3 cards total");
@@ -393,7 +392,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
 
     // All instances should be able to detect and load the final state
     let (store1_final, _) = store1.load().await.unwrap();
-    let store1_final_data: DataSnapshot = serde_json::from_slice(&store1_final.data).unwrap();
+    let store1_final_data: Snapshot = serde_json::from_slice(&store1_final.data).unwrap();
     assert_eq!(
         store1_final_data.cards.len(),
         3,

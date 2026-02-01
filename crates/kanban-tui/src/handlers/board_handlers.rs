@@ -1,5 +1,5 @@
 use crate::app::{App, AppMode, BoardFocus, DialogMode, Focus};
-use crate::state::commands::{CreateBoard, CreateColumn, UpdateBoard};
+use kanban_domain::commands::{CreateBoard, CreateColumn, UpdateBoard};
 use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {
@@ -87,7 +87,7 @@ impl App {
         };
 
         // Now batch the column creation commands
-        let mut column_commands: Vec<Box<dyn crate::state::commands::Command>> = Vec::new();
+        let mut column_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
         let default_columns = vec![("TODO", 0i32), ("Doing", 1i32), ("Complete", 2i32)];
 
         for (name, position) in default_columns {
@@ -95,7 +95,7 @@ impl App {
                 board_id,
                 name: name.to_string(),
                 position,
-            }) as Box<dyn crate::state::commands::Command>;
+            }) as Box<dyn kanban_domain::commands::Command>;
             column_commands.push(create_col_cmd);
         }
 

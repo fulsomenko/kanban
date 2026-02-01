@@ -1,11 +1,17 @@
+//! Board export functionality.
+//!
+//! Converts domain entities into export format for serialization.
+
 use super::models::{AllBoardsExport, BoardExport};
-use kanban_domain::{ArchivedCard, Board, Card, Column, Sprint};
+use crate::{ArchivedCard, Board, Card, Column, Sprint};
 use std::io;
 use uuid::Uuid;
 
+/// Exports boards and their data to portable format.
 pub struct BoardExporter;
 
 impl BoardExporter {
+    /// Export a single board with all its associated data.
     pub fn export_board(
         board: &Board,
         all_columns: &[Column],
@@ -48,6 +54,7 @@ impl BoardExporter {
         }
     }
 
+    /// Export all boards with their associated data.
     pub fn export_all_boards(
         boards: &[Board],
         columns: &[Column],
@@ -65,15 +72,15 @@ impl BoardExporter {
         }
     }
 
+    /// Serialize export to JSON string.
     pub fn export_to_json(export: &AllBoardsExport) -> Result<String, io::Error> {
         serde_json::to_string_pretty(export).map_err(io::Error::other)
     }
 
+    /// Export directly to a file.
     pub fn export_to_file(export: &AllBoardsExport, filename: &str) -> io::Result<()> {
         let json = Self::export_to_json(export)?;
-        std::fs::write(filename, json)?;
-        tracing::info!("Exported to: {}", filename);
-        Ok(())
+        std::fs::write(filename, json)
     }
 }
 
@@ -123,5 +130,22 @@ mod tests {
         assert_eq!(export.boards.len(), 2);
         assert_eq!(export.boards[0].board.name, "Board 1");
         assert_eq!(export.boards[1].board.name, "Board 2");
+    }
+
+    #[test]
+    fn test_export_to_json() {
+        let board = Board::new("Test".to_string(), None);
+        let export = AllBoardsExport {
+            boards: vec![BoardExport {
+                board,
+                columns: vec![],
+                cards: vec![],
+                archived_cards: vec![],
+                sprints: vec![],
+            }],
+        };
+
+        let json = BoardExporter::export_to_json(&export).unwrap();
+        assert!(json.contains("Test"));
     }
 }

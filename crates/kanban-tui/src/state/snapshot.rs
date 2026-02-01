@@ -1,29 +1,26 @@
-use crate::app::App;
-use kanban_core::KanbanResult;
-use kanban_domain::{ArchivedCard, Board, Card, Column, DependencyGraph, Sprint};
-use serde::{Deserialize, Serialize};
+//! Snapshot functionality - uses domain Snapshot with TUI extensions.
+//!
+//! The core Snapshot type is in kanban-domain. This module provides
+//! TUI-specific extension methods for App integration.
+//! Serialization (to_json_bytes/from_json_bytes) lives on domain Snapshot directly.
 
-/// Point-in-time snapshot of all data
-/// Bridges between in-memory App state and persistence format
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DataSnapshot {
-    #[serde(default)]
-    pub boards: Vec<Board>,
-    #[serde(default)]
-    pub columns: Vec<Column>,
-    #[serde(default)]
-    pub cards: Vec<Card>,
-    #[serde(default)]
-    pub archived_cards: Vec<ArchivedCard>,
-    #[serde(default)]
-    pub sprints: Vec<Sprint>,
-    #[serde(default)]
-    pub graph: DependencyGraph,
+use crate::app::App;
+
+use kanban_domain::Snapshot;
+
+/// Extension trait for App-specific snapshot operations.
+///
+/// These methods bridge between the domain Snapshot and the TUI App.
+pub trait TuiSnapshot {
+    /// Create a snapshot from current app state.
+    fn from_app(app: &App) -> Self;
+
+    /// Apply snapshot to app state (overwrites).
+    fn apply_to_app(&self, app: &mut App);
 }
 
-impl DataSnapshot {
-    /// Create snapshot from current app state
-    pub fn from_app(app: &App) -> Self {
+impl TuiSnapshot for Snapshot {
+    fn from_app(app: &App) -> Self {
         Self {
             boards: app.ctx.boards.clone(),
             columns: app.ctx.columns.clone(),
@@ -34,8 +31,7 @@ impl DataSnapshot {
         }
     }
 
-    /// Apply snapshot to app state (overwrites)
-    pub fn apply_to_app(&self, app: &mut App) {
+    fn apply_to_app(&self, app: &mut App) {
         app.ctx.boards = self.boards.clone();
         app.ctx.columns = self.columns.clone();
         app.ctx.cards = self.cards.clone();
@@ -51,30 +47,16 @@ impl DataSnapshot {
             }
         }
     }
-
-    /// Serialize snapshot to JSON bytes
-    pub fn to_json_bytes(&self) -> KanbanResult<Vec<u8>> {
-        let json = serde_json::to_vec_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(json)
-    }
-
-    /// Deserialize snapshot from JSON bytes
-    pub fn from_json_bytes(bytes: &[u8]) -> KanbanResult<Self> {
-        let snapshot = serde_json::from_slice(bytes)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(snapshot)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kanban_domain::SortField;
+    use kanban_domain::{Board, DependencyGraph, SortField};
 
     #[test]
     fn test_snapshot_serialization() {
-        let snapshot = DataSnapshot {
+        let snapshot = Snapshot {
             boards: vec![],
             columns: vec![],
             cards: vec![],
@@ -84,7 +66,7 @@ mod tests {
         };
 
         let bytes = snapshot.to_json_bytes().unwrap();
-        let restored = DataSnapshot::from_json_bytes(&bytes).unwrap();
+        let restored = Snapshot::from_json_bytes(&bytes).unwrap();
 
         assert_eq!(restored.boards.len(), 0);
     }
@@ -95,7 +77,7 @@ mod tests {
         let mut board = Board::new("Test".to_string(), None);
         board.update_task_sort(SortField::Position, kanban_domain::SortOrder::Ascending);
 
-        let snapshot = DataSnapshot {
+        let snapshot = Snapshot {
             boards: vec![board],
             columns: vec![],
             cards: vec![],

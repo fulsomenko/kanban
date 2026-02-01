@@ -462,7 +462,7 @@ fn render_sprint_task_panel_with_selection(
         .iter()
         .filter_map(|card_id| app.ctx.cards.iter().find(|c| c.id == *card_id))
         .collect();
-    let points = App::calculate_points(&cards);
+    let points = kanban_domain::calculate_points(&cards);
 
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
@@ -567,7 +567,7 @@ fn render_create_board_popup(app: &App, frame: &mut Frame) {
         "Create New Project",
         "Project Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -577,7 +577,7 @@ fn render_create_card_popup(app: &App, frame: &mut Frame) {
         "Create New Task",
         "Task Title:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -587,7 +587,7 @@ fn render_create_sprint_popup(app: &App, frame: &mut Frame) {
         "Create New Sprint",
         "Sprint Name (optional):",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -597,7 +597,7 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
         "Set Points",
         "Points (1-5 or empty):",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -770,7 +770,7 @@ fn render_rename_board_popup(app: &App, frame: &mut Frame) {
         "Rename Project",
         "New Project Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -780,7 +780,7 @@ fn render_export_board_popup(app: &App, frame: &mut Frame) {
         "Export Project",
         "Filename:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -790,7 +790,7 @@ fn render_export_all_popup(app: &App, frame: &mut Frame) {
         "Export All Projects",
         "Filename:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -889,10 +889,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             // Show active sprint's card prefix override if it exists
             if let Some(sprint_prefix) =
-                crate::board_context::get_active_sprint_card_prefix_override(
-                    board,
-                    &app.ctx.sprints,
-                )
+                kanban_domain::get_active_sprint_card_prefix_override(board, &app.ctx.sprints)
             {
                 settings_lines.push(metadata_line_styled(
                     "Active Sprint Card Prefix",
@@ -1062,7 +1059,7 @@ fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Branch Prefix",
         "Branch Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1072,7 +1069,7 @@ fn render_set_sprint_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Sprint Prefix",
         "Sprint Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1082,7 +1079,7 @@ fn render_set_sprint_card_prefix_popup(app: &App, frame: &mut Frame) {
         "Set Card Prefix Override",
         "Card Prefix:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1175,7 +1172,7 @@ fn render_create_column_popup(app: &App, frame: &mut Frame) {
         "Create New Column",
         "Column Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 
@@ -1185,7 +1182,7 @@ fn render_rename_column_popup(app: &App, frame: &mut Frame) {
         "Rename Column",
         "New Column Name:",
         app.input.as_str(),
-        app.input.cursor_pos(),
+        app.input.cursor_byte_offset(),
     );
 }
 

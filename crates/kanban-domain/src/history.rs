@@ -1,22 +1,33 @@
-use super::DataSnapshot;
+//! Undo/redo history management.
+//!
+//! Provides a snapshot-based history manager for implementing undo/redo
+//! functionality. This is pure state management with no UI dependencies,
+//! making it suitable for use by both TUI and future API server.
+
+use crate::Snapshot;
 use std::collections::VecDeque;
 
-/// Manages undo/redo history using snapshot-based approach
+const MAX_HISTORY_DEPTH: usize = 100;
+
+/// Manages undo/redo history using snapshot-based approach.
+///
+/// Before each mutation, capture the current state with `capture_before_command`.
+/// The manager maintains separate stacks for undo and redo operations.
 #[derive(Debug)]
 pub struct HistoryManager {
-    /// Stack of snapshots for undo (most recent = back of deque)
-    undo_stack: VecDeque<DataSnapshot>,
+    /// Stack of snapshots for undo (most recent = back of deque).
+    undo_stack: VecDeque<Snapshot>,
 
-    /// Stack of snapshots for redo (most recent = back of deque)
-    redo_stack: VecDeque<DataSnapshot>,
+    /// Stack of snapshots for redo (most recent = back of deque).
+    redo_stack: VecDeque<Snapshot>,
 
-    /// Flag to prevent undo/redo operations from being added to history
-    /// Set to true during undo/redo restore operations
+    /// Flag to prevent undo/redo operations from being added to history.
+    /// Set to true during undo/redo restore operations.
     suppress_capture: bool,
 }
 
 impl HistoryManager {
-    /// Create new history manager
+    /// Create new history manager.
     pub fn new() -> Self {
         Self {
             undo_stack: VecDeque::new(),
@@ -25,70 +36,81 @@ impl HistoryManager {
         }
     }
 
-    /// Capture current state before a command executes
-    /// Clears redo stack (standard undo/redo behavior)
-    pub fn capture_before_command(&mut self, snapshot: DataSnapshot) {
+    /// Capture current state before a command executes.
+    ///
+    /// Clears the redo stack (standard undo/redo behavior - any new action
+    /// after an undo invalidates the redo history).
+    pub fn capture_before_command(&mut self, snapshot: Snapshot) {
         if self.suppress_capture {
             return;
         }
 
         self.undo_stack.push_back(snapshot);
+        if self.undo_stack.len() > MAX_HISTORY_DEPTH {
+            self.undo_stack.pop_front();
+        }
         // Any new action clears the redo history
         self.redo_stack.clear();
     }
 
-    /// Pop most recent snapshot from undo stack for restoration
-    pub fn pop_undo(&mut self) -> Option<DataSnapshot> {
+    /// Pop most recent snapshot from undo stack for restoration.
+    pub fn pop_undo(&mut self) -> Option<Snapshot> {
         self.undo_stack.pop_back()
     }
 
-    /// Pop most recent snapshot from redo stack for restoration
-    pub fn pop_redo(&mut self) -> Option<DataSnapshot> {
+    /// Pop most recent snapshot from redo stack for restoration.
+    pub fn pop_redo(&mut self) -> Option<Snapshot> {
         self.redo_stack.pop_back()
     }
 
-    /// Push current state to redo stack (before applying undo)
-    pub fn push_redo(&mut self, snapshot: DataSnapshot) {
+    /// Push current state to redo stack (before applying undo).
+    pub fn push_redo(&mut self, snapshot: Snapshot) {
         self.redo_stack.push_back(snapshot);
     }
 
-    /// Push current state to undo stack (before applying redo)
-    pub fn push_undo(&mut self, snapshot: DataSnapshot) {
+    /// Push current state to undo stack (before applying redo).
+    pub fn push_undo(&mut self, snapshot: Snapshot) {
         self.undo_stack.push_back(snapshot);
+        if self.undo_stack.len() > MAX_HISTORY_DEPTH {
+            self.undo_stack.pop_front();
+        }
     }
 
-    /// Check if undo is available
+    /// Check if undo is available.
     pub fn can_undo(&self) -> bool {
         !self.undo_stack.is_empty()
     }
 
-    /// Check if redo is available
+    /// Check if redo is available.
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 
-    /// Clear all history (called on external file reload)
+    /// Clear all history (called on external file reload).
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
     }
 
-    /// Enable suppression (for undo/redo operations)
+    /// Enable suppression (for undo/redo operations).
+    ///
+    /// While suppressed, calls to `capture_before_command` are ignored.
+    /// This prevents undo/redo operations from adding themselves to history.
     pub fn suppress(&mut self) {
         self.suppress_capture = true;
     }
 
-    /// Disable suppression (after undo/redo completes)
+    /// Disable suppression (after undo/redo completes).
     pub fn unsuppress(&mut self) {
         self.suppress_capture = false;
     }
 
-    /// Get undo stack depth (for debugging/status display)
+    /// Get undo stack depth (for debugging/status display).
     pub fn undo_depth(&self) -> usize {
         self.undo_stack.len()
     }
 
-    /// Get redo stack depth (for debugging/status display)
+    /// Get redo stack depth (for debugging/status display).
     pub fn redo_depth(&self) -> usize {
         self.redo_stack.len()
     }
@@ -103,10 +125,10 @@ impl Default for HistoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kanban_domain::DependencyGraph;
+    use crate::DependencyGraph;
 
-    fn create_test_snapshot() -> DataSnapshot {
-        DataSnapshot {
+    fn create_test_snapshot() -> Snapshot {
+        Snapshot {
             boards: vec![],
             columns: vec![],
             cards: vec![],
@@ -185,5 +207,31 @@ mod tests {
         history.clear();
         assert!(!history.can_undo());
         assert!(!history.can_redo());
+    }
+
+    #[test]
+    fn test_undo_stack_is_bounded() {
+        let mut history = HistoryManager::new();
+
+        for _ in 0..MAX_HISTORY_DEPTH + 50 {
+            history.capture_before_command(create_test_snapshot());
+        }
+
+        assert_eq!(history.undo_depth(), MAX_HISTORY_DEPTH);
+    }
+
+    #[test]
+    fn test_depth() {
+        let mut history = HistoryManager::new();
+
+        assert_eq!(history.undo_depth(), 0);
+        assert_eq!(history.redo_depth(), 0);
+
+        history.capture_before_command(create_test_snapshot());
+        history.capture_before_command(create_test_snapshot());
+        assert_eq!(history.undo_depth(), 2);
+
+        history.push_redo(create_test_snapshot());
+        assert_eq!(history.redo_depth(), 1);
     }
 }

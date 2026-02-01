@@ -30,7 +30,7 @@ pub fn render_relationship_section(
 
         // Above indicator
         if page_info.show_above_indicator {
-            let count = page_info.items_above_count;
+            let count = page_info.items_above;
             let plural = if count == 1 { "" } else { "s" };
             lines.push(Line::from(Span::styled(
                 format!("  {} item{} above", count, plural),
@@ -39,7 +39,7 @@ pub fn render_relationship_section(
         }
 
         // Render visible items
-        for &idx in &page_info.visible_item_indices {
+        for &idx in &page_info.visible_indices {
             if let Some(&card_id) = card_ids.get(idx) {
                 if let Some(card) = all_cards.iter().find(|c| c.id == card_id) {
                     let is_selected = list_component.selection.get() == Some(idx);
@@ -61,7 +61,7 @@ pub fn render_relationship_section(
 
         // Below indicator
         if page_info.show_below_indicator {
-            let count = page_info.items_below_count;
+            let count = page_info.items_below;
             let plural = if count == 1 { "" } else { "s" };
             lines.push(Line::from(Span::styled(
                 format!("  {} item{} below", count, plural),

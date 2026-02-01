@@ -120,11 +120,11 @@ impl CardList {
         let render_info = self.list.get_render_info(viewport_height);
 
         CardListRenderInfo {
-            visible_card_indices: render_info.visible_item_indices,
+            visible_card_indices: render_info.visible_indices,
             show_above_indicator: render_info.show_above_indicator,
-            cards_above_count: render_info.items_above_count,
+            cards_above_count: render_info.items_above,
             show_below_indicator: render_info.show_below_indicator,
-            cards_below_count: render_info.items_below_count,
+            cards_below_count: render_info.items_below,
         }
     }
 
