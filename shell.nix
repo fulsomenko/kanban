@@ -1,9 +1,21 @@
-{ pkgs ? import <nixpkgs> {}, rustToolchain ? pkgs.rustc }:
+{
+  pkgs ? import <nixpkgs> {},
+  rustToolchain ? pkgs.rustc,
+  changeset ? null,
+  aggregateChangelog ? null,
+  bumpVersion ? null,
+  publishCrates ? null,
+  validateRelease ? null,
+}:
 
 let
-  changeset = pkgs.writeShellScriptBin "changeset" ''
-    ${builtins.readFile ./scripts/create-changeset.sh}
-  '';
+  scripts = builtins.filter (x: x != null) [
+    changeset
+    aggregateChangelog
+    bumpVersion
+    publishCrates
+    validateRelease
+  ];
 in
 
 pkgs.mkShell {
@@ -19,11 +31,10 @@ pkgs.mkShell {
 
     # Development utilities
     bacon
-    changeset
 
     asciinema_3
     asciinema-agg
-  ];
+  ] ++ scripts;
 
   shellHook = ''
     export RUST_BACKTRACE=1
@@ -32,4 +43,3 @@ pkgs.mkShell {
     echo "🦀 Rustc: $(rustc --version)"
   '';
 }
-
