@@ -1,7 +1,9 @@
 use crate::app::App;
 use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
-use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder, Sprint};
+use kanban_domain::{
+    dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder, Sprint,
+};
 
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
