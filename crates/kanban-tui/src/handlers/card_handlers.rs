@@ -4,7 +4,7 @@ use crate::events::EventHandler;
 use kanban_domain::commands::{
     ArchiveCard, CreateCard, DeleteCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard,
 };
-use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, Column, SortOrder};
+use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, Column, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -61,12 +61,7 @@ impl App {
         } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.active_board_index {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
-                    let sprint_count = self
-                        .ctx
-                        .sprints
-                        .iter()
-                        .filter(|s| s.board_id == board.id)
-                        .count();
+                    let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
                     if sprint_count > 0 {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
                             let card_id = selected_card.id;

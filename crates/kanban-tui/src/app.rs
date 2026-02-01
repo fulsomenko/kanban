@@ -1922,12 +1922,7 @@ impl App {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.active_board_index {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
-                            let board_sprints: Vec<_> = self
-                                .ctx
-                                .sprints
-                                .iter()
-                                .filter(|s| s.board_id == board.id)
-                                .collect();
+                            let board_sprints = Sprint::assignable(&self.ctx.sprints, board.id);
                             for (idx, sprint) in board_sprints.iter().enumerate() {
                                 if sprint.id == card_sprint_id {
                                     return idx + 1;

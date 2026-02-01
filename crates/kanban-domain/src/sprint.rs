@@ -33,6 +33,14 @@ pub struct Sprint {
 pub type SprintId = Uuid;
 
 impl Sprint {
+    pub fn assignable(sprints: &[Sprint], board_id: Uuid) -> Vec<&Sprint> {
+        sprints
+            .iter()
+            .filter(|s| s.board_id == board_id)
+            .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
+            .collect()
+    }
+
     pub fn new(
         board_id: Uuid,
         sprint_number: u32,

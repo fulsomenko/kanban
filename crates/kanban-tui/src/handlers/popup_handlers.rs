@@ -1,7 +1,9 @@
 use crate::app::App;
 use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
-use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder};
+use kanban_domain::{
+    dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder, Sprint,
+};
 
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
@@ -161,12 +163,7 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
-                        let sprint_count = self
-                            .ctx
-                            .sprints
-                            .iter()
-                            .filter(|s| s.board_id == board.id)
-                            .count();
+                        let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
                         self.sprint_assign_selection.next(sprint_count + 1);
                     }
                 }
@@ -206,12 +203,7 @@ impl App {
                             }
                         } else if let Some(board_idx) = self.active_board_index {
                             if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
-                                let board_sprints: Vec<_> = self
-                                    .ctx
-                                    .sprints
-                                    .iter()
-                                    .filter(|s| s.board_id == board_id)
-                                    .collect();
+                                let board_sprints = Sprint::assignable(&self.ctx.sprints, board_id);
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                     let sprint_id = sprint.id;
                                     let sprint_number = sprint.sprint_number;
@@ -295,12 +287,7 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
-                        let sprint_count = self
-                            .ctx
-                            .sprints
-                            .iter()
-                            .filter(|s| s.board_id == board.id)
-                            .count();
+                        let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
                         self.sprint_assign_selection.next(sprint_count + 1);
                     }
                 }
@@ -334,12 +321,7 @@ impl App {
                         }
                     } else if let Some(board_idx) = self.active_board_index {
                         if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
-                            let board_sprints: Vec<_> = self
-                                .ctx
-                                .sprints
-                                .iter()
-                                .filter(|s| s.board_id == board_id)
-                                .collect();
+                            let board_sprints = Sprint::assignable(&self.ctx.sprints, board_id);
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;
                                 let sprint_number = sprint.sprint_number;
