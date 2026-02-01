@@ -10,7 +10,12 @@ trap cleanup EXIT
 CURRENT_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
 
 # Check for changesets (excluding README.md)
-changeset_count=$(find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" 2>/dev/null | wc -l | tr -d ' ')
+if [ ! -d ".changeset" ]; then
+  echo "No changesets to aggregate"
+  exit 0
+fi
+
+changeset_count=$(find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" | wc -l | tr -d ' ')
 if [ "$changeset_count" -eq 0 ]; then
   echo "No changesets to aggregate"
   exit 0

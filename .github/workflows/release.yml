@@ -119,8 +119,10 @@ jobs:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
           # Delete changesets on master (after successful publish)
-          find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -delete
-          git add .changeset/
+          if [ -d ".changeset" ]; then
+            find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -delete
+            git add .changeset/
+          fi
           git commit -m "chore: clean up changesets for v${{ steps.versions.outputs.current }}" || echo "No changesets to clean up"
           git push origin master || echo "Nothing to push"
 

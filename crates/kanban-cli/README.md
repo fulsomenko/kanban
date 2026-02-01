@@ -174,7 +174,7 @@ All CLI commands output JSON for easy parsing and scripting:
 ```json
 {
   "success": true,
-  "api_version": "0.1.13",
+  "api_version": "0.2.0",
   "data": { ... }
 }
 ```
@@ -282,8 +282,7 @@ When launching with a file path:
 
 ### Auto-Save Behavior
 
-- **On graceful exit** (press `q` in TUI): File automatically updated with latest state
-- **On force quit** (Ctrl+C): Changes may be lost (graceful shutdown recommended)
+- **Immediate save**: Changes are saved automatically after each action
 - **In-memory only**: Without file argument, all data discarded on exit
 
 ## Logging and Diagnostics
