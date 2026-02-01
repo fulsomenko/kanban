@@ -149,8 +149,8 @@ jobs:
 
           echo "Found changesets (release will be triggered on merge):"
           for changeset in $CHANGESETS; do
-            bump=$(grep -A1 "^---$" "$changeset" | grep "^bump:" | cut -d' ' -f2 | tr -d '\r\n')
-            echo "  $changeset (bump: $bump)"
+            bump=$(sed -n '/^---$/,/^---$/{ /^bump:/{ s/^bump: *//; p; } }' "$changeset" | tr -d '\r\n')
+            echo "  $changeset (bump: ${bump:-unknown})"
           done
 
   release-validation:
