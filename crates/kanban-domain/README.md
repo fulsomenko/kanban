@@ -153,7 +153,7 @@ pub trait DependencyGraph {
 ```
 
 - `ParentOf` and `Blocks` enforce DAG constraints (cycle detection)
-- Cascade cleanup on card deletion/archival
+- Edges referencing a deleted or archived card are automatically cleaned up
 - Integrated into board persistence (import/export)
 
 ### Card Lifecycle

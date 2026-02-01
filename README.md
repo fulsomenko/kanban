@@ -17,12 +17,12 @@ A **fast, keyboard-driven kanban tool**
 - **Board Management**: Create, edit, and organize multiple boards
 - **Custom Columns**: Define your own columns to match your workflow (e.g., **Todo**, **In Progress**, **Blocked**, **Done**)
 - **Rich Cards**: Cards with metadata including priority, story points, due dates, and more
-- **Card Dependencies**: Parent-child and blocking relationships with cycle detection
+- **Card Dependencies**: Parent-child and blocking relationships between cards
 - **Keyboard-Driven**: Vim-like navigation with hjkl and context-aware shortcuts
 
 ### 🚀 Productivity
 - **Search**: Find cards instantly with vim-style `/` search
-- **Undo / Redo**: Snapshot-based undo (`u`) and redo (`U`) with bounded history
+- **Undo / Redo**: Undo (`u`) and redo (`U`) any action
 - **Multiple Views**: Switch between flat list, grouped by column, or kanban board layout with `V`
 - **External Editor**: Edit in your preferred editor (emacs, nano, vim, etc.)
 
@@ -31,7 +31,7 @@ A **fast, keyboard-driven kanban tool**
 - **Story Points**: Assign 1-5 point estimates with color-coded display
 - **Sorting**: Sort cards by points, priority, date, status, or position
 - **Filtering**: Filter by sprint, status, or search results
-- **Card Archiving**: Archive tasks with cascade cleanup of dependency edges
+- **Card Archiving**: Archive and restore tasks
 - **Metadata**: Organize with due dates, priority levels, and timestamps
 
 ## Installation

@@ -184,13 +184,6 @@ Assign 1-5 point estimates with color-coded display:
 - Visual indicators for sprint planning
 - Point totals per column/sprint
 
-### Undo / Redo
-
-Snapshot-based undo and redo:
-- `u` to undo, `U` to redo
-- State captured automatically before every command
-- Bounded history (100 entries) to prevent unbounded memory growth
-
 ## License
 
 Apache 2.0 - See [LICENSE.md](../../LICENSE.md) for details
