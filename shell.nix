@@ -9,7 +9,7 @@
 }:
 
 let
-  scripts = pkgs.lib.optionals (changeset != null) [
+  scripts = builtins.filter (x: x != null) [
     changeset
     aggregateChangelog
     bumpVersion

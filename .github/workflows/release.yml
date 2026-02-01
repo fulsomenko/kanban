@@ -65,6 +65,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin git@github.com:fulsomenko/kanban.git
 
+      # bump-version reads changesets, aggregate-changelog reads then deletes them.
+      # These two steps must run in this order.
       - name: Bump version from changesets
         if: steps.check.outputs.has_changesets == 'true'
         run: |
@@ -77,18 +79,13 @@ jobs:
 
       - name: Commit release changes
         if: steps.check.outputs.has_changesets == 'true'
-        run: |
-          NEW_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
-          git add .
-          git commit -m "chore: release v${NEW_VERSION}"
-
-      - name: Get new version
-        if: steps.check.outputs.has_changesets == 'true'
-        id: version
+        id: release
         run: |
           NEW_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
           echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "Release version: $NEW_VERSION"
+          git add .
+          git commit -m "chore: release v${NEW_VERSION}"
 
       - name: Validate release build
         if: steps.check.outputs.has_changesets == 'true'
@@ -116,14 +113,14 @@ jobs:
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
-          git tag "v${{ steps.version.outputs.new }}"
-          git push origin "v${{ steps.version.outputs.new }}"
+          git tag "v${{ steps.release.outputs.new }}"
+          git push origin "v${{ steps.release.outputs.new }}"
 
       - name: Create GitHub Release
         if: steps.check.outputs.has_changesets == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.new }}
+          tag_name: v${{ steps.release.outputs.new }}
           generate_release_notes: true
 
       - name: Sync develop with master

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cleanup() {
+  rm -f CHANGELOG.md.new
+}
+trap cleanup EXIT
+
 PR_NUMBER="${1:-}"
 
 CURRENT_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)

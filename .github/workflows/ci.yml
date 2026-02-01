@@ -133,18 +133,26 @@ jobs:
 
       - name: Check for changesets
         run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if [[ "$PR_TITLE" == *"[hotfix]"* ]]; then
+            echo "Hotfix PR, skipping changeset check"
+            exit 0
+          fi
+
           if [ ! -d ".changeset" ]; then
             echo "No .changeset directory found"
-            echo "This merge will not trigger a release"
-            exit 0
+            echo "PRs to master require changesets to trigger a release."
+            echo "Add [hotfix] to the PR title to bypass this check."
+            exit 1
           fi
 
           CHANGESETS=$(find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" 2>/dev/null || true)
 
           if [ -z "$CHANGESETS" ]; then
             echo "No changesets found"
-            echo "This merge will not trigger a release"
-            exit 0
+            echo "PRs to master require changesets to trigger a release."
+            echo "Add [hotfix] to the PR title to bypass this check."
+            exit 1
           fi
 
           echo "Found changesets (release will be triggered on merge):"
