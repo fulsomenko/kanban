@@ -129,8 +129,6 @@ kanban myboard.json       # Load a board from file
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Navigate between sections (and within parent/child lists) |
-| `Enter` | Open selected parent/child card |
-| `Backspace` / `h` | Navigate back to previous card (breadcrumb history) |
 | `1` / `2` / `3` | Switch tabs (Title/Metadata/Description) |
 | `e` | Edit in external editor |
 | `Esc` | Return to previous view |
@@ -185,15 +183,6 @@ Smooth 150ms animations for:
 Assign 1-5 point estimates with color-coded display:
 - Visual indicators for sprint planning
 - Point totals per column/sprint
-
-### Card Dependencies
-
-Manage parent-child and blocking relationships from the card detail view:
-- Parent and child boxes displayed side-by-side
-- Navigate within relationship lists with `j`/`k`
-- Drill into related cards with `Enter`, navigate back with `Backspace`
-- Scrolling with "X items above/below" indicators for long lists
-- Full wrap-around navigation through all detail sections
 
 ### Undo / Redo
 
