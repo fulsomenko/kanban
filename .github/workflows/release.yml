@@ -68,14 +68,19 @@ jobs:
       - name: Bump version from changesets
         if: steps.check.outputs.has_changesets == 'true'
         run: |
-          nix develop --command bash scripts/bump-version.sh "${{ github.event.pull_request.number }}"
+          nix develop --command bash scripts/bump-version.sh
 
-      - name: Push version bump
+      - name: Aggregate changelog
         if: steps.check.outputs.has_changesets == 'true'
-        env:
-          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
-          git push origin master
+          bash scripts/aggregate-changelog.sh "${{ github.event.pull_request.number }}"
+
+      - name: Commit release changes
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          NEW_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
+          git add .
+          git commit -m "chore: release v${NEW_VERSION}"
 
       - name: Get new version
         if: steps.check.outputs.has_changesets == 'true'
@@ -89,6 +94,13 @@ jobs:
         if: steps.check.outputs.has_changesets == 'true'
         run: |
           nix develop --command bash scripts/validate-release.sh
+
+      - name: Push release commit
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+        run: |
+          git push origin master
 
       - name: Publish to crates.io
         if: steps.check.outputs.has_changesets == 'true'
@@ -121,5 +133,9 @@ jobs:
         run: |
           git checkout develop
           git pull origin develop
-          git merge origin/master --no-edit
+          if ! git merge origin/master --no-edit; then
+            echo "::warning::Failed to auto-merge master into develop. Manual merge required."
+            git merge --abort
+            exit 0
+          fi
           git push origin develop
