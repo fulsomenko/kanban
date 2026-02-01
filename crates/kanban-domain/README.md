@@ -30,7 +30,7 @@ pub struct Board {
     // ...more fields
 }
 
-pub enum SortField { Points, Priority, CreatedAt, UpdatedAt, Status, Default }
+pub enum SortField { Points, Priority, CreatedAt, UpdatedAt, Status, Position, Default }
 pub enum SortOrder { Ascending, Descending }
 ```
 
@@ -130,6 +130,118 @@ pub struct CardMetadataDto {
     pub due_date: Option<DateTime<Utc>>,
 }
 ```
+
+### Card Dependencies
+
+Directed graph system for card relationships:
+
+```rust
+pub enum CardEdgeType {
+    ParentOf,    // Hierarchical parent-child grouping
+    Blocks,      // Blocking dependency (acyclic)
+    RelatesTo,   // Informational link (allows cycles)
+}
+
+pub trait DependencyGraph {
+    fn add_edge(&mut self, ...) -> KanbanResult<()>;
+    fn remove_edge(&mut self, ...);
+    fn get_parents(&self, card_id: CardId) -> Vec<CardId>;
+    fn get_children(&self, card_id: CardId) -> Vec<CardId>;
+    fn remove_card_edges(&mut self, card_id: CardId);
+    fn archive_card_edges(&mut self, card_id: CardId);
+}
+```
+
+- `ParentOf` and `Blocks` enforce DAG constraints (cycle detection)
+- Cascade cleanup on card deletion/archival
+- Integrated into board persistence (import/export)
+
+### Card Lifecycle
+
+Pure domain functions for card state transitions:
+
+```rust
+pub fn compute_completion_toggle(card: &Card, board: &Board) -> ToggleResult;
+pub fn compute_move_to_column(card: &Card, target_column_id: ColumnId, board: &Board) -> MoveResult;
+pub fn compute_auto_completion_on_create(column_id: ColumnId, board: &Board) -> CardStatus;
+pub fn compact_positions(cards: &mut [Card]);
+pub fn next_position_in_column(cards: &[Card], column_id: ColumnId) -> u32;
+```
+
+### Sorting & Filtering
+
+**SortBy** — Enum dispatch for card sorting (no dyn dispatch):
+
+```rust
+pub enum SortBy {
+    Points, Priority, CreatedAt, UpdatedAt, Status, Position, CardNumber
+}
+
+impl SortBy {
+    pub fn sort_by(&self, cards: &mut [Card]);
+}
+```
+
+**CardFilter** trait + concrete filters:
+
+```rust
+pub trait CardFilter {
+    fn matches(&self, card: &Card) -> bool;
+}
+// Implementations: BoardFilter, ColumnFilter, SprintFilter, UnassignedOnlyFilter
+```
+
+### Query Builder
+
+Fluent API composing filter + sort + search:
+
+```rust
+let cards = CardQueryBuilder::new(&all_cards)
+    .filter_by_column(column_id)
+    .filter_by_sprint(sprint_id)
+    .search("bug fix")
+    .sort(SortBy::Priority)
+    .sort_order(SortOrder::Descending)
+    .execute();
+```
+
+### History & Snapshots
+
+```rust
+pub struct HistoryManager { /* bounded undo/redo stacks, max 100 entries */ }
+pub struct Snapshot { /* point-in-time state of all kanban data */ }
+
+impl HistoryManager {
+    pub fn push_undo(&mut self, snapshot: Snapshot);
+    pub fn undo(&mut self) -> Option<Snapshot>;
+    pub fn redo(&mut self) -> Option<Snapshot>;
+    pub fn can_undo(&self) -> bool;
+    pub fn can_redo(&self) -> bool;
+}
+
+impl Snapshot {
+    pub fn to_json_bytes(&self) -> KanbanResult<Vec<u8>>;
+    pub fn from_json_bytes(bytes: &[u8]) -> KanbanResult<Self>;
+}
+```
+
+### Export / Import
+
+```rust
+pub struct BoardExporter;
+pub struct BoardImporter;
+
+impl BoardExporter {
+    pub fn export_board(board: &Board, ...) -> BoardExport;
+    pub fn export_all_boards(...) -> AllBoardsExport;
+}
+
+impl BoardImporter {
+    pub fn import(data: &str) -> KanbanResult<ImportedEntities>;
+}
+```
+
+Supports V1 and V2 format detection with automatic migration.
 
 ## Architecture
 

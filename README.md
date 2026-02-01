@@ -17,18 +17,21 @@ A **fast, keyboard-driven kanban tool**
 - **Board Management**: Create, edit, and organize multiple boards
 - **Custom Columns**: Define your own columns to match your workflow (e.g., **Todo**, **In Progress**, **Blocked**, **Done**)
 - **Rich Cards**: Cards with metadata including priority, story points, due dates, and more
+- **Card Dependencies**: Parent-child and blocking relationships with cycle detection
 - **Keyboard-Driven**: Vim-like navigation with hjkl and context-aware shortcuts
 
 ### 🚀 Productivity
 - **Search**: Find cards instantly with vim-style `/` search
+- **Undo / Redo**: Snapshot-based undo (`u`) and redo (`U`) with bounded history
 - **Multiple Views**: Switch between flat list, grouped by column, or kanban board layout with `V`
 - **External Editor**: Edit in your preferred editor (emacs, nano, vim, etc.)
 
 ### 📊 Organization
 - **Sprint Planning**: Plan, start and complete sprints
 - **Story Points**: Assign 1-5 point estimates with color-coded display
+- **Sorting**: Sort cards by points, priority, date, status, or position
 - **Filtering**: Filter by sprint, status, or search results
-- **Card Archiving**: Archive tasks with restoration support
+- **Card Archiving**: Archive tasks with cascade cleanup of dependency edges
 - **Metadata**: Organize with due dates, priority levels, and timestamps
 
 ## Installation
@@ -111,7 +114,8 @@ Switch between view modes with `V`:
 - `V` - Toggle view mode, `/` - Search
 - `t` - Sprint filter, `D` - Archived cards
 
-**Other**
+**Undo & Other**
+- `u` - Undo, `U` - Redo
 - `y` - Copy to clipboard, `H`/`L` - Move card left/right, `q` - Quit
 
 ## Architecture
@@ -120,11 +124,12 @@ Built with **Rust** for speed and reliability:
 
 ```
 crates/
-├── kanban-core        → Shared traits & error handling
-├── kanban-domain      → Domain models (Board, Card, Column, Sprint)
+├── kanban-core        → Shared traits, error handling & reusable state primitives
+├── kanban-domain      → Domain models, business logic, filtering & sorting
 ├── kanban-persistence → JSON storage, versioning & migrations
 ├── kanban-tui         → Terminal UI with ratatui
-└── kanban-cli         → CLI entry point
+├── kanban-cli         → CLI entry point
+└── kanban-mcp         → Model Context Protocol server for LLM integration
 ```
 
 **Key Design Patterns:**

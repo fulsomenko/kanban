@@ -31,6 +31,10 @@ Standard result type used throughout the workspace for consistent error handling
 - `Io(std::io::Error)` - File system and I/O errors
 - `Serialization(String)` - JSON/serde errors
 - `Internal(String)` - Unexpected internal errors
+- `ConflictDetected { path, source }` - File modified by another instance
+- `CycleDetected` - Adding an edge would create a circular dependency
+- `SelfReference` - Self-referencing edge not allowed
+- `EdgeNotFound` - Graph edge not found
 
 ### Configuration
 
@@ -101,6 +105,84 @@ pub trait Service<T, Id>: Send + Sync {
     async fn create(&mut self, entity: T) -> KanbanResult<Id>;
     async fn update(&mut self, entity: T) -> KanbanResult<()>;
     async fn delete(&mut self, id: Id) -> KanbanResult<()>;
+}
+```
+
+### Graph
+
+`Graph<E>` — Generic directed graph data structure used for card dependencies:
+
+```rust
+pub struct Graph<E: Edge> {
+    // ...
+}
+
+pub trait Edge: Clone + PartialEq {
+    fn is_acyclic(&self) -> bool;
+}
+
+pub trait GraphNode {
+    fn node_id(&self) -> Uuid;
+}
+```
+
+- Add/remove edges between nodes
+- Automatic cycle detection for acyclic edge types
+- Query neighbors, parents, and children by edge type
+- Edge direction filtering (`Outgoing`, `Incoming`, `Both`)
+
+### InputState
+
+Cursor-aware text input buffer with correct multi-byte UTF-8 handling:
+
+```rust
+pub struct InputState { /* private fields */ }
+
+impl InputState {
+    pub fn new() -> Self
+    pub fn insert_char(&mut self, c: char)
+    pub fn backspace(&mut self)
+    pub fn move_left(&mut self)
+    pub fn move_right(&mut self)
+    pub fn value(&self) -> &str
+    pub fn cursor_byte_offset(&self) -> usize
+}
+```
+
+### SelectionState
+
+Generic single-item selection for list navigation:
+
+```rust
+pub struct SelectionState { /* private fields */ }
+
+impl SelectionState {
+    pub fn new() -> Self
+    pub fn select(&mut self, index: usize)
+    pub fn selected(&self) -> Option<usize>
+    pub fn next(&mut self, total: usize)
+    pub fn prev(&mut self)
+    pub fn jump_to_first(&mut self)
+    pub fn jump_to_last(&mut self, total: usize)
+    pub fn clamp(&mut self, total: usize)
+}
+```
+
+### Pagination
+
+Viewport pagination with scroll position management:
+
+```rust
+pub struct PageInfo {
+    pub visible_indices: Vec<usize>,
+    pub items_above: usize,
+    pub items_below: usize,
+}
+
+impl Page {
+    pub fn new(viewport_height: usize) -> Self
+    pub fn calculate(&self, total_items: usize, selected: usize) -> PageInfo
+    pub fn scroll_to_visible(&mut self, index: usize)
 }
 ```
 

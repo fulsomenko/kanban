@@ -95,11 +95,18 @@ kanban myboard.json       # Load a board from file
 | `a` | Assign card to sprint |
 | `t` | Toggle sprint filter |
 
+### Undo / Redo
+
+| Key | Action |
+|-----|--------|
+| `u` | Undo last action |
+| `U` | Redo last undone action |
+
 ### Sorting
 
 | Key | Action |
 |-----|--------|
-| `o` | Sort by field (Points, Priority, Date, Status) |
+| `o` | Sort by field (Points, Priority, Date, Status, Position) |
 | `O` | Toggle sort order (Ascending/Descending) |
 
 ### Clipboard & Git Integration
@@ -121,6 +128,9 @@ kanban myboard.json       # Load a board from file
 
 | Key | Action |
 |-----|--------|
+| `j` / `k` | Navigate between sections (and within parent/child lists) |
+| `Enter` | Open selected parent/child card |
+| `Backspace` / `h` | Navigate back to previous card (breadcrumb history) |
 | `1` / `2` / `3` | Switch tabs (Title/Metadata/Description) |
 | `e` | Edit in external editor |
 | `Esc` | Return to previous view |
@@ -175,6 +185,30 @@ Smooth 150ms animations for:
 Assign 1-5 point estimates with color-coded display:
 - Visual indicators for sprint planning
 - Point totals per column/sprint
+
+### Card Dependencies
+
+Manage parent-child and blocking relationships from the card detail view:
+- Parent and child boxes displayed side-by-side
+- Navigate within relationship lists with `j`/`k`
+- Drill into related cards with `Enter`, navigate back with `Backspace`
+- Scrolling with "X items above/below" indicators for long lists
+- Full wrap-around navigation through all detail sections
+
+### Undo / Redo
+
+Snapshot-based undo and redo:
+- `u` to undo, `U` to redo
+- State captured automatically before every command
+- Bounded history (100 entries) to prevent unbounded memory growth
+
+### Cascade Cleanup
+
+Safe deletion that maintains data integrity:
+- Deleting a card removes all its dependency edges
+- Archiving preserves edges; restoring unarchives them
+- Column deletion blocked if active or archived cards remain
+- Sprint deletion unassigns all cards first
 
 ## License
 

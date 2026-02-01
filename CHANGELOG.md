@@ -1,3 +1,54 @@
+## [0.2.0] - 2026-02-01
+
+- - feat(tui): register undo/redo keybindings in CardList provider
+- feat(tui): register undo/redo keybindings in BoardDetail provider
+- feat(tui): register undo/redo keybindings in CardDetail provider
+- feat(tui): register undo/redo keybindings in NormalMode providers
+- feat(tui): add Undo and Redo KeybindingAction variants
+- feat(tui): add undo() and redo() methods to App
+- feat(tui): capture snapshots before command execution for undo history
+- feat(tui): integrate HistoryManager into StateManager
+- feat(tui): create HistoryManager module for undo/redo support
+- - test: add cycle detection tests for dependency graph
+- test: add integration tests for cascade cleanup operations
+- feat(domain): unassign cards when deleting sprints
+- feat(domain): add validation to DeleteColumn command
+- feat(domain): implement cascade cleanup in card deletion and archival
+- feat(domain): add cascade cleanup methods to DependencyGraph trait
+- - feat(tui): implement backward wrap-around navigation from title to children
+- feat(tui): add scrolling support to parent/child relationship boxes
+- feat(tui): Implement interactive navigation for parent/child relationship boxes
+- feat(tui): add infrastructure for parent/child relationship navigation
+- feat(tui): Display parent/child relationship boxes side-by-side with increased height
+- Extract business logic from kanban-tui into kanban-domain and kanban-core, establishing a clean layered architecture.
+### kanban-core
+- Add `InputState`, `SelectionState`, and `PageInfo` modules for reusable UI-agnostic state primitives
+### kanban-domain
+- Add `sort`, `filter`, `search`, and `query` modules for card filtering/sorting pipeline
+- Add `CardQueryBuilder` with fluent API for composing card queries
+- Add `card_lifecycle` module for card movement, completion toggling, and archival logic
+- Add `HistoryManager` for bounded undo/redo (capped at 100 entries)
+- Add `export`/`import` modules with `BoardExporter` and `BoardImporter`
+- Add `Snapshot` serialization (`to_json_bytes`/`from_json_bytes`) directly on the domain type
+- Add sprint query functions and `CardFilters` struct
+- Replace dyn dispatch with enum dispatch in search and sort
+### kanban-tui
+- Remove re-export wrappers and thin delegation layers that proxied domain logic
+- Replace inline business logic in handlers with `card_lifecycle` calls
+- Replace duplicated filter/sort service with `CardQueryBuilder`
+- Fix multi-byte UTF-8 cursor handling via core `InputState`
+- - feat(tui): Add TUI for managing parent-child card relationships
+- feat(domain): Add commands for parent-child card relationships
+- feat(domain): Add ParentOf edge type for hierarchical card grouping
+- feat(tui,cli): integrate dependency graph into persistence
+- feat(domain): add dependency management commands
+- feat(domain): add card dependency graph types
+- feat(core): add graph-related error variants
+- feat(core): add graph cycle detection algorithms
+- feat(core): add generic Graph<E> data structure
+- feat(core): add graph module with edge types and GraphNode trait
+
+
 ## [0.1.16] - 2025-12-21
 
 - chore: bump version to 16
