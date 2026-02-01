@@ -62,7 +62,3 @@ fi
 cargo update --workspace
 
 echo "Version bumped to $NEW_VERSION"
-
-if [ -n "${GITHUB_OUTPUT:-}" ]; then
-  echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-fi
