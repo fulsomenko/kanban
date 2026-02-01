@@ -1,3 +1,24 @@
+## [0.2.1] - 2026-02-01 ([#162](https://github.com/fulsomenko/kanban/pull/162))
+
+- # Changesets
+When creating a PR, add a changeset file to describe your changes.
+## Creating a Changeset
+```bash
+nix run .#changeset
+```
+Or create a file `.changeset/<descriptive-name>.md` manually:
+```md
+Brief description of changes for the changelog
+```
+## Bump Types
+- `patch` - Bug fixes, small changes (0.1.0 → 0.1.1)
+- `minor` - New features, backwards compatible (0.1.0 → 0.2.0)
+- `major` - Breaking changes (0.1.0 → 1.0.0)
+On merge to master, changesets are aggregated and the highest bump type determines the version increment.
+- - refactor: extract Sprint::assignable to deduplicate sprint filtering
+- fix: filter completed/cancelled sprints from assignment handlers
+
+
 ## [0.2.0] - 2026-02-01
 
 - - feat(tui): register undo/redo keybindings in CardList provider
