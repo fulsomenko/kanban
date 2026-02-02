@@ -14,3 +14,8 @@ bump: patch
 - feat: add McpContext implementing KanbanOperations trait
 - feat: replace async CliExecutor with sync SyncExecutor
 - feat: add kanban-domain, kanban-core, uuid, chrono, tempfile deps to kanban-mcp
+- fix: remove create_card_full bypass, use trait two-step create+update pattern
+- fix: remove update_sprint_full bypass, route through trait's update_sprint
+- feat: add name field to SprintUpdate for MCP name passthrough
+- fix: remove broken clear_description and clear_points MCP flags
+- refactor: remove 4 dead pre-animation functions from TUI card_handlers
