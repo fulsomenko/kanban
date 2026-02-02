@@ -1,8 +1,8 @@
 {
   "version": 2,
   "metadata": {
-    "instance_id": "b858dc4c-2281-4abd-8724-6f73ccfcdfe4",
-    "saved_at": "2026-01-29T13:25:18.482874Z"
+    "instance_id": "1bd0f5a2-f434-4b5e-affc-c47927ae6f83",
+    "saved_at": "2026-02-02T19:47:42.520488Z"
   },
   "data": {
     "archived_cards": [
@@ -222,15 +222,16 @@
     ],
     "boards": [
       {
-        "active_sprint_id": null,
+        "active_sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "card_prefix": "KAN",
+        "completion_column_id": null,
         "created_at": "2025-10-10T08:47:44.779097Z",
         "description": "Management of the **Kanban** project\n",
         "id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 181
+          "KAN": 208
         },
         "sprint_counters": {
           "KAN": 12
@@ -248,28 +249,9 @@
         ],
         "sprint_prefix": "KAN",
         "task_list_view": "ColumnView",
-        "task_sort_field": "Priority",
+        "task_sort_field": "CreatedAt",
         "task_sort_order": "Descending",
-        "updated_at": "2026-01-29T13:19:38.832301Z"
-      },
-      {
-        "active_sprint_id": null,
-        "card_prefix": null,
-        "created_at": "2025-12-20T02:29:13.679707Z",
-        "description": null,
-        "id": "82e0d16a-5d79-42e5-aba1-886c63d8f323",
-        "name": "test",
-        "next_sprint_number": 1,
-        "prefix_counters": {},
-        "sprint_counters": {},
-        "sprint_duration_days": null,
-        "sprint_name_used_count": 0,
-        "sprint_names": [],
-        "sprint_prefix": null,
-        "task_list_view": "Flat",
-        "task_sort_field": "Default",
-        "task_sort_order": "Ascending",
-        "updated_at": "2025-12-20T02:29:13.679707Z"
+        "updated_at": "2026-02-02T19:47:42.519968Z"
       }
     ],
     "cards": [
@@ -494,7 +476,7 @@
         "updated_at": "2025-10-21T21:47:36.557991Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 8,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -506,20 +488,28 @@
         "points": 1,
         "position": 36,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784516Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2025-11-01T09:30:06.155906Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784516Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Test the application with another editor",
-        "updated_at": "2025-12-04T22:33:35.771744Z"
+        "updated_at": "2026-02-01T19:39:40.784517Z"
       },
       {
         "assigned_prefix": null,
@@ -590,7 +580,7 @@
         "points": 1,
         "position": 3,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-04T00:22:28.640552Z",
@@ -625,17 +615,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784588Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374925Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784588Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Be able to scroll in the card description",
-        "updated_at": "2026-01-10T15:31:10.374926Z"
+        "updated_at": "2026-02-01T19:39:40.784589Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -905,7 +903,7 @@
         "points": 3,
         "position": 19,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448943Z",
@@ -940,17 +938,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784539Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374921Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784539Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Link to pull request",
-        "updated_at": "2026-01-10T15:31:10.374922Z"
+        "updated_at": "2026-02-01T19:39:40.784540Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1157,7 +1163,7 @@
         "points": 2,
         "position": 0,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448941Z",
@@ -1192,17 +1198,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784511Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374943Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784511Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "When titles are too long. they don't fit the tasks list",
-        "updated_at": "2026-01-10T15:31:10.374949Z"
+        "updated_at": "2026-02-01T19:39:40.784512Z"
       },
       {
         "assigned_prefix": null,
@@ -1245,7 +1259,7 @@
         "points": 4,
         "position": 1,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448927Z",
@@ -1280,17 +1294,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784623Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374994Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784623Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "When setting the priority, the card details are closed and the lists are shown",
-        "updated_at": "2026-01-10T15:31:10.374995Z"
+        "updated_at": "2026-02-01T19:39:40.784624Z"
       },
       {
         "assigned_prefix": null,
@@ -1531,7 +1553,7 @@
         "points": 5,
         "position": 5,
         "priority": "High",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:15.760147Z",
@@ -1558,17 +1580,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784620Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.375004Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784620Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "audit history - keep a log of changes",
-        "updated_at": "2026-01-10T15:31:10.375005Z"
+        "updated_at": "2026-02-01T19:39:40.784622Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1583,7 +1613,7 @@
         "points": 2,
         "position": 8,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:17.501321Z",
@@ -1610,20 +1640,28 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784612Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374929Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784612Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "branch name doesnt reflected the used version",
-        "updated_at": "2026-01-10T15:31:10.374932Z"
+        "updated_at": "2026-02-01T19:39:40.784613Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 39,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -1635,20 +1673,28 @@
         "points": 5,
         "position": 11,
         "priority": "Critical",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784514Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2025-11-01T09:30:06.155912Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784514Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Tags for cards",
-        "updated_at": "2025-12-15T20:42:23.480058Z"
+        "updated_at": "2026-02-01T19:39:40.784515Z"
       },
       {
         "assigned_prefix": null,
@@ -1691,7 +1737,7 @@
         "points": 2,
         "position": 27,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264745Z",
@@ -1710,20 +1756,28 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784536Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374910Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784536Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add retrospective note on completed tasks",
-        "updated_at": "2026-01-10T15:31:10.374911Z"
+        "updated_at": "2026-02-01T19:39:40.784537Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 42,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -1735,20 +1789,28 @@
         "points": 2,
         "position": 13,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784563Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2025-11-01T09:30:06.155913Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784563Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Assign task to sprint if created in sprint task list",
-        "updated_at": "2025-10-21T21:11:49.067711Z"
+        "updated_at": "2026-02-01T19:39:40.784564Z"
       },
       {
         "assigned_prefix": null,
@@ -1838,7 +1900,7 @@
         "points": 2,
         "position": 17,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448934Z",
@@ -1873,17 +1935,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784487Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374903Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784487Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Syntax highlighting for card description",
-        "updated_at": "2026-01-10T15:31:10.374904Z"
+        "updated_at": "2026-02-01T19:39:40.784489Z"
       },
       {
         "assigned_prefix": null,
@@ -1945,7 +2015,7 @@
         "points": 1,
         "position": 4,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:20.088757Z",
@@ -1972,17 +2042,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784598Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.375001Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784599Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "cards without priority should be order following low priority",
-        "updated_at": "2026-01-10T15:31:10.375002Z"
+        "updated_at": "2026-02-01T19:39:40.784600Z"
       },
       {
         "assigned_prefix": null,
@@ -2004,7 +2082,7 @@
         "updated_at": "2025-11-27T21:20:53.581479Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 52,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -2016,20 +2094,28 @@
         "points": 4,
         "position": 28,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784531Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2025-11-01T09:30:06.155914Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784532Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "sprint details UI",
-        "updated_at": "2025-10-17T06:14:51.908241Z"
+        "updated_at": "2026-02-01T19:39:40.784535Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2367,7 +2453,7 @@
         "points": 2,
         "position": 2,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448937Z",
@@ -2402,17 +2488,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784609Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374890Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784609Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Create new card from card",
-        "updated_at": "2026-01-10T15:31:10.374895Z"
+        "updated_at": "2026-02-01T19:39:40.784611Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2563,7 +2657,7 @@
         "points": 3,
         "position": 15,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264710Z",
@@ -2582,17 +2676,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784541Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374975Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784542Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Assignee for cards",
-        "updated_at": "2026-01-10T15:31:10.374977Z"
+        "updated_at": "2026-02-01T19:39:40.784543Z"
       },
       {
         "assigned_prefix": null,
@@ -2654,7 +2756,7 @@
         "points": 2,
         "position": 9,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264761Z",
@@ -2673,17 +2775,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784585Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374964Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784586Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "a sprint can only be completed after the duration is over",
-        "updated_at": "2026-01-10T15:31:10.374966Z"
+        "updated_at": "2026-02-01T19:39:40.784587Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2698,7 +2808,7 @@
         "points": 1,
         "position": 10,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898919Z",
@@ -2733,17 +2843,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784554Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374935Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784555Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "bring the task columns, completed non completed into sprint details",
-        "updated_at": "2026-01-10T15:31:10.374938Z"
+        "updated_at": "2026-02-01T19:39:40.784556Z"
       },
       {
         "assigned_prefix": null,
@@ -2805,7 +2923,7 @@
         "points": 3,
         "position": 12,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264757Z",
@@ -2824,17 +2942,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784578Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.375017Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784579Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "automatic sprint completion",
-        "updated_at": "2026-01-10T15:31:10.375018Z"
+        "updated_at": "2026-02-01T19:39:40.784580Z"
       },
       {
         "assigned_prefix": null,
@@ -2905,7 +3031,7 @@
         "points": 3,
         "position": 14,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898916Z",
@@ -2940,17 +3066,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784500Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374987Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784500Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "in card creation show a list of cards fuzzily matching the proposed title",
-        "updated_at": "2026-01-10T15:31:10.374988Z"
+        "updated_at": "2026-02-01T19:39:40.784502Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3117,7 +3251,7 @@
         "points": 4,
         "position": 23,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327391Z",
@@ -3144,17 +3278,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784508Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374972Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784508Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "unify the sprint details view",
-        "updated_at": "2026-01-10T15:31:10.374973Z"
+        "updated_at": "2026-02-01T19:39:40.784509Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3169,7 +3311,7 @@
         "points": 3,
         "position": 24,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327392Z",
@@ -3196,17 +3338,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784504Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374968Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784504Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "set a due date for a card",
-        "updated_at": "2026-01-10T15:31:10.374969Z"
+        "updated_at": "2026-02-01T19:39:40.784506Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3221,7 +3371,7 @@
         "points": 1,
         "position": 25,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327385Z",
@@ -3248,17 +3398,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784601Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374940Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784602Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "assigning cards to sprint doesnt remove it from unsprinted cards list",
-        "updated_at": "2026-01-10T15:31:10.374942Z"
+        "updated_at": "2026-02-01T19:39:40.784603Z"
       },
       {
         "assigned_prefix": null,
@@ -3320,7 +3478,7 @@
         "points": 2,
         "position": 29,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327394Z",
@@ -3347,17 +3505,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784519Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374983Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784519Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "default sprint and branch prefixes",
-        "updated_at": "2026-01-10T15:31:10.374985Z"
+        "updated_at": "2026-02-01T19:39:40.784521Z"
       },
       {
         "assigned_prefix": null,
@@ -3410,7 +3576,7 @@
         "points": 2,
         "position": 18,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327386Z",
@@ -3437,17 +3603,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784582Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374897Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784582Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "moving and item between columns should also move the selector along with the card",
-        "updated_at": "2026-01-10T15:31:10.374899Z"
+        "updated_at": "2026-02-01T19:39:40.784584Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3462,7 +3636,7 @@
         "points": 2,
         "position": 20,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:14.917359Z",
@@ -3497,17 +3671,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784595Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374877Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784595Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "when changing place of columns",
-        "updated_at": "2026-01-10T15:31:10.374886Z"
+        "updated_at": "2026-02-01T19:39:40.784597Z"
       },
       {
         "assigned_prefix": null,
@@ -3726,7 +3908,7 @@
         "updated_at": "2025-11-01T16:55:42.602259Z"
       },
       {
-        "assigned_prefix": null,
+        "assigned_prefix": "KAN",
         "card_number": 114,
         "card_prefix": null,
         "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
@@ -3738,20 +3920,28 @@
         "points": 4,
         "position": 30,
         "priority": "Medium",
-        "sprint_id": "c272f2b0-db50-4877-94db-dcdc06b84116",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784570Z",
             "sprint_id": "c272f2b0-db50-4877-94db-dcdc06b84116",
             "sprint_name": "halloween",
             "sprint_number": 1,
             "started_at": "2025-11-01T17:25:56.359649Z",
             "status": "Planning"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784571Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "data migrations and decoupling of data model",
-        "updated_at": "2025-11-01T17:25:56.359655Z"
+        "updated_at": "2026-02-01T19:39:40.784572Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3766,7 +3956,7 @@
         "points": 1,
         "position": 31,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327398Z",
@@ -3793,17 +3983,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784591Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374997Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784591Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "it is not apparent enough that we are entered into a board",
-        "updated_at": "2026-01-10T15:31:10.374999Z"
+        "updated_at": "2026-02-01T19:39:40.784593Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3818,7 +4016,7 @@
         "points": 1,
         "position": 38,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:01.506770Z",
@@ -3845,17 +4043,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784605Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.375007Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784606Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "filter out completed sprint from sprint assign",
-        "updated_at": "2026-01-10T15:31:10.375015Z"
+        "updated_at": "2026-02-01T19:39:40.784607Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3917,7 +4123,7 @@
         "points": null,
         "position": 21,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264763Z",
@@ -3936,17 +4142,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784491Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374991Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784491Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "ui module refactor",
-        "updated_at": "2026-01-10T15:31:10.374992Z"
+        "updated_at": "2026-02-01T19:39:40.784493Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4017,7 +4231,7 @@
         "points": 1,
         "position": 1,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264701Z",
@@ -4036,17 +4250,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T13:47:00.884883Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374906Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T13:47:00.884886Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "dont reset search on scroll",
-        "updated_at": "2026-01-29T13:18:00.090832Z"
+        "updated_at": "2026-02-01T13:47:00.884891Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4061,7 +4283,7 @@
         "points": 1,
         "position": 0,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264719Z",
@@ -4080,17 +4302,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T13:46:57.678266Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374956Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T13:46:57.678268Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "escape bind to clear search, enter to apply",
-        "updated_at": "2026-01-29T13:18:07.075383Z"
+        "updated_at": "2026-02-01T13:46:57.678273Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4161,7 +4391,7 @@
         "points": null,
         "position": 32,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264735Z",
@@ -4180,17 +4410,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784631Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374951Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784632Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "add filter for completed cards",
-        "updated_at": "2026-01-10T15:31:10.374953Z"
+        "updated_at": "2026-02-01T19:39:40.784634Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4388,7 +4626,7 @@
         "points": 1,
         "position": 37,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264731Z",
@@ -4407,17 +4645,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784528Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374979Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784528Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "update package README.md's",
-        "updated_at": "2026-01-10T15:31:10.374981Z"
+        "updated_at": "2026-02-01T19:39:40.784530Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4432,7 +4678,7 @@
         "points": 2,
         "position": 40,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264723Z",
@@ -4451,17 +4697,25 @@
             "status": "Planning"
           },
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784626Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-10T15:31:10.374960Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784626Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Saving improvements",
-        "updated_at": "2026-01-10T15:31:10.374962Z"
+        "updated_at": "2026-02-01T19:39:40.784628Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4835,20 +5089,28 @@
         "points": 1,
         "position": 36,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784523Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-28T08:47:10.923200Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784523Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "make multi select behave like a toggle",
-        "updated_at": "2026-01-28T08:47:10.923201Z"
+        "updated_at": "2026-02-01T19:39:40.784525Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4863,20 +5125,28 @@
         "points": 1,
         "position": 3,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T13:46:54.469307Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2025-12-23T00:35:00.539909Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T13:46:54.469310Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "`p` dialog does not correctly set points",
-        "updated_at": "2025-12-23T00:35:00.539916Z"
+        "updated_at": "2026-02-01T13:46:54.469314Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5227,20 +5497,28 @@
         "points": null,
         "position": 48,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784550Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2025-12-23T00:34:45.449843Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784551Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "scrolling in sprint list",
-        "updated_at": "2025-12-23T00:34:45.449850Z"
+        "updated_at": "2026-02-01T19:39:40.784553Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5274,20 +5552,28 @@
         "points": 2,
         "position": 47,
         "priority": "High",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784575Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-28T08:47:10.923205Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784575Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Replace Silent Failures with Proper Errors",
-        "updated_at": "2026-01-28T08:47:10.923206Z"
+        "updated_at": "2026-02-01T19:39:40.784577Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5302,20 +5588,28 @@
         "points": 2,
         "position": 48,
         "priority": "High",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784496Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-28T08:47:10.923181Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784496Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Fix Save Queue Overflow - Use Unbounded Queue",
-        "updated_at": "2026-01-28T08:47:10.923187Z"
+        "updated_at": "2026-02-01T19:39:40.784498Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5330,20 +5624,28 @@
         "points": 3,
         "position": 49,
         "priority": "High",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784545Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-28T08:47:10.923192Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784546Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add Referential Integrity Validation on Import/Load",
-        "updated_at": "2026-01-28T08:47:10.923193Z"
+        "updated_at": "2026-02-01T19:39:40.784548Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5358,20 +5660,28 @@
         "points": 1,
         "position": 50,
         "priority": "High",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784473Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-28T08:47:10.923203Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784477Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add User-Visible Save Error Notifications",
-        "updated_at": "2026-01-28T08:47:10.923204Z"
+        "updated_at": "2026-02-01T19:39:40.784485Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5386,20 +5696,28 @@
         "points": 2,
         "position": 51,
         "priority": "High",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784566Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-28T08:47:10.923208Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784567Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add Integration Tests for Data Integrity Fixes",
-        "updated_at": "2026-01-28T08:47:10.923209Z"
+        "updated_at": "2026-02-01T19:39:40.784569Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5414,20 +5732,28 @@
         "points": 2,
         "position": 52,
         "priority": "Medium",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T19:39:40.784559Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-28T08:47:10.923189Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:40.784559Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add QuickCheck Property Tests for Validation",
-        "updated_at": "2026-01-28T08:47:10.923190Z"
+        "updated_at": "2026-02-01T19:39:40.784561Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5442,39 +5768,64 @@
         "points": 1,
         "position": 3,
         "priority": "Low",
-        "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": null,
+            "ended_at": "2026-02-01T13:46:45.917608Z",
             "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
             "sprint_name": "an-eventful-october",
             "sprint_number": 1,
             "started_at": "2026-01-28T08:47:10.923195Z",
             "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T13:46:52.464842Z",
+            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "parent and child relationship boxes layout",
-        "updated_at": "2026-01-28T08:47:10.923196Z"
+        "updated_at": "2026-02-01T13:46:52.464850Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 178,
         "card_prefix": null,
-        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-02-02T19:22:59.769305Z",
         "created_at": "2026-01-29T13:14:49.316081Z",
         "description": "## Overview\n\nExtract business logic from `kanban-tui` to `kanban-domain` and `kanban-core` crates for reuse by other consumers (API server, CLI).\n\n## Why This Migration?\n\nThe TUI crate contained business logic (filtering, sorting, searching, export/import) that should be reusable by:\n- Future API server\n- CLI tools\n- Other UI implementations\n\nBy moving this logic to domain/core, we follow proper layered architecture and enable code reuse.\n\n---\n\n## Files Changed\n\n### New Domain Files (`kanban-domain`)\n\n**`crates/kanban-domain/src/search/mod.rs`** (NEW)\n- `CardSearcher` trait - abstraction for searching cards\n- `TitleSearcher` - searches card titles (case-insensitive)\n- `BranchNameSearcher` - searches sprint branch names\n- `CompositeSearcher` - combines title + branch name search\n\n**`crates/kanban-domain/src/query/mod.rs`** (NEW)\n- `CardFilterOptions` - struct grouping filter parameters (sprint_filter, hide_assigned, search_query)\n- `filter_and_sort_cards()` - filter cards for a board view\n- `filter_and_sort_cards_by_column()` - filter cards for a specific column\n- `CardQueryBuilder` - fluent API for building card queries\n\n**`crates/kanban-domain/src/export/mod.rs`** (NEW)\n- Re-exports BoardExporter, BoardImporter, models\n\n**`crates/kanban-domain/src/export/exporter.rs`** (NEW)\n- `BoardExporter` - exports boards to JSON format\n- Handles single board and all-boards export\n\n**`crates/kanban-domain/src/export/importer.rs`** (NEW)\n- `BoardImporter` - imports boards from JSON\n- Supports V1 (legacy) and V2 format detection\n- `ImportedEntities` - returned struct with imported data\n\n**`crates/kanban-domain/src/export/models.rs`** (NEW)\n- `BoardExport` - DTO for single board export\n- `AllBoardsExport` - DTO for multi-board export\n\n**`crates/kanban-domain/src/lib.rs`** (MODIFIED)\n- Added module declarations: search, query, export\n- Added public exports for all new types\n\n---\n\n### New Core Files (`kanban-core`)\n\n**`crates/kanban-core/src/pagination.rs`** (NEW - previous commits)\n- `Page` - tracks scroll position and total items\n- `PageInfo` - viewport info with visible_indices, items_above, items_below\n- Used for virtual list rendering in any UI\n\n**`crates/kanban-core/src/selection.rs`** (NEW - previous commits)\n- `SelectionState` - single-item selection state machine\n- Navigation helpers: next, prev, jump_to, clear\n\n---\n\n### TUI Files Changed\n\n**`crates/kanban-tui/src/search.rs`** (MODIFIED)\n- Now re-exports `CardSearcher`, `TitleSearcher`, `BranchNameSearcher`, `CompositeSearcher` from domain\n- Keeps `SearchState` in TUI (depends on TUI's InputState)\n\n**`crates/kanban-tui/src/export/mod.rs`** (MODIFIED)\n- Now re-exports everything from `kanban_domain::export`\n\n**`crates/kanban-tui/src/export/exporter.rs`** (DELETED)\n- Moved to domain\n\n**`crates/kanban-tui/src/export/importer.rs`** (DELETED)\n- Moved to domain\n\n**`crates/kanban-tui/src/export/models.rs`** (DELETED)\n- Moved to domain\n\n**`crates/kanban-tui/src/services/filter.rs`** (MODIFIED)\n- Re-exports filter types from domain\n\n**`crates/kanban-tui/src/services/sort.rs`** (MODIFIED)\n- Re-exports sort types from domain\n\n**`crates/kanban-tui/src/state/snapshot.rs`** (MODIFIED)\n- Uses `kanban_domain::Snapshot` as base type\n- Adds `SnapshotExt` trait for TUI-specific methods (`to_json_bytes`, `from_json_bytes`)\n- Type alias: `DataSnapshot = Snapshot`\n\n**`crates/kanban-tui/src/state/history.rs`** (MODIFIED)\n- Re-exports `HistoryManager` from domain\n\n**`crates/kanban-tui/src/state/mod.rs`** (MODIFIED)\n- Updated exports to include `SnapshotExt`\n\n**`crates/kanban-tui/src/selection.rs`** (MODIFIED)\n- Re-exports `SelectionState` from kanban_core\n\n**`crates/kanban-tui/src/components/page.rs`** (MODIFIED)\n- Re-exports `Page`, `PageInfo` from kanban_core\n\n**`crates/kanban-tui/src/card_list.rs`** (MODIFIED)\n- Updated field names: `visible_indices`, `items_above`, `items_below`\n\n**`crates/kanban-tui/src/components/generic_list.rs`** (MODIFIED)\n- Updated to use `scroll_to_visible` method name\n- Updated field references for PageInfo\n\n**`crates/kanban-tui/src/components/relationship_section.rs`** (MODIFIED)\n- Updated field references for PageInfo\n\n**`crates/kanban-tui/src/app.rs`** (MODIFIED)\n- Added `use crate::state::SnapshotExt` import\n\n**`crates/kanban-tui/src/handlers/detail_view_handlers.rs`** (MODIFIED)\n- Added `SnapshotExt` import for serialization\n\n**`crates/kanban-tui/src/handlers/popup_handlers.rs`** (MODIFIED)\n- Added `SnapshotExt` import for serialization\n\n**`crates/kanban-tui/tests/conflict_detection_tests.rs`** (MODIFIED)\n- Added `SnapshotExt` import for test serialization\n\n---\n\n### Domain Clippy Fixes\n\n**`crates/kanban-domain/src/filter/card_filter.rs`** (MODIFIED)\n- Changed `map_or(false, ...)` to `is_some_and(...)` per clippy\n\n**`crates/kanban-domain/src/sort/mod.rs`** (MODIFIED)\n- Changed `&mut Vec<Card>` to `&mut [Card]` per clippy\n\n---\n\n## Status\n- 15 commits on develop branch\n- Build: ✓ `cargo build --workspace`\n- Tests: ✓ `cargo test --workspace`\n- Clippy: ✓ `cargo clippy --all-targets --all-features -- -D warnings`\n\n## Pending\n- Smoke test manual verification\n- Push to origin",
         "due_date": null,
         "id": "b859d609-9b17-46fc-9ffd-6f7778c398d7",
         "points": 4,
-        "position": 4,
+        "position": 104,
         "priority": "High",
-        "sprint_id": null,
-        "sprint_logs": [],
-        "status": "Todo",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": "2026-02-01T13:46:44.070948Z",
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-02-01T13:32:49.831521Z",
+            "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T13:46:44.070949Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Done",
         "title": "TUI-to-Domain Refactoring Migration",
-        "updated_at": "2026-01-29T13:25:18.480118Z"
+        "updated_at": "2026-02-02T19:22:59.769305Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5489,11 +5840,20 @@
         "points": null,
         "position": 52,
         "priority": "Medium",
-        "sprint_id": null,
-        "sprint_logs": [],
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166369Z",
+            "status": "Planning"
+          }
+        ],
         "status": "Todo",
         "title": "Status metadata field doesnt reflect column",
-        "updated_at": "2026-01-29T13:19:19.560998Z"
+        "updated_at": "2026-02-01T19:39:53.166371Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5508,11 +5868,751 @@
         "points": 3,
         "position": 53,
         "priority": "High",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166354Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "due dates",
+        "updated_at": "2026-02-01T19:39:53.166356Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 181,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T20:56:32.282294Z",
+        "description": "**File:** `crates/kanban-domain/src/history.rs`\n\nUnbounded memory growth in long sessions. Each Snapshot clones the entire application state. Every command pushes a full clone onto the undo stack with no limit.\n\nAdd a `max_depth` field to `HistoryManager` using `VecDeque`, enforce it in `capture_before_command` by dropping oldest snapshots when limit exceeded. Default to 100. Expose `with_max_depth(n)` constructor.\n\nTests: verify stack never exceeds max_depth, oldest snapshots are dropped FIFO, redo stack unaffected.",
+        "due_date": null,
+        "id": "03b819d6-1023-4478-83ab-1867806d547a",
+        "points": null,
+        "position": 54,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166297Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Add max depth to HistoryManager",
+        "updated_at": "2026-02-01T19:39:53.166305Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 182,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T20:56:32.344839Z",
+        "description": "**File:** `crates/kanban-domain/src/query/mod.rs`\n\n30 lines of identical sprint/hide-assigned/search filter logic duplicated across `filter_and_sort_cards` (lines 51-95) and `filter_and_sort_cards_by_column` (lines 100-149). Only difference is the column variant adds `column_filter.matches(c)`.\n\nOption A: Extract a `matches_options()` helper function called by both public functions.\nOption B: Use `CompositeFilter` from the filter module to build filter chain dynamically (requires implementing SprintFilter and HideAssignedFilter as CardFilter trait objects).",
+        "due_date": null,
+        "id": "7d026ae3-ae2e-4e50-8103-27e5a5708d1a",
+        "points": null,
+        "position": 55,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166318Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Deduplicate query filter logic",
+        "updated_at": "2026-02-01T19:39:53.166320Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 183,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T20:56:32.411332Z",
+        "description": "**Files:** `crates/kanban-domain/src/filter/card_filter.rs:11` (trait), `crates/kanban-domain/src/operations.rs:10` (struct)\n\nTwo public items named `CardFilter` in the same crate — a trait (predicate interface) and a struct (data bag of filter options for `KanbanOperations::list_cards`). Consumers must disambiguate via path.\n\nRename the struct in `operations.rs` to `CardFilterCriteria` or `CardListFilter`. The struct is only used in the `KanbanOperations::list_cards` method signature so rename scope should be small.",
+        "due_date": null,
+        "id": "4460e994-5455-42f3-a86a-45e8454bf130",
+        "points": null,
+        "position": 56,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166327Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Resolve CardFilter naming collision",
+        "updated_at": "2026-02-01T19:39:53.166329Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 184,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T20:56:32.456850Z",
+        "description": "**File:** `crates/kanban-domain/src/search/mod.rs:61-95`\n\n`BranchNameSearcher::get_branch_name` runs on every `matches()` call, performing sprint lookup, string formatting, title slugification, and branch prefix resolution. During interactive search this is 500 string allocations per keystroke for 500 cards.\n\nOption A: Pre-compute branch names into `HashMap<CardId, String>` at search session start, pass to `CachedBranchNameSearcher`.\nOption B: Accept the cost — for typical board sizes (<200 cards) overhead is negligible. Profile before optimizing.",
+        "due_date": null,
+        "id": "e51c6e55-0c6b-4d45-b3b7-e0a9b23be7da",
+        "points": null,
+        "position": 57,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166322Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Cache branch names in BranchNameSearcher",
+        "updated_at": "2026-02-01T19:39:53.166325Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 185,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T20:56:32.504770Z",
+        "description": "**File:** `crates/kanban-domain/src/query/sprint.rs:36-50`\n\nCurrent code iterates the card list twice (once for uncompleted, once for completed). Replace with single-pass fold or `Iterator::partition`.\n\nSame optimization applies to `sort_card_ids` (lines 55-71) and `calculate_points_by_ids` (lines 82-88) which use `cards.iter().find()` for O(n) lookup per ID — build a `HashMap<Uuid, &Card>` first for O(1) per lookup.",
+        "due_date": null,
+        "id": "6d899a22-8bc3-44bc-b695-8995e9f47524",
+        "points": null,
+        "position": 58,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166345Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Use partition in partition_sprint_cards",
+        "updated_at": "2026-02-01T19:39:53.166347Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 186,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T20:56:32.551632Z",
+        "description": "**File:** `crates/kanban-domain/src/card.rs:26-33`\n\n`AnimationType` is a UI/presentation concern living in the domain layer. Doc comment says \"visual feedback\", no Serialize/Deserialize derives, only used by TUI layer.\n\nOptions:\n1. Move to `kanban-tui` — cleanest separation\n2. Keep in domain, document rationale — pragmatic, enum is 5 lines with no behavior\n3. Move to `kanban-core` — if considered generic UI primitive like SelectionState/InputState",
+        "due_date": null,
+        "id": "1ee5488a-3c01-42cf-a5f9-b5d432287fcc",
+        "points": null,
+        "position": 59,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166308Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Decide on AnimationType placement",
+        "updated_at": "2026-02-01T19:39:53.166310Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 187,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T20:56:32.601993Z",
+        "description": "**File:** `crates/kanban-domain/src/filter/card_filters.rs:19-23`\n\n`date_from`, `date_to`, and `selected_tags` fields are declared in `CardFilters` and checked by `has_active_filters()`/`clear()`, but no `CardFilter` trait implementation reads them.\n\nOptions:\n1. Implement missing filters — create `DateRangeFilter` and `TagFilter`, wire into query pipeline\n2. Remove unused fields — avoid dead code, re-add when needed\n3. Keep as-is with TODO comment — if feature is planned for upcoming release",
+        "due_date": null,
+        "id": "30c2c570-dc96-4123-939d-04f7d8221ec9",
+        "points": null,
+        "position": 60,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166336Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Wire up unused CardFilters fields",
+        "updated_at": "2026-02-01T19:39:53.166338Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 188,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-29T20:56:32.653906Z",
+        "description": "**File:** `crates/kanban-tui/src/components/generic_list.rs:5`\n\n`pub type ListRenderInfo = PageInfo;` is a single-use alias that adds indirection without meaningful semantic distinction. `PageInfo` is already self-descriptive. Remove the alias and use `PageInfo` directly.",
+        "due_date": null,
+        "id": "e6d5d851-b4f3-418c-adec-420f7e73a729",
+        "points": null,
+        "position": 61,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166340Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Remove ListRenderInfo type alias",
+        "updated_at": "2026-02-01T19:39:53.166343Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 189,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-30T06:30:12.443076Z",
+        "description": "TaskListView (Flat, GroupedByColumn, ColumnView) is a UI presentation concern currently persisted as a field on the Board domain model in the board JSON file. It should be moved to a separate TUI state store (e.g. XDG state dir ~/.local/state/kanban/ui_state.json) keyed by board_id. This keeps the domain data file free of UI concerns while still preserving per-board view preferences.",
+        "due_date": null,
+        "id": "dd9ab0ee-e10f-4ee1-9dc7-25c4b15ff3af",
+        "points": null,
+        "position": 62,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166364Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Move TaskListView out of Board data file into TUI state store",
+        "updated_at": "2026-02-01T19:39:53.166366Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 190,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-30T06:30:12.482048Z",
+        "description": "BranchNameSearcher::get_branch_name() in crates/kanban-domain/src/search/mod.rs contains complex branch name generation logic (sprint prefix, title slug, card number formatting) that likely duplicates logic elsewhere in the codebase (Card or Board methods). Extract a shared implementation to avoid maintenance risk if the naming scheme changes.",
+        "due_date": null,
+        "id": "2e029a1a-d240-4e6c-9616-5a10d802aaef",
+        "points": null,
+        "position": 63,
+        "priority": "Low",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166350Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Deduplicate BranchNameSearcher branch name generation logic",
+        "updated_at": "2026-02-01T19:39:53.166352Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 191,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-01-30T11:58:46.410607Z",
+        "description": "Replace the current HistoryManager (which stores N full-state Snapshot clones) with a command-log replay system that stores 1 initial snapshot + N tiny command structs. Provides audit trail of all commands executed.\n\n## Background: UUID Non-Determinism\n\n**Problem**: Create commands (CreateCard, CreateBoard, CreateColumn, CreateSprint, CreateSubcardCommand) call Uuid::new_v4() inside entity constructors. Replaying these commands generates different UUIDs each time.\n\n**What breaks**: Subsequent commands store entity IDs as fields (e.g., MoveCard { card_id: AAA }). During replay, CreateCard generates BBB instead of AAA, so MoveCard references a non-existent entity.\n\n**Solution**: Pre-generate IDs at command construction time. Add an `id: Uuid` field to each create command. In execute(), override the constructor-generated ID: `entity.id = self.id`. All entity ID fields are pub, so this works without changing constructors.\n\n**Additional fix**: TuiContext::create_sprint() mutates the board (sprint counter increment, name list append) OUTSIDE the command. During replay, these mutations don't happen. Solution: move these side effects INTO CreateSprint::execute().\n\n## Commit Strategy — 4 atomic commits\n\n### Commit 1: Pre-generate IDs in create commands\n\n**Files:**\n- crates/kanban-domain/src/commands/board_commands.rs — add id: Uuid to CreateBoard\n- crates/kanban-domain/src/commands/card_commands.rs — add id: Uuid to CreateCard\n- crates/kanban-domain/src/commands/column_commands.rs — add id: Uuid to CreateColumn\n- crates/kanban-domain/src/commands/sprint_commands.rs — add id: Uuid to CreateSprint\n- crates/kanban-domain/src/commands/dependency_commands.rs — add id: Uuid to CreateSubcardCommand\n- crates/kanban-tui/src/tui_context.rs — all create methods pass id: Uuid::new_v4()\n\n### Commit 2: Move sprint side effects into CreateSprint command\n\n- crates/kanban-domain/src/commands/sprint_commands.rs — execute() does counter/name logic internally\n- crates/kanban-tui/src/tui_context.rs — create_sprint() simplifies to raw inputs\n\n### Commit 3: Rewrite HistoryManager to command-log replay\n\n**File:** crates/kanban-domain/src/history.rs\n\nReplace VecDeque undo/redo stacks with: initial_state (1 clone), command_log (tiny structs), cursor (position).\nNew API: set_initial_state(), record_batch(), undo(), redo(), can_undo(), can_redo(), command_descriptions()\nRemoved: suppress/unsuppress, capture_before_command, pop_undo/pop_redo, push_undo/push_redo\n\n### Commit 4: Wire up new history in TuiContext, StateManager, and App\n\n- crates/kanban-tui/src/tui_context.rs — execute via &commands then move to record_batch()\n- crates/kanban-tui/src/state/mod.rs — remove old history methods, add set_initial_state()\n- crates/kanban-tui/src/app.rs — simplify undo/redo, remove suppress/unsuppress\n\n## Future: Persist command log to disk\n\nInitial implementation keeps command log in memory only (resets on app restart). Follow-up work to add disk persistence:\n\n- Serialize command log into kanban.json save file\n- Replace Box<dyn Command> with CommandKind enum wrapping all ~28 types, derive Serialize/Deserialize\n- Add command_log and command_cursor fields to persistence format\n- Handle forward compatibility (version tagging for command struct changes)\n- On load, deserialize and restore command log + cursor position\n\n## Verification\n\ncargo check --workspace && cargo test --workspace && cargo clippy --all-targets",
+        "due_date": null,
+        "id": "2abaee6d-d79a-41ac-9acc-37208add9e0a",
+        "points": null,
+        "position": 64,
+        "priority": "High",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166331Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Replace snapshot-based undo/redo with command-replay history system",
+        "updated_at": "2026-02-01T19:39:53.166333Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 192,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-01T06:51:58.134887Z",
+        "description": "When creating a board, columns are created correctly. However, undoing the board creation and then redoing it causes the columns to disappear.\n\n## Root Cause\n\nHandlers that execute multiple commands for a single user action create multiple undo entries. `execute_command()` and `execute_commands_batch()` each capture a before-snapshot and push to the undo stack. Calling them multiple times = multiple undo entries for one logical operation.\n\nBoard creation fires two separate command batches — `execute_command(CreateBoard)` then `execute_commands_batch([CreateColumn×3])` — resulting in two undo stack entries for what the user perceives as one action. On redo, the first entry restores the board without columns.\n\n## Affected Handlers (4 total)\n\n### Needs command group API (intermediate ID dependency)\n\n1. **`board_handlers.rs:create_board()`** (lines 77, 103)\n   - `execute_command(CreateBoard)` then `execute_commands_batch([CreateColumn x3])`\n   - Needs `board_id` from CreateBoard to build CreateColumn commands\n\n2. **`card_handlers.rs:create_card()`** (lines 349, 371)\n   - `execute_command(CreateCard)` then `execute_command(UpdateCard)` when auto-complete\n   - Needs `card_id` from CreateCard for UpdateCard\n\n### Simple batch merge (all IDs known upfront)\n\n3. **`column_handlers.rs:delete_column()`** (lines 358, 368)\n   - `execute_commands_batch(move_commands)` then `execute_command(DeleteColumn)`\n   - Fix: append DeleteColumn to move_commands vec, single batch call\n\n4. **`detail_view_handlers.rs` MoveColumn action** (lines 794, 808)\n   - `execute_command(MoveCard)` then `execute_command(UpdateCard)`\n   - Fix: build vec with both commands, single `execute_commands_batch` call\n\n## Implementation\n\n### Step 1: Add command group API to TuiContext\n\n**File:** `crates/kanban-tui/src/tui_context.rs`\n\nAdd `pending_group_snapshot: Option<Snapshot>` field to `TuiContext`.\n\nAdd four methods:\n- `begin_command_group()` — clone current state into `pending_group_snapshot`\n- `execute_grouped_command()` — call `state_manager.execute_with_context()` directly (no snapshot capture)\n- `commit_command_group()` — pass stored before-snapshot to `state_manager.capture_before_command()`, then `queue_snapshot()` with current state\n- `rollback_command_group()` — restore fields from stored snapshot, clear `pending_group_snapshot`\n\n### Step 2: Add App-level delegation\n\n**File:** `crates/kanban-tui/src/app.rs`\n\nAdd matching methods on `App` that delegate to `self.ctx`.\n\n### Step 3: Fix create_board handler\n\n**File:** `crates/kanban-tui/src/handlers/board_handlers.rs`\n\nReplace the two separate calls with command group pattern:\n```\nbegin_command_group()\nexecute_grouped_command(CreateBoard)\n// read board_id from self.ctx.boards.last()\nexecute_grouped_command(CreateColumn) x3\ncommit_command_group()\n```\n\n### Step 4: Fix create_card handler (auto-complete path)\n\n**File:** `crates/kanban-tui/src/handlers/card_handlers.rs`\n\nWhen `mark_as_complete` is true, wrap in command group. When not auto-completing, keep single `execute_command()`.\n\n### Step 5: Fix delete_column handler (simple merge)\n\n**File:** `crates/kanban-tui/src/handlers/column_handlers.rs`\n\nAppend `DeleteColumn` to the `move_commands` vec. Single `execute_commands_batch()` call.\n\n### Step 6: Fix detail_view MoveColumn handler (simple merge)\n\n**File:** `crates/kanban-tui/src/handlers/detail_view_handlers.rs`\n\nBuild a commands vec with MoveCard and conditionally UpdateCard. Single `execute_commands_batch()` call.\n\n### Step 7: Tests\n\n- Test that command group creates exactly 1 undo entry for multiple commands\n- Test that undo after command group restores complete pre-group state\n- Test that redo after undo restores complete post-group state\n- Test rollback restores pre-group state and creates no undo entry\n\n## Files Modified\n\n| File | Change |\n|------|--------|\n| `crates/kanban-tui/src/tui_context.rs` | Add `pending_group_snapshot` field + 4 methods |\n| `crates/kanban-tui/src/app.rs` | Add 4 delegation methods |\n| `crates/kanban-tui/src/handlers/board_handlers.rs` | Rewrite `create_board()` with command group |\n| `crates/kanban-tui/src/handlers/card_handlers.rs` | Wrap auto-complete path in command group |\n| `crates/kanban-tui/src/handlers/column_handlers.rs` | Merge delete_column commands into single batch |\n| `crates/kanban-tui/src/handlers/detail_view_handlers.rs` | Merge MoveColumn commands into single batch |\n\n## Architecture Notes\n\n- **No domain layer changes** — HistoryManager already has correct primitives\n- **No core crate changes** — no new traits needed\n- Command group API lives in TUI layer (TuiContext) where orchestration belongs\n- `execute_commands_batch` remains unchanged — command group is an alternative for when intermediate state is needed between commands",
+        "due_date": null,
+        "id": "42e31c50-77c9-43a0-98fb-5a1aa9012b49",
+        "points": null,
+        "position": 65,
+        "priority": "High",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166359Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Board creation undo/redo loses columns due to split undo entries",
+        "updated_at": "2026-02-01T19:39:53.166361Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 193,
+        "card_prefix": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-02-02T19:22:55.402436Z",
+        "created_at": "2026-02-01T13:15:33.764052Z",
+        "description": "## Problem\n\nThe three interfaces (TUI, CLI, MCP) are not at feature parity. `KanbanOperations` trait in `kanban-domain` enforces compile-time parity between TUI (`TuiContext`) and CLI (`CliContext`) — 36 methods. But the MCP server has a separate `McpTools` trait with only 14 methods, delegates to CLI subprocesses, and has no compile-time enforcement.\n\n## Current State\n\n- `KanbanOperations` (36 methods) in `crates/kanban-domain/src/operations.rs:19-84`\n- `CliContext` implements it at `crates/kanban-cli/src/context.rs:172`\n- `TuiContext` implements it at `crates/kanban-tui/src/tui_context.rs:92`\n- MCP has separate `McpTools` trait (14 methods) at `crates/kanban-mcp/src/tools_trait.rs`\n- MCP spawns CLI subprocesses via `CliExecutor` at `crates/kanban-mcp/src/executor.rs`\n- MCP crate has **zero dependency** on `kanban-domain`, `kanban-core`, or `kanban-persistence`\n\n## Desired End State\n\n- MCP implements all 36 `KanbanOperations` methods as MCP tools\n- MCP depends on `kanban-domain`, `kanban-core`, `kanban-persistence` directly\n- `McpTools` trait and `CliExecutor` are deleted\n- `McpContext` struct implements `KanbanOperations` (same pattern as `CliContext`)\n- Adding a method to `KanbanOperations` causes a compile error in MCP until wired up\n- No subprocess spawning, no CLI arg building, no retry logic\n\n## Missing from MCP (22 operations)\n\n**Board**: update_board\n**Column**: get_column, update_column, reorder_column\n**Card**: restore_card, list_archived_cards, assign_card_to_sprint, unassign_card_from_sprint, get_card_branch_name, get_card_git_checkout, bulk_archive_cards, bulk_move_cards, bulk_assign_sprint\n**Sprint** (all 8): create, list, get, update, activate, complete, cancel, delete\n**Import/Export**: export_board, import_board\n\n## Implementation Plan\n\n### Phase 1: Add Dependencies and Create McpContext\n\n1. **Update `crates/kanban-mcp/Cargo.toml`** — add `kanban-core`, `kanban-domain`, `kanban-persistence`, `uuid` as dependencies\n\n2. **Create `crates/kanban-mcp/src/context.rs`** — `McpContext` struct following `CliContext` pattern:\n   - Same fields: `boards`, `columns`, `cards`, `sprints`, `archived_cards`, `graph`, `store`\n   - Same `load()` async constructor via `JsonFileStore`\n   - Same `execute()` method using `CommandContext`\n   - Same `save()` async method\n   - `impl KanbanOperations for McpContext` (copy from `CliContext`)\n   - Local `DataSnapshot` struct (same as CLI's — simple 6-field serialize/deserialize)\n\n**Key design**: `KanbanOperations` uses `&mut self`, MCP tools receive `&self`. Solution: `Arc<tokio::sync::Mutex<McpContext>>`\n\n**Verify**: `cargo build --package kanban-mcp`\n\n### Phase 2: Replace Subprocess Delegation\n\n1. **Update `KanbanMcpServer`** — replace `executor: Arc<CliExecutor>` with `ctx: Arc<tokio::sync::Mutex<McpContext>>`\n\n2. **Update `main.rs`** — `KanbanMcpServer::new()` becomes async (loads data at startup)\n\n3. **Add helpers**:\n   - `parse_uuid(s: &str) -> Result<Uuid, McpError>` for String→Uuid conversion\n   - `to_mcp_error(e: impl Display) -> McpError` to reduce boilerplate\n   - `list_result<T: Serialize>(items: Vec<T>) -> CallToolResult` for consistent list responses\n\n4. **Rewrite existing 14 tool implementations** — each tool: lock mutex → call trait method → save on writes → serialize result\n\n   Read pattern:\n   ```rust\n   async fn tool_list_boards(&self) -> Result<CallToolResult, McpError> {\n       let ctx = self.ctx.lock().await;\n       let boards = ctx.list_boards().map_err(to_mcp_error)?;\n       Ok(list_result(boards))\n   }\n   ```\n   Write pattern:\n   ```rust\n   async fn tool_create_board(&self, Parameters(req): Parameters<CreateBoardRequest>) -> Result<CallToolResult, McpError> {\n       let mut ctx = self.ctx.lock().await;\n       let board = ctx.create_board(req.name, req.card_prefix).map_err(to_mcp_error)?;\n       ctx.save().await.map_err(to_mcp_error)?;\n       Ok(json_result(serde_json::to_value(&board).unwrap()))\n   }\n   ```\n\n5. **Delete dead code**:\n   - Delete `crates/kanban-mcp/src/executor.rs`\n   - Delete `crates/kanban-mcp/src/tools_trait.rs`\n   - Remove `mod executor`, `mod tools_trait`, all `use` of deleted types from `lib.rs`\n\n**Verify**: `cargo build --package kanban-mcp`, existing 14 tools still work\n\n### Phase 3: Add Missing 22 MCP Tools\n\nAdd request types + `#[tool]` wrappers for all missing operations:\n\n**Board** (1 tool):\n- `tool_update_board` — \"Update a board's properties (name, description, prefixes)\"\n\n**Column** (3 tools):\n- `tool_get_column` — \"Get a specific column by ID\"\n- `tool_update_column` — \"Update a column's properties (name, position, WIP limit)\"\n- `tool_reorder_column` — \"Move a column to a new position\"\n\n**Card** (10 tools):\n- `tool_restore_card` — \"Restore an archived card\"\n- `tool_list_archived_cards` — \"List all archived cards\"\n- `tool_assign_card_to_sprint` — \"Assign a card to a sprint\"\n- `tool_unassign_card_from_sprint` — \"Remove a card's sprint assignment\"\n- `tool_get_card_branch_name` — \"Get git branch name for a card\"\n- `tool_get_card_git_checkout` — \"Get git checkout command for a card\"\n- `tool_bulk_archive_cards` — \"Archive multiple cards\"\n- `tool_bulk_move_cards` — \"Move multiple cards to a column\"\n- `tool_bulk_assign_sprint` — \"Assign multiple cards to a sprint\"\n\n**Sprint** (8 tools):\n- `tool_create_sprint` — \"Create a new sprint\"\n- `tool_list_sprints` — \"List all sprints for a board\"\n- `tool_get_sprint` — \"Get a specific sprint by ID\"\n- `tool_update_sprint` — \"Update sprint properties\"\n- `tool_activate_sprint` — \"Activate a sprint\"\n- `tool_complete_sprint` — \"Complete an active sprint\"\n- `tool_cancel_sprint` — \"Cancel an active sprint\"\n- `tool_delete_sprint` — \"Delete a sprint\"\n\n**Import/Export** (2 tools):\n- `tool_export_board` — \"Export board data as JSON\"\n- `tool_import_board` — \"Import board data from JSON\"\n\nAlso update `ListCardsRequest` to add `status` filter parameter.\n\n**Verify**: `cargo build`, `cargo clippy`, all 36 tools listed when connecting\n\n### Phase 4: Verification\n\n- `cargo build` (full workspace)\n- `cargo clippy --package kanban-mcp`\n- `cargo test`\n- Connect via `.mcp.json`, verify all 36 tools appear\n- Test sprint CRUD, card archive/restore, bulk ops, export/import through MCP\n\n## What We're NOT Doing\n\n- NOT extracting shared base context crate (MCP context will duplicate CliContext pattern — acceptable)\n- NOT changing `KanbanOperations` trait itself\n- NOT adding undo/redo to MCP (TUI-specific)\n- NOT changing `.mcp.json` config or CLI binary interface\n- NOT adding new operations beyond existing 36\n\n## References\n\n- `crates/kanban-domain/src/operations.rs:19-84` — KanbanOperations trait\n- `crates/kanban-cli/src/context.rs:39-683` — CliContext (model for McpContext)\n- `crates/kanban-tui/src/tui_context.rs:17-569` — TuiContext (reference)\n- `crates/kanban-mcp/src/lib.rs` — current MCP server\n- `crates/kanban-mcp/src/executor.rs` — CliExecutor (to delete)\n- `crates/kanban-mcp/src/tools_trait.rs` — McpTools (to delete)",
+        "due_date": null,
+        "id": "da146ab1-37dc-49a4-9ad5-531fe67a07b0",
+        "points": 4,
+        "position": 103,
+        "priority": "High",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": "2026-02-01T13:46:41.474405Z",
+            "sprint_id": "5fffb1a7-facb-4461-b0f1-13ec3e4d3f3a",
+            "sprint_name": "an-eventful-october",
+            "sprint_number": 1,
+            "started_at": "2026-02-01T13:32:57.901233Z",
+            "status": "Completed"
+          },
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T13:46:41.474410Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Done",
+        "title": "Bring MCP to full feature parity with CLI/TUI via KanbanOperations trait",
+        "updated_at": "2026-02-02T19:22:55.402436Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 194,
+        "card_prefix": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-02-02T19:22:49.304523Z",
+        "created_at": "2026-02-01T13:41:03.481620Z",
+        "description": "## Bug\n\nWhen assigning a card to a sprint via the TUI ('a' key), the wrong sprint gets assigned. Cards end up on old Completed sprints instead of the intended one.\n\n## Root Cause\n\nIndex mismatch between the sprint selection dialog and the selection handler:\n\n**Dialog rendering** (`selection_dialog.rs:194-202`) filters OUT Completed/Cancelled sprints:\n```rust\n.filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)\n```\nShows: `[(None), Sprint #11 \"a-new-year\" (Planning)]`\n\n**Selection handler** (`popup_handlers.rs:209-215`) uses UNFILTERED list:\n```rust\nlet board_sprints: Vec<_> = self.ctx.sprints.iter()\n    .filter(|s| s.board_id == board_id)\n    .collect();\nif let Some(sprint) = board_sprints.get(selection_idx - 1) { ... }\n```\nUnfiltered: `[Sprint #1 (Completed), Sprint #6 (Completed), ..., Sprint #11 (Planning)]`\n\nUser selects index 1 (Sprint #11 in filtered list) -> handler does `get(0)` on unfiltered list -> gets Sprint #1 \"an-eventful-october\".\n\n## Affected Code\n\n- `crates/kanban-tui/src/handlers/popup_handlers.rs:209-215` -- single card assignment\n- `crates/kanban-tui/src/handlers/popup_handlers.rs:337-343` -- multi-card assignment (same bug)\n\n## Fix\n\nApply the same Completed/Cancelled filter in the handler that the dialog uses:\n```rust\nlet board_sprints: Vec<_> = self.ctx.sprints.iter()\n    .filter(|s| s.board_id == board_id)\n    .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)\n    .collect();\n```\n\nBoth single-card and multi-card paths need the fix.\n\n## Notes\n\n- CLI is not affected (uses UUID directly, no index-based selection)\n- MCP is not affected (no sprint assignment tool yet)",
+        "due_date": null,
+        "id": "54197834-f36b-453c-9c15-68de00f17186",
+        "points": 5,
+        "position": 102,
+        "priority": "Critical",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T13:46:38.854326Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Done",
+        "title": "Fix TUI sprint assignment selecting wrong sprint (index mismatch)",
+        "updated_at": "2026-02-02T19:22:49.304524Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 195,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-01T14:21:27.068480Z",
+        "description": "## Context\n\nDuring the Sprint::assignable refactor (KAN-194 follow-up), we identified a design gap: domain business rules like \"only Planning/Active sprints are assignable\" are encoded as functions in kanban-domain (e.g. Sprint::assignable), but nothing prevents consumers (TUI, CLI, MCP, future API) from bypassing them by accessing raw data directly.\n\nThis is exactly how the original sprint index mismatch bug happened — the UI filtered sprints for display but handlers accessed the unfiltered list.\n\n## Current State\n\n- KanbanOperations trait handles data access (CRUD) — enforced on all consumers\n- Domain logic lives as pure functions on types (Sprint::assignable) — shared but not enforced\n- TuiContext/CliContext fields like sprints: Vec<Sprint> are pub, so consumers can hand-roll their own filters\n\n## Research Needed\n\nInvestigate making domain data private on context types and only exposing it through methods that enforce business rules. Questions to answer:\n\n- Which fields/operations have business rules that consumers must conform to?\n- What would the API surface look like if fields were private?\n- How much of the codebase directly accesses ctx.sprints, ctx.cards, etc. vs going through methods?\n- What is the ripple effect of making these fields private?\n- Is there a middle ground (e.g. private for writes, pub for reads)?\n\n## Goal\n\nEnsure all consumers (TUI, CLI, MCP, future API) cannot accidentally bypass domain business rules, without over-engineering the abstraction layer.",
+        "due_date": null,
+        "id": "9d7692f1-f66f-46a1-a6b6-8132a92a8f3e",
+        "points": null,
+        "position": 66,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:39:53.166313Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Todo",
+        "title": "Research enforcing domain business rules via private accessors",
+        "updated_at": "2026-02-01T19:39:53.166316Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 196,
+        "card_prefix": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-02-01T19:28:45.979587Z",
+        "created_at": "2026-02-01T14:39:23.034980Z",
+        "description": "## Problem\n\nThe current workflow bumps the version on every merge to develop. This causes:\n\n1. One version bump per feature/fix/refactor instead of one per release\n2. Risk of mismatch between the bumped version in Cargo.toml and the published version on crates.io\n3. Bump and publish can get out of sync, delaying the actual publish by one push to master\n\n## Current Flow\n\n1. PR merges to develop → aggregate-changesets.yml bumps version immediately\n2. PR from develop to master → release.yml publishes and tags\n\nThe gap between steps 1 and 2 is where things go wrong. The version is already bumped but not yet published, so any failure or extra commit can desync the two.\n\n## Desired Flow\n\n1. PRs merge to develop — changesets accumulate, NO version bump\n2. When ready to release, create PR from develop to master\n3. On merge to master: evaluate all accumulated changesets, determine aggregate bump type, bump version, update changelog, publish to crates.io, create tag — all atomically\n4. If any step fails, the whole thing rolls back (no partial state)\n\n## Research Needed\n\n- How to make bump + changelog + publish + tag atomic in a single workflow\n- What happens if crates.io publish fails mid-way (some crates published, some not)\n- Whether to keep the CI changeset validation on develop PRs (probably yes)\n- How to handle the develop → master sync after a release without conflicts\n- Review scripts/bump-version.sh, scripts/publish-crates.sh, and both workflows for the refactor\n\n## Risk\n\nThe previous workflow was designed to avoid exactly the sync issues we're now hitting. Need to be careful not to introduce new failure modes while fixing the current ones.",
+        "due_date": null,
+        "id": "dbac3738-007e-43a6-b1f3-b967ce304f09",
+        "points": null,
+        "position": 100,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T14:39:40.337223Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Done",
+        "title": "Redesign release workflow: defer version bump to master merge",
+        "updated_at": "2026-02-01T19:28:45.979587Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 197,
+        "card_prefix": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-02-01T19:40:10.991376Z",
+        "created_at": "2026-02-01T19:30:12.050976Z",
+        "description": "Search cards by prefix+number (e.g. KAN-164) or just number (e.g. 164). Add CardIdentifierSearcher to the existing composite search in kanban-domain.",
+        "due_date": null,
+        "id": "7a900a9a-7db2-46cf-aa53-7863fb38e320",
+        "points": null,
+        "position": 101,
+        "priority": "Medium",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+        "sprint_logs": [
+          {
+            "ended_at": null,
+            "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
+            "sprint_name": "a-new-year",
+            "sprint_number": 11,
+            "started_at": "2026-02-01T19:38:07.162713Z",
+            "status": "Planning"
+          }
+        ],
+        "status": "Done",
+        "title": "Add card identifier search (PREFIX-NUMBER)",
+        "updated_at": "2026-02-01T19:40:10.991376Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 198,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-01T19:42:14.588123Z",
+        "description": "We currently show what sprint a card is assigned to as a greyed out text at the end of the card title.\n\nWe could show the card prefix / number aswell.\n\nMaybe on the front? bold letters?\n",
+        "due_date": null,
+        "id": "73cda89a-5c99-4a7d-b9fb-d8af30d3a9b5",
+        "points": null,
+        "position": 67,
+        "priority": "Medium",
         "sprint_id": null,
         "sprint_logs": [],
         "status": "Todo",
-        "title": "due dates",
-        "updated_at": "2026-01-29T13:20:34.071548Z"
+        "title": "In the card list, show the card number / prefix",
+        "updated_at": "2026-02-01T19:43:00.933520Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 199,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-02T17:51:23.260577Z",
+        "description": "## Gap\n\nThe `KanbanOperations` trait (`crates/kanban-domain/src/operations.rs`) defines 3 bulk card operations:\n- `bulk_archive_cards` (line 62)\n- `bulk_move_cards` (line 63)\n- `bulk_assign_sprint` (line 64)\n\nBut `bulk_restore_cards` and `bulk_delete_cards` are missing entirely — no trait method, no CLI handler, no TUI handler, no MCP tool. The single-item `restore_card` and `delete_card` are fully implemented across all layers.\n\n## Implementation\n\n### 1. Trait — `crates/kanban-domain/src/operations.rs`\nAdd two methods alongside the existing bulk ops (after line 64):\n```rust\nfn bulk_restore_cards(&mut self, ids: Vec<Uuid>, column_id: Option<Uuid>) -> KanbanResult<usize>;\nfn bulk_delete_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize>;\n```\n\n### 2. CLI context — `crates/kanban-cli/src/context.rs`\nImplement both methods following the `bulk_archive_cards` pattern (lines 494-501): loop over ids, call single-item method, count successes.\n\n### 3. CLI handler — `crates/kanban-cli/src/handlers/card.rs`\nAdd `BulkRestore` and `BulkDelete` variants to the card command enum and wire handler functions (parse `--ids` CSV, call context method, print result).\n\n### 4. TUI context — `crates/kanban-tui/src/tui_context.rs`\nSame loop-and-count pattern as CLI context (mirror `bulk_archive_cards` at lines 391-398).\n\n### 5. MCP context — `crates/kanban-mcp/src/context.rs`\nDelegate to CLI via `execute_with_retry`, following `bulk_archive_cards` pattern (lines 392-402):\n- `bulk_restore_cards` → `[\"card\", \"bulk-restore\", \"--ids\", &ids_csv]`\n- `bulk_delete_cards` → `[\"card\", \"bulk-delete\", \"--ids\", &ids_csv]`\n\n### 6. MCP tools — `crates/kanban-mcp/src/lib.rs`\nAdd `tool_bulk_restore_cards` and `tool_bulk_delete_cards` alongside existing bulk tools (lines 828-860), using the `spawn_op!` macro.",
+        "due_date": null,
+        "id": "d8ee8eec-a2a8-4b62-9793-80eab112f69e",
+        "points": null,
+        "position": 68,
+        "priority": "Low",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Add bulk_restore and bulk_delete to KanbanOperations trait",
+        "updated_at": "2026-02-02T17:57:15.429830Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 200,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:08:59.545866Z",
+        "description": "**From PR #165 review**\\n\\nThe same `parse_datetime` function exists in two places:\\n- `crates/kanban-mcp/src/lib.rs:87-102`\\n- `crates/kanban-cli/src/handlers/sprint.rs:5-18`\\n\\nThese are nearly identical implementations that parse both RFC 3339 and YYYY-MM-DD date formats. Should be extracted to a shared utility in `kanban-domain` or `kanban-core` to avoid drift between the two implementations.",
+        "due_date": null,
+        "id": "1a6eb20a-1228-40d7-b2d4-c92409c3e93b",
+        "points": null,
+        "position": 69,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Extract duplicated parse_datetime into shared utility",
+        "updated_at": "2026-02-02T19:08:59.545869Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 201,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:08:59.636047Z",
+        "description": "**From PR #165 review**\\n\\nIn `crates/kanban-mcp/src/context.rs:75-81`, `add_field_str` only handles `FieldUpdate::Set`. When `FieldUpdate::Clear` is passed, it silently does nothing.\\n\\nThis is currently correct for sprint prefix/card_prefix (which use separate `--clear-*` flags handled elsewhere), but the method name doesn't signal this limitation. If someone uses `add_field_str` for a field that needs clear support without adding explicit handling, it will silently drop the clear intent.\\n\\nConsider either:\\n- Renaming to make the limitation explicit\\n- Adding a `clear_flag` parameter to handle the Clear variant\\n- Adding a doc comment warning about the behavior",
+        "due_date": null,
+        "id": "d5deebac-734d-475b-ad31-effb07ab5101",
+        "points": null,
+        "position": 70,
+        "priority": "Low",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "ArgsBuilder.add_field_str silently ignores FieldUpdate::Clear",
+        "updated_at": "2026-02-02T19:08:59.636052Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 202,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:08:59.733942Z",
+        "description": "**From PR #165 review**\\n\\nIn `crates/kanban-mcp/src/context.rs:276-310`, `update_card` handles `FieldUpdate::Clear` for `due_date` (line 303-305) but NOT for `description` (line 281-283) or `points` (line 294-296).\\n\\nIf `FieldUpdate::Clear` is passed for description or points, it silently does nothing — the CLI args won't include a `--clear-description` or `--clear-points` flag.\\n\\nThe PR intentionally removed broken `clear_description`/`clear_points` from the MCP request schema (UpdateCardRequest), which is correct. But the `McpContext` implementation of `KanbanOperations` should still handle the trait contract correctly if called programmatically (e.g., from tests or future code).\\n\\nNeeds corresponding `--clear-description` and `--clear-points` CLI flags to be added first, then the context can handle them.",
+        "due_date": null,
+        "id": "58b583f0-75a2-4f84-ad43-1df49c3cdde0",
+        "points": null,
+        "position": 71,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "McpContext.update_card doesn't handle Clear for description/points",
+        "updated_at": "2026-02-02T19:08:59.733948Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 203,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:08:59.830996Z",
+        "description": "**From PR #165 review**\\n\\nIn `crates/kanban-mcp/src/executor.rs:113-122`, error types are determined by substring matching on the error message:\\n\\n```rust\\nif error_msg.contains(\\\"conflict\\\") || error_msg.contains(\\\"modified by another\\\") {\\n    Err(KanbanError::ConflictDetected { ... })\\n} else if error_msg.contains(\\\"not found\\\") {\\n    Err(KanbanError::NotFound(error_msg))\\n}\\n```\\n\\nIf the CLI ever changes its error messages (e.g., capitalization, rewording), this classification breaks silently — conflicts won't be retried, not-found errors won't get the right type.\\n\\nConsider adding structured error codes to the CLI JSON response format, e.g.:\\n```json\\n{\\\"success\\\": false, \\\"error_code\\\": \\\"CONFLICT\\\", \\\"error\\\": \\\"modified by another process\\\"}\\n```\\n\\nThis would make the executor's error mapping robust against message changes.",
+        "due_date": null,
+        "id": "efb44c09-a22d-4c89-b228-4305158939f8",
+        "points": null,
+        "position": 72,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "SyncExecutor error classification relies on fragile string matching",
+        "updated_at": "2026-02-02T19:08:59.831001Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 204,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:08:59.930871Z",
+        "description": "**From PR #165 review**\\n\\nIn `crates/kanban-mcp/src/lib.rs:593`:\\n```rust\\nreq.wip_limit.map(|w| FieldUpdate::Set(w as i32))\\n```\\n\\nAnd similarly in `crates/kanban-cli/src/handlers/column.rs:52`:\\n```rust\\nargs.wip_limit.map(|w| w as i32)\\n```\\n\\nBoth use `as i32` which is a potentially lossy cast. If `wip_limit > i32::MAX` (2,147,483,647), it wraps to a negative value. While unlikely in practice (WIP limits are typically single digits), the schema accepts `u32` so technically values up to 4 billion are valid input.\\n\\nConsider using `TryFrom` with an error, or capping at a reasonable maximum (e.g., 1000), or changing the domain type to `u32` to match.",
+        "due_date": null,
+        "id": "d844ad72-a8d6-4690-9cc6-2f0953cad000",
+        "points": null,
+        "position": 73,
+        "priority": "Low",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Lossy u32-to-i32 cast for wip_limit in MCP and CLI handlers",
+        "updated_at": "2026-02-02T19:08:59.930874Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 205,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:09:00.020734Z",
+        "description": "**From PR #165 review**\\n\\nThe integration tests in `crates/kanban-mcp/tests/integration.rs` cover happy paths thoroughly (13 tests for board CRUD, column CRUD, card lifecycle, sprint lifecycle, bulk ops, export/import). However, there are no tests for:\\n\\n- **Invalid UUID handling** — verify parse_uuid returns proper MCP error\\n- **Conflict retries** — verify execute_with_retry actually retries on ConflictDetected\\n- **Timeout behavior** — verify the 30s timeout fires and returns the right error\\n- **Operations on nonexistent entities** — only `board_get_nonexistent` is tested; missing column_get_nonexistent, card_get_nonexistent, sprint_get_nonexistent\\n- **Delete of nonexistent entity** — verify proper error propagation\\n- **Bulk operations with invalid IDs** — partial failure behavior\\n\\nUnit tests cover parser edge cases well (32 tests), but the integration layer needs error path coverage to prevent regressions.",
+        "due_date": null,
+        "id": "a130134c-08d8-4d56-ab07-e43acba95590",
+        "points": 3,
+        "position": 74,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "MCP integration tests lack error path coverage",
+        "updated_at": "2026-02-02T19:09:00.020742Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 206,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:09:00.120396Z",
+        "description": "**From PR #165 review**\\n\\nIn `crates/kanban-mcp/src/context.rs:544-554`:\\n\\n```rust\\nlet tmp = tempfile::NamedTempFile::new()?;\\nstd::fs::write(tmp.path(), data)?;\\nlet path_str = tmp.path().to_string_lossy().to_string();\\nself.executor.execute_with_retry(&[\\\"import\\\", \\\"--file\\\", &path_str])\\n// tmp is dropped here, deleting the file\\n```\\n\\nThe `NamedTempFile` is dropped at end of function scope. Since `execute_with_retry` is synchronous and blocks until the CLI process completes, the file should still exist when read. However:\\n\\n1. If retry logic kicks in (conflict), the file could be read multiple times — which is fine since `NamedTempFile` isn't dropped until after all retries.\\n2. On some platforms, if the OS delays process cleanup, there could theoretically be a race.\\n\\nSafer alternative: use `tmp.into_temp_path()` or explicitly hold the handle, or pass data via stdin instead of a temp file.",
+        "due_date": null,
+        "id": "071f9152-1f2e-4ca8-85f1-795856751c0b",
+        "points": null,
+        "position": 75,
+        "priority": "Low",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Potential race in import_board temp file lifetime",
+        "updated_at": "2026-02-02T19:09:00.120401Z"
+      },
+      {
+        "assigned_prefix": "task",
+        "card_number": 1,
+        "card_prefix": null,
+        "column_id": "7724ace0-bb87-4f48-bf98-e8f65acc55db",
+        "completed_at": "2026-02-02T19:26:00.736845Z",
+        "created_at": "2026-02-02T19:24:07.251563Z",
+        "description": null,
+        "due_date": null,
+        "id": "b6ec50d0-a09d-44fc-976e-f1c4b01256c1",
+        "points": null,
+        "position": 0,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Done",
+        "title": "card",
+        "updated_at": "2026-02-02T19:26:00.736846Z"
+      },
+      {
+        "assigned_prefix": "task",
+        "card_number": 3,
+        "card_prefix": null,
+        "column_id": "28c91933-5e8c-47ac-9b7d-87ceabbda0cd",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:25:48.122033Z",
+        "description": null,
+        "due_date": null,
+        "id": "00a84be2-2540-414d-8878-b93ac419b4a9",
+        "points": null,
+        "position": 0,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "new",
+        "updated_at": "2026-02-02T19:25:48.122033Z"
+      },
+      {
+        "assigned_prefix": "task",
+        "card_number": 2,
+        "card_prefix": null,
+        "column_id": "d77bb354-8781-44c0-8b49-06a038629eca",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:24:09.264144Z",
+        "description": "A description\n",
+        "due_date": null,
+        "id": "a33b027b-1d19-4ce9-89a8-5a339e062669",
+        "points": null,
+        "position": 0,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "second",
+        "updated_at": "2026-02-02T19:26:19.218671Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 207,
+        "card_prefix": null,
+        "column_id": "64e02b8a-c9a0-49dc-a21e-a20ed1620fa5",
+        "completed_at": null,
+        "created_at": "2026-02-02T19:47:42.519968Z",
+        "description": "## Problem\n\nTUI can update all fields on BoardUpdate (10), CardUpdate (11), and SprintUpdate (7), but CLI and MCP can only update a subset:\n\n- **BoardUpdate**: 4/10 fields exposed (missing: task_sort_field, task_sort_order, sprint_duration_days, task_list_view, active_sprint_id, completion_column_id)\n- **CardUpdate**: 6/11 fields exposed (missing: position, column_id, sprint_id, assigned_prefix, card_prefix)\n- **SprintUpdate**: 5/7 fields exposed (missing: name_index, status)\n\nSome missing fields have dedicated methods (move_card, assign_card_to_sprint, activate/complete/cancel_sprint), so those are intentional. But `assigned_prefix`, `card_prefix` on cards and all the board settings have NO way to be set outside TUI.\n\n## Root Cause\n\nArchitectural asymmetry:\n\n1. **TUI** (`tui_context.rs`) operates directly on in-memory Rust structs. It constructs full `CardUpdate`/`BoardUpdate`/`SprintUpdate` structs and passes them to the command executor. No serialization boundary.\n\n2. **CLI** (`cli.rs` + handlers) parses command-line arguments via clap, then constructs the update structs from those args. If no clap flag exists for a field, it's unreachable.\n\n3. **MCP** (`context.rs`) builds CLI argument vectors and shells out to the kanban binary, parsing JSON responses. It inherits all CLI limitations.\n\nThe domain layer supports all fields. The bottleneck is entirely in CLI argument definitions.\n\n## Why This Happened\n\nThe KanbanOperations trait enforces method parity (all 37 operations exist everywhere), but it doesn't enforce field-level completeness within those methods. The trait signature is:\n\n```rust\nfn update_card(&mut self, id: Uuid, updates: CardUpdate) -> Result<Card>;\n```\n\nBoth TUI and CLI implement this, but TUI populates all CardUpdate fields while CLI only populates fields that have corresponding clap arguments.\n\n## Solution Options\n\n### Option A: Add missing CLI flags\nAdd clap arguments for all missing fields in the update commands. Straightforward but expands CLI surface area significantly.\n\nFiles to modify:\n- `crates/kanban-cli/src/cli.rs` - Add clap args\n- `crates/kanban-cli/src/handlers/card.rs` - Wire args to CardUpdate\n- `crates/kanban-cli/src/handlers/board.rs` - Wire args to BoardUpdate\n- MCP would automatically get parity since it delegates to CLI\n\n### Option B: Direct domain access for MCP\nHave MCP implement KanbanOperations by directly manipulating the data file (like TUI does) instead of shelling out to CLI. This would give MCP full field access without CLI changes.\n\nDownside: Duplicates file I/O logic that currently lives in CLI.\n\n### Option C: Extract shared library\nFactor out the file I/O and state management into a shared library that both TUI and a new \"direct\" MCP implementation can use. CLI remains a thin wrapper.\n\nThis is the cleanest long-term but highest effort.\n\n## Recommendation\n\nOption A is pragmatic for now. The missing fields are:\n- Card: `assigned_prefix`, `card_prefix` (2 fields)\n- Board: `task_sort_field`, `task_sort_order`, `sprint_duration_days`, `task_list_view`, `active_sprint_id`, `completion_column_id` (6 fields)\n\nCard prefixes are useful for CLI users. Board settings are more TUI-specific but could still be exposed.\n\n## Files Reference\n\n- Trait: `crates/kanban-domain/src/operations.rs:19-89`\n- TUI impl: `crates/kanban-tui/src/tui_context.rs:92-571`\n- CLI impl: `crates/kanban-cli/src/context.rs:172-685`\n- MCP impl: `crates/kanban-mcp/src/context.rs:121-554`\n- CLI args: `crates/kanban-cli/src/cli.rs`",
+        "due_date": null,
+        "id": "fefd78db-0350-49bd-b3d7-2d656fc92871",
+        "points": null,
+        "position": 0,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "CLI/MCP field parity gap caused by architectural asymmetry",
+        "updated_at": "2026-02-02T19:47:42.519981Z"
       }
     ],
     "columns": [
@@ -5542,35 +6642,23 @@
         "position": 2,
         "updated_at": "2025-10-30T18:52:12.692465Z",
         "wip_limit": null
-      },
-      {
-        "board_id": "82e0d16a-5d79-42e5-aba1-886c63d8f323",
-        "created_at": "2025-12-20T02:29:13.681550Z",
-        "id": "edcb2af0-091f-424b-a699-d0c9da3bd189",
-        "name": "TODO",
-        "position": 0,
-        "updated_at": "2025-12-20T02:29:13.681550Z",
-        "wip_limit": null
-      },
-      {
-        "board_id": "82e0d16a-5d79-42e5-aba1-886c63d8f323",
-        "created_at": "2025-12-20T02:29:13.681555Z",
-        "id": "0d932fb7-0632-44bd-8903-1f5de355f644",
-        "name": "Doing",
-        "position": 1,
-        "updated_at": "2025-12-20T02:29:13.681555Z",
-        "wip_limit": null
-      },
-      {
-        "board_id": "82e0d16a-5d79-42e5-aba1-886c63d8f323",
-        "created_at": "2025-12-20T02:29:13.681558Z",
-        "id": "eb3d88cc-fb53-481d-a14c-8732b5b10c47",
-        "name": "Complete",
-        "position": 2,
-        "updated_at": "2025-12-20T02:29:13.681558Z",
-        "wip_limit": null
       }
     ],
+    "graph": {
+      "cards": {
+        "edges": [
+          {
+            "archived_at": null,
+            "created_at": "2026-02-02T19:24:12.306859Z",
+            "direction": "Directed",
+            "edge_type": "ParentOf",
+            "source": "a33b027b-1d19-4ce9-89a8-5a339e062669",
+            "target": "b6ec50d0-a09d-44fc-976e-f1c4b01256c1",
+            "weight": null
+          }
+        ]
+      }
+    },
     "sprints": [
       {
         "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
@@ -5654,14 +6742,14 @@
         "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
         "card_prefix": null,
         "created_at": "2025-12-23T00:28:48.615812Z",
-        "end_date": null,
+        "end_date": "2026-02-09T05:00:53.804547Z",
         "id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "name_index": 6,
         "prefix": "KAN",
         "sprint_number": 11,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2025-12-23T00:28:48.615812Z"
+        "start_date": "2026-02-02T05:00:53.804547Z",
+        "status": "Active",
+        "updated_at": "2026-02-02T05:00:53.804551Z"
       }
     ]
   }
