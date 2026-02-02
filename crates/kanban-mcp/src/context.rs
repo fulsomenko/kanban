@@ -116,7 +116,6 @@ impl McpContext {
         let response: ListResponse<T> = self.executor.execute(args)?;
         Ok(response.items)
     }
-
 }
 
 impl KanbanOperations for McpContext {

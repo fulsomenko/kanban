@@ -7,6 +7,7 @@ use kanban_domain::{
     BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
     CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
 };
+use parking_lot::Mutex;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
@@ -16,7 +17,6 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router, ServerHandler,
 };
 use serde::Deserialize;
-use parking_lot::Mutex;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -637,7 +637,14 @@ impl KanbanMcpServer {
             due_date,
         };
 
-        let card = spawn_op!(self.ctx, create_card, board_id, column_id, req.title, options)?;
+        let card = spawn_op!(
+            self.ctx,
+            create_card,
+            board_id,
+            column_id,
+            req.title,
+            options
+        )?;
         to_call_tool_result(&card)
     }
 

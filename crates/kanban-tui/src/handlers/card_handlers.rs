@@ -1,9 +1,7 @@
 use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use kanban_domain::commands::{
-    CreateCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard,
-};
+use kanban_domain::commands::{CreateCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard};
 use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, Column, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
