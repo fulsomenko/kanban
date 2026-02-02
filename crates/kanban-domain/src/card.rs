@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use uuid::Uuid;
 
 use crate::{board::Board, column::ColumnId, field_update::FieldUpdate, sprint::Sprint, SprintLog};
@@ -21,6 +22,28 @@ pub enum CardStatus {
     InProgress,
     Blocked,
     Done,
+}
+
+impl fmt::Display for CardPriority {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Low => write!(f, "low"),
+            Self::Medium => write!(f, "medium"),
+            Self::High => write!(f, "high"),
+            Self::Critical => write!(f, "critical"),
+        }
+    }
+}
+
+impl fmt::Display for CardStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Todo => write!(f, "todo"),
+            Self::InProgress => write!(f, "in_progress"),
+            Self::Blocked => write!(f, "blocked"),
+            Self::Done => write!(f, "done"),
+        }
+    }
 }
 
 /// Represents card lifecycle operation types.
@@ -329,6 +352,14 @@ pub struct CardUpdate {
     pub sprint_id: FieldUpdate<Uuid>,
     pub assigned_prefix: FieldUpdate<String>,
     pub card_prefix: FieldUpdate<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CreateCardOptions {
+    pub description: Option<String>,
+    pub priority: Option<CardPriority>,
+    pub points: Option<u8>,
+    pub due_date: Option<DateTime<Utc>>,
 }
 
 impl GraphNode for Card {

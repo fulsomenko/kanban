@@ -1,9 +1,7 @@
 use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use kanban_domain::commands::{
-    ArchiveCard, CreateCard, DeleteCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard,
-};
+use kanban_domain::commands::{CreateCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard};
 use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, Column, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -339,6 +337,7 @@ impl App {
                     column_id: column.id,
                     title: self.input.as_str().to_string(),
                     position,
+                    options: kanban_domain::CreateCardOptions::default(),
                 });
 
                 if let Err(e) = self.execute_command(create_cmd) {
@@ -516,36 +515,6 @@ impl App {
         }
     }
 
-    #[allow(dead_code)]
-    fn delete_card(&mut self, card_id: uuid::Uuid) -> bool {
-        // Store info before executing command
-        let deleted_info = self
-            .ctx
-            .cards
-            .iter()
-            .find(|c| c.id == card_id)
-            .map(|c| (c.column_id, c.position, c.title.clone()));
-
-        if let Some((deleted_column_id, deleted_position, card_title)) = deleted_info {
-            // Execute ArchiveCard command
-            let cmd = Box::new(ArchiveCard { card_id });
-            if let Err(e) = self.execute_command(cmd) {
-                tracing::error!("Failed to archive card: {}", e);
-                return false;
-            }
-
-            // Compact positions in the deleted column to remove gaps
-            self.compact_column_positions(deleted_column_id);
-
-            // Update selection to the next appropriate card
-            self.select_card_after_deletion(deleted_column_id, deleted_position);
-
-            tracing::info!("Card '{}' archived", card_title);
-            return true;
-        }
-        false
-    }
-
     pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
         kanban_domain::card_lifecycle::compact_column_positions(&mut self.ctx.cards, column_id);
     }
@@ -615,29 +584,6 @@ impl App {
                 },
             );
         }
-    }
-
-    #[allow(dead_code)]
-    fn restore_selected_cards(&mut self) {
-        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
-        let mut restored_count = 0;
-
-        for card_id in card_ids {
-            if let Some(archived_card) = self
-                .ctx
-                .archived_cards
-                .iter()
-                .find(|dc| dc.card.id == card_id)
-                .cloned()
-            {
-                self.restore_card(archived_card);
-                restored_count += 1;
-            }
-        }
-
-        tracing::info!("Restored {} card(s)", restored_count);
-        self.selected_cards.clear();
-        self.refresh_view();
     }
 
     pub fn restore_card(&mut self, archived_card: ArchivedCard) {
@@ -713,57 +659,6 @@ impl App {
                     start_time: Instant::now(),
                 },
             );
-        }
-    }
-
-    #[allow(dead_code)]
-    fn permanent_delete_selected_cards(&mut self) {
-        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
-        let mut deleted_count = 0;
-
-        for card_id in card_ids {
-            if let Some(card) = self
-                .ctx
-                .archived_cards
-                .iter()
-                .find(|dc| dc.card.id == card_id)
-            {
-                let card_title = card.card.title.clone();
-
-                // Execute DeleteCard command
-                let cmd = Box::new(DeleteCard { card_id });
-                if let Err(e) = self.execute_command(cmd) {
-                    tracing::error!("Failed to permanently delete card: {}", e);
-                    continue;
-                }
-
-                tracing::info!("Permanently deleted card '{}'", card_title);
-                deleted_count += 1;
-            }
-        }
-
-        tracing::info!("Permanently deleted {} card(s)", deleted_count);
-        self.selected_cards.clear();
-        self.refresh_view();
-    }
-
-    #[allow(dead_code)]
-    fn permanent_delete_card_at(&mut self, index: usize) {
-        if index < self.ctx.archived_cards.len() {
-            if let Some(card) = self.ctx.archived_cards.get(index) {
-                let card_id = card.card.id;
-                let card_title = card.card.title.clone();
-
-                // Execute DeleteCard command
-                let cmd = Box::new(DeleteCard { card_id });
-                if let Err(e) = self.execute_command(cmd) {
-                    tracing::error!("Failed to permanently delete card: {}", e);
-                    return;
-                }
-
-                tracing::info!("Permanently deleted card '{}'", card_title);
-                self.refresh_view();
-            }
         }
     }
 

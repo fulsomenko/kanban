@@ -69,6 +69,14 @@ kanban myboard.json    # Load a board from file
 3. Add cards with `n` and organize them
 4. Press `x` to export as JSON
 
+### MCP Server
+
+```bash
+nix run github:fulsomenko/kanban#kanban-mcp
+```
+
+Provides full read/write access to your boards, cards, columns, and sprints over the [Model Context Protocol](https://modelcontextprotocol.io) for use with LLM tools like Claude Code, Cursor, etc.
+
 ### CLI
 
 ```bash

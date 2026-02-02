@@ -2,26 +2,15 @@ use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
 use kanban_domain::{
-    CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate, FieldUpdate,
-    KanbanOperations,
+    CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate, CreateCardOptions,
+    FieldUpdate, KanbanOperations,
 };
 
 pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {
     match action {
         CardAction::Create(args) => {
-            let title = args.title.clone();
-            let mut card = ctx.create_card(args.board_id, args.column_id, title)?;
-
-            if args.description.is_some()
-                || args.priority.is_some()
-                || args.points.is_some()
-                || args.due_date.is_some()
-            {
-                let updates =
-                    build_card_update_from_create(&args).map_err(|e| anyhow::anyhow!(e))?;
-                card = ctx.update_card(card.id, updates)?;
-            }
-
+            let options = build_create_options(&args).map_err(|e| anyhow::anyhow!(e))?;
+            let card = ctx.create_card(args.board_id, args.column_id, args.title, options)?;
             ctx.save().await?;
             output::output_success(&card);
         }
@@ -135,33 +124,20 @@ fn build_filter(args: &CardListArgs) -> Result<CardListFilter, String> {
     })
 }
 
-fn build_card_update_from_create(args: &CardCreateArgs) -> Result<CardUpdate, String> {
+fn build_create_options(args: &CardCreateArgs) -> Result<CreateCardOptions, String> {
     let priority = match &args.priority {
         Some(p) => Some(parse_priority(p)?),
         None => None,
     };
-    Ok(CardUpdate {
-        title: None,
-        description: args
-            .description
-            .clone()
-            .map(FieldUpdate::Set)
-            .unwrap_or(FieldUpdate::NoChange),
+    let due_date = match &args.due_date {
+        Some(d) => Some(parse_datetime(d)?),
+        None => None,
+    };
+    Ok(CreateCardOptions {
+        description: args.description.clone(),
         priority,
-        status: None,
-        position: None,
-        column_id: None,
-        points: args
-            .points
-            .map(FieldUpdate::Set)
-            .unwrap_or(FieldUpdate::NoChange),
-        due_date: match &args.due_date {
-            Some(d) => FieldUpdate::Set(parse_datetime(d)?),
-            None => FieldUpdate::NoChange,
-        },
-        sprint_id: FieldUpdate::NoChange,
-        assigned_prefix: FieldUpdate::NoChange,
-        card_prefix: FieldUpdate::NoChange,
+        points: args.points,
+        due_date,
     })
 }
 

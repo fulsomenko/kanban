@@ -141,6 +141,8 @@ pub struct ColumnUpdateArgs {
     pub position: Option<i32>,
     #[arg(long)]
     pub wip_limit: Option<u32>,
+    #[arg(long)]
+    pub clear_wip_limit: bool,
 }
 
 // Card commands
@@ -343,9 +345,19 @@ pub struct SprintUpdateArgs {
     /// Sprint ID to update
     pub id: Uuid,
     #[arg(long)]
+    pub name: Option<String>,
+    #[arg(long)]
     pub prefix: Option<String>,
     #[arg(long)]
     pub card_prefix: Option<String>,
+    #[arg(long)]
+    pub start_date: Option<String>,
+    #[arg(long)]
+    pub end_date: Option<String>,
+    #[arg(long)]
+    pub clear_start_date: bool,
+    #[arg(long)]
+    pub clear_end_date: bool,
 }
 
 // Export/Import commands

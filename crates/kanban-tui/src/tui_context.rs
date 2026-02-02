@@ -182,6 +182,7 @@ impl KanbanOperations for TuiContext {
         board_id: Uuid,
         column_id: Uuid,
         title: String,
+        options: kanban_domain::CreateCardOptions,
     ) -> KanbanResult<Card> {
         let position =
             kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
@@ -190,6 +191,7 @@ impl KanbanOperations for TuiContext {
             column_id,
             title,
             position,
+            options,
         });
         self.execute_command(cmd)?;
         Ok(self.cards.last().unwrap().clone())

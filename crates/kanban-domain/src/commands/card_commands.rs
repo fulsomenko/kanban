@@ -1,6 +1,6 @@
 use super::{Command, CommandContext};
 use crate::dependencies::card_graph::CardGraphExt;
-use crate::CardUpdate;
+use crate::{CardUpdate, CreateCardOptions};
 use chrono::Utc;
 use kanban_core::KanbanResult;
 use uuid::Uuid;
@@ -30,6 +30,7 @@ pub struct CreateCard {
     pub column_id: Uuid,
     pub title: String,
     pub position: i32,
+    pub options: CreateCardOptions,
 }
 
 impl Command for CreateCard {
@@ -53,6 +54,37 @@ impl Command for CreateCard {
                 &prefix,
             );
             context.cards.push(card);
+
+            // Apply optional fields
+            if self.options.description.is_some()
+                || self.options.priority.is_some()
+                || self.options.points.is_some()
+                || self.options.due_date.is_some()
+            {
+                if let Some(card) = context.cards.last_mut() {
+                    let updates = CardUpdate {
+                        description: self
+                            .options
+                            .description
+                            .clone()
+                            .map(crate::FieldUpdate::Set)
+                            .unwrap_or(crate::FieldUpdate::NoChange),
+                        priority: self.options.priority,
+                        points: self
+                            .options
+                            .points
+                            .map(crate::FieldUpdate::Set)
+                            .unwrap_or(crate::FieldUpdate::NoChange),
+                        due_date: self
+                            .options
+                            .due_date
+                            .map(crate::FieldUpdate::Set)
+                            .unwrap_or(crate::FieldUpdate::NoChange),
+                        ..Default::default()
+                    };
+                    card.update(updates);
+                }
+            }
         }
         Ok(())
     }

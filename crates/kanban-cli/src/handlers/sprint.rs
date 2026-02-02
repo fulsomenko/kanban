@@ -3,6 +3,23 @@ use crate::context::CliContext;
 use crate::output;
 use kanban_domain::{FieldUpdate, KanbanOperations, SprintUpdate};
 
+fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .or_else(|_| {
+            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                .map_err(|_| ())
+                .and_then(|d| d.and_hms_opt(0, 0, 0).ok_or(()))
+                .map(|dt| dt.and_utc())
+        })
+        .map_err(|_| {
+            format!(
+                "Invalid date '{}'. Supported formats: YYYY-MM-DD or RFC 3339 (e.g., 2024-01-15T10:30:00Z)",
+                s
+            )
+        })
+}
+
 pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Result<()> {
     match action {
         SprintAction::Create {
@@ -54,7 +71,26 @@ async fn handle_update(
     ctx: &mut CliContext,
     args: SprintUpdateArgs,
 ) -> anyhow::Result<kanban_domain::Sprint> {
+    let start_date = if args.clear_start_date {
+        FieldUpdate::Clear
+    } else {
+        match args.start_date {
+            Some(d) => FieldUpdate::Set(parse_datetime(&d).map_err(anyhow::Error::msg)?),
+            None => FieldUpdate::NoChange,
+        }
+    };
+
+    let end_date = if args.clear_end_date {
+        FieldUpdate::Clear
+    } else {
+        match args.end_date {
+            Some(d) => FieldUpdate::Set(parse_datetime(&d).map_err(anyhow::Error::msg)?),
+            None => FieldUpdate::NoChange,
+        }
+    };
+
     let updates = SprintUpdate {
+        name: args.name,
         name_index: FieldUpdate::NoChange,
         prefix: args
             .prefix
@@ -65,8 +101,8 @@ async fn handle_update(
             .map(FieldUpdate::Set)
             .unwrap_or(FieldUpdate::NoChange),
         status: None,
-        start_date: FieldUpdate::NoChange,
-        end_date: FieldUpdate::NoChange,
+        start_date,
+        end_date,
     };
     let sprint = ctx.update_sprint(args.id, updates)?;
     ctx.save().await?;
