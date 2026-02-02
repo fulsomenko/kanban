@@ -252,7 +252,7 @@ impl KanbanOperations for McpContext {
         let board_id_str = filter.board_id.map(|id| id.to_string());
         let column_id_str = filter.column_id.map(|id| id.to_string());
         let sprint_id_str = filter.sprint_id.map(|id| id.to_string());
-        let status_str = filter.status.map(|s| format!("{:?}", s).to_lowercase());
+        let status_str = filter.status.map(|s| s.to_string());
 
         let mut builder = ArgsBuilder::new(&["card", "list"]);
         builder
@@ -278,11 +278,11 @@ impl KanbanOperations for McpContext {
         }
 
         if let Some(p) = &updates.priority {
-            let p_str = format!("{:?}", p).to_lowercase();
+            let p_str = p.to_string();
             builder.add_opt("--priority", Some(&p_str));
         }
         if let Some(s) = &updates.status {
-            let s_str = format!("{:?}", s).to_lowercase();
+            let s_str = s.to_string();
             builder.add_opt("--status", Some(&s_str));
         }
 
