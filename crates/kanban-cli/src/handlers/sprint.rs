@@ -71,21 +71,6 @@ async fn handle_update(
     ctx: &mut CliContext,
     args: SprintUpdateArgs,
 ) -> anyhow::Result<kanban_domain::Sprint> {
-    let name_index = if let Some(name) = args.name {
-        let sprint = ctx
-            .get_sprint(args.id)?
-            .ok_or_else(|| anyhow::anyhow!("Sprint not found: {}", args.id))?;
-        let board = ctx
-            .boards
-            .iter_mut()
-            .find(|b| b.id == sprint.board_id)
-            .ok_or_else(|| anyhow::anyhow!("Board not found: {}", sprint.board_id))?;
-        let idx = board.add_sprint_name_at_used_index(name);
-        FieldUpdate::Set(idx)
-    } else {
-        FieldUpdate::NoChange
-    };
-
     let start_date = if args.clear_start_date {
         FieldUpdate::Clear
     } else {
@@ -105,8 +90,8 @@ async fn handle_update(
     };
 
     let updates = SprintUpdate {
-        name: None,
-        name_index,
+        name: args.name,
+        name_index: FieldUpdate::NoChange,
         prefix: args
             .prefix
             .map(FieldUpdate::Set)
