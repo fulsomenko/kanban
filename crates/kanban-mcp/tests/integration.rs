@@ -3,6 +3,9 @@ use kanban_mcp::context::McpContext;
 use tempfile::TempDir;
 
 fn kanban_bin() -> String {
+    if let Ok(path) = std::env::var("KANBAN_BIN") {
+        return path;
+    }
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let workspace_root = std::path::Path::new(manifest_dir)
         .parent()
