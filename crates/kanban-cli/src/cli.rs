@@ -141,6 +141,8 @@ pub struct ColumnUpdateArgs {
     pub position: Option<i32>,
     #[arg(long)]
     pub wip_limit: Option<u32>,
+    #[arg(long)]
+    pub clear_wip_limit: bool,
 }
 
 // Card commands

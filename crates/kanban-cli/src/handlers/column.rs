@@ -47,11 +47,14 @@ async fn handle_update(
     let updates = ColumnUpdate {
         name: args.name,
         position: args.position,
-        wip_limit: args
-            .wip_limit
-            .map(|w| w as i32)
-            .map(FieldUpdate::Set)
-            .unwrap_or(FieldUpdate::NoChange),
+        wip_limit: if args.clear_wip_limit {
+            FieldUpdate::Clear
+        } else {
+            args.wip_limit
+                .map(|w| w as i32)
+                .map(FieldUpdate::Set)
+                .unwrap_or(FieldUpdate::NoChange)
+        },
     };
     let column = ctx.update_column(args.id, updates)?;
     ctx.save().await?;
