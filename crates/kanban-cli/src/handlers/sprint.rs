@@ -105,6 +105,7 @@ async fn handle_update(
     };
 
     let updates = SprintUpdate {
+        name: None,
         name_index,
         prefix: args
             .prefix

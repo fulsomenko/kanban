@@ -85,27 +85,6 @@ impl ArgsBuilder {
     }
 }
 
-pub struct SprintUpdateFullParams {
-    pub id: Uuid,
-    pub name: Option<String>,
-    pub prefix: Option<String>,
-    pub card_prefix: Option<String>,
-    pub start_date: Option<String>,
-    pub end_date: Option<String>,
-    pub clear_start_date: bool,
-    pub clear_end_date: bool,
-}
-
-pub struct CreateCardFullParams {
-    pub board_id: Uuid,
-    pub column_id: Uuid,
-    pub title: String,
-    pub description: Option<String>,
-    pub priority: Option<String>,
-    pub points: Option<u8>,
-    pub due_date: Option<String>,
-}
-
 pub struct McpContext {
     executor: SyncExecutor,
 }
@@ -138,40 +117,6 @@ impl McpContext {
         Ok(response.items)
     }
 
-    pub fn update_sprint_full(&mut self, params: SprintUpdateFullParams) -> KanbanResult<Sprint> {
-        let id_str = params.id.to_string();
-        let mut builder = ArgsBuilder::new(&["sprint", "update", &id_str]);
-        builder
-            .add_opt("--name", params.name.as_deref())
-            .add_opt("--prefix", params.prefix.as_deref())
-            .add_opt("--card-prefix", params.card_prefix.as_deref())
-            .add_opt("--start-date", params.start_date.as_deref())
-            .add_opt("--end-date", params.end_date.as_deref())
-            .add_flag("--clear-start-date", params.clear_start_date)
-            .add_flag("--clear-end-date", params.clear_end_date);
-        self.executor.execute_with_retry(&builder.build())
-    }
-
-    pub fn create_card_full(&mut self, params: CreateCardFullParams) -> KanbanResult<Card> {
-        let board_id_str = params.board_id.to_string();
-        let column_id_str = params.column_id.to_string();
-        let mut builder = ArgsBuilder::new(&[
-            "card",
-            "create",
-            "--board-id",
-            &board_id_str,
-            "--column-id",
-            &column_id_str,
-            "--title",
-            &params.title,
-        ]);
-        builder
-            .add_opt("--description", params.description.as_deref())
-            .add_opt("--priority", params.priority.as_deref())
-            .add_opt_num("--points", params.points)
-            .add_opt("--due-date", params.due_date.as_deref());
-        self.executor.execute_with_retry(&builder.build())
-    }
 }
 
 impl KanbanOperations for McpContext {
@@ -341,14 +286,8 @@ impl KanbanOperations for McpContext {
             builder.add_opt("--status", Some(&s_str));
         }
 
-        match &updates.points {
-            FieldUpdate::Set(v) => {
-                builder.add_opt_num("--points", Some(*v));
-            }
-            FieldUpdate::Clear => {
-                builder.add_flag("--clear-points", true);
-            }
-            _ => {}
+        if let FieldUpdate::Set(v) = &updates.points {
+            builder.add_opt_num("--points", Some(*v));
         }
 
         match &updates.due_date {
@@ -530,6 +469,7 @@ impl KanbanOperations for McpContext {
         let id_str = id.to_string();
         let mut builder = ArgsBuilder::new(&["sprint", "update", &id_str]);
         builder
+            .add_opt("--name", updates.name.as_deref())
             .add_field_str("--prefix", &updates.prefix)
             .add_field_str("--card-prefix", &updates.card_prefix);
 

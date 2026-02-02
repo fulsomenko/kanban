@@ -1,5 +1,5 @@
 use kanban_domain::KanbanOperations;
-use kanban_mcp::context::{CreateCardFullParams, McpContext, SprintUpdateFullParams};
+use kanban_mcp::context::McpContext;
 use tempfile::TempDir;
 
 fn kanban_bin() -> String {
@@ -120,24 +120,36 @@ fn card_create_get_move_archive_restore() {
 }
 
 #[test]
-fn create_card_full_with_all_fields() {
+fn create_card_then_update_with_all_fields() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
 
     let card = ctx
-        .create_card_full(CreateCardFullParams {
-            board_id: board.id,
-            column_id: col.id,
-            title: "Full Card".into(),
-            description: Some("A description".into()),
-            priority: Some("high".into()),
-            points: Some(5),
-            due_date: Some("2025-12-31".into()),
-        })
+        .create_card(board.id, col.id, "Full Card".into())
         .unwrap();
     assert_eq!(card.title, "Full Card");
-    assert_eq!(card.description.as_deref(), Some("A description"));
+
+    let updated = ctx
+        .update_card(
+            card.id,
+            kanban_domain::CardUpdate {
+                title: None,
+                description: kanban_domain::FieldUpdate::Set("A description".into()),
+                priority: Some(kanban_domain::CardPriority::High),
+                status: None,
+                position: None,
+                column_id: None,
+                points: kanban_domain::FieldUpdate::Set(5),
+                due_date: kanban_domain::FieldUpdate::NoChange,
+                sprint_id: kanban_domain::FieldUpdate::NoChange,
+                assigned_prefix: kanban_domain::FieldUpdate::NoChange,
+                card_prefix: kanban_domain::FieldUpdate::NoChange,
+            },
+        )
+        .unwrap();
+    assert_eq!(updated.title, "Full Card");
+    assert_eq!(updated.description.as_deref(), Some("A description"));
 }
 
 // Sprint round-trips
@@ -160,22 +172,36 @@ fn sprint_create_list_activate_complete() {
 }
 
 #[test]
-fn sprint_update_full() {
+fn sprint_update_via_trait() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
 
     let updated = ctx
-        .update_sprint_full(SprintUpdateFullParams {
-            id: sprint.id,
-            name: Some("Sprint Alpha".into()),
-            prefix: Some("SA".into()),
-            card_prefix: None,
-            start_date: Some("2025-01-01".into()),
-            end_date: Some("2025-01-15".into()),
-            clear_start_date: false,
-            clear_end_date: false,
-        })
+        .update_sprint(
+            sprint.id,
+            kanban_domain::SprintUpdate {
+                name: Some("Sprint Alpha".into()),
+                name_index: kanban_domain::FieldUpdate::NoChange,
+                prefix: kanban_domain::FieldUpdate::Set("SA".into()),
+                card_prefix: kanban_domain::FieldUpdate::NoChange,
+                status: None,
+                start_date: kanban_domain::FieldUpdate::Set(
+                    chrono::NaiveDate::from_ymd_opt(2025, 1, 1)
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap()
+                        .and_utc(),
+                ),
+                end_date: kanban_domain::FieldUpdate::Set(
+                    chrono::NaiveDate::from_ymd_opt(2025, 1, 15)
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap()
+                        .and_utc(),
+                ),
+            },
+        )
         .unwrap();
     assert_eq!(updated.id, sprint.id);
 }

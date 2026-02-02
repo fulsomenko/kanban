@@ -1,11 +1,11 @@
 pub mod context;
 pub mod executor;
 
-use context::{CreateCardFullParams, McpContext, SprintUpdateFullParams};
+use context::McpContext;
 use kanban_core::KanbanError;
 use kanban_domain::{
     BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate, FieldUpdate,
-    KanbanOperations,
+    KanbanOperations, SprintUpdate,
 };
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -235,7 +235,9 @@ pub struct CreateCardRequest {
     pub priority: Option<String>,
     #[schemars(description = "Story points (optional, 0-255)")]
     pub points: Option<u8>,
-    #[schemars(description = "Due date in ISO 8601 format (optional)")]
+    #[schemars(
+        description = "Due date in YYYY-MM-DD or RFC 3339 format (e.g. 2024-06-15 or 2024-06-15T10:30:00Z)"
+    )]
     pub due_date: Option<String>,
 }
 
@@ -263,24 +265,20 @@ pub struct UpdateCardRequest {
     pub card_id: String,
     #[schemars(description = "New title (optional)")]
     pub title: Option<String>,
-    #[schemars(description = "New description (optional, use empty string to clear)")]
+    #[schemars(description = "New description (optional)")]
     pub description: Option<String>,
-    #[schemars(description = "Clear description (set to true to remove description)")]
-    pub clear_description: Option<bool>,
     #[schemars(description = "Priority: 'low', 'medium', 'high', or 'critical' (optional)")]
     pub priority: Option<String>,
     #[schemars(description = "Status: 'todo', 'in_progress', 'blocked', or 'done' (optional)")]
     pub status: Option<String>,
     #[schemars(
-        description = "Due date in ISO 8601 format (optional, use clear_due_date to remove)"
+        description = "Due date in YYYY-MM-DD or RFC 3339 format (e.g. 2024-06-15 or 2024-06-15T10:30:00Z), use clear_due_date to remove"
     )]
     pub due_date: Option<String>,
     #[schemars(description = "Clear due date (set to true to remove due date)")]
     pub clear_due_date: Option<bool>,
     #[schemars(description = "Story points (optional, 0-255)")]
     pub points: Option<u8>,
-    #[schemars(description = "Clear story points (set to true to remove points)")]
-    pub clear_points: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -623,20 +621,44 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let board_id = parse_uuid(&req.board_id)?;
         let column_id = parse_uuid(&req.column_id)?;
-        if let Some(ref p) = req.priority {
-            parse_priority(p)?;
+        let priority = req.priority.as_deref().map(parse_priority).transpose()?;
+        let due_date = req.due_date.as_deref().map(parse_datetime).transpose()?;
+
+        let card = spawn_op!(self.ctx, create_card, board_id, column_id, req.title)?;
+
+        let has_updates = req.description.is_some()
+            || priority.is_some()
+            || req.points.is_some()
+            || due_date.is_some();
+
+        if has_updates {
+            let card_id = card.id;
+            let updates = CardUpdate {
+                title: None,
+                description: req
+                    .description
+                    .map(FieldUpdate::Set)
+                    .unwrap_or(FieldUpdate::NoChange),
+                priority,
+                status: None,
+                position: None,
+                column_id: None,
+                points: req
+                    .points
+                    .map(FieldUpdate::Set)
+                    .unwrap_or(FieldUpdate::NoChange),
+                due_date: due_date
+                    .map(FieldUpdate::Set)
+                    .unwrap_or(FieldUpdate::NoChange),
+                sprint_id: FieldUpdate::NoChange,
+                assigned_prefix: FieldUpdate::NoChange,
+                card_prefix: FieldUpdate::NoChange,
+            };
+            let card = spawn_op!(self.ctx, update_card, card_id, updates)?;
+            to_call_tool_result(&card)
+        } else {
+            to_call_tool_result(&card)
         }
-        let params = CreateCardFullParams {
-            board_id,
-            column_id,
-            title: req.title,
-            description: req.description,
-            priority: req.priority,
-            points: req.points,
-            due_date: req.due_date,
-        };
-        let card = spawn_op!(self.ctx, create_card_full, params)?;
-        to_call_tool_result(&card)
     }
 
     #[tool(description = "List cards with optional filters")]
@@ -682,24 +704,18 @@ impl KanbanMcpServer {
 
         let updates = CardUpdate {
             title: req.title,
-            description: if req.clear_description == Some(true) {
-                FieldUpdate::Clear
-            } else {
-                req.description
-                    .map(FieldUpdate::Set)
-                    .unwrap_or(FieldUpdate::NoChange)
-            },
+            description: req
+                .description
+                .map(FieldUpdate::Set)
+                .unwrap_or(FieldUpdate::NoChange),
             priority,
             status,
             position: None,
             column_id: None,
-            points: if req.clear_points == Some(true) {
-                FieldUpdate::Clear
-            } else {
-                req.points
-                    .map(FieldUpdate::Set)
-                    .unwrap_or(FieldUpdate::NoChange)
-            },
+            points: req
+                .points
+                .map(FieldUpdate::Set)
+                .unwrap_or(FieldUpdate::NoChange),
             due_date: if req.clear_due_date == Some(true) {
                 FieldUpdate::Clear
             } else {
@@ -882,17 +898,43 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let params = SprintUpdateFullParams {
-            id: parse_uuid(&req.sprint_id)?,
-            name: req.name,
-            prefix: req.prefix,
-            card_prefix: req.card_prefix,
-            start_date: req.start_date,
-            end_date: req.end_date,
-            clear_start_date: req.clear_start_date.unwrap_or(false),
-            clear_end_date: req.clear_end_date.unwrap_or(false),
+        let id = parse_uuid(&req.sprint_id)?;
+
+        let start_date = if req.clear_start_date == Some(true) {
+            FieldUpdate::Clear
+        } else {
+            match req.start_date {
+                Some(ref d) => FieldUpdate::Set(parse_datetime(d)?),
+                None => FieldUpdate::NoChange,
+            }
         };
-        let sprint = spawn_op!(self.ctx, update_sprint_full, params)?;
+
+        let end_date = if req.clear_end_date == Some(true) {
+            FieldUpdate::Clear
+        } else {
+            match req.end_date {
+                Some(ref d) => FieldUpdate::Set(parse_datetime(d)?),
+                None => FieldUpdate::NoChange,
+            }
+        };
+
+        let updates = SprintUpdate {
+            name: req.name,
+            name_index: FieldUpdate::NoChange,
+            prefix: req
+                .prefix
+                .map(FieldUpdate::Set)
+                .unwrap_or(FieldUpdate::NoChange),
+            card_prefix: req
+                .card_prefix
+                .map(FieldUpdate::Set)
+                .unwrap_or(FieldUpdate::NoChange),
+            status: None,
+            start_date,
+            end_date,
+        };
+
+        let sprint = spawn_op!(self.ctx, update_sprint, id, updates)?;
         to_call_tool_result(&sprint)
     }
 

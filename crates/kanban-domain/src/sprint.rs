@@ -167,6 +167,7 @@ impl Sprint {
 /// See [`FieldUpdate`] documentation for usage examples.
 #[derive(Debug, Clone, Default)]
 pub struct SprintUpdate {
+    pub name: Option<String>,
     pub name_index: FieldUpdate<usize>,
     pub prefix: FieldUpdate<String>,
     pub card_prefix: FieldUpdate<String>,
