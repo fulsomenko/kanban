@@ -104,7 +104,7 @@ fn card_create_get_move_archive_restore() {
     let col2 = ctx.create_column(board.id, "Done".into(), None).unwrap();
 
     let card = ctx
-        .create_card(board.id, col1.id, "My Card".into())
+        .create_card(board.id, col1.id, "My Card".into(), Default::default())
         .unwrap();
     assert_eq!(card.title, "My Card");
 
@@ -129,7 +129,7 @@ fn create_card_then_update_with_all_fields() {
     let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
 
     let card = ctx
-        .create_card(board.id, col.id, "Full Card".into())
+        .create_card(board.id, col.id, "Full Card".into(), Default::default())
         .unwrap();
     assert_eq!(card.title, "Full Card");
 
@@ -226,7 +226,7 @@ fn card_assign_unassign_sprint() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
-    let card = ctx.create_card(board.id, col.id, "Card".into()).unwrap();
+    let card = ctx.create_card(board.id, col.id, "Card".into(), Default::default()).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
 
     let assigned = ctx.assign_card_to_sprint(card.id, sprint.id).unwrap();
@@ -243,8 +243,8 @@ fn bulk_archive() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
-    let c1 = ctx.create_card(board.id, col.id, "Card 1".into()).unwrap();
-    let c2 = ctx.create_card(board.id, col.id, "Card 2".into()).unwrap();
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into(), Default::default()).unwrap();
+    let c2 = ctx.create_card(board.id, col.id, "Card 2".into(), Default::default()).unwrap();
 
     let count = ctx.bulk_archive_cards(vec![c1.id, c2.id]).unwrap();
     assert_eq!(count, 2);
@@ -256,8 +256,8 @@ fn bulk_move() {
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col1 = ctx.create_column(board.id, "From".into(), None).unwrap();
     let col2 = ctx.create_column(board.id, "To".into(), None).unwrap();
-    let c1 = ctx.create_card(board.id, col1.id, "Card 1".into()).unwrap();
-    let c2 = ctx.create_card(board.id, col1.id, "Card 2".into()).unwrap();
+    let c1 = ctx.create_card(board.id, col1.id, "Card 1".into(), Default::default()).unwrap();
+    let c2 = ctx.create_card(board.id, col1.id, "Card 2".into(), Default::default()).unwrap();
 
     let count = ctx.bulk_move_cards(vec![c1.id, c2.id], col2.id).unwrap();
     assert_eq!(count, 2);

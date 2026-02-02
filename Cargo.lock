@@ -973,6 +973,7 @@ dependencies = [
  "chrono",
  "kanban-core",
  "kanban-domain",
+ "parking_lot",
  "rmcp",
  "schemars",
  "serde",

@@ -2,7 +2,7 @@ use crate::executor::SyncExecutor;
 use kanban_core::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardUpdate, Column, ColumnUpdate,
-    FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    CreateCardOptions, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use uuid::Uuid;
 
@@ -233,19 +233,24 @@ impl KanbanOperations for McpContext {
         board_id: Uuid,
         column_id: Uuid,
         title: String,
+        options: CreateCardOptions,
     ) -> KanbanResult<Card> {
         let board_id_str = board_id.to_string();
         let column_id_str = column_id.to_string();
-        self.executor.execute_with_retry(&[
-            "card",
-            "create",
-            "--board-id",
-            &board_id_str,
-            "--column-id",
-            &column_id_str,
-            "--title",
-            &title,
-        ])
+        let priority_str = options.priority.map(|p| p.to_string());
+        let points_str = options.points.map(|p| p.to_string());
+        let due_date_str = options.due_date.map(|d| d.to_rfc3339());
+
+        let mut builder = ArgsBuilder::new(&["card", "create"]);
+        builder
+            .add_opt("--board-id", Some(&board_id_str))
+            .add_opt("--column-id", Some(&column_id_str))
+            .add_opt("--title", Some(&title))
+            .add_opt("--description", options.description.as_deref())
+            .add_opt("--priority", priority_str.as_deref())
+            .add_opt("--points", points_str.as_deref())
+            .add_opt("--due-date", due_date_str.as_deref());
+        self.executor.execute_with_retry(&builder.build())
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {

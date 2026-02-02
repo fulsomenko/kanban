@@ -4,8 +4,8 @@ pub mod executor;
 use context::McpContext;
 use kanban_core::KanbanError;
 use kanban_domain::{
-    BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate, FieldUpdate,
-    KanbanOperations, SprintUpdate,
+    BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
+    CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
 };
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -630,41 +630,15 @@ impl KanbanMcpServer {
         let priority = req.priority.as_deref().map(parse_priority).transpose()?;
         let due_date = req.due_date.as_deref().map(parse_datetime).transpose()?;
 
-        let card = spawn_op!(self.ctx, create_card, board_id, column_id, req.title)?;
+        let options = CreateCardOptions {
+            description: req.description,
+            priority,
+            points: req.points,
+            due_date,
+        };
 
-        let has_updates = req.description.is_some()
-            || priority.is_some()
-            || req.points.is_some()
-            || due_date.is_some();
-
-        if has_updates {
-            let card_id = card.id;
-            let updates = CardUpdate {
-                title: None,
-                description: req
-                    .description
-                    .map(FieldUpdate::Set)
-                    .unwrap_or(FieldUpdate::NoChange),
-                priority,
-                status: None,
-                position: None,
-                column_id: None,
-                points: req
-                    .points
-                    .map(FieldUpdate::Set)
-                    .unwrap_or(FieldUpdate::NoChange),
-                due_date: due_date
-                    .map(FieldUpdate::Set)
-                    .unwrap_or(FieldUpdate::NoChange),
-                sprint_id: FieldUpdate::NoChange,
-                assigned_prefix: FieldUpdate::NoChange,
-                card_prefix: FieldUpdate::NoChange,
-            };
-            let card = spawn_op!(self.ctx, update_card, card_id, updates)?;
-            to_call_tool_result(&card)
-        } else {
-            to_call_tool_result(&card)
-        }
+        let card = spawn_op!(self.ctx, create_card, board_id, column_id, req.title, options)?;
+        to_call_tool_result(&card)
     }
 
     #[tool(description = "List cards with optional filters")]

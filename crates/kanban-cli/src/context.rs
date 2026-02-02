@@ -276,6 +276,7 @@ impl KanbanOperations for CliContext {
         board_id: Uuid,
         column_id: Uuid,
         title: String,
+        options: kanban_domain::CreateCardOptions,
     ) -> KanbanResult<Card> {
         use kanban_domain::commands::CreateCard;
         let position = self
@@ -288,6 +289,7 @@ impl KanbanOperations for CliContext {
             column_id,
             title,
             position,
+            options,
         };
         self.execute(Box::new(cmd))?;
         self.cards.last().cloned().ok_or_else(|| {

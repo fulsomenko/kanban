@@ -339,6 +339,7 @@ impl App {
                     column_id: column.id,
                     title: self.input.as_str().to_string(),
                     position,
+                    options: kanban_domain::CreateCardOptions::default(),
                 });
 
                 if let Err(e) = self.execute_command(create_cmd) {

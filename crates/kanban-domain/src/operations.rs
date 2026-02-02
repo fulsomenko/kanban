@@ -1,6 +1,6 @@
 use crate::{
-    ArchivedCard, Board, BoardUpdate, Card, CardStatus, CardUpdate, Column, ColumnUpdate, Sprint,
-    SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardStatus, CardUpdate, Column, ColumnUpdate,
+    CreateCardOptions, Sprint, SprintUpdate,
 };
 use kanban_core::KanbanResult;
 use uuid::Uuid;
@@ -38,8 +38,13 @@ pub trait KanbanOperations {
     fn reorder_column(&mut self, id: Uuid, new_position: i32) -> KanbanResult<Column>;
 
     // Card operations
-    fn create_card(&mut self, board_id: Uuid, column_id: Uuid, title: String)
-        -> KanbanResult<Card>;
+    fn create_card(
+        &mut self,
+        board_id: Uuid,
+        column_id: Uuid,
+        title: String,
+        options: CreateCardOptions,
+    ) -> KanbanResult<Card>;
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>>;
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>>;
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card>;

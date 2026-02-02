@@ -354,6 +354,14 @@ pub struct CardUpdate {
     pub card_prefix: FieldUpdate<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct CreateCardOptions {
+    pub description: Option<String>,
+    pub priority: Option<CardPriority>,
+    pub points: Option<u8>,
+    pub due_date: Option<DateTime<Utc>>,
+}
+
 impl GraphNode for Card {
     fn node_id(&self) -> Uuid {
         self.id
