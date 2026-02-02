@@ -451,15 +451,23 @@ impl KanbanOperations for McpContext {
     // ========================================================================
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        let ids_csv: String = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
-        let resp: BulkResponse = self
-            .executor
-            .execute_with_retry(&["card", "bulk-archive", "--ids", &ids_csv])?;
+        let ids_csv: String = ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let resp: BulkResponse =
+            self.executor
+                .execute_with_retry(&["card", "bulk-archive", "--ids", &ids_csv])?;
         Ok(resp.succeeded_count)
     }
 
     fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        let ids_csv: String = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+        let ids_csv: String = ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         let column_id_str = column_id.to_string();
         let resp: BulkResponse = self.executor.execute_with_retry(&[
             "card",
@@ -473,7 +481,11 @@ impl KanbanOperations for McpContext {
     }
 
     fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        let ids_csv: String = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+        let ids_csv: String = ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         let sprint_id_str = sprint_id.to_string();
         let resp: BulkResponse = self.executor.execute_with_retry(&[
             "card",
@@ -497,8 +509,7 @@ impl KanbanOperations for McpContext {
         name: Option<String>,
     ) -> KanbanResult<Sprint> {
         let board_id_str = board_id.to_string();
-        let mut builder =
-            ArgsBuilder::new(&["sprint", "create", "--board-id", &board_id_str]);
+        let mut builder = ArgsBuilder::new(&["sprint", "create", "--board-id", &board_id_str]);
         builder
             .add_opt("--prefix", prefix.as_deref())
             .add_opt("--name", name.as_deref());
@@ -658,10 +669,7 @@ mod tests {
         let mut builder = ArgsBuilder::new(&["sprint", "update"]);
         let field = FieldUpdate::Set("v1".to_string());
         builder.add_field_str("--prefix", &field);
-        assert_eq!(
-            builder.build(),
-            vec!["sprint", "update", "--prefix", "v1"]
-        );
+        assert_eq!(builder.build(), vec!["sprint", "update", "--prefix", "v1"]);
     }
 
     #[test]

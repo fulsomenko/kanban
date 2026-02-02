@@ -4,8 +4,8 @@ pub mod executor;
 use context::{CreateCardFullParams, McpContext, SprintUpdateFullParams};
 use kanban_core::KanbanError;
 use kanban_domain::{
-    BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate, FieldUpdate,
-    KanbanOperations, ColumnUpdate,
+    BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate, FieldUpdate,
+    KanbanOperations,
 };
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -51,7 +51,10 @@ fn parse_priority(s: &str) -> Result<CardPriority, McpError> {
         "high" => Ok(CardPriority::High),
         "critical" => Ok(CardPriority::Critical),
         _ => Err(McpError::invalid_params(
-            format!("Invalid priority '{}'. Valid: low, medium, high, critical", s),
+            format!(
+                "Invalid priority '{}'. Valid: low, medium, high, critical",
+                s
+            ),
             None,
         )),
     }
@@ -64,7 +67,10 @@ fn parse_status(s: &str) -> Result<CardStatus, McpError> {
         "blocked" => Ok(CardStatus::Blocked),
         "done" => Ok(CardStatus::Done),
         _ => Err(McpError::invalid_params(
-            format!("Invalid status '{}'. Valid: todo, in_progress, blocked, done", s),
+            format!(
+                "Invalid status '{}'. Valid: todo, in_progress, blocked, done",
+                s
+            ),
             None,
         )),
     }
@@ -88,9 +94,7 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
 }
 
 fn parse_uuids_csv(s: &str) -> Result<Vec<Uuid>, McpError> {
-    s.split(',')
-        .map(|id| parse_uuid(id.trim()))
-        .collect()
+    s.split(',').map(|id| parse_uuid(id.trim())).collect()
 }
 
 /// Runs a KanbanOperations method on McpContext via spawn_blocking.
@@ -499,7 +503,9 @@ impl KanbanMcpServer {
         to_call_tool_result(&board)
     }
 
-    #[tool(description = "Update a board's properties (name, description, sprint_prefix, card_prefix)")]
+    #[tool(
+        description = "Update a board's properties (name, description, sprint_prefix, card_prefix)"
+    )]
     async fn tool_update_board(
         &self,
         Parameters(req): Parameters<UpdateBoardRequest>,
@@ -869,7 +875,9 @@ impl KanbanMcpServer {
         to_call_tool_result(&sprint)
     }
 
-    #[tool(description = "Update a sprint's properties (name, prefix, card_prefix, start_date, end_date)")]
+    #[tool(
+        description = "Update a sprint's properties (name, prefix, card_prefix, start_date, end_date)"
+    )]
     async fn tool_update_sprint(
         &self,
         Parameters(req): Parameters<UpdateSprintRequest>,
@@ -1111,8 +1119,7 @@ mod tests {
 
     #[test]
     fn parse_uuids_csv_with_spaces() {
-        let ids =
-            "550e8400-e29b-41d4-a716-446655440000 , 660e8400-e29b-41d4-a716-446655440001";
+        let ids = "550e8400-e29b-41d4-a716-446655440000 , 660e8400-e29b-41d4-a716-446655440001";
         let result = parse_uuids_csv(ids).unwrap();
         assert_eq!(result.len(), 2);
     }

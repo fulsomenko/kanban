@@ -58,9 +58,7 @@ fn board_get_nonexistent() {
 fn column_create_list_update() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
-    let col = ctx
-        .create_column(board.id, "To Do".into(), None)
-        .unwrap();
+    let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
     assert_eq!(col.name, "To Do");
 
     let cols = ctx.list_columns(board.id).unwrap();
@@ -99,12 +97,8 @@ fn column_reorder() {
 fn card_create_get_move_archive_restore() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
-    let col1 = ctx
-        .create_column(board.id, "To Do".into(), None)
-        .unwrap();
-    let col2 = ctx
-        .create_column(board.id, "Done".into(), None)
-        .unwrap();
+    let col1 = ctx.create_column(board.id, "To Do".into(), None).unwrap();
+    let col2 = ctx.create_column(board.id, "Done".into(), None).unwrap();
 
     let card = ctx
         .create_card(board.id, col1.id, "My Card".into())
@@ -129,9 +123,7 @@ fn card_create_get_move_archive_restore() {
 fn create_card_full_with_all_fields() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
-    let col = ctx
-        .create_column(board.id, "To Do".into(), None)
-        .unwrap();
+    let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
 
     let card = ctx
         .create_card_full(CreateCardFullParams {
@@ -204,12 +196,8 @@ fn sprint_cancel() {
 fn card_assign_unassign_sprint() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
-    let col = ctx
-        .create_column(board.id, "To Do".into(), None)
-        .unwrap();
-    let card = ctx
-        .create_card(board.id, col.id, "Card".into())
-        .unwrap();
+    let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
+    let card = ctx.create_card(board.id, col.id, "Card".into()).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
 
     let assigned = ctx.assign_card_to_sprint(card.id, sprint.id).unwrap();
@@ -225,15 +213,9 @@ fn card_assign_unassign_sprint() {
 fn bulk_archive() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
-    let col = ctx
-        .create_column(board.id, "Col".into(), None)
-        .unwrap();
-    let c1 = ctx
-        .create_card(board.id, col.id, "Card 1".into())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col.id, "Card 2".into())
-        .unwrap();
+    let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into()).unwrap();
+    let c2 = ctx.create_card(board.id, col.id, "Card 2".into()).unwrap();
 
     let count = ctx.bulk_archive_cards(vec![c1.id, c2.id]).unwrap();
     assert_eq!(count, 2);
@@ -243,18 +225,10 @@ fn bulk_archive() {
 fn bulk_move() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Board".into(), None).unwrap();
-    let col1 = ctx
-        .create_column(board.id, "From".into(), None)
-        .unwrap();
-    let col2 = ctx
-        .create_column(board.id, "To".into(), None)
-        .unwrap();
-    let c1 = ctx
-        .create_card(board.id, col1.id, "Card 1".into())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col1.id, "Card 2".into())
-        .unwrap();
+    let col1 = ctx.create_column(board.id, "From".into(), None).unwrap();
+    let col2 = ctx.create_column(board.id, "To".into(), None).unwrap();
+    let c1 = ctx.create_card(board.id, col1.id, "Card 1".into()).unwrap();
+    let c2 = ctx.create_card(board.id, col1.id, "Card 2".into()).unwrap();
 
     let count = ctx.bulk_move_cards(vec![c1.id, c2.id], col2.id).unwrap();
     assert_eq!(count, 2);
@@ -266,9 +240,7 @@ fn bulk_move() {
 fn export_import_roundtrip() {
     let (mut ctx, _tmp) = setup();
     let board = ctx.create_board("Export Board".into(), None).unwrap();
-    let _col = ctx
-        .create_column(board.id, "Col".into(), None)
-        .unwrap();
+    let _col = ctx.create_column(board.id, "Col".into(), None).unwrap();
 
     let json = ctx.export_board(Some(board.id)).unwrap();
     assert!(json.contains("Export Board"));
