@@ -29,6 +29,11 @@ impl SyncExecutor {
         }
     }
 
+    pub fn with_kanban_path(mut self, path: String) -> Self {
+        self.kanban_path = path;
+        self
+    }
+
     pub fn execute<T: DeserializeOwned>(&self, args: &[&str]) -> KanbanResult<T> {
         let output = Command::new(&self.kanban_path)
             .arg(&self.data_file)
@@ -39,19 +44,22 @@ impl SyncExecutor {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        let response: CliResponse<T> = serde_json::from_str(&stdout).map_err(|e| {
-            if stderr.is_empty() {
-                KanbanError::Serialization(format!(
-                    "Failed to parse CLI response: {} (stdout: {})",
-                    e, stdout
-                ))
-            } else {
-                KanbanError::Serialization(format!(
-                    "Failed to parse CLI response: {} (stdout: {}, stderr: {})",
-                    e, stdout, stderr
-                ))
-            }
-        })?;
+        let stderr_first_line = stderr.lines().next().unwrap_or("");
+        let response: CliResponse<T> = serde_json::from_str(&stdout)
+            .or_else(|_| serde_json::from_str(stderr_first_line))
+            .map_err(|e| {
+                if stderr.is_empty() {
+                    KanbanError::Serialization(format!(
+                        "Failed to parse CLI response: {} (stdout: {})",
+                        e, stdout
+                    ))
+                } else {
+                    KanbanError::Serialization(format!(
+                        "Failed to parse CLI response: {} (stdout: {}, stderr: {})",
+                        e, stdout, stderr
+                    ))
+                }
+            })?;
 
         if response.success {
             response
@@ -67,6 +75,8 @@ impl SyncExecutor {
                     path: self.data_file.clone(),
                     source: None,
                 })
+            } else if error_msg.contains("not found") {
+                Err(KanbanError::NotFound(error_msg))
             } else {
                 Err(KanbanError::Internal(error_msg))
             }
