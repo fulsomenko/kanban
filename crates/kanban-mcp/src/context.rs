@@ -597,3 +597,100 @@ impl KanbanOperations for McpContext {
             .execute_with_retry(&["import", "--file", &path_str])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn args_builder_new() {
+        let builder = ArgsBuilder::new(&["board", "create"]);
+        assert_eq!(builder.build(), vec!["board", "create"]);
+    }
+
+    #[test]
+    fn args_builder_add_opt_some() {
+        let mut builder = ArgsBuilder::new(&["card", "create"]);
+        builder.add_opt("--title", Some("hello"));
+        assert_eq!(builder.build(), vec!["card", "create", "--title", "hello"]);
+    }
+
+    #[test]
+    fn args_builder_add_opt_none() {
+        let mut builder = ArgsBuilder::new(&["card", "create"]);
+        builder.add_opt("--title", None);
+        assert_eq!(builder.build(), vec!["card", "create"]);
+    }
+
+    #[test]
+    fn args_builder_add_opt_num_some() {
+        let mut builder = ArgsBuilder::new(&["card", "create"]);
+        builder.add_opt_num("--points", Some(5u8));
+        assert_eq!(builder.build(), vec!["card", "create", "--points", "5"]);
+    }
+
+    #[test]
+    fn args_builder_add_opt_num_none() {
+        let mut builder = ArgsBuilder::new(&["card", "create"]);
+        builder.add_opt_num::<u8>("--points", None);
+        assert_eq!(builder.build(), vec!["card", "create"]);
+    }
+
+    #[test]
+    fn args_builder_add_flag_true() {
+        let mut builder = ArgsBuilder::new(&["column", "update"]);
+        builder.add_flag("--clear-wip-limit", true);
+        assert_eq!(
+            builder.build(),
+            vec!["column", "update", "--clear-wip-limit"]
+        );
+    }
+
+    #[test]
+    fn args_builder_add_flag_false() {
+        let mut builder = ArgsBuilder::new(&["column", "update"]);
+        builder.add_flag("--clear-wip-limit", false);
+        assert_eq!(builder.build(), vec!["column", "update"]);
+    }
+
+    #[test]
+    fn args_builder_add_field_str_set() {
+        let mut builder = ArgsBuilder::new(&["sprint", "update"]);
+        let field = FieldUpdate::Set("v1".to_string());
+        builder.add_field_str("--prefix", &field);
+        assert_eq!(
+            builder.build(),
+            vec!["sprint", "update", "--prefix", "v1"]
+        );
+    }
+
+    #[test]
+    fn args_builder_add_field_str_clear() {
+        let mut builder = ArgsBuilder::new(&["sprint", "update"]);
+        let field: FieldUpdate<String> = FieldUpdate::Clear;
+        builder.add_field_str("--prefix", &field);
+        assert_eq!(builder.build(), vec!["sprint", "update"]);
+    }
+
+    #[test]
+    fn args_builder_add_field_str_no_change() {
+        let mut builder = ArgsBuilder::new(&["sprint", "update"]);
+        let field: FieldUpdate<String> = FieldUpdate::NoChange;
+        builder.add_field_str("--prefix", &field);
+        assert_eq!(builder.build(), vec!["sprint", "update"]);
+    }
+
+    #[test]
+    fn args_builder_chained() {
+        let mut builder = ArgsBuilder::new(&["card", "create"]);
+        builder
+            .add_opt("--title", Some("test"))
+            .add_opt("--description", None)
+            .add_opt_num("--points", Some(3u8))
+            .add_flag("--archived", false);
+        assert_eq!(
+            builder.build(),
+            vec!["card", "create", "--title", "test", "--points", "3"]
+        );
+    }
+}

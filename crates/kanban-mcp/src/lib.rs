@@ -970,3 +970,187 @@ impl ServerHandler for KanbanMcpServer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // parse_uuid
+
+    #[test]
+    fn parse_uuid_valid() {
+        let id = "550e8400-e29b-41d4-a716-446655440000";
+        let result = parse_uuid(id).unwrap();
+        assert_eq!(result.to_string(), id);
+    }
+
+    #[test]
+    fn parse_uuid_invalid() {
+        let err = parse_uuid("not-a-uuid").unwrap_err();
+        assert!(err.message.contains("Invalid UUID"));
+    }
+
+    #[test]
+    fn parse_uuid_empty() {
+        let err = parse_uuid("").unwrap_err();
+        assert!(err.message.contains("Invalid UUID"));
+    }
+
+    // parse_priority
+
+    #[test]
+    fn parse_priority_all_valid() {
+        assert!(matches!(parse_priority("low").unwrap(), CardPriority::Low));
+        assert!(matches!(
+            parse_priority("medium").unwrap(),
+            CardPriority::Medium
+        ));
+        assert!(matches!(
+            parse_priority("high").unwrap(),
+            CardPriority::High
+        ));
+        assert!(matches!(
+            parse_priority("critical").unwrap(),
+            CardPriority::Critical
+        ));
+    }
+
+    #[test]
+    fn parse_priority_case_insensitive() {
+        assert!(matches!(parse_priority("LOW").unwrap(), CardPriority::Low));
+        assert!(matches!(
+            parse_priority("High").unwrap(),
+            CardPriority::High
+        ));
+        assert!(matches!(
+            parse_priority("CRITICAL").unwrap(),
+            CardPriority::Critical
+        ));
+    }
+
+    #[test]
+    fn parse_priority_invalid() {
+        let err = parse_priority("urgent").unwrap_err();
+        assert!(err.message.contains("Invalid priority"));
+    }
+
+    // parse_status
+
+    #[test]
+    fn parse_status_all_valid() {
+        assert!(matches!(parse_status("todo").unwrap(), CardStatus::Todo));
+        assert!(matches!(
+            parse_status("in_progress").unwrap(),
+            CardStatus::InProgress
+        ));
+        assert!(matches!(
+            parse_status("blocked").unwrap(),
+            CardStatus::Blocked
+        ));
+        assert!(matches!(parse_status("done").unwrap(), CardStatus::Done));
+    }
+
+    #[test]
+    fn parse_status_hyphen_underscore_normalization() {
+        assert!(matches!(
+            parse_status("in-progress").unwrap(),
+            CardStatus::InProgress
+        ));
+        assert!(matches!(
+            parse_status("in_progress").unwrap(),
+            CardStatus::InProgress
+        ));
+        assert!(matches!(
+            parse_status("InProgress").unwrap(),
+            CardStatus::InProgress
+        ));
+    }
+
+    #[test]
+    fn parse_status_invalid() {
+        let err = parse_status("cancelled").unwrap_err();
+        assert!(err.message.contains("Invalid status"));
+    }
+
+    // parse_datetime
+
+    #[test]
+    fn parse_datetime_rfc3339() {
+        let dt = parse_datetime("2024-06-15T10:30:00Z").unwrap();
+        assert_eq!(dt.to_rfc3339(), "2024-06-15T10:30:00+00:00");
+    }
+
+    #[test]
+    fn parse_datetime_date_only() {
+        let dt = parse_datetime("2024-06-15").unwrap();
+        assert_eq!(dt.to_rfc3339(), "2024-06-15T00:00:00+00:00");
+    }
+
+    #[test]
+    fn parse_datetime_invalid() {
+        let err = parse_datetime("not-a-date").unwrap_err();
+        assert!(err.message.contains("Invalid date"));
+    }
+
+    // parse_uuids_csv
+
+    #[test]
+    fn parse_uuids_csv_single() {
+        let id = "550e8400-e29b-41d4-a716-446655440000";
+        let result = parse_uuids_csv(id).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].to_string(), id);
+    }
+
+    #[test]
+    fn parse_uuids_csv_multiple() {
+        let ids = "550e8400-e29b-41d4-a716-446655440000,660e8400-e29b-41d4-a716-446655440001";
+        let result = parse_uuids_csv(ids).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn parse_uuids_csv_with_spaces() {
+        let ids =
+            "550e8400-e29b-41d4-a716-446655440000 , 660e8400-e29b-41d4-a716-446655440001";
+        let result = parse_uuids_csv(ids).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn parse_uuids_csv_invalid_in_list() {
+        let ids = "550e8400-e29b-41d4-a716-446655440000,bad-uuid";
+        let err = parse_uuids_csv(ids).unwrap_err();
+        assert!(err.message.contains("Invalid UUID"));
+    }
+
+    // to_call_tool_result / to_call_tool_result_json
+
+    #[test]
+    fn to_call_tool_result_serializes_struct() {
+        use rmcp::model::RawContent;
+        #[derive(serde::Serialize)]
+        struct Foo {
+            x: i32,
+        }
+        let result = to_call_tool_result(&Foo { x: 42 }).unwrap();
+        match &result.content[0].raw {
+            RawContent::Text(t) => assert!(t.text.contains("42")),
+            _ => panic!("Expected text content"),
+        }
+    }
+
+    #[test]
+    fn to_call_tool_result_json_serializes_value() {
+        use rmcp::model::RawContent;
+        let val = serde_json::json!({"key": "value"});
+        let result = to_call_tool_result_json(val).unwrap();
+        match &result.content[0].raw {
+            RawContent::Text(t) => {
+                assert!(t.text.contains("key"));
+                assert!(t.text.contains("value"));
+            }
+            _ => panic!("Expected text content"),
+        }
+    }
+}
