@@ -3,7 +3,7 @@ use kanban_core::KanbanResult;
 use serde::de::DeserializeOwned;
 use std::process::Command;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, serde::Deserialize)]
 pub struct CliResponse<T> {
@@ -21,6 +21,7 @@ pub struct SyncExecutor {
 
 impl SyncExecutor {
     const DEFAULT_RETRY_COUNT: u32 = 3;
+    const COMMAND_TIMEOUT_SECS: u64 = 30;
 
     pub fn new(data_file: String) -> Self {
         Self {
@@ -34,19 +35,58 @@ impl SyncExecutor {
         self
     }
 
-    pub fn execute<T: DeserializeOwned>(&self, args: &[&str]) -> KanbanResult<T> {
-        let output = Command::new(&self.kanban_path)
+    fn run_with_timeout(&self, args: &[&str]) -> KanbanResult<std::process::Output> {
+        let mut child = Command::new(&self.kanban_path)
             .arg(&self.data_file)
             .args(args)
-            .output()
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
             .map_err(|e| KanbanError::Internal(format!("Failed to execute kanban CLI: {}", e)))?;
+
+        let start = Instant::now();
+        let timeout = Duration::from_secs(Self::COMMAND_TIMEOUT_SECS);
+
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    return child.wait_with_output().map_err(|e| {
+                        KanbanError::Internal(format!("Failed to read CLI output: {}", e))
+                    });
+                }
+                Ok(None) => {
+                    if start.elapsed() > timeout {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err(KanbanError::Internal(format!(
+                            "CLI command timed out after {}s",
+                            Self::COMMAND_TIMEOUT_SECS
+                        )));
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Err(e) => {
+                    return Err(KanbanError::Internal(format!(
+                        "Failed to check CLI process status: {}",
+                        e
+                    )));
+                }
+            }
+        }
+    }
+
+    pub fn execute<T: DeserializeOwned>(&self, args: &[&str]) -> KanbanResult<T> {
+        let output = self.run_with_timeout(args)?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        let stderr_first_line = stderr.lines().next().unwrap_or("");
         let response: CliResponse<T> = serde_json::from_str(&stdout)
-            .or_else(|_| serde_json::from_str(stderr_first_line))
+            .or_else(|_| serde_json::from_str(&stderr))
+            .or_else(|_| {
+                let first_line = stderr.lines().next().unwrap_or("");
+                serde_json::from_str(first_line)
+            })
             .map_err(|e| {
                 if stderr.is_empty() {
                     KanbanError::Serialization(format!(
@@ -108,11 +148,7 @@ impl SyncExecutor {
     }
 
     pub fn execute_raw_stdout(&self, args: &[&str]) -> KanbanResult<String> {
-        let output = Command::new(&self.kanban_path)
-            .arg(&self.data_file)
-            .args(args)
-            .output()
-            .map_err(|e| KanbanError::Internal(format!("Failed to execute kanban CLI: {}", e)))?;
+        let output = self.run_with_timeout(args)?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
