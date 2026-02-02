@@ -345,9 +345,19 @@ pub struct SprintUpdateArgs {
     /// Sprint ID to update
     pub id: Uuid,
     #[arg(long)]
+    pub name: Option<String>,
+    #[arg(long)]
     pub prefix: Option<String>,
     #[arg(long)]
     pub card_prefix: Option<String>,
+    #[arg(long)]
+    pub start_date: Option<String>,
+    #[arg(long)]
+    pub end_date: Option<String>,
+    #[arg(long)]
+    pub clear_start_date: bool,
+    #[arg(long)]
+    pub clear_end_date: bool,
 }
 
 // Export/Import commands
