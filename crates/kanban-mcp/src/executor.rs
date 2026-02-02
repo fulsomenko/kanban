@@ -1,140 +1,119 @@
+use kanban_core::KanbanError;
+use kanban_core::KanbanResult;
 use serde::de::DeserializeOwned;
-use std::process::Stdio;
+use std::process::Command;
+use std::thread;
 use std::time::Duration;
-use tokio::process::Command;
 
-use rmcp::model::ErrorData as McpError;
-
-/// Response format from kanban CLI (matches crates/kanban-cli/src/output.rs)
 #[derive(Debug, serde::Deserialize)]
 pub struct CliResponse<T> {
     pub success: bool,
-    /// API version from CLI response. Parsed to validate response format;
-    /// reserved for future version compatibility checks.
     #[allow(dead_code)]
     pub api_version: String,
     pub data: Option<T>,
     pub error: Option<String>,
 }
 
-/// Executor that spawns kanban CLI subprocess for each operation
-pub struct CliExecutor {
+pub struct SyncExecutor {
     kanban_path: String,
     data_file: String,
 }
 
-impl CliExecutor {
-    /// Create a new executor
-    ///
-    /// # Arguments
-    /// * `data_file` - Path to the kanban.json data file
+impl SyncExecutor {
+    const DEFAULT_RETRY_COUNT: u32 = 3;
+
     pub fn new(data_file: String) -> Self {
         Self {
-            kanban_path: "kanban".to_string(), // Assumes in PATH via Nix wrapper
+            kanban_path: "kanban".to_string(),
             data_file,
         }
     }
 
-    /// Execute a kanban CLI command and parse the JSON response
-    pub async fn execute<T: DeserializeOwned>(&self, args: &[&str]) -> Result<T, McpError> {
+    pub fn execute<T: DeserializeOwned>(&self, args: &[&str]) -> KanbanResult<T> {
         let output = Command::new(&self.kanban_path)
-            .arg(&self.data_file) // First arg is always the data file
+            .arg(&self.data_file)
             .args(args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
             .output()
-            .await
-            .map_err(|e| {
-                McpError::internal_error(format!("Failed to execute kanban CLI: {}", e), None)
-            })?;
+            .map_err(|e| KanbanError::Internal(format!("Failed to execute kanban CLI: {}", e)))?;
 
-        // Parse stdout as JSON, capture stderr for error messages
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         let response: CliResponse<T> = serde_json::from_str(&stdout).map_err(|e| {
-            let error_detail = if stderr.is_empty() {
-                format!("Failed to parse CLI response: {} (stdout: {})", e, stdout)
+            if stderr.is_empty() {
+                KanbanError::Serialization(format!(
+                    "Failed to parse CLI response: {} (stdout: {})",
+                    e, stdout
+                ))
             } else {
-                format!(
+                KanbanError::Serialization(format!(
                     "Failed to parse CLI response: {} (stdout: {}, stderr: {})",
                     e, stdout, stderr
-                )
-            };
-            McpError::internal_error(error_detail, None)
+                ))
+            }
         })?;
 
         if response.success {
-            response.data.ok_or_else(|| {
-                McpError::internal_error("Success response missing data".to_string(), None)
-            })
+            response
+                .data
+                .ok_or_else(|| KanbanError::Internal("Success response missing data".to_string()))
         } else {
             let error_msg = response
                 .error
                 .unwrap_or_else(|| "Unknown error".to_string());
 
-            // Check for conflict error (retryable)
             if error_msg.contains("conflict") || error_msg.contains("modified by another") {
-                Err(McpError::internal_error(
-                    error_msg,
-                    Some(serde_json::json!({"retryable": true})),
-                ))
+                Err(KanbanError::ConflictDetected {
+                    path: self.data_file.clone(),
+                    source: None,
+                })
             } else {
-                Err(McpError::internal_error(error_msg, None))
+                Err(KanbanError::Internal(error_msg))
             }
         }
     }
 
-    /// Execute with retry on conflict (exponential backoff)
-    pub async fn execute_with_retry<T: DeserializeOwned>(
-        &self,
-        args: &[&str],
-        max_attempts: u32,
-    ) -> Result<T, McpError> {
+    pub fn execute_with_retry<T: DeserializeOwned>(&self, args: &[&str]) -> KanbanResult<T> {
+        let max_attempts = Self::DEFAULT_RETRY_COUNT;
         let mut attempt = 0;
         let mut delay_ms = 50u64;
 
         loop {
             attempt += 1;
-            match self.execute(args).await {
-                Ok(result) => {
-                    if attempt > 1 {
-                        tracing::info!("CLI command succeeded after {} attempts", attempt);
-                    }
-                    return Ok(result);
-                }
-                Err(e) if Self::is_retryable(&e) && attempt < max_attempts => {
+            match self.execute(args) {
+                Ok(result) => return Ok(result),
+                Err(KanbanError::ConflictDetected { .. }) if attempt < max_attempts => {
                     tracing::warn!(
-                        "CLI command failed (attempt {}/{}): {}. Retrying after {}ms...",
+                        "CLI command failed (attempt {}/{}): conflict. Retrying after {}ms...",
                         attempt,
                         max_attempts,
-                        e.message,
                         delay_ms
                     );
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                    delay_ms = (delay_ms * 2).min(1000); // Exponential backoff, max 1s
+                    thread::sleep(Duration::from_millis(delay_ms));
+                    delay_ms = (delay_ms * 2).min(1000);
                 }
-                Err(e) => {
-                    if attempt > 1 {
-                        tracing::error!(
-                            "CLI command failed after {} attempts: {}",
-                            attempt,
-                            e.message
-                        );
-                    }
-                    return Err(e);
-                }
+                Err(e) => return Err(e),
             }
         }
     }
 
-    fn is_retryable(error: &McpError) -> bool {
-        error
-            .data
-            .as_ref()
-            .and_then(|d| d.get("retryable"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
+    pub fn execute_raw_stdout(&self, args: &[&str]) -> KanbanResult<String> {
+        let output = Command::new(&self.kanban_path)
+            .arg(&self.data_file)
+            .args(args)
+            .output()
+            .map_err(|e| KanbanError::Internal(format!("Failed to execute kanban CLI: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(KanbanError::Internal(format!(
+                "CLI command failed: {}",
+                stderr
+            )));
+        }
+
+        String::from_utf8(output.stdout)
+            .map_err(|e| KanbanError::Internal(format!("Invalid UTF-8 in CLI output: {}", e)))
     }
 }
 
