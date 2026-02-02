@@ -35,6 +35,9 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 
+# Synchronization (non-poisoning mutex)
+parking_lot = "0.12"
+
 # Temp files (for import)
 tempfile.workspace = true
 

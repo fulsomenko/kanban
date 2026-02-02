@@ -16,7 +16,8 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router, ServerHandler,
 };
 use serde::Deserialize;
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use uuid::Uuid;
 
 // ============================================================================
@@ -36,7 +37,14 @@ fn to_call_tool_result_json(value: serde_json::Value) -> Result<CallToolResult, 
 }
 
 fn kanban_err_to_mcp(e: KanbanError) -> McpError {
-    McpError::internal_error(e.to_string(), None)
+    match &e {
+        KanbanError::NotFound(_)
+        | KanbanError::Validation(_)
+        | KanbanError::CycleDetected
+        | KanbanError::SelfReference
+        | KanbanError::EdgeNotFound => McpError::invalid_params(e.to_string(), None),
+        _ => McpError::internal_error(e.to_string(), None),
+    }
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, McpError> {
@@ -102,8 +110,7 @@ macro_rules! spawn_op {
     ($ctx:expr, $method:ident $(, $arg:expr)*) => {{
         let ctx = $ctx.clone();
         tokio::task::spawn_blocking(move || {
-            let mut guard = ctx.lock()
-                .map_err(|_| KanbanError::Internal("Context lock poisoned".into()))?;
+            let mut guard = ctx.lock();
             guard.$method($($arg),*)
         })
         .await
@@ -117,8 +124,7 @@ macro_rules! spawn_op_ref {
     ($ctx:expr, $method:ident $(, $arg:expr)*) => {{
         let ctx = $ctx.clone();
         tokio::task::spawn_blocking(move || {
-            let guard = ctx.lock()
-                .map_err(|_| KanbanError::Internal("Context lock poisoned".into()))?;
+            let guard = ctx.lock();
             guard.$method($($arg),*)
         })
         .await
@@ -1201,5 +1207,58 @@ mod tests {
             }
             _ => panic!("Expected text content"),
         }
+    }
+
+    // kanban_err_to_mcp
+
+    #[test]
+    fn err_not_found_maps_to_invalid_params() {
+        use rmcp::model::ErrorCode;
+        let err = kanban_err_to_mcp(KanbanError::NotFound("board xyz".into()));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err.message.contains("board xyz"));
+    }
+
+    #[test]
+    fn err_validation_maps_to_invalid_params() {
+        use rmcp::model::ErrorCode;
+        let err = kanban_err_to_mcp(KanbanError::Validation("bad input".into()));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn err_cycle_maps_to_invalid_params() {
+        use rmcp::model::ErrorCode;
+        let err = kanban_err_to_mcp(KanbanError::CycleDetected);
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn err_self_ref_maps_to_invalid_params() {
+        use rmcp::model::ErrorCode;
+        let err = kanban_err_to_mcp(KanbanError::SelfReference);
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn err_edge_not_found_maps_to_invalid_params() {
+        use rmcp::model::ErrorCode;
+        let err = kanban_err_to_mcp(KanbanError::EdgeNotFound);
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn err_internal_maps_to_internal_error() {
+        use rmcp::model::ErrorCode;
+        let err = kanban_err_to_mcp(KanbanError::Internal("boom".into()));
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+    }
+
+    #[test]
+    fn err_io_maps_to_internal_error() {
+        use rmcp::model::ErrorCode;
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file gone");
+        let err = kanban_err_to_mcp(KanbanError::Io(io_err));
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
     }
 }
