@@ -37,12 +37,14 @@ impl App {
 
     pub fn handle_card_selection_toggle(&mut self) {
         if self.focus == Focus::Cards {
-            if let Some(card) = self.get_selected_card_in_context() {
-                let card_id = card.id;
-                if self.selected_cards.contains(&card_id) {
-                    self.selected_cards.remove(&card_id);
-                } else {
-                    self.selected_cards.insert(card_id);
+            if self.selection_mode_active {
+                // Exit selection mode (keep selections)
+                self.selection_mode_active = false;
+            } else {
+                // Enter selection mode and select current card
+                self.selection_mode_active = true;
+                if let Some(card) = self.get_selected_card_in_context() {
+                    self.selected_cards.insert(card.id);
                 }
             }
         }
