@@ -129,6 +129,7 @@ impl App {
                     }
 
                     self.selected_cards.clear();
+                    self.selection_mode_active = false;
                 }
                 self.pop_mode();
                 self.priority_selection.clear();
@@ -344,6 +345,7 @@ impl App {
                 self.pop_mode();
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
+                self.selection_mode_active = false;
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
@@ -452,6 +454,7 @@ impl App {
                 self.pop_mode();
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
+                self.selection_mode_active = false;
             }
             _ => {}
         }

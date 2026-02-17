@@ -300,6 +300,7 @@ impl App {
 
         tracing::info!("Toggled {} cards completion status", toggled_count);
         self.selected_cards.clear();
+        self.selection_mode_active = false;
         self.refresh_view();
         if let Some(card_id) = first_card_id {
             self.select_card_by_id(card_id);
@@ -576,6 +577,7 @@ impl App {
 
         tracing::info!("Moved {} cards", moved_count);
         self.selected_cards.clear();
+        self.selection_mode_active = false;
         self.refresh_view();
         if let Some(card_id) = first_card_id {
             self.select_card_by_id(card_id);
@@ -600,6 +602,7 @@ impl App {
             self.start_delete_animation(card_id);
         }
         self.selected_cards.clear();
+        self.selection_mode_active = false;
     }
 
     fn start_delete_animation(&mut self, card_id: uuid::Uuid) {
@@ -666,6 +669,7 @@ impl App {
             self.start_restore_animation(card_id);
         }
         self.selected_cards.clear();
+        self.selection_mode_active = false;
     }
 
     fn start_restore_animation(&mut self, card_id: uuid::Uuid) {
@@ -742,6 +746,7 @@ impl App {
             self.start_permanent_delete_animation(card_id);
         }
         self.selected_cards.clear();
+        self.selection_mode_active = false;
     }
 
     fn start_permanent_delete_animation(&mut self, card_id: uuid::Uuid) {
