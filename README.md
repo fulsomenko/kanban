@@ -54,6 +54,15 @@ cargo install --path crates/kanban-cli
 nix run github:fulsomenko/kanban
 ```
 
+### Linux Clipboard Support
+
+For clipboard operations (`y`/`Y` to copy branch names) to persist after exiting, you need a clipboard manager running:
+
+- **Wayland**: `wl-clip-persist`, `cliphist`, `clipman`, or your DE's built-in manager
+- **X11**: Most desktop environments include one by default
+
+Without a clipboard manager, copied content is lost when the app exits (this is a Linux platform limitation, not a bug).
+
 ## Quick Start
 
 ### TUI
