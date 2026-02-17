@@ -21,6 +21,10 @@ in
 pkgs.mkShell {
   name = "kanban-rust-shell";
 
+  nativeBuildInputs = with pkgs; [
+    pkg-config
+  ];
+
   buildInputs = with pkgs; [
     # Rust toolchain
     rustToolchain
@@ -34,6 +38,12 @@ pkgs.mkShell {
 
     asciinema_3
     asciinema-agg
+  ] ++ lib.optionals stdenv.isLinux [
+    # Clipboard support
+    wayland
+    xorg.libxcb
+    wl-clipboard  # for testing on Wayland
+    xclip         # for testing on X11
   ] ++ scripts;
 
   shellHook = ''

@@ -16,33 +16,9 @@ use uuid::Uuid;
 const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
 const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
 
-fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some((message, _)) = &app.last_error {
-        let error_style = Style::default()
-            .fg(Color::White)
-            .bg(Color::Red)
-            .add_modifier(Modifier::BOLD);
-
-        // Calculate width needed for message + padding (1 char on each side)
-        let message_width = (message.len() + 2).min(area.width as usize) as u16;
-        let centered_x = if area.width > message_width {
-            (area.width - message_width) / 2
-        } else {
-            0
-        };
-
-        let error_area = Rect {
-            x: area.x + centered_x,
-            y: area.y,
-            width: message_width,
-            height: 1,
-        };
-
-        let error_widget = Paragraph::new(format!(" {} ", message))
-            .style(error_style)
-            .alignment(ratatui::layout::Alignment::Center);
-
-        frame.render_widget(error_widget, error_area);
+fn render_banner(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(ref banner) = app.banner {
+        banner.render(frame, area);
     }
 }
 
@@ -112,15 +88,15 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         render_help_popup(app, frame);
     }
 
-    // Render error banner on top if present
-    if app.last_error.is_some() {
-        let error_area = Rect {
+    // Render banner on top if present
+    if app.banner.is_some() {
+        let banner_area = Rect {
             x: 0,
             y: 0,
             width: frame.area().width,
-            height: 1,
+            height: 3,
         };
-        render_error_banner(app, frame, error_area);
+        render_banner(app, frame, banner_area);
     }
 }
 
