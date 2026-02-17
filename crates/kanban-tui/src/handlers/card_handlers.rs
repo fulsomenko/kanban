@@ -421,6 +421,11 @@ impl App {
             return;
         }
 
+        if !self.selected_cards.is_empty() {
+            self.move_selected_cards(direction);
+            return;
+        }
+
         if let Some(card) = self.get_selected_card_in_context() {
             let board = self
                 .active_board_index
@@ -500,6 +505,77 @@ impl App {
             }
 
             self.refresh_view();
+            self.select_card_by_id(card_id);
+        }
+    }
+
+    fn move_selected_cards(&mut self, direction: kanban_domain::card_lifecycle::MoveDirection) {
+        let board = self
+            .active_board_index
+            .and_then(|idx| self.ctx.boards.get(idx));
+        let board = match board {
+            Some(b) => b,
+            None => return,
+        };
+
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let first_card_id = card_ids.first().copied();
+        let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+        let mut moved_count = 0;
+
+        for card_id in &card_ids {
+            let card = match self.ctx.cards.iter().find(|c| c.id == *card_id) {
+                Some(c) => c,
+                None => continue,
+            };
+
+            let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
+                card,
+                board,
+                &self.ctx.columns,
+                &self.ctx.cards,
+                direction,
+            );
+
+            let move_result = match move_result {
+                Some(r) => r,
+                None => continue,
+            };
+
+            commands.push(Box::new(MoveCard {
+                card_id: *card_id,
+                new_column_id: move_result.target_column_id,
+                new_position: move_result.new_position,
+            }));
+
+            if let Some(new_status) = move_result.new_status {
+                commands.push(Box::new(UpdateCard {
+                    card_id: *card_id,
+                    updates: CardUpdate {
+                        status: Some(new_status),
+                        ..Default::default()
+                    },
+                }));
+            }
+
+            moved_count += 1;
+        }
+
+        if !commands.is_empty() {
+            if let Err(e) = self.execute_commands_batch(commands) {
+                let dir = match direction {
+                    kanban_domain::card_lifecycle::MoveDirection::Left => "left",
+                    kanban_domain::card_lifecycle::MoveDirection::Right => "right",
+                };
+                tracing::error!("Failed to move cards {}: {}", dir, e);
+                return;
+            }
+        }
+
+        tracing::info!("Moved {} cards", moved_count);
+        self.selected_cards.clear();
+        self.refresh_view();
+        if let Some(card_id) = first_card_id {
             self.select_card_by_id(card_id);
         }
     }
