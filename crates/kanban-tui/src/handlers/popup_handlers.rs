@@ -5,6 +5,8 @@ use kanban_domain::{
     dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder, Sprint,
 };
 
+const PRIORITY_COUNT: usize = 4;
+
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
         match key_code {
@@ -39,7 +41,7 @@ impl App {
                 self.pop_mode();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.priority_selection.next(4);
+                self.priority_selection.next(PRIORITY_COUNT);
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.priority_selection.prev();
@@ -83,7 +85,7 @@ impl App {
                 self.priority_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.priority_selection.next(4);
+                self.priority_selection.next(PRIORITY_COUNT);
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.priority_selection.prev();
