@@ -1,3 +1,4 @@
+pub mod banner;
 pub mod card_detail_sections;
 pub mod card_list_item;
 pub mod detail_view;
@@ -9,6 +10,7 @@ pub mod relationship_section;
 pub mod selection_dialog;
 pub mod selection_list;
 
+pub use banner::*;
 pub use card_detail_sections::*;
 pub use card_list_item::*;
 pub use detail_view::*;
