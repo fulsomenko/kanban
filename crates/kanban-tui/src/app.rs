@@ -425,6 +425,9 @@ impl App {
             KeybindingAction::ToggleArchivedView => self.handle_toggle_archived_cards_view(),
             KeybindingAction::ToggleTaskListView => self.handle_toggle_task_list_view(),
             KeybindingAction::ToggleCardSelection => self.handle_card_selection_toggle(),
+            KeybindingAction::ClearCardSelection => self.handle_clear_card_selection(),
+            KeybindingAction::SelectAllCards => self.handle_select_all_cards_in_view(),
+            KeybindingAction::SetSelectedCardsPriority => self.handle_set_selected_cards_priority(),
             KeybindingAction::Search => {
                 if self.focus == Focus::Cards {
                     self.search.activate();
