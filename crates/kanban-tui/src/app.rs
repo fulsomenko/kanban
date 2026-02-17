@@ -748,6 +748,9 @@ impl App {
                     should_restart_events = self.handle_set_card_points_dialog(key.code);
                 }
                 DialogMode::SetCardPriority => self.handle_set_card_priority_popup(key.code),
+                DialogMode::SetMultipleCardsPriority => {
+                    self.handle_set_multiple_cards_priority_popup(key.code)
+                }
                 DialogMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
                 DialogMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
                 DialogMode::SetSprintCardPrefix => {
