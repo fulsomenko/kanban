@@ -1,5 +1,6 @@
 {
   lib,
+  pkgs,
   rustPlatform,
 }:
 
@@ -13,6 +14,12 @@ rustPlatform.buildRustPackage {
   src = lib.cleanSource ./.;
 
   cargoLock.lockFile = ./Cargo.lock;
+
+  nativeBuildInputs = [ pkgs.pkg-config ];
+  buildInputs = lib.optionals pkgs.stdenv.isLinux [
+    pkgs.wayland
+    pkgs.xorg.libxcb
+  ];
 
   cargoBuildFlags = [ "--package" "kanban-cli" ];
   doCheck = false;
