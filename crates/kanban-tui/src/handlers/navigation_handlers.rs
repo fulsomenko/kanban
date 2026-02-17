@@ -496,8 +496,8 @@ impl App {
     }
 
     pub fn handle_escape_key(&mut self) {
-        // Clear selection mode and selections first
-        if self.selection_mode_active || !self.selected_cards.is_empty() {
+        // Clear selection mode first (only when actively in selection mode)
+        if self.selection_mode_active {
             self.selection_mode_active = false;
             self.selected_cards.clear();
             return;
