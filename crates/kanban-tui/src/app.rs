@@ -516,6 +516,18 @@ impl App {
             return false;
         }
 
+        // Handle Ctrl+a for select all cards
+        if matches!(self.mode, AppMode::Normal)
+            && key
+                .modifiers
+                .contains(crossterm::event::KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Char('a'))
+        {
+            self.pending_key = None;
+            self.handle_select_all_cards_in_view();
+            return false;
+        }
+
         match self.mode {
             AppMode::Normal => match key.code {
                 KeyCode::Char('/') => {
@@ -623,6 +635,10 @@ impl App {
                 KeyCode::Char('V') => {
                     self.pending_key = None;
                     self.handle_toggle_task_list_view();
+                }
+                KeyCode::Char('P') => {
+                    self.pending_key = None;
+                    self.handle_set_selected_cards_priority();
                 }
                 KeyCode::Char('H') => {
                     self.pending_key = None;
