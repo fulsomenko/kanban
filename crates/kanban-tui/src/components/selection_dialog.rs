@@ -56,6 +56,56 @@ impl SelectionDialog for PriorityDialog {
     }
 }
 
+pub struct BulkPriorityDialog {
+    pub count: usize,
+}
+
+impl SelectionDialog for BulkPriorityDialog {
+    fn title(&self) -> &str {
+        "Set Priority (Bulk)"
+    }
+
+    fn get_current_selection(&self, _app: &App) -> usize {
+        0
+    }
+
+    fn options_count(&self, _app: &App) -> usize {
+        4 // Low, Medium, High, Critical
+    }
+
+    fn render(&self, app: &App, frame: &mut Frame) {
+        use crate::components::render_selection_popup_with_list_items;
+        use crate::theme::*;
+        use kanban_domain::CardPriority;
+        use ratatui::widgets::ListItem;
+
+        let priorities = [
+            CardPriority::Low,
+            CardPriority::Medium,
+            CardPriority::High,
+            CardPriority::Critical,
+        ];
+
+        let selected = app.priority_selection.get();
+
+        let items: Vec<ListItem> = priorities
+            .iter()
+            .enumerate()
+            .map(|(idx, priority)| {
+                let style = if Some(idx) == selected {
+                    bold_highlight()
+                } else {
+                    normal_text()
+                };
+                ListItem::new(format!("{:?}", priority)).style(style)
+            })
+            .collect();
+
+        let title = format!("Set Priority ({} cards)", self.count);
+        render_selection_popup_with_list_items(frame, &title, items, 35, 40);
+    }
+}
+
 pub struct SortFieldDialog;
 
 impl SelectionDialog for SortFieldDialog {
