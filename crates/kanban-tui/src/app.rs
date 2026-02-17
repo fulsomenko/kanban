@@ -147,6 +147,7 @@ pub enum DialogMode {
     ImportBoard,
     SetCardPoints,
     SetCardPriority,
+    SetMultipleCardsPriority,
     SetBranchPrefix,
     OrderCards,
     CreateSprint,
