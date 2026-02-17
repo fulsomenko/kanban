@@ -496,6 +496,13 @@ impl App {
     }
 
     pub fn handle_escape_key(&mut self) {
+        // Clear selection mode and selections first
+        if self.selection_mode_active || !self.selected_cards.is_empty() {
+            self.selection_mode_active = false;
+            self.selected_cards.clear();
+            return;
+        }
+
         if self.active_board_index.is_some() {
             self.active_board_index = None;
             self.focus = Focus::Boards;
