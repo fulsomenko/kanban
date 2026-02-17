@@ -381,6 +381,13 @@ impl App {
                     }
                 }
 
+                // If selection mode active, add the new current card to selection
+                if self.selection_mode_active {
+                    if let Some(card) = self.get_selected_card_in_context() {
+                        self.selected_cards.insert(card.id);
+                    }
+                }
+
                 // Check for bottom navigation: only switch columns if we were ALREADY at bottom
                 if was_at_bottom {
                     self.view_strategy.navigate_right(false);
@@ -416,6 +423,13 @@ impl App {
                 if final_adjusted_viewport != initial_adjusted_viewport {
                     if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                         list.ensure_selected_visible(final_adjusted_viewport);
+                    }
+                }
+
+                // If selection mode active, add the new current card to selection
+                if self.selection_mode_active {
+                    if let Some(card) = self.get_selected_card_in_context() {
+                        self.selected_cards.insert(card.id);
                     }
                 }
 
