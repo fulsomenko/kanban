@@ -48,6 +48,31 @@ impl App {
         }
     }
 
+    pub fn handle_clear_card_selection(&mut self) {
+        self.selected_cards.clear();
+    }
+
+    pub fn handle_select_all_cards_in_view(&mut self) {
+        if self.focus != Focus::Cards {
+            return;
+        }
+
+        if let Some(task_list) = self.view_strategy.get_active_task_list() {
+            for card_id in &task_list.cards {
+                self.selected_cards.insert(*card_id);
+            }
+        }
+    }
+
+    pub fn handle_set_selected_cards_priority(&mut self) {
+        if self.focus != Focus::Cards || self.selected_cards.is_empty() {
+            return;
+        }
+
+        self.priority_selection.set(Some(0));
+        self.open_dialog(DialogMode::SetMultipleCardsPriority);
+    }
+
     pub fn handle_assign_to_sprint_key(&mut self) {
         if self.focus != Focus::Cards {
             return;
