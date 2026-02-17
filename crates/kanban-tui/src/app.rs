@@ -2,7 +2,7 @@ use crate::{
     card_list::{CardList, CardListId},
     card_list_component::{CardListComponent, CardListComponentConfig},
     clipboard,
-    components::generic_list::ListComponent,
+    components::{generic_list::ListComponent, Banner},
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
     filters::FilterDialogState,
@@ -93,7 +93,7 @@ pub struct App {
     pub file_watcher: Option<kanban_persistence::FileWatcher>,
     pub save_worker_handle: Option<tokio::task::JoinHandle<()>>,
     pub save_completion_rx: Option<tokio::sync::mpsc::UnboundedReceiver<()>>,
-    pub last_error: Option<(String, Instant)>,
+    pub banner: Option<Banner>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -265,7 +265,7 @@ impl App {
             file_watcher: None,
             save_worker_handle: None,
             save_completion_rx,
-            last_error: None,
+            banner: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -316,16 +316,16 @@ impl App {
         self.push_mode(AppMode::Dialog(dialog));
     }
 
-    pub fn set_error(&mut self, message: String) {
-        self.last_error = Some((message, Instant::now()));
+    pub fn set_error(&mut self, message: impl Into<String>) {
+        self.banner = Some(Banner::error(message));
     }
 
-    pub fn clear_error(&mut self) {
-        self.last_error = None;
+    pub fn set_success(&mut self, message: impl Into<String>) {
+        self.banner = Some(Banner::success(message));
     }
 
-    pub fn should_clear_error(&self) -> bool {
-        false
+    pub fn clear_banner(&mut self) {
+        self.banner = None;
     }
 
     fn keycode_matches_binding_key(
@@ -459,9 +459,9 @@ impl App {
         use crossterm::event::KeyCode;
         let mut should_restart_events = false;
 
-        // Clear error on any key press
-        if self.last_error.is_some() {
-            self.clear_error();
+        // Clear banner on any key press
+        if self.banner.is_some() {
+            self.clear_banner();
             return false;
         }
 
@@ -1594,9 +1594,11 @@ impl App {
                             Event::Tick => {
                                 self.handle_animation_tick();
 
-                                // Auto-clear errors after 5 seconds
-                                if self.should_clear_error() {
-                                    self.clear_error();
+                                // Auto-clear banner after 3 seconds
+                                if let Some(ref banner) = self.banner {
+                                    if banner.is_expired(std::time::Duration::from_secs(3)) {
+                                        self.clear_banner();
+                                    }
                                 }
 
                                 // Handle pending conflict resolution actions
@@ -1879,9 +1881,9 @@ impl App {
                             self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&output) {
-                            tracing::error!("Failed to copy to clipboard: {}", e);
+                            self.set_error(format!("Failed to copy: {}", e));
                         } else {
-                            tracing::info!("Copied {}: {}", output_type, output);
+                            self.set_success(format!("Copied {}", output_type));
                         }
                     }
                 }
