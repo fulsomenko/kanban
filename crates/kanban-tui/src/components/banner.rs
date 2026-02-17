@@ -71,9 +71,7 @@ impl Banner {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(color));
 
-        let text_style = Style::default()
-            .fg(color)
-            .add_modifier(Modifier::BOLD);
+        let text_style = Style::default().fg(color).add_modifier(Modifier::BOLD);
 
         let widget = Paragraph::new(self.message.as_str())
             .style(text_style)
