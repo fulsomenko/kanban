@@ -54,6 +54,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 DialogMode::ImportBoard => render_import_board_popup(app, frame),
                 DialogMode::SetCardPoints => render_set_card_points_popup(app, frame),
                 DialogMode::SetCardPriority => render_set_card_priority_popup(app, frame),
+                DialogMode::SetMultipleCardsPriority => {
+                    render_set_multiple_cards_priority_popup(app, frame)
+                }
                 DialogMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
                 DialogMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
                 DialogMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
@@ -589,6 +592,14 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
 fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
     use crate::components::{PriorityDialog, SelectionDialog};
     let dialog = PriorityDialog;
+    dialog.render(app, frame);
+}
+
+fn render_set_multiple_cards_priority_popup(app: &App, frame: &mut Frame) {
+    use crate::components::{BulkPriorityDialog, SelectionDialog};
+    let dialog = BulkPriorityDialog {
+        count: app.selected_cards.len(),
+    };
     dialog.render(app, frame);
 }
 
