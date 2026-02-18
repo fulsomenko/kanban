@@ -63,6 +63,9 @@ impl App {
             for card_id in &task_list.cards {
                 self.selected_cards.insert(*card_id);
             }
+            if !task_list.cards.is_empty() {
+                self.selection_mode_active = true;
+            }
         }
     }
 
