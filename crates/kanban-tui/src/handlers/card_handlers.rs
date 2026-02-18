@@ -37,15 +37,45 @@ impl App {
 
     pub fn handle_card_selection_toggle(&mut self) {
         if self.focus == Focus::Cards {
-            if let Some(card) = self.get_selected_card_in_context() {
-                let card_id = card.id;
-                if self.selected_cards.contains(&card_id) {
-                    self.selected_cards.remove(&card_id);
-                } else {
-                    self.selected_cards.insert(card_id);
+            if self.selection_mode_active {
+                // Exit selection mode (keep selections)
+                self.selection_mode_active = false;
+            } else {
+                // Enter selection mode and select current card
+                self.selection_mode_active = true;
+                if let Some(card) = self.get_selected_card_in_context() {
+                    self.selected_cards.insert(card.id);
                 }
             }
         }
+    }
+
+    pub fn handle_clear_card_selection(&mut self) {
+        self.selected_cards.clear();
+    }
+
+    pub fn handle_select_all_cards_in_view(&mut self) {
+        if self.focus != Focus::Cards {
+            return;
+        }
+
+        if let Some(task_list) = self.view_strategy.get_active_task_list() {
+            for card_id in &task_list.cards {
+                self.selected_cards.insert(*card_id);
+            }
+            if !task_list.cards.is_empty() {
+                self.selection_mode_active = true;
+            }
+        }
+    }
+
+    pub fn handle_set_selected_cards_priority(&mut self) {
+        if self.focus != Focus::Cards || self.selected_cards.is_empty() {
+            return;
+        }
+
+        self.priority_selection.set(Some(0));
+        self.open_dialog(DialogMode::SetMultipleCardsPriority);
     }
 
     pub fn handle_assign_to_sprint_key(&mut self) {
@@ -273,6 +303,7 @@ impl App {
 
         tracing::info!("Toggled {} cards completion status", toggled_count);
         self.selected_cards.clear();
+        self.selection_mode_active = false;
         self.refresh_view();
         if let Some(card_id) = first_card_id {
             self.select_card_by_id(card_id);
@@ -396,6 +427,11 @@ impl App {
             return;
         }
 
+        if !self.selected_cards.is_empty() {
+            self.move_selected_cards(direction);
+            return;
+        }
+
         if let Some(card) = self.get_selected_card_in_context() {
             let board = self
                 .active_board_index
@@ -479,6 +515,78 @@ impl App {
         }
     }
 
+    fn move_selected_cards(&mut self, direction: kanban_domain::card_lifecycle::MoveDirection) {
+        let board = self
+            .active_board_index
+            .and_then(|idx| self.ctx.boards.get(idx));
+        let board = match board {
+            Some(b) => b,
+            None => return,
+        };
+
+        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let first_card_id = card_ids.first().copied();
+        let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+        let mut moved_count = 0;
+
+        for card_id in &card_ids {
+            let card = match self.ctx.cards.iter().find(|c| c.id == *card_id) {
+                Some(c) => c,
+                None => continue,
+            };
+
+            let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
+                card,
+                board,
+                &self.ctx.columns,
+                &self.ctx.cards,
+                direction,
+            );
+
+            let move_result = match move_result {
+                Some(r) => r,
+                None => continue,
+            };
+
+            commands.push(Box::new(MoveCard {
+                card_id: *card_id,
+                new_column_id: move_result.target_column_id,
+                new_position: move_result.new_position,
+            }));
+
+            if let Some(new_status) = move_result.new_status {
+                commands.push(Box::new(UpdateCard {
+                    card_id: *card_id,
+                    updates: CardUpdate {
+                        status: Some(new_status),
+                        ..Default::default()
+                    },
+                }));
+            }
+
+            moved_count += 1;
+        }
+
+        if !commands.is_empty() {
+            if let Err(e) = self.execute_commands_batch(commands) {
+                let dir = match direction {
+                    kanban_domain::card_lifecycle::MoveDirection::Left => "left",
+                    kanban_domain::card_lifecycle::MoveDirection::Right => "right",
+                };
+                tracing::error!("Failed to move cards {}: {}", dir, e);
+                return;
+            }
+        }
+
+        tracing::info!("Moved {} cards", moved_count);
+        self.selected_cards.clear();
+        self.selection_mode_active = false;
+        self.refresh_view();
+        if let Some(card_id) = first_card_id {
+            self.select_card_by_id(card_id);
+        }
+    }
+
     pub fn handle_archive_card(&mut self) {
         if self.focus != Focus::Cards {
             return;
@@ -497,6 +605,7 @@ impl App {
             self.start_delete_animation(card_id);
         }
         self.selected_cards.clear();
+        self.selection_mode_active = false;
     }
 
     fn start_delete_animation(&mut self, card_id: uuid::Uuid) {
@@ -563,6 +672,7 @@ impl App {
             self.start_restore_animation(card_id);
         }
         self.selected_cards.clear();
+        self.selection_mode_active = false;
     }
 
     fn start_restore_animation(&mut self, card_id: uuid::Uuid) {
@@ -639,6 +749,7 @@ impl App {
             self.start_permanent_delete_animation(card_id);
         }
         self.selected_cards.clear();
+        self.selection_mode_active = false;
     }
 
     fn start_permanent_delete_animation(&mut self, card_id: uuid::Uuid) {

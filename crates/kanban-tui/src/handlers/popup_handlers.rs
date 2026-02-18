@@ -5,6 +5,8 @@ use kanban_domain::{
     dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder, Sprint,
 };
 
+const PRIORITY_COUNT: usize = 4;
+
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
         match key_code {
@@ -39,7 +41,7 @@ impl App {
                 self.pop_mode();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.priority_selection.next(4);
+                self.priority_selection.next(PRIORITY_COUNT);
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.priority_selection.prev();
@@ -71,6 +73,66 @@ impl App {
                     }
                 }
                 self.pop_mode();
+            }
+            _ => {}
+        }
+    }
+
+    pub fn handle_set_multiple_cards_priority_popup(&mut self, key_code: KeyCode) {
+        match key_code {
+            KeyCode::Esc => {
+                self.pop_mode();
+                self.priority_selection.clear();
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.priority_selection.next(PRIORITY_COUNT);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.priority_selection.prev();
+            }
+            KeyCode::Enter => {
+                if let Some(priority_idx) = self.priority_selection.get() {
+                    use kanban_domain::{CardPriority, CardUpdate};
+                    let priority = match priority_idx {
+                        0 => CardPriority::Low,
+                        1 => CardPriority::Medium,
+                        2 => CardPriority::High,
+                        3 => CardPriority::Critical,
+                        _ => CardPriority::Medium,
+                    };
+
+                    let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+                    let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+
+                    for card_id in &card_ids {
+                        let cmd = Box::new(kanban_domain::commands::UpdateCard {
+                            card_id: *card_id,
+                            updates: CardUpdate {
+                                priority: Some(priority),
+                                ..Default::default()
+                            },
+                        })
+                            as Box<dyn kanban_domain::commands::Command>;
+                        commands.push(cmd);
+                    }
+
+                    if !commands.is_empty() {
+                        if let Err(e) = self.execute_commands_batch(commands) {
+                            tracing::error!("Failed to update cards priority: {}", e);
+                        } else {
+                            tracing::info!(
+                                "Set priority to {:?} for {} cards",
+                                priority,
+                                card_ids.len()
+                            );
+                        }
+                    }
+
+                    self.selected_cards.clear();
+                    self.selection_mode_active = false;
+                }
+                self.pop_mode();
+                self.priority_selection.clear();
             }
             _ => {}
         }
@@ -283,6 +345,7 @@ impl App {
                 self.pop_mode();
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
+                self.selection_mode_active = false;
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
@@ -391,6 +454,7 @@ impl App {
                 self.pop_mode();
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
+                self.selection_mode_active = false;
             }
             _ => {}
         }

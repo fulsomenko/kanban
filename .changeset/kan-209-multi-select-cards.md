@@ -1,0 +1,21 @@
+---
+bump: patch
+---
+
+- feat(tui): add bulk priority popup rendering
+- feat(tui): add selection mode indicator to footer
+- feat(tui): handle SetMultipleCardsPriority dialog in event loop
+- feat(tui): add keyboard shortcuts for multi-select
+- feat(tui): wire keybinding actions in execute_action
+- feat(tui): add bulk priority popup handler
+- feat(tui): update escape handler for selection mode
+- feat(tui): add auto-select on navigation in selection mode
+- feat(tui): implement vim-style selection mode toggle
+- feat(tui): add bulk move for selected cards
+- feat(tui): add card selection handler functions
+- feat(tui): add card list keybindings for bulk operations
+- feat(tui): register bulk priority dialog provider
+- feat(tui): add BulkPriorityDialog component
+- feat(tui): add keybinding actions for multi-select operations
+- feat(tui): add SetMultipleCardsPriority dialog mode
+- feat(tui): add selection_mode_active field to App

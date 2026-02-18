@@ -65,6 +65,7 @@ pub struct App {
     pub current_sort_field: Option<SortField>,
     pub current_sort_order: Option<SortOrder>,
     pub selected_cards: std::collections::HashSet<uuid::Uuid>,
+    pub selection_mode_active: bool,
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
@@ -146,6 +147,7 @@ pub enum DialogMode {
     ImportBoard,
     SetCardPoints,
     SetCardPriority,
+    SetMultipleCardsPriority,
     SetBranchPrefix,
     OrderCards,
     CreateSprint,
@@ -213,6 +215,7 @@ impl App {
             current_sort_field: None,
             current_sort_order: None,
             selected_cards: std::collections::HashSet::new(),
+            selection_mode_active: false,
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
@@ -422,6 +425,9 @@ impl App {
             KeybindingAction::ToggleArchivedView => self.handle_toggle_archived_cards_view(),
             KeybindingAction::ToggleTaskListView => self.handle_toggle_task_list_view(),
             KeybindingAction::ToggleCardSelection => self.handle_card_selection_toggle(),
+            KeybindingAction::ClearCardSelection => self.handle_clear_card_selection(),
+            KeybindingAction::SelectAllCards => self.handle_select_all_cards_in_view(),
+            KeybindingAction::SetSelectedCardsPriority => self.handle_set_selected_cards_priority(),
             KeybindingAction::Search => {
                 if self.focus == Focus::Cards {
                     self.search.activate();
@@ -507,6 +513,18 @@ impl App {
             let previous_mode = self.mode.clone();
             self.help_selection.set(Some(0));
             self.mode = AppMode::Help(Box::new(previous_mode));
+            return false;
+        }
+
+        // Handle Ctrl+a for select all cards
+        if matches!(self.mode, AppMode::Normal)
+            && key
+                .modifiers
+                .contains(crossterm::event::KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Char('a'))
+        {
+            self.pending_key = None;
+            self.handle_select_all_cards_in_view();
             return false;
         }
 
@@ -618,6 +636,10 @@ impl App {
                     self.pending_key = None;
                     self.handle_toggle_task_list_view();
                 }
+                KeyCode::Char('P') => {
+                    self.pending_key = None;
+                    self.handle_set_selected_cards_priority();
+                }
                 KeyCode::Char('H') => {
                     self.pending_key = None;
                     self.handle_move_card_left();
@@ -726,6 +748,9 @@ impl App {
                     should_restart_events = self.handle_set_card_points_dialog(key.code);
                 }
                 DialogMode::SetCardPriority => self.handle_set_card_priority_popup(key.code),
+                DialogMode::SetMultipleCardsPriority => {
+                    self.handle_set_multiple_cards_priority_popup(key.code)
+                }
                 DialogMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
                 DialogMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
                 DialogMode::SetSprintCardPrefix => {

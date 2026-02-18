@@ -54,6 +54,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 DialogMode::ImportBoard => render_import_board_popup(app, frame),
                 DialogMode::SetCardPoints => render_set_card_points_popup(app, frame),
                 DialogMode::SetCardPriority => render_set_card_priority_popup(app, frame),
+                DialogMode::SetMultipleCardsPriority => {
+                    render_set_multiple_cards_priority_popup(app, frame)
+                }
                 DialogMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
                 DialogMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
                 DialogMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
@@ -506,6 +509,14 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
 
     use crate::keybindings::KeybindingRegistry;
 
+    let selection_prefix = if app.selection_mode_active {
+        format!("-- SELECT ({}) -- | ", app.selected_cards.len())
+    } else if !app.selected_cards.is_empty() {
+        format!("({} selected) | ", app.selected_cards.len())
+    } else {
+        String::new()
+    };
+
     let help_text: String = if let AppMode::SprintDetail = app.mode {
         let component = match app.sprint_task_panel {
             crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
@@ -520,16 +531,17 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             .collect::<Vec<_>>()
             .join(" | ");
         let component_help = component.help_text();
-        format!("{} | {}", keybindings, component_help)
+        format!("{}{} | {}", selection_prefix, keybindings, component_help)
     } else {
         let provider = KeybindingRegistry::get_provider(app);
         let context = provider.get_context();
-        context
+        let keybindings = context
             .bindings
             .iter()
             .map(|b| format!("{}: {}", b.key, b.short_description))
             .collect::<Vec<_>>()
-            .join(" | ")
+            .join(" | ");
+        format!("{}{}", selection_prefix, keybindings)
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
@@ -580,6 +592,14 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
 fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
     use crate::components::{PriorityDialog, SelectionDialog};
     let dialog = PriorityDialog;
+    dialog.render(app, frame);
+}
+
+fn render_set_multiple_cards_priority_popup(app: &App, frame: &mut Frame) {
+    use crate::components::{BulkPriorityDialog, SelectionDialog};
+    let dialog = BulkPriorityDialog {
+        count: app.selected_cards.len(),
+    };
     dialog.render(app, frame);
 }
 

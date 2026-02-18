@@ -53,6 +53,24 @@ impl KeybindingProvider for CardListProvider {
                     KeybindingAction::ToggleCardSelection,
                 ),
                 Keybinding::new(
+                    "Ctrl+a",
+                    "select all",
+                    "Select all visible tasks",
+                    KeybindingAction::SelectAllCards,
+                ),
+                Keybinding::new(
+                    "Esc",
+                    "clear",
+                    "Clear selection",
+                    KeybindingAction::ClearCardSelection,
+                ),
+                Keybinding::new(
+                    "P",
+                    "priority",
+                    "Set priority (bulk)",
+                    KeybindingAction::SetSelectedCardsPriority,
+                ),
+                Keybinding::new(
                     "V",
                     "view",
                     "Toggle task list view",
