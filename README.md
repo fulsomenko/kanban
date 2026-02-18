@@ -126,6 +126,7 @@ Switch between view modes with `V`:
 **Card list**
 - `n` - New card, `e` - Edit, `r` - Rename
 - `d` - Archive, `c` - Toggle done, `p` - Set priority
+- `v` - Toggle selection mode, `Ctrl+a` - Select all
 
 **Views & Search**
 - `V` - Toggle view mode, `/` - Search
