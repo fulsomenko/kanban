@@ -203,10 +203,9 @@ a:hover {
 
 .cta-buttons {
   display: flex;
-  align-items: stretch;
-  gap: 0;
+  flex-direction: column;
+  gap: var(--spacing-xs);
   margin-bottom: var(--spacing-4xl);
-  margin-left: 0;
   width: fit-content;
 }
 
@@ -223,6 +222,7 @@ a:hover {
   user-select: all;
   cursor: pointer;
   transition: border-color var(--transition-fast);
+  min-width: 320px;
 }
 
 .code-prompt:hover {
@@ -233,16 +233,6 @@ a:hover {
   color: var(--color-accent);
   content: "$ ";
   margin-right: var(--spacing-md);
-}
-
-.cta-separator {
-  display: flex;
-  align-items: center;
-  padding: 0 var(--spacing-xl);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  font-style: italic;
 }
 
 .hero-links {
