@@ -7,13 +7,15 @@
   <meta name="keywords" content="kanban, project management, terminal, rust, vim, developer tools">
   <title>kanban - Keyboard-driven project management</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </head>
 <body>
   <main class="container">
     <!-- Hero Section -->
     <section class="hero">
       <h1 class="hero-title">kanban</h1>
-      <p class="hero-tagline">Keyboard-driven project management for developers who live in the terminal</p>
+      <p class="hero-tagline">Keyboard-driven project management</p>
       <nav class="hero-links">
         <a href="https://github.com/fulsomenko/kanban" class="link">GitHub</a>
         <a href="https://crates.io/crates/kanban-cli" class="link">Crates.io</a>
@@ -26,12 +28,12 @@
       <div class="install-methods">
         <div class="install-method">
           <h3>From Crates.io</h3>
-          <pre><code class="code-block">$ cargo install kanban-cli</code></pre>
+          <pre><code class="code-block language-sh">$ cargo install kanban-cli</code></pre>
         </div>
 
         <div class="install-method">
           <h3>Using Nix</h3>
-          <pre><code class="code-block">$ nix run github:fulsomenko/kanban
+          <pre><code class="code-block language-sh">$ nix run github:fulsomenko/kanban
 $ # or
 $ nix run github:nixos/nixpkgs/nixpkgs-unstable#kanban
 </code></pre>
@@ -39,7 +41,7 @@ $ nix run github:nixos/nixpkgs/nixpkgs-unstable#kanban
 
         <div class="install-method">
           <h3>From Source</h3>
-          <pre><code class="code-block">$ git clone https://github.com/fulsomenko/kanban
+          <pre><code class="code-block language-sh">$ git clone https://github.com/fulsomenko/kanban
 $ cd kanban
 $ cargo install --path crates/kanban-cli</code></pre>
         </div>
@@ -104,7 +106,7 @@ $ cargo install --path crates/kanban-cli</code></pre>
         <div class="roadmap-category">
           <h3 class="roadmap-title">Completed</h3>
           <ul class="roadmap-list">
-            <li><span class="status-badge completed">[x]</span> Progressive auto-save architecture</li>
+            <li><span class="status-badge completed">[x]</span> Progressive auto-save</li>
             <li><span class="status-badge completed">[x]</span> Full CLI interface matching TUI operations</li>
             <li><span class="status-badge completed">[x]</span> Card dependencies (parent-child and blocking)</li>
             <li><span class="status-badge completed">[x]</span> Undo/redo support (<code>u</code>/<code>U</code>)</li>
@@ -141,5 +143,11 @@ $ cargo install --path crates/kanban-cli</code></pre>
       </div>
     </footer>
   </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      hljs.highlightAll();
+    });
+  </script>
 </body>
 </html>
