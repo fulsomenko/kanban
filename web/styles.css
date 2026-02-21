@@ -189,51 +189,6 @@ a:hover {
   line-height: 1.8;
 }
 
-.demo-gif {
-  max-width: 100%;
-  width: 100%;
-  max-width: 800px;
-  height: auto;
-  border: 1px solid var(--color-border);
-  margin-bottom: var(--spacing-4xl);
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.cta-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-4xl);
-  width: fit-content;
-}
-
-.code-prompt {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-  background-color: var(--color-bg-panel);
-  border: 1px solid var(--color-border);
-  padding: var(--spacing-lg) var(--spacing-2xl);
-  border-radius: var(--border-radius);
-  display: block;
-  letter-spacing: var(--letter-spacing-normal);
-  user-select: all;
-  cursor: pointer;
-  transition: border-color var(--transition-fast);
-  min-width: 320px;
-}
-
-.code-prompt:hover {
-  border-color: var(--color-accent);
-}
-
-.code-prompt::before {
-  color: var(--color-accent);
-  content: "$ ";
-  margin-right: var(--spacing-md);
-}
 
 .hero-links {
   display: flex;
@@ -245,10 +200,6 @@ a:hover {
 @media (max-width: 640px) {
   .hero {
     padding: var(--spacing-4xl) 0;
-  }
-
-  .cta-buttons {
-    gap: var(--spacing-sm);
   }
 
   .hero-links {
@@ -349,11 +300,6 @@ a:hover {
   margin-bottom: var(--spacing-xl);
 }
 
-.quick-start-title {
-  margin-top: var(--spacing-4xl);
-  margin-bottom: var(--spacing-2xl);
-}
-
 /* ============================================================================
    Code Blocks
    ============================================================================ */
@@ -447,10 +393,6 @@ pre {
 
 .status-badge.completed {
   color: #3fb950;
-}
-
-.status-badge.in-progress {
-  color: #d29922;
 }
 
 .status-badge.planned {
@@ -569,9 +511,5 @@ pre {
 
   a {
     color: black;
-  }
-
-  .demo-gif {
-    display: none;
   }
 }
