@@ -318,6 +318,11 @@ a:hover {
   user-select: all;
 }
 
+.prompt {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
 pre {
   margin: 0;
 }
