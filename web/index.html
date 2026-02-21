@@ -14,14 +14,37 @@
     <section class="hero">
       <h1 class="hero-title">kanban</h1>
       <p class="hero-tagline">Keyboard-driven project management for developers who live in the terminal</p>
-      <div class="cta-buttons">
-        <code class="code-prompt">cargo install kanban-cli</code>
-        <code class="code-prompt">nix run github:fulsomenko/kanban</code>
-      </div>
       <nav class="hero-links">
         <a href="https://github.com/fulsomenko/kanban" class="link">GitHub Repository</a>
         <a href="https://crates.io/crates/kanban-cli" class="link">Crates.io</a>
       </nav>
+    </section>
+
+    <!-- Installation Section -->
+    <section class="installation">
+      <h2>Getting Started</h2>
+      <div class="install-methods">
+        <div class="install-method">
+          <h3>From Crates.io</h3>
+          <pre><code class="code-block">$ cargo install kanban-cli</code></pre>
+        </div>
+
+        <div class="install-method">
+          <h3>Using Nix</h3>
+          <pre><code class="code-block">$ nix run github:fulsomenko/kanban
+$ # or
+$ nix run github:nixos/nixpkgs/nixpkgs-unstable#kanban
+</code></pre>
+        </div>
+
+        <div class="install-method">
+          <h3>From Source</h3>
+          <pre><code class="code-block">$ git clone https://github.com/fulsomenko/kanban
+$ cd kanban
+$ cargo install --path crates/kanban-cli</code></pre>
+        </div>
+      </div>
+
     </section>
 
     <!-- Features Section -->
@@ -70,33 +93,6 @@
           </p>
         </div>
       </div>
-    </section>
-
-    <!-- Installation Section -->
-    <section class="installation">
-      <h2>Getting Started</h2>
-      <div class="install-methods">
-        <div class="install-method">
-          <h3>From Crates.io</h3>
-          <pre><code class="code-block">$ cargo install kanban-cli</code></pre>
-        </div>
-
-        <div class="install-method">
-          <h3>Using Nix</h3>
-          <pre><code class="code-block">$ nix run github:fulsomenko/kanban</code></pre>
-        </div>
-
-        <div class="install-method">
-          <h3>From Source</h3>
-          <pre><code class="code-block">$ git clone https://github.com/fulsomenko/kanban
-$ cd kanban
-$ cargo install --path crates/kanban-cli</code></pre>
-        </div>
-      </div>
-
-      <h3 class="quick-start-title">Quick Start</h3>
-      <pre><code class="code-block">$ kanban init --name "My Board"
-$ kanban tui</code></pre>
     </section>
 
     <!-- Roadmap Section -->
