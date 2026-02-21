@@ -323,6 +323,11 @@ a:hover {
   font-weight: var(--font-weight-semibold);
 }
 
+.comment {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 pre {
   margin: 0;
 }
