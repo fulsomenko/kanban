@@ -324,22 +324,24 @@ a:hover {
    ============================================================================ */
 
 .installation {
-  padding: var(--spacing-5xl) 0;
   border-bottom: 1px solid var(--color-border);
 }
 
 .install-methods {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--spacing-3xl);
+  background-color: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
   margin-bottom: var(--spacing-5xl);
 }
 
 .install-method {
-  background-color: var(--color-bg-panel);
-  border: 1px solid var(--color-border);
   padding: var(--spacing-3xl);
-  border-radius: var(--border-radius);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.install-method:last-child {
+  border-bottom: none;
 }
 
 .install-method h3 {
