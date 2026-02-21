@@ -319,8 +319,12 @@ a:hover {
 }
 
 .prompt {
-  color: var(--color-accent) !important;
-  font-weight: var(--font-weight-semibold);
+  color: #c9714a !important;
+  font-weight: var(--font-weight-semibold) !important;
+}
+
+.code-block .prompt {
+  color: #c9714a !important;
 }
 
 pre {
