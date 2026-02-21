@@ -290,10 +290,6 @@ a:hover {
   padding: var(--spacing-3xl);
 }
 
-.install-method:last-child {
-  border-bottom: none;
-}
-
 .install-method h3 {
   margin-top: 0;
   margin-bottom: var(--spacing-xl);
@@ -315,7 +311,7 @@ a:hover {
   letter-spacing: var(--letter-spacing-normal);
   line-height: 1.8;
   display: block;
-  user-select: all;
+  user-select: text;
 }
 
 .prompt {
