@@ -15,7 +15,6 @@ stdenv.mkDerivation {
     mkdir -p $out
     cp index.html $out/
     cp styles.css $out/
-    cp demo.gif $out/
   '';
 
   meta = {
