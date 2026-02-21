@@ -202,31 +202,41 @@ a:hover {
 }
 
 .cta-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
   justify-content: center;
-  align-items: center;
+  align-items: stretch;
   margin-bottom: var(--spacing-4xl);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-panel);
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .code-prompt {
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   color: var(--color-text);
-  background-color: var(--color-bg-panel);
-  border: 1px solid var(--color-border);
+  background-color: transparent;
+  border: none;
+  border-right: 1px solid var(--color-border);
   padding: var(--spacing-lg) var(--spacing-2xl);
   border-radius: var(--border-radius);
-  display: inline-block;
+  display: block;
   letter-spacing: var(--letter-spacing-normal);
   user-select: all;
   cursor: pointer;
-  transition: border-color var(--transition-fast);
+  transition: background-color var(--transition-fast);
+}
+
+.code-prompt:last-child {
+  border-right: none;
 }
 
 .code-prompt:hover {
-  border-color: var(--color-accent);
+  background-color: var(--color-bg);
 }
 
 .code-prompt::before {
