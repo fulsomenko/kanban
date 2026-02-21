@@ -67,6 +67,7 @@
           kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {
             inherit kanban;
           };
+          kanban-web = pkgs.callPackage ./web/default.nix {};
           mcp-server-git = servers.packages.${system}.mcp-server-git;
           aggregate-changelog = aggregateChangelog;
           bump-version = bumpVersion;

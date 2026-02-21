@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Fast, terminal-based kanban board written in Rust. Vim-like navigation, MCP integration, local-first data storage.">
+  <meta name="keywords" content="kanban, project management, terminal, rust, vim, developer tools">
+  <title>kanban</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="container">
+    <!-- Hero Section -->
+    <section class="hero">
+      <h1 class="hero-title">kanban</h1>
+      <p class="hero-tagline">Keyboard-driven project management</p>
+      <nav class="hero-links">
+        <a href="https://github.com/fulsomenko/kanban" class="link">GitHub</a>
+        <a href="https://crates.io/crates/kanban-cli" class="link">Crates.io</a>
+      </nav>
+    </section>
+
+    <!-- Installation Section -->
+    <section class="installation">
+      <h2>Getting Started</h2>
+      <div class="install-methods">
+        <div class="install-method">
+          <h3>From Crates.io</h3>
+          <pre><code class="code-block nohighlight"><span class="prompt">$</span> cargo install kanban-cli</code></pre>
+        </div>
+
+        <div class="install-method">
+          <h3>Using Nix</h3>
+          <pre><code class="code-block nohighlight"><span class="prompt">$</span> nix run github:fulsomenko/kanban
+<span class="prompt">$</span> <span class="comment"># or</span>
+<span class="prompt">$</span> nix run github:nixos/nixpkgs/nixpkgs-unstable#kanban
+</code></pre>
+        </div>
+
+        <div class="install-method">
+          <h3>From Source</h3>
+          <pre><code class="code-block nohighlight"><span class="prompt">$</span> git clone https://github.com/fulsomenko/kanban
+<span class="prompt">$</span> cd kanban
+<span class="prompt">$</span> cargo install --path crates/kanban-cli</code></pre>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+      <h2>Features</h2>
+      <div class="features-grid">
+        <div class="card">
+          <h3 class="card-title">⌨️ Vim-Like Power</h3>
+          <p class="card-description">
+            Keyboard-driven with hjkl navigation, vim search with <code>/</code>, jump motions with <code>gg</code>/<code>G</code>, context-aware shortcuts, and full undo/redo support.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">🚀 Blazing Fast</h3>
+          <p class="card-description">
+            Written in Rust for native performance. Instant saves with debouncing, multi-instance safe with conflict detection, and zero browser overhead.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">🔌 Three Interfaces</h3>
+          <p class="card-description">
+            <strong>TUI</strong> for interactive work, <strong>CLI</strong> for scripting and automation, and <strong>MCP Server</strong> for LLM integration with Claude and Cursor.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">📋 Rich Task Management</h3>
+          <p class="card-description">
+            Card dependencies (parent-child, blocking), sprint planning with history, story points with color coding, priority levels, due dates, and markdown descriptions.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">🛠️ Developer Workflow</h3>
+          <p class="card-description">
+            Automatic git branch names from cards, sprint-based card prefixes (e.g., KAN-123), external editor support (vim, nvim, emacs), and JSON import/export.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">🔒 Local-First</h3>
+          <p class="card-description">
+            All data stored locally in JSON format. No cloud dependencies, full privacy and control, atomic saves with crash protection.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Roadmap Section -->
+    <section class="roadmap">
+      <h2>Roadmap</h2>
+      <p class="roadmap-status">Version 0.2.0 - Production Ready</p>
+
+      <div class="roadmap-categories">
+        <div class="roadmap-category">
+          <h3 class="roadmap-title">Completed</h3>
+          <ul class="roadmap-list">
+            <li><span class="status-badge completed">[x]</span> Progressive auto-save</li>
+            <li><span class="status-badge completed">[x]</span> Full CLI interface matching TUI operations</li>
+            <li><span class="status-badge completed">[x]</span> Card dependencies (parent-child and blocking)</li>
+            <li><span class="status-badge completed">[x]</span> Undo/redo support (<code>u</code>/<code>U</code>)</li>
+            <li><span class="status-badge completed">[x]</span> MCP server for LLM integration</li>
+          </ul>
+        </div>
+
+        <div class="roadmap-category">
+          <h3 class="roadmap-title">Planned</h3>
+          <ul class="roadmap-list">
+            <li><span class="status-badge planned">[ ]</span> HTTP API for remote board access</li>
+            <li><span class="status-badge planned">[ ]</span> Collaborative features (multi-user, sync)</li>
+            <li><span class="status-badge planned">[ ]</span> Web UI to complement TUI and CLI</li>
+            <li><span class="status-badge planned">[ ]</span> Multiple storage backends (markdown, SQL)</li>
+            <li><span class="status-badge planned">[ ]</span> Configurable keybindings</li>
+            <li><span class="status-badge planned">[ ]</span> Audit log for compliance tracking</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer Section -->
+    <footer class="footer">
+      <div class="footer-content">
+        <nav class="footer-links">
+          <a href="https://github.com/fulsomenko/kanban" class="link">GitHub</a>
+          <a href="https://crates.io/crates/kanban-cli" class="link">Crates.io</a>
+          <a href="https://github.com/fulsomenko/kanban/issues" class="link">Report Issue</a>
+        </nav>
+        <div class="footer-meta">
+          <p>Created by <strong>Max Emil Yoon Blomstervall</strong></p>
+          <p>Licensed under <strong>Apache 2.0</strong></p>
+        </div>
+      </div>
+    </footer>
+  </main>
+</body>
+</html>
