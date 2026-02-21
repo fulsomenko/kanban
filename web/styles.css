@@ -319,7 +319,7 @@ a:hover {
 }
 
 .prompt {
-  color: var(--color-accent);
+  color: var(--color-accent) !important;
   font-weight: var(--font-weight-semibold);
 }
 
