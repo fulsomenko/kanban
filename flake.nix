@@ -2,6 +2,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    crane.url = "github:ipetkov/crane";
     flake-utils.url = "github:numtide/flake-utils";
     servers.url = "github:fulsomenko/servers";
   };
@@ -10,6 +11,7 @@
     self,
     nixpkgs,
     rust-overlay,
+    crane,
     flake-utils,
     servers,
     ...
@@ -24,6 +26,8 @@
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = ["rust-src" "rust-analyzer" "clippy" "rustfmt"];
         };
+
+        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
         changeset = pkgs.writeShellApplication {
           name = "changeset";
@@ -61,11 +65,13 @@
         };
 
         packages = let
-          kanban = pkgs.callPackage ./default.nix {};
+          kanban = pkgs.callPackage ./default.nix {
+            inherit craneLib;
+          };
         in {
           default = kanban;
           kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {
-            inherit kanban;
+            inherit kanban craneLib;
           };
           kanban-web = pkgs.callPackage ./web/default.nix {};
           mcp-server-git = servers.packages.${system}.mcp-server-git;
