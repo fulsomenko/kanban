@@ -1,33 +1,42 @@
-{ lib
-, rustPlatform
-, makeWrapper
-, kanban
+{
+  lib,
+  craneLib,
+  makeWrapper,
+  kanban,
 }:
 
 let
   cargoToml = lib.importTOML ../../Cargo.toml;
-in
-rustPlatform.buildRustPackage {
-  inherit (cargoToml.workspace.package) version;
-  pname = "kanban-mcp";
 
-  src = lib.cleanSource ../..;
-
-  cargoLock = {
-    lockFile = ../../Cargo.lock;
+  src = lib.cleanSourceWith {
+    src = ../..;
+    filter = path: type:
+      (lib.hasSuffix "\.rs" path) ||
+      (lib.hasSuffix "\.toml" path) ||
+      (lib.hasInfix "/Cargo.lock" path) ||
+      (type == "directory");
   };
+
+  cargoArtifacts = craneLib.buildDepsOnly {
+    inherit src;
+    pname = "kanban-mcp";
+    version = cargoToml.workspace.package.version;
+  };
+
+in
+craneLib.buildPackage {
+  inherit src cargoArtifacts;
+  pname = "kanban-mcp";
+  version = cargoToml.workspace.package.version;
 
   nativeBuildInputs = [ makeWrapper ];
   nativeCheckInputs = [ kanban ];
 
-  # Only build the kanban-mcp binary
-  cargoBuildFlags = [ "--package" "kanban-mcp" ];
-  cargoTestFlags = [ "--package" "kanban-mcp" ];
+  cargoExtraArgs = "--package kanban-mcp";
+  cargoTestExtraArgs = "--package kanban-mcp";
 
-  # Point integration tests to the Nix-built kanban binary
   KANBAN_BIN = lib.getExe kanban;
 
-  # Wrap the binary to include kanban CLI in PATH
   postInstall = ''
     wrapProgram $out/bin/kanban-mcp \
       --prefix PATH : ${lib.makeBinPath [ kanban ]}

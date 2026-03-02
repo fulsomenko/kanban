@@ -19,6 +19,11 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-stable"
+          cache-on-failure: true
+
       - name: Check formatting
         run: nix develop --command cargo fmt --all -- --check
 
@@ -33,6 +38,11 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: |
             experimental-features = nix-command flakes
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-stable"
+          cache-on-failure: true
 
       - name: Run clippy
         run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
@@ -49,12 +59,20 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-stable"
+          cache-on-failure: true
+
       - name: Run tests
         run: nix develop --command cargo test --all-features --workspace
 
   build:
     name: Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for magic-nix-cache
     steps:
       - uses: actions/checkout@v4
 
@@ -64,8 +82,19 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Build workspace
-        run: nix develop --command cargo build --all-features --workspace
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Build kanban CLI
+        run: nix build .#default --print-build-logs
+
+      - name: Build kanban MCP server
+        run: nix build .#kanban-mcp --print-build-logs
+
+      - name: Verify binaries
+        run: |
+          ./result/bin/kanban --version
+          nix build .#kanban-mcp
+          ./result/bin/kanban-mcp --help
 
   changeset:
     name: Validate Changeset

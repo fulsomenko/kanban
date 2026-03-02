@@ -1,19 +1,38 @@
 {
   lib,
   pkgs,
-  rustPlatform,
+  craneLib,
 }:
 
 let
   cargoToml = lib.importTOML ./Cargo.toml;
+
+  src = lib.cleanSourceWith {
+    src = ./.;
+    filter = path: type:
+      (lib.hasSuffix "\.rs" path) ||
+      (lib.hasSuffix "\.toml" path) ||
+      (lib.hasInfix "/Cargo.lock" path) ||
+      (type == "directory");
+  };
+
+  cargoArtifacts = craneLib.buildDepsOnly {
+    inherit src;
+    pname = "kanban";
+    version = cargoToml.workspace.package.version;
+
+    nativeBuildInputs = [ pkgs.pkg-config ];
+    buildInputs = lib.optionals pkgs.stdenv.isLinux [
+      pkgs.wayland
+      pkgs.xorg.libxcb
+    ];
+  };
+
 in
-rustPlatform.buildRustPackage {
+craneLib.buildPackage {
+  inherit src cargoArtifacts;
   pname = "kanban";
-  inherit (cargoToml.workspace.package) version;
-
-  src = lib.cleanSource ./.;
-
-  cargoLock.lockFile = ./Cargo.lock;
+  version = cargoToml.workspace.package.version;
 
   nativeBuildInputs = [ pkgs.pkg-config ];
   buildInputs = lib.optionals pkgs.stdenv.isLinux [
@@ -21,7 +40,7 @@ rustPlatform.buildRustPackage {
     pkgs.xorg.libxcb
   ];
 
-  cargoBuildFlags = [ "--package" "kanban-cli" ];
+  cargoExtraArgs = "--package kanban-cli";
   doCheck = false;
 
   meta = {
