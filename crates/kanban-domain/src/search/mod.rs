@@ -3,7 +3,7 @@
 //! Provides traits and implementations for searching cards by various criteria.
 //! Used by both TUI and API for consistent search behavior.
 
-use crate::{Board, Card, Sprint};
+use crate::{Board, Card, Column, Sprint};
 
 /// Trait for searching cards by various criteria.
 pub trait CardSearcher {
@@ -197,6 +197,27 @@ impl Default for CompositeSearcher {
     }
 }
 
+/// Find a card by identifier (e.g. "KAN-5" or "5"), searching across all boards.
+pub fn find_card_by_identifier<'a>(
+    identifier: &str,
+    cards: &'a [Card],
+    columns: &[Column],
+    boards: &[Board],
+    sprints: &[Sprint],
+) -> Option<&'a Card> {
+    let searcher = CardIdentifierSearcher::new(identifier);
+    cards.iter().find(|card| {
+        let board = columns
+            .iter()
+            .find(|col| col.id == card.column_id)
+            .and_then(|col| boards.iter().find(|b| b.id == col.board_id));
+        match board {
+            Some(board) => searcher.matches(card, board, sprints),
+            None => false,
+        }
+    })
+}
+
 impl CardSearcher for CompositeSearcher {
     fn matches(&self, card: &Card, board: &Board, sprints: &[Sprint]) -> bool {
         if self.searchers.is_empty() {
@@ -306,6 +327,77 @@ mod tests {
 
         let searcher = CardIdentifierSearcher::new("task-2");
         assert!(searcher.matches(&card2, &board, &[]));
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_prefix_format() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0, "KAN");
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card.clone()];
+
+        assert_eq!(
+            find_card_by_identifier("KAN-1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card.id)
+        );
+        assert_eq!(
+            find_card_by_identifier("kan-1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card.id)
+        );
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_number_only() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0, "KAN");
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card.clone()];
+
+        assert_eq!(
+            find_card_by_identifier("1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card.id)
+        );
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_not_found() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0, "KAN");
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card];
+
+        assert!(find_card_by_identifier("KAN-99", &cards, &columns, &boards, &[]).is_none());
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_second_board() {
+        let mut board1 = Board::new("Board One".to_string(), None);
+        board1.card_prefix = Some("AAA".to_string());
+        let col1 = crate::Column::new(board1.id, "Todo".to_string(), 0);
+        let card1 = Card::new(&mut board1, col1.id, "First".to_string(), 0, "AAA");
+
+        let mut board2 = Board::new("Board Two".to_string(), None);
+        board2.card_prefix = Some("BBB".to_string());
+        let col2 = crate::Column::new(board2.id, "Todo".to_string(), 0);
+        let card2 = Card::new(&mut board2, col2.id, "Second".to_string(), 0, "BBB");
+
+        let boards = vec![board1, board2];
+        let columns = vec![col1, col2];
+        let cards = vec![card1, card2.clone()];
+
+        assert_eq!(
+            find_card_by_identifier("BBB-1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card2.id)
+        );
     }
 
     #[test]
