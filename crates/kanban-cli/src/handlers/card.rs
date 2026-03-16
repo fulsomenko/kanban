@@ -53,7 +53,10 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             }
         }
         CardAction::Update(args) => {
-            let uuid = resolve_card_id(ctx, &args.id)?;
+            let uuid = match resolve_card_id(ctx, &args.id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             let updates = match build_card_update(&args) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e),
@@ -67,48 +70,72 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             column_id,
             position,
         } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             let card = ctx.move_card(uuid, column_id, position)?;
             ctx.save().await?;
             output::output_success(&card);
         }
         CardAction::Archive { id } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             ctx.archive_card(uuid)?;
             ctx.save().await?;
             output::output_success(serde_json::json!({"archived": uuid.to_string()}));
         }
         CardAction::Restore { id, column_id } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             let card = ctx.restore_card(uuid, column_id)?;
             ctx.save().await?;
             output::output_success(&card);
         }
         CardAction::Delete { id } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             ctx.delete_card(uuid)?;
             ctx.save().await?;
             output::output_success(serde_json::json!({"deleted": uuid.to_string()}));
         }
         CardAction::AssignSprint { id, sprint_id } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             let card = ctx.assign_card_to_sprint(uuid, sprint_id)?;
             ctx.save().await?;
             output::output_success(&card);
         }
         CardAction::UnassignSprint { id } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             let card = ctx.unassign_card_from_sprint(uuid)?;
             ctx.save().await?;
             output::output_success(&card);
         }
         CardAction::BranchName { id } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             let branch = ctx.get_card_branch_name(uuid)?;
             output::output_success(serde_json::json!({"branch_name": branch}));
         }
         CardAction::GitCheckout { id } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             let cmd = ctx.get_card_git_checkout(uuid)?;
             output::output_success(serde_json::json!({"command": cmd}));
         }
