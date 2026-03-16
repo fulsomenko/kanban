@@ -8,6 +8,10 @@ pub struct PaginatedList<T> {
 }
 
 impl<T> PaginatedList<T> {
+    /// Slice an already-loaded `Vec<T>` into a page window.
+    ///
+    /// This is an in-memory operation: the full dataset must be fetched from
+    /// storage before calling this. `total` always reflects the unfiltered count.
     pub fn paginate(items: Vec<T>, page: usize, page_size: usize) -> Self {
         let total = items.len();
         let page = page.max(1);
