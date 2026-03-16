@@ -532,7 +532,13 @@ mod tests {
         let mut board = Board::new("Project".to_string(), None);
         // No board card_prefix
         let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let mut card = Card::new(&mut board, column.id, "No prefix task".to_string(), 0, "task");
+        let mut card = Card::new(
+            &mut board,
+            column.id,
+            "No prefix task".to_string(),
+            0,
+            "task",
+        );
         card.assigned_prefix = None;
         card.card_prefix = None;
         let boards = vec![board];
