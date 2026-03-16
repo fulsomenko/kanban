@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 - feat(mcp): resolve card identifier (e.g. KAN-5) in all card tools
