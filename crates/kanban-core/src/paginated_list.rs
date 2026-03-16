@@ -1,3 +1,26 @@
+//! API-level pagination for CLI and MCP responses.
+//!
+//! [`PaginatedList<T>`] is the serialized response envelope returned by list
+//! endpoints. It is distinct from [`super::pagination`], which manages TUI
+//! viewport scroll state and is never serialized.
+
+use crate::{KanbanError, KanbanResult};
+
+/// Default page number (1-based).
+pub const DEFAULT_PAGE: usize = 1;
+
+/// Default number of items per page.
+pub const DEFAULT_PAGE_SIZE: usize = 50;
+
+/// Paginated response envelope returned by CLI and MCP list endpoints.
+///
+/// All list commands (board, column, sprint, card) serialize to this shape:
+///
+/// ```json
+/// { "items": [...], "total": 42, "page": 1, "page_size": 50, "total_pages": 1 }
+/// ```
+///
+/// `total_pages` is 0 when the collection is empty.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PaginatedList<T> {
     pub items: Vec<T>,
@@ -12,24 +35,32 @@ impl<T> PaginatedList<T> {
     ///
     /// This is an in-memory operation: the full dataset must be fetched from
     /// storage before calling this. `total` always reflects the unfiltered count.
-    pub fn paginate(items: Vec<T>, page: usize, page_size: usize) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KanbanError::Validation`] if `page` or `page_size` is 0.
+    pub fn paginate(items: Vec<T>, page: usize, page_size: usize) -> KanbanResult<Self> {
+        if page == 0 {
+            return Err(KanbanError::Validation(
+                "page must be >= 1 (1-based)".to_string(),
+            ));
+        }
+        if page_size == 0 {
+            return Err(KanbanError::Validation(
+                "page_size must be >= 1".to_string(),
+            ));
+        }
         let total = items.len();
-        let page = page.max(1);
-        let page_size = page_size.max(1);
-        let total_pages = if total == 0 {
-            1
-        } else {
-            total.div_ceil(page_size)
-        };
+        let total_pages = total.div_ceil(page_size);
         let offset = (page - 1).saturating_mul(page_size);
         let items = items.into_iter().skip(offset).take(page_size).collect();
-        Self {
+        Ok(Self {
             items,
             total,
             page,
             page_size,
             total_pages,
-        }
+        })
     }
 }
 
@@ -40,7 +71,7 @@ mod tests {
     #[test]
     fn test_paginate_normal() {
         let items: Vec<i32> = (1..=10).collect();
-        let result = PaginatedList::paginate(items, 2, 3);
+        let result = PaginatedList::paginate(items, 2, 3).unwrap();
         assert_eq!(result.items, vec![4, 5, 6]);
         assert_eq!(result.total, 10);
         assert_eq!(result.total_pages, 4);
@@ -49,34 +80,31 @@ mod tests {
 
     #[test]
     fn test_paginate_empty() {
-        let result = PaginatedList::<i32>::paginate(vec![], 1, 10);
+        let result = PaginatedList::<i32>::paginate(vec![], 1, 10).unwrap();
         assert_eq!(result.items, vec![]);
         assert_eq!(result.total, 0);
-        assert_eq!(result.total_pages, 1);
+        assert_eq!(result.total_pages, 0);
         assert_eq!(result.page, 1);
     }
 
     #[test]
-    fn test_paginate_page_zero_normalizes() {
+    fn test_paginate_page_zero_errors() {
         let items: Vec<i32> = (1..=5).collect();
-        let result = PaginatedList::paginate(items, 0, 3);
-        assert_eq!(result.page, 1);
-        assert_eq!(result.items, vec![1, 2, 3]);
+        let err = PaginatedList::paginate(items, 0, 3).unwrap_err();
+        assert!(err.to_string().contains("page must be >= 1"));
     }
 
     #[test]
-    fn test_paginate_page_size_zero_normalizes() {
+    fn test_paginate_page_size_zero_errors() {
         let items: Vec<i32> = (1..=5).collect();
-        let result = PaginatedList::paginate(items, 1, 0);
-        assert_eq!(result.page_size, 1);
-        assert_eq!(result.items, vec![1]);
-        assert_eq!(result.total_pages, 5);
+        let err = PaginatedList::paginate(items, 1, 0).unwrap_err();
+        assert!(err.to_string().contains("page_size must be >= 1"));
     }
 
     #[test]
     fn test_paginate_out_of_bounds() {
         let items: Vec<i32> = (1..=5).collect();
-        let result = PaginatedList::paginate(items, 3, 5);
+        let result = PaginatedList::paginate(items, 3, 5).unwrap();
         assert_eq!(result.items, vec![]);
         assert_eq!(result.total, 5);
         assert_eq!(result.total_pages, 1);
@@ -85,7 +113,7 @@ mod tests {
     #[test]
     fn test_paginate_fits_on_one_page() {
         let items: Vec<i32> = (1..=3).collect();
-        let result = PaginatedList::paginate(items, 1, 10);
+        let result = PaginatedList::paginate(items, 1, 10).unwrap();
         assert_eq!(result.items, vec![1, 2, 3]);
         assert_eq!(result.total_pages, 1);
     }
@@ -93,7 +121,7 @@ mod tests {
     #[test]
     fn test_paginate_exact_boundary() {
         let items: Vec<i32> = (1..=9).collect();
-        let result = PaginatedList::paginate(items, 3, 3);
+        let result = PaginatedList::paginate(items, 3, 3).unwrap();
         assert_eq!(result.items, vec![7, 8, 9]);
         assert_eq!(result.total_pages, 3);
     }
