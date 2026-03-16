@@ -770,7 +770,7 @@ mod card_tests {
             .clone();
 
         let archived_json = parse_json_output(&String::from_utf8_lossy(&archived_output));
-        assert_eq!(archived_json["data"]["count"], 1);
+        assert_eq!(archived_json["data"]["total"], 1);
 
         let restore_output = kanban()
             .args([file.to_str().unwrap(), "card", "restore", &card_id])

@@ -30,17 +30,17 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             output::output_success(&card);
         }
         CardAction::List(args) => {
+            let page = args.page.unwrap_or(1) as usize;
+            let page_size = args.page_size.unwrap_or(50) as usize;
             if args.archived {
                 let archived = ctx.list_archived_cards()?;
-                output::output_list(archived);
+                output::output_paginated_list(PaginatedList::paginate(archived, page, page_size));
             } else {
                 let filter = match build_filter(&args) {
                     Ok(f) => f,
                     Err(e) => return output::output_error(&e),
                 };
                 let cards = ctx.list_cards(filter)?;
-                let page = args.page.unwrap_or(1) as usize;
-                let page_size = args.page_size.unwrap_or(50) as usize;
                 if args.description {
                     output::output_paginated_list(PaginatedList::paginate(cards, page, page_size));
                 } else {
