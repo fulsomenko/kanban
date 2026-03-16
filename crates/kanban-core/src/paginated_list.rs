@@ -16,6 +16,12 @@ impl<T: serde::Serialize> PaginatedList<T> {
         let total_pages = scroll_page.get_page_info(page_size).total_pages;
         let offset = page.saturating_sub(1) * page_size;
         let items = items.into_iter().skip(offset).take(page_size).collect();
-        Self { items, total, page, page_size, total_pages }
+        Self {
+            items,
+            total,
+            page,
+            page_size,
+            total_pages,
+        }
     }
 }

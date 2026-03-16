@@ -45,7 +45,12 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                     Err(e) => return output::output_error(&e),
                 };
                 let cards = ctx.list_cards(filter)?;
-                output::output_success(PaginatedCards::new(cards, args.description, page, page_size));
+                output::output_success(PaginatedCards::new(
+                    cards,
+                    args.description,
+                    page,
+                    page_size,
+                ));
             }
         }
         CardAction::Get { id } => {

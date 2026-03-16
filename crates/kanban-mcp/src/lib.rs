@@ -277,7 +277,9 @@ pub struct ListCardsRequest {
     pub sprint_id: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
-    #[schemars(description = "Include description field in results (default: false). Omit unless you need to read card descriptions — prefer false for token efficiency")]
+    #[schemars(
+        description = "Include description field in results (default: false). Omit unless you need to read card descriptions — prefer false for token efficiency"
+    )]
     pub include_description: Option<bool>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
@@ -678,7 +680,9 @@ impl KanbanMcpServer {
         to_call_tool_result(&card)
     }
 
-    #[tool(description = "List cards with optional filters. Returns CardSummary (no description) by default — set include_description=true to include descriptions. Use page/page_size for pagination (default: page=1, page_size=50).")]
+    #[tool(
+        description = "List cards with optional filters. Returns CardSummary (no description) by default — set include_description=true to include descriptions. Use page/page_size for pagination (default: page=1, page_size=50)."
+    )]
     async fn tool_list_cards(
         &self,
         Parameters(req): Parameters<ListCardsRequest>,
@@ -698,7 +702,12 @@ impl KanbanMcpServer {
         let page = req.page.unwrap_or(1) as usize;
         let page_size = req.page_size.unwrap_or(50) as usize;
         let include_description = req.include_description.unwrap_or(false);
-        to_call_tool_result(&PaginatedCards::new(cards, include_description, page, page_size))
+        to_call_tool_result(&PaginatedCards::new(
+            cards,
+            include_description,
+            page,
+            page_size,
+        ))
     }
 
     #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]

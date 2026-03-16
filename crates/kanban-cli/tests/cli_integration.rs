@@ -776,7 +776,13 @@ mod card_tests {
         assert!(archived_json["data"]["items"][0]["card"]["description"].is_null());
 
         let archived_full_output = kanban()
-            .args([file.to_str().unwrap(), "card", "list", "--archived", "--description"])
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--archived",
+                "--description",
+            ])
             .assert()
             .success()
             .get_output()

@@ -1,8 +1,8 @@
 pub mod archived_card;
 pub mod board;
 pub mod card;
-pub mod card_pagination;
 pub mod card_lifecycle;
+pub mod card_pagination;
 pub mod column;
 pub mod commands;
 pub mod dependencies;
@@ -22,7 +22,6 @@ pub mod tag;
 pub mod task_list_view;
 
 pub use archived_card::{ArchivedCard, ArchivedCardSummary};
-pub use card_pagination::{PaginatedArchivedCards, PaginatedCards};
 pub use board::{
     get_active_sprint_card_prefix_override, get_active_sprint_prefix_override, Board, BoardId,
     BoardUpdate, SortField, SortOrder,
@@ -31,6 +30,7 @@ pub use card::{
     AnimationType, Card, CardId, CardPriority, CardStatus, CardSummary, CardUpdate,
     CreateCardOptions,
 };
+pub use card_pagination::{PaginatedArchivedCards, PaginatedCards};
 pub use column::{Column, ColumnId, ColumnUpdate};
 pub use dependencies::{CardDependencyGraph, CardEdgeType, CardGraphExt, DependencyGraph};
 pub use editable::{BoardSettingsDto, CardMetadataDto};

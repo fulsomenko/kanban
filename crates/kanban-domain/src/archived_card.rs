@@ -1,7 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{card::{Card, CardSummary}, column::ColumnId};
+use crate::{
+    card::{Card, CardSummary},
+    column::ColumnId,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchivedCard {
