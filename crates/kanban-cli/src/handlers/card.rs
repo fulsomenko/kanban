@@ -32,7 +32,10 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
         }
         CardAction::List(args) => {
             let page = args.page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
-            let page_size = args.page_size.map(|p| p as usize).unwrap_or(DEFAULT_PAGE_SIZE);
+            let page_size = args
+                .page_size
+                .map(|p| p as usize)
+                .unwrap_or(DEFAULT_PAGE_SIZE);
             if args.archived {
                 let archived = ctx.list_archived_cards()?;
                 let summaries: Vec<ArchivedCardSummary> =
