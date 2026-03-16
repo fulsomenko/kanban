@@ -20,7 +20,10 @@ fn resolve_card_id(ctx: &CliContext, id: &str) -> anyhow::Result<Uuid> {
 pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {
     match action {
         CardAction::Create(args) => {
-            let options = build_create_options(&args).map_err(|e| anyhow::anyhow!(e))?;
+            let options = match build_create_options(&args) {
+                Ok(o) => o,
+                Err(e) => return output::output_error(&e),
+            };
             let card = ctx.create_card(args.board_id, args.column_id, args.title, options)?;
             ctx.save().await?;
             output::output_success(&card);
@@ -30,14 +33,20 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 let archived = ctx.list_archived_cards()?;
                 output::output_list(archived);
             } else {
-                let filter = build_filter(&args).map_err(|e| anyhow::anyhow!(e))?;
+                let filter = match build_filter(&args) {
+                    Ok(f) => f,
+                    Err(e) => return output::output_error(&e),
+                };
                 let cards = ctx.list_cards(filter)?;
                 let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
                 output::output_list(summaries);
             }
         }
         CardAction::Get { id } => {
-            let uuid = resolve_card_id(ctx, &id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(_) => return output::output_error(&format!("Card not found: '{}'", id)),
+            };
             match ctx.get_card(uuid)? {
                 Some(card) => output::output_success(&card),
                 None => return output::output_error(&format!("Card not found: {}", id)),
@@ -45,7 +54,10 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
         }
         CardAction::Update(args) => {
             let uuid = resolve_card_id(ctx, &args.id)?;
-            let updates = build_card_update(&args).map_err(|e| anyhow::anyhow!(e))?;
+            let updates = match build_card_update(&args) {
+                Ok(u) => u,
+                Err(e) => return output::output_error(&e),
+            };
             let card = ctx.update_card(uuid, updates)?;
             ctx.save().await?;
             output::output_success(&card);
