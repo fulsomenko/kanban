@@ -2,10 +2,10 @@ pub mod context;
 pub mod executor;
 
 use context::McpContext;
-use kanban_core::{KanbanError, PaginatedList};
+use kanban_core::KanbanError;
 use kanban_domain::{
-    BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate,
-    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
+    CreateCardOptions, FieldUpdate, KanbanOperations, PaginatedCards, SprintUpdate,
 };
 use parking_lot::Mutex;
 use rmcp::{
@@ -697,13 +697,8 @@ impl KanbanMcpServer {
         let cards = spawn_op_ref!(self.ctx, list_cards, filter)?;
         let page = req.page.unwrap_or(1) as usize;
         let page_size = req.page_size.unwrap_or(50) as usize;
-
-        if req.include_description.unwrap_or(false) {
-            to_call_tool_result(&PaginatedList::paginate(cards, page, page_size))
-        } else {
-            let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
-            to_call_tool_result(&PaginatedList::paginate(summaries, page, page_size))
-        }
+        let include_description = req.include_description.unwrap_or(false);
+        to_call_tool_result(&PaginatedCards::new(cards, include_description, page, page_size))
     }
 
     #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
