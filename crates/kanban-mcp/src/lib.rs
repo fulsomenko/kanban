@@ -2,10 +2,10 @@ pub mod context;
 pub mod executor;
 
 use context::McpContext;
-use kanban_core::KanbanError;
+use kanban_core::{KanbanError, PaginatedList};
 use kanban_domain::{
-    BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
-    CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate,
+    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
 };
 use parking_lot::Mutex;
 use rmcp::{
@@ -277,6 +277,12 @@ pub struct ListCardsRequest {
     pub sprint_id: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
+    #[schemars(description = "Include description field in results (default: false). Omit unless you need to read card descriptions — prefer false for token efficiency")]
+    pub include_description: Option<bool>,
+    #[schemars(description = "Page number, 1-based (default: 1)")]
+    pub page: Option<u32>,
+    #[schemars(description = "Items per page (default: 50)")]
+    pub page_size: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -672,7 +678,7 @@ impl KanbanMcpServer {
         to_call_tool_result(&card)
     }
 
-    #[tool(description = "List cards with optional filters")]
+    #[tool(description = "List cards with optional filters. Returns CardSummary (no description) by default — set include_description=true to include descriptions. Use page/page_size for pagination (default: page=1, page_size=50).")]
     async fn tool_list_cards(
         &self,
         Parameters(req): Parameters<ListCardsRequest>,
@@ -689,7 +695,15 @@ impl KanbanMcpServer {
             status,
         };
         let cards = spawn_op_ref!(self.ctx, list_cards, filter)?;
-        to_call_tool_result(&cards)
+        let page = req.page.unwrap_or(1) as usize;
+        let page_size = req.page_size.unwrap_or(50) as usize;
+
+        if req.include_description.unwrap_or(false) {
+            to_call_tool_result(&PaginatedList::paginate(cards, page, page_size))
+        } else {
+            let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
+            to_call_tool_result(&PaginatedList::paginate(summaries, page, page_size))
+        }
     }
 
     #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
