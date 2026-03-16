@@ -272,6 +272,10 @@ impl KanbanOperations for McpContext {
         self.execute_get(&["card", "get", &id_str])
     }
 
+    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>> {
+        self.execute_get(&["card", "find-by-identifier", identifier])
+    }
+
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
         let id_str = id.to_string();
         let mut builder = ArgsBuilder::new(&["card", "update", &id_str]);
