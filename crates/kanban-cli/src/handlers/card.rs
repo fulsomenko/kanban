@@ -100,12 +100,6 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             let cmd = ctx.get_card_git_checkout(uuid)?;
             output::output_success(serde_json::json!({"command": cmd}));
         }
-        CardAction::FindByIdentifier { identifier } => {
-            match ctx.find_card_by_identifier(&identifier)? {
-                Some(card) => output::output_success(&card),
-                None => return output::output_error(&format!("Card not found: {}", identifier)),
-            }
-        }
         CardAction::BulkArchive { ids } => {
             let result = ctx.bulk_archive_cards_detailed(ids);
             ctx.save().await?;

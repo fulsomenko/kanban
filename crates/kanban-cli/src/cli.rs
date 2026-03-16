@@ -213,11 +213,6 @@ pub enum CardAction {
         /// Card UUID or identifier like KAN-5 or 5
         id: String,
     },
-    /// Find a card by prefix+number identifier (e.g. KAN-5 or 5)
-    FindByIdentifier {
-        /// Identifier like "KAN-5" or "5"
-        identifier: String,
-    },
     /// Archive multiple cards
     BulkArchive {
         #[arg(long, value_delimiter = ',')]
