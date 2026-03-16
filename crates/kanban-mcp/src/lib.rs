@@ -761,7 +761,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         spawn_op!(self.ctx, archive_card, id)?;
-        to_call_tool_result_json(serde_json::json!({"archived": req.card_id}))
+        to_call_tool_result_json(serde_json::json!({"archived": id.to_string()}))
     }
 
     #[tool(description = "Restore an archived card")]
@@ -782,7 +782,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         spawn_op!(self.ctx, delete_card, id)?;
-        to_call_tool_result_json(serde_json::json!({"deleted": req.card_id}))
+        to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
 
     #[tool(description = "List archived cards")]
