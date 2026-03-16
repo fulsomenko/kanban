@@ -2,7 +2,6 @@ pub mod archived_card;
 pub mod board;
 pub mod card;
 pub mod card_lifecycle;
-pub mod card_pagination;
 pub mod column;
 pub mod commands;
 pub mod dependencies;
@@ -30,7 +29,6 @@ pub use card::{
     AnimationType, Card, CardId, CardPriority, CardStatus, CardSummary, CardUpdate,
     CreateCardOptions,
 };
-pub use card_pagination::{PaginatedArchivedCards, PaginatedCards};
 pub use column::{Column, ColumnId, ColumnUpdate};
 pub use dependencies::{CardDependencyGraph, CardEdgeType, CardGraphExt, DependencyGraph};
 pub use editable::{BoardSettingsDto, CardMetadataDto};
