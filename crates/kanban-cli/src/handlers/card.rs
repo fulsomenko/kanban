@@ -1,7 +1,7 @@
 use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
-use kanban_core::{PaginatedList, DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
+use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
     ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate,
     CreateCardOptions, FieldUpdate, KanbanOperations,
@@ -31,11 +31,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             output::output_success(&card);
         }
         CardAction::List(args) => {
-            let page = args.page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
-            let page_size = args
-                .page_size
-                .map(|p| p as usize)
-                .unwrap_or(DEFAULT_PAGE_SIZE);
+            let (page, page_size) = resolve_page_params(args.page, args.page_size);
             if args.archived {
                 let archived = ctx.list_archived_cards()?;
                 let summaries: Vec<ArchivedCardSummary> =

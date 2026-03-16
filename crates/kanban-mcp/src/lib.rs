@@ -3,7 +3,7 @@ pub mod executor;
 
 use context::McpContext;
 use kanban_core::KanbanError;
-use kanban_core::{PaginatedList, DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
+use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
     ArchivedCardSummary, BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardSummary,
     CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
@@ -704,11 +704,7 @@ impl KanbanMcpServer {
             status,
         };
         let cards = spawn_op_ref!(self.ctx, list_cards, filter)?;
-        let page = req.page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
-        let page_size = req
-            .page_size
-            .map(|p| p as usize)
-            .unwrap_or(DEFAULT_PAGE_SIZE);
+        let (page, page_size) = resolve_page_params(req.page, req.page_size);
         let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
         to_call_tool_result(
             &PaginatedList::paginate(summaries, page, page_size).map_err(kanban_err_to_mcp)?,
@@ -816,11 +812,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ListArchivedCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let cards = spawn_op_ref!(self.ctx, list_archived_cards)?;
-        let page = req.page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
-        let page_size = req
-            .page_size
-            .map(|p| p as usize)
-            .unwrap_or(DEFAULT_PAGE_SIZE);
+        let (page, page_size) = resolve_page_params(req.page, req.page_size);
         let summaries: Vec<ArchivedCardSummary> =
             cards.iter().map(ArchivedCardSummary::from).collect();
         to_call_tool_result(

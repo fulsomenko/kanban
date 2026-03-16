@@ -1,7 +1,7 @@
 use crate::cli::{ColumnAction, ColumnUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
-use kanban_core::{PaginatedList, DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
+use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{ColumnUpdate, FieldUpdate, KanbanOperations};
 
 pub async fn handle(ctx: &mut CliContext, action: ColumnAction) -> anyhow::Result<()> {
@@ -21,8 +21,7 @@ pub async fn handle(ctx: &mut CliContext, action: ColumnAction) -> anyhow::Resul
             page_size,
         } => {
             let columns = ctx.list_columns(board_id)?;
-            let page = page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
-            let page_size = page_size.map(|p| p as usize).unwrap_or(DEFAULT_PAGE_SIZE);
+            let (page, page_size) = resolve_page_params(page, page_size);
             output::output_success(PaginatedList::paginate(columns, page, page_size)?);
         }
         ColumnAction::Get { id } => match ctx.get_column(id)? {

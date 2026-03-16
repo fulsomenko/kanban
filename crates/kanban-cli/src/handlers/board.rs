@@ -1,7 +1,7 @@
 use crate::cli::{BoardAction, BoardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
-use kanban_core::{PaginatedList, DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
+use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{BoardUpdate, FieldUpdate, KanbanOperations};
 
 pub async fn handle(ctx: &mut CliContext, action: BoardAction) -> anyhow::Result<()> {
@@ -13,8 +13,7 @@ pub async fn handle(ctx: &mut CliContext, action: BoardAction) -> anyhow::Result
         }
         BoardAction::List { page, page_size } => {
             let boards = ctx.list_boards()?;
-            let page = page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
-            let page_size = page_size.map(|p| p as usize).unwrap_or(DEFAULT_PAGE_SIZE);
+            let (page, page_size) = resolve_page_params(page, page_size);
             output::output_success(PaginatedList::paginate(boards, page, page_size)?);
         }
         BoardAction::Get { id } => match ctx.get_board(id)? {
