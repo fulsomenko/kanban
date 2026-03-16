@@ -3,7 +3,7 @@
 //! Provides traits and implementations for searching cards by various criteria.
 //! Used by both TUI and API for consistent search behavior.
 
-use crate::{Board, Card, Sprint};
+use crate::{Board, Card, Column, Sprint};
 
 /// Trait for searching cards by various criteria.
 pub trait CardSearcher {
@@ -197,6 +197,72 @@ impl Default for CompositeSearcher {
     }
 }
 
+enum ParsedIdentifier {
+    PrefixAndNumber { prefix: String, number: u32 },
+    NumberOnly(u32),
+}
+
+fn parse_identifier(identifier: &str) -> Option<ParsedIdentifier> {
+    let lower = identifier.to_lowercase();
+    if let Some(dash_pos) = lower.rfind('-') {
+        let prefix = &lower[..dash_pos];
+        if prefix.is_empty() {
+            return None;
+        }
+        let number_str = &lower[dash_pos + 1..];
+        let number = number_str.parse::<u32>().ok()?;
+        Some(ParsedIdentifier::PrefixAndNumber {
+            prefix: prefix.to_string(),
+            number,
+        })
+    } else if let Ok(number) = lower.parse::<u32>() {
+        Some(ParsedIdentifier::NumberOnly(number))
+    } else {
+        None
+    }
+}
+
+/// Find a card by identifier (e.g. `"KAN-5"` or `"5"`), searching across all boards.
+///
+/// - `"PREFIX-N"`: matches the first card whose resolved prefix equals `PREFIX` (case-insensitive)
+///   and whose `card_number` equals `N`. Prefix resolution follows:
+///   `card.card_prefix → card.assigned_prefix → sprint.card_prefix → board.card_prefix`.
+/// - `"N"` (bare number): matches the **first** card with `card_number == N` regardless of board.
+///   When multiple boards share card numbers, insertion order in `cards` determines the result.
+pub fn find_card_by_identifier<'a>(
+    identifier: &str,
+    cards: &'a [Card],
+    columns: &[Column],
+    boards: &[Board],
+    sprints: &[Sprint],
+) -> Option<&'a Card> {
+    let parsed = parse_identifier(identifier)?;
+    cards.iter().find(|card| match &parsed {
+        ParsedIdentifier::PrefixAndNumber { prefix, number } => {
+            let board = columns
+                .iter()
+                .find(|col| col.id == card.column_id)
+                .and_then(|col| boards.iter().find(|b| b.id == col.board_id));
+            let Some(board) = board else { return false };
+            let resolved_prefix = card
+                .card_prefix
+                .as_deref()
+                .or(card.assigned_prefix.as_deref())
+                .or_else(|| {
+                    card.sprint_id
+                        .and_then(|sid| sprints.iter().find(|s| s.id == sid))
+                        .and_then(|s| s.card_prefix.as_deref())
+                })
+                .or(board.card_prefix.as_deref());
+            resolved_prefix
+                .map(|p| p.to_lowercase() == *prefix)
+                .unwrap_or(false)
+                && card.card_number == *number
+        }
+        ParsedIdentifier::NumberOnly(number) => card.card_number == *number,
+    })
+}
+
 impl CardSearcher for CompositeSearcher {
     fn matches(&self, card: &Card, board: &Board, sprints: &[Sprint]) -> bool {
         if self.searchers.is_empty() {
@@ -309,6 +375,212 @@ mod tests {
     }
 
     #[test]
+    fn test_find_card_by_identifier_prefix_format() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0, "KAN");
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card.clone()];
+
+        assert_eq!(
+            find_card_by_identifier("KAN-1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card.id)
+        );
+        assert_eq!(
+            find_card_by_identifier("kan-1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card.id)
+        );
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_number_only() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0, "KAN");
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card.clone()];
+
+        assert_eq!(
+            find_card_by_identifier("1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card.id)
+        );
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_not_found() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0, "KAN");
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card];
+
+        assert!(find_card_by_identifier("KAN-99", &cards, &columns, &boards, &[]).is_none());
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_second_board() {
+        let mut board1 = Board::new("Board One".to_string(), None);
+        board1.card_prefix = Some("AAA".to_string());
+        let col1 = crate::Column::new(board1.id, "Todo".to_string(), 0);
+        let card1 = Card::new(&mut board1, col1.id, "First".to_string(), 0, "AAA");
+
+        let mut board2 = Board::new("Board Two".to_string(), None);
+        board2.card_prefix = Some("BBB".to_string());
+        let col2 = crate::Column::new(board2.id, "Todo".to_string(), 0);
+        let card2 = Card::new(&mut board2, col2.id, "Second".to_string(), 0, "BBB");
+
+        let boards = vec![board1, board2];
+        let columns = vec![col1, col2];
+        let cards = vec![card1, card2.clone()];
+
+        assert_eq!(
+            find_card_by_identifier("BBB-1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card2.id)
+        );
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_no_prefix_collision() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let mut card1 = Card::new(&mut board, column.id, "First".to_string(), 0, "KAN");
+        card1.card_number = 1;
+        let mut card11 = Card::new(&mut board, column.id, "Eleventh".to_string(), 0, "KAN");
+        card11.card_number = 11;
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card1.clone(), card11];
+
+        let result = find_card_by_identifier("KAN-1", &cards, &columns, &boards, &[]);
+        assert_eq!(result.map(|c| c.id), Some(card1.id));
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_exact_number() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let mut card11 = Card::new(&mut board, column.id, "Eleven".to_string(), 0, "KAN");
+        card11.card_number = 11;
+        let mut card111 = Card::new(
+            &mut board,
+            column.id,
+            "OneHundredEleven".to_string(),
+            0,
+            "KAN",
+        );
+        card111.card_number = 111;
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card11.clone(), card111];
+
+        let result = find_card_by_identifier("KAN-11", &cards, &columns, &boards, &[]);
+        assert_eq!(result.map(|c| c.id), Some(card11.id));
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_sprint_prefix() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let mut sprint = crate::Sprint::new(board.id, 1, None, None);
+        sprint.card_prefix = Some("SP".to_string());
+        let mut card = Card::new(&mut board, column.id, "Sprint task".to_string(), 0, "KAN");
+        card.sprint_id = Some(sprint.id);
+        card.assigned_prefix = None;
+        card.card_prefix = None;
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card.clone()];
+        let sprints = vec![sprint];
+
+        assert_eq!(
+            find_card_by_identifier("SP-1", &cards, &columns, &boards, &sprints).map(|c| c.id),
+            Some(card.id)
+        );
+        assert_eq!(
+            find_card_by_identifier("KAN-1", &cards, &columns, &boards, &sprints).map(|c| c.id),
+            None
+        );
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_card_prefix_override() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let mut card = Card::new(&mut board, column.id, "Override task".to_string(), 0, "KAN");
+        card.assigned_prefix = Some("ASSIGNED".to_string());
+        card.card_prefix = Some("CARD".to_string());
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card.clone()];
+
+        // card_prefix takes priority over assigned_prefix
+        assert_eq!(
+            find_card_by_identifier("CARD-1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card.id)
+        );
+        assert_eq!(
+            find_card_by_identifier("ASSIGNED-1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            None
+        );
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_no_prefix_no_match() {
+        let mut board = Board::new("Project".to_string(), None);
+        // No board card_prefix
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let mut card = Card::new(
+            &mut board,
+            column.id,
+            "No prefix task".to_string(),
+            0,
+            "task",
+        );
+        card.assigned_prefix = None;
+        card.card_prefix = None;
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card];
+
+        // PrefixAndNumber with no resolved prefix → no match
+        assert!(find_card_by_identifier("task-1", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("KAN-1", &cards, &columns, &boards, &[]).is_none());
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_number_only_multi_board() {
+        let mut board1 = Board::new("Board One".to_string(), None);
+        board1.card_prefix = Some("AAA".to_string());
+        let col1 = crate::Column::new(board1.id, "Todo".to_string(), 0);
+        let card1 = Card::new(&mut board1, col1.id, "First".to_string(), 0, "AAA");
+
+        let mut board2 = Board::new("Board Two".to_string(), None);
+        board2.card_prefix = Some("BBB".to_string());
+        let col2 = crate::Column::new(board2.id, "Todo".to_string(), 0);
+        let card2 = Card::new(&mut board2, col2.id, "Second".to_string(), 0, "BBB");
+
+        let boards = vec![board1, board2];
+        let columns = vec![col1, col2];
+        // card1 comes first in the slice — bare number returns the first match
+        let cards = vec![card1.clone(), card2];
+
+        assert_eq!(
+            find_card_by_identifier("1", &cards, &columns, &boards, &[]).map(|c| c.id),
+            Some(card1.id)
+        );
+    }
+
+    #[test]
     fn test_composite_searcher_matches_by_identifier() {
         let mut board = Board::new("Test".to_string(), None);
         board.card_prefix = Some("KAN".to_string());
@@ -324,5 +596,17 @@ mod tests {
         // Title doesn't contain "KAN-1", but identifier does
         let searcher = CompositeSearcher::all("KAN-1");
         assert!(searcher.matches(&card, &board, &[]));
+    }
+
+    #[test]
+    fn test_parse_identifier_invalid_inputs() {
+        let boards = vec![];
+        let columns = vec![];
+        let cards = vec![];
+        assert!(find_card_by_identifier("", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("KAN-", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("KAN-abc", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("-5", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("not-a-number", &cards, &columns, &boards, &[]).is_none());
     }
 }

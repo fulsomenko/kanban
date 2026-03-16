@@ -152,14 +152,14 @@ fn default_sort_order() -> SortOrder {
 }
 
 impl Board {
-    pub fn new(name: String, description: Option<String>) -> Self {
+    pub fn new(name: String, card_prefix: Option<String>) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             name,
-            description,
+            description: None,
             sprint_prefix: None,
-            card_prefix: None,
+            card_prefix,
             task_sort_field: SortField::Default,
             task_sort_order: SortOrder::Ascending,
             sprint_duration_days: None,

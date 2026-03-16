@@ -4,7 +4,7 @@ pub mod executor;
 use context::McpContext;
 use kanban_core::KanbanError;
 use kanban_domain::{
-    BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
+    BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
     CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
 };
 use parking_lot::Mutex;
@@ -103,6 +103,26 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
 
 fn parse_uuids_csv(s: &str) -> Result<Vec<Uuid>, McpError> {
     s.split(',').map(|id| parse_uuid(id.trim())).collect()
+}
+
+async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, McpError> {
+    if let Ok(id) = Uuid::parse_str(s) {
+        return Ok(id);
+    }
+    let identifier = s.to_string();
+    let card: Option<Card> = {
+        let ctx = ctx.clone();
+        tokio::task::spawn_blocking(move || {
+            let guard = ctx.lock();
+            guard.find_card_by_identifier(&identifier)
+        })
+        .await
+        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
+        .map_err(kanban_err_to_mcp)?
+    };
+
+    card.map(|c| c.id)
+        .ok_or_else(|| McpError::invalid_params(format!("Card not found: '{}'", s), None))
 }
 
 /// Runs a KanbanOperations method on McpContext via spawn_blocking.
@@ -261,13 +281,13 @@ pub struct ListCardsRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetCardRequest {
-    #[schemars(description = "ID of the card to retrieve")]
+    #[schemars(description = "UUID or identifier of the card to retrieve (e.g. 'KAN-5' or '5')")]
     pub card_id: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct UpdateCardRequest {
-    #[schemars(description = "ID of the card to update")]
+    #[schemars(description = "UUID or identifier of the card to update (e.g. 'KAN-5' or '5')")]
     pub card_id: String,
     #[schemars(description = "New title (optional)")]
     pub title: Option<String>,
@@ -289,7 +309,7 @@ pub struct UpdateCardRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct MoveCardRequest {
-    #[schemars(description = "ID of the card to move")]
+    #[schemars(description = "UUID or identifier of the card to move (e.g. 'KAN-5' or '5')")]
     pub card_id: String,
     #[schemars(description = "ID of the destination column")]
     pub column_id: String,
@@ -299,13 +319,15 @@ pub struct MoveCardRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ArchiveCardRequest {
-    #[schemars(description = "ID of the card to archive")]
+    #[schemars(description = "UUID or identifier of the card to archive (e.g. 'KAN-5' or '5')")]
     pub card_id: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct RestoreCardRequest {
-    #[schemars(description = "ID of the archived card to restore")]
+    #[schemars(
+        description = "UUID or identifier of the archived card to restore (e.g. 'KAN-5' or '5')"
+    )]
     pub card_id: String,
     #[schemars(description = "Column ID to restore the card to (optional)")]
     pub column_id: Option<String>,
@@ -313,7 +335,7 @@ pub struct RestoreCardRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct DeleteCardRequest {
-    #[schemars(description = "ID of the card to delete")]
+    #[schemars(description = "UUID or identifier of the card to delete (e.g. 'KAN-5' or '5')")]
     pub card_id: String,
 }
 
@@ -321,7 +343,7 @@ pub struct DeleteCardRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct AssignCardToSprintRequest {
-    #[schemars(description = "ID of the card")]
+    #[schemars(description = "UUID or identifier of the card (e.g. 'KAN-5' or '5')")]
     pub card_id: String,
     #[schemars(description = "ID of the sprint to assign to")]
     pub sprint_id: String,
@@ -329,7 +351,9 @@ pub struct AssignCardToSprintRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct UnassignCardFromSprintRequest {
-    #[schemars(description = "ID of the card to unassign from its sprint")]
+    #[schemars(
+        description = "UUID or identifier of the card to unassign from its sprint (e.g. 'KAN-5' or '5')"
+    )]
     pub card_id: String,
 }
 
@@ -337,13 +361,13 @@ pub struct UnassignCardFromSprintRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetCardBranchNameRequest {
-    #[schemars(description = "ID of the card")]
+    #[schemars(description = "UUID or identifier of the card (e.g. 'KAN-5' or '5')")]
     pub card_id: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetCardGitCheckoutRequest {
-    #[schemars(description = "ID of the card")]
+    #[schemars(description = "UUID or identifier of the card (e.g. 'KAN-5' or '5')")]
     pub card_id: String,
 }
 
@@ -668,12 +692,12 @@ impl KanbanMcpServer {
         to_call_tool_result(&cards)
     }
 
-    #[tool(description = "Get a specific card by ID")]
+    #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
     async fn tool_get_card(
         &self,
         Parameters(req): Parameters<GetCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = parse_uuid(&req.card_id)?;
+        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let card = spawn_op_ref!(self.ctx, get_card, id)?;
         to_call_tool_result(&card)
     }
@@ -685,7 +709,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = parse_uuid(&req.card_id)?;
+        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let priority = req.priority.as_deref().map(parse_priority).transpose()?;
         let status = req.status.as_deref().map(parse_status).transpose()?;
 
@@ -724,7 +748,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<MoveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = parse_uuid(&req.card_id)?;
+        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let column_id = parse_uuid(&req.column_id)?;
         let card = spawn_op!(self.ctx, move_card, id, column_id, req.position)?;
         to_call_tool_result(&card)
@@ -735,9 +759,9 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = parse_uuid(&req.card_id)?;
+        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         spawn_op!(self.ctx, archive_card, id)?;
-        to_call_tool_result_json(serde_json::json!({"archived": req.card_id}))
+        to_call_tool_result_json(serde_json::json!({"archived": id.to_string()}))
     }
 
     #[tool(description = "Restore an archived card")]
@@ -745,7 +769,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<RestoreCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = parse_uuid(&req.card_id)?;
+        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let column_id = req.column_id.as_deref().map(parse_uuid).transpose()?;
         let card = spawn_op!(self.ctx, restore_card, id, column_id)?;
         to_call_tool_result(&card)
@@ -756,9 +780,9 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = parse_uuid(&req.card_id)?;
+        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         spawn_op!(self.ctx, delete_card, id)?;
-        to_call_tool_result_json(serde_json::json!({"deleted": req.card_id}))
+        to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
 
     #[tool(description = "List archived cards")]
@@ -774,7 +798,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<AssignCardToSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let card_id = parse_uuid(&req.card_id)?;
+        let card_id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let sprint_id = parse_uuid(&req.sprint_id)?;
         let card = spawn_op!(self.ctx, assign_card_to_sprint, card_id, sprint_id)?;
         to_call_tool_result(&card)
@@ -785,7 +809,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UnassignCardFromSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let card_id = parse_uuid(&req.card_id)?;
+        let card_id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let card = spawn_op!(self.ctx, unassign_card_from_sprint, card_id)?;
         to_call_tool_result(&card)
     }
@@ -797,7 +821,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardBranchNameRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = parse_uuid(&req.card_id)?;
+        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let branch_name = spawn_op_ref!(self.ctx, get_card_branch_name, id)?;
         to_call_tool_result_json(serde_json::json!({"branch_name": branch_name}))
     }
@@ -807,7 +831,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardGitCheckoutRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = parse_uuid(&req.card_id)?;
+        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let command = spawn_op_ref!(self.ctx, get_card_git_checkout, id)?;
         to_call_tool_result_json(serde_json::json!({"command": command}))
     }

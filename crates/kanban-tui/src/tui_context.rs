@@ -229,6 +229,18 @@ impl KanbanOperations for TuiContext {
         Ok(self.cards.iter().find(|c| c.id == id).cloned())
     }
 
+    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>> {
+        use kanban_domain::search::find_card_by_identifier as search_by_identifier;
+        Ok(search_by_identifier(
+            identifier,
+            &self.cards,
+            &self.columns,
+            &self.boards,
+            &self.sprints,
+        )
+        .cloned())
+    }
+
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
         let cmd = Box::new(UpdateCard {
             card_id: id,

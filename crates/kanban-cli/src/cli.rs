@@ -158,60 +158,60 @@ pub enum CardAction {
     Create(CardCreateArgs),
     /// List cards with optional filters
     List(CardListArgs),
-    /// Get a specific card by ID
+    /// Get a specific card by ID or identifier (e.g. KAN-5)
     Get {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Update a card
     Update(CardUpdateArgs),
     /// Move a card to another column
     Move {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
         #[arg(long)]
         column_id: Uuid,
         #[arg(long)]
         position: Option<i32>,
     },
-    /// Archive a card by ID
+    /// Archive a card by ID or identifier (e.g. KAN-5)
     Archive {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
-    /// Restore an archived card by ID
+    /// Restore an archived card by ID or identifier (e.g. KAN-5)
     Restore {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
         #[arg(long)]
         column_id: Option<Uuid>,
     },
-    /// Permanently delete an archived card by ID
+    /// Permanently delete an archived card by ID or identifier (e.g. KAN-5)
     Delete {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Assign a card to a sprint
     AssignSprint {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
         #[arg(long)]
         sprint_id: Uuid,
     },
     /// Unassign a card from its sprint
     UnassignSprint {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Get the branch name for a card
     BranchName {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Get the git checkout command for a card
     GitCheckout {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Archive multiple cards
     BulkArchive {
@@ -268,8 +268,8 @@ pub struct CardListArgs {
 
 #[derive(Args)]
 pub struct CardUpdateArgs {
-    /// Card ID to update
-    pub id: Uuid,
+    /// Card UUID or identifier like KAN-5 or 5
+    pub id: String,
     #[arg(long)]
     pub title: Option<String>,
     #[arg(long)]

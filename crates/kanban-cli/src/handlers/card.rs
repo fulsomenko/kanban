@@ -5,11 +5,25 @@ use kanban_domain::{
     CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate, CreateCardOptions,
     FieldUpdate, KanbanOperations,
 };
+use uuid::Uuid;
+
+fn resolve_card_id(ctx: &CliContext, id: &str) -> anyhow::Result<Uuid> {
+    if let Ok(uuid) = Uuid::parse_str(id) {
+        return Ok(uuid);
+    }
+    ctx.find_card_by_identifier(id)
+        .map_err(anyhow::Error::from)?
+        .map(|c| c.id)
+        .ok_or_else(|| anyhow::anyhow!("Card not found: '{}'", id))
+}
 
 pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {
     match action {
         CardAction::Create(args) => {
-            let options = build_create_options(&args).map_err(|e| anyhow::anyhow!(e))?;
+            let options = match build_create_options(&args) {
+                Ok(o) => o,
+                Err(e) => return output::output_error(&e),
+            };
             let card = ctx.create_card(args.board_id, args.column_id, args.title, options)?;
             ctx.save().await?;
             output::output_success(&card);
@@ -19,19 +33,35 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 let archived = ctx.list_archived_cards()?;
                 output::output_list(archived);
             } else {
-                let filter = build_filter(&args).map_err(|e| anyhow::anyhow!(e))?;
+                let filter = match build_filter(&args) {
+                    Ok(f) => f,
+                    Err(e) => return output::output_error(&e),
+                };
                 let cards = ctx.list_cards(filter)?;
                 let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
                 output::output_list(summaries);
             }
         }
-        CardAction::Get { id } => match ctx.get_card(id)? {
-            Some(card) => output::output_success(&card),
-            None => return output::output_error(&format!("Card not found: {}", id)),
-        },
+        CardAction::Get { id } => {
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            match ctx.get_card(uuid)? {
+                Some(card) => output::output_success(&card),
+                None => return output::output_error(&format!("Card not found: {}", id)),
+            }
+        }
         CardAction::Update(args) => {
-            let updates = build_card_update(&args).map_err(|e| anyhow::anyhow!(e))?;
-            let card = ctx.update_card(args.id, updates)?;
+            let uuid = match resolve_card_id(ctx, &args.id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            let updates = match build_card_update(&args) {
+                Ok(u) => u,
+                Err(e) => return output::output_error(&e),
+            };
+            let card = ctx.update_card(uuid, updates)?;
             ctx.save().await?;
             output::output_success(&card);
         }
@@ -40,41 +70,73 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             column_id,
             position,
         } => {
-            let card = ctx.move_card(id, column_id, position)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            let card = ctx.move_card(uuid, column_id, position)?;
             ctx.save().await?;
             output::output_success(&card);
         }
         CardAction::Archive { id } => {
-            ctx.archive_card(id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            ctx.archive_card(uuid)?;
             ctx.save().await?;
-            output::output_success(serde_json::json!({"archived": id.to_string()}));
+            output::output_success(serde_json::json!({"archived": uuid.to_string()}));
         }
         CardAction::Restore { id, column_id } => {
-            let card = ctx.restore_card(id, column_id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            let card = ctx.restore_card(uuid, column_id)?;
             ctx.save().await?;
             output::output_success(&card);
         }
         CardAction::Delete { id } => {
-            ctx.delete_card(id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            ctx.delete_card(uuid)?;
             ctx.save().await?;
-            output::output_success(serde_json::json!({"deleted": id.to_string()}));
+            output::output_success(serde_json::json!({"deleted": uuid.to_string()}));
         }
         CardAction::AssignSprint { id, sprint_id } => {
-            let card = ctx.assign_card_to_sprint(id, sprint_id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            let card = ctx.assign_card_to_sprint(uuid, sprint_id)?;
             ctx.save().await?;
             output::output_success(&card);
         }
         CardAction::UnassignSprint { id } => {
-            let card = ctx.unassign_card_from_sprint(id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            let card = ctx.unassign_card_from_sprint(uuid)?;
             ctx.save().await?;
             output::output_success(&card);
         }
         CardAction::BranchName { id } => {
-            let branch = ctx.get_card_branch_name(id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            let branch = ctx.get_card_branch_name(uuid)?;
             output::output_success(serde_json::json!({"branch_name": branch}));
         }
         CardAction::GitCheckout { id } => {
-            let cmd = ctx.get_card_git_checkout(id)?;
+            let uuid = match resolve_card_id(ctx, &id) {
+                Ok(uuid) => uuid,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            let cmd = ctx.get_card_git_checkout(uuid)?;
             output::output_success(serde_json::json!({"command": cmd}));
         }
         CardAction::BulkArchive { ids } => {

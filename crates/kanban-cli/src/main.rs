@@ -9,7 +9,14 @@ use context::CliContext;
 use kanban_tui::App;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
+    if let Err(e) = run().await {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> anyhow::Result<()> {
     if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
         let log_file = std::fs::OpenOptions::new()
             .create(true)
