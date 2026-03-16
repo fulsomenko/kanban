@@ -609,7 +609,7 @@ mod card_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 2);
+        assert_eq!(json["data"]["total"], 2);
     }
 
     #[test]
