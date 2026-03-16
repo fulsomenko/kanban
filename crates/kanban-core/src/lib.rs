@@ -14,7 +14,7 @@ pub use error::KanbanError;
 pub use graph::{Edge, EdgeDirection, Graph, GraphNode};
 pub use input::InputState;
 pub use logging::{LogEntry, Loggable};
-pub use paginated_list::PaginatedList;
+pub use paginated_list::{PaginatedList, DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
 pub use pagination::{Page, PageInfo};
 pub use result::KanbanResult;
 pub use selection::SelectionState;
