@@ -10,12 +10,6 @@ pub struct CliResponse<T: Serialize> {
     pub error: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct ListResponse<T: Serialize> {
-    pub items: Vec<T>,
-    pub count: usize,
-}
-
 pub fn output_success<T: Serialize>(data: T) {
     let response = CliResponse {
         success: true,
@@ -24,12 +18,6 @@ pub fn output_success<T: Serialize>(data: T) {
         error: None,
     };
     println!("{}", serde_json::to_string(&response).unwrap());
-}
-
-pub fn output_list<T: Serialize>(items: Vec<T>) {
-    let count = items.len();
-    let list = ListResponse { items, count };
-    output_success(list);
 }
 
 /// Outputs an error response to stderr and returns an error for proper propagation.
