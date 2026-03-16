@@ -5,7 +5,8 @@ use context::McpContext;
 use kanban_core::KanbanError;
 use kanban_domain::{
     BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
-    CreateCardOptions, FieldUpdate, KanbanOperations, PaginatedCards, SprintUpdate,
+    CreateCardOptions, FieldUpdate, KanbanOperations, PaginatedArchivedCards, PaginatedCards,
+    SprintUpdate,
 };
 use parking_lot::Mutex;
 use rmcp::{
@@ -277,6 +278,18 @@ pub struct ListCardsRequest {
     pub sprint_id: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
+    #[schemars(
+        description = "Include description field in results (default: false). Omit unless you need to read card descriptions — prefer false for token efficiency"
+    )]
+    pub include_description: Option<bool>,
+    #[schemars(description = "Page number, 1-based (default: 1)")]
+    pub page: Option<u32>,
+    #[schemars(description = "Items per page (default: 50)")]
+    pub page_size: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListArchivedCardsRequest {
     #[schemars(
         description = "Include description field in results (default: false). Omit unless you need to read card descriptions — prefer false for token efficiency"
     )]
@@ -803,10 +816,19 @@ impl KanbanMcpServer {
         to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
 
-    #[tool(description = "List archived cards")]
-    async fn tool_list_archived_cards(&self) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "List archived cards. Returns ArchivedCardSummary (no description) by default — set include_description=true to include descriptions. Use page/page_size for pagination (default: page=1, page_size=50)."
+    )]
+    async fn tool_list_archived_cards(
+        &self,
+        Parameters(req): Parameters<ListArchivedCardsRequest>,
+    ) -> Result<CallToolResult, McpError> {
         let cards = spawn_op_ref!(self.ctx, list_archived_cards)?;
-        to_call_tool_result(&cards)
+        let page = req.page.unwrap_or(1) as usize;
+        let page_size = req.page_size.unwrap_or(50) as usize;
+        let include_description = req.include_description.unwrap_or(false);
+        let result = PaginatedArchivedCards::new(cards, include_description, page, page_size);
+        to_call_tool_result(&result)
     }
 
     // Card Sprint Operations
