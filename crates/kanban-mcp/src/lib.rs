@@ -3,10 +3,10 @@ pub mod executor;
 
 use context::McpContext;
 use kanban_core::KanbanError;
+use kanban_core::PaginatedList;
 use kanban_domain::{
-    BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
-    CreateCardOptions, FieldUpdate, KanbanOperations, PaginatedArchivedCards, PaginatedCards,
-    SprintUpdate,
+    ArchivedCardSummary, BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardSummary,
+    CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
 };
 use parking_lot::Mutex;
 use rmcp::{
@@ -714,13 +714,12 @@ impl KanbanMcpServer {
         let cards = spawn_op_ref!(self.ctx, list_cards, filter)?;
         let page = req.page.unwrap_or(1) as usize;
         let page_size = req.page_size.unwrap_or(50) as usize;
-        let include_description = req.include_description.unwrap_or(false);
-        to_call_tool_result(&PaginatedCards::new(
-            cards,
-            include_description,
-            page,
-            page_size,
-        ))
+        if req.include_description.unwrap_or(false) {
+            to_call_tool_result(&PaginatedList::paginate(cards, page, page_size))
+        } else {
+            let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
+            to_call_tool_result(&PaginatedList::paginate(summaries, page, page_size))
+        }
     }
 
     #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
@@ -826,9 +825,13 @@ impl KanbanMcpServer {
         let cards = spawn_op_ref!(self.ctx, list_archived_cards)?;
         let page = req.page.unwrap_or(1) as usize;
         let page_size = req.page_size.unwrap_or(50) as usize;
-        let include_description = req.include_description.unwrap_or(false);
-        let result = PaginatedArchivedCards::new(cards, include_description, page, page_size);
-        to_call_tool_result(&result)
+        if req.include_description.unwrap_or(false) {
+            to_call_tool_result(&PaginatedList::paginate(cards, page, page_size))
+        } else {
+            let summaries: Vec<ArchivedCardSummary> =
+                cards.iter().map(ArchivedCardSummary::from).collect();
+            to_call_tool_result(&PaginatedList::paginate(summaries, page, page_size))
+        }
     }
 
     // Card Sprint Operations
