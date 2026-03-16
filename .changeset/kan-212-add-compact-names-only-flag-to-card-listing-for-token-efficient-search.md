@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 - test(cli): assert archived list defaults to summary, --include-description returns full cards
