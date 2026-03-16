@@ -75,7 +75,12 @@ async fn handle_update(
         FieldUpdate::Clear
     } else {
         match args.start_date {
-            Some(d) => FieldUpdate::Set(parse_datetime(&d).map_err(anyhow::Error::msg)?),
+            Some(d) => FieldUpdate::Set(
+                parse_datetime(&d).map_err(|e| {
+                    let _ = output::output_error(&e);
+                    anyhow::Error::msg(e)
+                })?,
+            ),
             None => FieldUpdate::NoChange,
         }
     };
@@ -84,7 +89,12 @@ async fn handle_update(
         FieldUpdate::Clear
     } else {
         match args.end_date {
-            Some(d) => FieldUpdate::Set(parse_datetime(&d).map_err(anyhow::Error::msg)?),
+            Some(d) => FieldUpdate::Set(
+                parse_datetime(&d).map_err(|e| {
+                    let _ = output::output_error(&e);
+                    anyhow::Error::msg(e)
+                })?,
+            ),
             None => FieldUpdate::NoChange,
         }
     };
