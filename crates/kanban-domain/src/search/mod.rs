@@ -454,7 +454,13 @@ mod tests {
         let column = crate::Column::new(board.id, "Todo".to_string(), 0);
         let mut card11 = Card::new(&mut board, column.id, "Eleven".to_string(), 0, "KAN");
         card11.card_number = 11;
-        let mut card111 = Card::new(&mut board, column.id, "OneHundredEleven".to_string(), 0, "KAN");
+        let mut card111 = Card::new(
+            &mut board,
+            column.id,
+            "OneHundredEleven".to_string(),
+            0,
+            "KAN",
+        );
         card111.card_number = 111;
         let boards = vec![board];
         let columns = vec![column];
