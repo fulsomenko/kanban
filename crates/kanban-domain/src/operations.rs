@@ -47,6 +47,7 @@ pub trait KanbanOperations {
     ) -> KanbanResult<Card>;
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>>;
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>>;
+    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>>;
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card>;
     fn move_card(&mut self, id: Uuid, column_id: Uuid, position: Option<i32>)
         -> KanbanResult<Card>;
