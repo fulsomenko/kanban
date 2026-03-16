@@ -4,7 +4,7 @@ use serde::Serialize;
 use crate::archived_card::{ArchivedCard, ArchivedCardSummary};
 use crate::card::{Card, CardSummary};
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum PaginatedCards {
     Summaries(PaginatedList<CardSummary>),
@@ -22,7 +22,7 @@ impl PaginatedCards {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum PaginatedArchivedCards {
     Summaries(PaginatedList<ArchivedCardSummary>),
