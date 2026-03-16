@@ -1039,6 +1039,8 @@ mod card_tests {
                 "create",
                 "--name",
                 "Test Board",
+                "--card-prefix",
+                prefix,
             ])
             .assert()
             .success()
@@ -1048,18 +1050,6 @@ mod card_tests {
 
         let board_json = parse_json_output(&String::from_utf8_lossy(&board_output));
         let board_id = extract_id(&board_json);
-
-        kanban()
-            .args([
-                file.to_str().unwrap(),
-                "board",
-                "update",
-                &board_id,
-                "--card-prefix",
-                prefix,
-            ])
-            .assert()
-            .success();
 
         let column_output = kanban()
             .args([
