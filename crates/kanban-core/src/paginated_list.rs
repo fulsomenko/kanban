@@ -12,6 +12,18 @@ pub const DEFAULT_PAGE: usize = 1;
 /// Default number of items per page.
 pub const DEFAULT_PAGE_SIZE: usize = 50;
 
+/// Maximum allowed page size.
+pub const MAX_PAGE_SIZE: usize = 500;
+
+/// Resolve optional `page` and `page_size` CLI/MCP inputs to concrete values.
+///
+/// `None` falls back to [`DEFAULT_PAGE`] / [`DEFAULT_PAGE_SIZE`].
+pub fn resolve_page_params(page: Option<u32>, page_size: Option<u32>) -> (usize, usize) {
+    let page = page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
+    let page_size = page_size.map(|p| p as usize).unwrap_or(DEFAULT_PAGE_SIZE);
+    (page, page_size)
+}
+
 /// Paginated response envelope returned by CLI and MCP list endpoints.
 ///
 /// All list commands (board, column, sprint, card) serialize to this shape:
@@ -49,6 +61,11 @@ impl<T> PaginatedList<T> {
             return Err(KanbanError::Validation(
                 "page_size must be >= 1".to_string(),
             ));
+        }
+        if page_size > MAX_PAGE_SIZE {
+            return Err(KanbanError::Validation(format!(
+                "page_size must be <= {MAX_PAGE_SIZE}"
+            )));
         }
         let total = items.len();
         let total_pages = total.div_ceil(page_size);
@@ -116,6 +133,13 @@ mod tests {
         let result = PaginatedList::paginate(items, 1, 10).unwrap();
         assert_eq!(result.items, vec![1, 2, 3]);
         assert_eq!(result.total_pages, 1);
+    }
+
+    #[test]
+    fn test_paginate_page_size_too_large_errors() {
+        let items: Vec<i32> = (1..=5).collect();
+        let err = PaginatedList::paginate(items, 1, MAX_PAGE_SIZE + 1).unwrap_err();
+        assert!(err.to_string().contains("page_size must be <="));
     }
 
     #[test]
