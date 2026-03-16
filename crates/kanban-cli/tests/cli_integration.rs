@@ -610,6 +610,159 @@ mod card_tests {
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
         assert_eq!(json["data"]["total"], 2);
+        assert!(json["data"]["total_pages"].is_number());
+    }
+
+    #[test]
+    fn test_card_list_description_flag() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Task With Desc",
+                "--description",
+                "Hello description",
+            ])
+            .assert()
+            .success();
+
+        let default_output = kanban()
+            .args([file.to_str().unwrap(), "card", "list"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let default_json = parse_json_output(&String::from_utf8_lossy(&default_output));
+        assert!(default_json["data"]["items"][0]["description"].is_null());
+
+        let full_output = kanban()
+            .args([file.to_str().unwrap(), "card", "list", "--description"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let full_json = parse_json_output(&String::from_utf8_lossy(&full_output));
+        assert!(full_json["data"]["items"][0]["description"].is_string());
+    }
+
+    #[test]
+    fn test_card_list_pagination() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        for i in 1..=3 {
+            kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "card",
+                    "create",
+                    "--board-id",
+                    &board_id,
+                    "--column-id",
+                    &column_id,
+                    "--title",
+                    &format!("Task {i}"),
+                ])
+                .assert()
+                .success();
+        }
+
+        let page1_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--page-size",
+                "2",
+                "--page",
+                "1",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let page1_json = parse_json_output(&String::from_utf8_lossy(&page1_output));
+        assert_eq!(page1_json["data"]["total"], 3);
+        assert_eq!(page1_json["data"]["total_pages"], 2);
+        assert_eq!(page1_json["data"]["items"].as_array().unwrap().len(), 2);
+
+        let page2_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--page-size",
+                "2",
+                "--page",
+                "2",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let page2_json = parse_json_output(&String::from_utf8_lossy(&page2_output));
+        assert_eq!(page2_json["data"]["items"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_card_list_out_of_bounds_page() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Only Card",
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--page-size",
+                "5",
+                "--page",
+                "99",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"]["items"].as_array().unwrap().len(), 0);
+        assert_eq!(json["data"]["total"], 1);
     }
 
     #[test]
