@@ -110,14 +110,16 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
         return Ok(id);
     }
     let identifier = s.to_string();
-    let ctx = ctx.clone();
-    let card: Option<Card> = tokio::task::spawn_blocking(move || {
-        let guard = ctx.lock();
-        guard.find_card_by_identifier(&identifier)
-    })
-    .await
-    .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
-    .map_err(kanban_err_to_mcp)?;
+    let card: Option<Card> = {
+        let ctx = ctx.clone();
+        tokio::task::spawn_blocking(move || {
+            let guard = ctx.lock();
+            guard.find_card_by_identifier(&identifier)
+        })
+        .await
+        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
+        .map_err(kanban_err_to_mcp)?
+    };
 
     card.map(|c| c.id)
         .ok_or_else(|| McpError::invalid_params(format!("Card not found: '{}'", s), None))
