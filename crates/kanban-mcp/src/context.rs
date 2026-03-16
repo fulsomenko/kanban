@@ -273,7 +273,7 @@ impl KanbanOperations for McpContext {
     }
 
     fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>> {
-        self.execute_get(&["card", "find-by-identifier", identifier])
+        self.execute_get(&["card", "get", identifier])
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
