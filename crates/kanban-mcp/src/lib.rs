@@ -323,7 +323,9 @@ pub struct ArchiveCardRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct RestoreCardRequest {
-    #[schemars(description = "UUID or identifier of the archived card to restore (e.g. 'KAN-5' or '5')")]
+    #[schemars(
+        description = "UUID or identifier of the archived card to restore (e.g. 'KAN-5' or '5')"
+    )]
     pub card_id: String,
     #[schemars(description = "Column ID to restore the card to (optional)")]
     pub column_id: Option<String>,
@@ -347,7 +349,9 @@ pub struct AssignCardToSprintRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct UnassignCardFromSprintRequest {
-    #[schemars(description = "UUID or identifier of the card to unassign from its sprint (e.g. 'KAN-5' or '5')")]
+    #[schemars(
+        description = "UUID or identifier of the card to unassign from its sprint (e.g. 'KAN-5' or '5')"
+    )]
     pub card_id: String,
 }
 
