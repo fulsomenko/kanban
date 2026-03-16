@@ -197,23 +197,53 @@ impl Default for CompositeSearcher {
     }
 }
 
+enum ParsedIdentifier {
+    PrefixAndNumber { prefix: String, number: u32 },
+    NumberOnly(u32),
+}
+
+fn parse_identifier(identifier: &str) -> Option<ParsedIdentifier> {
+    let lower = identifier.to_lowercase();
+    if let Some(dash_pos) = lower.find('-') {
+        let prefix = &lower[..dash_pos];
+        let number_str = &lower[dash_pos + 1..];
+        let number = number_str.parse::<u32>().ok()?;
+        Some(ParsedIdentifier::PrefixAndNumber {
+            prefix: prefix.to_string(),
+            number,
+        })
+    } else if let Ok(number) = lower.parse::<u32>() {
+        Some(ParsedIdentifier::NumberOnly(number))
+    } else {
+        None
+    }
+}
+
 /// Find a card by identifier (e.g. "KAN-5" or "5"), searching across all boards.
 pub fn find_card_by_identifier<'a>(
     identifier: &str,
     cards: &'a [Card],
     columns: &[Column],
     boards: &[Board],
-    sprints: &[Sprint],
+    _sprints: &[Sprint],
 ) -> Option<&'a Card> {
-    let searcher = CardIdentifierSearcher::new(identifier);
+    let parsed = parse_identifier(identifier)?;
     cards.iter().find(|card| {
         let board = columns
             .iter()
             .find(|col| col.id == card.column_id)
             .and_then(|col| boards.iter().find(|b| b.id == col.board_id));
-        match board {
-            Some(board) => searcher.matches(card, board, sprints),
-            None => false,
+        let Some(board) = board else { return false };
+        let resolved_prefix = card
+            .assigned_prefix
+            .as_deref()
+            .or(board.card_prefix.as_deref())
+            .unwrap_or("task");
+        match &parsed {
+            ParsedIdentifier::PrefixAndNumber { prefix, number } => {
+                resolved_prefix.to_lowercase() == *prefix && card.card_number == *number
+            }
+            ParsedIdentifier::NumberOnly(number) => card.card_number == *number,
         }
     })
 }
@@ -398,6 +428,40 @@ mod tests {
             find_card_by_identifier("BBB-1", &cards, &columns, &boards, &[]).map(|c| c.id),
             Some(card2.id)
         );
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_no_prefix_collision() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let mut card1 = Card::new(&mut board, column.id, "First".to_string(), 0, "KAN");
+        card1.card_number = 1;
+        let mut card11 = Card::new(&mut board, column.id, "Eleventh".to_string(), 0, "KAN");
+        card11.card_number = 11;
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card1.clone(), card11];
+
+        let result = find_card_by_identifier("KAN-1", &cards, &columns, &boards, &[]);
+        assert_eq!(result.map(|c| c.id), Some(card1.id));
+    }
+
+    #[test]
+    fn test_find_card_by_identifier_exact_number() {
+        let mut board = Board::new("Project".to_string(), None);
+        board.card_prefix = Some("KAN".to_string());
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let mut card11 = Card::new(&mut board, column.id, "Eleven".to_string(), 0, "KAN");
+        card11.card_number = 11;
+        let mut card111 = Card::new(&mut board, column.id, "OneHundredEleven".to_string(), 0, "KAN");
+        card111.card_number = 111;
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card11.clone(), card111];
+
+        let result = find_card_by_identifier("KAN-11", &cards, &columns, &boards, &[]);
+        assert_eq!(result.map(|c| c.id), Some(card11.id));
     }
 
     #[test]
