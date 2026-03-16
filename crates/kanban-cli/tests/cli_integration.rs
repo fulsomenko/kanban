@@ -771,6 +771,21 @@ mod card_tests {
 
         let archived_json = parse_json_output(&String::from_utf8_lossy(&archived_output));
         assert_eq!(archived_json["data"]["total"], 1);
+        assert!(archived_json["data"]["items"][0]["archived_at"].is_string());
+        assert!(archived_json["data"]["items"][0]["original_column_id"].is_string());
+        assert!(archived_json["data"]["items"][0]["card"]["description"].is_null());
+
+        let archived_full_output = kanban()
+            .args([file.to_str().unwrap(), "card", "list", "--archived", "--description"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let archived_full_json = parse_json_output(&String::from_utf8_lossy(&archived_full_output));
+        assert_eq!(archived_full_json["data"]["total"], 1);
+        assert!(archived_full_json["data"]["items"][0]["card"].is_object());
 
         let restore_output = kanban()
             .args([file.to_str().unwrap(), "card", "restore", &card_id])
