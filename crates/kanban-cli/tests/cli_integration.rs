@@ -1616,4 +1616,250 @@ mod error_tests {
             .failure()
             .stderr(predicate::str::contains("--board-id"));
     }
+
+    #[test]
+    fn test_card_get_nonexistent_numeric_identifier() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban()
+            .args([file.to_str().unwrap(), "card", "get", "555"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Card not found"))
+            .stderr(predicate::str::contains("555"));
+    }
+
+    #[test]
+    fn test_card_get_nonexistent_prefix_identifier() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban()
+            .args([file.to_str().unwrap(), "card", "get", "KAN-5"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Card not found"))
+            .stderr(predicate::str::contains("KAN-5"));
+    }
+
+    #[test]
+    fn test_card_get_no_backtrace() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban()
+            .env("RUST_BACKTRACE", "1")
+            .args([file.to_str().unwrap(), "card", "get", "555"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("stack backtrace").not());
+    }
+
+    fn setup_board_and_column(file: &std::path::Path) -> (String, String) {
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_json = parse_json_output(&String::from_utf8_lossy(&board_output));
+        let board_id = extract_id(&board_json);
+
+        let column_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "column",
+                "create",
+                "--board-id",
+                &board_id,
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let column_json = parse_json_output(&String::from_utf8_lossy(&column_output));
+        let column_id = extract_id(&column_json);
+
+        (board_id, column_id)
+    }
+
+    #[test]
+    fn test_card_create_invalid_priority() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Test",
+                "--priority",
+                "badpriority",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid priority"))
+            .stderr(predicate::str::contains("badpriority"));
+    }
+
+    #[test]
+    fn test_card_list_invalid_status() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--status",
+                "notastatus",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid status"))
+            .stderr(predicate::str::contains("notastatus"));
+    }
+
+    #[test]
+    fn test_card_update_invalid_priority() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        let card_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Test",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let card_json = parse_json_output(&String::from_utf8_lossy(&card_output));
+        let card_id = extract_id(&card_json);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "update",
+                &card_id,
+                "--priority",
+                "badpriority",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid priority"))
+            .stderr(predicate::str::contains("badpriority"));
+    }
+
+    fn setup_sprint(file: &std::path::Path) -> String {
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_json = parse_json_output(&String::from_utf8_lossy(&board_output));
+        let board_id = extract_id(&board_json);
+
+        let sprint_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "create",
+                "--board-id",
+                &board_id,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let sprint_json = parse_json_output(&String::from_utf8_lossy(&sprint_output));
+        extract_id(&sprint_json)
+    }
+
+    #[test]
+    fn test_sprint_update_invalid_start_date() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let sprint_id = setup_sprint(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "update",
+                &sprint_id,
+                "--start-date",
+                "notadate",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid date"))
+            .stderr(predicate::str::contains("notadate"));
+    }
+
+    #[test]
+    fn test_sprint_update_invalid_end_date() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let sprint_id = setup_sprint(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "update",
+                &sprint_id,
+                "--end-date",
+                "notadate",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid date"))
+            .stderr(predicate::str::contains("notadate"));
+    }
 }
