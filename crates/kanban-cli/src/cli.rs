@@ -265,7 +265,7 @@ pub struct CardListArgs {
     #[arg(long)]
     pub archived: bool,
     #[arg(long)]
-    pub description: bool,
+    pub include_description: bool,
     #[arg(long)]
     pub page: Option<u32>,
     #[arg(long)]
