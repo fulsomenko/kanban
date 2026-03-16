@@ -88,10 +88,16 @@ kanban column delete <COLUMN_ID>
 ### Card Operations
 
 ```bash
-# List cards
+# List cards (returns CardSummary by default — no description field)
 kanban card list --board-id <BOARD_ID>
 kanban card list --board-id <BOARD_ID> --column-id <COLUMN_ID>
 kanban card list --board-id <BOARD_ID> --sprint-id <SPRINT_ID>
+
+# Include description field in results
+kanban card list --board-id <BOARD_ID> --include-description
+
+# Paginate results
+kanban card list --board-id <BOARD_ID> --page 2 --page-size 20
 
 # Create a card
 kanban card create --board-id <BOARD_ID> --column-id <COLUMN_ID> --title "Implement feature"
@@ -108,6 +114,9 @@ kanban card update <CARD_ID> --priority high --status done --points 5
 # Move a card to another column
 kanban card move <CARD_ID> --column-id <NEW_COLUMN_ID>
 kanban card move <CARD_ID> --column-id <NEW_COLUMN_ID> --position 0
+
+# List archived cards (also supports --include-description, --page, --page-size)
+kanban card list --archived
 
 # Archive/restore/delete cards
 kanban card archive <CARD_ID>
@@ -178,6 +187,24 @@ All CLI commands output JSON for easy parsing and scripting:
   "data": { ... }
 }
 ```
+
+`card list` and `card list --archived` return a paginated envelope:
+
+```json
+{
+  "success": true,
+  "api_version": "0.2.0",
+  "data": {
+    "items": [ { "id": "...", "title": "...", "status": "Todo", ... } ],
+    "total": 42,
+    "page": 1,
+    "page_size": 50,
+    "total_pages": 1
+  }
+}
+```
+
+By default `description` is omitted from card summaries. Pass `--include-description` to get full card objects.
 
 ```bash
 # Pipe to jq for processing
