@@ -6,6 +6,7 @@ use kanban_domain::{
     ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate,
     CreateCardOptions, FieldUpdate, KanbanOperations,
 };
+
 use uuid::Uuid;
 
 fn resolve_card_id(ctx: &CliContext, id: &str) -> anyhow::Result<Uuid> {
@@ -34,25 +35,17 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             let page_size = args.page_size.unwrap_or(50) as usize;
             if args.archived {
                 let archived = ctx.list_archived_cards()?;
-                if args.include_description {
-                    output::output_success(PaginatedList::paginate(archived, page, page_size));
-                } else {
-                    let summaries: Vec<ArchivedCardSummary> =
-                        archived.iter().map(ArchivedCardSummary::from).collect();
-                    output::output_success(PaginatedList::paginate(summaries, page, page_size));
-                }
+                let summaries: Vec<ArchivedCardSummary> =
+                    archived.iter().map(ArchivedCardSummary::from).collect();
+                output::output_success(PaginatedList::paginate(summaries, page, page_size));
             } else {
                 let filter = match build_filter(&args) {
                     Ok(f) => f,
                     Err(e) => return output::output_error(&e),
                 };
                 let cards = ctx.list_cards(filter)?;
-                if args.include_description {
-                    output::output_success(PaginatedList::paginate(cards, page, page_size));
-                } else {
-                    let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
-                    output::output_success(PaginatedList::paginate(summaries, page, page_size));
-                }
+                let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
+                output::output_success(PaginatedList::paginate(summaries, page, page_size));
             }
         }
         CardAction::Get { id } => {

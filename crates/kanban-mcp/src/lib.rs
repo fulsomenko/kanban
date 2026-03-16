@@ -278,10 +278,6 @@ pub struct ListCardsRequest {
     pub sprint_id: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
-    #[schemars(
-        description = "Include description field in results (default: false). Omit unless you need to read card descriptions — prefer false for token efficiency"
-    )]
-    pub include_description: Option<bool>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
     #[schemars(description = "Items per page (default: 50)")]
@@ -290,10 +286,6 @@ pub struct ListCardsRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListArchivedCardsRequest {
-    #[schemars(
-        description = "Include description field in results (default: false). Omit unless you need to read card descriptions — prefer false for token efficiency"
-    )]
-    pub include_description: Option<bool>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
     #[schemars(description = "Items per page (default: 50)")]
@@ -694,7 +686,7 @@ impl KanbanMcpServer {
     }
 
     #[tool(
-        description = "List cards with optional filters. Returns CardSummary (no description) by default — set include_description=true to include descriptions. Use page/page_size for pagination (default: page=1, page_size=50)."
+        description = "List cards with optional filters. Returns CardSummary (title, status, priority — no description). Use card get for full details. Use page/page_size for pagination (default: page=1, page_size=50)."
     )]
     async fn tool_list_cards(
         &self,
@@ -714,12 +706,8 @@ impl KanbanMcpServer {
         let cards = spawn_op_ref!(self.ctx, list_cards, filter)?;
         let page = req.page.unwrap_or(1) as usize;
         let page_size = req.page_size.unwrap_or(50) as usize;
-        if req.include_description.unwrap_or(false) {
-            to_call_tool_result(&PaginatedList::paginate(cards, page, page_size))
-        } else {
-            let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
-            to_call_tool_result(&PaginatedList::paginate(summaries, page, page_size))
-        }
+        let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
+        to_call_tool_result(&PaginatedList::paginate(summaries, page, page_size))
     }
 
     #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
@@ -816,7 +804,7 @@ impl KanbanMcpServer {
     }
 
     #[tool(
-        description = "List archived cards. Returns ArchivedCardSummary (no description) by default — set include_description=true to include descriptions. Use page/page_size for pagination (default: page=1, page_size=50)."
+        description = "List archived cards. Returns ArchivedCardSummary (no description). Use page/page_size for pagination (default: page=1, page_size=50)."
     )]
     async fn tool_list_archived_cards(
         &self,
@@ -825,13 +813,9 @@ impl KanbanMcpServer {
         let cards = spawn_op_ref!(self.ctx, list_archived_cards)?;
         let page = req.page.unwrap_or(1) as usize;
         let page_size = req.page_size.unwrap_or(50) as usize;
-        if req.include_description.unwrap_or(false) {
-            to_call_tool_result(&PaginatedList::paginate(cards, page, page_size))
-        } else {
-            let summaries: Vec<ArchivedCardSummary> =
-                cards.iter().map(ArchivedCardSummary::from).collect();
-            to_call_tool_result(&PaginatedList::paginate(summaries, page, page_size))
-        }
+        let summaries: Vec<ArchivedCardSummary> =
+            cards.iter().map(ArchivedCardSummary::from).collect();
+        to_call_tool_result(&PaginatedList::paginate(summaries, page, page_size))
     }
 
     // Card Sprint Operations
