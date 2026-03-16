@@ -1,4 +1,3 @@
-use kanban_core::PaginatedList;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -25,10 +24,6 @@ pub fn output_success<T: Serialize>(data: T) {
         error: None,
     };
     println!("{}", serde_json::to_string(&response).unwrap());
-}
-
-pub fn output_paginated_list<T: Serialize>(list: PaginatedList<T>) {
-    output_success(list);
 }
 
 pub fn output_list<T: Serialize>(items: Vec<T>) {

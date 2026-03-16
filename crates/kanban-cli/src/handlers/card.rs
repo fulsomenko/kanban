@@ -1,10 +1,9 @@
 use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
-use kanban_core::PaginatedList;
 use kanban_domain::{
-    CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate, CreateCardOptions,
-    FieldUpdate, KanbanOperations,
+    CardListFilter, CardPriority, CardStatus, CardUpdate, CreateCardOptions, FieldUpdate,
+    KanbanOperations, PaginatedArchivedCards, PaginatedCards,
 };
 use uuid::Uuid;
 
@@ -34,22 +33,19 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             let page_size = args.page_size.unwrap_or(50) as usize;
             if args.archived {
                 let archived = ctx.list_archived_cards()?;
-                output::output_paginated_list(PaginatedList::paginate(archived, page, page_size));
+                output::output_success(PaginatedArchivedCards::new(
+                    archived,
+                    args.description,
+                    page,
+                    page_size,
+                ));
             } else {
                 let filter = match build_filter(&args) {
                     Ok(f) => f,
                     Err(e) => return output::output_error(&e),
                 };
                 let cards = ctx.list_cards(filter)?;
-                if args.description {
-                    output::output_paginated_list(PaginatedList::paginate(cards, page, page_size));
-                } else {
-                    let summaries: Vec<CardSummary> =
-                        cards.iter().map(CardSummary::from).collect();
-                    output::output_paginated_list(PaginatedList::paginate(
-                        summaries, page, page_size,
-                    ));
-                }
+                output::output_success(PaginatedCards::new(cards, args.description, page, page_size));
             }
         }
         CardAction::Get { id } => {
