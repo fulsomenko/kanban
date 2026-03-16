@@ -1,8 +1,8 @@
 {
   "version": 2,
   "metadata": {
-    "instance_id": "ec78b6c1-e4f5-414e-8b52-3555727ade48",
-    "saved_at": "2026-02-17T22:29:27.849338110Z"
+    "instance_id": "cc55f7c0-9d1d-42f6-b370-3c625920467d",
+    "saved_at": "2026-03-16T21:15:11.317159743Z"
   },
   "data": {
     "archived_cards": [
@@ -231,13 +231,13 @@
         "name": "Kanban",
         "next_sprint_number": 8,
         "prefix_counters": {
-          "KAN": 211
+          "KAN": 215
         },
         "sprint_counters": {
-          "KAN": 13
+          "KAN": 12
         },
         "sprint_duration_days": 7,
-        "sprint_name_used_count": 8,
+        "sprint_name_used_count": 7,
         "sprint_names": [
           "an-eventful-october",
           "an-experience-to-remember",
@@ -245,14 +245,13 @@
           "progression-is-progress",
           "full-bowling",
           "a-merry-christmas",
-          "a-new-year",
-          "fresh-air"
+          "a-new-year"
         ],
         "sprint_prefix": "KAN",
         "task_list_view": "ColumnView",
         "task_sort_field": "CreatedAt",
         "task_sort_order": "Descending",
-        "updated_at": "2026-02-17T22:22:00.293789192Z"
+        "updated_at": "2026-03-16T20:36:43.090083725Z"
       }
     ],
     "cards": [
@@ -489,7 +488,7 @@
         "points": 1,
         "position": 36,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784516Z",
@@ -500,25 +499,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521456764Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784516Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521457005Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Test the application with another editor",
-        "updated_at": "2026-02-17T22:20:49.521457597Z"
+        "updated_at": "2026-02-01T19:39:40.784517Z"
       },
       {
         "assigned_prefix": null,
@@ -589,7 +580,7 @@
         "points": 1,
         "position": 3,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-04T00:22:28.640552Z",
@@ -632,25 +623,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521481024Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784588Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521481262Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Be able to scroll in the card description",
-        "updated_at": "2026-02-17T22:20:49.521482639Z"
+        "updated_at": "2026-02-01T19:39:40.784589Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -920,7 +903,7 @@
         "points": 3,
         "position": 19,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448943Z",
@@ -963,25 +946,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521391358Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784539Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521391596Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Link to pull request",
-        "updated_at": "2026-02-17T22:20:49.521392929Z"
+        "updated_at": "2026-02-01T19:39:40.784540Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1188,7 +1163,7 @@
         "points": 2,
         "position": 0,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448941Z",
@@ -1231,25 +1206,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521397809Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784511Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521398047Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "When titles are too long. they don't fit the tasks list",
-        "updated_at": "2026-02-17T22:20:49.521399216Z"
+        "updated_at": "2026-02-01T19:39:40.784512Z"
       },
       {
         "assigned_prefix": null,
@@ -1292,7 +1259,7 @@
         "points": 4,
         "position": 1,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448927Z",
@@ -1335,25 +1302,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521363563Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784623Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521363812Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "When setting the priority, the card details are closed and the lists are shown",
-        "updated_at": "2026-02-17T22:20:49.521365004Z"
+        "updated_at": "2026-02-01T19:39:40.784624Z"
       },
       {
         "assigned_prefix": null,
@@ -1594,7 +1553,7 @@
         "points": 5,
         "position": 5,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:15.760147Z",
@@ -1629,25 +1588,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521466959Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784620Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521467200Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "audit history - keep a log of changes",
-        "updated_at": "2026-02-17T22:20:49.521468119Z"
+        "updated_at": "2026-02-01T19:39:40.784622Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1662,7 +1613,7 @@
         "points": 2,
         "position": 8,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:17.501321Z",
@@ -1697,25 +1648,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521475262Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784612Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521475501Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "branch name doesnt reflected the used version",
-        "updated_at": "2026-02-17T22:20:49.521476278Z"
+        "updated_at": "2026-02-01T19:39:40.784613Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1730,7 +1673,7 @@
         "points": 5,
         "position": 11,
         "priority": "Critical",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784514Z",
@@ -1741,25 +1684,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521453427Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784514Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521453668Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Tags for cards",
-        "updated_at": "2026-02-17T22:20:49.521454343Z"
+        "updated_at": "2026-02-01T19:39:40.784515Z"
       },
       {
         "assigned_prefix": null,
@@ -1802,7 +1737,7 @@
         "points": 2,
         "position": 27,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264745Z",
@@ -1829,25 +1764,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521385158Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784536Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521385528Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add retrospective note on completed tasks",
-        "updated_at": "2026-02-17T22:20:49.521386442Z"
+        "updated_at": "2026-02-01T19:39:40.784537Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -1862,7 +1789,7 @@
         "points": 2,
         "position": 13,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784563Z",
@@ -1873,25 +1800,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521354402Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784563Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521354698Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Assign task to sprint if created in sprint task list",
-        "updated_at": "2026-02-17T22:20:49.521355522Z"
+        "updated_at": "2026-02-01T19:39:40.784564Z"
       },
       {
         "assigned_prefix": null,
@@ -1981,7 +1900,7 @@
         "points": 2,
         "position": 17,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448934Z",
@@ -2024,25 +1943,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521361301Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784487Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521361552Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Syntax highlighting for card description",
-        "updated_at": "2026-02-17T22:20:49.521362692Z"
+        "updated_at": "2026-02-01T19:39:40.784489Z"
       },
       {
         "assigned_prefix": null,
@@ -2104,7 +2015,7 @@
         "points": 1,
         "position": 4,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:20.088757Z",
@@ -2139,25 +2050,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521405322Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784599Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521405562Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "cards without priority should be order following low priority",
-        "updated_at": "2026-02-17T22:20:49.521406321Z"
+        "updated_at": "2026-02-01T19:39:40.784600Z"
       },
       {
         "assigned_prefix": null,
@@ -2191,7 +2094,7 @@
         "points": 4,
         "position": 28,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784531Z",
@@ -2202,25 +2105,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521426086Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784532Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521426323Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "sprint details UI",
-        "updated_at": "2026-02-17T22:20:49.521427114Z"
+        "updated_at": "2026-02-01T19:39:40.784535Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2558,7 +2453,7 @@
         "points": 2,
         "position": 2,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:39.448937Z",
@@ -2601,25 +2496,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521447633Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784609Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521448151Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Create new card from card",
-        "updated_at": "2026-02-17T22:20:49.521450810Z"
+        "updated_at": "2026-02-01T19:39:40.784611Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2770,7 +2657,7 @@
         "points": 3,
         "position": 15,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264710Z",
@@ -2797,25 +2684,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521455106Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784542Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521455348Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Assignee for cards",
-        "updated_at": "2026-02-17T22:20:49.521456106Z"
+        "updated_at": "2026-02-01T19:39:40.784543Z"
       },
       {
         "assigned_prefix": null,
@@ -2877,7 +2756,7 @@
         "points": 2,
         "position": 9,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264761Z",
@@ -2904,25 +2783,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521465330Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784586Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521465567Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "a sprint can only be completed after the duration is over",
-        "updated_at": "2026-02-17T22:20:49.521466304Z"
+        "updated_at": "2026-02-01T19:39:40.784587Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -2937,7 +2808,7 @@
         "points": 1,
         "position": 10,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898919Z",
@@ -2980,25 +2851,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521336329Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784555Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521336573Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "bring the task columns, completed non completed into sprint details",
-        "updated_at": "2026-02-17T22:20:49.521337487Z"
+        "updated_at": "2026-02-01T19:39:40.784556Z"
       },
       {
         "assigned_prefix": null,
@@ -3060,7 +2923,7 @@
         "points": 3,
         "position": 12,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264757Z",
@@ -3087,25 +2950,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521377555Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784579Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521377796Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "automatic sprint completion",
-        "updated_at": "2026-02-17T22:20:49.521378502Z"
+        "updated_at": "2026-02-01T19:39:40.784580Z"
       },
       {
         "assigned_prefix": null,
@@ -3176,7 +3031,7 @@
         "points": 3,
         "position": 14,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:23.898916Z",
@@ -3219,25 +3074,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521375238Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784500Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521375485Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "in card creation show a list of cards fuzzily matching the proposed title",
-        "updated_at": "2026-02-17T22:20:49.521376745Z"
+        "updated_at": "2026-02-01T19:39:40.784502Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3404,7 +3251,7 @@
         "points": 4,
         "position": 23,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327391Z",
@@ -3439,25 +3286,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521422145Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784508Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521422386Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "unify the sprint details view",
-        "updated_at": "2026-02-17T22:20:49.521423255Z"
+        "updated_at": "2026-02-01T19:39:40.784509Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3472,7 +3311,7 @@
         "points": 3,
         "position": 24,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327392Z",
@@ -3507,25 +3346,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521403453Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784504Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521403774Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "set a due date for a card",
-        "updated_at": "2026-02-17T22:20:49.521404538Z"
+        "updated_at": "2026-02-01T19:39:40.784506Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3540,7 +3371,7 @@
         "points": 1,
         "position": 25,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327385Z",
@@ -3575,25 +3406,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521451646Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784602Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521451890Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "assigning cards to sprint doesnt remove it from unsprinted cards list",
-        "updated_at": "2026-02-17T22:20:49.521452801Z"
+        "updated_at": "2026-02-01T19:39:40.784603Z"
       },
       {
         "assigned_prefix": null,
@@ -3655,7 +3478,7 @@
         "points": 2,
         "position": 29,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327394Z",
@@ -3690,25 +3513,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521382971Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784519Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521383216Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "default sprint and branch prefixes",
-        "updated_at": "2026-02-17T22:20:49.521384396Z"
+        "updated_at": "2026-02-01T19:39:40.784521Z"
       },
       {
         "assigned_prefix": null,
@@ -3761,7 +3576,7 @@
         "points": 2,
         "position": 18,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327386Z",
@@ -3796,25 +3611,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521387259Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784582Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521387543Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "moving and item between columns should also move the selector along with the card",
-        "updated_at": "2026-02-17T22:20:49.521388483Z"
+        "updated_at": "2026-02-01T19:39:40.784584Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -3829,7 +3636,7 @@
         "points": 2,
         "position": 20,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-02T16:56:14.917359Z",
@@ -3872,25 +3679,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521358404Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784595Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521358649Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "when changing place of columns",
-        "updated_at": "2026-02-17T22:20:49.521360329Z"
+        "updated_at": "2026-02-01T19:39:40.784597Z"
       },
       {
         "assigned_prefix": null,
@@ -4121,7 +3920,7 @@
         "points": 4,
         "position": 30,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784570Z",
@@ -4132,25 +3931,17 @@
             "status": "Planning"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521381149Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784571Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521381387Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "data migrations and decoupling of data model",
-        "updated_at": "2026-02-17T22:20:49.521382171Z"
+        "updated_at": "2026-02-01T19:39:40.784572Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4165,7 +3956,7 @@
         "points": 1,
         "position": 31,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:34.327398Z",
@@ -4200,25 +3991,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521420322Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784591Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521420623Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "it is not apparent enough that we are entered into a board",
-        "updated_at": "2026-02-17T22:20:49.521421444Z"
+        "updated_at": "2026-02-01T19:39:40.784593Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4233,7 +4016,7 @@
         "points": 1,
         "position": 38,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-11-17T22:41:01.506770Z",
@@ -4268,25 +4051,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521324932Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784606Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521326032Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "filter out completed sprint from sprint assign",
-        "updated_at": "2026-02-17T22:20:49.521329521Z"
+        "updated_at": "2026-02-01T19:39:40.784607Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4348,7 +4123,7 @@
         "points": null,
         "position": 21,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264763Z",
@@ -4375,25 +4150,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521350302Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784491Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521350567Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "ui module refactor",
-        "updated_at": "2026-02-17T22:20:49.521351433Z"
+        "updated_at": "2026-02-01T19:39:40.784493Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4464,7 +4231,7 @@
         "points": 1,
         "position": 1,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264701Z",
@@ -4491,25 +4258,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521379379Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T13:47:00.884886Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521379621Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "dont reset search on scroll",
-        "updated_at": "2026-02-17T22:20:49.521380393Z"
+        "updated_at": "2026-02-01T13:47:00.884891Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4524,7 +4283,7 @@
         "points": 1,
         "position": 0,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264719Z",
@@ -4551,25 +4310,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521352330Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T13:46:57.678268Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521352572Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "escape bind to clear search, enter to apply",
-        "updated_at": "2026-02-17T22:20:49.521353474Z"
+        "updated_at": "2026-02-01T13:46:57.678273Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4640,7 +4391,7 @@
         "points": null,
         "position": 32,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264735Z",
@@ -4667,25 +4418,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521432493Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784632Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521432731Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "add filter for completed cards",
-        "updated_at": "2026-02-17T22:20:49.521433701Z"
+        "updated_at": "2026-02-01T19:39:40.784634Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4883,7 +4626,7 @@
         "points": 1,
         "position": 37,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264731Z",
@@ -4910,25 +4653,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521371208Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784528Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521371448Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "update package README.md's",
-        "updated_at": "2026-02-17T22:20:49.521372279Z"
+        "updated_at": "2026-02-01T19:39:40.784530Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -4943,7 +4678,7 @@
         "points": 2,
         "position": 40,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2025-12-15T20:35:57.264723Z",
@@ -4970,25 +4705,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521418333Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784626Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521418574Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Saving improvements",
-        "updated_at": "2026-02-17T22:20:49.521419387Z"
+        "updated_at": "2026-02-01T19:39:40.784628Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5362,7 +5089,7 @@
         "points": 1,
         "position": 36,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784523Z",
@@ -5373,25 +5100,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521472732Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784523Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521473388Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "make multi select behave like a toggle",
-        "updated_at": "2026-02-17T22:20:49.521474475Z"
+        "updated_at": "2026-02-01T19:39:40.784525Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5406,7 +5125,7 @@
         "points": 1,
         "position": 3,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T13:46:54.469307Z",
@@ -5417,25 +5136,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521411745Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T13:46:54.469310Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521411986Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "`p` dialog does not correctly set points",
-        "updated_at": "2026-02-17T22:20:49.521413041Z"
+        "updated_at": "2026-02-01T13:46:54.469314Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5478,28 +5189,20 @@
         "points": 3,
         "position": 37,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521477174Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248218Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521477414Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Document conflict resolution limitations",
-        "updated_at": "2026-02-17T22:20:49.521478305Z"
+        "updated_at": "2026-01-10T16:35:25.535113Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5514,28 +5217,20 @@
         "points": 5,
         "position": 38,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521340553Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248407Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521340800Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Implement bounded save queue overflow handling",
-        "updated_at": "2026-02-17T22:20:49.521341641Z"
+        "updated_at": "2025-12-23T00:47:42.193175Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5550,28 +5245,20 @@
         "points": 8,
         "position": 39,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521409602Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248410Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521409836Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add property-based tests for domain logic",
-        "updated_at": "2026-02-17T22:20:49.521410853Z"
+        "updated_at": "2025-12-23T00:47:42.364073Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5586,28 +5273,20 @@
         "points": 13,
         "position": 40,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521365948Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248412Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521366182Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Implement SQLite storage backend",
-        "updated_at": "2026-02-17T22:20:49.521368067Z"
+        "updated_at": "2025-12-23T00:48:41.959550Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5622,28 +5301,20 @@
         "points": 3,
         "position": 41,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521334060Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248415Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521334324Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Document JSON export schema",
-        "updated_at": "2026-02-17T22:20:49.521335464Z"
+        "updated_at": "2025-12-23T00:48:42.133028Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5658,28 +5329,20 @@
         "points": 3,
         "position": 42,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521393800Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248418Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521394037Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Document error handling behavior",
-        "updated_at": "2026-02-17T22:20:49.521395078Z"
+        "updated_at": "2025-12-23T00:48:42.306608Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5694,28 +5357,20 @@
         "points": 1,
         "position": 44,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521347603Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248422Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521347842Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add AI contribution disclosure to CONTRIBUTING.md",
-        "updated_at": "2026-02-17T22:20:49.521349246Z"
+        "updated_at": "2025-12-23T00:49:30.085523Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5730,28 +5385,20 @@
         "points": 2,
         "position": 45,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521416330Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248424Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521416572Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Decide project scope: personal vs team tool",
-        "updated_at": "2026-02-17T22:20:49.521417490Z"
+        "updated_at": "2025-12-23T00:49:30.259278Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5766,28 +5413,20 @@
         "points": 3,
         "position": 46,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521479153Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248427Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521479389Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Evaluate command pattern implementation",
-        "updated_at": "2026-02-17T22:20:49.521480414Z"
+        "updated_at": "2025-12-23T00:49:30.434063Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5802,28 +5441,20 @@
         "points": 8,
         "position": 47,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521438944Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248429Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521439183Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Complete sprint feature implementation",
-        "updated_at": "2026-02-17T22:20:49.521440246Z"
+        "updated_at": "2025-12-23T00:50:04.502873Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5838,28 +5469,20 @@
         "points": 8,
         "position": 48,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521356478Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2025-12-23T00:31:51.248432Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521356721Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add integration test suite",
-        "updated_at": "2026-02-17T22:20:49.521357581Z"
+        "updated_at": "2025-12-23T00:50:04.674052Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5874,7 +5497,7 @@
         "points": null,
         "position": 48,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784550Z",
@@ -5885,25 +5508,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521445293Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784551Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521445530Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "scrolling in sprint list",
-        "updated_at": "2026-02-17T22:20:49.521446773Z"
+        "updated_at": "2026-02-01T19:39:40.784553Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5937,7 +5552,7 @@
         "points": 2,
         "position": 47,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784575Z",
@@ -5948,25 +5563,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521436661Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784575Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521437002Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Replace Silent Failures with Proper Errors",
-        "updated_at": "2026-02-17T22:20:49.521438091Z"
+        "updated_at": "2026-02-01T19:39:40.784577Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -5981,7 +5588,7 @@
         "points": 2,
         "position": 48,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784496Z",
@@ -5992,25 +5599,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521369026Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784496Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521369271Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Fix Save Queue Overflow - Use Unbounded Queue",
-        "updated_at": "2026-02-17T22:20:49.521370274Z"
+        "updated_at": "2026-02-01T19:39:40.784498Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6025,7 +5624,7 @@
         "points": 3,
         "position": 49,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784545Z",
@@ -6036,25 +5635,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521463439Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784546Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521463681Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add Referential Integrity Validation on Import/Load",
-        "updated_at": "2026-02-17T22:20:49.521464647Z"
+        "updated_at": "2026-02-01T19:39:40.784548Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6069,7 +5660,7 @@
         "points": 1,
         "position": 50,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784473Z",
@@ -6080,25 +5671,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521469062Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784477Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521469317Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add User-Visible Save Error Notifications",
-        "updated_at": "2026-02-17T22:20:49.521471809Z"
+        "updated_at": "2026-02-01T19:39:40.784485Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6113,7 +5696,7 @@
         "points": 2,
         "position": 51,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784566Z",
@@ -6124,25 +5707,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521389387Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784567Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521389703Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add Integration Tests for Data Integrity Fixes",
-        "updated_at": "2026-02-17T22:20:49.521390666Z"
+        "updated_at": "2026-02-01T19:39:40.784569Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6157,7 +5732,7 @@
         "points": 2,
         "position": 52,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T19:39:40.784559Z",
@@ -6168,25 +5743,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521434625Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:40.784559Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521434870Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add QuickCheck Property Tests for Validation",
-        "updated_at": "2026-02-17T22:20:49.521435789Z"
+        "updated_at": "2026-02-01T19:39:40.784561Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6201,7 +5768,7 @@
         "points": 1,
         "position": 3,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
             "ended_at": "2026-02-01T13:46:45.917608Z",
@@ -6212,25 +5779,17 @@
             "status": "Completed"
           },
           {
-            "ended_at": "2026-02-17T22:20:49.521428047Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T13:46:52.464842Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521428317Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "parent and child relationship boxes layout",
-        "updated_at": "2026-02-17T22:20:49.521429325Z"
+        "updated_at": "2026-02-01T13:46:52.464850Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6281,28 +5840,20 @@
         "points": null,
         "position": 52,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521430336Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166369Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521430571Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Status metadata field doesnt reflect column",
-        "updated_at": "2026-02-17T22:20:49.521431738Z"
+        "updated_at": "2026-02-01T19:39:53.166371Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6317,28 +5868,20 @@
         "points": 3,
         "position": 53,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521458658Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166354Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521458898Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "due dates",
-        "updated_at": "2026-02-17T22:20:49.521460182Z"
+        "updated_at": "2026-02-01T19:39:53.166356Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6353,28 +5896,20 @@
         "points": null,
         "position": 54,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521407210Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166297Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521407448Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Add max depth to HistoryManager",
-        "updated_at": "2026-02-17T22:20:49.521408475Z"
+        "updated_at": "2026-02-01T19:39:53.166305Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6389,28 +5924,20 @@
         "points": null,
         "position": 55,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521396049Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166318Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521396288Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Deduplicate query filter logic",
-        "updated_at": "2026-02-17T22:20:49.521397151Z"
+        "updated_at": "2026-02-01T19:39:53.166320Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6425,28 +5952,20 @@
         "points": null,
         "position": 56,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521338407Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166327Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521338649Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Resolve CardFilter naming collision",
-        "updated_at": "2026-02-17T22:20:49.521339714Z"
+        "updated_at": "2026-02-01T19:39:53.166329Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6461,28 +5980,20 @@
         "points": null,
         "position": 57,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521344967Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166322Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521345209Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Cache branch names in BranchNameSearcher",
-        "updated_at": "2026-02-17T22:20:49.521346219Z"
+        "updated_at": "2026-02-01T19:39:53.166325Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6497,28 +6008,20 @@
         "points": null,
         "position": 58,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521443164Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166345Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521443400Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Use partition in partition_sprint_cards",
-        "updated_at": "2026-02-17T22:20:49.521444419Z"
+        "updated_at": "2026-02-01T19:39:53.166347Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6533,28 +6036,20 @@
         "points": null,
         "position": 59,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521373222Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166308Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521373474Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Decide on AnimationType placement",
-        "updated_at": "2026-02-17T22:20:49.521374447Z"
+        "updated_at": "2026-02-01T19:39:53.166310Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6569,28 +6064,20 @@
         "points": null,
         "position": 60,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521400176Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166336Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521400411Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Wire up unused CardFilters fields",
-        "updated_at": "2026-02-17T22:20:49.521402365Z"
+        "updated_at": "2026-02-01T19:39:53.166338Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6605,28 +6092,20 @@
         "points": null,
         "position": 61,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521461112Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166340Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521461363Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Remove ListRenderInfo type alias",
-        "updated_at": "2026-02-17T22:20:49.521462542Z"
+        "updated_at": "2026-02-01T19:39:53.166343Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6641,28 +6120,20 @@
         "points": null,
         "position": 62,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521342516Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166364Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521342759Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Move TaskListView out of Board data file into TUI state store",
-        "updated_at": "2026-02-17T22:20:49.521343827Z"
+        "updated_at": "2026-02-01T19:39:53.166366Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6677,28 +6148,20 @@
         "points": null,
         "position": 63,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521441149Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166350Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521441389Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Deduplicate BranchNameSearcher branch name generation logic",
-        "updated_at": "2026-02-17T22:20:49.521442303Z"
+        "updated_at": "2026-02-01T19:39:53.166352Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6713,28 +6176,20 @@
         "points": null,
         "position": 64,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521414003Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166331Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521414245Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Replace snapshot-based undo/redo with command-replay history system",
-        "updated_at": "2026-02-17T22:20:49.521415440Z"
+        "updated_at": "2026-02-01T19:39:53.166333Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6749,28 +6204,20 @@
         "points": null,
         "position": 65,
         "priority": "High",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521424209Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166359Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521424451Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Board creation undo/redo loses columns due to split undo entries",
-        "updated_at": "2026-02-17T22:20:49.521425344Z"
+        "updated_at": "2026-02-01T19:39:53.166361Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6849,28 +6296,20 @@
         "points": null,
         "position": 66,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
+        "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
         "sprint_logs": [
           {
-            "ended_at": "2026-02-17T22:20:49.521331321Z",
+            "ended_at": null,
             "sprint_id": "3b98dc57-7c28-4724-9b80-e4dcb3421acd",
             "sprint_name": "a-new-year",
             "sprint_number": 11,
             "started_at": "2026-02-01T19:39:53.166313Z",
             "status": "Planning"
-          },
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:20:49.521331660Z",
-            "status": "Planning"
           }
         ],
         "status": "Todo",
         "title": "Research enforcing domain business rules via private accessors",
-        "updated_at": "2026-02-17T22:20:49.521332828Z"
+        "updated_at": "2026-02-01T19:39:53.166316Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6941,20 +6380,11 @@
         "points": null,
         "position": 67,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861917380Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "In the card list, show the card number / prefix",
-        "updated_at": "2026-02-17T22:19:48.861918593Z"
+        "updated_at": "2026-02-01T19:43:00.933520Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6969,20 +6399,11 @@
         "points": null,
         "position": 68,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861911241Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "Add bulk_restore and bulk_delete to KanbanOperations trait",
-        "updated_at": "2026-02-17T22:19:48.861912401Z"
+        "updated_at": "2026-02-02T17:57:15.429830Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -6997,20 +6418,11 @@
         "points": null,
         "position": 69,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861923017Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "Extract duplicated parse_datetime into shared utility",
-        "updated_at": "2026-02-17T22:19:48.861923891Z"
+        "updated_at": "2026-02-02T19:08:59.545869Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -7025,20 +6437,11 @@
         "points": null,
         "position": 70,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861909001Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "ArgsBuilder.add_field_str silently ignores FieldUpdate::Clear",
-        "updated_at": "2026-02-17T22:19:48.861910221Z"
+        "updated_at": "2026-02-02T19:08:59.636052Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -7053,20 +6456,11 @@
         "points": null,
         "position": 71,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861915430Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "McpContext.update_card doesn't handle Clear for description/points",
-        "updated_at": "2026-02-17T22:19:48.861916313Z"
+        "updated_at": "2026-02-02T19:08:59.733948Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -7081,20 +6475,11 @@
         "points": null,
         "position": 72,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861903636Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "SyncExecutor error classification relies on fragile string matching",
-        "updated_at": "2026-02-17T22:19:48.861904880Z"
+        "updated_at": "2026-02-02T19:08:59.831001Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -7109,20 +6494,11 @@
         "points": null,
         "position": 73,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861920162Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "Lossy u32-to-i32 cast for wip_limit in MCP and CLI handlers",
-        "updated_at": "2026-02-17T22:19:48.861921747Z"
+        "updated_at": "2026-02-02T19:08:59.930874Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -7137,20 +6513,11 @@
         "points": 3,
         "position": 74,
         "priority": "Medium",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861913501Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "MCP integration tests lack error path coverage",
-        "updated_at": "2026-02-17T22:19:48.861914430Z"
+        "updated_at": "2026-02-02T19:09:00.020742Z"
       },
       {
         "assigned_prefix": "KAN",
@@ -7165,20 +6532,11 @@
         "points": null,
         "position": 75,
         "priority": "Low",
-        "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
-            "sprint_name": "fresh-air",
-            "sprint_number": 12,
-            "started_at": "2026-02-17T22:19:48.861896316Z",
-            "status": "Planning"
-          }
-        ],
+        "sprint_id": null,
+        "sprint_logs": [],
         "status": "Todo",
         "title": "Potential race in import_board temp file lifetime",
-        "updated_at": "2026-02-17T22:19:48.861900893Z"
+        "updated_at": "2026-02-02T19:09:00.120401Z"
       },
       {
         "assigned_prefix": "task",
@@ -7260,6 +6618,25 @@
         "assigned_prefix": "KAN",
         "card_number": 208,
         "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2026-02-21T11:47:26.405502Z",
+        "description": "# Create and Deploy Kanban Project Landing Page\n\n## Summary\nDesigned and implemented a landing page for the kanban terminal-based project management tool at kanban.yoon.se. The page showcases the   \nproject's capabilities, features, and installation methods using a terminal-inspired design that matches the yoon.se design system.       \n\n## What Was Done\n\n### 1. Landing Page Design & Content\n- Created semantic HTML5 structure with 5 main sections:\n  - **Hero**: Project title, tagline, demo GIF, installation CTAs (cargo + nix)\n  - **Features**: 6 feature cards highlighting vim-like power, speed, three interfaces, task management, developer workflow, and local-first approach\n  - **Installation**: Three installation methods (crates.io, nix, from source) with quick start guide\n  - **Roadmap**: v0.2.0 status with completed/in-progress/planned items\n  - **Footer**: Links to GitHub, Crates.io, docs, and author/license info\n\n### 2. Design System Integration\n- Matched yoon.se terminal-inspired dark theme:\n  - Colors: GitHub Dark (#0d1117 bg, #c9714a accent)\n  - Typography: SF Mono for headings, system sans for body\n  - Spacing: 8-point grid system\n  - No border-radius (sharp terminal aesthetic)\n- Terminal-style components:\n  - `$ ` prefix for install commands in accent color\n  - `> ` prefix for links (yoon design pattern)\n  - Monospace headings and code blocks\n- Fully responsive: desktop (3-col), tablet (2-col), mobile (1-col)\n\n### 3. Static Site Implementation\n- **index.html**: 158 lines, semantic HTML with proper meta tags\n- **styles.css**: 576 lines, complete design system with CSS variables and responsive layout\n- **demo.gif**: 997KB animated TUI demo (copied from project root)\n- No external dependencies, fast loading, SEO-friendly\n\n### 4. Nix Build Integration\n- Created `web/default.nix` for reproducible builds\n- Added `kanban-web` package to main `flake.nix`\n- Build command: `nix build .#kanban-web`\n- Output: Static files ready for deployment\n\n## Files Created\n- `/Users/max/memes/kanban/web/index.html`\n- `/Users/max/memes/kanban/web/styles.css`\n- `/Users/max/memes/kanban/web/demo.gif`\n- `/Users/max/memes/kanban/web/default.nix`\n\n## Deployment\nReady for deployment to kanban.yoon.se:\n\n```bash\nnix build .#kanban-web\ncp -r result/* /var/www/kanban.yoon.se/\n```\n\nSuccess Criteria\n\n✅ Landing page matches yoon.se design system (dark theme, terminal aesthetic)\n✅ All 5 content sections implemented with accurate project information\n✅ Responsive design works across desktop, tablet, and mobile\n✅ Demo GIF displays correctly and animates\n✅ Installation commands (cargo + nix) clearly presented\n✅ Nix build support added for reproducible deployment\n✅ Fast loading with minimal file size (20KB HTML+CSS)\n✅ SEO-optimized with proper meta tags and semantic HTML\n✅ Follows yoon BRAND_GUIDE principles (direct, humble, technical, authentic)\n✅ Files committed to git with proper commit message\n\nThis captures the full scope of work completed for the landing page project!\n",
+        "due_date": null,
+        "id": "4a2eb647-acbf-40f0-a03f-4c874e0d1c09",
+        "points": 3,
+        "position": 4,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "create a landing page for the project",
+        "updated_at": "2026-02-21T11:50:19.537388Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 208,
+        "card_prefix": null,
         "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
         "completed_at": "2026-02-17T22:28:04.426955436Z",
         "created_at": "2026-02-17T22:18:09.713698203Z",
@@ -7288,14 +6665,14 @@
         "assigned_prefix": "KAN",
         "card_number": 209,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
-        "completed_at": null,
+        "column_id": "289b85d8-a199-49fa-9d77-5ad892d87ef8",
+        "completed_at": "2026-02-18T17:44:25.361826125Z",
         "created_at": "2026-02-17T22:21:06.155406152Z",
         "description": "Selecting cards with `v`, one at a time is tedious and slow. lets make it faster!\n\n`v` to toggle selection perhaps\n",
         "due_date": null,
         "id": "cbb4424f-8adb-4f4e-aa09-a4762f9fb6eb",
         "points": null,
-        "position": 77,
+        "position": 106,
         "priority": "Medium",
         "sprint_id": "c2712055-8490-43fd-be83-5331c49f6c75",
         "sprint_logs": [
@@ -7308,28 +6685,180 @@
             "status": "Planning"
           }
         ],
-        "status": "Todo",
+        "status": "Done",
         "title": "Multi select cards",
-        "updated_at": "2026-02-17T22:21:48.170914349Z"
+        "updated_at": "2026-02-18T17:44:25.361826341Z"
       },
       {
         "assigned_prefix": "KAN",
         "card_number": 210,
         "card_prefix": null,
-        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
         "completed_at": null,
         "created_at": "2026-02-17T22:22:00.293786995Z",
-        "description": "When a sprint is ended it is currently a repetetive process to transfer cards over to a new sprint\n\nyou have to\n\n- end the sprint\n- create a new sprint (come up with a name)\n- go back to cards list\n- filter by the ended sprint\n- select all unfinished cards\n- assign to new sprint\n\nCould be made better with a carry over option when ending a sprint\n",
+        "description": "When a sprint is ended it is currently a repetetive process to transfer cards over to a new sprint\n\nyou have to\n\n- end the sprint\n- create a new sprint (come up with a name)\n- go back to cards list\n- filter by the ended sprint\n- select all unfinished cards\n- assign to new sprint\n\nCould be made better with a carry over option when ending a sprint\n\nIf no sprint names are available, dialog to give otherwise consume sprint names",
         "due_date": null,
         "id": "b849870a-252f-477f-96d2-bd633e54a6d3",
+        "points": null,
+        "position": 5,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Carry over cards from ended sprint",
+        "updated_at": "2026-03-16T00:19:47.998710785Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 211,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-18T17:44:47.098855315Z",
+        "description": "The MCP seems to be lacking the graph implementation\n\nHow can we align the tui and the mcp to implement the interface?\n",
+        "due_date": null,
+        "id": "7d0b4c31-b762-4701-989d-86e699f23ddd",
+        "points": null,
+        "position": 76,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "MCP Lacks graph implementation",
+        "updated_at": "2026-02-18T17:45:30.231050016Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 212,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-18T17:46:39.939661066Z",
+        "description": "Some people may not find it so interesting to name their sprints in a thematic way\n\nSprint names and the supporting features should be opt in as per app setting\n",
+        "due_date": null,
+        "id": "b2f006dc-528c-48fa-aaba-aa24db70aded",
+        "points": null,
+        "position": 77,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Sprint names opt in",
+        "updated_at": "2026-02-18T17:47:29.311557295Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 209,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-02-22T11:31:05.056219736Z",
+        "description": "Replace rustPlatform.buildRustPackage with crane to cache Rust dependencies separately, reducing rebuild times from ~5 minutes to ~30-60 seconds for incremental builds",
+        "due_date": null,
+        "id": "e68a991a-fac5-456d-af0f-19d918cc1f52",
         "points": null,
         "position": 78,
         "priority": "Medium",
         "sprint_id": null,
         "sprint_logs": [],
         "status": "Todo",
-        "title": "Carry over cards from ended sprint",
-        "updated_at": "2026-02-17T22:24:00.495720753Z"
+        "title": "Integrate crane for faster Nix builds",
+        "updated_at": "2026-02-22T11:31:05.056228327Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 210,
+        "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2026-03-16T00:10:40.280418149Z",
+        "description": "## Implementation\n\nWires the existing CardIdentifierSearcher (from KAN-197) through to MCP tools, CLI commands, and the KanbanOperations trait so that 'KAN-5', 'kan-5', or '5' can be used anywhere a card UUID is currently required.\n\n## Changes\n\n### kanban-domain: KanbanOperations trait\n- Added `find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>>` to the trait\n\n### kanban-cli / kanban-tui / kanban-mcp: Context implementations\n- CliContext and TuiContext: implemented via CardIdentifierSearcher::new + matches()\n- McpContext: delegates to `card find-by-identifier <identifier>` CLI subcommand\n\n### kanban-cli: CLI changes\n- Changed `id: Uuid` -> `id: String` in all single-card CardAction variants (Get, Update, Move, Archive, Restore, Delete, AssignSprint, UnassignSprint, BranchName, GitCheckout)\n- Added `FindByIdentifier { identifier: String }` subcommand (`card find-by-identifier`)\n- Added `resolve_card_id` helper: tries Uuid::parse_str, falls back to find_card_by_identifier\n\n### kanban-mcp: MCP tool changes\n- Added async `resolve_card_id` helper (UUID parse -> spawn_blocking find_card_by_identifier)\n- Replaced parse_uuid(&req.card_id) with resolve_card_id(&self.ctx, &req.card_id).await? in all 10 card tools: get, update, move, archive, restore, delete, assign_sprint, unassign_sprint, branch_name, git_checkout\n- Updated schemars descriptions for all card_id fields to mention identifier support\n\n## Commits\n- feat(domain): add find_card_by_identifier to KanbanOperations trait\n- feat(cli,tui,mcp): implement find_card_by_identifier in all contexts\n- feat(cli): accept card identifier (e.g. KAN-5) in all card commands\n- feat(mcp): resolve card identifier (e.g. KAN-5) in all card tools",
+        "due_date": null,
+        "id": "42c5d500-3c35-4197-a9ed-63dbff43f991",
+        "points": null,
+        "position": 6,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Find cards by prefix+increment identifier (e.g. KAN-5)",
+        "updated_at": "2026-03-16T20:17:18.425867921Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 211,
+        "card_prefix": null,
+        "column_id": "db3aaee8-0f13-4afa-b000-592bac0bf364",
+        "completed_at": null,
+        "created_at": "2026-03-16T00:20:13.348753249Z",
+        "description": "find_card_by_identifier uses .find() and returns the first match, which is ambiguous when two cards on different boards share the same card number and prefix (e.g. two boards both using KAN prefix both having card #210).\n\n## Problem\n\nCardIdentifierSearcher::matches() checks prefix+number but has no board scope. If the caller does not filter by board first, the wrong card can be returned — as demonstrated when 'KAN-210' resolved to an older card instead of the newly created one.\n\n## Options\n\n- Add an optional board_id scope to find_card_by_identifier so callers can narrow the search\n- In CLI/MCP contexts where a single board is in use, auto-scope to that board\n- Return all matches and error if ambiguous (forcing the caller to use a UUID)\n- Document the limitation and require UUID when identifier is ambiguous",
+        "due_date": null,
+        "id": "a32e7977-8e0f-483a-8e4e-138b5fb1604e",
+        "points": null,
+        "position": 7,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Disambiguate card identifier lookup across boards",
+        "updated_at": "2026-03-16T20:17:44.887114376Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 212,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-03-16T20:23:30.349722758Z",
+        "description": "## Goal\nReduce token consumption when listing cards via MCP and CLI by making descriptions opt-in and adding pagination.\n\n## Problem\n- MCP `list_cards` returns full `Card` objects including description and sprint_logs by default — very verbose\n- No pagination means all cards are returned at once, which can be huge on large boards\n\n## Plan\n\n### 1. MCP: default to `CardSummary` in `list_cards` (`kanban-mcp/src/lib.rs`)\n- Change return type from `Vec<Card>` to `Vec<CardSummary>` by default\n- Add `include_description: Option<bool>` to `ListCardsRequest` — when true, return full `Card` objects instead\n- Update tool description to document this behaviour\n\n### 2. CLI: add `--description` flag to `card list` (`kanban-cli/src/cli.rs` + `handlers/card.rs`)\n- CLI already returns `CardSummary` by default (good)\n- Add `#[arg(long)] pub description: bool` to `CardListArgs`\n- When `--description` is set, collect `Vec<Card>` instead of `Vec<CardSummary>`\n\n### 3. Pagination for both MCP and CLI\n- Add `page: Option<u32>` and `page_size: Option<u32>` to `ListCardsRequest` (MCP) and `CardListArgs` (CLI)\n- Default `page_size`: 50\n- Apply pagination after filtering in the handler layer (no domain changes needed)\n- Return pagination metadata in response: `total`, `page`, `page_size`, `total_pages`\n\n## Files Changed\n- `crates/kanban-mcp/src/lib.rs` — `ListCardsRequest` fields + handler logic\n- `crates/kanban-cli/src/cli.rs` — `CardListArgs` fields\n- `crates/kanban-cli/src/handlers/card.rs` — pagination + description opt-in logic\n- `crates/kanban-cli/src/output.rs` — paginated list response type (if needed)",
+        "due_date": null,
+        "id": "3353ce70-6f6e-42e6-8f24-fb90384a070b",
+        "points": null,
+        "position": 79,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Add description opt-in and pagination to card listing",
+        "updated_at": "2026-03-16T20:26:38.273896812Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 213,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-03-16T20:32:46.610809104Z",
+        "description": "## Context\nFollows from KAN-212 which adds `CardSummary` as the default list response and introduces `PaginatedList<T>` as a shared response wrapper for MCP and CLI.\n\n## Goal\nExtend those primitives into the TUI so the entire stack shares the same lean data model for card listing.\n\n## Design Discussion\n\n### Current TUI behaviour\n- Loads full `Card` objects into memory for the list view (includes description, sprint_logs)\n- Manages its own viewport/scroll pagination via `Page` in `kanban-core/src/pagination.rs`\n- `Page` is viewport-aware: tracks `scroll_offset` + `viewport_height` → produces `visible_indices` for rendering, with above/below scroll indicators\n\n### Proposed architecture\n- TUI card list view uses `CardSummary` instead of `Card` (no description or sprint_logs in memory)\n- Full `Card` is fetched on demand only when opening the card detail/edit panel\n- `PaginatedList<T>` (introduced in KAN-212) becomes the fetch/response layer\n- The existing `Page` scroll logic continues to own viewport slicing — it sits on top of `PaginatedList<CardSummary>` as the data source rather than a raw `Vec<Card>`\n\n### Layering\n```\nPaginatedList<CardSummary>   ← data fetch / response layer (shared with CLI + MCP)\n         ↓\n      Page / PageInfo         ← scroll + viewport logic (TUI-only, unchanged)\n         ↓\n   render_strategy.rs         ← rendering (unchanged)\n```\n\n### Key distinction\n`PaginatedList` is a static response wrapper (total, page, page_size, items).\n`Page` is a dynamic scroll state that reacts to viewport resize and key events.\nThey are complementary, not replacements for each other.\n\n## Scope\n\n### Changes required\n- `kanban-tui`: change card list state from `Vec<Card>` to `Vec<CardSummary>`\n- `kanban-tui`: fetch full `Card` only on detail panel open (lazy load)\n- `kanban-tui`: ensure all list-rendering paths use `CardSummary` fields only\n- `kanban-tui`: card detail panel continues to use full `Card`\n- Verify no description/sprint_log fields are accessed during list rendering\n\n### Out of scope\n- Changing `Page` / `PageInfo` scroll logic (leave untouched)\n- Server-side pagination for the TUI (TUI still loads all summaries into memory and slices locally — network/IO is not the bottleneck here)",
+        "due_date": null,
+        "id": "284d08f7-9149-4909-b517-e049e0359b37",
+        "points": null,
+        "position": 80,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Refactor TUI card list to use CardSummary and PaginatedList",
+        "updated_at": "2026-03-16T20:32:46.610811411Z"
+      },
+      {
+        "assigned_prefix": "KAN",
+        "card_number": 214,
+        "card_prefix": null,
+        "column_id": "591afb61-7289-46bf-ba07-21758afd44fe",
+        "completed_at": null,
+        "created_at": "2026-03-16T20:36:43.090076686Z",
+        "description": "## Goal\nEliminate the read-modify-write cycle when editing card descriptions via CLI and MCP. Currently every edit requires reading the full description, reconstructing it client-side, and writing it back as a full replacement. This is expensive for humans and wastes tokens for LLMs.\n\n## Problem\n`FieldUpdate<T>` only supports `Set(T)`, `Clear`, and `NoChange`. Every description edit goes through `update_card` with a full replacement. For an LLM editing one section of a structured markdown description this means:\n1. Call `get_card` to read current description (~N tokens)\n2. Mentally reconstruct the full text with the desired change\n3. Call `update_card` with the entire description rewritten (~N tokens again)\n\n## Proposed Operations\n\n### 1. Append\nAdd text to the end of the description.\n```\nCLI:  --append-description \"text\"\nMCP:  append_description: \"text\"\n```\nInserts a newline separator if the current description is non-empty.\n\n### 2. Prepend\nAdd text to the beginning of the description.\n```\nCLI:  --prepend-description \"text\"\nMCP:  prepend_description: \"text\"\n```\nInserts a newline separator if the current description is non-empty.\n\n### 3. Find & Replace\nReplace a specific substring within the description.\n```\nCLI:  --find \"old text\" --replace \"new text\"\nMCP:  find: \"old text\", replace: \"new text\"\n```\nReplaces the first occurrence only. Error if `find` string is not found (avoids silent no-ops).\nOptional `replace_all: bool` flag to replace all occurrences.\n\n### 4. Section Replace (markdown-aware)\nReplace the content under a specific `##` heading without touching other sections.\n```\nCLI:  --section \"Plan\" --section-content \"new content\"\nMCP:  section: \"Plan\", section_content: \"new content\"\n```\nMatches headings case-insensitively. The section spans from the matched heading to the next same-or-higher-level heading (or end of string). Replaces only the body, preserving the heading line itself.\n\nExample — given description:\n```markdown\n## Goal\nReduce tokens.\n\n## Plan\nOld plan text.\n\n## Notes\nSome notes.\n```\n`section: \"Plan\", section_content: \"New plan text.\"` produces:\n```markdown\n## Goal\nReduce tokens.\n\n## Plan\nNew plan text.\n\n## Notes\nSome notes.\n```\n\nError if the section heading is not found.\n\n### 5. Section Append\nAppend text within a specific section rather than at the end of the whole description.\n```\nCLI:  --section \"Notes\" --append-section \"text\"\nMCP:  section: \"Notes\", append_section: \"text\"\n```\n\n## Domain Layer Design\n\n### Option A — extend `FieldUpdate<T>`\nAdd `Append(String)` and `Prepend(String)` variants. Constrained to `T = String` at the call sites.\nDownside: `FieldUpdate` is generic and these variants only make sense for strings — slightly leaky abstraction.\n\n### Option B — dedicated `DescriptionUpdate` enum (preferred)\nReplace `FieldUpdate<String>` for the description field in `CardUpdate` with a purpose-built enum:\n```rust\npub enum DescriptionUpdate {\n    NoChange,\n    Set(String),\n    Clear,\n    Append(String),\n    Prepend(String),\n    FindReplace { find: String, replace: String, replace_all: bool },\n    ReplaceSection { heading: String, content: String },\n    AppendSection { heading: String, content: String },\n}\n```\nApply logic lives on `Card` as `fn apply_description_update(&mut self, update: DescriptionUpdate) -> KanbanResult<()>`.\nReturns `Err` for find-not-found and section-not-found cases.\n\n## CLI Design\nAll new flags apply only to `card update`. Conflicts:\n- `--description` (full replace) is mutually exclusive with all partial-edit flags\n- `--find` requires `--replace`\n- `--section` requires either `--section-content` or `--append-section`\n\n## MCP Design\n`UpdateCardRequest` gains the new optional fields. The handler applies them in order if multiple are set (though passing multiple edit ops in one call should be discouraged in the tool description).\nTool description should explicitly note: \"use append_description or section/section_content instead of description when making partial edits — avoids the read-modify-write cycle.\"\n\n## Files Changed\n- `crates/kanban-domain/src/card.rs` — `apply_description_update()` method, section parsing logic\n- `crates/kanban-domain/src/field_update.rs` — add `DescriptionUpdate` enum (or extend `FieldUpdate`)\n- `crates/kanban-domain/src/lib.rs` — export `DescriptionUpdate`\n- `crates/kanban-cli/src/cli.rs` — new flags on `CardUpdateArgs`\n- `crates/kanban-cli/src/handlers/card.rs` — map flags to `DescriptionUpdate`\n- `crates/kanban-mcp/src/lib.rs` — new fields on `UpdateCardRequest`, handler logic\n\n## Notes\n- Section parsing should handle both `##` and `###` headings (match heading level exactly, not just prefix)\n- Newline normalisation: strip trailing whitespace before appending separators\n- All partial-edit operations should set `updated_at` as usual\n- Consider whether `find_replace` and `section_*` ops deserve their own MCP tools rather than being fields on `update_card` — cleaner schema but more tools to discover",
+        "due_date": null,
+        "id": "b675ff76-a156-4424-a13e-2c5dc7fa1add",
+        "points": null,
+        "position": 81,
+        "priority": "Medium",
+        "sprint_id": null,
+        "sprint_logs": [],
+        "status": "Todo",
+        "title": "Rich description editing operations for CLI and MCP",
+        "updated_at": "2026-03-16T20:36:43.090084499Z"
       }
     ],
     "columns": [
@@ -7363,17 +6892,7 @@
     ],
     "graph": {
       "cards": {
-        "edges": [
-          {
-            "archived_at": null,
-            "created_at": "2026-02-02T19:24:12.306859Z",
-            "direction": "Directed",
-            "edge_type": "ParentOf",
-            "source": "a33b027b-1d19-4ce9-89a8-5a339e062669",
-            "target": "b6ec50d0-a09d-44fc-976e-f1c4b01256c1",
-            "weight": null
-          }
-        ]
+        "edges": []
       }
     },
     "sprints": [
@@ -7466,22 +6985,8 @@
         "sprint_number": 11,
         "start_date": "2026-02-02T05:00:53.804547Z",
         "status": "Completed",
-        "updated_at": "2026-02-17T22:18:47.625924278Z"
-      },
-      {
-        "board_id": "e119c091-e1fa-4596-9bc7-038ceab6adec",
-        "card_prefix": null,
-        "created_at": "2026-02-17T22:19:07.252467444Z",
-        "end_date": null,
-        "id": "c2712055-8490-43fd-be83-5331c49f6c75",
-        "name_index": 7,
-        "prefix": "KAN",
-        "sprint_number": 12,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2026-02-17T22:19:07.252467444Z"
+        "updated_at": "2026-03-16T20:20:25.738629940Z"
       }
     ]
   }
 }
-
