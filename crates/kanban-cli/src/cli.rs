@@ -264,6 +264,12 @@ pub struct CardListArgs {
     pub status: Option<String>,
     #[arg(long)]
     pub archived: bool,
+    #[arg(long)]
+    pub description: bool,
+    #[arg(long)]
+    pub page: Option<u32>,
+    #[arg(long)]
+    pub page_size: Option<u32>,
 }
 
 #[derive(Args)]
