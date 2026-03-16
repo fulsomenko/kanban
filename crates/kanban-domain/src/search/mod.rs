@@ -204,7 +204,7 @@ enum ParsedIdentifier {
 
 fn parse_identifier(identifier: &str) -> Option<ParsedIdentifier> {
     let lower = identifier.to_lowercase();
-    if let Some(dash_pos) = lower.find('-') {
+    if let Some(dash_pos) = lower.rfind('-') {
         let prefix = &lower[..dash_pos];
         if prefix.is_empty() {
             return None;
