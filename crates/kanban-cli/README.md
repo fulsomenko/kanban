@@ -88,13 +88,10 @@ kanban column delete <COLUMN_ID>
 ### Card Operations
 
 ```bash
-# List cards (returns CardSummary by default — no description field)
+# List cards (returns CardSummary — no description; use card get for full details)
 kanban card list --board-id <BOARD_ID>
 kanban card list --board-id <BOARD_ID> --column-id <COLUMN_ID>
 kanban card list --board-id <BOARD_ID> --sprint-id <SPRINT_ID>
-
-# Include description field in results
-kanban card list --board-id <BOARD_ID> --include-description
 
 # Paginate results
 kanban card list --board-id <BOARD_ID> --page 2 --page-size 20
@@ -115,7 +112,7 @@ kanban card update <CARD_ID> --priority high --status done --points 5
 kanban card move <CARD_ID> --column-id <NEW_COLUMN_ID>
 kanban card move <CARD_ID> --column-id <NEW_COLUMN_ID> --position 0
 
-# List archived cards (also supports --include-description, --page, --page-size)
+# List archived cards (also supports --page, --page-size)
 kanban card list --archived
 
 # Archive/restore/delete cards
@@ -188,7 +185,7 @@ All CLI commands output JSON for easy parsing and scripting:
 }
 ```
 
-`card list` and `card list --archived` return a paginated envelope:
+`card list` and `card list --archived` return a paginated envelope. All list commands (board, column, sprint, card) use the same shape:
 
 ```json
 {
@@ -204,7 +201,7 @@ All CLI commands output JSON for easy parsing and scripting:
 }
 ```
 
-By default `description` is omitted from card summaries. Pass `--include-description` to get full card objects.
+Card and archived-card items are summaries — `description` is excluded. Use `card get <ID>` for full card details.
 
 ```bash
 # Pipe to jq for processing

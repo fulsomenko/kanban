@@ -100,7 +100,7 @@ mod board_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 0);
+        assert_eq!(json["data"]["total"], 0);
     }
 
     #[test]
@@ -140,7 +140,7 @@ mod board_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 2);
+        assert_eq!(json["data"]["total"], 2);
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod board_tests {
             .clone();
 
         let json = parse_json_output(&String::from_utf8_lossy(&list_output));
-        assert_eq!(json["data"]["count"], 0);
+        assert_eq!(json["data"]["total"], 0);
     }
 }
 
@@ -359,7 +359,7 @@ mod column_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 2);
+        assert_eq!(json["data"]["total"], 2);
     }
 
     #[test]
@@ -614,7 +614,7 @@ mod card_tests {
     }
 
     #[test]
-    fn test_card_list_description_flag() {
+    fn test_card_list_summary_omits_description() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
         let (board_id, column_id) = setup_board_and_column(&file);
@@ -636,7 +636,7 @@ mod card_tests {
             .assert()
             .success();
 
-        let default_output = kanban()
+        let output = kanban()
             .args([file.to_str().unwrap(), "card", "list"])
             .assert()
             .success()
@@ -644,24 +644,11 @@ mod card_tests {
             .stdout
             .clone();
 
-        let default_json = parse_json_output(&String::from_utf8_lossy(&default_output));
-        assert!(default_json["data"]["items"][0]["description"].is_null());
-
-        let full_output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "card",
-                "list",
-                "--include-description",
-            ])
-            .assert()
-            .success()
-            .get_output()
-            .stdout
-            .clone();
-
-        let full_json = parse_json_output(&String::from_utf8_lossy(&full_output));
-        assert!(full_json["data"]["items"][0]["description"].is_string());
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(!json["data"]["items"][0]
+            .as_object()
+            .unwrap()
+            .contains_key("description"));
     }
 
     #[test]
@@ -931,25 +918,10 @@ mod card_tests {
         assert_eq!(archived_json["data"]["total"], 1);
         assert!(archived_json["data"]["items"][0]["archived_at"].is_string());
         assert!(archived_json["data"]["items"][0]["original_column_id"].is_string());
-        assert!(archived_json["data"]["items"][0]["card"]["description"].is_null());
-
-        let archived_full_output = kanban()
-            .args([
-                file.to_str().unwrap(),
-                "card",
-                "list",
-                "--archived",
-                "--include-description",
-            ])
-            .assert()
-            .success()
-            .get_output()
-            .stdout
-            .clone();
-
-        let archived_full_json = parse_json_output(&String::from_utf8_lossy(&archived_full_output));
-        assert_eq!(archived_full_json["data"]["total"], 1);
-        assert!(archived_full_json["data"]["items"][0]["card"].is_object());
+        assert!(!archived_json["data"]["items"][0]["card"]
+            .as_object()
+            .unwrap()
+            .contains_key("description"));
 
         let restore_output = kanban()
             .args([file.to_str().unwrap(), "card", "restore", &card_id])
@@ -1494,7 +1466,7 @@ mod sprint_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 2);
+        assert_eq!(json["data"]["total"], 2);
     }
 
     #[test]
