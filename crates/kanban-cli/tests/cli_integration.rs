@@ -648,7 +648,7 @@ mod card_tests {
         assert!(default_json["data"]["items"][0]["description"].is_null());
 
         let full_output = kanban()
-            .args([file.to_str().unwrap(), "card", "list", "--description"])
+            .args([file.to_str().unwrap(), "card", "list", "--include-description"])
             .assert()
             .success()
             .get_output()
@@ -934,7 +934,7 @@ mod card_tests {
                 "card",
                 "list",
                 "--archived",
-                "--description",
+                "--include-description",
             ])
             .assert()
             .success()
