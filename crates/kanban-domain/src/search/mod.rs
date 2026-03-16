@@ -206,6 +206,9 @@ fn parse_identifier(identifier: &str) -> Option<ParsedIdentifier> {
     let lower = identifier.to_lowercase();
     if let Some(dash_pos) = lower.find('-') {
         let prefix = &lower[..dash_pos];
+        if prefix.is_empty() {
+            return None;
+        }
         let number_str = &lower[dash_pos + 1..];
         let number = number_str.parse::<u32>().ok()?;
         Some(ParsedIdentifier::PrefixAndNumber {
@@ -219,7 +222,13 @@ fn parse_identifier(identifier: &str) -> Option<ParsedIdentifier> {
     }
 }
 
-/// Find a card by identifier (e.g. "KAN-5" or "5"), searching across all boards.
+/// Find a card by identifier (e.g. `"KAN-5"` or `"5"`), searching across all boards.
+///
+/// - `"PREFIX-N"`: matches the first card whose resolved prefix equals `PREFIX` (case-insensitive)
+///   and whose `card_number` equals `N`. Prefix resolution follows:
+///   `card.card_prefix → card.assigned_prefix → sprint.card_prefix → board.card_prefix`.
+/// - `"N"` (bare number): matches the **first** card with `card_number == N` regardless of board.
+///   When multiple boards share card numbers, insertion order in `cards` determines the result.
 pub fn find_card_by_identifier<'a>(
     identifier: &str,
     cards: &'a [Card],
@@ -228,31 +237,29 @@ pub fn find_card_by_identifier<'a>(
     sprints: &[Sprint],
 ) -> Option<&'a Card> {
     let parsed = parse_identifier(identifier)?;
-    cards.iter().find(|card| {
-        let board = columns
-            .iter()
-            .find(|col| col.id == card.column_id)
-            .and_then(|col| boards.iter().find(|b| b.id == col.board_id));
-        let Some(board) = board else { return false };
-        let resolved_prefix = card
-            .card_prefix
-            .as_deref()
-            .or(card.assigned_prefix.as_deref())
-            .or_else(|| {
-                card.sprint_id
-                    .and_then(|sid| sprints.iter().find(|s| s.id == sid))
-                    .and_then(|s| s.card_prefix.as_deref())
-            })
-            .or(board.card_prefix.as_deref());
-        match &parsed {
-            ParsedIdentifier::PrefixAndNumber { prefix, number } => {
-                resolved_prefix
-                    .map(|p| p.to_lowercase() == *prefix)
-                    .unwrap_or(false)
-                    && card.card_number == *number
-            }
-            ParsedIdentifier::NumberOnly(number) => card.card_number == *number,
+    cards.iter().find(|card| match &parsed {
+        ParsedIdentifier::PrefixAndNumber { prefix, number } => {
+            let board = columns
+                .iter()
+                .find(|col| col.id == card.column_id)
+                .and_then(|col| boards.iter().find(|b| b.id == col.board_id));
+            let Some(board) = board else { return false };
+            let resolved_prefix = card
+                .card_prefix
+                .as_deref()
+                .or(card.assigned_prefix.as_deref())
+                .or_else(|| {
+                    card.sprint_id
+                        .and_then(|sid| sprints.iter().find(|s| s.id == sid))
+                        .and_then(|s| s.card_prefix.as_deref())
+                })
+                .or(board.card_prefix.as_deref());
+            resolved_prefix
+                .map(|p| p.to_lowercase() == *prefix)
+                .unwrap_or(false)
+                && card.card_number == *number
         }
+        ParsedIdentifier::NumberOnly(number) => card.card_number == *number,
     })
 }
 
@@ -589,5 +596,17 @@ mod tests {
         // Title doesn't contain "KAN-1", but identifier does
         let searcher = CompositeSearcher::all("KAN-1");
         assert!(searcher.matches(&card, &board, &[]));
+    }
+
+    #[test]
+    fn test_parse_identifier_invalid_inputs() {
+        let boards = vec![];
+        let columns = vec![];
+        let cards = vec![];
+        assert!(find_card_by_identifier("", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("KAN-", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("KAN-abc", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("-5", &cards, &columns, &boards, &[]).is_none());
+        assert!(find_card_by_identifier("not-a-number", &cards, &columns, &boards, &[]).is_none());
     }
 }
