@@ -45,7 +45,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
         CardAction::Get { id } => {
             let uuid = match resolve_card_id(ctx, &id) {
                 Ok(uuid) => uuid,
-                Err(_) => return output::output_error(&format!("Card not found: '{}'", id)),
+                Err(e) => return output::output_error(&e.to_string()),
             };
             match ctx.get_card(uuid)? {
                 Some(card) => output::output_success(&card),
