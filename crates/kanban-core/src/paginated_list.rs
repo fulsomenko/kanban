@@ -12,7 +12,11 @@ impl<T> PaginatedList<T> {
         let total = items.len();
         let page = page.max(1);
         let page_size = page_size.max(1);
-        let total_pages = if total == 0 { 1 } else { total.div_ceil(page_size) };
+        let total_pages = if total == 0 {
+            1
+        } else {
+            total.div_ceil(page_size)
+        };
         let offset = (page - 1).saturating_mul(page_size);
         let items = items.into_iter().skip(offset).take(page_size).collect();
         Self {

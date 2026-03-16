@@ -50,8 +50,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 if args.include_description {
                     output::output_success(PaginatedList::paginate(cards, page, page_size));
                 } else {
-                    let summaries: Vec<CardSummary> =
-                        cards.iter().map(CardSummary::from).collect();
+                    let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
                     output::output_success(PaginatedList::paginate(summaries, page, page_size));
                 }
             }
