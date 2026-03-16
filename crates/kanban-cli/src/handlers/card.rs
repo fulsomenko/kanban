@@ -64,7 +64,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             let uuid = resolve_card_id(ctx, &id)?;
             ctx.archive_card(uuid)?;
             ctx.save().await?;
-            output::output_success(serde_json::json!({"archived": id}));
+            output::output_success(serde_json::json!({"archived": uuid.to_string()}));
         }
         CardAction::Restore { id, column_id } => {
             let uuid = resolve_card_id(ctx, &id)?;
@@ -76,7 +76,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             let uuid = resolve_card_id(ctx, &id)?;
             ctx.delete_card(uuid)?;
             ctx.save().await?;
-            output::output_success(serde_json::json!({"deleted": id}));
+            output::output_success(serde_json::json!({"deleted": uuid.to_string()}));
         }
         CardAction::AssignSprint { id, sprint_id } => {
             let uuid = resolve_card_id(ctx, &id)?;
