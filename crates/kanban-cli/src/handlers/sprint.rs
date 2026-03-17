@@ -1,6 +1,7 @@
 use crate::cli::{SprintAction, SprintUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
+use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{FieldUpdate, KanbanOperations, SprintUpdate};
 
 fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
@@ -31,9 +32,14 @@ pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Resul
             ctx.save().await?;
             output::output_success(&sprint);
         }
-        SprintAction::List { board_id } => {
+        SprintAction::List {
+            board_id,
+            page,
+            page_size,
+        } => {
             let sprints = ctx.list_sprints(board_id)?;
-            output::output_list(sprints);
+            let (page, page_size) = resolve_page_params(page, page_size)?;
+            output::output_success(PaginatedList::paginate(sprints, page, page_size)?);
         }
         SprintAction::Get { id } => match ctx.get_sprint(id)? {
             Some(sprint) => output::output_success(&sprint),

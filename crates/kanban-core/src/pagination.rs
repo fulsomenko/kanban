@@ -1,8 +1,11 @@
-//! Generic pagination utilities.
+//! TUI viewport pagination — scroll state for the terminal UI.
 //!
-//! Provides a reusable virtual list/pagination implementation that can be used
-//! by any UI framework. Handles scroll position, viewport calculation, and
-//! scroll indicators.
+//! [`Page`] and [`PageInfo`] manage which items are visible in a terminal
+//! viewport given a scroll offset. They are pure in-memory state and are never
+//! serialized or exposed through the CLI/MCP API.
+//!
+//! For the serialized pagination envelope used by CLI and MCP list responses,
+//! see [`super::paginated_list`].
 
 /// Information about the visible portion of a paginated list.
 #[derive(Debug, Clone)]

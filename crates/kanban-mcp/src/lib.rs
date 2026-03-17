@@ -3,9 +3,10 @@ pub mod executor;
 
 use context::McpContext;
 use kanban_core::KanbanError;
+use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardUpdate, ColumnUpdate,
-    CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    ArchivedCardSummary, BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardSummary,
+    CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
 };
 use parking_lot::Mutex;
 use rmcp::{
@@ -277,6 +278,18 @@ pub struct ListCardsRequest {
     pub sprint_id: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
+    #[schemars(description = "Page number, 1-based (default: 1)")]
+    pub page: Option<u32>,
+    #[schemars(description = "Items per page (default: 50)")]
+    pub page_size: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListArchivedCardsRequest {
+    #[schemars(description = "Page number, 1-based (default: 1)")]
+    pub page: Option<u32>,
+    #[schemars(description = "Items per page (default: 50)")]
+    pub page_size: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -672,7 +685,9 @@ impl KanbanMcpServer {
         to_call_tool_result(&card)
     }
 
-    #[tool(description = "List cards with optional filters")]
+    #[tool(
+        description = "List cards with optional filters. Returns CardSummary (title, status, priority — no description). Use card get for full details. Use page/page_size for pagination (default: page=1, page_size=50)."
+    )]
     async fn tool_list_cards(
         &self,
         Parameters(req): Parameters<ListCardsRequest>,
@@ -689,7 +704,11 @@ impl KanbanMcpServer {
             status,
         };
         let cards = spawn_op_ref!(self.ctx, list_cards, filter)?;
-        to_call_tool_result(&cards)
+        let (page, page_size) = resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
+        let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
+        to_call_tool_result(
+            &PaginatedList::paginate(summaries, page, page_size).map_err(kanban_err_to_mcp)?,
+        )
     }
 
     #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
@@ -785,10 +804,20 @@ impl KanbanMcpServer {
         to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
 
-    #[tool(description = "List archived cards")]
-    async fn tool_list_archived_cards(&self) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "List archived cards. Returns ArchivedCardSummary (no description). Use page/page_size for pagination (default: page=1, page_size=50)."
+    )]
+    async fn tool_list_archived_cards(
+        &self,
+        Parameters(req): Parameters<ListArchivedCardsRequest>,
+    ) -> Result<CallToolResult, McpError> {
         let cards = spawn_op_ref!(self.ctx, list_archived_cards)?;
-        to_call_tool_result(&cards)
+        let (page, page_size) = resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
+        let summaries: Vec<ArchivedCardSummary> =
+            cards.iter().map(ArchivedCardSummary::from).collect();
+        to_call_tool_result(
+            &PaginatedList::paginate(summaries, page, page_size).map_err(kanban_err_to_mcp)?,
+        )
     }
 
     // Card Sprint Operations

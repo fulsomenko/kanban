@@ -1,7 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{card::Card, column::ColumnId};
+use crate::{
+    card::{Card, CardSummary},
+    column::ColumnId,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchivedCard {
@@ -37,5 +40,24 @@ impl ArchivedCard {
 impl From<ArchivedCard> for Card {
     fn from(archived_card: ArchivedCard) -> Self {
         archived_card.card
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchivedCardSummary {
+    pub card: CardSummary,
+    pub archived_at: DateTime<Utc>,
+    pub original_column_id: ColumnId,
+    pub original_position: i32,
+}
+
+impl From<&ArchivedCard> for ArchivedCardSummary {
+    fn from(a: &ArchivedCard) -> Self {
+        Self {
+            card: CardSummary::from(&a.card),
+            archived_at: a.archived_at,
+            original_column_id: a.original_column_id,
+            original_position: a.original_position,
+        }
     }
 }
