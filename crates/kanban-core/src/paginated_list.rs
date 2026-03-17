@@ -23,7 +23,10 @@ pub const MAX_PAGE_SIZE: usize = 500;
 ///
 /// Returns [`KanbanError::Validation`] if the resolved `page` is 0, `page_size`
 /// is 0, or `page_size` exceeds [`MAX_PAGE_SIZE`].
-pub fn resolve_page_params(page: Option<u32>, page_size: Option<u32>) -> KanbanResult<(usize, usize)> {
+pub fn resolve_page_params(
+    page: Option<u32>,
+    page_size: Option<u32>,
+) -> KanbanResult<(usize, usize)> {
     let page = page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
     let page_size = page_size.map(|p| p as usize).unwrap_or(DEFAULT_PAGE_SIZE);
     if page == 0 {
