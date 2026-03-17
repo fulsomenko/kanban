@@ -1,3 +1,11 @@
+## [0.3.1] - 2026-03-17 ([#179](https://github.com/fulsomenko/kanban/pull/179))
+
+### KAN-216 Changelog Md Grouping By Card (2026-03-17)
+
+- docs: retroactively group CHANGELOG entries by changeset for 0.1.11–0.3.0
+- fix: group changelog entries by changeset in aggregate-changelog.sh
+
+
 ## [0.3.0] - 2026-03-17 ([#175](https://github.com/fulsomenko/kanban/pull/175))
 
 ### KAN-193 Bring Mcp To Full Feature Parity With Cli Tui Via Kanbanoperations Trait (2026-03-17)
