@@ -23,16 +23,35 @@ fi
 
 echo "Aggregating $changeset_count changesets into CHANGELOG.md for version $CURRENT_VERSION"
 
+DATE=$(date +%Y-%m-%d)
 CHANGELOG_ENTRIES=""
-for changeset in .changeset/*.md; do
+for changeset in $(find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" | sort); do
   [ -e "$changeset" ] || continue
-  [ "$(basename "$changeset")" = "README.md" ] && continue
 
-  description=$(sed -n '/^---$/,/^---$/!p' "$changeset" | sed '/^---$/d' | sed '/^$/d' | sed 's/^- //' | sed 's/^/- /')
-  CHANGELOG_ENTRIES+="$description\n"
+  filename=$(basename "$changeset" .md)
+  card_id=""
+  branch_name=""
+
+  if [[ "$filename" =~ ^([a-zA-Z]+-[0-9]+)-(.+)$ ]]; then
+    card_id=$(echo "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')
+    branch_name=$(echo "${BASH_REMATCH[2]}" | tr '-' ' ' | sed 's/\b\(.\)/\u\1/g')
+  elif [[ "$filename" =~ ^([a-zA-Z]+-[0-9]+)$ ]]; then
+    card_id=$(echo "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')
+  else
+    card_id="OTHER"
+  fi
+
+  description=$(sed -n '/^---$/,/^---$/!p' "$changeset" | sed '/^---$/d' | sed '/^$/d')
+
+  if [ "$card_id" = "OTHER" ]; then
+    CHANGELOG_ENTRIES+="### Other Changes ($DATE)\n\n$description\n\n"
+  elif [ -n "$branch_name" ]; then
+    CHANGELOG_ENTRIES+="### $card_id $branch_name ($DATE)\n\n$description\n\n"
+  else
+    CHANGELOG_ENTRIES+="### $card_id ($DATE)\n\n$description\n\n"
+  fi
 done
 
-DATE=$(date +%Y-%m-%d)
 PR_LINK=""
 if [ -n "$PR_NUMBER" ]; then
   REPO_URL=$(git remote get-url origin | sed 's/\.git$//' | sed 's|git@github.com:|https://github.com/|')
