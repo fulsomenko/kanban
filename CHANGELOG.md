@@ -1,5 +1,7 @@
 ## [0.3.0] - 2026-03-17 ([#175](https://github.com/fulsomenko/kanban/pull/175))
 
+### KAN-193 Bring Mcp To Full Feature Parity With Cli Tui Via Kanbanoperations Trait (2026-03-17)
+
 - test: add integration tests for MCP round-trips
 - test: add unit tests for MCP helpers and ArgsBuilder
 - feat: update MCP server tools for full CLI parity
@@ -17,6 +19,9 @@
 - feat: add name field to SprintUpdate for MCP name passthrough
 - fix: remove broken clear_description and clear_points MCP flags
 - refactor: remove 4 dead pre-animation functions from TUI card_handlers
+
+### KAN-196 Redesign Release Workflow Defer Version Bump To Master Merge (2026-03-17)
+
 - fix: address PR review findings for release workflow
 - fix: quote variable in parameter expansion to satisfy shellcheck SC2295
 - chore: wire all scripts into nix dev shell
@@ -25,12 +30,21 @@
 - refactor: extract changelog aggregation into standalone script
 - fix: exclude README.md from changeset detection in bump-version.sh
 - fix: defer version bump to master merge
+
+### KAN-197 Add Card Identifier Search Prefix Number (2026-03-17)
+
 - feat: add card identifier search (KAN-197)
+
+### KAN-208 Fix Shift Y Branch Copy Crash On Linux Nixos Wayland (2026-03-17)
+
 - docs: document Linux clipboard manager requirement
 - refactor(tui): replace last_error with unified Banner system
 - feat(tui): add reusable Banner component
 - feat(tui): enable Wayland support with clipboard manager handoff
 - chore: add Wayland/X11 clipboard dependencies
+
+### KAN-209 Multi Select Cards (2026-03-17)
+
 - feat(tui): add bulk priority popup rendering
 - feat(tui): add selection mode indicator to footer
 - feat(tui): handle SetMultipleCardsPriority dialog in event loop
@@ -48,6 +62,9 @@
 - feat(tui): add keybinding actions for multi-select operations
 - feat(tui): add SetMultipleCardsPriority dialog mode
 - feat(tui): add selection_mode_active field to App
+
+### KAN-210 Find Cards By Prefix Increment Identifier E G Kan 5 (2026-03-17)
+
 - feat(mcp): resolve card identifier (e.g. KAN-5) in all card tools
 - feat(cli): accept card identifier (e.g. KAN-5) in all card commands
 - feat(cli,tui,mcp): implement find_card_by_identifier in all contexts
@@ -55,6 +72,9 @@
 - fix(domain): use sprint card_prefix in identifier resolution
 - fix(domain): PrefixAndNumber with no resolved prefix returns no match instead of falling back to "task"
 - fix(cli): remove redundant find-by-identifier subcommand (card get KAN-5 already works)
+
+### KAN-212 Add Compact Names Only Flag To Card Listing For Token Efficient Search (2026-03-17)
+
 - feat(core): add PaginatedList<T> with paginate() helper and resolve_page_params() utility
 - feat(domain): add ArchivedCardSummary with From<&ArchivedCard> impl
 - feat(cli): card list defaults to CardSummary (no description); use card get for full details
@@ -62,13 +82,18 @@
 - feat(cli): archived card list returns PaginatedList<ArchivedCardSummary>
 - feat(mcp): tool_list_cards and tool_list_archived_cards return PaginatedList<CardSummary>
 - test(cli): card list pagination, summary shape, out-of-bounds page
+
+### KAN-215 Version Flag (2026-03-17)
+
 - nix: inject self.rev as GIT_COMMIT_HASH in Nix builds
 - fix: suppress commit: line in -V when git hash is unknown
 - fmt: wrap long lines
 
 ## [0.2.0] - 2026-02-01
 
-- - feat(tui): register undo/redo keybindings in CardList provider
+### KAN-134 Undo Action (2026-02-01)
+
+- feat(tui): register undo/redo keybindings in CardList provider
 - feat(tui): register undo/redo keybindings in BoardDetail provider
 - feat(tui): register undo/redo keybindings in CardDetail provider
 - feat(tui): register undo/redo keybindings in NormalMode providers
@@ -77,20 +102,31 @@
 - feat(tui): capture snapshots before command execution for undo history
 - feat(tui): integrate HistoryManager into StateManager
 - feat(tui): create HistoryManager module for undo/redo support
-- - test: add cycle detection tests for dependency graph
+
+### KAN-170 Cascade Cleanup Delete Operations (2026-02-01)
+
+- test: add cycle detection tests for dependency graph
 - test: add integration tests for cascade cleanup operations
 - feat(domain): unassign cards when deleting sprints
 - feat(domain): add validation to DeleteColumn command
 - feat(domain): implement cascade cleanup in card deletion and archival
 - feat(domain): add cascade cleanup methods to DependencyGraph trait
-- - feat(tui): implement backward wrap-around navigation from title to children
+
+### KAN-177 Parent And Child Relationship Boxes Layout (2026-02-01)
+
+- feat(tui): implement backward wrap-around navigation from title to children
 - feat(tui): add scrolling support to parent/child relationship boxes
 - feat(tui): Implement interactive navigation for parent/child relationship boxes
 - feat(tui): add infrastructure for parent/child relationship navigation
 - feat(tui): Display parent/child relationship boxes side-by-side with increased height
-- Extract business logic from kanban-tui into kanban-domain and kanban-core, establishing a clean layered architecture.
+
+### KAN-178 Tui To Domain Refactoring Migration (2026-02-01)
+
+Extract business logic from kanban-tui into kanban-domain and kanban-core, establishing a clean layered architecture.
+
 ### kanban-core
 - Add `InputState`, `SelectionState`, and `PageInfo` modules for reusable UI-agnostic state primitives
+
 ### kanban-domain
 - Add `sort`, `filter`, `search`, and `query` modules for card filtering/sorting pipeline
 - Add `CardQueryBuilder` with fluent API for composing card queries
@@ -100,12 +136,16 @@
 - Add `Snapshot` serialization (`to_json_bytes`/`from_json_bytes`) directly on the domain type
 - Add sprint query functions and `CardFilters` struct
 - Replace dyn dispatch with enum dispatch in search and sort
+
 ### kanban-tui
 - Remove re-export wrappers and thin delegation layers that proxied domain logic
 - Replace inline business logic in handlers with `card_lifecycle` calls
 - Replace duplicated filter/sort service with `CardQueryBuilder`
 - Fix multi-byte UTF-8 cursor handling via core `InputState`
-- - feat(tui): Add TUI for managing parent-child card relationships
+
+### KAN-6 Card Dependencies (2026-02-01)
+
+- feat(tui): Add TUI for managing parent-child card relationships
 - feat(domain): Add commands for parent-child card relationships
 - feat(domain): Add ParentOf edge type for hierarchical card grouping
 - feat(tui,cli): integrate dependency graph into persistence
@@ -119,27 +159,61 @@
 
 ## [0.1.16] - 2025-12-21
 
+### Other Changes (2025-12-21)
+
 - chore: bump version to 16
+
+### KAN-154 P Dialog Does Not Correctly Set Points (2025-12-21)
+
 - fix: points dialog now correctly updates card from detail view
 
 ## [0.1.15] - 2025-12-21
 
+### KAN-129 Include Commit Hash In V (2025-12-21)
+
 - feat(cli): include git commit hash in version output
+
+### KAN-139 If No Sprints Cant Scroll To Column Settings (2025-12-21)
+
 - fix(tui): skip empty sprints section when navigating board details
+
+### KAN-140 Filter Out Completed Sprints From Assign List (2025-12-21)
+
 - fix: filter out completed and cancelled sprints from assign list
+
+### KAN-141 Scrolling Up From Column Options Lands The Cursor On The First Sprint In The List (2025-12-21)
+
 - fix: navigate to last sprint when scrolling up from columns in board settings
+
+### KAN-142 Updating Fields Jumps The User Back To Board 2 (2025-12-21)
+
 - fix: preserve navigation mode during auto-reload from external changes
+
+### KAN-143 Gg G Works Poorly (2025-12-21)
+
 - chore: cargo fmt
 - fix(tui): fix gg/G vim navigation in grouped-by-column view
 - chore: remove wip file
+
+### KAN-144 Kanban View Switches Column On The Second To Last Item (2025-12-21)
+
 - fix: prevent premature column switching in handle_navigation_down
+
+### KAN-145 We Broke The File Watcher Having A Conflict With One Instance (2025-12-21)
+
 - fix: Centralize file watcher pause/resume in StateManager
+
+### KAN-146 Kanban Mcp (2025-12-21)
+
 - feat: add kanban-mcp server
 - feat(mcp): add McpTools trait for compile-time parity with KanbanOperations
 - docs(mcp): add subprocess architecture documentation and Nix wrapper
 - feat(mcp): add CLI executor for subprocess-based operations
 - feat(mcp): enhance card operations and add delete/archive functionality
 - feat: add kanban-mcp: Model Context Protocol server implementation
+
+### KAN-147 Multiselecting And Assigning Cards Causes Write Race Condition (2025-12-21)
+
 - fix: batch card creation with optional status update
 - fix: batch card movements with conditional status updates
 - fix: batch sprint activation and completion with board updates
@@ -151,7 +225,13 @@
 - refactor: use batch command execution in sprint assignment handlers
 - feat: add execute_commands_batch for race-free command execution
 - fix: enhance AssignCardToSprint to handle sprint log transitions
+
+### KAN-148 Archiving Deleting Cards Is Broken (2025-12-21)
+
 - fix: batch card archive and delete operations in animation completion
+
+### KAN-15 Progressive Saving Detect Changes To Current Json (2025-12-21)
+
 - feat(persistence): create kanban-persistence crate structure
 - feat(state): create Command trait and StateManager
 - feat(domain): add CreateBoard command
@@ -169,9 +249,15 @@
 - feat(app): prevent quit with pending saves
 - feat(app): add save completion receiver to App struct
 - feat(state): add bidirectional save completion channel
+
+### KAN-150 File Path To A Non Existant File Crashes The App (2025-12-21)
+
 - feat: Add migration verification and automatic backup cleanup
 - fix: Add instance ID check to file watcher to prevent false positives
 - fix: Remove redundant version fields from PersistenceMetadata
+
+### KAN-151 Kanban Cli (2025-12-21)
+
 - fix(tui): restoring restoring cards
 - fix(cli): restoring to a non existing column
 - docs: add CLI quick start section to root README
@@ -189,10 +275,20 @@
 - test: Add comprehensive integration tests for CLI
 - feat: Implement full CLI with subcommand interface
 - feat: Add KanbanOperations trait for TUI/CLI feature parity
+
+### KAN-152 Dont Include Description Of Card For Get Cards (2025-12-21)
+
 - feat(mcp): omit description and sprint_logs from card list responses
 - feat(cli): include git commit hash in version output (#132)
+
+### KAN-155 Publish New Version (2025-12-21)
+
 - fix: stabilize release pipeline for v0.1.15
+
+### KAN-30 Vim Motions (2025-12-21)
+
 Jumping cards
+
 - fix: jump by actual visible cards count from render_info, not cards_to_show
 - feat: add vim jump motions to normal mode keybinding display
 - feat: add vim jump motions to card list keybinding display
@@ -202,9 +298,13 @@ Jumping cards
 - feat: add jump_to_first and jump_to_last methods to SelectionState
 - feat: add jump action variants to KeybindingAction enum
 - feat: add pending_key field to App struct for multi-key sequences
+
+### KAN-93 Dialogs Always Return To Main When Opened (2025-12-21)
+
 Refactored dialog mode handling to use nested AppMode::Dialog(DialogMode) enum
 for type-safe dialog management. Dialogs now correctly display their parent
 view in the background instead of hardcoded destinations.
+
 - Added DialogMode enum with all 23 dialog variants
 - Simplified is_dialog_mode() to matches!(self.mode, AppMode::Dialog(_))
 - Added get_base_mode() to determine parent view from mode_stack
@@ -213,12 +313,22 @@ view in the background instead of hardcoded destinations.
 
 ## [0.1.14] - 2025-11-17 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
-- - refactor: integrate card list into keybinding registry
+### KAN-111 Sprint Binding Help Is Wrong (2025-11-17)
+
+- refactor: integrate card list into keybinding registry
 - refactor: unify keybinding management for footer and help popup
-- Remove filtering of cards from completed sprints
+
+### KAN-118 Unfilter Tasks List On Completed Sprint (2025-11-17)
+
+Remove filtering of cards from completed sprints
+
 - fix: remove auto-hiding of completed sprint cards from app methods
 - fix: remove auto-hiding of completed sprint cards from view strategies
-- A refactoring.
+
+### KAN-130 Three Card List Components To Become One (2025-11-17)
+
+A refactoring.
+
 - refactor: simplify navigation handlers to work with unified view strategy
 - refactor: simplify card handlers to work with unified view strategy
 - refactor: update app initialization to use UnifiedViewStrategy
@@ -231,18 +341,30 @@ view in the background instead of hardcoded destinations.
 - KAN-111/sprint-binding-help-is-wrong (#92)
 - KAN-33: Add Help mode with context-aware keybindings (#91)
 - ci: automatically sync develop with master after release (#90)
-- - migration: add reconciliation of branch_prefix and sprint_prefix to migrate old boards
+
+### KAN-132 Urgent Migrations (2025-11-17)
+
+- migration: add reconciliation of branch_prefix and sprint_prefix to migrate old boards
 - migration: add serde default to support migration to archived cards board
-- - feat: Synchronize navigation viewport with grouped view column headers
+
+### KAN-133 Scrolling Doesnt Work In Grouped By Columns List (2025-11-17)
+
+- feat: Synchronize navigation viewport with grouped view column headers
 - feat: Implement unified scrolling rendering for grouped view
 - feat: Wire up VirtualUnifiedLayout for grouped view mode
 - feat: Add VirtualUnifiedLayout for unified card scrolling in grouped view
-- - fix: help menu keybinding matching for special keys and /
+
+### KAN-196 Make Help Menu Items Selectable And Activateable (2025-11-17)
+
+- fix: help menu keybinding matching for special keys and /
 - fix: implement missing action handlers for help menu
 - refactor: couple keybindings with actions
 - feat: add visual selection to help popup
 - feat: add generic list component
-- - chore: simplify archived cards view keybindings
+
+### KAN-20 Remove A Card (2025-11-17)
+
+- chore: simplify archived cards view keybindings
 - refactor: rename delete to archive, permanent delete to delete
 - refactor: consolidate keybinding providers into CardListProvider
 - feat: add animation state infrastructure and types
@@ -255,7 +377,11 @@ view in the background instead of hardcoded destinations.
 - feat: add DeletedCardsView mode to App
 - feat: add deleted_cards persistence
 - feat: add DeletedCard domain model
-- Add help dialogue for keybindings.
+
+### KAN-33 Add Binding (2025-11-17)
+
+Add help dialogue for keybindings.
+
 - feat: implement Help popup rendering with context-aware keybindings
 - feat: add global ? key handler for help across all modes
 - refactor: make CardFocus and BoardFocus Copy
@@ -265,7 +391,10 @@ view in the background instead of hardcoded destinations.
 - feat: create keybindings module with traits and data structures
 - refactor: add keybindings module to lib
 - ci: automatically sync develop with master after release (#90)
-- - fix: ensure forward progress when viewport shrinks during down navigation
+
+### KAN-55 Scroll In Cards List (2025-11-17)
+
+- fix: ensure forward progress when viewport shrinks during down navigation
 - fix: correct viewport height calculation across all renderers
 - feat: add viewport calculation infrastructure to CardList
 - fix: allow scrolling down to show the final card
@@ -287,7 +416,10 @@ view in the background instead of hardcoded destinations.
 
 ## [0.1.12] - 2025-11-02 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
-- Update release flow
+### KAN-117 Workflows And Releases (2025-11-02)
+
+Update release flow
+
 - chore: remove unnecessary backup logic from update-changelog script
 - chore: update bump-version script to output new version
 - ci: enhance release workflow with version bump and changelog
@@ -297,7 +429,9 @@ view in the background instead of hardcoded destinations.
 
 ## [0.1.11] - 2025-11-02 ([#patch](https://github.com/fulsomenko/kanban/pull/patch))
 
-- - refactor: fix clippy enum variant naming warnings
+### KAN-105 We Probably Should Move Sprint Prefix Into Sprint Level Settings (2025-11-02)
+
+- refactor: fix clippy enum variant naming warnings
 - chore: cargo fmt
 - refactor: consolidate copy methods with generic implementation
 - refactor: create generic prefix dialog handler abstraction
@@ -339,7 +473,11 @@ view in the background instead of hardcoded destinations.
 - refactor: add Sprint.effective_prefix() and update branch name logic
 - refactor: remove sprint_prefix from Board and BoardSettingsDto
 - refactor: rename Sprint.prefix_override to Sprint.prefix
-- Adding a dialogue to chose card filters
+
+### KAN-109 Choose Which Sprint To Filter By (2025-11-02)
+
+Adding a dialogue to chose card filters
+
 - feat: support filtering by multiple sprints simultaneously
 - feat: display all active filters in card list header
 - chore: cargo fmt
@@ -350,20 +488,38 @@ view in the background instead of hardcoded destinations.
 - feat: add filter dialog UI rendering
 - feat: implement filter dialog handlers
 - feat: add filters module with FilterOptions AppMode
-- - fix: prevent duplicate sprint log entries when reassigning to same sprint
-- - add demo
-- Implement log for sprints that a card has seen
+
+### KAN-113 Dont Add To Sprint Log For A Card If The Same Sprint Is Added (2025-11-02)
+
+- fix: prevent duplicate sprint log entries when reassigning to same sprint
+
+### KAN-95 Marketing (2025-11-02)
+
+- add demo
+
+### MVP-108 Keep A Log Of Sprints For A Card (2025-11-02)
+
+Implement log for sprints that a card has seen
+
 - chore: cargo fmt
 - feat: integrate sprint logging into card-to-sprint assignment
 - feat: add sprint logging to Card domain model
 - feat: add SprintLog struct for tracking sprint history
 - feat: add logging abstraction to kanban-core
-- Adding a sprint history view to Card Details
+
+### MVP-110 In Card Metadata Show The Sprint Log For A Card (2025-11-02)
+
+Adding a sprint history view to Card Details
+
 - feat: increase sprint history display to 4 elements
 - feat: show sprint history tail with correct absolute indexing
 - feat: migrate sprint logs for existing assigned cards
 - feat: display sprint history in card detail view
-- Introduce JSON editing for card meta
+
+### MVP-40 Make Card Meta Data Editing Like Board Settings Edit (2025-11-02)
+
+Introduce JSON editing for card meta
+
 - refactor: swap keybindings - 'p' for points, 'P' for priority in card detail
 - chore: cargo fmt
 - refactor: remove unused BoardSettingsDto import from app.rs
