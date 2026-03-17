@@ -2,6 +2,7 @@
   lib,
   pkgs,
   rustPlatform,
+  gitRev ? null,
 }:
 
 let
@@ -23,6 +24,10 @@ rustPlatform.buildRustPackage {
 
   cargoBuildFlags = [ "--package" "kanban-cli" ];
   doCheck = false;
+
+  preBuild = lib.optionalString (gitRev != null) ''
+    export GIT_COMMIT_HASH="${gitRev}"
+  '';
 
   meta = {
     inherit (cargoToml.workspace.package) description homepage;

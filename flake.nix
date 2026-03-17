@@ -61,7 +61,7 @@
         };
 
         packages = let
-          kanban = pkgs.callPackage ./default.nix {};
+          kanban = pkgs.callPackage ./default.nix { gitRev = self.rev or null; };
         in {
           default = kanban;
           kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {
