@@ -169,4 +169,59 @@ mod tests {
         assert_eq!(result.items, vec![7, 8, 9]);
         assert_eq!(result.total_pages, 3);
     }
+
+    // resolve_page_params — base cases
+
+    #[test]
+    fn test_resolve_page_params_defaults() {
+        let (page, page_size) = resolve_page_params(None, None).unwrap();
+        assert_eq!(page, DEFAULT_PAGE);
+        assert_eq!(page_size, DEFAULT_PAGE_SIZE);
+    }
+
+    #[test]
+    fn test_resolve_page_params_explicit_values() {
+        let (page, page_size) = resolve_page_params(Some(3), Some(25)).unwrap();
+        assert_eq!(page, 3);
+        assert_eq!(page_size, 25);
+    }
+
+    #[test]
+    fn test_resolve_page_params_max_page_size() {
+        let (page, page_size) = resolve_page_params(Some(1), Some(MAX_PAGE_SIZE as u32)).unwrap();
+        assert_eq!(page, 1);
+        assert_eq!(page_size, MAX_PAGE_SIZE);
+    }
+
+    // resolve_page_params — zero / out-of-range error cases
+
+    #[test]
+    fn test_resolve_page_params_page_zero_errors() {
+        let err = resolve_page_params(Some(0), None).unwrap_err();
+        assert!(err.to_string().contains("page must be >= 1"));
+    }
+
+    #[test]
+    fn test_resolve_page_params_page_size_zero_errors() {
+        let err = resolve_page_params(None, Some(0)).unwrap_err();
+        assert!(err.to_string().contains("page_size must be >= 1"));
+    }
+
+    #[test]
+    fn test_resolve_page_params_page_size_too_large_errors() {
+        let err = resolve_page_params(None, Some(MAX_PAGE_SIZE as u32 + 1)).unwrap_err();
+        assert!(err.to_string().contains("page_size must be <="));
+    }
+
+    // empty collection — total_pages must be 0, not 1
+
+    #[test]
+    fn test_paginate_empty_total_pages_is_zero() {
+        // An empty collection has 0 pages (not 1). Callers looping
+        // `for p in 1..=total_pages` correctly do zero iterations.
+        let result = PaginatedList::<i32>::paginate(vec![], 1, 10).unwrap();
+        assert_eq!(result.total, 0);
+        assert_eq!(result.total_pages, 0);
+        assert_eq!(result.items, vec![]);
+    }
 }
