@@ -76,7 +76,14 @@ kanban myboard.json       # Load a board from file
 
 | Key | Action |
 |-----|--------|
-| `v` | Toggle selection on current card |
+| `v` | Toggle selection mode (vim-style visual select) |
+| `j` / `k` | Auto-select cards while navigating in selection mode |
+| `Ctrl+a` | Select all cards in current view |
+| `Esc` | Clear selections and exit selection mode |
+| `P` | Set priority on all selected cards |
+| `H` / `L` | Move all selected cards left/right |
+| `c` | Toggle completion on all selected cards |
+| `d` | Archive all selected cards |
 | `V` | Toggle view mode (Flat/Grouped/Kanban) |
 
 ### Search & Filter

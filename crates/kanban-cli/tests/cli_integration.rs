@@ -100,7 +100,7 @@ mod board_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 0);
+        assert_eq!(json["data"]["total"], 0);
     }
 
     #[test]
@@ -140,7 +140,7 @@ mod board_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 2);
+        assert_eq!(json["data"]["total"], 2);
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod board_tests {
             .clone();
 
         let json = parse_json_output(&String::from_utf8_lossy(&list_output));
-        assert_eq!(json["data"]["count"], 0);
+        assert_eq!(json["data"]["total"], 0);
     }
 }
 
@@ -359,7 +359,7 @@ mod column_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 2);
+        assert_eq!(json["data"]["total"], 2);
     }
 
     #[test]
@@ -609,7 +609,152 @@ mod card_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 2);
+        assert_eq!(json["data"]["total"], 2);
+        assert!(json["data"]["total_pages"].is_number());
+    }
+
+    #[test]
+    fn test_card_list_summary_omits_description() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Task With Desc",
+                "--description",
+                "Hello description",
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "card", "list"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(!json["data"]["items"][0]
+            .as_object()
+            .unwrap()
+            .contains_key("description"));
+    }
+
+    #[test]
+    fn test_card_list_pagination() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        for i in 1..=3 {
+            kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "card",
+                    "create",
+                    "--board-id",
+                    &board_id,
+                    "--column-id",
+                    &column_id,
+                    "--title",
+                    &format!("Task {i}"),
+                ])
+                .assert()
+                .success();
+        }
+
+        let page1_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--page-size",
+                "2",
+                "--page",
+                "1",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let page1_json = parse_json_output(&String::from_utf8_lossy(&page1_output));
+        assert_eq!(page1_json["data"]["total"], 3);
+        assert_eq!(page1_json["data"]["total_pages"], 2);
+        assert_eq!(page1_json["data"]["items"].as_array().unwrap().len(), 2);
+
+        let page2_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--page-size",
+                "2",
+                "--page",
+                "2",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let page2_json = parse_json_output(&String::from_utf8_lossy(&page2_output));
+        assert_eq!(page2_json["data"]["items"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_card_list_out_of_bounds_page() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Only Card",
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--page-size",
+                "5",
+                "--page",
+                "99",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"]["items"].as_array().unwrap().len(), 0);
+        assert_eq!(json["data"]["total"], 1);
     }
 
     #[test]
@@ -770,7 +915,13 @@ mod card_tests {
             .clone();
 
         let archived_json = parse_json_output(&String::from_utf8_lossy(&archived_output));
-        assert_eq!(archived_json["data"]["count"], 1);
+        assert_eq!(archived_json["data"]["total"], 1);
+        assert!(archived_json["data"]["items"][0]["archived_at"].is_string());
+        assert!(archived_json["data"]["items"][0]["original_column_id"].is_string());
+        assert!(!archived_json["data"]["items"][0]["card"]
+            .as_object()
+            .unwrap()
+            .contains_key("description"));
 
         let restore_output = kanban()
             .args([file.to_str().unwrap(), "card", "restore", &card_id])
@@ -1027,6 +1178,173 @@ mod card_tests {
         assert_eq!(json["data"]["succeeded_count"], 2);
         assert_eq!(json["data"]["failed_count"], 0);
     }
+
+    fn setup_board_and_column_with_prefix(
+        file: &std::path::Path,
+        prefix: &str,
+    ) -> (String, String) {
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+                "--card-prefix",
+                prefix,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let board_json = parse_json_output(&String::from_utf8_lossy(&board_output));
+        let board_id = extract_id(&board_json);
+
+        let column_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "column",
+                "create",
+                "--board-id",
+                &board_id,
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let column_json = parse_json_output(&String::from_utf8_lossy(&column_output));
+        let column_id = extract_id(&column_json);
+
+        (board_id, column_id)
+    }
+
+    #[test]
+    fn test_card_get_by_prefix_identifier() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column_with_prefix(&file, "KAN");
+
+        let create_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Prefix Test Card",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let create_json = parse_json_output(&String::from_utf8_lossy(&create_output));
+        let card_uuid = extract_id(&create_json);
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "card", "get", "KAN-1"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["id"], card_uuid);
+        assert_eq!(json["data"]["title"], "Prefix Test Card");
+    }
+
+    #[test]
+    fn test_card_get_by_number_only() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column_with_prefix(&file, "KAN");
+
+        let create_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Number Lookup Card",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let create_json = parse_json_output(&String::from_utf8_lossy(&create_output));
+        let card_uuid = extract_id(&create_json);
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "card", "get", "1"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["id"], card_uuid);
+        assert_eq!(json["data"]["title"], "Number Lookup Card");
+    }
+
+    #[test]
+    fn test_card_archive_by_identifier() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column_with_prefix(&file, "KAN");
+
+        let create_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Archive Me",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let create_json = parse_json_output(&String::from_utf8_lossy(&create_output));
+        let card_uuid = extract_id(&create_json);
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "card", "archive", "KAN-1"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["archived"], card_uuid);
+    }
 }
 
 mod sprint_tests {
@@ -1148,7 +1466,7 @@ mod sprint_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["count"], 2);
+        assert_eq!(json["data"]["total"], 2);
     }
 
     #[test]
@@ -1615,5 +1933,251 @@ mod error_tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains("--board-id"));
+    }
+
+    #[test]
+    fn test_card_get_nonexistent_numeric_identifier() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban()
+            .args([file.to_str().unwrap(), "card", "get", "555"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Card not found"))
+            .stderr(predicate::str::contains("555"));
+    }
+
+    #[test]
+    fn test_card_get_nonexistent_prefix_identifier() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban()
+            .args([file.to_str().unwrap(), "card", "get", "KAN-5"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Card not found"))
+            .stderr(predicate::str::contains("KAN-5"));
+    }
+
+    #[test]
+    fn test_card_get_no_backtrace() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban()
+            .env("RUST_BACKTRACE", "1")
+            .args([file.to_str().unwrap(), "card", "get", "555"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("stack backtrace").not());
+    }
+
+    fn setup_board_and_column(file: &std::path::Path) -> (String, String) {
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_json = parse_json_output(&String::from_utf8_lossy(&board_output));
+        let board_id = extract_id(&board_json);
+
+        let column_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "column",
+                "create",
+                "--board-id",
+                &board_id,
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let column_json = parse_json_output(&String::from_utf8_lossy(&column_output));
+        let column_id = extract_id(&column_json);
+
+        (board_id, column_id)
+    }
+
+    #[test]
+    fn test_card_create_invalid_priority() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Test",
+                "--priority",
+                "badpriority",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid priority"))
+            .stderr(predicate::str::contains("badpriority"));
+    }
+
+    #[test]
+    fn test_card_list_invalid_status() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--status",
+                "notastatus",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid status"))
+            .stderr(predicate::str::contains("notastatus"));
+    }
+
+    #[test]
+    fn test_card_update_invalid_priority() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        let card_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_id,
+                "--column-id",
+                &column_id,
+                "--title",
+                "Test",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let card_json = parse_json_output(&String::from_utf8_lossy(&card_output));
+        let card_id = extract_id(&card_json);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "update",
+                &card_id,
+                "--priority",
+                "badpriority",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid priority"))
+            .stderr(predicate::str::contains("badpriority"));
+    }
+
+    fn setup_sprint(file: &std::path::Path) -> String {
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_json = parse_json_output(&String::from_utf8_lossy(&board_output));
+        let board_id = extract_id(&board_json);
+
+        let sprint_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "create",
+                "--board-id",
+                &board_id,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let sprint_json = parse_json_output(&String::from_utf8_lossy(&sprint_output));
+        extract_id(&sprint_json)
+    }
+
+    #[test]
+    fn test_sprint_update_invalid_start_date() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let sprint_id = setup_sprint(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "update",
+                &sprint_id,
+                "--start-date",
+                "notadate",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid date"))
+            .stderr(predicate::str::contains("notadate"));
+    }
+
+    #[test]
+    fn test_sprint_update_invalid_end_date() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let sprint_id = setup_sprint(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "update",
+                &sprint_id,
+                "--end-date",
+                "notadate",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Invalid date"))
+            .stderr(predicate::str::contains("notadate"));
     }
 }

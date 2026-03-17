@@ -2,7 +2,7 @@ use crate::{
     card_list::{CardList, CardListId},
     card_list_component::{CardListComponent, CardListComponentConfig},
     clipboard,
-    components::generic_list::ListComponent,
+    components::{generic_list::ListComponent, Banner},
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
     filters::FilterDialogState,
@@ -65,6 +65,7 @@ pub struct App {
     pub current_sort_field: Option<SortField>,
     pub current_sort_order: Option<SortOrder>,
     pub selected_cards: std::collections::HashSet<uuid::Uuid>,
+    pub selection_mode_active: bool,
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
@@ -93,7 +94,7 @@ pub struct App {
     pub file_watcher: Option<kanban_persistence::FileWatcher>,
     pub save_worker_handle: Option<tokio::task::JoinHandle<()>>,
     pub save_completion_rx: Option<tokio::sync::mpsc::UnboundedReceiver<()>>,
-    pub last_error: Option<(String, Instant)>,
+    pub banner: Option<Banner>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -146,6 +147,7 @@ pub enum DialogMode {
     ImportBoard,
     SetCardPoints,
     SetCardPriority,
+    SetMultipleCardsPriority,
     SetBranchPrefix,
     OrderCards,
     CreateSprint,
@@ -213,6 +215,7 @@ impl App {
             current_sort_field: None,
             current_sort_order: None,
             selected_cards: std::collections::HashSet::new(),
+            selection_mode_active: false,
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
@@ -265,7 +268,7 @@ impl App {
             file_watcher: None,
             save_worker_handle: None,
             save_completion_rx,
-            last_error: None,
+            banner: None,
         };
 
         if let Some(ref filename) = save_file {
@@ -316,16 +319,16 @@ impl App {
         self.push_mode(AppMode::Dialog(dialog));
     }
 
-    pub fn set_error(&mut self, message: String) {
-        self.last_error = Some((message, Instant::now()));
+    pub fn set_error(&mut self, message: impl Into<String>) {
+        self.banner = Some(Banner::error(message));
     }
 
-    pub fn clear_error(&mut self) {
-        self.last_error = None;
+    pub fn set_success(&mut self, message: impl Into<String>) {
+        self.banner = Some(Banner::success(message));
     }
 
-    pub fn should_clear_error(&self) -> bool {
-        false
+    pub fn clear_banner(&mut self) {
+        self.banner = None;
     }
 
     fn keycode_matches_binding_key(
@@ -422,6 +425,9 @@ impl App {
             KeybindingAction::ToggleArchivedView => self.handle_toggle_archived_cards_view(),
             KeybindingAction::ToggleTaskListView => self.handle_toggle_task_list_view(),
             KeybindingAction::ToggleCardSelection => self.handle_card_selection_toggle(),
+            KeybindingAction::ClearCardSelection => self.handle_clear_card_selection(),
+            KeybindingAction::SelectAllCards => self.handle_select_all_cards_in_view(),
+            KeybindingAction::SetSelectedCardsPriority => self.handle_set_selected_cards_priority(),
             KeybindingAction::Search => {
                 if self.focus == Focus::Cards {
                     self.search.activate();
@@ -459,9 +465,9 @@ impl App {
         use crossterm::event::KeyCode;
         let mut should_restart_events = false;
 
-        // Clear error on any key press
-        if self.last_error.is_some() {
-            self.clear_error();
+        // Clear banner on any key press
+        if self.banner.is_some() {
+            self.clear_banner();
             return false;
         }
 
@@ -507,6 +513,18 @@ impl App {
             let previous_mode = self.mode.clone();
             self.help_selection.set(Some(0));
             self.mode = AppMode::Help(Box::new(previous_mode));
+            return false;
+        }
+
+        // Handle Ctrl+a for select all cards
+        if matches!(self.mode, AppMode::Normal)
+            && key
+                .modifiers
+                .contains(crossterm::event::KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Char('a'))
+        {
+            self.pending_key = None;
+            self.handle_select_all_cards_in_view();
             return false;
         }
 
@@ -618,6 +636,10 @@ impl App {
                     self.pending_key = None;
                     self.handle_toggle_task_list_view();
                 }
+                KeyCode::Char('P') => {
+                    self.pending_key = None;
+                    self.handle_set_selected_cards_priority();
+                }
                 KeyCode::Char('H') => {
                     self.pending_key = None;
                     self.handle_move_card_left();
@@ -726,6 +748,9 @@ impl App {
                     should_restart_events = self.handle_set_card_points_dialog(key.code);
                 }
                 DialogMode::SetCardPriority => self.handle_set_card_priority_popup(key.code),
+                DialogMode::SetMultipleCardsPriority => {
+                    self.handle_set_multiple_cards_priority_popup(key.code)
+                }
                 DialogMode::SetBranchPrefix => self.handle_set_branch_prefix_dialog(key.code),
                 DialogMode::SetSprintPrefix => self.handle_set_sprint_prefix_dialog(key.code),
                 DialogMode::SetSprintCardPrefix => {
@@ -1594,9 +1619,11 @@ impl App {
                             Event::Tick => {
                                 self.handle_animation_tick();
 
-                                // Auto-clear errors after 5 seconds
-                                if self.should_clear_error() {
-                                    self.clear_error();
+                                // Auto-clear banner after 3 seconds
+                                if let Some(ref banner) = self.banner {
+                                    if banner.is_expired(std::time::Duration::from_secs(3)) {
+                                        self.clear_banner();
+                                    }
                                 }
 
                                 // Handle pending conflict resolution actions
@@ -1879,9 +1906,9 @@ impl App {
                             self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&output) {
-                            tracing::error!("Failed to copy to clipboard: {}", e);
+                            self.set_error(format!("Failed to copy: {}", e));
                         } else {
-                            tracing::info!("Copied {}: {}", output_type, output);
+                            self.set_success(format!("Copied {}", output_type));
                         }
                     }
                 }
@@ -1922,12 +1949,7 @@ impl App {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.active_board_index {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
-                            let board_sprints: Vec<_> = self
-                                .ctx
-                                .sprints
-                                .iter()
-                                .filter(|s| s.board_id == board.id)
-                                .collect();
+                            let board_sprints = Sprint::assignable(&self.ctx.sprints, board.id);
                             for (idx, sprint) in board_sprints.iter().enumerate() {
                                 if sprint.id == card_sprint_id {
                                     return idx + 1;

@@ -16,6 +16,7 @@ fn test_delete_card_cleans_dependencies() {
             column_id: columns[0].id,
             title: "Card A".to_string(),
             position: 0,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -35,6 +36,7 @@ fn test_delete_card_cleans_dependencies() {
             column_id: columns[0].id,
             title: "Card B".to_string(),
             position: 1,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -102,6 +104,7 @@ fn test_delete_column_with_cards_fails() {
             column_id: columns[0].id,
             title: "Test Card".to_string(),
             position: 0,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -153,6 +156,7 @@ fn test_delete_column_with_archived_cards_fails() {
             column_id: columns[0].id,
             title: "Test Card".to_string(),
             position: 0,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -222,6 +226,7 @@ fn test_delete_sprint_unassigns_cards() {
             column_id,
             title: "Card A".to_string(),
             position: 0,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -241,6 +246,7 @@ fn test_delete_sprint_unassigns_cards() {
             column_id,
             title: "Card B".to_string(),
             position: 1,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -360,6 +366,7 @@ fn test_archive_card_preserves_edges() {
             column_id,
             title: "Card A".to_string(),
             position: 0,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -379,6 +386,7 @@ fn test_archive_card_preserves_edges() {
             column_id,
             title: "Card B".to_string(),
             position: 1,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -507,6 +515,7 @@ fn test_cycle_detection_parent_child() {
             column_id,
             title: "Card A".to_string(),
             position: 0,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -526,6 +535,7 @@ fn test_cycle_detection_parent_child() {
             column_id,
             title: "Card B".to_string(),
             position: 1,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -545,6 +555,7 @@ fn test_cycle_detection_parent_child() {
             column_id,
             title: "Card C".to_string(),
             position: 2,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -607,6 +618,7 @@ fn test_cycle_detection_blocks() {
             column_id,
             title: "Card A".to_string(),
             position: 0,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -626,6 +638,7 @@ fn test_cycle_detection_blocks() {
             column_id,
             title: "Card B".to_string(),
             position: 1,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
@@ -645,6 +658,7 @@ fn test_cycle_detection_blocks() {
             column_id,
             title: "Card C".to_string(),
             position: 2,
+            options: Default::default(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,

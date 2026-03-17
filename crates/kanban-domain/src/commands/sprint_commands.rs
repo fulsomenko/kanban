@@ -12,8 +12,25 @@ pub struct UpdateSprint {
 
 impl Command for UpdateSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        let mut updates = self.updates.clone();
+
+        if let Some(ref name) = updates.name {
+            let board_id = context
+                .sprints
+                .iter()
+                .find(|s| s.id == self.sprint_id)
+                .map(|s| s.board_id);
+
+            if let Some(board_id) = board_id {
+                if let Some(board) = context.boards.iter_mut().find(|b| b.id == board_id) {
+                    let idx = board.add_sprint_name_at_used_index(name.clone());
+                    updates.name_index = crate::FieldUpdate::Set(idx);
+                }
+            }
+        }
+
         if let Some(sprint) = context.sprints.iter_mut().find(|s| s.id == self.sprint_id) {
-            sprint.update(self.updates.clone());
+            sprint.update(updates);
         }
         Ok(())
     }

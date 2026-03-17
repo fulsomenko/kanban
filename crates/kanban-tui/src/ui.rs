@@ -16,33 +16,9 @@ use uuid::Uuid;
 const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
 const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
 
-fn render_error_banner(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some((message, _)) = &app.last_error {
-        let error_style = Style::default()
-            .fg(Color::White)
-            .bg(Color::Red)
-            .add_modifier(Modifier::BOLD);
-
-        // Calculate width needed for message + padding (1 char on each side)
-        let message_width = (message.len() + 2).min(area.width as usize) as u16;
-        let centered_x = if area.width > message_width {
-            (area.width - message_width) / 2
-        } else {
-            0
-        };
-
-        let error_area = Rect {
-            x: area.x + centered_x,
-            y: area.y,
-            width: message_width,
-            height: 1,
-        };
-
-        let error_widget = Paragraph::new(format!(" {} ", message))
-            .style(error_style)
-            .alignment(ratatui::layout::Alignment::Center);
-
-        frame.render_widget(error_widget, error_area);
+fn render_banner(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(ref banner) = app.banner {
+        banner.render(frame, area);
     }
 }
 
@@ -78,6 +54,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 DialogMode::ImportBoard => render_import_board_popup(app, frame),
                 DialogMode::SetCardPoints => render_set_card_points_popup(app, frame),
                 DialogMode::SetCardPriority => render_set_card_priority_popup(app, frame),
+                DialogMode::SetMultipleCardsPriority => {
+                    render_set_multiple_cards_priority_popup(app, frame)
+                }
                 DialogMode::SetBranchPrefix => render_set_branch_prefix_popup(app, frame),
                 DialogMode::SetSprintPrefix => render_set_sprint_prefix_popup(app, frame),
                 DialogMode::SetSprintCardPrefix => render_set_sprint_card_prefix_popup(app, frame),
@@ -112,15 +91,15 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         render_help_popup(app, frame);
     }
 
-    // Render error banner on top if present
-    if app.last_error.is_some() {
-        let error_area = Rect {
+    // Render banner on top if present
+    if app.banner.is_some() {
+        let banner_area = Rect {
             x: 0,
             y: 0,
             width: frame.area().width,
-            height: 1,
+            height: 3,
         };
-        render_error_banner(app, frame, error_area);
+        render_banner(app, frame, banner_area);
     }
 }
 
@@ -530,6 +509,14 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
 
     use crate::keybindings::KeybindingRegistry;
 
+    let selection_prefix = if app.selection_mode_active {
+        format!("-- SELECT ({}) -- | ", app.selected_cards.len())
+    } else if !app.selected_cards.is_empty() {
+        format!("({} selected) | ", app.selected_cards.len())
+    } else {
+        String::new()
+    };
+
     let help_text: String = if let AppMode::SprintDetail = app.mode {
         let component = match app.sprint_task_panel {
             crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
@@ -544,16 +531,17 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             .collect::<Vec<_>>()
             .join(" | ");
         let component_help = component.help_text();
-        format!("{} | {}", keybindings, component_help)
+        format!("{}{} | {}", selection_prefix, keybindings, component_help)
     } else {
         let provider = KeybindingRegistry::get_provider(app);
         let context = provider.get_context();
-        context
+        let keybindings = context
             .bindings
             .iter()
             .map(|b| format!("{}: {}", b.key, b.short_description))
             .collect::<Vec<_>>()
-            .join(" | ")
+            .join(" | ");
+        format!("{}{}", selection_prefix, keybindings)
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
@@ -604,6 +592,14 @@ fn render_set_card_points_popup(app: &App, frame: &mut Frame) {
 fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
     use crate::components::{PriorityDialog, SelectionDialog};
     let dialog = PriorityDialog;
+    dialog.render(app, frame);
+}
+
+fn render_set_multiple_cards_priority_popup(app: &App, frame: &mut Frame) {
+    use crate::components::{BulkPriorityDialog, SelectionDialog};
+    let dialog = BulkPriorityDialog {
+        count: app.selected_cards.len(),
+    };
     dialog.render(app, frame);
 }
 
@@ -1124,15 +1120,7 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
 
     if let Some(board_idx) = app.active_board_index {
         if let Some(board) = app.ctx.boards.get(board_idx) {
-            let board_sprints: Vec<_> = app
-                .ctx
-                .sprints
-                .iter()
-                .filter(|s| s.board_id == board.id)
-                .filter(|s| {
-                    s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled
-                })
-                .collect();
+            let board_sprints = Sprint::assignable(&app.ctx.sprints, board.id);
 
             for (idx, sprint_option) in std::iter::once(None)
                 .chain(board_sprints.iter().map(|s| Some(*s)))

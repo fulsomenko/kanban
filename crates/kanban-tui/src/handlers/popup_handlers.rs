@@ -1,7 +1,11 @@
 use crate::app::App;
 use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
-use kanban_domain::{dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder};
+use kanban_domain::{
+    dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder, Sprint,
+};
+
+const PRIORITY_COUNT: usize = 4;
 
 impl App {
     pub fn handle_import_board_popup(&mut self, key_code: KeyCode) {
@@ -37,7 +41,7 @@ impl App {
                 self.pop_mode();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.priority_selection.next(4);
+                self.priority_selection.next(PRIORITY_COUNT);
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.priority_selection.prev();
@@ -69,6 +73,66 @@ impl App {
                     }
                 }
                 self.pop_mode();
+            }
+            _ => {}
+        }
+    }
+
+    pub fn handle_set_multiple_cards_priority_popup(&mut self, key_code: KeyCode) {
+        match key_code {
+            KeyCode::Esc => {
+                self.pop_mode();
+                self.priority_selection.clear();
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.priority_selection.next(PRIORITY_COUNT);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.priority_selection.prev();
+            }
+            KeyCode::Enter => {
+                if let Some(priority_idx) = self.priority_selection.get() {
+                    use kanban_domain::{CardPriority, CardUpdate};
+                    let priority = match priority_idx {
+                        0 => CardPriority::Low,
+                        1 => CardPriority::Medium,
+                        2 => CardPriority::High,
+                        3 => CardPriority::Critical,
+                        _ => CardPriority::Medium,
+                    };
+
+                    let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+                    let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+
+                    for card_id in &card_ids {
+                        let cmd = Box::new(kanban_domain::commands::UpdateCard {
+                            card_id: *card_id,
+                            updates: CardUpdate {
+                                priority: Some(priority),
+                                ..Default::default()
+                            },
+                        })
+                            as Box<dyn kanban_domain::commands::Command>;
+                        commands.push(cmd);
+                    }
+
+                    if !commands.is_empty() {
+                        if let Err(e) = self.execute_commands_batch(commands) {
+                            tracing::error!("Failed to update cards priority: {}", e);
+                        } else {
+                            tracing::info!(
+                                "Set priority to {:?} for {} cards",
+                                priority,
+                                card_ids.len()
+                            );
+                        }
+                    }
+
+                    self.selected_cards.clear();
+                    self.selection_mode_active = false;
+                }
+                self.pop_mode();
+                self.priority_selection.clear();
             }
             _ => {}
         }
@@ -161,12 +225,7 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
-                        let sprint_count = self
-                            .ctx
-                            .sprints
-                            .iter()
-                            .filter(|s| s.board_id == board.id)
-                            .count();
+                        let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
                         self.sprint_assign_selection.next(sprint_count + 1);
                     }
                 }
@@ -206,12 +265,7 @@ impl App {
                             }
                         } else if let Some(board_idx) = self.active_board_index {
                             if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
-                                let board_sprints: Vec<_> = self
-                                    .ctx
-                                    .sprints
-                                    .iter()
-                                    .filter(|s| s.board_id == board_id)
-                                    .collect();
+                                let board_sprints = Sprint::assignable(&self.ctx.sprints, board_id);
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                     let sprint_id = sprint.id;
                                     let sprint_number = sprint.sprint_number;
@@ -291,16 +345,12 @@ impl App {
                 self.pop_mode();
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
+                self.selection_mode_active = false;
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
-                        let sprint_count = self
-                            .ctx
-                            .sprints
-                            .iter()
-                            .filter(|s| s.board_id == board.id)
-                            .count();
+                        let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
                         self.sprint_assign_selection.next(sprint_count + 1);
                     }
                 }
@@ -334,12 +384,7 @@ impl App {
                         }
                     } else if let Some(board_idx) = self.active_board_index {
                         if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
-                            let board_sprints: Vec<_> = self
-                                .ctx
-                                .sprints
-                                .iter()
-                                .filter(|s| s.board_id == board_id)
-                                .collect();
+                            let board_sprints = Sprint::assignable(&self.ctx.sprints, board_id);
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;
                                 let sprint_number = sprint.sprint_number;
@@ -409,6 +454,7 @@ impl App {
                 self.pop_mode();
                 self.sprint_assign_selection.clear();
                 self.selected_cards.clear();
+                self.selection_mode_active = false;
             }
             _ => {}
         }

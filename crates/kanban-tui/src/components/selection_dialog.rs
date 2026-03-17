@@ -1,4 +1,5 @@
 use crate::app::App;
+use kanban_domain::Sprint;
 use ratatui::Frame;
 
 pub trait SelectionDialog {
@@ -52,6 +53,56 @@ impl SelectionDialog for PriorityDialog {
             .collect();
 
         render_selection_popup_with_list_items(frame, "Set Priority", items, 30, 40);
+    }
+}
+
+pub struct BulkPriorityDialog {
+    pub count: usize,
+}
+
+impl SelectionDialog for BulkPriorityDialog {
+    fn title(&self) -> &str {
+        "Set Priority (Bulk)"
+    }
+
+    fn get_current_selection(&self, _app: &App) -> usize {
+        0
+    }
+
+    fn options_count(&self, _app: &App) -> usize {
+        4 // Low, Medium, High, Critical
+    }
+
+    fn render(&self, app: &App, frame: &mut Frame) {
+        use crate::components::render_selection_popup_with_list_items;
+        use crate::theme::*;
+        use kanban_domain::CardPriority;
+        use ratatui::widgets::ListItem;
+
+        let priorities = [
+            CardPriority::Low,
+            CardPriority::Medium,
+            CardPriority::High,
+            CardPriority::Critical,
+        ];
+
+        let selected = app.priority_selection.get();
+
+        let items: Vec<ListItem> = priorities
+            .iter()
+            .enumerate()
+            .map(|(idx, priority)| {
+                let style = if Some(idx) == selected {
+                    bold_highlight()
+                } else {
+                    normal_text()
+                };
+                ListItem::new(format!("{:?}", priority)).style(style)
+            })
+            .collect();
+
+        let title = format!("Set Priority ({} cards)", self.count);
+        render_selection_popup_with_list_items(frame, &title, items, 35, 40);
     }
 }
 
@@ -136,18 +187,9 @@ impl SelectionDialog for SprintAssignDialog {
     }
 
     fn options_count(&self, app: &App) -> usize {
-        use kanban_domain::SprintStatus;
         if let Some(board_idx) = app.active_board_index {
             if let Some(board) = app.ctx.boards.get(board_idx) {
-                let sprint_count = app
-                    .ctx
-                    .sprints
-                    .iter()
-                    .filter(|s| s.board_id == board.id)
-                    .filter(|s| {
-                        s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled
-                    })
-                    .count();
+                let sprint_count = Sprint::assignable(&app.ctx.sprints, board.id).len();
                 sprint_count + 1 // +1 for None option
             } else {
                 1
@@ -190,16 +232,7 @@ impl SelectionDialog for SprintAssignDialog {
 
         if let Some(board_idx) = app.active_board_index {
             if let Some(board) = app.ctx.boards.get(board_idx) {
-                use kanban_domain::SprintStatus;
-                let board_sprints: Vec<_> = app
-                    .ctx
-                    .sprints
-                    .iter()
-                    .filter(|s| s.board_id == board.id)
-                    .filter(|s| {
-                        s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled
-                    })
-                    .collect();
+                let board_sprints = Sprint::assignable(&app.ctx.sprints, board.id);
 
                 let current_sprint_id = if let Some(card_idx) = app.active_card_index {
                     app.ctx.cards.get(card_idx).and_then(|c| c.sprint_id)

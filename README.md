@@ -54,6 +54,15 @@ cargo install --path crates/kanban-cli
 nix run github:fulsomenko/kanban
 ```
 
+### Linux Clipboard Support
+
+For clipboard operations (`y`/`Y` to copy branch names) to persist after exiting, you need a clipboard manager running:
+
+- **Wayland**: `wl-clip-persist`, `cliphist`, `clipman`, or your DE's built-in manager
+- **X11**: Most desktop environments include one by default
+
+Without a clipboard manager, copied content is lost when the app exits (this is a Linux platform limitation, not a bug).
+
 ## Quick Start
 
 ### TUI
@@ -68,6 +77,14 @@ kanban myboard.json    # Load a board from file
 2. Press `Enter` to activate it
 3. Add cards with `n` and organize them
 4. Press `x` to export as JSON
+
+### MCP Server
+
+```bash
+nix run github:fulsomenko/kanban#kanban-mcp
+```
+
+Provides full read/write access to your boards, cards, columns, and sprints over the [Model Context Protocol](https://modelcontextprotocol.io) for use with LLM tools like Claude Code, Cursor, etc.
 
 ### CLI
 
@@ -109,6 +126,7 @@ Switch between view modes with `V`:
 **Card list**
 - `n` - New card, `e` - Edit, `r` - Rename
 - `d` - Archive, `c` - Toggle done, `p` - Set priority
+- `v` - Toggle selection mode, `Ctrl+a` - Select all
 
 **Views & Search**
 - `V` - Toggle view mode, `/` - Search

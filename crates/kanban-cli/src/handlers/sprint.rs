@@ -1,7 +1,25 @@
 use crate::cli::{SprintAction, SprintUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
+use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{FieldUpdate, KanbanOperations, SprintUpdate};
+
+fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .or_else(|_| {
+            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                .map_err(|_| ())
+                .and_then(|d| d.and_hms_opt(0, 0, 0).ok_or(()))
+                .map(|dt| dt.and_utc())
+        })
+        .map_err(|_| {
+            format!(
+                "Invalid date '{}'. Supported formats: YYYY-MM-DD or RFC 3339 (e.g., 2024-01-15T10:30:00Z)",
+                s
+            )
+        })
+}
 
 pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Result<()> {
     match action {
@@ -14,16 +32,24 @@ pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Resul
             ctx.save().await?;
             output::output_success(&sprint);
         }
-        SprintAction::List { board_id } => {
+        SprintAction::List {
+            board_id,
+            page,
+            page_size,
+        } => {
             let sprints = ctx.list_sprints(board_id)?;
-            output::output_list(sprints);
+            let (page, page_size) = resolve_page_params(page, page_size)?;
+            output::output_success(PaginatedList::paginate(sprints, page, page_size)?);
         }
         SprintAction::Get { id } => match ctx.get_sprint(id)? {
             Some(sprint) => output::output_success(&sprint),
             None => return output::output_error(&format!("Sprint not found: {}", id)),
         },
         SprintAction::Update(args) => {
-            let sprint = handle_update(ctx, args).await?;
+            let sprint = match handle_update(ctx, args).await {
+                Ok(s) => s,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
             output::output_success(&sprint);
         }
         SprintAction::Activate { id, duration_days } => {
@@ -54,7 +80,26 @@ async fn handle_update(
     ctx: &mut CliContext,
     args: SprintUpdateArgs,
 ) -> anyhow::Result<kanban_domain::Sprint> {
+    let start_date = if args.clear_start_date {
+        FieldUpdate::Clear
+    } else {
+        match args.start_date {
+            Some(d) => FieldUpdate::Set(parse_datetime(&d).map_err(anyhow::Error::msg)?),
+            None => FieldUpdate::NoChange,
+        }
+    };
+
+    let end_date = if args.clear_end_date {
+        FieldUpdate::Clear
+    } else {
+        match args.end_date {
+            Some(d) => FieldUpdate::Set(parse_datetime(&d).map_err(anyhow::Error::msg)?),
+            None => FieldUpdate::NoChange,
+        }
+    };
+
     let updates = SprintUpdate {
+        name: args.name,
         name_index: FieldUpdate::NoChange,
         prefix: args
             .prefix
@@ -65,8 +110,8 @@ async fn handle_update(
             .map(FieldUpdate::Set)
             .unwrap_or(FieldUpdate::NoChange),
         status: None,
-        start_date: FieldUpdate::NoChange,
-        end_date: FieldUpdate::NoChange,
+        start_date,
+        end_date,
     };
     let sprint = ctx.update_sprint(args.id, updates)?;
     ctx.save().await?;

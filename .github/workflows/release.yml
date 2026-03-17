@@ -7,6 +7,10 @@ on:
     types:
       - closed
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Release to crates.io
@@ -20,43 +24,34 @@ jobs:
           fetch-depth: 0
           ref: master
 
-      - name: Get versions
-        id: versions
+      - name: Check for changesets
+        id: check
         run: |
-          CURRENT_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
-          LAST_VERSION="${LAST_TAG#v}"
+          if [ ! -d ".changeset" ]; then
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+            echo "No .changeset directory, skipping release"
+            exit 0
+          fi
 
-          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "last=$LAST_VERSION" >> $GITHUB_OUTPUT
-
-          # Check if current version is greater than last version using sort -V
-          # Note: sort -V is a GNU extension, available on Ubuntu runners
-          version_gt() {
-            [ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$2" ]
-          }
-
-          if version_gt "$CURRENT_VERSION" "$LAST_VERSION"; then
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "Version increased: $LAST_VERSION → $CURRENT_VERSION"
-          elif [ "$CURRENT_VERSION" = "$LAST_VERSION" ]; then
-            echo "should_release=false" >> $GITHUB_OUTPUT
-            echo "Version unchanged ($CURRENT_VERSION), skipping release"
+          CHANGESETS=$(find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" 2>/dev/null || true)
+          if [ -z "$CHANGESETS" ]; then
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+            echo "No changesets found, skipping release"
           else
-            echo "should_release=false" >> $GITHUB_OUTPUT
-            echo "::error::Version decreased: $LAST_VERSION → $CURRENT_VERSION (must be greater)"
-            exit 1
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+            echo "Found changesets:"
+            echo "$CHANGESETS"
           fi
 
       - uses: cachix/install-nix-action@v27
-        if: steps.versions.outputs.should_release == 'true'
+        if: steps.check.outputs.has_changesets == 'true'
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: |
             experimental-features = nix-command flakes
 
       - name: Setup SSH deploy key
-        if: steps.versions.outputs.should_release == 'true'
+        if: steps.check.outputs.has_changesets == 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
@@ -64,70 +59,80 @@ jobs:
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
       - name: Configure Git
-        if: steps.versions.outputs.should_release == 'true'
+        if: steps.check.outputs.has_changesets == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin git@github.com:fulsomenko/kanban.git
 
-      - name: Aggregate changelog from changesets
-        if: steps.versions.outputs.should_release == 'true'
+      # bump-version reads changesets, aggregate-changelog reads then deletes them.
+      # These two steps must run in this order.
+      - name: Bump version from changesets
+        if: steps.check.outputs.has_changesets == 'true'
         run: |
-          bash scripts/aggregate-changelog.sh
+          nix develop --command bump-version
 
-      - name: Commit changelog update
-        if: steps.versions.outputs.should_release == 'true'
+      - name: Aggregate changelog
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          nix develop --command aggregate-changelog "${{ github.event.pull_request.number }}"
+
+      - name: Commit release changes
+        if: steps.check.outputs.has_changesets == 'true'
+        id: release
+        run: |
+          NEW_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
+          echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $NEW_VERSION"
+          git add .
+          git commit -m "chore: release v${NEW_VERSION}"
+
+      - name: Validate release build
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          nix develop --command validate-release
+
+      - name: Push release commit
+        if: steps.check.outputs.has_changesets == 'true'
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
-          git add CHANGELOG.md
-          git commit -m "docs: update changelog for v${{ steps.versions.outputs.current }}" || echo "No changelog changes to commit"
-          git push origin master || echo "Nothing to push"
-
-      - name: Validate release build
-        if: steps.versions.outputs.should_release == 'true'
-        run: |
-          nix develop --command bash scripts/validate-release.sh
+          git push origin master
 
       - name: Publish to crates.io
-        if: steps.versions.outputs.should_release == 'true'
+        if: steps.check.outputs.has_changesets == 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          echo "🚀 Publishing to crates.io..."
+          echo "Publishing to crates.io..."
           nix run .#publish-crates
-          echo "✅ Published successfully"
+          echo "Published successfully"
 
       - name: Tag version
-        if: steps.versions.outputs.should_release == 'true'
+        if: steps.check.outputs.has_changesets == 'true'
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
-          git tag "v${{ steps.versions.outputs.current }}"
-          git push origin "v${{ steps.versions.outputs.current }}"
+          git tag "v${{ steps.release.outputs.new }}"
+          git push origin "v${{ steps.release.outputs.new }}"
 
       - name: Create GitHub Release
-        if: steps.versions.outputs.should_release == 'true'
+        if: steps.check.outputs.has_changesets == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.versions.outputs.current }}
+          tag_name: v${{ steps.release.outputs.new }}
           generate_release_notes: true
 
-      - name: Clean up changesets and sync develop
-        if: steps.versions.outputs.should_release == 'true'
+      - name: Sync develop with master
+        if: steps.check.outputs.has_changesets == 'true'
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
-          # Delete changesets on master (after successful publish)
-          if [ -d ".changeset" ]; then
-            find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -delete
-            git add .changeset/
-          fi
-          git commit -m "chore: clean up changesets for v${{ steps.versions.outputs.current }}" || echo "No changesets to clean up"
-          git push origin master || echo "Nothing to push"
-
-          # Sync develop with master (gets changelog + changeset cleanup)
           git checkout develop
           git pull origin develop
-          git merge origin/master --no-edit
+          if ! git merge origin/master --no-edit; then
+            echo "::warning::Failed to auto-merge master into develop. Manual merge required."
+            git merge --abort
+            exit 0
+          fi
           git push origin develop

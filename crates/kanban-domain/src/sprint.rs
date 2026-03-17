@@ -33,6 +33,14 @@ pub struct Sprint {
 pub type SprintId = Uuid;
 
 impl Sprint {
+    pub fn assignable(sprints: &[Sprint], board_id: Uuid) -> Vec<&Sprint> {
+        sprints
+            .iter()
+            .filter(|s| s.board_id == board_id)
+            .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
+            .collect()
+    }
+
     pub fn new(
         board_id: Uuid,
         sprint_number: u32,
@@ -159,6 +167,7 @@ impl Sprint {
 /// See [`FieldUpdate`] documentation for usage examples.
 #[derive(Debug, Clone, Default)]
 pub struct SprintUpdate {
+    pub name: Option<String>,
     pub name_index: FieldUpdate<usize>,
     pub prefix: FieldUpdate<String>,
     pub card_prefix: FieldUpdate<String>,

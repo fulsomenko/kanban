@@ -88,10 +88,13 @@ kanban column delete <COLUMN_ID>
 ### Card Operations
 
 ```bash
-# List cards
+# List cards (returns CardSummary — no description; use card get for full details)
 kanban card list --board-id <BOARD_ID>
 kanban card list --board-id <BOARD_ID> --column-id <COLUMN_ID>
 kanban card list --board-id <BOARD_ID> --sprint-id <SPRINT_ID>
+
+# Paginate results
+kanban card list --board-id <BOARD_ID> --page 2 --page-size 20
 
 # Create a card
 kanban card create --board-id <BOARD_ID> --column-id <COLUMN_ID> --title "Implement feature"
@@ -108,6 +111,9 @@ kanban card update <CARD_ID> --priority high --status done --points 5
 # Move a card to another column
 kanban card move <CARD_ID> --column-id <NEW_COLUMN_ID>
 kanban card move <CARD_ID> --column-id <NEW_COLUMN_ID> --position 0
+
+# List archived cards (also supports --page, --page-size)
+kanban card list --archived
 
 # Archive/restore/delete cards
 kanban card archive <CARD_ID>
@@ -178,6 +184,24 @@ All CLI commands output JSON for easy parsing and scripting:
   "data": { ... }
 }
 ```
+
+`card list` and `card list --archived` return a paginated envelope. All list commands (board, column, sprint, card) use the same shape:
+
+```json
+{
+  "success": true,
+  "api_version": "0.2.0",
+  "data": {
+    "items": [ { "id": "...", "title": "...", "status": "Todo", ... } ],
+    "total": 42,
+    "page": 1,
+    "page_size": 50,
+    "total_pages": 1
+  }
+}
+```
+
+Card and archived-card items are summaries — `description` is excluded. Use `card get <ID>` for full card details.
 
 ```bash
 # Pipe to jq for processing

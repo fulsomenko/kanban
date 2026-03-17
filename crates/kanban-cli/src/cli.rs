@@ -1,11 +1,15 @@
 use clap::{Args, Parser, Subcommand};
 use uuid::Uuid;
 
+#[cfg(has_git_commit)]
 const VERSION: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     "\ncommit: ",
     env!("GIT_COMMIT_HASH")
 );
+
+#[cfg(not(has_git_commit))]
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser)]
 #[command(name = "kanban")]
@@ -58,7 +62,12 @@ pub enum BoardAction {
         card_prefix: Option<String>,
     },
     /// List all boards
-    List,
+    List {
+        #[arg(long)]
+        page: Option<u32>,
+        #[arg(long)]
+        page_size: Option<u32>,
+    },
     /// Get a specific board by ID
     Get {
         /// Board ID
@@ -109,6 +118,10 @@ pub enum ColumnAction {
     List {
         #[arg(long)]
         board_id: Uuid,
+        #[arg(long)]
+        page: Option<u32>,
+        #[arg(long)]
+        page_size: Option<u32>,
     },
     /// Get a specific column by ID
     Get {
@@ -141,6 +154,8 @@ pub struct ColumnUpdateArgs {
     pub position: Option<i32>,
     #[arg(long)]
     pub wip_limit: Option<u32>,
+    #[arg(long)]
+    pub clear_wip_limit: bool,
 }
 
 // Card commands
@@ -156,60 +171,60 @@ pub enum CardAction {
     Create(CardCreateArgs),
     /// List cards with optional filters
     List(CardListArgs),
-    /// Get a specific card by ID
+    /// Get a specific card by ID or identifier (e.g. KAN-5)
     Get {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Update a card
     Update(CardUpdateArgs),
     /// Move a card to another column
     Move {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
         #[arg(long)]
         column_id: Uuid,
         #[arg(long)]
         position: Option<i32>,
     },
-    /// Archive a card by ID
+    /// Archive a card by ID or identifier (e.g. KAN-5)
     Archive {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
-    /// Restore an archived card by ID
+    /// Restore an archived card by ID or identifier (e.g. KAN-5)
     Restore {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
         #[arg(long)]
         column_id: Option<Uuid>,
     },
-    /// Permanently delete an archived card by ID
+    /// Permanently delete an archived card by ID or identifier (e.g. KAN-5)
     Delete {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Assign a card to a sprint
     AssignSprint {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
         #[arg(long)]
         sprint_id: Uuid,
     },
     /// Unassign a card from its sprint
     UnassignSprint {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Get the branch name for a card
     BranchName {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Get the git checkout command for a card
     GitCheckout {
-        /// Card ID
-        id: Uuid,
+        /// Card UUID or identifier like KAN-5 or 5
+        id: String,
     },
     /// Archive multiple cards
     BulkArchive {
@@ -262,12 +277,16 @@ pub struct CardListArgs {
     pub status: Option<String>,
     #[arg(long)]
     pub archived: bool,
+    #[arg(long)]
+    pub page: Option<u32>,
+    #[arg(long)]
+    pub page_size: Option<u32>,
 }
 
 #[derive(Args)]
 pub struct CardUpdateArgs {
-    /// Card ID to update
-    pub id: Uuid,
+    /// Card UUID or identifier like KAN-5 or 5
+    pub id: String,
     #[arg(long)]
     pub title: Option<String>,
     #[arg(long)]
@@ -306,6 +325,10 @@ pub enum SprintAction {
     List {
         #[arg(long)]
         board_id: Uuid,
+        #[arg(long)]
+        page: Option<u32>,
+        #[arg(long)]
+        page_size: Option<u32>,
     },
     /// Get a specific sprint by ID
     Get {
@@ -343,9 +366,19 @@ pub struct SprintUpdateArgs {
     /// Sprint ID to update
     pub id: Uuid,
     #[arg(long)]
+    pub name: Option<String>,
+    #[arg(long)]
     pub prefix: Option<String>,
     #[arg(long)]
     pub card_prefix: Option<String>,
+    #[arg(long)]
+    pub start_date: Option<String>,
+    #[arg(long)]
+    pub end_date: Option<String>,
+    #[arg(long)]
+    pub clear_start_date: bool,
+    #[arg(long)]
+    pub clear_end_date: bool,
 }
 
 // Export/Import commands

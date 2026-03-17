@@ -6,10 +6,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Get current version from Cargo.toml (already set in PR)
+PR_NUMBER="${1:-}"
+
 CURRENT_VERSION=$(grep -m1 'version = ' Cargo.toml | cut -d'"' -f2)
 
-# Check for changesets (excluding README.md)
 if [ ! -d ".changeset" ]; then
   echo "No changesets to aggregate"
   exit 0
@@ -23,26 +23,36 @@ fi
 
 echo "Aggregating $changeset_count changesets into CHANGELOG.md for version $CURRENT_VERSION"
 
-# Aggregate changeset entries
 CHANGELOG_ENTRIES=""
 for changeset in .changeset/*.md; do
   [ -e "$changeset" ] || continue
   [ "$(basename "$changeset")" = "README.md" ] && continue
 
-  # Extract description (everything outside the --- frontmatter)
-  description=$(sed -n '/^---$/,/^---$/!p' "$changeset" | sed '/^---$/d' | sed '/^$/d')
+  description=$(sed -n '/^---$/,/^---$/!p' "$changeset" | sed '/^---$/d' | sed '/^$/d' | sed 's/^- //' | sed 's/^/- /')
   CHANGELOG_ENTRIES+="$description\n"
 done
 
-# Prepend to CHANGELOG.md
 DATE=$(date +%Y-%m-%d)
+PR_LINK=""
+if [ -n "$PR_NUMBER" ]; then
+  REPO_URL=$(git remote get-url origin | sed 's/\.git$//' | sed 's|git@github.com:|https://github.com/|')
+  PR_LINK=" ([#$PR_NUMBER]($REPO_URL/pull/$PR_NUMBER))"
+fi
+
+if [ ! -f CHANGELOG.md ]; then
+  echo "# Changelog" > CHANGELOG.md
+  echo "" >> CHANGELOG.md
+fi
+
 {
-  echo "## [$CURRENT_VERSION] - $DATE"
+  echo "## [$CURRENT_VERSION] - $DATE$PR_LINK"
   echo ""
   printf '%b' "$CHANGELOG_ENTRIES"
   echo ""
-  [ -f CHANGELOG.md ] && cat CHANGELOG.md
+  cat CHANGELOG.md
 } > CHANGELOG.md.new
 mv CHANGELOG.md.new CHANGELOG.md
+
+find .changeset -maxdepth 1 -name "*.md" ! -name "README.md" -delete
 
 echo "Aggregated changesets into CHANGELOG.md for version $CURRENT_VERSION"

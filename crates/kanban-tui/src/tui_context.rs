@@ -182,6 +182,7 @@ impl KanbanOperations for TuiContext {
         board_id: Uuid,
         column_id: Uuid,
         title: String,
+        options: kanban_domain::CreateCardOptions,
     ) -> KanbanResult<Card> {
         let position =
             kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
@@ -190,6 +191,7 @@ impl KanbanOperations for TuiContext {
             column_id,
             title,
             position,
+            options,
         });
         self.execute_command(cmd)?;
         Ok(self.cards.last().unwrap().clone())
@@ -225,6 +227,18 @@ impl KanbanOperations for TuiContext {
 
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {
         Ok(self.cards.iter().find(|c| c.id == id).cloned())
+    }
+
+    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>> {
+        use kanban_domain::search::find_card_by_identifier as search_by_identifier;
+        Ok(search_by_identifier(
+            identifier,
+            &self.cards,
+            &self.columns,
+            &self.boards,
+            &self.sprints,
+        )
+        .cloned())
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {

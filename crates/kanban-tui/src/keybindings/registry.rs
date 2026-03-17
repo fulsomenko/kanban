@@ -66,6 +66,9 @@ impl KeybindingRegistry {
                 DialogMode::SetCardPriority => {
                     Box::new(DialogSelectionProvider::new("Set Priority"))
                 }
+                DialogMode::SetMultipleCardsPriority => {
+                    Box::new(DialogSelectionProvider::new("Set Priority (Bulk)"))
+                }
                 DialogMode::OrderCards => Box::new(DialogSelectionProvider::new("Sort Tasks")),
                 DialogMode::AssignCardToSprint => {
                     Box::new(DialogSelectionProvider::new("Assign to Sprint"))

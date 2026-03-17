@@ -1,13 +1,29 @@
-{ pkgs ? import <nixpkgs> {}, rustToolchain ? pkgs.rustc }:
+{
+  pkgs ? import <nixpkgs> {},
+  rustToolchain ? pkgs.rustc,
+  changeset ? null,
+  aggregateChangelog ? null,
+  bumpVersion ? null,
+  publishCrates ? null,
+  validateRelease ? null,
+}:
 
 let
-  changeset = pkgs.writeShellScriptBin "changeset" ''
-    ${builtins.readFile ./scripts/create-changeset.sh}
-  '';
+  scripts = builtins.filter (x: x != null) [
+    changeset
+    aggregateChangelog
+    bumpVersion
+    publishCrates
+    validateRelease
+  ];
 in
 
 pkgs.mkShell {
   name = "kanban-rust-shell";
+
+  nativeBuildInputs = with pkgs; [
+    pkg-config
+  ];
 
   buildInputs = with pkgs; [
     # Rust toolchain
@@ -19,11 +35,16 @@ pkgs.mkShell {
 
     # Development utilities
     bacon
-    changeset
 
     asciinema_3
     asciinema-agg
-  ];
+  ] ++ lib.optionals stdenv.isLinux [
+    # Clipboard support
+    wayland
+    xorg.libxcb
+    wl-clipboard  # for testing on Wayland
+    xclip         # for testing on X11
+  ] ++ scripts;
 
   shellHook = ''
     export RUST_BACKTRACE=1
@@ -32,4 +53,3 @@ pkgs.mkShell {
     echo "🦀 Rustc: $(rustc --version)"
   '';
 }
-
