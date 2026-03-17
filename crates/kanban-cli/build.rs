@@ -1,6 +1,7 @@
 use std::process::Command;
 
 fn main() {
+    println!("cargo::rustc-check-cfg=cfg(has_git_commit)");
     println!("cargo::rerun-if-changed=../../.git/HEAD");
     println!("cargo::rerun-if-changed=../../.git/refs/heads/");
     println!("cargo::rerun-if-env-changed=GIT_COMMIT_HASH");
@@ -25,4 +26,7 @@ fn main() {
         .unwrap_or_else(|| "unknown".to_string());
 
     println!("cargo::rustc-env=GIT_COMMIT_HASH={}", commit_hash);
+    if commit_hash != "unknown" {
+        println!("cargo::rustc-cfg=has_git_commit");
+    }
 }
