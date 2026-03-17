@@ -18,10 +18,30 @@ pub const MAX_PAGE_SIZE: usize = 500;
 /// Resolve optional `page` and `page_size` CLI/MCP inputs to concrete values.
 ///
 /// `None` falls back to [`DEFAULT_PAGE`] / [`DEFAULT_PAGE_SIZE`].
-pub fn resolve_page_params(page: Option<u32>, page_size: Option<u32>) -> (usize, usize) {
+///
+/// # Errors
+///
+/// Returns [`KanbanError::Validation`] if the resolved `page` is 0, `page_size`
+/// is 0, or `page_size` exceeds [`MAX_PAGE_SIZE`].
+pub fn resolve_page_params(page: Option<u32>, page_size: Option<u32>) -> KanbanResult<(usize, usize)> {
     let page = page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
     let page_size = page_size.map(|p| p as usize).unwrap_or(DEFAULT_PAGE_SIZE);
-    (page, page_size)
+    if page == 0 {
+        return Err(KanbanError::Validation(
+            "page must be >= 1 (1-based)".to_string(),
+        ));
+    }
+    if page_size == 0 {
+        return Err(KanbanError::Validation(
+            "page_size must be >= 1".to_string(),
+        ));
+    }
+    if page_size > MAX_PAGE_SIZE {
+        return Err(KanbanError::Validation(format!(
+            "page_size must be <= {MAX_PAGE_SIZE}"
+        )));
+    }
+    Ok((page, page_size))
 }
 
 /// Paginated response envelope returned by CLI and MCP list endpoints.

@@ -31,7 +31,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             output::output_success(&card);
         }
         CardAction::List(args) => {
-            let (page, page_size) = resolve_page_params(args.page, args.page_size);
+            let (page, page_size) = resolve_page_params(args.page, args.page_size)?;
             if args.archived {
                 let archived = ctx.list_archived_cards()?;
                 let summaries: Vec<ArchivedCardSummary> =

@@ -13,7 +13,7 @@ pub async fn handle(ctx: &mut CliContext, action: BoardAction) -> anyhow::Result
         }
         BoardAction::List { page, page_size } => {
             let boards = ctx.list_boards()?;
-            let (page, page_size) = resolve_page_params(page, page_size);
+            let (page, page_size) = resolve_page_params(page, page_size)?;
             output::output_success(PaginatedList::paginate(boards, page, page_size)?);
         }
         BoardAction::Get { id } => match ctx.get_board(id)? {

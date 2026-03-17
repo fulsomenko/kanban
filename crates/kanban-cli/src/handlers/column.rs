@@ -21,7 +21,7 @@ pub async fn handle(ctx: &mut CliContext, action: ColumnAction) -> anyhow::Resul
             page_size,
         } => {
             let columns = ctx.list_columns(board_id)?;
-            let (page, page_size) = resolve_page_params(page, page_size);
+            let (page, page_size) = resolve_page_params(page, page_size)?;
             output::output_success(PaginatedList::paginate(columns, page, page_size)?);
         }
         ColumnAction::Get { id } => match ctx.get_column(id)? {

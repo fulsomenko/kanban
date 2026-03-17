@@ -38,7 +38,7 @@ pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Resul
             page_size,
         } => {
             let sprints = ctx.list_sprints(board_id)?;
-            let (page, page_size) = resolve_page_params(page, page_size);
+            let (page, page_size) = resolve_page_params(page, page_size)?;
             output::output_success(PaginatedList::paginate(sprints, page, page_size)?);
         }
         SprintAction::Get { id } => match ctx.get_sprint(id)? {
