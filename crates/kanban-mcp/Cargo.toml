@@ -16,8 +16,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Workspace crates
-kanban-core = { path = "../kanban-core", version = "^0.2" }
-kanban-domain = { path = "../kanban-domain", version = "^0.2" }
+kanban-core = { path = "../kanban-core", version = "^0.3" }
+kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 
 # MCP SDK
 rmcp = { version = "0.11", features = ["server", "transport-io"] }

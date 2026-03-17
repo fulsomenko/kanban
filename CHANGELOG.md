@@ -1,3 +1,71 @@
+## [0.3.0] - 2026-03-17 ([#175](https://github.com/fulsomenko/kanban/pull/175))
+
+- test: add integration tests for MCP round-trips
+- test: add unit tests for MCP helpers and ArgsBuilder
+- feat: update MCP server tools for full CLI parity
+- feat: bring MCP context to full parity with CLI
+- fix: error handling in MCP executor
+- feat: add sprint update fields to CLI (name, dates, clear flags)
+- feat: add --clear-wip-limit flag to CLI column update
+- feat: rewrite MCP server with 37 tools via KanbanOperations trait
+- feat: remove McpTools trait, replaced by KanbanOperations from kanban-domain
+- feat: add McpContext implementing KanbanOperations trait
+- feat: replace async CliExecutor with sync SyncExecutor
+- feat: add kanban-domain, kanban-core, uuid, chrono, tempfile deps to kanban-mcp
+- fix: remove create_card_full bypass, use trait two-step create+update pattern
+- fix: remove update_sprint_full bypass, route through trait's update_sprint
+- feat: add name field to SprintUpdate for MCP name passthrough
+- fix: remove broken clear_description and clear_points MCP flags
+- refactor: remove 4 dead pre-animation functions from TUI card_handlers
+- fix: address PR review findings for release workflow
+- fix: quote variable in parameter expansion to satisfy shellcheck SC2295
+- chore: wire all scripts into nix dev shell
+- fix: use robust frontmatter parsing in changeset-check
+- fix: reorder release workflow to validate before push
+- refactor: extract changelog aggregation into standalone script
+- fix: exclude README.md from changeset detection in bump-version.sh
+- fix: defer version bump to master merge
+- feat: add card identifier search (KAN-197)
+- docs: document Linux clipboard manager requirement
+- refactor(tui): replace last_error with unified Banner system
+- feat(tui): add reusable Banner component
+- feat(tui): enable Wayland support with clipboard manager handoff
+- chore: add Wayland/X11 clipboard dependencies
+- feat(tui): add bulk priority popup rendering
+- feat(tui): add selection mode indicator to footer
+- feat(tui): handle SetMultipleCardsPriority dialog in event loop
+- feat(tui): add keyboard shortcuts for multi-select
+- feat(tui): wire keybinding actions in execute_action
+- feat(tui): add bulk priority popup handler
+- feat(tui): update escape handler for selection mode
+- feat(tui): add auto-select on navigation in selection mode
+- feat(tui): implement vim-style selection mode toggle
+- feat(tui): add bulk move for selected cards
+- feat(tui): add card selection handler functions
+- feat(tui): add card list keybindings for bulk operations
+- feat(tui): register bulk priority dialog provider
+- feat(tui): add BulkPriorityDialog component
+- feat(tui): add keybinding actions for multi-select operations
+- feat(tui): add SetMultipleCardsPriority dialog mode
+- feat(tui): add selection_mode_active field to App
+- feat(mcp): resolve card identifier (e.g. KAN-5) in all card tools
+- feat(cli): accept card identifier (e.g. KAN-5) in all card commands
+- feat(cli,tui,mcp): implement find_card_by_identifier in all contexts
+- feat(domain): add find_card_by_identifier to KanbanOperations trait
+- fix(domain): use sprint card_prefix in identifier resolution
+- fix(domain): PrefixAndNumber with no resolved prefix returns no match instead of falling back to "task"
+- fix(cli): remove redundant find-by-identifier subcommand (card get KAN-5 already works)
+- feat(core): add PaginatedList<T> with paginate() helper and resolve_page_params() utility
+- feat(domain): add ArchivedCardSummary with From<&ArchivedCard> impl
+- feat(cli): card list defaults to CardSummary (no description); use card get for full details
+- feat(cli): add --page, --page-size flags to card, board, column, sprint list
+- feat(cli): archived card list returns PaginatedList<ArchivedCardSummary>
+- feat(mcp): tool_list_cards and tool_list_archived_cards return PaginatedList<CardSummary>
+- test(cli): card list pagination, summary shape, out-of-bounds page
+- nix: inject self.rev as GIT_COMMIT_HASH in Nix builds
+- fix: suppress commit: line in -V when git hash is unknown
+- fmt: wrap long lines
+
 ## [0.2.0] - 2026-02-01
 
 - - feat(tui): register undo/redo keybindings in CardList provider
