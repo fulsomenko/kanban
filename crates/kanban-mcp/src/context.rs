@@ -1,15 +1,11 @@
 use crate::executor::SyncExecutor;
-use kanban_core::{KanbanResult, PaginatedList};
+use kanban_core::{KanbanResult, PaginatedList, MAX_PAGE_SIZE};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use uuid::Uuid;
 
-#[derive(serde::Deserialize)]
-struct ListResponse<T> {
-    items: Vec<T>,
-}
 
 #[derive(serde::Deserialize)]
 struct DeletedResponse {
@@ -112,12 +108,7 @@ impl McpContext {
         }
     }
 
-    fn execute_list<T: serde::de::DeserializeOwned>(&self, args: &[&str]) -> KanbanResult<Vec<T>> {
-        let response: ListResponse<T> = self.executor.execute(args)?;
-        Ok(response.items)
-    }
-
-    fn execute_list_paged<T: serde::de::DeserializeOwned>(
+    fn execute_list<T: serde::de::DeserializeOwned>(
         &self,
         args: &[&str],
         page: usize,
@@ -147,7 +138,7 @@ impl McpContext {
             .add_opt("--column-id", column_id_str.as_deref())
             .add_opt("--sprint-id", sprint_id_str.as_deref())
             .add_opt("--status", status_str.as_deref());
-        self.execute_list_paged(&builder.build(), page, page_size)
+        self.execute_list(&builder.build(), page, page_size)
     }
 }
 
@@ -163,7 +154,7 @@ impl KanbanOperations for McpContext {
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
-        self.execute_list(&["board", "list"])
+        Ok(self.execute_list(&["board", "list"], 1, MAX_PAGE_SIZE)?.items)
     }
 
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
@@ -215,7 +206,7 @@ impl KanbanOperations for McpContext {
 
     fn list_columns(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
         let board_id_str = board_id.to_string();
-        self.execute_list(&["column", "list", "--board-id", &board_id_str])
+        Ok(self.execute_list(&["column", "list", "--board-id", &board_id_str], 1, MAX_PAGE_SIZE)?.items)
     }
 
     fn get_column(&self, id: Uuid) -> KanbanResult<Option<Column>> {
@@ -297,7 +288,7 @@ impl KanbanOperations for McpContext {
             .add_opt("--column-id", column_id_str.as_deref())
             .add_opt("--sprint-id", sprint_id_str.as_deref())
             .add_opt("--status", status_str.as_deref());
-        self.execute_list(&builder.build())
+        Ok(self.execute_list(&builder.build(), 1, MAX_PAGE_SIZE)?.items)
     }
 
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {
@@ -384,7 +375,7 @@ impl KanbanOperations for McpContext {
     }
 
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
-        self.execute_list(&["card", "list", "--archived"])
+        Ok(self.execute_list(&["card", "list", "--archived"], 1, MAX_PAGE_SIZE)?.items)
     }
 
     // ========================================================================
@@ -498,7 +489,7 @@ impl KanbanOperations for McpContext {
 
     fn list_sprints(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
         let board_id_str = board_id.to_string();
-        self.execute_list(&["sprint", "list", "--board-id", &board_id_str])
+        Ok(self.execute_list(&["sprint", "list", "--board-id", &board_id_str], 1, MAX_PAGE_SIZE)?.items)
     }
 
     fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>> {
