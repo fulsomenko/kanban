@@ -6,7 +6,6 @@ use kanban_domain::{
 };
 use uuid::Uuid;
 
-
 #[derive(serde::Deserialize)]
 struct DeletedResponse {
     #[allow(dead_code)]
@@ -117,7 +116,12 @@ impl McpContext {
         let page_str = page.to_string();
         let page_size_str = page_size.to_string();
         let mut paged_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-        paged_args.extend(["--page".into(), page_str, "--page-size".into(), page_size_str]);
+        paged_args.extend([
+            "--page".into(),
+            page_str,
+            "--page-size".into(),
+            page_size_str,
+        ]);
         let paged_refs: Vec<&str> = paged_args.iter().map(|s| s.as_str()).collect();
         self.executor.execute(&paged_refs)
     }
@@ -154,7 +158,9 @@ impl KanbanOperations for McpContext {
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
-        Ok(self.execute_list(&["board", "list"], 1, MAX_PAGE_SIZE)?.items)
+        Ok(self
+            .execute_list(&["board", "list"], 1, MAX_PAGE_SIZE)?
+            .items)
     }
 
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
@@ -206,7 +212,13 @@ impl KanbanOperations for McpContext {
 
     fn list_columns(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
         let board_id_str = board_id.to_string();
-        Ok(self.execute_list(&["column", "list", "--board-id", &board_id_str], 1, MAX_PAGE_SIZE)?.items)
+        Ok(self
+            .execute_list(
+                &["column", "list", "--board-id", &board_id_str],
+                1,
+                MAX_PAGE_SIZE,
+            )?
+            .items)
     }
 
     fn get_column(&self, id: Uuid) -> KanbanResult<Option<Column>> {
@@ -375,7 +387,9 @@ impl KanbanOperations for McpContext {
     }
 
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
-        Ok(self.execute_list(&["card", "list", "--archived"], 1, MAX_PAGE_SIZE)?.items)
+        Ok(self
+            .execute_list(&["card", "list", "--archived"], 1, MAX_PAGE_SIZE)?
+            .items)
     }
 
     // ========================================================================
@@ -489,7 +503,13 @@ impl KanbanOperations for McpContext {
 
     fn list_sprints(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
         let board_id_str = board_id.to_string();
-        Ok(self.execute_list(&["sprint", "list", "--board-id", &board_id_str], 1, MAX_PAGE_SIZE)?.items)
+        Ok(self
+            .execute_list(
+                &["sprint", "list", "--board-id", &board_id_str],
+                1,
+                MAX_PAGE_SIZE,
+            )?
+            .items)
     }
 
     fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>> {
