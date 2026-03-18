@@ -6,19 +6,40 @@ fn kanban_bin() -> String {
     if let Ok(path) = std::env::var("KANBAN_BIN") {
         return path;
     }
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let workspace_root = std::path::Path::new(manifest_dir)
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
-    let bin = workspace_root.join("target/debug/kanban");
-    assert!(
-        bin.exists(),
-        "kanban binary not found at {:?}. Run `cargo build --bin kanban` first.",
-        bin
+    let target_dir = std::env::var("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("target")
+        });
+    // Check direct profiles first (plain `cargo build` without --target)
+    for profile in &["release", "debug"] {
+        let p = target_dir.join(profile).join("kanban");
+        if p.is_file() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    // Search target-triple subdirectories (nix / cross-compiled builds)
+    for entry in std::fs::read_dir(&target_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        for profile in &["release", "debug"] {
+            let p = entry.path().join(profile).join("kanban");
+            if p.is_file() {
+                return p.to_string_lossy().into_owned();
+            }
+        }
+    }
+    panic!(
+        "kanban binary not found under {:?}. Run `cargo build --bin kanban` or set KANBAN_BIN.",
+        target_dir
     );
-    bin.to_string_lossy().to_string()
 }
 
 fn setup() -> (McpContext, TempDir) {
