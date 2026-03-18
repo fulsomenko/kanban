@@ -1,5 +1,5 @@
 use crate::executor::SyncExecutor;
-use kanban_core::KanbanResult;
+use kanban_core::{KanbanResult, PaginatedList};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
@@ -115,6 +115,39 @@ impl McpContext {
     fn execute_list<T: serde::de::DeserializeOwned>(&self, args: &[&str]) -> KanbanResult<Vec<T>> {
         let response: ListResponse<T> = self.executor.execute(args)?;
         Ok(response.items)
+    }
+
+    fn execute_list_paged<T: serde::de::DeserializeOwned>(
+        &self,
+        args: &[&str],
+        page: usize,
+        page_size: usize,
+    ) -> KanbanResult<PaginatedList<T>> {
+        let page_str = page.to_string();
+        let page_size_str = page_size.to_string();
+        let mut paged_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        paged_args.extend(["--page".into(), page_str, "--page-size".into(), page_size_str]);
+        let paged_refs: Vec<&str> = paged_args.iter().map(|s| s.as_str()).collect();
+        self.executor.execute(&paged_refs)
+    }
+
+    pub fn list_cards_paged(
+        &self,
+        filter: CardListFilter,
+        page: usize,
+        page_size: usize,
+    ) -> KanbanResult<PaginatedList<CardSummary>> {
+        let board_id_str = filter.board_id.map(|id| id.to_string());
+        let column_id_str = filter.column_id.map(|id| id.to_string());
+        let sprint_id_str = filter.sprint_id.map(|id| id.to_string());
+        let status_str = filter.status.map(|s| s.to_string());
+        let mut builder = ArgsBuilder::new(&["card", "list"]);
+        builder
+            .add_opt("--board-id", board_id_str.as_deref())
+            .add_opt("--column-id", column_id_str.as_deref())
+            .add_opt("--sprint-id", sprint_id_str.as_deref())
+            .add_opt("--status", status_str.as_deref());
+        self.execute_list_paged(&builder.build(), page, page_size)
     }
 }
 

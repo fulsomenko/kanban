@@ -703,12 +703,10 @@ impl KanbanMcpServer {
             sprint_id,
             status,
         };
-        let summaries = spawn_op_ref!(self.ctx, list_cards, filter)?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
-        to_call_tool_result(
-            &PaginatedList::paginate(summaries, page, page_size).map_err(kanban_err_to_mcp)?,
-        )
+        let result = spawn_op_ref!(self.ctx, list_cards_paged, filter, page, page_size)?;
+        to_call_tool_result(&result)
     }
 
     #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
