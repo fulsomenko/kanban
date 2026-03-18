@@ -67,6 +67,21 @@ jobs:
       - name: Build workspace
         run: nix develop --command cargo build --all-features --workspace
 
+  build-no-tui:
+    name: Build (no-tui)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Check no-tui build
+        run: nix develop --command cargo check --package kanban-cli --no-default-features
+
   changeset:
     name: Validate Changeset
     if: github.event_name == 'pull_request' && github.base_ref == 'develop'

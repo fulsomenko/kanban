@@ -3,6 +3,7 @@
   pkgs,
   rustPlatform,
   gitRev ? null,
+  withTui ? true,
 }:
 
 let
@@ -17,12 +18,13 @@ rustPlatform.buildRustPackage {
   cargoLock.lockFile = ./Cargo.lock;
 
   nativeBuildInputs = [ pkgs.pkg-config ];
-  buildInputs = lib.optionals pkgs.stdenv.isLinux [
+  buildInputs = lib.optionals (pkgs.stdenv.isLinux && withTui) [
     pkgs.wayland
     pkgs.xorg.libxcb
   ];
 
-  cargoBuildFlags = [ "--package" "kanban-cli" ];
+  cargoBuildFlags = [ "--package" "kanban-cli" ]
+    ++ lib.optionals (!withTui) [ "--no-default-features" ];
   doCheck = false;
 
   preBuild = lib.optionalString (gitRev != null) ''

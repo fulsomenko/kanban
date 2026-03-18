@@ -6,6 +6,7 @@ mod output;
 use clap::{CommandFactory, Parser};
 use cli::{Cli, Commands};
 use context::CliContext;
+#[cfg(feature = "tui")]
 use kanban_tui::App;
 
 #[tokio::main]
@@ -42,15 +43,23 @@ async fn run() -> anyhow::Result<()> {
 
     match cli.command {
         None => {
-            if let Some(ref file_path) = cli.file {
-                if !std::path::Path::new(file_path).exists() {
-                    let empty_state = kanban_persistence::JsonEnvelope::empty().to_json_string()?;
-                    std::fs::write(file_path, empty_state)?;
-                    tracing::info!("Created new board file: {}", file_path);
+            #[cfg(feature = "tui")]
+            {
+                if let Some(ref file_path) = cli.file {
+                    if !std::path::Path::new(file_path).exists() {
+                        let empty_state =
+                            kanban_persistence::JsonEnvelope::empty().to_json_string()?;
+                        std::fs::write(file_path, empty_state)?;
+                        tracing::info!("Created new board file: {}", file_path);
+                    }
                 }
+                let (mut app, save_rx) = App::new(cli.file);
+                app.run(save_rx).await?;
             }
-            let (mut app, save_rx) = App::new(cli.file);
-            app.run(save_rx).await?;
+            #[cfg(not(feature = "tui"))]
+            anyhow::bail!(
+                "TUI not available in this build. Run `kanban --help` for available subcommands."
+            );
         }
         Some(Commands::Completions { shell }) => {
             clap_complete::generate(shell, &mut Cli::command(), "kanban", &mut std::io::stdout());
