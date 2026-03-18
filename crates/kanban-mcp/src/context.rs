@@ -126,6 +126,9 @@ impl McpContext {
         self.executor.execute(&paged_refs)
     }
 
+    /// MCP-specific method that exposes real pagination metadata from the CLI.
+    /// `KanbanOperations::list_cards` cannot carry pagination params, so `tool_list_cards`
+    /// calls this directly to forward the MCP request's page/page_size to the subprocess.
     pub fn list_cards_paged(
         &self,
         filter: CardListFilter,
@@ -289,18 +292,7 @@ impl KanbanOperations for McpContext {
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
-        let board_id_str = filter.board_id.map(|id| id.to_string());
-        let column_id_str = filter.column_id.map(|id| id.to_string());
-        let sprint_id_str = filter.sprint_id.map(|id| id.to_string());
-        let status_str = filter.status.map(|s| s.to_string());
-
-        let mut builder = ArgsBuilder::new(&["card", "list"]);
-        builder
-            .add_opt("--board-id", board_id_str.as_deref())
-            .add_opt("--column-id", column_id_str.as_deref())
-            .add_opt("--sprint-id", sprint_id_str.as_deref())
-            .add_opt("--status", status_str.as_deref());
-        Ok(self.execute_list(&builder.build(), 1, MAX_PAGE_SIZE)?.items)
+        Ok(self.list_cards_paged(filter, 1, MAX_PAGE_SIZE)?.items)
     }
 
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {
