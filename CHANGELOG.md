@@ -1,3 +1,11 @@
+## [0.3.3] - 2026-03-18 ([#184](https://github.com/fulsomenko/kanban/pull/184))
+
+### KAN-220 Fix Kanban Binary Discovery In Mcp Integration Tests For Nix Builds (2026-03-18)
+
+- fix: check direct target profiles before triple subdirs in kanban_bin()
+- fix: discover kanban binary across target triples and profiles in integration tests
+
+
 ## [0.3.2] - 2026-03-18 ([#182](https://github.com/fulsomenko/kanban/pull/182))
 
 ### KAN-217 Mcp List Cards Pagination Returns Max 50 Cards Instead Of All Cards (2026-03-18)
