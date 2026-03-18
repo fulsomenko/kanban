@@ -10,12 +10,18 @@ fn kanban_bin() -> String {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| {
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent().unwrap()
-                .parent().unwrap()
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
                 .join("target")
         });
     // Search subdirectories (target-triple) and both profiles
-    for entry in std::fs::read_dir(&target_dir).into_iter().flatten().flatten() {
+    for entry in std::fs::read_dir(&target_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
         for profile in &["release", "debug"] {
             let p = entry.path().join(profile).join("kanban");
             if p.is_file() {
