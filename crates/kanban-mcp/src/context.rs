@@ -1,8 +1,8 @@
 use crate::executor::SyncExecutor;
 use kanban_core::KanbanResult;
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardUpdate, Column, ColumnUpdate,
-    CreateCardOptions, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
+    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use uuid::Uuid;
 
@@ -252,7 +252,7 @@ impl KanbanOperations for McpContext {
         self.executor.execute_with_retry(&builder.build())
     }
 
-    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {
+    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
         let board_id_str = filter.board_id.map(|id| id.to_string());
         let column_id_str = filter.column_id.map(|id| id.to_string());
         let sprint_id_str = filter.sprint_id.map(|id| id.to_string());
