@@ -14,11 +14,15 @@ categories = ["command-line-utilities"]
 name = "kanban"
 path = "src/main.rs"
 
+[features]
+default = ["tui"]
+tui = ["dep:kanban-tui"]
+
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
-kanban-tui = { path = "../kanban-tui", version = "^0.3" }
+kanban-tui = { path = "../kanban-tui", version = "^0.3", optional = true }
 clap.workspace = true
 clap_complete.workspace = true
 tokio.workspace = true

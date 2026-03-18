@@ -1,8 +1,8 @@
 use kanban_core::KanbanResult;
 use kanban_domain::commands::{Command, CommandContext};
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardUpdate, Column, ColumnUpdate,
-    DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
+    ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use serde::{Deserialize, Serialize};
@@ -297,7 +297,7 @@ impl KanbanOperations for CliContext {
         })
     }
 
-    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {
+    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
         let mut cards: Vec<_> = self.cards.to_vec();
 
         if let Some(board_id) = filter.board_id {
@@ -322,7 +322,7 @@ impl KanbanOperations for CliContext {
             cards.retain(|c| c.status == status);
         }
 
-        Ok(cards)
+        Ok(cards.iter().map(CardSummary::from).collect())
     }
 
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {
