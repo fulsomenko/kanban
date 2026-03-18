@@ -56,7 +56,7 @@ async fn run() -> anyhow::Result<()> {
                 app.run(save_rx).await?;
             }
             #[cfg(not(feature = "tui"))]
-            anyhow::bail!("TUI not available in this build. Use a subcommand (e.g. kanban card list).");
+            anyhow::bail!("TUI not available in this build. Run `kanban --help` for available subcommands.");
         }
         Some(Commands::Completions { shell }) => {
             clap_complete::generate(shell, &mut Cli::command(), "kanban", &mut std::io::stdout());
