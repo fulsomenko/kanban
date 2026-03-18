@@ -927,7 +927,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-cli"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -950,7 +950,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -964,7 +964,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-domain"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-mcp"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1000,7 +1000,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-persistence"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-tui"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "arboard",

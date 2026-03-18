@@ -1,3 +1,18 @@
+## [0.3.2] - 2026-03-18 ([#182](https://github.com/fulsomenko/kanban/pull/182))
+
+### KAN-217 Mcp List Cards Pagination Returns Max 50 Cards Instead Of All Cards (2026-03-18)
+
+- fix: pass page/page_size through to CLI subprocess in MCP list_cards
+- refactor: change list_cards to return Vec<CardSummary> instead of Vec<Card>
+
+### KAN-218 Gate Kanban Tui Behind Default Feature Flag In Kanban Cli (2026-03-18)
+
+- ci: add no-tui build check
+- fix: improve no-tui error message to point to --help
+- feat: build kanban-mcp with no-tui kanban binary to skip wayland/xcb
+- feat: gate kanban-tui behind optional 'tui' default feature
+
+
 ## [0.3.1] - 2026-03-17 ([#179](https://github.com/fulsomenko/kanban/pull/179))
 
 ### KAN-216 Changelog Md Grouping By Card (2026-03-17)
