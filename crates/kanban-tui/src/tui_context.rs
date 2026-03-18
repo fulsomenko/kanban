@@ -8,8 +8,8 @@ use kanban_domain::commands::{
 };
 use kanban_domain::Snapshot;
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardUpdate, Column, ColumnUpdate,
-    DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
+    ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -197,7 +197,7 @@ impl KanbanOperations for TuiContext {
         Ok(self.cards.last().unwrap().clone())
     }
 
-    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {
+    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
         let mut cards: Vec<_> = self.cards.clone();
 
         if let Some(board_id) = filter.board_id {
@@ -222,7 +222,7 @@ impl KanbanOperations for TuiContext {
             cards.retain(|c| c.status == status);
         }
 
-        Ok(cards)
+        Ok(cards.iter().map(CardSummary::from).collect())
     }
 
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {

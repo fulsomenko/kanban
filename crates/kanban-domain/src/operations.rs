@@ -1,6 +1,6 @@
 use crate::{
-    ArchivedCard, Board, BoardUpdate, Card, CardStatus, CardUpdate, Column, ColumnUpdate,
-    CreateCardOptions, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardStatus, CardSummary, CardUpdate, Column,
+    ColumnUpdate, CreateCardOptions, Sprint, SprintUpdate,
 };
 use kanban_core::KanbanResult;
 use uuid::Uuid;
@@ -45,7 +45,7 @@ pub trait KanbanOperations {
         title: String,
         options: CreateCardOptions,
     ) -> KanbanResult<Card>;
-    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>>;
+    fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>>;
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>>;
     fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>>;
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card>;

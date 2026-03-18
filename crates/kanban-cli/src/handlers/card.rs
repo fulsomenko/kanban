@@ -3,8 +3,8 @@ use crate::context::CliContext;
 use crate::output;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate,
-    CreateCardOptions, FieldUpdate, KanbanOperations,
+    ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardUpdate, CreateCardOptions,
+    FieldUpdate, KanbanOperations,
 };
 
 use uuid::Uuid;
@@ -42,8 +42,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                     Ok(f) => f,
                     Err(e) => return output::output_error(&e),
                 };
-                let cards = ctx.list_cards(filter)?;
-                let summaries: Vec<CardSummary> = cards.iter().map(CardSummary::from).collect();
+                let summaries = ctx.list_cards(filter)?;
                 output::output_success(PaginatedList::paginate(summaries, page, page_size)?);
             }
         }
