@@ -16,7 +16,14 @@ fn kanban_bin() -> String {
                 .unwrap()
                 .join("target")
         });
-    // Search subdirectories (target-triple) and both profiles
+    // Check direct profiles first (plain `cargo build` without --target)
+    for profile in &["release", "debug"] {
+        let p = target_dir.join(profile).join("kanban");
+        if p.is_file() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    // Search target-triple subdirectories (nix / cross-compiled builds)
     for entry in std::fs::read_dir(&target_dir)
         .into_iter()
         .flatten()
