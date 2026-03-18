@@ -3,8 +3,8 @@ use crate::context::CliContext;
 use crate::output;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardUpdate,
-    CreateCardOptions, FieldUpdate, KanbanOperations,
+    ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardUpdate, CreateCardOptions,
+    FieldUpdate, KanbanOperations,
 };
 
 use uuid::Uuid;
