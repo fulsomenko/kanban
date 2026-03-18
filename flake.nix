@@ -62,10 +62,12 @@
 
         packages = let
           kanban = pkgs.callPackage ./default.nix { gitRev = self.rev or null; };
+          kanban-cli = pkgs.callPackage ./default.nix { gitRev = self.rev or null; withTui = false; };
         in {
           default = kanban;
+          kanban-cli = kanban-cli;
           kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {
-            inherit kanban;
+            kanban = kanban-cli;
           };
           kanban-web = pkgs.callPackage ./web/default.nix {};
           mcp-server-git = servers.packages.${system}.mcp-server-git;
