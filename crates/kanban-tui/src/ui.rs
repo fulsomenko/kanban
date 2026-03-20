@@ -1447,7 +1447,9 @@ fn render_help_popup(app: &mut App, frame: &mut Frame) {
         Paragraph::new(vec![
             Line::from(Span::styled(
                 context.name.clone(),
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(""),
         ]),

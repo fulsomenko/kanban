@@ -837,20 +837,28 @@ impl App {
         match key_code {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.help_pending_action = None;
-                let initial_adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                let initial_adjusted = self
+                    .help_list
+                    .get_adjusted_viewport_height(self.help_viewport_height);
                 self.help_list.navigate_down();
                 self.help_list.ensure_selected_visible(initial_adjusted);
-                let final_adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                let final_adjusted = self
+                    .help_list
+                    .get_adjusted_viewport_height(self.help_viewport_height);
                 if final_adjusted != initial_adjusted {
                     self.help_list.ensure_selected_visible(final_adjusted);
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.help_pending_action = None;
-                let initial_adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                let initial_adjusted = self
+                    .help_list
+                    .get_adjusted_viewport_height(self.help_viewport_height);
                 self.help_list.navigate_up();
                 self.help_list.ensure_selected_visible(initial_adjusted);
-                let final_adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                let final_adjusted = self
+                    .help_list
+                    .get_adjusted_viewport_height(self.help_viewport_height);
                 if final_adjusted != initial_adjusted {
                     self.help_list.ensure_selected_visible(final_adjusted);
                 }
@@ -898,7 +906,9 @@ impl App {
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
                     self.help_list.jump_to(index);
-                    let adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                    let adjusted = self
+                        .help_list
+                        .get_adjusted_viewport_height(self.help_viewport_height);
                     self.help_list.ensure_selected_visible(adjusted);
                     self.help_pending_action = Some((Instant::now(), binding.action));
                 }

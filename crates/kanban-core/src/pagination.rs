@@ -148,7 +148,11 @@ impl Page {
         }
         let above = if self.scroll_offset > 0 { 1 } else { 0 };
         let available = raw_viewport_height.saturating_sub(above);
-        let below = if self.scroll_offset + available < self.total_items { 1 } else { 0 };
+        let below = if self.scroll_offset + available < self.total_items {
+            1
+        } else {
+            0
+        };
         available.saturating_sub(below)
     }
 
