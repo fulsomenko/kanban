@@ -16,7 +16,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, Editable, InputState, KanbanResult, SelectionState};
+use kanban_core::{AppConfig, Editable, InputState, KanbanResult, Page, SelectionState};
 use kanban_domain::AnimationType;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
@@ -70,6 +70,8 @@ pub struct App {
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
     pub help_selection: SelectionState,
+    pub help_page: Page,
+    pub help_viewport_height: usize,
     pub help_pending_action: Option<(Instant, crate::keybindings::KeybindingAction)>,
     pub sprint_task_panel: SprintTaskPanel,
     pub sprint_uncompleted_cards: CardList,
@@ -220,6 +222,8 @@ impl App {
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
             help_selection: SelectionState::new(),
+            help_page: Page::new(0),
+            help_viewport_height: 0,
             help_pending_action: None,
             sprint_task_panel: SprintTaskPanel::Uncompleted,
             sprint_uncompleted_cards: CardList::new(CardListId::All),
@@ -512,6 +516,10 @@ impl App {
         {
             let previous_mode = self.mode.clone();
             self.help_selection.set(Some(0));
+            let provider = crate::keybindings::KeybindingRegistry::get_provider(self);
+            let context = provider.get_context();
+            let total_lines = context.bindings.len() + 4;
+            self.help_page = Page::new(total_lines);
             self.mode = AppMode::Help(Box::new(previous_mode));
             return false;
         }
@@ -835,10 +843,16 @@ impl App {
                 let provider = KeybindingRegistry::get_provider(self);
                 let context = provider.get_context();
                 self.help_selection.next(context.bindings.len());
+                if let Some(sel_idx) = self.help_selection.get() {
+                    self.help_page.scroll_to_visible(sel_idx + 2, self.help_viewport_height);
+                }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.help_pending_action = None;
                 self.help_selection.prev();
+                if let Some(sel_idx) = self.help_selection.get() {
+                    self.help_page.scroll_to_visible(sel_idx + 2, self.help_viewport_height);
+                }
             }
             KeyCode::Char('h') | KeyCode::Char('l') => {
                 self.help_pending_action = None;
@@ -856,6 +870,8 @@ impl App {
                             self.mode = AppMode::Normal;
                         }
                         self.help_selection.clear();
+                        self.help_page = Page::new(0);
+                        self.help_viewport_height = 0;
 
                         self.execute_action(&binding.action);
                     }
@@ -869,6 +885,8 @@ impl App {
                     self.mode = AppMode::Normal;
                 }
                 self.help_selection.clear();
+                self.help_page = Page::new(0);
+                self.help_viewport_height = 0;
             }
             _ => {
                 let provider = KeybindingRegistry::get_provider(self);
@@ -881,6 +899,7 @@ impl App {
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
                     self.help_selection.set(Some(index));
+                    self.help_page.scroll_to_visible(index + 2, self.help_viewport_height);
                     self.help_pending_action = Some((Instant::now(), binding.action));
                 }
             }
@@ -1686,6 +1705,8 @@ impl App {
                                             self.mode = AppMode::Normal;
                                         }
                                         self.help_selection.clear();
+                                        self.help_page = Page::new(0);
+                                        self.help_viewport_height = 0;
 
                                         let action = *action;
                                         self.help_pending_action = None;

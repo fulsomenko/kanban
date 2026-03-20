@@ -395,14 +395,13 @@ fn render_sprint_task_panel_with_selection(
         let viewport_height = area.height.saturating_sub(2) as usize;
         let render_info = task_list.get_render_info(viewport_height);
 
-        if render_info.show_above_indicator {
-            let count = render_info.cards_above_count;
-            let plural = if count == 1 { "" } else { "s" };
-            lines.push(Line::from(Span::styled(
-                format!("  {} Task{} above", count, plural),
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
+        lines.extend(crate::card_list::render_scroll_indicators(
+            render_info.show_above_indicator,
+            render_info.cards_above_count,
+            false,
+            0,
+            "Task",
+        ));
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -425,14 +424,13 @@ fn render_sprint_task_panel_with_selection(
             }
         }
 
-        if render_info.show_below_indicator {
-            let count = render_info.cards_below_count;
-            let plural = if count == 1 { "" } else { "s" };
-            lines.push(Line::from(Span::styled(
-                format!("  {} Task{} below", count, plural),
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
+        lines.extend(crate::card_list::render_scroll_indicators(
+            false,
+            0,
+            render_info.show_below_indicator,
+            render_info.cards_below_count,
+            "Task",
+        ));
     }
 
     // Calculate points from cards in this panel
@@ -1414,7 +1412,7 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
     }
 }
 
-fn render_help_popup(app: &App, frame: &mut Frame) {
+fn render_help_popup(app: &mut App, frame: &mut Frame) {
     use crate::components::ListItemConfig;
     use crate::keybindings::KeybindingRegistry;
 
@@ -1435,13 +1433,16 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
         .constraints([Constraint::Min(0)])
         .split(inner);
 
+    let raw_height = chunks[0].height as usize;
+    app.help_viewport_height = raw_height;
+
     // Get keybindings for the underlying mode
     let provider = KeybindingRegistry::get_provider(app);
     let context = provider.get_context();
     let selected_idx = app.help_selection.get();
 
-    // Build lines for each keybinding
-    let mut lines = vec![
+    // Build all lines: header + blank + N bindings + blank + hint
+    let mut all_lines: Vec<Line> = vec![
         Line::from(Span::styled(
             context.name.clone(),
             Style::default()
@@ -1457,7 +1458,7 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
         let prefix = config.item_prefix();
         let style = config.item_style();
 
-        lines.push(Line::from(vec![
+        all_lines.push(Line::from(vec![
             Span::styled(prefix.to_string(), style),
             Span::styled(binding.key.to_string(), Style::default().fg(Color::Yellow)),
             Span::raw(" "),
@@ -1465,15 +1466,45 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
         ]));
     }
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
+    all_lines.push(Line::from(""));
+    all_lines.push(Line::from(Span::styled(
         "j/k or ↑↓: navigate | Enter: activate | ESC or ?: close",
         Style::default()
             .fg(Color::DarkGray)
             .add_modifier(Modifier::ITALIC),
     )));
 
-    let content = Paragraph::new(lines);
+    app.help_page.set_total_items(all_lines.len());
+
+    let page_info = app.help_page.get_page_info(raw_height);
+    let indicator_lines =
+        page_info.show_above_indicator as usize + page_info.show_below_indicator as usize;
+    let content_budget = raw_height.saturating_sub(indicator_lines);
+
+    let mut rendered_lines: Vec<Line> =
+        crate::card_list::render_scroll_indicators(
+            page_info.show_above_indicator,
+            page_info.items_above,
+            false,
+            0,
+            "entry",
+        );
+    let visible: Vec<Line> = page_info
+        .visible_indices
+        .iter()
+        .take(content_budget)
+        .filter_map(|&i| all_lines.get(i).cloned())
+        .collect();
+    rendered_lines.extend(visible);
+    rendered_lines.extend(crate::card_list::render_scroll_indicators(
+        false,
+        0,
+        page_info.show_below_indicator,
+        page_info.items_below,
+        "entry",
+    ));
+
+    let content = Paragraph::new(rendered_lines);
     frame.render_widget(content, chunks[0]);
 }
 
