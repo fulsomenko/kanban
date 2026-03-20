@@ -88,7 +88,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             AppMode::SprintDetail => render_sprint_detail_view(app, frame, frame.area()),
             _ => render_main(app, frame, frame.area()),
         }
-        render_help_popup(app, frame);
+        let vh = render_help_popup(app, frame);
+        app.help_viewport_height = vh;
     }
 
     // Render banner on top if present
@@ -395,11 +396,9 @@ fn render_sprint_task_panel_with_selection(
         let viewport_height = area.height.saturating_sub(2) as usize;
         let render_info = task_list.get_render_info(viewport_height);
 
-        lines.extend(crate::card_list::render_scroll_indicators(
+        lines.extend(crate::card_list::render_above_indicator(
             render_info.show_above_indicator,
             render_info.cards_above_count,
-            false,
-            0,
             "Task",
         ));
 
@@ -424,9 +423,7 @@ fn render_sprint_task_panel_with_selection(
             }
         }
 
-        lines.extend(crate::card_list::render_scroll_indicators(
-            false,
-            0,
+        lines.extend(crate::card_list::render_below_indicator(
             render_info.show_below_indicator,
             render_info.cards_below_count,
             "Task",
@@ -1412,9 +1409,7 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
     }
 }
 
-// Takes `&mut App` to write `help_viewport_height` after measuring the popup area,
-// so the event handler can use it for scroll calculations on the next keypress.
-fn render_help_popup(app: &mut App, frame: &mut Frame) {
+fn render_help_popup(app: &App, frame: &mut Frame) -> usize {
     use crate::components::ListItemConfig;
     use crate::keybindings::KeybindingRegistry;
 
@@ -1460,7 +1455,6 @@ fn render_help_popup(app: &mut App, frame: &mut Frame) {
 
     // Scrollable bindings body
     let raw_height = chunks[1].height as usize;
-    app.help_viewport_height = raw_height;
 
     let selected_idx = app.help_list.get_selected_index();
 
@@ -1512,6 +1506,7 @@ fn render_help_popup(app: &mut App, frame: &mut Frame) {
         )),
     ]);
     frame.render_widget(footer, chunks[2]);
+    raw_height
 }
 
 fn render_conflict_resolution_popup(_app: &App, frame: &mut Frame) {
