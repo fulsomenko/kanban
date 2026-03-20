@@ -28,11 +28,9 @@ pub fn render_relationship_section(
         let page_info = list_component.get_render_info(viewport_height);
 
         // Above indicator
-        lines.extend(crate::card_list::render_scroll_indicators(
+        lines.extend(crate::card_list::render_above_indicator(
             page_info.show_above_indicator,
             page_info.items_above,
-            false,
-            0,
             "item",
         ));
 
@@ -58,9 +56,7 @@ pub fn render_relationship_section(
         }
 
         // Below indicator
-        lines.extend(crate::card_list::render_scroll_indicators(
-            false,
-            0,
+        lines.extend(crate::card_list::render_below_indicator(
             page_info.show_below_indicator,
             page_info.items_below,
             "item",

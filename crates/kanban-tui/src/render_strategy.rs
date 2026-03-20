@@ -138,11 +138,9 @@ impl RenderStrategy for SinglePanelRenderer {
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
                             // Render above indicator
-                            lines.extend(crate::card_list::render_scroll_indicators(
+                            lines.extend(crate::card_list::render_above_indicator(
                                 render_info.show_above_indicator,
                                 render_info.cards_above_count,
-                                false,
-                                0,
                                 "Task",
                             ));
 
@@ -198,9 +196,7 @@ impl RenderStrategy for SinglePanelRenderer {
                             }
 
                             // Render below indicator
-                            lines.extend(crate::card_list::render_scroll_indicators(
-                                false,
-                                0,
+                            lines.extend(crate::card_list::render_below_indicator(
                                 render_info.show_below_indicator,
                                 render_info.cards_below_count,
                                 "Task",
@@ -255,11 +251,9 @@ impl RenderStrategy for SinglePanelRenderer {
 
                         let render_info = task_list.get_render_info(adjusted_viewport_height);
 
-                        lines.extend(crate::card_list::render_scroll_indicators(
+                        lines.extend(crate::card_list::render_above_indicator(
                             render_info.show_above_indicator,
                             render_info.cards_above_count,
-                            false,
-                            0,
                             "Task",
                         ));
 
@@ -284,9 +278,7 @@ impl RenderStrategy for SinglePanelRenderer {
                             }
                         }
 
-                        lines.extend(crate::card_list::render_scroll_indicators(
-                            false,
-                            0,
+                        lines.extend(crate::card_list::render_below_indicator(
                             render_info.show_below_indicator,
                             render_info.cards_below_count,
                             "Task",
@@ -389,11 +381,9 @@ impl RenderStrategy for MultiPanelRenderer {
 
                         let render_info = task_list.get_render_info(adjusted_viewport_height);
 
-                        lines.extend(crate::card_list::render_scroll_indicators(
+                        lines.extend(crate::card_list::render_above_indicator(
                             render_info.show_above_indicator,
                             render_info.cards_above_count,
-                            false,
-                            0,
                             "Task",
                         ));
 
@@ -424,9 +414,7 @@ impl RenderStrategy for MultiPanelRenderer {
                             }
                         }
 
-                        lines.extend(crate::card_list::render_scroll_indicators(
-                            false,
-                            0,
+                        lines.extend(crate::card_list::render_below_indicator(
                             render_info.show_below_indicator,
                             render_info.cards_below_count,
                             "Task",
