@@ -1467,10 +1467,13 @@ fn render_help_popup(app: &mut App, frame: &mut Frame) {
     let adjusted_height = app.help_list.get_adjusted_viewport_height(raw_height);
     let page_info = app.help_list.get_render_info(adjusted_height);
 
-    let mut rendered_lines: Vec<Line> =
-        crate::card_list::render_above_indicator(page_info.show_above_indicator, page_info.items_above, "item")
-            .into_iter()
-            .collect();
+    let mut rendered_lines: Vec<Line> = crate::card_list::render_above_indicator(
+        page_info.show_above_indicator,
+        page_info.items_above,
+        "item",
+    )
+    .into_iter()
+    .collect();
 
     let visible_lines: Vec<Line> = page_info
         .visible_indices
@@ -1490,9 +1493,11 @@ fn render_help_popup(app: &mut App, frame: &mut Frame) {
         })
         .collect();
     rendered_lines.extend(visible_lines);
-    rendered_lines.extend(
-        crate::card_list::render_below_indicator(page_info.show_below_indicator, page_info.items_below, "item")
-    );
+    rendered_lines.extend(crate::card_list::render_below_indicator(
+        page_info.show_below_indicator,
+        page_info.items_below,
+        "item",
+    ));
 
     frame.render_widget(Paragraph::new(rendered_lines), chunks[1]);
 

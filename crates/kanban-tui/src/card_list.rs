@@ -149,7 +149,11 @@ impl CardList {
 }
 
 /// Render an "N items above" indicator line, or `None` if not shown.
-pub fn render_above_indicator<'a>(show: bool, count: usize, label: &str) -> Option<ratatui::text::Line<'a>> {
+pub fn render_above_indicator<'a>(
+    show: bool,
+    count: usize,
+    label: &str,
+) -> Option<ratatui::text::Line<'a>> {
     use ratatui::style::{Color, Style};
     use ratatui::text::{Line, Span};
 
@@ -165,7 +169,11 @@ pub fn render_above_indicator<'a>(show: bool, count: usize, label: &str) -> Opti
 }
 
 /// Render an "N items below" indicator line, or `None` if not shown.
-pub fn render_below_indicator<'a>(show: bool, count: usize, label: &str) -> Option<ratatui::text::Line<'a>> {
+pub fn render_below_indicator<'a>(
+    show: bool,
+    count: usize,
+    label: &str,
+) -> Option<ratatui::text::Line<'a>> {
     use ratatui::style::{Color, Style};
     use ratatui::text::{Line, Span};
 
