@@ -1427,72 +1427,70 @@ fn render_help_popup(app: &mut App, frame: &mut Frame) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
+    // Layout: fixed header (context name + blank), scrollable bindings, fixed footer
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([Constraint::Min(0)])
+        .horizontal_margin(2)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(2),
+        ])
         .split(inner);
-
-    let raw_height = chunks[0].height as usize;
-    app.help_viewport_height = raw_height;
 
     // Get keybindings for the underlying mode
     let provider = KeybindingRegistry::get_provider(app);
     let context = provider.get_context();
-    let selected_idx = app.help_selection.get();
 
-    // Build all lines: header + blank + N bindings + blank + hint
-    let mut all_lines: Vec<Line> = vec![
-        Line::from(Span::styled(
-            context.name.clone(),
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-    ];
+    // Fixed header
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(Span::styled(
+                context.name.clone(),
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+        ]),
+        chunks[0],
+    );
 
-    for (idx, binding) in context.bindings.iter().enumerate() {
-        let is_selected = selected_idx == Some(idx);
-        let config = ListItemConfig::new().selected(is_selected).focused(true);
-        let prefix = config.item_prefix();
-        let style = config.item_style();
+    // Scrollable bindings body
+    let raw_height = chunks[1].height as usize;
+    app.help_viewport_height = raw_height;
 
-        all_lines.push(Line::from(vec![
-            Span::styled(prefix.to_string(), style),
-            Span::styled(binding.key.to_string(), Style::default().fg(Color::Yellow)),
-            Span::raw(" "),
-            Span::styled(binding.description.clone(), style),
-        ]));
-    }
+    let selected_idx = app.help_list.get_selected_index();
 
-    all_lines.push(Line::from(""));
-    all_lines.push(Line::from(Span::styled(
-        "j/k or ↑↓: navigate | Enter: activate | ESC or ?: close",
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::ITALIC),
-    )));
+    let all_lines: Vec<Line> = context
+        .bindings
+        .iter()
+        .enumerate()
+        .map(|(idx, binding)| {
+            let is_selected = selected_idx == Some(idx);
+            let config = ListItemConfig::new().selected(is_selected).focused(true);
+            let prefix = config.item_prefix();
+            let style = config.item_style();
+            Line::from(vec![
+                Span::styled(prefix.to_string(), style),
+                Span::styled(binding.key.to_string(), Style::default().fg(Color::Yellow)),
+                Span::raw(" "),
+                Span::styled(binding.description.clone(), style),
+            ])
+        })
+        .collect();
 
-    app.help_page.set_total_items(all_lines.len());
+    let adjusted_height = app.help_list.get_adjusted_viewport_height(raw_height);
+    let page_info = app.help_list.get_render_info(adjusted_height);
 
-    let page_info = app.help_page.get_page_info(raw_height);
-    let indicator_lines =
-        page_info.show_above_indicator as usize + page_info.show_below_indicator as usize;
-    let content_budget = raw_height.saturating_sub(indicator_lines);
-
-    let mut rendered_lines: Vec<Line> =
-        crate::card_list::render_scroll_indicators(
-            page_info.show_above_indicator,
-            page_info.items_above,
-            false,
-            0,
-            "entry",
-        );
+    let mut rendered_lines: Vec<Line> = crate::card_list::render_scroll_indicators(
+        page_info.show_above_indicator,
+        page_info.items_above,
+        false,
+        0,
+        "item",
+    );
     let visible: Vec<Line> = page_info
         .visible_indices
         .iter()
-        .take(content_budget)
         .filter_map(|&i| all_lines.get(i).cloned())
         .collect();
     rendered_lines.extend(visible);
@@ -1501,11 +1499,22 @@ fn render_help_popup(app: &mut App, frame: &mut Frame) {
         0,
         page_info.show_below_indicator,
         page_info.items_below,
-        "entry",
+        "item",
     ));
 
-    let content = Paragraph::new(rendered_lines);
-    frame.render_widget(content, chunks[0]);
+    frame.render_widget(Paragraph::new(rendered_lines), chunks[1]);
+
+    // Fixed footer — always visible regardless of scroll position
+    let footer = Paragraph::new(vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            "j/k or ↑↓: navigate | Enter: activate | ESC or ?: close",
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC),
+        )),
+    ]);
+    frame.render_widget(footer, chunks[2]);
 }
 
 fn render_conflict_resolution_popup(_app: &App, frame: &mut Frame) {
