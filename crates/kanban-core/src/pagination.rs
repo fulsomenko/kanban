@@ -137,6 +137,21 @@ impl Page {
         }
     }
 
+    /// Content rows available after reserving lines for scroll indicators.
+    ///
+    /// Above indicator takes 1 row when `scroll_offset > 0`. Below indicator
+    /// takes 1 row when items extend past the available space. This mirrors
+    /// the logic in `ListComponent::get_adjusted_viewport_height`.
+    pub fn get_adjusted_viewport_height(&self, raw_viewport_height: usize) -> usize {
+        if self.total_items == 0 || raw_viewport_height == 0 {
+            return raw_viewport_height;
+        }
+        let above = if self.scroll_offset > 0 { 1 } else { 0 };
+        let available = raw_viewport_height.saturating_sub(above);
+        let below = if self.scroll_offset + available < self.total_items { 1 } else { 0 };
+        available.saturating_sub(below)
+    }
+
     /// Set scroll offset, clamping to valid range.
     pub fn set_scroll_offset(&mut self, offset: usize) {
         self.scroll_offset = offset.min(self.total_items.saturating_sub(1));
