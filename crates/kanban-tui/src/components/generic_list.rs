@@ -167,6 +167,12 @@ impl ListComponent {
     pub fn is_empty(&self) -> bool {
         self.page.total_items == 0
     }
+
+    /// Reset list state: clear item count, selection, and scroll position
+    pub fn reset(&mut self) {
+        self.update_item_count(0);
+        self.page.set_scroll_offset(0);
+    }
 }
 
 #[cfg(test)]
