@@ -830,6 +830,18 @@ impl App {
         }
     }
 
+    fn scroll_help_into_view(&mut self) {
+        if self.help_viewport_height == 0 {
+            return;
+        }
+        let h0 = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+        self.help_list.ensure_selected_visible(h0);
+        let h1 = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+        if h1 != h0 {
+            self.help_list.ensure_selected_visible(h1);
+        }
+    }
+
     fn handle_help_mode(&mut self, key_code: crossterm::event::KeyCode) {
         use crate::keybindings::KeybindingRegistry;
         use crossterm::event::KeyCode;
@@ -838,34 +850,12 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.help_pending_action = None;
                 self.help_list.navigate_down();
-                if self.help_viewport_height > 0 {
-                    let initial_adjusted = self
-                        .help_list
-                        .get_adjusted_viewport_height(self.help_viewport_height);
-                    self.help_list.ensure_selected_visible(initial_adjusted);
-                    let final_adjusted = self
-                        .help_list
-                        .get_adjusted_viewport_height(self.help_viewport_height);
-                    if final_adjusted != initial_adjusted {
-                        self.help_list.ensure_selected_visible(final_adjusted);
-                    }
-                }
+                self.scroll_help_into_view();
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.help_pending_action = None;
                 self.help_list.navigate_up();
-                if self.help_viewport_height > 0 {
-                    let initial_adjusted = self
-                        .help_list
-                        .get_adjusted_viewport_height(self.help_viewport_height);
-                    self.help_list.ensure_selected_visible(initial_adjusted);
-                    let final_adjusted = self
-                        .help_list
-                        .get_adjusted_viewport_height(self.help_viewport_height);
-                    if final_adjusted != initial_adjusted {
-                        self.help_list.ensure_selected_visible(final_adjusted);
-                    }
-                }
+                self.scroll_help_into_view();
             }
             KeyCode::Char('h') | KeyCode::Char('l') => {
                 self.help_pending_action = None;
@@ -910,12 +900,7 @@ impl App {
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
                     self.help_list.jump_to(index);
-                    if self.help_viewport_height > 0 {
-                        let adjusted = self
-                            .help_list
-                            .get_adjusted_viewport_height(self.help_viewport_height);
-                        self.help_list.ensure_selected_visible(adjusted);
-                    }
+                    self.scroll_help_into_view();
                     self.help_pending_action = Some((Instant::now(), binding.action));
                 }
             }
