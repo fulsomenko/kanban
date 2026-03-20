@@ -138,15 +138,13 @@ impl RenderStrategy for SinglePanelRenderer {
                             let render_info = task_list.get_render_info(adjusted_viewport_height);
 
                             // Render above indicator
-                            if render_info.show_above_indicator {
-                                let count = render_info.cards_above_count;
-                                let plural = if count == 1 { "" } else { "s" };
-                                lines.push(Line::from(Span::styled(
-                                    format!("  {} Task{} above", count, plural),
-                                    ratatui::style::Style::default()
-                                        .fg(ratatui::style::Color::DarkGray),
-                                )));
-                            }
+                            lines.extend(crate::card_list::render_scroll_indicators(
+                                render_info.show_above_indicator,
+                                render_info.cards_above_count,
+                                false,
+                                0,
+                                "Task",
+                            ));
 
                             // Render all cards with column headers interspersed
                             let mut columns_shown = std::collections::HashSet::new();
@@ -200,15 +198,13 @@ impl RenderStrategy for SinglePanelRenderer {
                             }
 
                             // Render below indicator
-                            if render_info.show_below_indicator {
-                                let count = render_info.cards_below_count;
-                                let plural = if count == 1 { "" } else { "s" };
-                                lines.push(Line::from(Span::styled(
-                                    format!("  {} Task{} below", count, plural),
-                                    ratatui::style::Style::default()
-                                        .fg(ratatui::style::Color::DarkGray),
-                                )));
-                            }
+                            lines.extend(crate::card_list::render_scroll_indicators(
+                                false,
+                                0,
+                                render_info.show_below_indicator,
+                                render_info.cards_below_count,
+                                "Task",
+                            ));
                         }
                     } else if let Some(board) = app.ctx.boards.get(board_idx.unwrap()) {
                         let mut board_columns: Vec<_> = app
@@ -259,15 +255,13 @@ impl RenderStrategy for SinglePanelRenderer {
 
                         let render_info = task_list.get_render_info(adjusted_viewport_height);
 
-                        if render_info.show_above_indicator {
-                            let count = render_info.cards_above_count;
-                            let plural = if count == 1 { "" } else { "s" };
-                            lines.push(Line::from(Span::styled(
-                                format!("  {} Task{} above", count, plural),
-                                ratatui::style::Style::default()
-                                    .fg(ratatui::style::Color::DarkGray),
-                            )));
-                        }
+                        lines.extend(crate::card_list::render_scroll_indicators(
+                            render_info.show_above_indicator,
+                            render_info.cards_above_count,
+                            false,
+                            0,
+                            "Task",
+                        ));
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -290,15 +284,13 @@ impl RenderStrategy for SinglePanelRenderer {
                             }
                         }
 
-                        if render_info.show_below_indicator {
-                            let count = render_info.cards_below_count;
-                            let plural = if count == 1 { "" } else { "s" };
-                            lines.push(Line::from(Span::styled(
-                                format!("  {} Task{} below", count, plural),
-                                ratatui::style::Style::default()
-                                    .fg(ratatui::style::Color::DarkGray),
-                            )));
-                        }
+                        lines.extend(crate::card_list::render_scroll_indicators(
+                            false,
+                            0,
+                            render_info.show_below_indicator,
+                            render_info.cards_below_count,
+                            "Task",
+                        ));
                     }
                 }
             }
@@ -397,15 +389,13 @@ impl RenderStrategy for MultiPanelRenderer {
 
                         let render_info = task_list.get_render_info(adjusted_viewport_height);
 
-                        if render_info.show_above_indicator {
-                            let count = render_info.cards_above_count;
-                            let plural = if count == 1 { "" } else { "s" };
-                            lines.push(Line::from(Span::styled(
-                                format!("  {} Task{} above", count, plural),
-                                ratatui::style::Style::default()
-                                    .fg(ratatui::style::Color::DarkGray),
-                            )));
-                        }
+                        lines.extend(crate::card_list::render_scroll_indicators(
+                            render_info.show_above_indicator,
+                            render_info.cards_above_count,
+                            false,
+                            0,
+                            "Task",
+                        ));
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -434,15 +424,13 @@ impl RenderStrategy for MultiPanelRenderer {
                             }
                         }
 
-                        if render_info.show_below_indicator {
-                            let count = render_info.cards_below_count;
-                            let plural = if count == 1 { "" } else { "s" };
-                            lines.push(Line::from(Span::styled(
-                                format!("  {} Task{} below", count, plural),
-                                ratatui::style::Style::default()
-                                    .fg(ratatui::style::Color::DarkGray),
-                            )));
-                        }
+                        lines.extend(crate::card_list::render_scroll_indicators(
+                            false,
+                            0,
+                            render_info.show_below_indicator,
+                            render_info.cards_below_count,
+                            "Task",
+                        ));
                     }
 
                     let column_name =
