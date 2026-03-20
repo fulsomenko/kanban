@@ -16,7 +16,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, Editable, InputState, KanbanResult, Page, SelectionState};
+use kanban_core::{AppConfig, Editable, InputState, KanbanResult, SelectionState};
 use kanban_domain::AnimationType;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
@@ -69,8 +69,7 @@ pub struct App {
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
-    pub help_selection: SelectionState,
-    pub help_page: Page,
+    pub help_list: ListComponent,
     pub help_viewport_height: usize,
     pub help_pending_action: Option<(Instant, crate::keybindings::KeybindingAction)>,
     pub sprint_task_panel: SprintTaskPanel,
@@ -221,8 +220,7 @@ impl App {
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
-            help_selection: SelectionState::new(),
-            help_page: Page::new(0),
+            help_list: ListComponent::new(false),
             help_viewport_height: 0,
             help_pending_action: None,
             sprint_task_panel: SprintTaskPanel::Uncompleted,
@@ -515,11 +513,10 @@ impl App {
             && !matches!(self.mode, AppMode::Help(_))
         {
             let previous_mode = self.mode.clone();
-            self.help_selection.set(Some(0));
             let provider = crate::keybindings::KeybindingRegistry::get_provider(self);
             let context = provider.get_context();
-            let total_lines = context.bindings.len() + 4;
-            self.help_page = Page::new(total_lines);
+            self.help_list.update_item_count(context.bindings.len());
+            self.help_list.set_scroll_offset(0);
             self.mode = AppMode::Help(Box::new(previous_mode));
             return false;
         }
@@ -840,18 +837,22 @@ impl App {
         match key_code {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.help_pending_action = None;
-                let provider = KeybindingRegistry::get_provider(self);
-                let context = provider.get_context();
-                self.help_selection.next(context.bindings.len());
-                if let Some(sel_idx) = self.help_selection.get() {
-                    self.help_page.scroll_to_visible(sel_idx + 2, self.help_viewport_height);
+                let initial_adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                self.help_list.navigate_down();
+                self.help_list.ensure_selected_visible(initial_adjusted);
+                let final_adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                if final_adjusted != initial_adjusted {
+                    self.help_list.ensure_selected_visible(final_adjusted);
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.help_pending_action = None;
-                self.help_selection.prev();
-                if let Some(sel_idx) = self.help_selection.get() {
-                    self.help_page.scroll_to_visible(sel_idx + 2, self.help_viewport_height);
+                let initial_adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                self.help_list.navigate_up();
+                self.help_list.ensure_selected_visible(initial_adjusted);
+                let final_adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                if final_adjusted != initial_adjusted {
+                    self.help_list.ensure_selected_visible(final_adjusted);
                 }
             }
             KeyCode::Char('h') | KeyCode::Char('l') => {
@@ -859,7 +860,7 @@ impl App {
             }
             KeyCode::Enter => {
                 self.help_pending_action = None;
-                if let Some(index) = self.help_selection.get() {
+                if let Some(index) = self.help_list.get_selected_index() {
                     let provider = KeybindingRegistry::get_provider(self);
                     let context = provider.get_context();
 
@@ -869,8 +870,7 @@ impl App {
                         } else {
                             self.mode = AppMode::Normal;
                         }
-                        self.help_selection.clear();
-                        self.help_page = Page::new(0);
+                        self.help_list.update_item_count(0);
                         self.help_viewport_height = 0;
 
                         self.execute_action(&binding.action);
@@ -884,8 +884,7 @@ impl App {
                 } else {
                     self.mode = AppMode::Normal;
                 }
-                self.help_selection.clear();
-                self.help_page = Page::new(0);
+                self.help_list.update_item_count(0);
                 self.help_viewport_height = 0;
             }
             _ => {
@@ -898,8 +897,9 @@ impl App {
                     .enumerate()
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
-                    self.help_selection.set(Some(index));
-                    self.help_page.scroll_to_visible(index + 2, self.help_viewport_height);
+                    self.help_list.jump_to(index);
+                    let adjusted = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+                    self.help_list.ensure_selected_visible(adjusted);
                     self.help_pending_action = Some((Instant::now(), binding.action));
                 }
             }
@@ -1704,8 +1704,7 @@ impl App {
                                         } else {
                                             self.mode = AppMode::Normal;
                                         }
-                                        self.help_selection.clear();
-                                        self.help_page = Page::new(0);
+                                        self.help_list.update_item_count(0);
                                         self.help_viewport_height = 0;
 
                                         let action = *action;
