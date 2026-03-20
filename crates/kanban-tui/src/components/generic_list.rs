@@ -479,6 +479,20 @@ mod tests {
     }
 
     #[test]
+    fn test_reset_clears_items_and_selection() {
+        let mut list = ListComponent::new(false);
+        list.update_item_count(10);
+        list.set_selected_index(Some(5));
+        list.set_scroll_offset(3);
+
+        list.reset();
+
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.get_selected_index(), None);
+        assert_eq!(list.get_scroll_offset(), 0);
+    }
+
+    #[test]
     fn test_navigation_with_adjusted_viewport_bug_scenario() {
         // Exact bug scenario: 6 cards in viewport 5
         // User reports card 6 not visible when scrolling
