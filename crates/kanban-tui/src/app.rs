@@ -837,30 +837,34 @@ impl App {
         match key_code {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.help_pending_action = None;
-                let initial_adjusted = self
-                    .help_list
-                    .get_adjusted_viewport_height(self.help_viewport_height);
                 self.help_list.navigate_down();
-                self.help_list.ensure_selected_visible(initial_adjusted);
-                let final_adjusted = self
-                    .help_list
-                    .get_adjusted_viewport_height(self.help_viewport_height);
-                if final_adjusted != initial_adjusted {
-                    self.help_list.ensure_selected_visible(final_adjusted);
+                if self.help_viewport_height > 0 {
+                    let initial_adjusted = self
+                        .help_list
+                        .get_adjusted_viewport_height(self.help_viewport_height);
+                    self.help_list.ensure_selected_visible(initial_adjusted);
+                    let final_adjusted = self
+                        .help_list
+                        .get_adjusted_viewport_height(self.help_viewport_height);
+                    if final_adjusted != initial_adjusted {
+                        self.help_list.ensure_selected_visible(final_adjusted);
+                    }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.help_pending_action = None;
-                let initial_adjusted = self
-                    .help_list
-                    .get_adjusted_viewport_height(self.help_viewport_height);
                 self.help_list.navigate_up();
-                self.help_list.ensure_selected_visible(initial_adjusted);
-                let final_adjusted = self
-                    .help_list
-                    .get_adjusted_viewport_height(self.help_viewport_height);
-                if final_adjusted != initial_adjusted {
-                    self.help_list.ensure_selected_visible(final_adjusted);
+                if self.help_viewport_height > 0 {
+                    let initial_adjusted = self
+                        .help_list
+                        .get_adjusted_viewport_height(self.help_viewport_height);
+                    self.help_list.ensure_selected_visible(initial_adjusted);
+                    let final_adjusted = self
+                        .help_list
+                        .get_adjusted_viewport_height(self.help_viewport_height);
+                    if final_adjusted != initial_adjusted {
+                        self.help_list.ensure_selected_visible(final_adjusted);
+                    }
                 }
             }
             KeyCode::Char('h') | KeyCode::Char('l') => {
@@ -878,7 +882,7 @@ impl App {
                         } else {
                             self.mode = AppMode::Normal;
                         }
-                        self.help_list.update_item_count(0);
+                        self.help_list.reset();
                         self.help_viewport_height = 0;
 
                         self.execute_action(&binding.action);
@@ -892,7 +896,7 @@ impl App {
                 } else {
                     self.mode = AppMode::Normal;
                 }
-                self.help_list.update_item_count(0);
+                self.help_list.reset();
                 self.help_viewport_height = 0;
             }
             _ => {
@@ -906,10 +910,12 @@ impl App {
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
                     self.help_list.jump_to(index);
-                    let adjusted = self
-                        .help_list
-                        .get_adjusted_viewport_height(self.help_viewport_height);
-                    self.help_list.ensure_selected_visible(adjusted);
+                    if self.help_viewport_height > 0 {
+                        let adjusted = self
+                            .help_list
+                            .get_adjusted_viewport_height(self.help_viewport_height);
+                        self.help_list.ensure_selected_visible(adjusted);
+                    }
                     self.help_pending_action = Some((Instant::now(), binding.action));
                 }
             }
@@ -1714,7 +1720,7 @@ impl App {
                                         } else {
                                             self.mode = AppMode::Normal;
                                         }
-                                        self.help_list.update_item_count(0);
+                                        self.help_list.reset();
                                         self.help_viewport_height = 0;
 
                                         let action = *action;
