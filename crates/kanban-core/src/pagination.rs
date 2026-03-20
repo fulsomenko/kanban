@@ -298,4 +298,45 @@ mod tests {
         page.set_total_items(10);
         assert_eq!(page.scroll_offset, 9);
     }
+
+    #[test]
+    fn test_adjusted_viewport_height_empty_list() {
+        let page = Page::new(0);
+        assert_eq!(page.get_adjusted_viewport_height(5), 5);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_zero_raw() {
+        let page = Page::new(10);
+        assert_eq!(page.get_adjusted_viewport_height(0), 0);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_all_fit() {
+        let page = Page::new(5);
+        assert_eq!(page.get_adjusted_viewport_height(10), 10);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_at_top_with_below() {
+        let page = Page::new(10);
+        // offset=0: no above indicator; 0+5=5 < 10 → below indicator → raw-1
+        assert_eq!(page.get_adjusted_viewport_height(5), 4);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_middle_both_indicators() {
+        let mut page = Page::new(10);
+        page.set_scroll_offset(3);
+        // offset=3: above indicator; available=4; 3+4=7 < 10 → below indicator → raw-2
+        assert_eq!(page.get_adjusted_viewport_height(5), 3);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_near_end_above_only() {
+        let mut page = Page::new(10);
+        page.set_scroll_offset(6);
+        // offset=6: above indicator; available=4; 6+4=10 >= 10 → no below → raw-1
+        assert_eq!(page.get_adjusted_viewport_height(5), 4);
+    }
 }
