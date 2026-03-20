@@ -1412,6 +1412,8 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
     }
 }
 
+// Takes `&mut App` to write `help_viewport_height` after measuring the popup area,
+// so the event handler can use it for scroll calculations on the next keypress.
 fn render_help_popup(app: &mut App, frame: &mut Frame) {
     use crate::components::ListItemConfig;
     use crate::keybindings::KeybindingRegistry;
@@ -1462,47 +1464,35 @@ fn render_help_popup(app: &mut App, frame: &mut Frame) {
 
     let selected_idx = app.help_list.get_selected_index();
 
-    let all_lines: Vec<Line> = context
-        .bindings
+    let adjusted_height = app.help_list.get_adjusted_viewport_height(raw_height);
+    let page_info = app.help_list.get_render_info(adjusted_height);
+
+    let mut rendered_lines: Vec<Line> =
+        crate::card_list::render_above_indicator(page_info.show_above_indicator, page_info.items_above, "item")
+            .into_iter()
+            .collect();
+
+    let visible_lines: Vec<Line> = page_info
+        .visible_indices
         .iter()
-        .enumerate()
-        .map(|(idx, binding)| {
-            let is_selected = selected_idx == Some(idx);
+        .filter_map(|&i| {
+            let binding = context.bindings.get(i)?;
+            let is_selected = selected_idx == Some(i);
             let config = ListItemConfig::new().selected(is_selected).focused(true);
             let prefix = config.item_prefix();
             let style = config.item_style();
-            Line::from(vec![
+            Some(Line::from(vec![
                 Span::styled(prefix.to_string(), style),
                 Span::styled(binding.key.to_string(), Style::default().fg(Color::Yellow)),
                 Span::raw(" "),
                 Span::styled(binding.description.clone(), style),
-            ])
+            ]))
         })
         .collect();
-
-    let adjusted_height = app.help_list.get_adjusted_viewport_height(raw_height);
-    let page_info = app.help_list.get_render_info(adjusted_height);
-
-    let mut rendered_lines: Vec<Line> = crate::card_list::render_scroll_indicators(
-        page_info.show_above_indicator,
-        page_info.items_above,
-        false,
-        0,
-        "item",
+    rendered_lines.extend(visible_lines);
+    rendered_lines.extend(
+        crate::card_list::render_below_indicator(page_info.show_below_indicator, page_info.items_below, "item")
     );
-    let visible: Vec<Line> = page_info
-        .visible_indices
-        .iter()
-        .filter_map(|&i| all_lines.get(i).cloned())
-        .collect();
-    rendered_lines.extend(visible);
-    rendered_lines.extend(crate::card_list::render_scroll_indicators(
-        false,
-        0,
-        page_info.show_below_indicator,
-        page_info.items_below,
-        "item",
-    ));
 
     frame.render_widget(Paragraph::new(rendered_lines), chunks[1]);
 
