@@ -148,27 +148,35 @@ impl CardList {
     }
 }
 
-/// Helper function to render scroll indicators based on render info
-pub fn render_scroll_indicators(render_info: &CardListRenderInfo) -> Vec<ratatui::text::Line<'_>> {
+/// Render scroll indicators for any scrollable list.
+///
+/// Produces 0, 1, or 2 lines indicating how many items lie above or below
+/// the current viewport. `label` is the singular noun used in the message
+/// (e.g. `"Task"`, `"item"`, `"entry"`).
+pub fn render_scroll_indicators<'a>(
+    show_above: bool,
+    items_above: usize,
+    show_below: bool,
+    items_below: usize,
+    label: &str,
+) -> Vec<ratatui::text::Line<'a>> {
     use ratatui::style::{Color, Style};
     use ratatui::text::{Line, Span};
 
     let mut lines = Vec::new();
 
-    if render_info.show_above_indicator {
-        let count = render_info.cards_above_count;
-        let plural = if count == 1 { "" } else { "s" };
+    if show_above {
+        let plural = if items_above == 1 { "" } else { "s" };
         lines.push(Line::from(Span::styled(
-            format!("  {} Task{} above", count, plural),
+            format!("  {} {}{} above", items_above, label, plural),
             Style::default().fg(Color::DarkGray),
         )));
     }
 
-    if render_info.show_below_indicator {
-        let count = render_info.cards_below_count;
-        let plural = if count == 1 { "" } else { "s" };
+    if show_below {
+        let plural = if items_below == 1 { "" } else { "s" };
         lines.push(Line::from(Span::styled(
-            format!("  {} Task{} below", count, plural),
+            format!("  {} {}{} below", items_below, label, plural),
             Style::default().fg(Color::DarkGray),
         )));
     }
