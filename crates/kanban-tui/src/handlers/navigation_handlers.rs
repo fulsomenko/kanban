@@ -582,8 +582,10 @@ impl App {
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
+                let adjusted_viewport = self.get_adjusted_viewport_height();
                 if let Some(list) = self.view_strategy.get_active_task_list_mut() {
                     list.jump_to_top();
+                    list.ensure_selected_visible(adjusted_viewport);
                 }
             }
         }
