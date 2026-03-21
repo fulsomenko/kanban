@@ -148,7 +148,6 @@ impl CardList {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
