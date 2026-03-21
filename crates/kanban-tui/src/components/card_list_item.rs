@@ -15,6 +15,7 @@ pub struct CardListItemConfig<'a> {
     pub is_multi_selected: bool,
     pub show_sprint_name: bool,
     pub animation_type: Option<AnimationType>,
+    pub search_query: Option<&'a str>,
 }
 
 pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
@@ -98,13 +99,15 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
         .map(|p| p.to_string())
         .unwrap_or_else(|| " ".to_string());
 
+    let title_spans = build_title_spans(&config.card.title, title_style, config.search_query);
+
     let mut spans = vec![
         Span::styled("● ", priority_style_val),
         Span::styled(points_text, points_style),
         Span::raw(" "),
         Span::styled(format!("{}{} ", select_indicator, checkbox), base_style),
-        Span::styled(config.card.title.clone(), title_style),
     ];
+    spans.extend(title_spans);
 
     if !suffix_text.is_empty() {
         let mut suffix_style = label_text();
@@ -115,4 +118,30 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
     }
 
     Line::from(spans)
+}
+
+fn build_title_spans(title: &str, base_style: Style, query: Option<&str>) -> Vec<Span<'static>> {
+    let Some(q) = query.filter(|q| !q.is_empty()) else {
+        return vec![Span::styled(title.to_owned(), base_style)];
+    };
+
+    let title_lower = title.to_lowercase();
+    let query_lower = q.to_lowercase();
+    let highlight_style = base_style.fg(HIGHLIGHT_TEXT).add_modifier(Modifier::BOLD);
+
+    let mut spans = Vec::new();
+    let mut pos = 0;
+    while let Some(idx) = title_lower[pos..].find(&query_lower) {
+        let abs = pos + idx;
+        if abs > pos {
+            spans.push(Span::styled(title[pos..abs].to_owned(), base_style));
+        }
+        let end = abs + q.len();
+        spans.push(Span::styled(title[abs..end].to_owned(), highlight_style));
+        pos = end;
+    }
+    if pos < title.len() {
+        spans.push(Span::styled(title[pos..].to_owned(), base_style));
+    }
+    spans
 }
