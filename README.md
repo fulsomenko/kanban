@@ -175,6 +175,7 @@ crates/
 - [x] Progressive auto-save (save changes to board as you make them, not just on exit)
 - [x] Full CLI interface matching TUI operations (scriptable kanban commands)
 - [x] Card dependencies
+- [ ] Attachments, adding files to cards
 - [ ] Configurable keybindings
 - [ ] Audit log
 - [ ] Multiple storage backends (.md archive, SQL, MongoDB) with pluggable architecture
