@@ -564,9 +564,19 @@ impl App {
                 }
                 KeyCode::Char('n') => {
                     self.pending_key = None;
-                    match self.focus {
-                        Focus::Boards => self.handle_create_board_key(),
-                        Focus::Cards => self.handle_create_card_key(),
+                    if self.search.is_active {
+                        self.handle_navigation_down();
+                    } else {
+                        match self.focus {
+                            Focus::Boards => self.handle_create_board_key(),
+                            Focus::Cards => self.handle_create_card_key(),
+                        }
+                    }
+                }
+                KeyCode::Char('N') => {
+                    self.pending_key = None;
+                    if self.search.is_active {
+                        self.handle_navigation_up();
                     }
                 }
                 KeyCode::Char('r') => {
@@ -800,9 +810,14 @@ impl App {
                 self.search.input.backspace();
                 self.refresh_view();
             }
-            KeyCode::Esc | KeyCode::Enter => {
+            KeyCode::Enter => {
+                self.mode = AppMode::Normal;
+                self.refresh_view();
+            }
+            KeyCode::Esc => {
                 self.search.deactivate();
                 self.mode = AppMode::Normal;
+                self.refresh_view();
             }
             _ => {}
         }

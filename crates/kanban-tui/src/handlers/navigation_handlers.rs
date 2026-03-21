@@ -496,6 +496,12 @@ impl App {
     }
 
     pub fn handle_escape_key(&mut self) {
+        if self.search.is_active {
+            self.search.deactivate();
+            self.refresh_view();
+            return;
+        }
+
         // Clear selection mode first (only when actively in selection mode)
         if self.selection_mode_active {
             self.selection_mode_active = false;

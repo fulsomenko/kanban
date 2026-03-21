@@ -417,6 +417,7 @@ fn render_sprint_task_panel_with_selection(
                         is_multi_selected: false,
                         show_sprint_name: false,
                         animation_type,
+                        search_query: None,
                     });
                     lines.push(line);
                 }
@@ -472,9 +473,39 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             false
         };
 
+    if app.search.is_active && app.mode != AppMode::Search {
+        let search_text = format!("/{}", app.search.query());
+        let help_text = "ESC: clear search";
+
+        let available_width = area.width.saturating_sub(4);
+        let help_len = help_text.len() as u16;
+        let search_len = search_text.len() as u16;
+
+        let padding = if available_width > search_len + help_len + 1 {
+            available_width
+                .saturating_sub(search_len)
+                .saturating_sub(help_len)
+        } else {
+            1
+        };
+
+        let footer_line = Line::from(vec![
+            Span::styled(search_text, Style::default().fg(Color::Yellow)),
+            Span::styled(
+                format!("{:width$}", "", width = padding as usize),
+                label_text(),
+            ),
+            Span::styled(help_text, label_text()),
+        ]);
+
+        let help = Paragraph::new(footer_line).block(Block::default().borders(Borders::ALL));
+        frame.render_widget(help, area);
+        return;
+    }
+
     if app.mode == AppMode::Search {
         let search_text = format!("/{}", app.search.query());
-        let help_text = "ESC/ENTER: exit search";
+        let help_text = "ESC: clear | Enter: apply";
 
         let available_width = area.width.saturating_sub(4);
         let help_len = help_text.len() as u16;
