@@ -2,13 +2,13 @@ pub mod mode;
 pub use mode::{AppMode, DialogMode};
 
 pub mod focus;
-pub use focus::{Focus, CardFocus, BoardFocus, FocusState};
+pub use focus::{BoardFocus, CardFocus, Focus, FocusState};
 
 pub mod sprint_view;
 pub use sprint_view::{SprintTaskPanel, SprintViewState};
 
 pub mod animation;
-pub use animation::{CardAnimation, ANIMATION_DURATION_MS, AnimationState};
+pub use animation::{AnimationState, CardAnimation, ANIMATION_DURATION_MS};
 
 pub mod selection;
 pub use selection::SelectionHub;
@@ -950,7 +950,8 @@ impl App {
     }
 
     pub fn get_selected_card_id(&self) -> Option<uuid::Uuid> {
-        self.view.strategy
+        self.view
+            .strategy
             .get_active_task_list()
             .and_then(|list| list.get_selected_card_id())
     }
@@ -976,12 +977,16 @@ impl App {
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &self.ctx.cards);
 
-        self.sprint_view.uncompleted_cards.update_cards(uncompleted_ids);
+        self.sprint_view
+            .uncompleted_cards
+            .update_cards(uncompleted_ids);
         self.sprint_view.completed_cards.update_cards(completed_ids);
 
-        self.sprint_view.uncompleted_component
+        self.sprint_view
+            .uncompleted_component
             .update_cards(self.sprint_view.uncompleted_cards.cards.clone());
-        self.sprint_view.completed_component
+        self.sprint_view
+            .completed_component
             .update_cards(self.sprint_view.completed_cards.cards.clone());
 
         // Default to uncompleted panel
@@ -1002,14 +1007,18 @@ impl App {
             sort_order,
         );
 
-        self.sprint_view.uncompleted_cards
+        self.sprint_view
+            .uncompleted_cards
             .update_cards(sorted_uncompleted_ids);
-        self.sprint_view.completed_cards
+        self.sprint_view
+            .completed_cards
             .update_cards(sorted_completed_ids);
 
-        self.sprint_view.uncompleted_component
+        self.sprint_view
+            .uncompleted_component
             .update_cards(self.sprint_view.uncompleted_cards.cards.clone());
-        self.sprint_view.completed_component
+        self.sprint_view
+            .completed_component
             .update_cards(self.sprint_view.completed_cards.cards.clone());
     }
 
@@ -1033,7 +1042,10 @@ impl App {
     }
 
     pub fn refresh_view(&mut self) {
-        let board_idx = self.selection.active_board_index.or(self.selection.board.get());
+        let board_idx = self
+            .selection
+            .active_board_index
+            .or(self.selection.board.get());
         if let Some(idx) = board_idx {
             if let Some(board) = self.ctx.boards.get(idx) {
                 let search_query = if self.filter.search.is_active {
@@ -1136,7 +1148,8 @@ impl App {
 
     pub fn sync_card_list_component(&mut self) {
         if let Some(active_list) = self.view.strategy.get_active_task_list() {
-            self.view.card_list_component
+            self.view
+                .card_list_component
                 .update_cards(active_list.cards.clone());
         }
     }

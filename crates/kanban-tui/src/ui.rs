@@ -165,7 +165,11 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
     }
 
     if !app.filter.active_sprint_filters.is_empty() {
-        if let Some(board_idx) = app.selection.active_board_index.or(app.selection.board.get()) {
+        if let Some(board_idx) = app
+            .selection
+            .active_board_index
+            .or(app.selection.board.get())
+        {
             if let Some(board) = app.ctx.boards.get(board_idx) {
                 let mut sprint_names: Vec<String> = app
                     .ctx
@@ -211,7 +215,8 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(unified_strategy) = app
-        .view.strategy
+        .view
+        .strategy
         .as_any()
         .downcast_ref::<UnifiedViewStrategy>()
     {
@@ -406,8 +411,11 @@ fn render_sprint_task_panel_with_selection(
             if let Some(card_id) = task_list.cards.get(*card_idx) {
                 if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
                     let is_selected = selected_idx == Some(*card_idx) && is_focused;
-                    let animation_type =
-                        app.animation.animating.get(&card.id).map(|a| a.animation_type);
+                    let animation_type = app
+                        .animation
+                        .animating
+                        .get(&card.id)
+                        .map(|a| a.animation_type);
                     let line = render_card_list_item(CardListItemConfig {
                         card,
                         board,
@@ -462,16 +470,19 @@ fn render_sprint_task_panel_with_selection(
 }
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
-    let _is_kanban_view =
-        if let Some(board_idx) = app.selection.active_board_index.or(app.selection.board.get()) {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
-                board.task_list_view == kanban_domain::TaskListView::ColumnView
-            } else {
-                false
-            }
+    let _is_kanban_view = if let Some(board_idx) = app
+        .selection
+        .active_board_index
+        .or(app.selection.board.get())
+    {
+        if let Some(board) = app.ctx.boards.get(board_idx) {
+            board.task_list_view == kanban_domain::TaskListView::ColumnView
         } else {
             false
-        };
+        }
+    } else {
+        false
+    };
 
     if app.filter.search.is_active && app.mode != AppMode::Search {
         let search_text = format!("/{}", app.filter.search.query());
@@ -536,7 +547,10 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     use crate::keybindings::KeybindingRegistry;
 
     let selection_prefix = if app.multi_select.selection_mode_active {
-        format!("-- SELECT ({}) -- | ", app.multi_select.selected_cards.len())
+        format!(
+            "-- SELECT ({}) -- | ",
+            app.multi_select.selected_cards.len()
+        )
     } else if !app.multi_select.selected_cards.is_empty() {
         format!("({} selected) | ", app.multi_select.selected_cards.len())
     } else {
@@ -723,8 +737,12 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.focus.card_focus == CardFocus::Metadata);
-                        let meta_lines =
-                            build_metadata_lines(card, board, &app.ctx.sprints, &app.persistence.app_config);
+                        let meta_lines = build_metadata_lines(
+                            card,
+                            board,
+                            &app.ctx.sprints,
+                            &app.persistence.app_config,
+                        );
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
 
@@ -757,8 +775,12 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.focus.card_focus == CardFocus::Metadata);
-                        let meta_lines =
-                            build_metadata_lines(card, board, &app.ctx.sprints, &app.persistence.app_config);
+                        let meta_lines = build_metadata_lines(
+                            card,
+                            board,
+                            &app.ctx.sprints,
+                            &app.persistence.app_config,
+                        );
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
 
@@ -889,7 +911,10 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Sprint Prefix: ", label_text()),
                         Span::styled(
-                            app.persistence.app_config.effective_default_sprint_prefix().to_string(),
+                            app.persistence
+                                .app_config
+                                .effective_default_sprint_prefix()
+                                .to_string(),
                             normal_text(),
                         ),
                         Span::styled(" (default)", label_text()),
@@ -901,7 +926,10 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Card Prefix: ", label_text()),
                         Span::styled(
-                            app.persistence.app_config.effective_default_card_prefix().to_string(),
+                            app.persistence
+                                .app_config
+                                .effective_default_card_prefix()
+                                .to_string(),
                             normal_text(),
                         ),
                         Span::styled(" (default)", label_text()),
@@ -1239,7 +1267,8 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
     let selected = app.dialog_input.task_list_view_selection.get();
 
     let current_view = app
-        .selection.active_board_index
+        .selection
+        .active_board_index
         .and_then(|idx| app.ctx.boards.get(idx))
         .map(|board| board.task_list_view);
 
@@ -1732,7 +1761,8 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_pare
         app.relationship.card_ids.clone()
     } else {
         let search_lower = app.relationship.search.to_lowercase();
-        app.relationship.card_ids
+        app.relationship
+            .card_ids
             .iter()
             .filter(|card_id| {
                 app.ctx

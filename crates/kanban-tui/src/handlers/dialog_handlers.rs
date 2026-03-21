@@ -133,7 +133,8 @@ impl App {
                 };
 
                 let card_id = self
-                    .selection.active_card_index
+                    .selection
+                    .active_card_index
                     .and_then(|idx| self.ctx.cards.get(idx))
                     .map(|c| c.id)
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
@@ -282,7 +283,10 @@ impl App {
                                     }
                                 }
                             }
-                            let board_idx = self.selection.active_board_index.or(self.selection.board.get());
+                            let board_idx = self
+                                .selection
+                                .active_board_index
+                                .or(self.selection.board.get());
                             if let Some(board_idx) = board_idx {
                                 if let Some(board) = self.ctx.boards.get_mut(board_idx) {
                                     board.ensure_sprint_counter_initialized(

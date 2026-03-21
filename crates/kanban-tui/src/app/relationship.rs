@@ -1,7 +1,7 @@
+use crate::components::generic_list::ListComponent;
+use kanban_core::SelectionState;
 use std::collections::HashSet;
 use uuid::Uuid;
-use kanban_core::SelectionState;
-use crate::components::generic_list::ListComponent;
 
 pub struct RelationshipState {
     pub card_ids: Vec<Uuid>,

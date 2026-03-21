@@ -89,8 +89,14 @@ mod tests {
 
         // Create a minimal app with active_board_index set
         let app = App {
-            selection: SelectionHub { active_board_index: Some(0), ..SelectionHub::new() },
-            filter: FilterState { current_sort_field: Some(SortField::Default), ..FilterState::new() },
+            selection: SelectionHub {
+                active_board_index: Some(0),
+                ..SelectionHub::new()
+            },
+            filter: FilterState {
+                current_sort_field: Some(SortField::Default),
+                ..FilterState::new()
+            },
             ..Default::default()
         };
         let mut app = app;

@@ -247,7 +247,8 @@ impl App {
 
             // Try to get column boundaries from UnifiedViewStrategy
             if let Some(unified) = self
-                .view.strategy
+                .view
+                .strategy
                 .as_any()
                 .downcast_ref::<UnifiedViewStrategy>()
             {
@@ -300,12 +301,17 @@ impl App {
     /// Compute page boundaries appropriate for the current view mode
     fn compute_pages_for_current_view(&self, total_items: usize) -> Vec<PageBoundary> {
         // For GroupedByColumn view, use header-aware pagination
-        if let Some(board_idx) = self.selection.active_board_index.or(self.selection.board.get()) {
+        if let Some(board_idx) = self
+            .selection
+            .active_board_index
+            .or(self.selection.board.get())
+        {
             if let Some(board) = self.ctx.boards.get(board_idx) {
                 if board.task_list_view == TaskListView::GroupedByColumn {
                     // Try to get column boundaries for header-aware pagination
                     if let Some(unified) = self
-                        .view.strategy
+                        .view
+                        .strategy
                         .as_any()
                         .downcast_ref::<UnifiedViewStrategy>()
                     {
@@ -487,8 +493,12 @@ impl App {
                     // Initialize list components with item counts
                     let parents = self.get_current_card_parents();
                     let children = self.get_current_card_children();
-                    self.relationship.parents_list.update_item_count(parents.len());
-                    self.relationship.children_list.update_item_count(children.len());
+                    self.relationship
+                        .parents_list
+                        .update_item_count(parents.len());
+                    self.relationship
+                        .children_list
+                        .update_item_count(children.len());
                     self.push_mode(AppMode::CardDetail);
                 }
             }
@@ -518,7 +528,11 @@ impl App {
     }
 
     pub fn is_kanban_view(&self) -> bool {
-        if let Some(board_idx) = self.selection.active_board_index.or(self.selection.board.get()) {
+        if let Some(board_idx) = self
+            .selection
+            .active_board_index
+            .or(self.selection.board.get())
+        {
             if let Some(board) = self.ctx.boards.get(board_idx) {
                 return board.task_list_view == TaskListView::ColumnView;
             }
@@ -551,7 +565,8 @@ impl App {
             let column_count = self.view.strategy.get_all_task_lists().len();
 
             if index < column_count {
-                self.view.strategy
+                self.view
+                    .strategy
                     .as_any_mut()
                     .downcast_mut::<UnifiedViewStrategy>()
                     .map(|unified| unified.try_set_active_column_index(index));
@@ -615,7 +630,8 @@ impl App {
         if self.focus.focus == Focus::Cards {
             // Get total items before borrowing mutably
             let total_items = self
-                .view.strategy
+                .view
+                .strategy
                 .get_active_task_list()
                 .map(|list| list.len())
                 .unwrap_or(0);
@@ -659,7 +675,8 @@ impl App {
         if self.focus.focus == Focus::Cards {
             // Get total items before borrowing mutably
             let total_items = self
-                .view.strategy
+                .view
+                .strategy
                 .get_active_task_list()
                 .map(|list| list.len())
                 .unwrap_or(0);

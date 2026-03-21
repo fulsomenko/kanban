@@ -1,7 +1,7 @@
+use kanban_domain::AnimationType;
 use std::collections::HashMap;
 use std::time::Instant;
 use uuid::Uuid;
-use kanban_domain::AnimationType;
 
 pub const ANIMATION_DURATION_MS: u128 = 150;
 

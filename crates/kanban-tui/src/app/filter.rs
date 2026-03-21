@@ -1,9 +1,9 @@
-use std::collections::HashSet;
-use uuid::Uuid;
-use kanban_core::SelectionState;
-use kanban_domain::{SortField, SortOrder};
 use crate::filters::FilterDialogState;
 use crate::search::SearchState;
+use kanban_core::SelectionState;
+use kanban_domain::{SortField, SortOrder};
+use std::collections::HashSet;
+use uuid::Uuid;
 
 pub struct FilterState {
     pub active_sprint_filters: HashSet<Uuid>,

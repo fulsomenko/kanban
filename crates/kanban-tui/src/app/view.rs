@@ -1,7 +1,7 @@
-use ratatui::layout::Rect;
-use crate::card_list_component::{CardListComponent, CardListComponentConfig};
 use crate::card_list::CardListId;
+use crate::card_list_component::{CardListComponent, CardListComponentConfig};
 use crate::view_strategy::{UnifiedViewStrategy, ViewStrategy};
+use ratatui::layout::Rect;
 
 pub struct ViewState {
     pub strategy: Box<dyn ViewStrategy>,

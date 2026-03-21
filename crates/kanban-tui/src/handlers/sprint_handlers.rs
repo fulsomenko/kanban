@@ -32,7 +32,10 @@ impl App {
             };
 
             if let Some((sprint_id, _)) = sprint_info {
-                let board_idx = self.selection.active_board_index.or(self.selection.board.get());
+                let board_idx = self
+                    .selection
+                    .active_board_index
+                    .or(self.selection.board.get());
                 if let Some(board_idx) = board_idx {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
                         let duration = board.sprint_duration_days.unwrap_or(14);
@@ -83,7 +86,10 @@ impl App {
                     if sprint.status == SprintStatus::Active
                         || sprint.status == SprintStatus::Planning
                     {
-                        let board_idx = self.selection.active_board_index.or(self.selection.board.get());
+                        let board_idx = self
+                            .selection
+                            .active_board_index
+                            .or(self.selection.board.get());
                         board_idx.and_then(|board_idx| {
                             self.ctx.boards.get(board_idx).map(|board| {
                                 (sprint.id, board.id, sprint.formatted_name(board, "sprint"))
@@ -127,7 +133,10 @@ impl App {
     }
 
     pub fn create_sprint(&mut self) {
-        let board_idx = self.selection.active_board_index.or(self.selection.board.get());
+        let board_idx = self
+            .selection
+            .active_board_index
+            .or(self.selection.board.get());
         if let Some(board_idx) = board_idx {
             let (sprint_number, name_index, board_id, effective_sprint_prefix) = {
                 if let Some(board) = self.ctx.boards.get_mut(board_idx) {

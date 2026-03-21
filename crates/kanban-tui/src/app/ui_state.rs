@@ -1,6 +1,6 @@
-use std::time::Instant;
 use crate::components::{generic_list::ListComponent, Banner};
 use crate::keybindings::KeybindingAction;
+use std::time::Instant;
 
 pub struct UiState {
     pub banner: Option<Banner>,

@@ -18,7 +18,9 @@ impl App {
     }
 
     pub fn handle_rename_column_key(&mut self) {
-        if self.focus.board_focus == BoardFocus::Columns && self.dialog_input.column_selection.get().is_some() {
+        if self.focus.board_focus == BoardFocus::Columns
+            && self.dialog_input.column_selection.get().is_some()
+        {
             if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     let board_columns: Vec<_> = self
@@ -40,7 +42,9 @@ impl App {
     }
 
     pub fn handle_delete_column_key(&mut self) {
-        if self.focus.board_focus == BoardFocus::Columns && self.dialog_input.column_selection.get().is_some() {
+        if self.focus.board_focus == BoardFocus::Columns
+            && self.dialog_input.column_selection.get().is_some()
+        {
             if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     let column_count = self
@@ -61,7 +65,9 @@ impl App {
     }
 
     pub fn handle_move_column_up(&mut self) {
-        if self.focus.board_focus == BoardFocus::Columns && self.dialog_input.column_selection.get().is_some() {
+        if self.focus.board_focus == BoardFocus::Columns
+            && self.dialog_input.column_selection.get().is_some()
+        {
             if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     // Collect and sort column data before mutating
@@ -116,7 +122,9 @@ impl App {
     }
 
     pub fn handle_move_column_down(&mut self) {
-        if self.focus.board_focus == BoardFocus::Columns && self.dialog_input.column_selection.get().is_some() {
+        if self.focus.board_focus == BoardFocus::Columns
+            && self.dialog_input.column_selection.get().is_some()
+        {
             if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     // Collect and sort column data before mutating
@@ -183,7 +191,9 @@ impl App {
                     TaskListView::GroupedByColumn => 1,
                     TaskListView::ColumnView => 2,
                 };
-                self.dialog_input.task_list_view_selection.set(Some(current_view_idx));
+                self.dialog_input
+                    .task_list_view_selection
+                    .set(Some(current_view_idx));
                 self.open_dialog(DialogMode::SelectTaskListView);
             }
         }
@@ -232,7 +242,9 @@ impl App {
                     .filter(|col| col.board_id == board_id)
                     .count();
                 let new_column_index = board_column_count.saturating_sub(1);
-                self.dialog_input.column_selection.set(Some(new_column_index));
+                self.dialog_input
+                    .column_selection
+                    .set(Some(new_column_index));
             }
         }
     }
@@ -387,7 +399,9 @@ impl App {
 
                 if remaining_columns > 0 {
                     if column_idx >= remaining_columns {
-                        self.dialog_input.column_selection.set(Some(remaining_columns - 1));
+                        self.dialog_input
+                            .column_selection
+                            .set(Some(remaining_columns - 1));
                     } else {
                         self.dialog_input.column_selection.set(Some(column_idx));
                     }

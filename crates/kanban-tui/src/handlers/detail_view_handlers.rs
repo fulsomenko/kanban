@@ -51,9 +51,12 @@ impl App {
                         if !parents.is_empty() {
                             let was_at_boundary = self.relationship.parents_list.navigate_down();
                             let viewport = self
-                                .relationship.parents_list
+                                .relationship
+                                .parents_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.relationship.parents_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .parents_list
+                                .ensure_selected_visible(viewport);
 
                             if was_at_boundary {
                                 // At last parent, wrap to Children section
@@ -61,7 +64,9 @@ impl App {
                                 self.relationship.parents_list.selection.clear();
 
                                 let children = self.get_current_card_children();
-                                self.relationship.children_list.update_item_count(children.len());
+                                self.relationship
+                                    .children_list
+                                    .update_item_count(children.len());
                                 if !children.is_empty() {
                                     self.relationship.children_list.selection.jump_to_first();
                                 }
@@ -77,9 +82,12 @@ impl App {
                         if !children.is_empty() {
                             let was_at_boundary = self.relationship.children_list.navigate_down();
                             let viewport = self
-                                .relationship.children_list
+                                .relationship
+                                .children_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.relationship.children_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .children_list
+                                .ensure_selected_visible(viewport);
 
                             if was_at_boundary {
                                 // At last child, wrap to Title section
@@ -111,9 +119,12 @@ impl App {
                         if !parents.is_empty() {
                             let was_at_boundary = self.relationship.parents_list.navigate_up();
                             let viewport = self
-                                .relationship.parents_list
+                                .relationship
+                                .parents_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.relationship.parents_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .parents_list
+                                .ensure_selected_visible(viewport);
 
                             if was_at_boundary {
                                 // At first parent or no selection, wrap to Description section
@@ -131,18 +142,26 @@ impl App {
                         if !children.is_empty() {
                             let was_at_boundary = self.relationship.children_list.navigate_up();
                             let viewport = self
-                                .relationship.children_list
+                                .relationship
+                                .children_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.relationship.children_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .children_list
+                                .ensure_selected_visible(viewport);
 
                             if was_at_boundary {
                                 // At first child or no selection, wrap to Parents section
                                 let parents = self.get_current_card_parents();
                                 self.focus.card_focus = CardFocus::Parents;
                                 self.relationship.children_list.selection.clear();
-                                self.relationship.parents_list.update_item_count(parents.len());
+                                self.relationship
+                                    .parents_list
+                                    .update_item_count(parents.len());
                                 if !parents.is_empty() {
-                                    self.relationship.parents_list.selection.jump_to_last(parents.len());
+                                    self.relationship
+                                        .parents_list
+                                        .selection
+                                        .jump_to_last(parents.len());
                                 }
                             }
                         } else {
@@ -154,13 +173,21 @@ impl App {
                         // When at Title, wrap backward to Children and select last child
                         let children = self.get_current_card_children();
                         self.focus.card_focus = CardFocus::Children;
-                        self.relationship.children_list.update_item_count(children.len());
+                        self.relationship
+                            .children_list
+                            .update_item_count(children.len());
                         if !children.is_empty() {
-                            self.relationship.children_list.selection.jump_to_last(children.len());
+                            self.relationship
+                                .children_list
+                                .selection
+                                .jump_to_last(children.len());
                             let viewport = self
-                                .relationship.children_list
+                                .relationship
+                                .children_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.relationship.children_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .children_list
+                                .ensure_selected_visible(viewport);
                         }
                     }
                     _ => {
@@ -243,7 +270,9 @@ impl App {
                             .count();
                         if sprint_count > 0 {
                             let selection_idx = self.get_current_sprint_selection_index();
-                            self.dialog_input.sprint_assign_selection.set(Some(selection_idx));
+                            self.dialog_input
+                                .sprint_assign_selection
+                                .set(Some(selection_idx));
                             self.open_dialog(DialogMode::AssignCardToSprint);
                         }
                     }
@@ -288,8 +317,12 @@ impl App {
                     // Update item counts for the card we're returning to
                     let parents = self.get_current_card_parents();
                     let children = self.get_current_card_children();
-                    self.relationship.parents_list.update_item_count(parents.len());
-                    self.relationship.children_list.update_item_count(children.len());
+                    self.relationship
+                        .parents_list
+                        .update_item_count(parents.len());
+                    self.relationship
+                        .children_list
+                        .update_item_count(children.len());
                 }
             }
             _ => {}
@@ -459,7 +492,8 @@ impl App {
                     let current_idx = self.dialog_input.column_selection.get().unwrap_or(0);
                     if current_idx == 0 {
                         let sprint_count = self
-                            .selection.board
+                            .selection
+                            .board
                             .get()
                             .and_then(|idx| self.ctx.boards.get(idx))
                             .map(|board| {
@@ -624,8 +658,12 @@ impl App {
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
-                                self.relationship.parents_list.update_item_count(parents.len());
-                                self.relationship.children_list.update_item_count(children.len());
+                                self.relationship
+                                    .parents_list
+                                    .update_item_count(parents.len());
+                                self.relationship
+                                    .children_list
+                                    .update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
                                 self.focus.card_focus = CardFocus::Title;
                             }
@@ -638,8 +676,12 @@ impl App {
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
-                                self.relationship.parents_list.update_item_count(parents.len());
-                                self.relationship.children_list.update_item_count(children.len());
+                                self.relationship
+                                    .parents_list
+                                    .update_item_count(parents.len());
+                                self.relationship
+                                    .children_list
+                                    .update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
                                 self.focus.card_focus = CardFocus::Title;
                             }
@@ -653,8 +695,9 @@ impl App {
                                     CardStatus::Done
                                 };
 
-                                let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                                    self.ctx.boards.get(idx).and_then(|board| {
+                                let toggle_result =
+                                    self.selection.active_board_index.and_then(|idx| {
+                                        self.ctx.boards.get(idx).and_then(|board| {
                                         kanban_domain::card_lifecycle::compute_completion_toggle(
                                             card,
                                             board,
@@ -662,7 +705,7 @@ impl App {
                                             &self.ctx.cards,
                                         )
                                     })
-                                });
+                                    });
 
                                 let mut updates = CardUpdate {
                                     status: Some(new_status),
@@ -710,7 +753,9 @@ impl App {
                                         if sprint_count > 0 {
                                             let selection_idx =
                                                 self.get_current_sprint_selection_index();
-                                            self.dialog_input.sprint_assign_selection.set(Some(selection_idx));
+                                            self.dialog_input
+                                                .sprint_assign_selection
+                                                .set(Some(selection_idx));
                                             self.open_dialog(DialogMode::AssignCardToSprint);
                                         }
                                     }
@@ -733,7 +778,9 @@ impl App {
                                         if sprint_count > 0 {
                                             let selection_idx =
                                                 self.get_current_sprint_selection_index();
-                                            self.dialog_input.sprint_assign_selection.set(Some(selection_idx));
+                                            self.dialog_input
+                                                .sprint_assign_selection
+                                                .set(Some(selection_idx));
                                             self.open_dialog(DialogMode::AssignCardToSprint);
                                         }
                                     }
@@ -773,17 +820,18 @@ impl App {
                                     kanban_domain::card_lifecycle::MoveDirection::Left
                                 };
 
-                                let move_result = self.selection.active_board_index.and_then(|idx| {
-                                    self.ctx.boards.get(idx).and_then(|board| {
-                                        kanban_domain::card_lifecycle::compute_card_column_move(
-                                            &card,
-                                            board,
-                                            &self.ctx.columns,
-                                            &self.ctx.cards,
-                                            direction,
-                                        )
-                                    })
-                                });
+                                let move_result =
+                                    self.selection.active_board_index.and_then(|idx| {
+                                        self.ctx.boards.get(idx).and_then(|board| {
+                                            kanban_domain::card_lifecycle::compute_card_column_move(
+                                                &card,
+                                                board,
+                                                &self.ctx.columns,
+                                                &self.ctx.cards,
+                                                direction,
+                                            )
+                                        })
+                                    });
 
                                 if let Some(result) = move_result {
                                     let move_cmd = Box::new(kanban_domain::commands::MoveCard {
@@ -821,7 +869,9 @@ impl App {
                                 SprintTaskPanel::Uncompleted => {
                                     &mut self.sprint_view.uncompleted_component
                                 }
-                                SprintTaskPanel::Completed => &mut self.sprint_view.completed_component,
+                                SprintTaskPanel::Completed => {
+                                    &mut self.sprint_view.completed_component
+                                }
                             };
                             component.toggle_multi_select(card_id);
                         }
@@ -830,7 +880,9 @@ impl App {
                                 SprintTaskPanel::Uncompleted => {
                                     &mut self.sprint_view.uncompleted_component
                                 }
-                                SprintTaskPanel::Completed => &mut self.sprint_view.completed_component,
+                                SprintTaskPanel::Completed => {
+                                    &mut self.sprint_view.completed_component
+                                }
                             };
                             component.clear_multi_select();
                         }
@@ -839,7 +891,9 @@ impl App {
                                 SprintTaskPanel::Uncompleted => {
                                     &mut self.sprint_view.uncompleted_component
                                 }
-                                SprintTaskPanel::Completed => &mut self.sprint_view.completed_component,
+                                SprintTaskPanel::Completed => {
+                                    &mut self.sprint_view.completed_component
+                                }
                             };
                             component.select_all();
                         }
@@ -999,8 +1053,12 @@ impl App {
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
                     let new_children = self.get_current_card_children();
-                    self.relationship.parents_list.update_item_count(new_parents.len());
-                    self.relationship.children_list.update_item_count(new_children.len());
+                    self.relationship
+                        .parents_list
+                        .update_item_count(new_parents.len());
+                    self.relationship
+                        .children_list
+                        .update_item_count(new_children.len());
                     return;
                 }
             }
@@ -1014,8 +1072,12 @@ impl App {
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
                 let new_children = self.get_current_card_children();
-                self.relationship.parents_list.update_item_count(new_parents.len());
-                self.relationship.children_list.update_item_count(new_children.len());
+                self.relationship
+                    .parents_list
+                    .update_item_count(new_parents.len());
+                self.relationship
+                    .children_list
+                    .update_item_count(new_children.len());
             }
         }
     }
@@ -1033,8 +1095,12 @@ impl App {
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
                     let new_children = self.get_current_card_children();
-                    self.relationship.parents_list.update_item_count(new_parents.len());
-                    self.relationship.children_list.update_item_count(new_children.len());
+                    self.relationship
+                        .parents_list
+                        .update_item_count(new_parents.len());
+                    self.relationship
+                        .children_list
+                        .update_item_count(new_children.len());
                     return;
                 }
             }
@@ -1048,8 +1114,12 @@ impl App {
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
                 let new_children = self.get_current_card_children();
-                self.relationship.parents_list.update_item_count(new_parents.len());
-                self.relationship.children_list.update_item_count(new_children.len());
+                self.relationship
+                    .parents_list
+                    .update_item_count(new_parents.len());
+                self.relationship
+                    .children_list
+                    .update_item_count(new_children.len());
             }
         }
     }

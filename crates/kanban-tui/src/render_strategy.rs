@@ -59,7 +59,10 @@ impl SinglePanelRenderer {
 
 impl RenderStrategy for SinglePanelRenderer {
     fn render(&self, app: &App, frame: &mut Frame, area: Rect) {
-        let board_idx = app.selection.active_board_index.or(app.selection.board.get());
+        let board_idx = app
+            .selection
+            .active_board_index
+            .or(app.selection.board.get());
 
         let mut lines = vec![];
 
@@ -74,7 +77,8 @@ impl RenderStrategy for SinglePanelRenderer {
 
                         // Try to get column boundaries from VirtualUnifiedLayout
                         let column_boundaries = app
-                            .view.strategy
+                            .view
+                            .strategy
                             .as_any()
                             .downcast_ref::<UnifiedViewStrategy>()
                             .and_then(|unified| {
@@ -175,7 +179,8 @@ impl RenderStrategy for SinglePanelRenderer {
                                         let is_selected =
                                             task_list.get_selected_index() == Some(*card_idx);
                                         let animation_type = app
-                                            .animation.animating
+                                            .animation
+                                            .animating
                                             .get(&card.id)
                                             .map(|a| a.animation_type);
                                         let line = render_card_list_item(CardListItemConfig {
@@ -185,9 +190,13 @@ impl RenderStrategy for SinglePanelRenderer {
                                             is_selected,
                                             is_focused: app.focus.focus == crate::app::Focus::Cards,
                                             is_multi_selected: app
-                                                .multi_select.selected_cards
+                                                .multi_select
+                                                .selected_cards
                                                 .contains(&card.id),
-                                            show_sprint_name: app.filter.active_sprint_filters.is_empty(),
+                                            show_sprint_name: app
+                                                .filter
+                                                .active_sprint_filters
+                                                .is_empty(),
                                             animation_type,
                                             search_query: app.filter.search.active_query(),
                                         });
@@ -261,8 +270,11 @@ impl RenderStrategy for SinglePanelRenderer {
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
                                 if let Some(card) = app.get_card_by_id(*card_id) {
-                                    let animation_type =
-                                        app.animation.animating.get(&card.id).map(|a| a.animation_type);
+                                    let animation_type = app
+                                        .animation
+                                        .animating
+                                        .get(&card.id)
+                                        .map(|a| a.animation_type);
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
@@ -270,8 +282,14 @@ impl RenderStrategy for SinglePanelRenderer {
                                         is_selected: task_list.get_selected_index()
                                             == Some(*card_idx),
                                         is_focused: app.focus.focus == crate::app::Focus::Cards,
-                                        is_multi_selected: app.multi_select.selected_cards.contains(&card.id),
-                                        show_sprint_name: app.filter.active_sprint_filters.is_empty(),
+                                        is_multi_selected: app
+                                            .multi_select
+                                            .selected_cards
+                                            .contains(&card.id),
+                                        show_sprint_name: app
+                                            .filter
+                                            .active_sprint_filters
+                                            .is_empty(),
                                         animation_type,
                                         search_query: app.filter.search.active_query(),
                                     });
@@ -316,7 +334,10 @@ pub struct MultiPanelRenderer;
 
 impl RenderStrategy for MultiPanelRenderer {
     fn render(&self, app: &App, frame: &mut Frame, area: Rect) {
-        let board_idx = app.selection.active_board_index.or(app.selection.board.get());
+        let board_idx = app
+            .selection
+            .active_board_index
+            .or(app.selection.board.get());
 
         if let Some(idx) = board_idx {
             if let Some(board) = app.ctx.boards.get(idx) {
@@ -398,8 +419,11 @@ impl RenderStrategy for MultiPanelRenderer {
                                         false
                                     };
 
-                                    let animation_type =
-                                        app.animation.animating.get(&card.id).map(|a| a.animation_type);
+                                    let animation_type = app
+                                        .animation
+                                        .animating
+                                        .get(&card.id)
+                                        .map(|a| a.animation_type);
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
@@ -407,8 +431,14 @@ impl RenderStrategy for MultiPanelRenderer {
                                         is_selected,
                                         is_focused: app.focus.focus == crate::app::Focus::Cards
                                             && is_focused_column,
-                                        is_multi_selected: app.multi_select.selected_cards.contains(&card.id),
-                                        show_sprint_name: app.filter.active_sprint_filters.is_empty(),
+                                        is_multi_selected: app
+                                            .multi_select
+                                            .selected_cards
+                                            .contains(&card.id),
+                                        show_sprint_name: app
+                                            .filter
+                                            .active_sprint_filters
+                                            .is_empty(),
                                         animation_type,
                                         search_query: app.filter.search.active_query(),
                                     });

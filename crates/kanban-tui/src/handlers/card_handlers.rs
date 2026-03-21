@@ -97,7 +97,9 @@ impl App {
                             self.selection.active_card_index = actual_idx;
                         }
                         let selection_idx = self.get_current_sprint_selection_index();
-                        self.dialog_input.sprint_assign_selection.set(Some(selection_idx));
+                        self.dialog_input
+                            .sprint_assign_selection
+                            .set(Some(selection_idx));
                         self.open_dialog(DialogMode::AssignCardToSprint);
                     }
                 }
@@ -164,7 +166,11 @@ impl App {
             if let Some(board_idx) = self.selection.active_board_index {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     if let Some(active_sprint_id) = board.active_sprint_id {
-                        if self.filter.active_sprint_filters.contains(&active_sprint_id) {
+                        if self
+                            .filter
+                            .active_sprint_filters
+                            .contains(&active_sprint_id)
+                        {
                             self.filter.active_sprint_filters.remove(&active_sprint_id);
                             tracing::info!("Disabled sprint filter - showing all cards");
                         } else {
@@ -434,7 +440,8 @@ impl App {
 
         if let Some(card) = self.get_selected_card_in_context() {
             let board = self
-                .selection.active_board_index
+                .selection
+                .active_board_index
                 .and_then(|idx| self.ctx.boards.get(idx));
             let board = match board {
                 Some(b) => b,
@@ -487,12 +494,15 @@ impl App {
                     match direction {
                         kanban_domain::card_lifecycle::MoveDirection::Left => {
                             if current_col_idx > 0 {
-                                self.dialog_input.column_selection.set(Some(current_col_idx - 1));
+                                self.dialog_input
+                                    .column_selection
+                                    .set(Some(current_col_idx - 1));
                             }
                         }
                         kanban_domain::card_lifecycle::MoveDirection::Right => {
                             let num_cols = self
-                                .selection.active_board_index
+                                .selection
+                                .active_board_index
                                 .and_then(|idx| self.ctx.boards.get(idx))
                                 .map(|b| {
                                     self.ctx
@@ -503,7 +513,9 @@ impl App {
                                 })
                                 .unwrap_or(0);
                             if current_col_idx < num_cols - 1 {
-                                self.dialog_input.column_selection.set(Some(current_col_idx + 1));
+                                self.dialog_input
+                                    .column_selection
+                                    .set(Some(current_col_idx + 1));
                             }
                         }
                     }
@@ -517,7 +529,8 @@ impl App {
 
     fn move_selected_cards(&mut self, direction: kanban_domain::card_lifecycle::MoveDirection) {
         let board = self
-            .selection.active_board_index
+            .selection
+            .active_board_index
             .and_then(|idx| self.ctx.boards.get(idx));
         let board = match board {
             Some(b) => b,
@@ -703,7 +716,8 @@ impl App {
         let card_title = archived_card.card.title.clone();
 
         let board_id = self
-            .selection.active_board_index
+            .selection
+            .active_board_index
             .and_then(|idx| self.ctx.boards.get(idx))
             .map(|b| b.id);
 

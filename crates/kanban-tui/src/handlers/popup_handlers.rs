@@ -15,7 +15,9 @@ impl App {
                 self.dialog_input.import_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.dialog_input.import_selection.next(self.dialog_input.import_files.len());
+                self.dialog_input
+                    .import_selection
+                    .next(self.dialog_input.import_files.len());
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.dialog_input.import_selection.prev();
@@ -101,7 +103,8 @@ impl App {
                         _ => CardPriority::Medium,
                     };
 
-                    let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
+                    let card_ids: Vec<uuid::Uuid> =
+                        self.multi_select.selected_cards.iter().copied().collect();
                     let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
 
                     for card_id in &card_ids {
@@ -226,7 +229,9 @@ impl App {
                 if let Some(board_idx) = self.selection.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
-                        self.dialog_input.sprint_assign_selection.next(sprint_count + 1);
+                        self.dialog_input
+                            .sprint_assign_selection
+                            .next(sprint_count + 1);
                     }
                 }
             }
@@ -351,7 +356,9 @@ impl App {
                 if let Some(board_idx) = self.selection.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
-                        self.dialog_input.sprint_assign_selection.next(sprint_count + 1);
+                        self.dialog_input
+                            .sprint_assign_selection
+                            .next(sprint_count + 1);
                     }
                 }
             }
@@ -360,7 +367,8 @@ impl App {
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
-                    let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
+                    let card_ids: Vec<uuid::Uuid> =
+                        self.multi_select.selected_cards.iter().copied().collect();
 
                     if selection_idx == 0 {
                         // Unassign cards from sprint - batch all unassignments
@@ -474,7 +482,8 @@ impl App {
             self.relationship.card_ids.clone()
         } else {
             let search_lower = self.relationship.search.to_lowercase();
-            self.relationship.card_ids
+            self.relationship
+                .card_ids
                 .iter()
                 .filter(|card_id| {
                     self.ctx
@@ -601,7 +610,8 @@ impl App {
             self.relationship.card_ids.len()
         } else {
             let search_lower = self.relationship.search.to_lowercase();
-            self.relationship.card_ids
+            self.relationship
+                .card_ids
                 .iter()
                 .filter(|card_id| {
                     self.ctx

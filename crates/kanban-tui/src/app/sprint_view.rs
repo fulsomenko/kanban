@@ -1,5 +1,5 @@
 use crate::card_list::{CardList, CardListId};
-use crate::card_list_component::{CardListComponent, CardListComponentConfig, CardListActionType};
+use crate::card_list_component::{CardListActionType, CardListComponent, CardListComponentConfig};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SprintTaskPanel {
