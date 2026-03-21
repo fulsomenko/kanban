@@ -475,7 +475,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
 
     if app.search.is_active && app.mode != AppMode::Search {
         let search_text = format!("/{}", app.search.query());
-        let help_text = "j/k/n/N: navigate | ESC: clear";
+        let help_text = "j/k: navigate | ESC: clear";
 
         let available_width = area.width.saturating_sub(4);
         let help_len = help_text.len() as u16;
