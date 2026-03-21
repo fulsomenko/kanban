@@ -129,19 +129,42 @@ fn build_title_spans(title: &str, base_style: Style, query: Option<&str>) -> Vec
     let query_lower = q.to_lowercase();
     let highlight_style = base_style.fg(HIGHLIGHT_TEXT).add_modifier(Modifier::BOLD);
 
+    // Map byte offset in title_lower → byte offset in title.
+    // to_lowercase() can expand chars (e.g. İ → "i\u{307}"), so offsets
+    // into title_lower are not valid offsets into title without this map.
+    let lower_to_orig: Vec<usize> = {
+        let mut map = vec![0usize; title_lower.len() + 1];
+        let mut lower_pos = 0usize;
+        for (orig_byte, orig_char) in title.char_indices() {
+            for lc in orig_char.to_lowercase() {
+                let lc_len = lc.len_utf8();
+                for i in 0..lc_len {
+                    map[lower_pos + i] = orig_byte;
+                }
+                lower_pos += lc_len;
+            }
+        }
+        map[lower_pos] = title.len();
+        map
+    };
+
     let mut spans = Vec::new();
-    let mut pos = 0;
+    let mut pos = 0usize; // byte cursor in title_lower
     while let Some(idx) = title_lower[pos..].find(&query_lower) {
         let abs = pos + idx;
-        if abs > pos {
-            spans.push(Span::styled(title[pos..abs].to_owned(), base_style));
+        let end = abs + query_lower.len();
+        let orig_pos = lower_to_orig[pos];
+        let orig_abs = lower_to_orig[abs];
+        let orig_end = lower_to_orig[end];
+
+        if orig_abs > orig_pos {
+            spans.push(Span::styled(title[orig_pos..orig_abs].to_owned(), base_style));
         }
-        let end = abs + q.len();
-        spans.push(Span::styled(title[abs..end].to_owned(), highlight_style));
+        spans.push(Span::styled(title[orig_abs..orig_end].to_owned(), highlight_style));
         pos = end;
     }
-    if pos < title.len() {
-        spans.push(Span::styled(title[pos..].to_owned(), base_style));
+    if pos < title_lower.len() {
+        spans.push(Span::styled(title[lower_to_orig[pos]..].to_owned(), base_style));
     }
     spans
 }
