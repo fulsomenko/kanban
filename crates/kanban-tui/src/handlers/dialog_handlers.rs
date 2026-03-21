@@ -49,12 +49,12 @@ impl App {
             DialogAction::Confirm => {
                 self.create_sprint();
                 self.pop_mode();
-                self.board_focus = BoardFocus::Sprints;
+                self.focus.board_focus = BoardFocus::Sprints;
                 self.input.clear();
             }
             DialogAction::Cancel => {
                 self.pop_mode();
-                self.board_focus = BoardFocus::Sprints;
+                self.focus.board_focus = BoardFocus::Sprints;
                 self.input.clear();
             }
             DialogAction::None => {}
@@ -133,7 +133,7 @@ impl App {
                 };
 
                 let card_id = self
-                    .active_card_index
+                    .selection.active_card_index
                     .and_then(|idx| self.ctx.cards.get(idx))
                     .map(|c| c.id)
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
@@ -174,7 +174,7 @@ impl App {
                 if prefix_str.is_empty() {
                     match context {
                         PrefixDialogContext::BoardSprint => {
-                            if let Some(board_idx) = self.board_selection.get() {
+                            if let Some(board_idx) = self.selection.board.get() {
                                 if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
                                 {
                                     let cmd = Box::new(kanban_domain::commands::UpdateBoard {
@@ -193,7 +193,7 @@ impl App {
                             }
                         }
                         PrefixDialogContext::Sprint => {
-                            if let Some(sprint_idx) = self.active_sprint_index {
+                            if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
@@ -213,7 +213,7 @@ impl App {
                             }
                         }
                         PrefixDialogContext::SprintCard => {
-                            if let Some(sprint_idx) = self.active_sprint_index {
+                            if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
@@ -239,7 +239,7 @@ impl App {
                 } else if Card::validate_branch_prefix(&prefix_str) {
                     match context {
                         PrefixDialogContext::BoardSprint => {
-                            if let Some(board_idx) = self.board_selection.get() {
+                            if let Some(board_idx) = self.selection.board.get() {
                                 if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
                                 {
                                     let cmd = Box::new(kanban_domain::commands::UpdateBoard {
@@ -264,7 +264,7 @@ impl App {
                             }
                         }
                         PrefixDialogContext::Sprint => {
-                            if let Some(sprint_idx) = self.active_sprint_index {
+                            if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {
@@ -282,7 +282,7 @@ impl App {
                                     }
                                 }
                             }
-                            let board_idx = self.active_board_index.or(self.board_selection.get());
+                            let board_idx = self.selection.active_board_index.or(self.selection.board.get());
                             if let Some(board_idx) = board_idx {
                                 if let Some(board) = self.ctx.boards.get_mut(board_idx) {
                                     board.ensure_sprint_counter_initialized(
@@ -293,7 +293,7 @@ impl App {
                             }
                         }
                         PrefixDialogContext::SprintCard => {
-                            if let Some(sprint_idx) = self.active_sprint_index {
+                            if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints.get(sprint_idx).map(|s| s.id)
                                 {

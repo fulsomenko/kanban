@@ -5,34 +5,34 @@ use kanban_domain::CardFilters;
 
 impl App {
     pub fn handle_open_filter_dialog(&mut self) {
-        if self.focus != Focus::Cards || self.active_board_index.is_none() {
+        if self.focus.focus != Focus::Cards || self.selection.active_board_index.is_none() {
             return;
         }
 
         let filters = CardFilters {
-            show_unassigned_sprints: self.hide_assigned_cards,
-            selected_sprint_ids: self.active_sprint_filters.clone(),
+            show_unassigned_sprints: self.filter.hide_assigned_cards,
+            selected_sprint_ids: self.filter.active_sprint_filters.clone(),
             date_from: None,
             date_to: None,
             selected_tags: Default::default(),
         };
 
-        self.filter_dialog_state = Some(FilterDialogState::new(filters));
+        self.filter.dialog_state = Some(FilterDialogState::new(filters));
         self.open_dialog(DialogMode::FilterOptions);
     }
 
     pub fn handle_filter_options_popup(&mut self, key_code: KeyCode) {
         use crossterm::event::KeyCode;
 
-        if let Some(ref mut dialog_state) = self.filter_dialog_state {
+        if let Some(ref mut dialog_state) = self.filter.dialog_state {
             match key_code {
                 KeyCode::Esc => {
-                    self.filter_dialog_state = None;
+                    self.filter.dialog_state = None;
                     self.pop_mode();
                 }
                 KeyCode::Char('j') | KeyCode::Down => match dialog_state.current_section {
                     FilterDialogSection::Sprints => {
-                        if let Some(board_idx) = self.active_board_index {
+                        if let Some(board_idx) = self.selection.active_board_index {
                             if let Some(board) = self.ctx.boards.get(board_idx) {
                                 let sprint_count = self
                                     .ctx
@@ -75,7 +75,7 @@ impl App {
                                 dialog_state.filters.show_unassigned_sprints
                             );
                             self.apply_filters();
-                        } else if let Some(board_idx) = self.active_board_index {
+                        } else if let Some(board_idx) = self.selection.active_board_index {
                             if let Some(board) = self.ctx.boards.get(board_idx) {
                                 let board_sprints: Vec<_> = self
                                     .ctx
@@ -107,7 +107,7 @@ impl App {
                 }
                 KeyCode::Enter => {
                     self.apply_filters();
-                    self.filter_dialog_state = None;
+                    self.filter.dialog_state = None;
                     self.pop_mode();
                 }
                 _ => {}
@@ -116,15 +116,15 @@ impl App {
     }
 
     fn apply_filters(&mut self) {
-        if let Some(dialog_state) = &self.filter_dialog_state {
-            self.hide_assigned_cards = dialog_state.filters.show_unassigned_sprints;
-            self.active_sprint_filters = dialog_state.filters.selected_sprint_ids.clone();
+        if let Some(dialog_state) = &self.filter.dialog_state {
+            self.filter.hide_assigned_cards = dialog_state.filters.show_unassigned_sprints;
+            self.filter.active_sprint_filters = dialog_state.filters.selected_sprint_ids.clone();
 
             self.refresh_view();
             tracing::info!(
                 "Applied filters: unassigned={}, sprints={}",
-                self.hide_assigned_cards,
-                self.active_sprint_filters.len()
+                self.filter.hide_assigned_cards,
+                self.filter.active_sprint_filters.len()
             );
         }
     }

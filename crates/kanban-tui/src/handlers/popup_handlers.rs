@@ -12,24 +12,24 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.import_selection.clear();
+                self.dialog_input.import_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.import_selection.next(self.import_files.len());
+                self.dialog_input.import_selection.next(self.dialog_input.import_files.len());
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.import_selection.prev();
+                self.dialog_input.import_selection.prev();
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(idx) = self.import_selection.get() {
-                    if let Some(filename) = self.import_files.get(idx).cloned() {
+                if let Some(idx) = self.dialog_input.import_selection.get() {
+                    if let Some(filename) = self.dialog_input.import_files.get(idx).cloned() {
                         if let Err(e) = self.import_board_from_file(&filename) {
                             tracing::error!("Failed to import board: {}", e);
                         }
                     }
                 }
                 self.pop_mode();
-                self.import_selection.clear();
+                self.dialog_input.import_selection.clear();
             }
             _ => {}
         }
@@ -41,14 +41,14 @@ impl App {
                 self.pop_mode();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.priority_selection.next(PRIORITY_COUNT);
+                self.dialog_input.priority_selection.next(PRIORITY_COUNT);
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.priority_selection.prev();
+                self.dialog_input.priority_selection.prev();
             }
             KeyCode::Enter => {
-                if let Some(priority_idx) = self.priority_selection.get() {
-                    if let Some(card_idx) = self.active_card_index {
+                if let Some(priority_idx) = self.dialog_input.priority_selection.get() {
+                    if let Some(card_idx) = self.selection.active_card_index {
                         if let Some(card) = self.ctx.cards.get(card_idx) {
                             use kanban_domain::{CardPriority, CardUpdate};
                             let priority = match priority_idx {
@@ -82,16 +82,16 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.priority_selection.clear();
+                self.dialog_input.priority_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.priority_selection.next(PRIORITY_COUNT);
+                self.dialog_input.priority_selection.next(PRIORITY_COUNT);
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.priority_selection.prev();
+                self.dialog_input.priority_selection.prev();
             }
             KeyCode::Enter => {
-                if let Some(priority_idx) = self.priority_selection.get() {
+                if let Some(priority_idx) = self.dialog_input.priority_selection.get() {
                     use kanban_domain::{CardPriority, CardUpdate};
                     let priority = match priority_idx {
                         0 => CardPriority::Low,
@@ -101,7 +101,7 @@ impl App {
                         _ => CardPriority::Medium,
                     };
 
-                    let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+                    let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
                     let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
 
                     for card_id in &card_ids {
@@ -128,11 +128,11 @@ impl App {
                         }
                     }
 
-                    self.selected_cards.clear();
-                    self.selection_mode_active = false;
+                    self.multi_select.selected_cards.clear();
+                    self.multi_select.selection_mode_active = false;
                 }
                 self.pop_mode();
-                self.priority_selection.clear();
+                self.dialog_input.priority_selection.clear();
             }
             _ => {}
         }
@@ -142,19 +142,19 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.sort_field_selection.clear();
+                self.filter.sort_field_selection.clear();
                 false
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.sort_field_selection.next(7);
+                self.filter.sort_field_selection.next(7);
                 false
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.sort_field_selection.prev();
+                self.filter.sort_field_selection.prev();
                 false
             }
             KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('a') | KeyCode::Char('d') => {
-                if let Some(field_idx) = self.sort_field_selection.get() {
+                if let Some(field_idx) = self.filter.sort_field_selection.get() {
                     let field = match field_idx {
                         0 => SortField::Points,
                         1 => SortField::Priority,
@@ -166,10 +166,10 @@ impl App {
                         _ => return false,
                     };
 
-                    let order = if self.current_sort_field == Some(field)
+                    let order = if self.filter.current_sort_field == Some(field)
                         && matches!(key_code, KeyCode::Enter | KeyCode::Char(' '))
                     {
-                        match self.current_sort_order {
+                        match self.filter.current_sort_order {
                             Some(SortOrder::Ascending) => SortOrder::Descending,
                             Some(SortOrder::Descending) => SortOrder::Ascending,
                             None => SortOrder::Ascending,
@@ -181,10 +181,10 @@ impl App {
                         }
                     };
 
-                    self.current_sort_field = Some(field);
-                    self.current_sort_order = Some(order);
+                    self.filter.current_sort_field = Some(field);
+                    self.filter.current_sort_order = Some(order);
 
-                    if let Some(board_idx) = self.active_board_index {
+                    if let Some(board_idx) = self.selection.active_board_index {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
                             let board_id = board.id;
                             let cmd = Box::new(kanban_domain::commands::SetBoardTaskSort {
@@ -198,9 +198,9 @@ impl App {
                         }
                     }
 
-                    let is_sprint_detail = self.active_sprint_index.is_some();
+                    let is_sprint_detail = self.selection.active_sprint_index.is_some();
                     self.pop_mode();
-                    self.sort_field_selection.clear();
+                    self.filter.sort_field_selection.clear();
 
                     tracing::info!("Sorting by {:?} ({:?})", field, order);
 
@@ -220,22 +220,22 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.sprint_assign_selection.clear();
+                self.dialog_input.sprint_assign_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                if let Some(board_idx) = self.active_board_index {
+                if let Some(board_idx) = self.selection.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
-                        self.sprint_assign_selection.next(sprint_count + 1);
+                        self.dialog_input.sprint_assign_selection.next(sprint_count + 1);
                     }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.sprint_assign_selection.prev();
+                self.dialog_input.sprint_assign_selection.prev();
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(selection_idx) = self.sprint_assign_selection.get() {
-                    if let Some(card_idx) = self.active_card_index {
+                if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
+                    if let Some(card_idx) = self.selection.active_card_index {
                         let card_id = {
                             if let Some(card) = self.ctx.cards.get(card_idx) {
                                 card.id
@@ -263,7 +263,7 @@ impl App {
                                 }
                                 tracing::info!("Unassigned card from sprint");
                             }
-                        } else if let Some(board_idx) = self.active_board_index {
+                        } else if let Some(board_idx) = self.selection.active_board_index {
                             if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
                                 let board_sprints = Sprint::assignable(&self.ctx.sprints, board_id);
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
@@ -333,7 +333,7 @@ impl App {
                     }
                 }
                 self.pop_mode();
-                self.sprint_assign_selection.clear();
+                self.dialog_input.sprint_assign_selection.clear();
             }
             _ => {}
         }
@@ -343,24 +343,24 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.sprint_assign_selection.clear();
-                self.selected_cards.clear();
-                self.selection_mode_active = false;
+                self.dialog_input.sprint_assign_selection.clear();
+                self.multi_select.selected_cards.clear();
+                self.multi_select.selection_mode_active = false;
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                if let Some(board_idx) = self.active_board_index {
+                if let Some(board_idx) = self.selection.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
-                        self.sprint_assign_selection.next(sprint_count + 1);
+                        self.dialog_input.sprint_assign_selection.next(sprint_count + 1);
                     }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.sprint_assign_selection.prev();
+                self.dialog_input.sprint_assign_selection.prev();
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(selection_idx) = self.sprint_assign_selection.get() {
-                    let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+                if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
+                    let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
 
                     if selection_idx == 0 {
                         // Unassign cards from sprint - batch all unassignments
@@ -379,10 +379,10 @@ impl App {
                         } else {
                             tracing::info!(
                                 "Unassigned {} cards from sprint",
-                                self.selected_cards.len()
+                                self.multi_select.selected_cards.len()
                             );
                         }
-                    } else if let Some(board_idx) = self.active_board_index {
+                    } else if let Some(board_idx) = self.selection.active_board_index {
                         if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id) {
                             let board_sprints = Sprint::assignable(&self.ctx.sprints, board_id);
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
@@ -444,7 +444,7 @@ impl App {
 
                                 tracing::info!(
                                     "Assigned {} cards to sprint with id: {}",
-                                    self.selected_cards.len(),
+                                    self.multi_select.selected_cards.len(),
                                     sprint_id
                                 );
                             }
@@ -452,9 +452,9 @@ impl App {
                     }
                 }
                 self.pop_mode();
-                self.sprint_assign_selection.clear();
-                self.selected_cards.clear();
-                self.selection_mode_active = false;
+                self.dialog_input.sprint_assign_selection.clear();
+                self.multi_select.selected_cards.clear();
+                self.multi_select.selection_mode_active = false;
             }
             _ => {}
         }
@@ -470,11 +470,11 @@ impl App {
 
     fn handle_relationship_popup(&mut self, key_code: KeyCode, is_parent_mode: bool) {
         // Filter cards by search
-        let filtered_cards: Vec<_> = if self.relationship_search.is_empty() {
-            self.relationship_card_ids.clone()
+        let filtered_cards: Vec<_> = if self.relationship.search.is_empty() {
+            self.relationship.card_ids.clone()
         } else {
-            let search_lower = self.relationship_search.to_lowercase();
-            self.relationship_card_ids
+            let search_lower = self.relationship.search.to_lowercase();
+            self.relationship.card_ids
                 .iter()
                 .filter(|card_id| {
                     self.ctx
@@ -491,22 +491,22 @@ impl App {
         let list_len = filtered_cards.len();
 
         // Handle search mode separately
-        if self.relationship_search_active {
+        if self.relationship.search_active {
             match key_code {
                 KeyCode::Esc => {
                     // Exit search mode but stay in dialog
-                    self.relationship_search_active = false;
+                    self.relationship.search_active = false;
                 }
                 KeyCode::Enter => {
                     // Confirm search and exit search mode
-                    self.relationship_search_active = false;
+                    self.relationship.search_active = false;
                 }
                 KeyCode::Backspace => {
-                    self.relationship_search.pop();
+                    self.relationship.search.pop();
                     self.update_relationship_selection_after_search();
                 }
                 KeyCode::Char(c) => {
-                    self.relationship_search.push(c);
+                    self.relationship.search.push(c);
                     self.update_relationship_selection_after_search();
                 }
                 _ => {}
@@ -518,31 +518,31 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.relationship_card_ids.clear();
-                self.relationship_selected.clear();
-                self.relationship_selection.clear();
-                self.relationship_search.clear();
-                self.relationship_search_active = false;
+                self.relationship.card_ids.clear();
+                self.relationship.selected.clear();
+                self.relationship.selection.clear();
+                self.relationship.search.clear();
+                self.relationship.search_active = false;
             }
             KeyCode::Char('/') => {
                 // Enter search mode
-                self.relationship_search_active = true;
+                self.relationship.search_active = true;
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.relationship_selection.next(list_len);
+                self.relationship.selection.next(list_len);
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.relationship_selection.prev();
+                self.relationship.selection.prev();
             }
             KeyCode::Char(' ') | KeyCode::Enter => {
                 // Toggle relationship
-                if let Some(idx) = self.relationship_selection.get() {
+                if let Some(idx) = self.relationship.selection.get() {
                     if let Some(selected_card_id) = filtered_cards.get(idx).copied() {
-                        if let Some(card_idx) = self.active_card_index {
+                        if let Some(card_idx) = self.selection.active_card_index {
                             if let Some(current_card) = self.ctx.cards.get(card_idx) {
                                 let current_card_id = current_card.id;
 
-                                if self.relationship_selected.contains(&selected_card_id) {
+                                if self.relationship.selected.contains(&selected_card_id) {
                                     // Remove relationship
                                     let result = if is_parent_mode {
                                         // Current card is child, selected card is parent
@@ -559,7 +559,7 @@ impl App {
                                     };
 
                                     if result.is_ok() {
-                                        self.relationship_selected.remove(&selected_card_id);
+                                        self.relationship.selected.remove(&selected_card_id);
                                         self.ctx.state_manager.mark_dirty();
                                         let snapshot = Snapshot::from_app(self);
                                         self.ctx.state_manager.queue_snapshot(snapshot);
@@ -581,7 +581,7 @@ impl App {
                                     };
 
                                     if result.is_ok() {
-                                        self.relationship_selected.insert(selected_card_id);
+                                        self.relationship.selected.insert(selected_card_id);
                                         self.ctx.state_manager.mark_dirty();
                                         let snapshot = Snapshot::from_app(self);
                                         self.ctx.state_manager.queue_snapshot(snapshot);
@@ -597,11 +597,11 @@ impl App {
     }
 
     fn update_relationship_selection_after_search(&mut self) {
-        let filtered_count = if self.relationship_search.is_empty() {
-            self.relationship_card_ids.len()
+        let filtered_count = if self.relationship.search.is_empty() {
+            self.relationship.card_ids.len()
         } else {
-            let search_lower = self.relationship_search.to_lowercase();
-            self.relationship_card_ids
+            let search_lower = self.relationship.search.to_lowercase();
+            self.relationship.card_ids
                 .iter()
                 .filter(|card_id| {
                     self.ctx
@@ -615,9 +615,9 @@ impl App {
         };
 
         if filtered_count > 0 {
-            self.relationship_selection.set(Some(0));
+            self.relationship.selection.set(Some(0));
         } else {
-            self.relationship_selection.clear();
+            self.relationship.selection.clear();
         }
     }
 }

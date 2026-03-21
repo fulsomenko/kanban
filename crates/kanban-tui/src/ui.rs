@@ -17,7 +17,7 @@ const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
 const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
 
 fn render_banner(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(ref banner) = app.banner {
+    if let Some(ref banner) = app.ui.banner {
         banner.render(frame, area);
     }
 }
@@ -88,12 +88,12 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             AppMode::SprintDetail => render_sprint_detail_view(app, frame, frame.area()),
             _ => render_main(app, frame, frame.area()),
         }
-        app.last_frame_area = frame.area();
+        app.view.last_frame_area = frame.area();
         render_help_popup(app, frame);
     }
 
     // Render banner on top if present
-    if app.banner.is_some() {
+    if app.ui.banner.is_some() {
         let banner_area = Rect {
             x: 0,
             y: 0,
@@ -105,7 +105,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 }
 
 fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
-    let is_kanban_view = if let Some(idx) = app.active_board_index {
+    let is_kanban_view = if let Some(idx) = app.selection.active_board_index {
         if let Some(board) = app.ctx.boards.get(idx) {
             board.task_list_view == kanban_domain::TaskListView::ColumnView
         } else {
@@ -116,7 +116,7 @@ fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
     };
 
     if is_kanban_view {
-        app.viewport_height = area.height.saturating_sub(2) as usize;
+        app.view.viewport_height = area.height.saturating_sub(2) as usize;
         render_tasks_panel(app, frame, area);
     } else {
         let chunks = Layout::default()
@@ -124,7 +124,7 @@ fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
             .split(area);
 
-        app.viewport_height = chunks[1].height.saturating_sub(2) as usize;
+        app.view.viewport_height = chunks[1].height.saturating_sub(2) as usize;
         render_projects_panel(app, frame, chunks[0]);
         render_tasks_panel(app, frame, chunks[1]);
     }
@@ -141,9 +141,9 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     } else {
         for (idx, board) in app.ctx.boards.iter().enumerate() {
             let config = ListItemConfig::new()
-                .selected(app.board_selection.get() == Some(idx))
-                .focused(app.focus == Focus::Boards)
-                .active(app.active_board_index == Some(idx));
+                .selected(app.selection.board.get() == Some(idx))
+                .focused(app.focus.focus == Focus::Boards)
+                .active(app.selection.active_board_index == Some(idx));
 
             lines.push(styled_list_item(&board.name, &config));
         }
@@ -151,7 +151,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     let panel_config = PanelConfig::new("Projects")
         .with_focus_indicator("Projects [1]")
-        .focused(app.focus == Focus::Boards);
+        .focused(app.focus.focus == Focus::Boards);
 
     let content = Paragraph::new(lines);
     render_panel(frame, area, &panel_config, content);
@@ -160,18 +160,18 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 pub fn build_filter_title_suffix(app: &App) -> Option<String> {
     let mut filters = vec![];
 
-    if app.hide_assigned_cards {
+    if app.filter.hide_assigned_cards {
         filters.push("Unassigned Cards".to_string());
     }
 
-    if !app.active_sprint_filters.is_empty() {
-        if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
+    if !app.filter.active_sprint_filters.is_empty() {
+        if let Some(board_idx) = app.selection.active_board_index.or(app.selection.board.get()) {
             if let Some(board) = app.ctx.boards.get(board_idx) {
                 let mut sprint_names: Vec<String> = app
                     .ctx
                     .sprints
                     .iter()
-                    .filter(|s| app.active_sprint_filters.contains(&s.id))
+                    .filter(|s| app.filter.active_sprint_filters.contains(&s.id))
                     .map(|s| s.formatted_name(board, "sprint"))
                     .collect();
                 sprint_names.sort();
@@ -190,7 +190,7 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
 pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
     let mut title = if app.mode == AppMode::ArchivedCardsView {
         "Archive".to_string()
-    } else if app.focus == Focus::Cards {
+    } else if app.focus.focus == Focus::Cards {
         "Tasks [2]".to_string()
     } else {
         "Tasks".to_string()
@@ -211,7 +211,7 @@ fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(unified_strategy) = app
-        .view_strategy
+        .view.strategy
         .as_any()
         .downcast_ref::<UnifiedViewStrategy>()
     {
@@ -222,9 +222,9 @@ fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(sprint_idx) = app.active_sprint_index {
+    if let Some(sprint_idx) = app.selection.active_sprint_index {
         if let Some(sprint) = app.ctx.sprints.get(sprint_idx) {
-            if let Some(board_idx) = app.active_board_index {
+            if let Some(board_idx) = app.selection.active_board_index {
                 if let Some(board) = app.ctx.boards.get(board_idx) {
                     let is_completed = sprint.status == SprintStatus::Completed;
 
@@ -359,9 +359,9 @@ fn render_sprint_detail_with_tasks(
         chunks[0],
         sprint,
         board,
-        &app.sprint_uncompleted_cards,
+        &app.sprint_view.uncompleted_cards,
         "Uncompleted",
-        app.sprint_task_panel == crate::app::SprintTaskPanel::Uncompleted,
+        app.sprint_view.panel == crate::app::SprintTaskPanel::Uncompleted,
     );
 
     render_sprint_task_panel_with_selection(
@@ -370,9 +370,9 @@ fn render_sprint_detail_with_tasks(
         chunks[1],
         sprint,
         board,
-        &app.sprint_completed_cards,
+        &app.sprint_view.completed_cards,
         "Completed",
-        app.sprint_task_panel == crate::app::SprintTaskPanel::Completed,
+        app.sprint_view.panel == crate::app::SprintTaskPanel::Completed,
     );
 }
 
@@ -407,7 +407,7 @@ fn render_sprint_task_panel_with_selection(
                 if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
                     let is_selected = selected_idx == Some(*card_idx) && is_focused;
                     let animation_type =
-                        app.animating_cards.get(&card.id).map(|a| a.animation_type);
+                        app.animation.animating.get(&card.id).map(|a| a.animation_type);
                     let line = render_card_list_item(CardListItemConfig {
                         card,
                         board,
@@ -463,7 +463,7 @@ fn render_sprint_task_panel_with_selection(
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let _is_kanban_view =
-        if let Some(board_idx) = app.active_board_index.or(app.board_selection.get()) {
+        if let Some(board_idx) = app.selection.active_board_index.or(app.selection.board.get()) {
             if let Some(board) = app.ctx.boards.get(board_idx) {
                 board.task_list_view == kanban_domain::TaskListView::ColumnView
             } else {
@@ -473,8 +473,8 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             false
         };
 
-    if app.search.is_active && app.mode != AppMode::Search {
-        let search_text = format!("/{}", app.search.query());
+    if app.filter.search.is_active && app.mode != AppMode::Search {
+        let search_text = format!("/{}", app.filter.search.query());
         let help_text = "j/k: navigate | ESC: clear";
 
         let available_width = area.width.saturating_sub(4);
@@ -504,7 +504,7 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     }
 
     if app.mode == AppMode::Search {
-        let search_text = format!("/{}", app.search.query());
+        let search_text = format!("/{}", app.filter.search.query());
         let help_text = "ESC: clear | Enter: apply";
 
         let available_width = area.width.saturating_sub(4);
@@ -535,18 +535,18 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
 
     use crate::keybindings::KeybindingRegistry;
 
-    let selection_prefix = if app.selection_mode_active {
-        format!("-- SELECT ({}) -- | ", app.selected_cards.len())
-    } else if !app.selected_cards.is_empty() {
-        format!("({} selected) | ", app.selected_cards.len())
+    let selection_prefix = if app.multi_select.selection_mode_active {
+        format!("-- SELECT ({}) -- | ", app.multi_select.selected_cards.len())
+    } else if !app.multi_select.selected_cards.is_empty() {
+        format!("({} selected) | ", app.multi_select.selected_cards.len())
     } else {
         String::new()
     };
 
     let help_text: String = if let AppMode::SprintDetail = app.mode {
-        let component = match app.sprint_task_panel {
-            crate::app::SprintTaskPanel::Uncompleted => &app.sprint_uncompleted_component,
-            crate::app::SprintTaskPanel::Completed => &app.sprint_completed_component,
+        let component = match app.sprint_view.panel {
+            crate::app::SprintTaskPanel::Uncompleted => &app.sprint_view.uncompleted_component,
+            crate::app::SprintTaskPanel::Completed => &app.sprint_view.completed_component,
         };
         let provider = KeybindingRegistry::get_provider(app);
         let context = provider.get_context();
@@ -624,7 +624,7 @@ fn render_set_card_priority_popup(app: &App, frame: &mut Frame) {
 fn render_set_multiple_cards_priority_popup(app: &App, frame: &mut Frame) {
     use crate::components::{BulkPriorityDialog, SelectionDialog};
     let dialog = BulkPriorityDialog {
-        count: app.selected_cards.len(),
+        count: app.multi_select.selected_cards.len(),
     };
     dialog.render(app, frame);
 }
@@ -649,13 +649,13 @@ fn render_relationship_boxes(
     // Render Parents section
     let parents_config = FieldSectionConfig::new("Parents")
         .with_focus_indicator("Parents [4]")
-        .focused(app.card_focus == CardFocus::Parents);
+        .focused(app.focus.card_focus == CardFocus::Parents);
     let parents_lines = render_relationship_section(
         parents,
         &app.ctx.cards,
         "Parents",
-        app.card_focus == CardFocus::Parents,
-        &app.parents_list,
+        app.focus.card_focus == CardFocus::Parents,
+        &app.relationship.parents_list,
         viewport_height,
     );
     let parents_widget = Paragraph::new(parents_lines).block(parents_config.block());
@@ -666,13 +666,13 @@ fn render_relationship_boxes(
     let children_title_focused = format!("Children ({}) [5]", child_count);
     let children_config = FieldSectionConfig::new(&children_title)
         .with_focus_indicator(&children_title_focused)
-        .focused(app.card_focus == CardFocus::Children);
+        .focused(app.focus.card_focus == CardFocus::Children);
     let children_lines = render_relationship_section(
         children,
         &app.ctx.cards,
         "Children",
-        app.card_focus == CardFocus::Children,
-        &app.children_list,
+        app.focus.card_focus == CardFocus::Children,
+        &app.relationship.children_list,
         viewport_height,
     );
     let children_widget = Paragraph::new(children_lines).block(children_config.block());
@@ -680,9 +680,9 @@ fn render_relationship_boxes(
 }
 
 fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(card_idx) = app.active_card_index {
+    if let Some(card_idx) = app.selection.active_card_index {
         if let Some(card) = app.ctx.cards.get(card_idx) {
-            if let Some(board_idx) = app.active_board_index {
+            if let Some(board_idx) = app.selection.active_board_index {
                 if let Some(board) = app.ctx.boards.get(board_idx) {
                     let has_sprint_logs = card.sprint_logs.len() > 1;
                     let card_id = card.id;
@@ -707,7 +707,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     // Render title section
                     let title_config = FieldSectionConfig::new("Task Title")
                         .with_focus_indicator("Task Title [1]")
-                        .focused(app.card_focus == CardFocus::Title);
+                        .focused(app.focus.card_focus == CardFocus::Title);
                     let title = Paragraph::new(build_title_lines(card))
                         .style(bold_highlight())
                         .block(title_config.block());
@@ -722,9 +722,9 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         // Render metadata
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
-                            .focused(app.card_focus == CardFocus::Metadata);
+                            .focused(app.focus.card_focus == CardFocus::Metadata);
                         let meta_lines =
-                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.persistence.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
 
@@ -738,7 +738,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         // Render description
                         let desc_config = FieldSectionConfig::new("Description")
                             .with_focus_indicator("Description [3]")
-                            .focused(app.card_focus == CardFocus::Description);
+                            .focused(app.focus.card_focus == CardFocus::Description);
                         let desc_lines = build_description_lines(card);
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
@@ -756,16 +756,16 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         // Render metadata section
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
-                            .focused(app.card_focus == CardFocus::Metadata);
+                            .focused(app.focus.card_focus == CardFocus::Metadata);
                         let meta_lines =
-                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.persistence.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
 
                         // Render description section
                         let desc_config = FieldSectionConfig::new("Description")
                             .with_focus_indicator("Description [3]")
-                            .focused(app.card_focus == CardFocus::Description);
+                            .focused(app.focus.card_focus == CardFocus::Description);
                         let desc_lines = build_description_lines(card);
                         let desc = Paragraph::new(desc_lines).block(desc_config.block());
                         frame.render_widget(desc, chunks[2]);
@@ -828,15 +828,15 @@ fn render_import_board_popup(app: &App, frame: &mut Frame) {
     let label = Paragraph::new("Select a JSON file to import:").style(highlight_text());
     frame.render_widget(label, chunks[0]);
 
-    if app.import_files.is_empty() {
+    if app.dialog_input.import_files.is_empty() {
         let empty_msg =
             Paragraph::new("No JSON files found in current directory").style(label_text());
         frame.render_widget(empty_msg, chunks[1]);
     } else {
         let mut lines = vec![];
-        for (idx, filename) in app.import_files.iter().enumerate() {
+        for (idx, filename) in app.dialog_input.import_files.iter().enumerate() {
             let config = ListItemConfig::new()
-                .selected(app.import_selection.get() == Some(idx))
+                .selected(app.dialog_input.import_selection.get() == Some(idx))
                 .focused(true);
             lines.push(styled_list_item(filename, &config));
         }
@@ -846,7 +846,7 @@ fn render_import_board_popup(app: &App, frame: &mut Frame) {
 }
 
 fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(board_idx) = app.board_selection.get() {
+    if let Some(board_idx) = app.selection.board.get() {
         if let Some(board) = app.ctx.boards.get(board_idx) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -861,7 +861,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             let name_config = FieldSectionConfig::new("Project Name")
                 .with_focus_indicator("Project Name [1]")
-                .focused(app.board_focus == BoardFocus::Name);
+                .focused(app.focus.board_focus == BoardFocus::Name);
             let name = Paragraph::new(board.name.clone())
                 .style(bold_highlight())
                 .block(name_config.block());
@@ -869,7 +869,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             let desc_config = FieldSectionConfig::new("Description")
                 .with_focus_indicator("Description [2]")
-                .focused(app.board_focus == BoardFocus::Description);
+                .focused(app.focus.board_focus == BoardFocus::Description);
             let desc_lines = if let Some(desc_text) = &board.description {
                 crate::markdown_renderer::render_markdown(desc_text)
             } else {
@@ -880,7 +880,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             let settings_config = FieldSectionConfig::new("Settings")
                 .with_focus_indicator("Settings [3]")
-                .focused(app.board_focus == BoardFocus::Settings);
+                .focused(app.focus.board_focus == BoardFocus::Settings);
 
             let mut settings_lines = vec![
                 if let Some(prefix) = &board.sprint_prefix {
@@ -889,7 +889,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Sprint Prefix: ", label_text()),
                         Span::styled(
-                            app.app_config.effective_default_sprint_prefix().to_string(),
+                            app.persistence.app_config.effective_default_sprint_prefix().to_string(),
                             normal_text(),
                         ),
                         Span::styled(" (default)", label_text()),
@@ -901,7 +901,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Card Prefix: ", label_text()),
                         Span::styled(
-                            app.app_config.effective_default_card_prefix().to_string(),
+                            app.persistence.app_config.effective_default_card_prefix().to_string(),
                             normal_text(),
                         ),
                         Span::styled(" (default)", label_text()),
@@ -945,7 +945,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             let sprints_config = FieldSectionConfig::new("Sprints")
                 .with_focus_indicator("Sprints [4]")
-                .focused(app.board_focus == BoardFocus::Sprints);
+                .focused(app.focus.board_focus == BoardFocus::Sprints);
 
             let board_sprints: Vec<&Sprint> = app
                 .ctx
@@ -963,8 +963,8 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 )));
             } else {
                 for (sprint_idx, sprint) in board_sprints.iter().enumerate() {
-                    let is_selected = app.sprint_selection.get() == Some(sprint_idx);
-                    let is_focused = app.board_focus == BoardFocus::Sprints;
+                    let is_selected = app.selection.sprint.get() == Some(sprint_idx);
+                    let is_focused = app.focus.board_focus == BoardFocus::Sprints;
 
                     let status_symbol = match sprint.status {
                         SprintStatus::Planning => "○",
@@ -1025,7 +1025,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
 
             let columns_config = FieldSectionConfig::new("Columns")
                 .with_focus_indicator("Columns [5]")
-                .focused(app.board_focus == BoardFocus::Columns);
+                .focused(app.focus.board_focus == BoardFocus::Columns);
 
             let mut board_columns: Vec<_> = app
                 .ctx
@@ -1044,8 +1044,8 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                 )));
             } else {
                 for (column_idx, column) in board_columns.iter().enumerate() {
-                    let is_selected = app.column_selection.get() == Some(column_idx);
-                    let is_focused = app.board_focus == BoardFocus::Columns;
+                    let is_selected = app.dialog_input.column_selection.get() == Some(column_idx);
+                    let is_focused = app.focus.board_focus == BoardFocus::Columns;
 
                     let card_count = app
                         .ctx
@@ -1125,7 +1125,7 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     let block = Block::default()
         .title(format!(
             "Assign {} Cards to Sprint",
-            app.selected_cards.len()
+            app.multi_select.selected_cards.len()
         ))
         .borders(Borders::ALL)
         .style(Style::default().bg(Color::Black));
@@ -1144,7 +1144,7 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
 
     let mut lines = vec![];
 
-    if let Some(board_idx) = app.active_board_index {
+    if let Some(board_idx) = app.selection.active_board_index {
         if let Some(board) = app.ctx.boards.get(board_idx) {
             let board_sprints = Sprint::assignable(&app.ctx.sprints, board.id);
 
@@ -1152,7 +1152,7 @@ fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
                 .chain(board_sprints.iter().map(|s| Some(*s)))
                 .enumerate()
             {
-                let is_selected = app.sprint_assign_selection.get() == Some(idx);
+                let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);
 
                 let style = if is_selected {
                     Style::default().fg(Color::White).bg(Color::Blue)
@@ -1236,10 +1236,10 @@ fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
         TaskListView::ColumnView,
     ];
 
-    let selected = app.task_list_view_selection.get();
+    let selected = app.dialog_input.task_list_view_selection.get();
 
     let current_view = app
-        .active_board_index
+        .selection.active_board_index
         .and_then(|idx| app.ctx.boards.get(idx))
         .map(|board| board.task_list_view);
 
@@ -1305,7 +1305,7 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
         ])
         .split(inner);
 
-    if let Some(ref dialog_state) = app.filter_dialog_state {
+    if let Some(ref dialog_state) = app.filter.dialog_state {
         let section_index = dialog_state.section_index;
 
         let mut sprint_lines = vec![Line::from(Span::styled(
@@ -1342,7 +1342,7 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
             label_text(),
         )));
 
-        if let Some(board_idx) = app.active_board_index {
+        if let Some(board_idx) = app.selection.active_board_index {
             if let Some(board) = app.ctx.boards.get(board_idx) {
                 let board_sprints: Vec<_> = app
                     .ctx
@@ -1503,10 +1503,10 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
     // Scrollable bindings body
     let raw_height = help_popup_viewport_height(frame.area());
 
-    let selected_idx = app.help_list.get_selected_index();
+    let selected_idx = app.ui.help_list.get_selected_index();
 
-    let adjusted_height = app.help_list.get_adjusted_viewport_height(raw_height);
-    let page_info = app.help_list.get_render_info(adjusted_height);
+    let adjusted_height = app.ui.help_list.get_adjusted_viewport_height(raw_height);
+    let page_info = app.ui.help_list.get_render_info(adjusted_height);
 
     let mut rendered_lines: Vec<Line> = crate::scroll_indicators::render_above_indicator(
         page_info.show_above_indicator,
@@ -1693,7 +1693,7 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_pare
         .split(inner);
 
     // Search box
-    let search_border_style = if app.relationship_search_active {
+    let search_border_style = if app.relationship.search_active {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default().fg(Color::Gray)
@@ -1704,13 +1704,13 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_pare
         .border_style(search_border_style);
 
     // Build search text with greyed "/" prefix when not in search mode
-    let search_text: Line = if app.relationship_search_active {
+    let search_text: Line = if app.relationship.search_active {
         // In search mode - show cursor indicator
         Line::from(vec![
-            Span::styled(&app.relationship_search, Style::default().fg(Color::White)),
+            Span::styled(&app.relationship.search, Style::default().fg(Color::White)),
             Span::styled("_", Style::default().fg(Color::Yellow)),
         ])
-    } else if app.relationship_search.is_empty() {
+    } else if app.relationship.search.is_empty() {
         // Not in search mode, empty search - show greyed "/" hint
         Line::from(Span::styled(
             "/ to search",
@@ -1719,7 +1719,7 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_pare
     } else {
         // Not in search mode, has search text
         Line::from(Span::styled(
-            &app.relationship_search,
+            &app.relationship.search,
             Style::default().fg(Color::White),
         ))
     };
@@ -1728,11 +1728,11 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_pare
     frame.render_widget(search, chunks[0]);
 
     // Filter cards by search
-    let filtered_cards: Vec<_> = if app.relationship_search.is_empty() {
-        app.relationship_card_ids.clone()
+    let filtered_cards: Vec<_> = if app.relationship.search.is_empty() {
+        app.relationship.card_ids.clone()
     } else {
-        let search_lower = app.relationship_search.to_lowercase();
-        app.relationship_card_ids
+        let search_lower = app.relationship.search.to_lowercase();
+        app.relationship.card_ids
             .iter()
             .filter(|card_id| {
                 app.ctx
@@ -1750,8 +1750,8 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_pare
     let mut lines = vec![];
     for (idx, card_id) in filtered_cards.iter().enumerate() {
         if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
-            let is_selected = app.relationship_selection.get() == Some(idx);
-            let is_checked = app.relationship_selected.contains(card_id);
+            let is_selected = app.relationship.selection.get() == Some(idx);
+            let is_checked = app.relationship.selected.contains(card_id);
 
             let checkbox = if is_checked { "[✓]" } else { "[ ]" };
 
@@ -1781,7 +1781,7 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_pare
     frame.render_widget(list, chunks[1]);
 
     // Instructions
-    let instructions_text = if app.relationship_search_active {
+    let instructions_text = if app.relationship.search_active {
         "Type to search | Enter/Esc: exit search"
     } else {
         "j/k: navigate | Space: toggle | /: search | Esc: close"
