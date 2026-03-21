@@ -189,11 +189,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                                 .contains(&card.id),
                                             show_sprint_name: app.active_sprint_filters.is_empty(),
                                             animation_type,
-                                            search_query: if app.search.is_active {
-                                                Some(app.search.query())
-                                            } else {
-                                                None
-                                            },
+                                            search_query: app.search.active_query(),
                                         });
                                         lines.push(line);
                                     }
@@ -277,11 +273,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         is_multi_selected: app.selected_cards.contains(&card.id),
                                         show_sprint_name: app.active_sprint_filters.is_empty(),
                                         animation_type,
-                                        search_query: if app.search.is_active {
-                                            Some(app.search.query())
-                                        } else {
-                                            None
-                                        },
+                                        search_query: app.search.active_query(),
                                     });
                                     lines.push(line);
                                 }
@@ -418,11 +410,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                         is_multi_selected: app.selected_cards.contains(&card.id),
                                         show_sprint_name: app.active_sprint_filters.is_empty(),
                                         animation_type,
-                                        search_query: if app.search.is_active {
-                                            Some(app.search.query())
-                                        } else {
-                                            None
-                                        },
+                                        search_query: app.search.active_query(),
                                     });
                                     lines.push(line);
                                 }
