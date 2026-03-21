@@ -158,13 +158,22 @@ fn build_title_spans(title: &str, base_style: Style, query: Option<&str>) -> Vec
         let orig_end = lower_to_orig[end];
 
         if orig_abs > orig_pos {
-            spans.push(Span::styled(title[orig_pos..orig_abs].to_owned(), base_style));
+            spans.push(Span::styled(
+                title[orig_pos..orig_abs].to_owned(),
+                base_style,
+            ));
         }
-        spans.push(Span::styled(title[orig_abs..orig_end].to_owned(), highlight_style));
+        spans.push(Span::styled(
+            title[orig_abs..orig_end].to_owned(),
+            highlight_style,
+        ));
         pos = end;
     }
     if pos < title_lower.len() {
-        spans.push(Span::styled(title[lower_to_orig[pos]..].to_owned(), base_style));
+        spans.push(Span::styled(
+            title[lower_to_orig[pos]..].to_owned(),
+            base_style,
+        ));
     }
     spans
 }

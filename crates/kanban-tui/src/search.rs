@@ -36,7 +36,11 @@ impl SearchState {
     }
 
     pub fn active_query(&self) -> Option<&str> {
-        if self.is_active { Some(self.query()) } else { None }
+        if self.is_active {
+            Some(self.query())
+        } else {
+            None
+        }
     }
 }
 
