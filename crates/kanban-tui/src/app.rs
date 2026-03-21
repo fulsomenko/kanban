@@ -69,7 +69,8 @@ pub struct App {
     pub priority_selection: SelectionState,
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
-    pub help_selection: SelectionState,
+    pub help_list: ListComponent,
+    pub last_frame_area: ratatui::layout::Rect,
     pub help_pending_action: Option<(Instant, crate::keybindings::KeybindingAction)>,
     pub sprint_task_panel: SprintTaskPanel,
     pub sprint_uncompleted_cards: CardList,
@@ -219,7 +220,8 @@ impl App {
             priority_selection: SelectionState::new(),
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
-            help_selection: SelectionState::new(),
+            help_list: ListComponent::new(false),
+            last_frame_area: ratatui::layout::Rect::default(),
             help_pending_action: None,
             sprint_task_panel: SprintTaskPanel::Uncompleted,
             sprint_uncompleted_cards: CardList::new(CardListId::All),
@@ -511,7 +513,10 @@ impl App {
             && !matches!(self.mode, AppMode::Help(_))
         {
             let previous_mode = self.mode.clone();
-            self.help_selection.set(Some(0));
+            let provider = crate::keybindings::KeybindingRegistry::get_provider(self);
+            let context = provider.get_context();
+            self.help_list.update_item_count(context.bindings.len());
+            self.help_list.set_scroll_offset(0);
             self.mode = AppMode::Help(Box::new(previous_mode));
             return false;
         }
@@ -825,6 +830,25 @@ impl App {
         }
     }
 
+    /// Scrolls the help list so the selected item is visible.
+    ///
+    /// Two passes are needed because `get_adjusted_viewport_height` reserves rows
+    /// for scroll indicators, and an indicator can appear or disappear after the
+    /// first `ensure_selected_visible` call — changing the available height. A
+    /// second pass with the updated height corrects any residual mis-alignment.
+    fn scroll_help_into_view(&mut self) {
+        let raw = crate::ui::help_popup_viewport_height(self.last_frame_area);
+        if raw == 0 {
+            return;
+        }
+        let h0 = self.help_list.get_adjusted_viewport_height(raw);
+        self.help_list.ensure_selected_visible(h0);
+        let h1 = self.help_list.get_adjusted_viewport_height(raw);
+        if h1 != h0 {
+            self.help_list.ensure_selected_visible(h1);
+        }
+    }
+
     fn handle_help_mode(&mut self, key_code: crossterm::event::KeyCode) {
         use crate::keybindings::KeybindingRegistry;
         use crossterm::event::KeyCode;
@@ -832,20 +856,20 @@ impl App {
         match key_code {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.help_pending_action = None;
-                let provider = KeybindingRegistry::get_provider(self);
-                let context = provider.get_context();
-                self.help_selection.next(context.bindings.len());
+                self.help_list.navigate_down();
+                self.scroll_help_into_view();
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.help_pending_action = None;
-                self.help_selection.prev();
+                self.help_list.navigate_up();
+                self.scroll_help_into_view();
             }
             KeyCode::Char('h') | KeyCode::Char('l') => {
                 self.help_pending_action = None;
             }
             KeyCode::Enter => {
                 self.help_pending_action = None;
-                if let Some(index) = self.help_selection.get() {
+                if let Some(index) = self.help_list.get_selected_index() {
                     let provider = KeybindingRegistry::get_provider(self);
                     let context = provider.get_context();
 
@@ -855,7 +879,7 @@ impl App {
                         } else {
                             self.mode = AppMode::Normal;
                         }
-                        self.help_selection.clear();
+                        self.help_list.reset();
 
                         self.execute_action(&binding.action);
                     }
@@ -868,7 +892,7 @@ impl App {
                 } else {
                     self.mode = AppMode::Normal;
                 }
-                self.help_selection.clear();
+                self.help_list.reset();
             }
             _ => {
                 let provider = KeybindingRegistry::get_provider(self);
@@ -880,7 +904,8 @@ impl App {
                     .enumerate()
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
-                    self.help_selection.set(Some(index));
+                    self.help_list.jump_to(index);
+                    self.scroll_help_into_view();
                     self.help_pending_action = Some((Instant::now(), binding.action));
                 }
             }
@@ -1685,7 +1710,7 @@ impl App {
                                         } else {
                                             self.mode = AppMode::Normal;
                                         }
-                                        self.help_selection.clear();
+                                        self.help_list.reset();
 
                                         let action = *action;
                                         self.help_pending_action = None;
@@ -2000,5 +2025,31 @@ impl Default for App {
     fn default() -> Self {
         let (app, _rx) = Self::new(None);
         app
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn test_scroll_help_into_view_scrolls_deep_item() {
+        let mut app = App {
+            last_frame_area: Rect {
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 50,
+            },
+            ..App::default()
+        };
+        app.help_list.update_item_count(50);
+        app.help_list.jump_to(49);
+        app.scroll_help_into_view();
+        assert!(
+            app.help_list.get_scroll_offset() > 0,
+            "help list should have scrolled to bring item 49 into view"
+        );
     }
 }

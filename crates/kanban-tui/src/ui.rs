@@ -88,6 +88,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             AppMode::SprintDetail => render_sprint_detail_view(app, frame, frame.area()),
             _ => render_main(app, frame, frame.area()),
         }
+        app.last_frame_area = frame.area();
         render_help_popup(app, frame);
     }
 
@@ -395,14 +396,11 @@ fn render_sprint_task_panel_with_selection(
         let viewport_height = area.height.saturating_sub(2) as usize;
         let render_info = task_list.get_render_info(viewport_height);
 
-        if render_info.show_above_indicator {
-            let count = render_info.cards_above_count;
-            let plural = if count == 1 { "" } else { "s" };
-            lines.push(Line::from(Span::styled(
-                format!("  {} Task{} above", count, plural),
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
+        lines.extend(crate::scroll_indicators::render_above_indicator(
+            render_info.show_above_indicator,
+            render_info.cards_above_count,
+            "Task",
+        ));
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -425,14 +423,11 @@ fn render_sprint_task_panel_with_selection(
             }
         }
 
-        if render_info.show_below_indicator {
-            let count = render_info.cards_below_count;
-            let plural = if count == 1 { "" } else { "s" };
-            lines.push(Line::from(Span::styled(
-                format!("  {} Task{} below", count, plural),
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
+        lines.extend(crate::scroll_indicators::render_below_indicator(
+            render_info.show_below_indicator,
+            render_info.cards_below_count,
+            "Task",
+        ));
     }
 
     // Calculate points from cards in this panel
@@ -1414,6 +1409,22 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
     }
 }
 
+pub fn help_popup_viewport_height(frame_area: Rect) -> usize {
+    let popup = centered_rect(80, 80, frame_area);
+    let block = Block::default().borders(Borders::ALL);
+    let inner = block.inner(popup);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .horizontal_margin(2)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+    chunks[1].height as usize
+}
+
 fn render_help_popup(app: &App, frame: &mut Frame) {
     use crate::components::ListItemConfig;
     use crate::keybindings::KeybindingRegistry;
@@ -1429,52 +1440,88 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
+    // Layout: fixed header (context name + blank), scrollable bindings, fixed footer
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([Constraint::Min(0)])
+        .horizontal_margin(2)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(2),
+        ])
         .split(inner);
 
     // Get keybindings for the underlying mode
     let provider = KeybindingRegistry::get_provider(app);
     let context = provider.get_context();
-    let selected_idx = app.help_selection.get();
 
-    // Build lines for each keybinding
-    let mut lines = vec![
-        Line::from(Span::styled(
-            context.name.clone(),
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
+    // Fixed header
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(Span::styled(
+                context.name.clone(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+        ]),
+        chunks[0],
+    );
+
+    // Scrollable bindings body
+    let raw_height = help_popup_viewport_height(frame.area());
+
+    let selected_idx = app.help_list.get_selected_index();
+
+    let adjusted_height = app.help_list.get_adjusted_viewport_height(raw_height);
+    let page_info = app.help_list.get_render_info(adjusted_height);
+
+    let mut rendered_lines: Vec<Line> = crate::scroll_indicators::render_above_indicator(
+        page_info.show_above_indicator,
+        page_info.items_above,
+        "item",
+    )
+    .into_iter()
+    .collect();
+
+    let visible_lines: Vec<Line> = page_info
+        .visible_indices
+        .iter()
+        .filter_map(|&i| {
+            let binding = context.bindings.get(i)?;
+            let is_selected = selected_idx == Some(i);
+            let config = ListItemConfig::new().selected(is_selected).focused(true);
+            let prefix = config.item_prefix();
+            let style = config.item_style();
+            Some(Line::from(vec![
+                Span::styled(prefix.to_string(), style),
+                Span::styled(binding.key.to_string(), Style::default().fg(Color::Yellow)),
+                Span::raw(" "),
+                Span::styled(binding.description.clone(), style),
+            ]))
+        })
+        .collect();
+    rendered_lines.extend(visible_lines);
+    rendered_lines.extend(crate::scroll_indicators::render_below_indicator(
+        page_info.show_below_indicator,
+        page_info.items_below,
+        "item",
+    ));
+
+    frame.render_widget(Paragraph::new(rendered_lines), chunks[1]);
+
+    // Fixed footer — always visible regardless of scroll position
+    let footer = Paragraph::new(vec![
         Line::from(""),
-    ];
-
-    for (idx, binding) in context.bindings.iter().enumerate() {
-        let is_selected = selected_idx == Some(idx);
-        let config = ListItemConfig::new().selected(is_selected).focused(true);
-        let prefix = config.item_prefix();
-        let style = config.item_style();
-
-        lines.push(Line::from(vec![
-            Span::styled(prefix.to_string(), style),
-            Span::styled(binding.key.to_string(), Style::default().fg(Color::Yellow)),
-            Span::raw(" "),
-            Span::styled(binding.description.clone(), style),
-        ]));
-    }
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "j/k or ↑↓: navigate | Enter: activate | ESC or ?: close",
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::ITALIC),
-    )));
-
-    let content = Paragraph::new(lines);
-    frame.render_widget(content, chunks[0]);
+        Line::from(Span::styled(
+            "j/k or ↑↓: navigate | Enter: activate | ESC or ?: close",
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC),
+        )),
+    ]);
+    frame.render_widget(footer, chunks[2]);
 }
 
 fn render_conflict_resolution_popup(_app: &App, frame: &mut Frame) {

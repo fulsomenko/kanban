@@ -2,7 +2,6 @@ use crate::components::generic_list::ListComponent;
 use crate::components::ListItemConfig;
 use crate::theme::*;
 use kanban_domain::Card;
-use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use uuid::Uuid;
 
@@ -29,14 +28,11 @@ pub fn render_relationship_section(
         let page_info = list_component.get_render_info(viewport_height);
 
         // Above indicator
-        if page_info.show_above_indicator {
-            let count = page_info.items_above;
-            let plural = if count == 1 { "" } else { "s" };
-            lines.push(Line::from(Span::styled(
-                format!("  {} item{} above", count, plural),
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
+        lines.extend(crate::scroll_indicators::render_above_indicator(
+            page_info.show_above_indicator,
+            page_info.items_above,
+            "item",
+        ));
 
         // Render visible items
         for &idx in &page_info.visible_indices {
@@ -60,14 +56,11 @@ pub fn render_relationship_section(
         }
 
         // Below indicator
-        if page_info.show_below_indicator {
-            let count = page_info.items_below;
-            let plural = if count == 1 { "" } else { "s" };
-            lines.push(Line::from(Span::styled(
-                format!("  {} item{} below", count, plural),
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
+        lines.extend(crate::scroll_indicators::render_below_indicator(
+            page_info.show_below_indicator,
+            page_info.items_below,
+            "item",
+        ));
     }
 
     // Pad to viewport_height with blank lines
