@@ -177,3 +177,103 @@ fn build_title_spans(title: &str, base_style: Style, query: Option<&str>) -> Vec
     }
     spans
 }
+
+#[cfg(test)]
+mod tests {
+    use super::build_title_spans;
+    use crate::theme::HIGHLIGHT_TEXT;
+    use ratatui::style::{Modifier, Style};
+
+    fn highlight_style(base: Style) -> Style {
+        base.fg(HIGHLIGHT_TEXT).add_modifier(Modifier::BOLD)
+    }
+
+    #[test]
+    fn no_query() {
+        let base = Style::default();
+        let spans = build_title_spans("Hello", base, None);
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].content, "Hello");
+        assert_eq!(spans[0].style, base);
+    }
+
+    #[test]
+    fn empty_query() {
+        let base = Style::default();
+        let spans = build_title_spans("Hello", base, Some(""));
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].content, "Hello");
+        assert_eq!(spans[0].style, base);
+    }
+
+    #[test]
+    fn no_match() {
+        let base = Style::default();
+        let spans = build_title_spans("Hello world", base, Some("xyz"));
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].content, "Hello world");
+        assert_eq!(spans[0].style, base);
+    }
+
+    #[test]
+    fn ascii_match_middle() {
+        let base = Style::default();
+        let spans = build_title_spans("Hello world", base, Some("lo"));
+        assert_eq!(spans.len(), 3);
+        assert_eq!(spans[0].content, "Hel");
+        assert_eq!(spans[0].style, base);
+        assert_eq!(spans[1].content, "lo");
+        assert_eq!(spans[1].style, highlight_style(base));
+        assert_eq!(spans[2].content, " world");
+        assert_eq!(spans[2].style, base);
+    }
+
+    #[test]
+    fn ascii_match_at_start() {
+        let base = Style::default();
+        let spans = build_title_spans("rust is great", base, Some("rust"));
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].content, "rust");
+        assert_eq!(spans[0].style, highlight_style(base));
+        assert_eq!(spans[1].content, " is great");
+        assert_eq!(spans[1].style, base);
+    }
+
+    #[test]
+    fn ascii_match_at_end() {
+        let base = Style::default();
+        let spans = build_title_spans("Hello world", base, Some("world"));
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].content, "Hello ");
+        assert_eq!(spans[0].style, base);
+        assert_eq!(spans[1].content, "world");
+        assert_eq!(spans[1].style, highlight_style(base));
+    }
+
+    #[test]
+    fn unicode_expanding_lowercase() {
+        // İ (U+0130, LATIN CAPITAL LETTER I WITH DOT ABOVE) lowercases to "i\u{307}" (3 bytes
+        // for 2 code points) while the original char is 2 bytes.  Naive byte-offset arithmetic
+        // would panic; the lower_to_orig map keeps offsets safe.
+        //
+        // Semantically, "i" matches the 'i' sub-byte of İ but can't split the original char,
+        // so the highlighted slice is empty and the full title appears in a trailing span.
+        // The critical invariant is: no panic and the spans reconstruct the original string.
+        let base = Style::default();
+        let spans = build_title_spans("İstanbul", base, Some("i"));
+        assert!(!spans.is_empty());
+        let reconstructed: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(reconstructed, "İstanbul");
+    }
+
+    #[test]
+    fn unicode_no_expansion_match() {
+        let base = Style::default();
+        let spans = build_title_spans("über", base, Some("ü"));
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].content, "ü");
+        assert_eq!(spans[0].style, highlight_style(base));
+        assert_eq!(spans[1].content, "ber");
+        assert_eq!(spans[1].style, base);
+    }
+}
