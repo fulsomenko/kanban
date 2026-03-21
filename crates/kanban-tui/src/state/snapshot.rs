@@ -88,9 +88,12 @@ mod tests {
         };
 
         // Create a minimal app with active_board_index set
-        let mut app = App::default();
-        app.selection = SelectionHub { active_board_index: Some(0), ..SelectionHub::new() };
-        app.filter = FilterState { current_sort_field: Some(SortField::Default), ..FilterState::new() };
+        let app = App {
+            selection: SelectionHub { active_board_index: Some(0), ..SelectionHub::new() },
+            filter: FilterState { current_sort_field: Some(SortField::Default), ..FilterState::new() },
+            ..Default::default()
+        };
+        let mut app = app;
 
         // Apply snapshot - should sync sort field from board
         snapshot.apply_to_app(&mut app);
