@@ -7,11 +7,16 @@ impl KeybindingProvider for SearchModeProvider {
         KeybindingContext::new(
             "Search Mode",
             vec![
-                Keybinding::new("ESC", "exit", "Exit search mode", KeybindingAction::Escape),
+                Keybinding::new(
+                    "ESC",
+                    "clear",
+                    "Clear search and return",
+                    KeybindingAction::Escape,
+                ),
                 Keybinding::new(
                     "Enter",
-                    "confirm",
-                    "Confirm search and filter",
+                    "apply",
+                    "Apply filter and browse results",
                     KeybindingAction::SelectItem,
                 ),
                 Keybinding::new(
@@ -19,6 +24,12 @@ impl KeybindingProvider for SearchModeProvider {
                     "query",
                     "Enter search query",
                     KeybindingAction::Search,
+                ),
+                Keybinding::new(
+                    "n/N",
+                    "navigate",
+                    "Next/previous hit (after applying)",
+                    KeybindingAction::NavigateDown,
                 ),
             ],
         )
