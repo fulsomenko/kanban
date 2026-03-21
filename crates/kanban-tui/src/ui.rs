@@ -88,8 +88,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             AppMode::SprintDetail => render_sprint_detail_view(app, frame, frame.area()),
             _ => render_main(app, frame, frame.area()),
         }
-        let vh = render_help_popup(app, frame);
-        app.help_viewport_height = vh;
+        app.last_frame_area = frame.area();
+        render_help_popup(app, frame);
     }
 
     // Render banner on top if present
@@ -396,7 +396,7 @@ fn render_sprint_task_panel_with_selection(
         let viewport_height = area.height.saturating_sub(2) as usize;
         let render_info = task_list.get_render_info(viewport_height);
 
-        lines.extend(crate::card_list::render_above_indicator(
+        lines.extend(crate::scroll_indicators::render_above_indicator(
             render_info.show_above_indicator,
             render_info.cards_above_count,
             "Task",
@@ -423,7 +423,7 @@ fn render_sprint_task_panel_with_selection(
             }
         }
 
-        lines.extend(crate::card_list::render_below_indicator(
+        lines.extend(crate::scroll_indicators::render_below_indicator(
             render_info.show_below_indicator,
             render_info.cards_below_count,
             "Task",
@@ -1409,7 +1409,23 @@ fn render_filter_options_popup(app: &App, frame: &mut Frame) {
     }
 }
 
-fn render_help_popup(app: &App, frame: &mut Frame) -> usize {
+pub fn help_popup_viewport_height(frame_area: Rect) -> usize {
+    let popup = centered_rect(80, 80, frame_area);
+    let block = Block::default().borders(Borders::ALL);
+    let inner = block.inner(popup);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .horizontal_margin(2)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+    chunks[1].height as usize
+}
+
+fn render_help_popup(app: &App, frame: &mut Frame) {
     use crate::components::ListItemConfig;
     use crate::keybindings::KeybindingRegistry;
 
@@ -1454,14 +1470,14 @@ fn render_help_popup(app: &App, frame: &mut Frame) -> usize {
     );
 
     // Scrollable bindings body
-    let raw_height = chunks[1].height as usize;
+    let raw_height = help_popup_viewport_height(frame.area());
 
     let selected_idx = app.help_list.get_selected_index();
 
     let adjusted_height = app.help_list.get_adjusted_viewport_height(raw_height);
     let page_info = app.help_list.get_render_info(adjusted_height);
 
-    let mut rendered_lines: Vec<Line> = crate::card_list::render_above_indicator(
+    let mut rendered_lines: Vec<Line> = crate::scroll_indicators::render_above_indicator(
         page_info.show_above_indicator,
         page_info.items_above,
         "item",
@@ -1487,7 +1503,7 @@ fn render_help_popup(app: &App, frame: &mut Frame) -> usize {
         })
         .collect();
     rendered_lines.extend(visible_lines);
-    rendered_lines.extend(crate::card_list::render_below_indicator(
+    rendered_lines.extend(crate::scroll_indicators::render_below_indicator(
         page_info.show_below_indicator,
         page_info.items_below,
         "item",
@@ -1506,7 +1522,6 @@ fn render_help_popup(app: &App, frame: &mut Frame) -> usize {
         )),
     ]);
     frame.render_widget(footer, chunks[2]);
-    raw_height
 }
 
 fn render_conflict_resolution_popup(_app: &App, frame: &mut Frame) {

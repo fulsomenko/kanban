@@ -70,7 +70,7 @@ pub struct App {
     pub column_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
     pub help_list: ListComponent,
-    pub help_viewport_height: usize,
+    pub last_frame_area: ratatui::layout::Rect,
     pub help_pending_action: Option<(Instant, crate::keybindings::KeybindingAction)>,
     pub sprint_task_panel: SprintTaskPanel,
     pub sprint_uncompleted_cards: CardList,
@@ -221,7 +221,7 @@ impl App {
             column_selection: SelectionState::new(),
             task_list_view_selection: SelectionState::new(),
             help_list: ListComponent::new(false),
-            help_viewport_height: 0,
+            last_frame_area: ratatui::layout::Rect::default(),
             help_pending_action: None,
             sprint_task_panel: SprintTaskPanel::Uncompleted,
             sprint_uncompleted_cards: CardList::new(CardListId::All),
@@ -830,13 +830,20 @@ impl App {
         }
     }
 
+    /// Scrolls the help list so the selected item is visible.
+    ///
+    /// Two passes are needed because `get_adjusted_viewport_height` reserves rows
+    /// for scroll indicators, and an indicator can appear or disappear after the
+    /// first `ensure_selected_visible` call — changing the available height. A
+    /// second pass with the updated height corrects any residual mis-alignment.
     fn scroll_help_into_view(&mut self) {
-        if self.help_viewport_height == 0 {
+        let raw = crate::ui::help_popup_viewport_height(self.last_frame_area);
+        if raw == 0 {
             return;
         }
-        let h0 = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+        let h0 = self.help_list.get_adjusted_viewport_height(raw);
         self.help_list.ensure_selected_visible(h0);
-        let h1 = self.help_list.get_adjusted_viewport_height(self.help_viewport_height);
+        let h1 = self.help_list.get_adjusted_viewport_height(raw);
         if h1 != h0 {
             self.help_list.ensure_selected_visible(h1);
         }
@@ -873,7 +880,6 @@ impl App {
                             self.mode = AppMode::Normal;
                         }
                         self.help_list.reset();
-                        self.help_viewport_height = 0;
 
                         self.execute_action(&binding.action);
                     }
@@ -887,7 +893,6 @@ impl App {
                     self.mode = AppMode::Normal;
                 }
                 self.help_list.reset();
-                self.help_viewport_height = 0;
             }
             _ => {
                 let provider = KeybindingRegistry::get_provider(self);
@@ -1706,7 +1711,6 @@ impl App {
                                             self.mode = AppMode::Normal;
                                         }
                                         self.help_list.reset();
-                                        self.help_viewport_height = 0;
 
                                         let action = *action;
                                         self.help_pending_action = None;
