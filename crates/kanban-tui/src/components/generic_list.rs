@@ -168,7 +168,10 @@ impl ListComponent {
         self.page.total_items == 0
     }
 
-    /// Reset list state: clear item count, selection, and scroll position
+    /// Reset list state: clear item count, selection, and scroll position.
+    ///
+    /// `update_item_count(0)` implicitly clears the selection; the explicit
+    /// `set_scroll_offset(0)` ensures no stale scroll position remains.
     pub fn reset(&mut self) {
         self.update_item_count(0);
         self.page.set_scroll_offset(0);
