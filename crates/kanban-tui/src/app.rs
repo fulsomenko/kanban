@@ -2035,12 +2035,14 @@ mod tests {
 
     #[test]
     fn test_scroll_help_into_view_scrolls_deep_item() {
-        let mut app = App::default();
-        app.last_frame_area = Rect {
-            x: 0,
-            y: 0,
-            width: 100,
-            height: 50,
+        let mut app = App {
+            last_frame_area: Rect {
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 50,
+            },
+            ..App::default()
         };
         app.help_list.update_item_count(50);
         app.help_list.jump_to(49);
