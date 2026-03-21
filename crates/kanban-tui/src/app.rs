@@ -564,19 +564,9 @@ impl App {
                 }
                 KeyCode::Char('n') => {
                     self.pending_key = None;
-                    if self.search.is_active {
-                        self.handle_navigation_down();
-                    } else {
-                        match self.focus {
-                            Focus::Boards => self.handle_create_board_key(),
-                            Focus::Cards => self.handle_create_card_key(),
-                        }
-                    }
-                }
-                KeyCode::Char('N') => {
-                    self.pending_key = None;
-                    if self.search.is_active {
-                        self.handle_navigation_up();
+                    match self.focus {
+                        Focus::Boards => self.handle_create_board_key(),
+                        Focus::Cards => self.handle_create_card_key(),
                     }
                 }
                 KeyCode::Char('r') => {
