@@ -22,6 +22,7 @@ tui = ["dep:kanban-tui"]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
+kanban-service = { path = "../kanban-service", version = "^0.3" }
 kanban-tui = { path = "../kanban-tui", version = "^0.3", optional = true }
 clap.workspace = true
 clap_complete.workspace = true
