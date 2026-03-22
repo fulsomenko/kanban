@@ -1,5 +1,4 @@
 pub mod context;
-pub mod executor;
 
 use context::McpContext;
 use kanban_core::KanbanError;
@@ -503,11 +502,11 @@ pub struct KanbanMcpServer {
 }
 
 impl KanbanMcpServer {
-    pub fn new(data_file: &str) -> Self {
-        Self {
-            ctx: Arc::new(Mutex::new(McpContext::new(data_file))),
+    pub async fn new(data_file: &str) -> kanban_core::KanbanResult<Self> {
+        Ok(Self {
+            ctx: Arc::new(Mutex::new(McpContext::new(data_file).await?)),
             tool_router: Self::tool_router(),
-        }
+        })
     }
 }
 

@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting Kanban MCP server with data file: {}", data_file);
 
-    let server = KanbanMcpServer::new(data_file);
+    let server = KanbanMcpServer::new(data_file).await?;
 
     let service = server.serve(stdio()).await?;
 
