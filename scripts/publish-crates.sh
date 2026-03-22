@@ -4,16 +4,18 @@ set -uo pipefail
 # Crates must be published in dependency order:
 # - kanban-core: no internal deps
 # - kanban-domain: depends on kanban-core
-# - kanban-mcp: depends on kanban-core, kanban-domain
 # - kanban-persistence: depends on kanban-core, kanban-domain
+# - kanban-service: depends on kanban-core, kanban-domain, kanban-persistence
 # - kanban-tui: depends on kanban-core, kanban-domain, kanban-persistence
+# - kanban-mcp: depends on kanban-core, kanban-domain, kanban-persistence, kanban-service
 # - kanban-cli: depends on all above
 CRATES=(
   "crates/kanban-core"
   "crates/kanban-domain"
-  "crates/kanban-mcp"
   "crates/kanban-persistence"
+  "crates/kanban-service"
   "crates/kanban-tui"
+  "crates/kanban-mcp"
   "crates/kanban-cli"
 )
 
