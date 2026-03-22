@@ -91,11 +91,11 @@ mod tests {
         let app = App {
             selection: SelectionHub {
                 active_board_index: Some(0),
-                ..SelectionHub::new()
+                ..SelectionHub::default()
             },
             filter: FilterState {
                 current_sort_field: Some(SortField::Default),
-                ..FilterState::new()
+                ..FilterState::default()
             },
             ..Default::default()
         };
