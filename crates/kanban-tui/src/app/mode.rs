@@ -1,0 +1,41 @@
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogMode {
+    CreateBoard,
+    CreateCard,
+    RenameBoard,
+    ExportBoard,
+    ExportAll,
+    ImportBoard,
+    SetCardPoints,
+    SetCardPriority,
+    SetMultipleCardsPriority,
+    SetBranchPrefix,
+    OrderCards,
+    CreateSprint,
+    AssignCardToSprint,
+    AssignMultipleCardsToSprint,
+    CreateColumn,
+    RenameColumn,
+    DeleteColumnConfirm,
+    SelectTaskListView,
+    SetSprintPrefix,
+    SetSprintCardPrefix,
+    ConfirmSprintPrefixCollision,
+    FilterOptions,
+    ConflictResolution,
+    ExternalChangeDetected,
+    ManageParents,
+    ManageChildren,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppMode {
+    Normal,
+    CardDetail,
+    BoardDetail,
+    SprintDetail,
+    Search,
+    ArchivedCardsView,
+    Help(Box<AppMode>),
+    Dialog(DialogMode),
+}

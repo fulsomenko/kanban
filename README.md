@@ -145,9 +145,21 @@ crates/
 ├── kanban-core        → Shared traits, error handling & reusable state primitives
 ├── kanban-domain      → Domain models, business logic, filtering & sorting
 ├── kanban-persistence → JSON storage, versioning & migrations
+├── kanban-service     → Service layer: KanbanContext, persistence orchestration
 ├── kanban-tui         → Terminal UI with ratatui
 ├── kanban-cli         → CLI entry point
 └── kanban-mcp         → Model Context Protocol server for LLM integration
+```
+
+```mermaid
+graph LR
+    CLI[kanban-cli] --> TUI[kanban-tui]
+    CLI --> SVC[kanban-service]
+    MCP[kanban-mcp] --> SVC
+    TUI --> SVC
+    SVC --> PER[kanban-persistence]
+    PER --> DOM[kanban-domain]
+    DOM --> CORE[kanban-core]
 ```
 
 **Key Design Patterns:**
@@ -175,6 +187,7 @@ crates/
 - [x] Progressive auto-save (save changes to board as you make them, not just on exit)
 - [x] Full CLI interface matching TUI operations (scriptable kanban commands)
 - [x] Card dependencies
+- [ ] Attachments, adding files to cards
 - [ ] Configurable keybindings
 - [ ] Audit log
 - [ ] Multiple storage backends (.md archive, SQL, MongoDB) with pluggable architecture

@@ -31,14 +31,25 @@ This is a **terminal-based kanban/project management tool** written in **Rust**,
 ```
 crates/
 ├── kanban-core/        # Core traits, errors, and result types
-├── kanban-domain/      # Domain models (Board, Card, Column, Tag)
+├── kanban-domain/      # Domain models (Board, Card, Column, Sprint)
+├── kanban-persistence/ # JSON storage, versioning & migrations
+├── kanban-service/     # Service layer: KanbanContext, persistence orchestration
 ├── kanban-tui/         # Terminal UI with ratatui
-└── kanban-cli/         # CLI entry point
+├── kanban-cli/         # CLI entry point
+└── kanban-mcp/         # Model Context Protocol server for LLM integration
 ```
 
 **Dependency Flow** (respecting dependency inversion):
-```
-kanban-cli → kanban-tui → kanban-domain → kanban-core
+
+```mermaid
+graph LR
+    CLI[kanban-cli] --> TUI[kanban-tui]
+    CLI --> SVC[kanban-service]
+    MCP[kanban-mcp] --> SVC
+    TUI --> SVC
+    SVC --> PER[kanban-persistence]
+    PER --> DOM[kanban-domain]
+    DOM --> CORE[kanban-core]
 ```
 
 ## Development Environment
@@ -160,7 +171,8 @@ cargo tarpaulin        # Code coverage
 ## Development Workflow
 
 1. **Domain First**: Define models in `kanban-domain`
-3. **Repository Layer**: Implement persistence in `kanban-db`
+2. **Persistence Layer**: Implement storage in `kanban-persistence`
+3. **Service Layer**: Orchestrate operations in `kanban-service`
 4. **TUI Components**: Build UI in `kanban-tui`
 5. **Integration**: Wire up in `kanban-cli`
 

@@ -137,6 +137,25 @@ impl Page {
         }
     }
 
+    /// Content rows available after reserving lines for scroll indicators.
+    ///
+    /// Above indicator takes 1 row when `scroll_offset > 0`. Below indicator
+    /// takes 1 row when items extend past the available space. This mirrors
+    /// the logic in `ListComponent::get_adjusted_viewport_height`.
+    pub fn get_adjusted_viewport_height(&self, raw_viewport_height: usize) -> usize {
+        if self.total_items == 0 || raw_viewport_height == 0 {
+            return raw_viewport_height;
+        }
+        let above = if self.scroll_offset > 0 { 1 } else { 0 };
+        let available = raw_viewport_height.saturating_sub(above);
+        let below = if self.scroll_offset + available < self.total_items {
+            1
+        } else {
+            0
+        };
+        available.saturating_sub(below)
+    }
+
     /// Set scroll offset, clamping to valid range.
     pub fn set_scroll_offset(&mut self, offset: usize) {
         self.scroll_offset = offset.min(self.total_items.saturating_sub(1));
@@ -278,5 +297,46 @@ mod tests {
 
         page.set_total_items(10);
         assert_eq!(page.scroll_offset, 9);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_empty_list() {
+        let page = Page::new(0);
+        assert_eq!(page.get_adjusted_viewport_height(5), 5);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_zero_raw() {
+        let page = Page::new(10);
+        assert_eq!(page.get_adjusted_viewport_height(0), 0);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_all_fit() {
+        let page = Page::new(5);
+        assert_eq!(page.get_adjusted_viewport_height(10), 10);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_at_top_with_below() {
+        let page = Page::new(10);
+        // offset=0: no above indicator; 0+5=5 < 10 → below indicator → raw-1
+        assert_eq!(page.get_adjusted_viewport_height(5), 4);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_middle_both_indicators() {
+        let mut page = Page::new(10);
+        page.set_scroll_offset(3);
+        // offset=3: above indicator; available=4; 3+4=7 < 10 → below indicator → raw-2
+        assert_eq!(page.get_adjusted_viewport_height(5), 3);
+    }
+
+    #[test]
+    fn test_adjusted_viewport_height_near_end_above_only() {
+        let mut page = Page::new(10);
+        page.set_scroll_offset(6);
+        // offset=6: above indicator; available=4; 6+4=10 >= 10 → no below → raw-1
+        assert_eq!(page.get_adjusted_viewport_height(5), 4);
     }
 }

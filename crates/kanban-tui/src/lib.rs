@@ -12,6 +12,7 @@ pub mod keybindings;
 pub mod layout_strategy;
 pub mod markdown_renderer;
 pub mod render_strategy;
+pub mod scroll_indicators;
 pub mod search;
 pub mod state;
 pub mod theme;

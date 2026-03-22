@@ -7,8 +7,8 @@ use kanban_domain::{ColumnUpdate, TaskListView};
 
 impl App {
     pub fn handle_create_column_key(&mut self) {
-        if self.board_focus == BoardFocus::Columns {
-            if let Some(board_idx) = self.board_selection.get() {
+        if self.focus.board_focus == BoardFocus::Columns {
+            if let Some(board_idx) = self.selection.board.get() {
                 if self.ctx.boards.get(board_idx).is_some() {
                     self.open_dialog(DialogMode::CreateColumn);
                     self.input.clear();
@@ -18,8 +18,10 @@ impl App {
     }
 
     pub fn handle_rename_column_key(&mut self) {
-        if self.board_focus == BoardFocus::Columns && self.column_selection.get().is_some() {
-            if let Some(board_idx) = self.board_selection.get() {
+        if self.focus.board_focus == BoardFocus::Columns
+            && self.dialog_input.column_selection.get().is_some()
+        {
+            if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     let board_columns: Vec<_> = self
                         .ctx
@@ -28,7 +30,7 @@ impl App {
                         .filter(|col| col.board_id == board.id)
                         .collect();
 
-                    if let Some(column_idx) = self.column_selection.get() {
+                    if let Some(column_idx) = self.dialog_input.column_selection.get() {
                         if let Some(column) = board_columns.get(column_idx) {
                             self.input.set(column.name.clone());
                             self.open_dialog(DialogMode::RenameColumn);
@@ -40,8 +42,10 @@ impl App {
     }
 
     pub fn handle_delete_column_key(&mut self) {
-        if self.board_focus == BoardFocus::Columns && self.column_selection.get().is_some() {
-            if let Some(board_idx) = self.board_selection.get() {
+        if self.focus.board_focus == BoardFocus::Columns
+            && self.dialog_input.column_selection.get().is_some()
+        {
+            if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     let column_count = self
                         .ctx
@@ -61,8 +65,10 @@ impl App {
     }
 
     pub fn handle_move_column_up(&mut self) {
-        if self.board_focus == BoardFocus::Columns && self.column_selection.get().is_some() {
-            if let Some(board_idx) = self.board_selection.get() {
+        if self.focus.board_focus == BoardFocus::Columns
+            && self.dialog_input.column_selection.get().is_some()
+        {
+            if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     // Collect and sort column data before mutating
                     let mut board_columns: Vec<_> = self
@@ -75,7 +81,7 @@ impl App {
 
                     board_columns.sort_by_key(|(_, pos)| *pos);
 
-                    if let Some(selected_idx) = self.column_selection.get() {
+                    if let Some(selected_idx) = self.dialog_input.column_selection.get() {
                         if selected_idx > 0 && selected_idx < board_columns.len() {
                             let prev_col_id = board_columns[selected_idx - 1].0;
                             let curr_col_id = board_columns[selected_idx].0;
@@ -106,7 +112,7 @@ impl App {
                                 return;
                             }
 
-                            self.column_selection.prev();
+                            self.dialog_input.column_selection.prev();
                             tracing::info!("Moved column up");
                         }
                     }
@@ -116,8 +122,10 @@ impl App {
     }
 
     pub fn handle_move_column_down(&mut self) {
-        if self.board_focus == BoardFocus::Columns && self.column_selection.get().is_some() {
-            if let Some(board_idx) = self.board_selection.get() {
+        if self.focus.board_focus == BoardFocus::Columns
+            && self.dialog_input.column_selection.get().is_some()
+        {
+            if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     // Collect and sort column data before mutating
                     let mut board_columns: Vec<_> = self
@@ -130,7 +138,7 @@ impl App {
 
                     board_columns.sort_by_key(|(_, pos)| *pos);
 
-                    if let Some(selected_idx) = self.column_selection.get() {
+                    if let Some(selected_idx) = self.dialog_input.column_selection.get() {
                         if selected_idx < board_columns.len() - 1 {
                             let curr_col_id = board_columns[selected_idx].0;
                             let next_col_id = board_columns[selected_idx + 1].0;
@@ -162,7 +170,7 @@ impl App {
                             }
 
                             let column_count = board_columns.len();
-                            self.column_selection.next(column_count);
+                            self.dialog_input.column_selection.next(column_count);
                             tracing::info!("Moved column down");
                         }
                     }
@@ -172,25 +180,27 @@ impl App {
     }
 
     pub fn handle_toggle_task_list_view(&mut self) {
-        if self.focus != crate::app::Focus::Cards {
+        if self.focus.active != crate::app::Focus::Cards {
             return;
         }
 
-        if let Some(board_idx) = self.active_board_index {
+        if let Some(board_idx) = self.selection.active_board_index {
             if let Some(board) = self.ctx.boards.get(board_idx) {
                 let current_view_idx = match board.task_list_view {
                     TaskListView::Flat => 0,
                     TaskListView::GroupedByColumn => 1,
                     TaskListView::ColumnView => 2,
                 };
-                self.task_list_view_selection.set(Some(current_view_idx));
+                self.dialog_input
+                    .task_list_view_selection
+                    .set(Some(current_view_idx));
                 self.open_dialog(DialogMode::SelectTaskListView);
             }
         }
     }
 
     pub fn create_column(&mut self) {
-        if let Some(board_idx) = self.board_selection.get() {
+        if let Some(board_idx) = self.selection.board.get() {
             // Collect board_id before command execution
             let board_id = self.ctx.boards.get(board_idx).map(|board| board.id);
 
@@ -232,17 +242,19 @@ impl App {
                     .filter(|col| col.board_id == board_id)
                     .count();
                 let new_column_index = board_column_count.saturating_sub(1);
-                self.column_selection.set(Some(new_column_index));
+                self.dialog_input
+                    .column_selection
+                    .set(Some(new_column_index));
             }
         }
     }
 
     pub fn rename_column(&mut self) {
-        if let Some(board_idx) = self.board_selection.get() {
+        if let Some(board_idx) = self.selection.board.get() {
             // Collect column ID before mutable borrow
             let column_info = {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
-                    if let Some(column_idx) = self.column_selection.get() {
+                    if let Some(column_idx) = self.dialog_input.column_selection.get() {
                         let board_columns: Vec<_> = self
                             .ctx
                             .columns
@@ -286,11 +298,11 @@ impl App {
     }
 
     pub fn delete_column(&mut self) {
-        if let Some(board_idx) = self.board_selection.get() {
+        if let Some(board_idx) = self.selection.board.get() {
             // Collect all necessary data before mutating
             let delete_info = {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
-                    if let Some(column_idx) = self.column_selection.get() {
+                    if let Some(column_idx) = self.dialog_input.column_selection.get() {
                         let board_columns: Vec<_> = self
                             .ctx
                             .columns
@@ -387,12 +399,14 @@ impl App {
 
                 if remaining_columns > 0 {
                     if column_idx >= remaining_columns {
-                        self.column_selection.set(Some(remaining_columns - 1));
+                        self.dialog_input
+                            .column_selection
+                            .set(Some(remaining_columns - 1));
                     } else {
-                        self.column_selection.set(Some(column_idx));
+                        self.dialog_input.column_selection.set(Some(column_idx));
                     }
                 } else {
-                    self.column_selection.clear();
+                    self.dialog_input.column_selection.clear();
                 }
             }
         }
@@ -402,13 +416,13 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.board_focus = BoardFocus::Columns;
+                self.focus.board_focus = BoardFocus::Columns;
                 self.input.clear();
             }
             KeyCode::Enter => {
                 self.create_column();
                 self.pop_mode();
-                self.board_focus = BoardFocus::Columns;
+                self.focus.board_focus = BoardFocus::Columns;
                 self.input.clear();
             }
             KeyCode::Char(c) => {
@@ -431,13 +445,13 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.board_focus = BoardFocus::Columns;
+                self.focus.board_focus = BoardFocus::Columns;
                 self.input.clear();
             }
             KeyCode::Enter => {
                 self.rename_column();
                 self.pop_mode();
-                self.board_focus = BoardFocus::Columns;
+                self.focus.board_focus = BoardFocus::Columns;
                 self.input.clear();
             }
             KeyCode::Char(c) => {
@@ -460,16 +474,16 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.board_focus = BoardFocus::Columns;
+                self.focus.board_focus = BoardFocus::Columns;
             }
             KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
                 self.delete_column();
                 self.pop_mode();
-                self.board_focus = BoardFocus::Columns;
+                self.focus.board_focus = BoardFocus::Columns;
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 self.pop_mode();
-                self.board_focus = BoardFocus::Columns;
+                self.focus.board_focus = BoardFocus::Columns;
             }
             _ => {}
         }
@@ -479,16 +493,16 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.task_list_view_selection.clear();
+                self.dialog_input.task_list_view_selection.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.task_list_view_selection.next(3);
+                self.dialog_input.task_list_view_selection.next(3);
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.task_list_view_selection.prev();
+                self.dialog_input.task_list_view_selection.prev();
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(view_idx) = self.task_list_view_selection.get() {
+                if let Some(view_idx) = self.dialog_input.task_list_view_selection.get() {
                     let view = match view_idx {
                         0 => TaskListView::Flat,
                         1 => TaskListView::GroupedByColumn,
@@ -498,7 +512,7 @@ impl App {
 
                     let selected_card_id = self.get_selected_card_id();
 
-                    if let Some(board_idx) = self.active_board_index {
+                    if let Some(board_idx) = self.selection.active_board_index {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
                             let cmd = Box::new(SetBoardTaskListView {
                                 board_id: board.id,
@@ -508,7 +522,7 @@ impl App {
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set task list view: {}", e);
                                 self.pop_mode();
-                                self.task_list_view_selection.clear();
+                                self.dialog_input.task_list_view_selection.clear();
                                 return;
                             }
 
@@ -523,7 +537,7 @@ impl App {
                     }
                 }
                 self.pop_mode();
-                self.task_list_view_selection.clear();
+                self.dialog_input.task_list_view_selection.clear();
             }
             _ => {}
         }

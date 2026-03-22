@@ -143,27 +143,7 @@ impl ListComponent {
     /// # Returns
     /// The number of lines available for actual item content after accounting for indicators
     pub fn get_adjusted_viewport_height(&self, raw_viewport_height: usize) -> usize {
-        if self.page.total_items == 0 || raw_viewport_height == 0 {
-            return raw_viewport_height;
-        }
-
-        let scroll_offset = self.page.scroll_offset;
-
-        // Calculate "above" indicator overhead (1 line if scrolled down)
-        let above_indicator_height = if scroll_offset > 0 { 1 } else { 0 };
-
-        // Start with space available after above indicator
-        let available_space = raw_viewport_height.saturating_sub(above_indicator_height);
-
-        // Calculate if we need "below" indicator (1 line if more items exist)
-        let below_indicator_height = if scroll_offset + available_space < self.page.total_items {
-            1
-        } else {
-            0
-        };
-
-        // Return actual content slots
-        available_space.saturating_sub(below_indicator_height)
+        self.page.get_adjusted_viewport_height(raw_viewport_height)
     }
 
     /// Get rendering information given a viewport height (raw lines, all overhead pre-accounted)
@@ -186,6 +166,15 @@ impl ListComponent {
     /// Check if empty
     pub fn is_empty(&self) -> bool {
         self.page.total_items == 0
+    }
+
+    /// Reset list state: clear item count, selection, and scroll position.
+    ///
+    /// `update_item_count(0)` implicitly clears the selection; the explicit
+    /// `set_scroll_offset(0)` ensures no stale scroll position remains.
+    pub fn reset(&mut self) {
+        self.update_item_count(0);
+        self.page.set_scroll_offset(0);
     }
 }
 
@@ -490,6 +479,20 @@ mod tests {
         let list = create_test_list(0);
         let adjusted = list.get_adjusted_viewport_height(5);
         assert_eq!(adjusted, 5); // No adjustment for empty list
+    }
+
+    #[test]
+    fn test_reset_clears_items_and_selection() {
+        let mut list = ListComponent::new(false);
+        list.update_item_count(10);
+        list.set_selected_index(Some(5));
+        list.set_scroll_offset(3);
+
+        list.reset();
+
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.get_selected_index(), None);
+        assert_eq!(list.get_scroll_offset(), 0);
     }
 
     #[test]

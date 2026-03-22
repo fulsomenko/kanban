@@ -338,15 +338,7 @@ RUST_LOG=trace kanban
 
 Entry point layer coordinating all workspace crates:
 
-```
-kanban-core (foundation)
-    ↑
-    └── kanban-domain (domain logic)
-            ↑
-            └── kanban-tui (TUI layer)
-                    ↑
-                    └── kanban-cli (entry point & file management)
-```
+`kanban-cli` is the top-level entry point, depending on `kanban-tui` and `kanban-service`. See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for the full workspace dependency graph.
 
 ### Responsibilities
 

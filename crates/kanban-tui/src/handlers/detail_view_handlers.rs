@@ -22,78 +22,86 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.active_card_index = None;
-                self.card_focus = CardFocus::Title;
-                self.parents_list.selection.clear();
-                self.children_list.selection.clear();
-                self.card_navigation_history.clear();
+                self.selection.active_card_index = None;
+                self.focus.card_focus = CardFocus::Title;
+                self.relationship.parents_list.selection.clear();
+                self.relationship.children_list.selection.clear();
+                self.selection.card_navigation_history.clear();
             }
             KeyCode::Char('1') => {
-                self.card_focus = CardFocus::Title;
+                self.focus.card_focus = CardFocus::Title;
             }
             KeyCode::Char('2') => {
-                self.card_focus = CardFocus::Metadata;
+                self.focus.card_focus = CardFocus::Metadata;
             }
             KeyCode::Char('3') => {
-                self.card_focus = CardFocus::Description;
+                self.focus.card_focus = CardFocus::Description;
             }
             KeyCode::Char('4') => {
-                self.card_focus = CardFocus::Parents;
+                self.focus.card_focus = CardFocus::Parents;
             }
             KeyCode::Char('5') => {
-                self.card_focus = CardFocus::Children;
+                self.focus.card_focus = CardFocus::Children;
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                match self.card_focus {
+                match self.focus.card_focus {
                     CardFocus::Parents => {
                         // Navigate within parents list or wrap to next section
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
-                            let was_at_boundary = self.parents_list.navigate_down();
+                            let was_at_boundary = self.relationship.parents_list.navigate_down();
                             let viewport = self
+                                .relationship
                                 .parents_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.parents_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .parents_list
+                                .ensure_selected_visible(viewport);
 
                             if was_at_boundary {
                                 // At last parent, wrap to Children section
-                                self.card_focus = CardFocus::Children;
-                                self.parents_list.selection.clear();
+                                self.focus.card_focus = CardFocus::Children;
+                                self.relationship.parents_list.selection.clear();
 
                                 let children = self.get_current_card_children();
-                                self.children_list.update_item_count(children.len());
+                                self.relationship
+                                    .children_list
+                                    .update_item_count(children.len());
                                 if !children.is_empty() {
-                                    self.children_list.selection.jump_to_first();
+                                    self.relationship.children_list.selection.jump_to_first();
                                 }
                             }
                         } else {
                             // No parents, move to Children section
-                            self.card_focus = CardFocus::Children;
+                            self.focus.card_focus = CardFocus::Children;
                         }
                     }
                     CardFocus::Children => {
                         // Navigate within children list or wrap to next section
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
-                            let was_at_boundary = self.children_list.navigate_down();
+                            let was_at_boundary = self.relationship.children_list.navigate_down();
                             let viewport = self
+                                .relationship
                                 .children_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.children_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .children_list
+                                .ensure_selected_visible(viewport);
 
                             if was_at_boundary {
                                 // At last child, wrap to Title section
-                                self.card_focus = CardFocus::Title;
-                                self.children_list.selection.clear();
+                                self.focus.card_focus = CardFocus::Title;
+                                self.relationship.children_list.selection.clear();
                             }
                         } else {
                             // No children, move to Title section
-                            self.card_focus = CardFocus::Title;
+                            self.focus.card_focus = CardFocus::Title;
                         }
                     }
                     _ => {
                         // Navigate between sections
-                        self.card_focus = match self.card_focus {
+                        self.focus.card_focus = match self.focus.card_focus {
                             CardFocus::Title => CardFocus::Metadata,
                             CardFocus::Metadata => CardFocus::Description,
                             CardFocus::Description => CardFocus::Parents,
@@ -104,68 +112,87 @@ impl App {
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                match self.card_focus {
+                match self.focus.card_focus {
                     CardFocus::Parents => {
                         // Navigate within parents list or wrap to previous section
                         let parents = self.get_current_card_parents();
                         if !parents.is_empty() {
-                            let was_at_boundary = self.parents_list.navigate_up();
+                            let was_at_boundary = self.relationship.parents_list.navigate_up();
                             let viewport = self
+                                .relationship
                                 .parents_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.parents_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .parents_list
+                                .ensure_selected_visible(viewport);
 
                             if was_at_boundary {
                                 // At first parent or no selection, wrap to Description section
-                                self.card_focus = CardFocus::Description;
-                                self.parents_list.selection.clear();
+                                self.focus.card_focus = CardFocus::Description;
+                                self.relationship.parents_list.selection.clear();
                             }
                         } else {
                             // No parents, move to Description section
-                            self.card_focus = CardFocus::Description;
+                            self.focus.card_focus = CardFocus::Description;
                         }
                     }
                     CardFocus::Children => {
                         // Navigate within children list or wrap to previous section
                         let children = self.get_current_card_children();
                         if !children.is_empty() {
-                            let was_at_boundary = self.children_list.navigate_up();
+                            let was_at_boundary = self.relationship.children_list.navigate_up();
                             let viewport = self
+                                .relationship
                                 .children_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.children_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .children_list
+                                .ensure_selected_visible(viewport);
 
                             if was_at_boundary {
                                 // At first child or no selection, wrap to Parents section
                                 let parents = self.get_current_card_parents();
-                                self.card_focus = CardFocus::Parents;
-                                self.children_list.selection.clear();
-                                self.parents_list.update_item_count(parents.len());
+                                self.focus.card_focus = CardFocus::Parents;
+                                self.relationship.children_list.selection.clear();
+                                self.relationship
+                                    .parents_list
+                                    .update_item_count(parents.len());
                                 if !parents.is_empty() {
-                                    self.parents_list.selection.jump_to_last(parents.len());
+                                    self.relationship
+                                        .parents_list
+                                        .selection
+                                        .jump_to_last(parents.len());
                                 }
                             }
                         } else {
                             // No children, move to Parents section
-                            self.card_focus = CardFocus::Parents;
+                            self.focus.card_focus = CardFocus::Parents;
                         }
                     }
                     CardFocus::Title => {
                         // When at Title, wrap backward to Children and select last child
                         let children = self.get_current_card_children();
-                        self.card_focus = CardFocus::Children;
-                        self.children_list.update_item_count(children.len());
+                        self.focus.card_focus = CardFocus::Children;
+                        self.relationship
+                            .children_list
+                            .update_item_count(children.len());
                         if !children.is_empty() {
-                            self.children_list.selection.jump_to_last(children.len());
+                            self.relationship
+                                .children_list
+                                .selection
+                                .jump_to_last(children.len());
                             let viewport = self
+                                .relationship
                                 .children_list
                                 .get_adjusted_viewport_height(RELATIONSHIP_VIEWPORT_RAW);
-                            self.children_list.ensure_selected_visible(viewport);
+                            self.relationship
+                                .children_list
+                                .ensure_selected_visible(viewport);
                         }
                     }
                     _ => {
                         // Navigate between remaining sections (Metadata, Description)
-                        self.card_focus = match self.card_focus {
+                        self.focus.card_focus = match self.focus.card_focus {
                             CardFocus::Description => CardFocus::Metadata,
                             CardFocus::Metadata => CardFocus::Title,
                             // Other cases won't reach here due to explicit handling above
@@ -180,7 +207,7 @@ impl App {
             KeyCode::Char('Y') => {
                 self.copy_git_checkout_command();
             }
-            KeyCode::Char('e') => match self.card_focus {
+            KeyCode::Char('e') => match self.focus.card_focus {
                 CardFocus::Title => {
                     if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Title)
                     {
@@ -197,7 +224,7 @@ impl App {
                     should_restart = true;
                 }
                 CardFocus::Metadata => {
-                    if let Some(card_idx) = self.active_card_index {
+                    if let Some(card_idx) = self.selection.active_card_index {
                         if let Some(card) = self.ctx.cards.get_mut(card_idx) {
                             let card_id = card.id;
                             let temp_file = std::env::temp_dir()
@@ -228,12 +255,12 @@ impl App {
             KeyCode::Char('d') => {
                 self.handle_archive_card();
                 self.pop_mode();
-                self.active_card_index = None;
-                self.card_focus = CardFocus::Title;
+                self.selection.active_card_index = None;
+                self.focus.card_focus = CardFocus::Title;
                 self.refresh_view();
             }
             KeyCode::Char('a') => {
-                if let Some(board_idx) = self.active_board_index {
+                if let Some(board_idx) = self.selection.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
                         let sprint_count = self
                             .ctx
@@ -243,7 +270,9 @@ impl App {
                             .count();
                         if sprint_count > 0 {
                             let selection_idx = self.get_current_sprint_selection_index();
-                            self.sprint_assign_selection.set(Some(selection_idx));
+                            self.dialog_input
+                                .sprint_assign_selection
+                                .set(Some(selection_idx));
                             self.open_dialog(DialogMode::AssignCardToSprint);
                         }
                     }
@@ -254,7 +283,7 @@ impl App {
             }
             KeyCode::Char('P') => {
                 let priority_idx = self.get_current_priority_selection_index();
-                self.priority_selection.set(Some(priority_idx));
+                self.dialog_input.priority_selection.set(Some(priority_idx));
                 self.open_dialog(DialogMode::SetCardPriority);
             }
             KeyCode::Char('r') => {
@@ -263,33 +292,37 @@ impl App {
             KeyCode::Char('R') => {
                 self.handle_manage_children();
             }
-            KeyCode::Enter => match self.card_focus {
+            KeyCode::Enter => match self.focus.card_focus {
                 CardFocus::Parents => {
-                    if let Some(current_idx) = self.active_card_index {
+                    if let Some(current_idx) = self.selection.active_card_index {
                         self.navigate_to_selected_parent(current_idx);
                     }
                 }
                 CardFocus::Children => {
-                    if let Some(current_idx) = self.active_card_index {
+                    if let Some(current_idx) = self.selection.active_card_index {
                         self.navigate_to_selected_child(current_idx);
                     }
                 }
                 _ => {}
             },
             KeyCode::Backspace | KeyCode::Char('h')
-                if self.card_focus != CardFocus::Title
-                    && self.card_focus != CardFocus::Metadata
-                    && self.card_focus != CardFocus::Description =>
+                if self.focus.card_focus != CardFocus::Title
+                    && self.focus.card_focus != CardFocus::Metadata
+                    && self.focus.card_focus != CardFocus::Description =>
             {
                 // Allow backspace for back navigation in parents/children, but not in text editing sections
-                if let Some(previous_idx) = self.card_navigation_history.pop() {
-                    self.active_card_index = Some(previous_idx);
-                    self.card_focus = CardFocus::Title;
+                if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
+                    self.selection.active_card_index = Some(previous_idx);
+                    self.focus.card_focus = CardFocus::Title;
                     // Update item counts for the card we're returning to
                     let parents = self.get_current_card_parents();
                     let children = self.get_current_card_children();
-                    self.parents_list.update_item_count(parents.len());
-                    self.children_list.update_item_count(children.len());
+                    self.relationship
+                        .parents_list
+                        .update_item_count(parents.len());
+                    self.relationship
+                        .children_list
+                        .update_item_count(children.len());
                 }
             }
             _ => {}
@@ -307,24 +340,24 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.board_focus = BoardFocus::Name;
+                self.focus.board_focus = BoardFocus::Name;
             }
             KeyCode::Char('1') => {
-                self.board_focus = BoardFocus::Name;
+                self.focus.board_focus = BoardFocus::Name;
             }
             KeyCode::Char('2') => {
-                self.board_focus = BoardFocus::Description;
+                self.focus.board_focus = BoardFocus::Description;
             }
             KeyCode::Char('3') => {
-                self.board_focus = BoardFocus::Settings;
+                self.focus.board_focus = BoardFocus::Settings;
             }
             KeyCode::Char('4') => {
-                self.board_focus = BoardFocus::Sprints;
+                self.focus.board_focus = BoardFocus::Sprints;
             }
             KeyCode::Char('5') => {
-                self.board_focus = BoardFocus::Columns;
+                self.focus.board_focus = BoardFocus::Columns;
             }
-            KeyCode::Char('e') => match self.board_focus {
+            KeyCode::Char('e') => match self.focus.board_focus {
                 BoardFocus::Name => {
                     if let Err(e) = self.edit_board_field(terminal, event_handler, BoardField::Name)
                     {
@@ -341,7 +374,7 @@ impl App {
                     should_restart = true;
                 }
                 BoardFocus::Settings => {
-                    if let Some(board_idx) = self.board_selection.get() {
+                    if let Some(board_idx) = self.selection.board.get() {
                         if let Some(board) = self.ctx.boards.get_mut(board_idx) {
                             let board_id = board.id;
                             let temp_file = std::env::temp_dir()
@@ -366,35 +399,35 @@ impl App {
                 BoardFocus::Columns => {}
             },
             KeyCode::Char('n') => {
-                if self.board_focus == BoardFocus::Sprints {
+                if self.focus.board_focus == BoardFocus::Sprints {
                     self.handle_create_sprint_key();
-                } else if self.board_focus == BoardFocus::Columns {
+                } else if self.focus.board_focus == BoardFocus::Columns {
                     self.handle_create_column_key();
                 }
             }
             KeyCode::Char('r') => {
-                if self.board_focus == BoardFocus::Columns {
+                if self.focus.board_focus == BoardFocus::Columns {
                     self.handle_rename_column_key();
                 }
             }
             KeyCode::Char('d') => {
-                if self.board_focus == BoardFocus::Columns {
+                if self.focus.board_focus == BoardFocus::Columns {
                     self.handle_delete_column_key();
                 }
             }
             KeyCode::Char('J') => {
-                if self.board_focus == BoardFocus::Columns {
+                if self.focus.board_focus == BoardFocus::Columns {
                     self.handle_move_column_down();
                 }
             }
             KeyCode::Char('K') => {
-                if self.board_focus == BoardFocus::Columns {
+                if self.focus.board_focus == BoardFocus::Columns {
                     self.handle_move_column_up();
                 }
             }
-            KeyCode::Char('j') | KeyCode::Down => match self.board_focus {
+            KeyCode::Char('j') | KeyCode::Down => match self.focus.board_focus {
                 BoardFocus::Sprints => {
-                    if let Some(board_idx) = self.board_selection.get() {
+                    if let Some(board_idx) = self.selection.board.get() {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
                             let sprint_count = self
                                 .ctx
@@ -402,18 +435,18 @@ impl App {
                                 .iter()
                                 .filter(|s| s.board_id == board.id)
                                 .count();
-                            let current_idx = self.sprint_selection.get().unwrap_or(0);
+                            let current_idx = self.selection.sprint.get().unwrap_or(0);
                             if sprint_count == 0 || current_idx >= sprint_count - 1 {
-                                self.board_focus = BoardFocus::Columns;
-                                self.column_selection.set(Some(0));
+                                self.focus.board_focus = BoardFocus::Columns;
+                                self.dialog_input.column_selection.set(Some(0));
                             } else {
-                                self.sprint_selection.next(sprint_count);
+                                self.selection.sprint.next(sprint_count);
                             }
                         }
                     }
                 }
                 BoardFocus::Columns => {
-                    if let Some(board_idx) = self.board_selection.get() {
+                    if let Some(board_idx) = self.selection.board.get() {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
                             let column_count = self
                                 .ctx
@@ -421,45 +454,46 @@ impl App {
                                 .iter()
                                 .filter(|col| col.board_id == board.id)
                                 .count();
-                            let current_idx = self.column_selection.get().unwrap_or(0);
+                            let current_idx = self.dialog_input.column_selection.get().unwrap_or(0);
                             if column_count > 0 && current_idx >= column_count - 1 {
-                                self.board_focus = BoardFocus::Name;
-                                self.sprint_selection.set(Some(0));
+                                self.focus.board_focus = BoardFocus::Name;
+                                self.selection.sprint.set(Some(0));
                             } else {
-                                self.column_selection.next(column_count);
+                                self.dialog_input.column_selection.next(column_count);
                             }
                         }
                     }
                 }
                 _ => {
-                    self.board_focus = match self.board_focus {
+                    self.focus.board_focus = match self.focus.board_focus {
                         BoardFocus::Name => BoardFocus::Description,
                         BoardFocus::Description => BoardFocus::Settings,
                         BoardFocus::Settings => BoardFocus::Sprints,
                         BoardFocus::Sprints => BoardFocus::Columns,
                         BoardFocus::Columns => BoardFocus::Name,
                     };
-                    if self.board_focus == BoardFocus::Sprints {
-                        self.sprint_selection.set(Some(0));
-                    } else if self.board_focus == BoardFocus::Columns {
-                        self.column_selection.set(Some(0));
+                    if self.focus.board_focus == BoardFocus::Sprints {
+                        self.selection.sprint.set(Some(0));
+                    } else if self.focus.board_focus == BoardFocus::Columns {
+                        self.dialog_input.column_selection.set(Some(0));
                     }
                 }
             },
-            KeyCode::Char('k') | KeyCode::Up => match self.board_focus {
+            KeyCode::Char('k') | KeyCode::Up => match self.focus.board_focus {
                 BoardFocus::Sprints => {
-                    let current_idx = self.sprint_selection.get().unwrap_or(0);
+                    let current_idx = self.selection.sprint.get().unwrap_or(0);
                     if current_idx == 0 {
-                        self.board_focus = BoardFocus::Settings;
+                        self.focus.board_focus = BoardFocus::Settings;
                     } else {
-                        self.sprint_selection.prev();
+                        self.selection.sprint.prev();
                     }
                 }
                 BoardFocus::Columns => {
-                    let current_idx = self.column_selection.get().unwrap_or(0);
+                    let current_idx = self.dialog_input.column_selection.get().unwrap_or(0);
                     if current_idx == 0 {
                         let sprint_count = self
-                            .board_selection
+                            .selection
+                            .board
                             .get()
                             .and_then(|idx| self.ctx.boards.get(idx))
                             .map(|board| {
@@ -471,32 +505,32 @@ impl App {
                             })
                             .unwrap_or(0);
                         if sprint_count == 0 {
-                            self.board_focus = BoardFocus::Settings;
+                            self.focus.board_focus = BoardFocus::Settings;
                         } else {
-                            self.board_focus = BoardFocus::Sprints;
-                            self.sprint_selection.set(Some(sprint_count - 1));
+                            self.focus.board_focus = BoardFocus::Sprints;
+                            self.selection.sprint.set(Some(sprint_count - 1));
                         }
                     } else {
-                        self.column_selection.prev();
+                        self.dialog_input.column_selection.prev();
                     }
                 }
                 _ => {
-                    self.board_focus = match self.board_focus {
+                    self.focus.board_focus = match self.focus.board_focus {
                         BoardFocus::Name => BoardFocus::Columns,
                         BoardFocus::Description => BoardFocus::Name,
                         BoardFocus::Settings => BoardFocus::Description,
                         BoardFocus::Sprints => BoardFocus::Settings,
                         BoardFocus::Columns => BoardFocus::Sprints,
                     };
-                    if self.board_focus == BoardFocus::Columns {
-                        self.column_selection.set(Some(0));
+                    if self.focus.board_focus == BoardFocus::Columns {
+                        self.dialog_input.column_selection.set(Some(0));
                     }
                 }
             },
             KeyCode::Enter | KeyCode::Char(' ') => {
-                if self.board_focus == BoardFocus::Sprints {
-                    if let Some(sprint_idx) = self.sprint_selection.get() {
-                        if let Some(board_idx) = self.board_selection.get() {
+                if self.focus.board_focus == BoardFocus::Sprints {
+                    if let Some(sprint_idx) = self.selection.sprint.get() {
+                        if let Some(board_idx) = self.selection.board.get() {
                             if let Some(board) = self.ctx.boards.get(board_idx) {
                                 let board_sprints: Vec<_> = self
                                     .ctx
@@ -506,8 +540,8 @@ impl App {
                                     .filter(|(_, s)| s.board_id == board.id)
                                     .collect();
                                 if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
-                                    self.active_sprint_index = Some(*actual_idx);
-                                    self.active_board_index = Some(board_idx);
+                                    self.selection.active_sprint_index = Some(*actual_idx);
+                                    self.selection.active_board_index = Some(board_idx);
                                     if let Some(sprint) = self.ctx.sprints.get(*actual_idx) {
                                         self.populate_sprint_task_lists(sprint.id);
                                     }
@@ -519,8 +553,8 @@ impl App {
                 }
             }
             KeyCode::Char('p') => {
-                if self.board_focus == BoardFocus::Settings {
-                    if let Some(board_idx) = self.board_selection.get() {
+                if self.focus.board_focus == BoardFocus::Settings {
+                    if let Some(board_idx) = self.selection.board.get() {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
                             let current_prefix =
                                 board.sprint_prefix.clone().unwrap_or_else(String::new);
@@ -539,8 +573,8 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.board_focus = BoardFocus::Sprints;
-                self.active_sprint_index = None;
+                self.focus.board_focus = BoardFocus::Sprints;
+                self.selection.active_sprint_index = None;
             }
             KeyCode::Char('a') => {
                 self.handle_activate_sprint_key();
@@ -549,7 +583,7 @@ impl App {
                 self.handle_complete_sprint_key();
             }
             KeyCode::Char('p') => {
-                if let Some(sprint_idx) = self.active_sprint_index {
+                if let Some(sprint_idx) = self.selection.active_sprint_index {
                     if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         let current_prefix = sprint.prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
@@ -558,7 +592,7 @@ impl App {
                 }
             }
             KeyCode::Char('C') => {
-                if let Some(sprint_idx) = self.active_sprint_index {
+                if let Some(sprint_idx) = self.selection.active_sprint_index {
                     if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         let current_prefix = sprint.card_prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
@@ -568,46 +602,46 @@ impl App {
             }
             KeyCode::Char('o') => {
                 let sort_idx = self.get_current_sort_field_selection_index();
-                self.sort_field_selection.set(Some(sort_idx));
+                self.filter.sort_field_selection.set(Some(sort_idx));
                 self.open_dialog(DialogMode::OrderCards);
             }
             KeyCode::Char('O') => {
-                if let Some(current_order) = self.current_sort_order {
+                if let Some(current_order) = self.filter.current_sort_order {
                     let new_order = match current_order {
                         kanban_domain::SortOrder::Ascending => kanban_domain::SortOrder::Descending,
                         kanban_domain::SortOrder::Descending => kanban_domain::SortOrder::Ascending,
                     };
-                    self.current_sort_order = Some(new_order);
+                    self.filter.current_sort_order = Some(new_order);
 
-                    if let Some(field) = self.current_sort_field {
+                    if let Some(field) = self.filter.current_sort_field {
                         self.apply_sort_to_sprint_lists(field, new_order);
                         tracing::info!("Toggled sort order to: {:?}", new_order);
                     }
                 }
             }
             KeyCode::Char('h') | KeyCode::Left => {
-                if let Some(sprint_idx) = self.active_sprint_index {
+                if let Some(sprint_idx) = self.selection.active_sprint_index {
                     if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
-                            self.sprint_task_panel = SprintTaskPanel::Uncompleted;
+                            self.sprint_view.panel = SprintTaskPanel::Uncompleted;
                         }
                     }
                 }
             }
             KeyCode::Char('l') | KeyCode::Right => {
-                if let Some(sprint_idx) = self.active_sprint_index {
+                if let Some(sprint_idx) = self.selection.active_sprint_index {
                     if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
-                            self.sprint_task_panel = SprintTaskPanel::Completed;
+                            self.sprint_view.panel = SprintTaskPanel::Completed;
                         }
                     }
                 }
             }
             _ => {
                 let action = {
-                    let active_component = match self.sprint_task_panel {
-                        SprintTaskPanel::Uncompleted => &mut self.sprint_uncompleted_component,
-                        SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                    let active_component = match self.sprint_view.panel {
+                        SprintTaskPanel::Uncompleted => &mut self.sprint_view.uncompleted_component,
+                        SprintTaskPanel::Completed => &mut self.sprint_view.completed_component,
                     };
                     active_component.handle_key(key_code)
                 };
@@ -620,28 +654,36 @@ impl App {
                             if let Some(card_idx) =
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
-                                self.active_card_index = Some(card_idx);
+                                self.selection.active_card_index = Some(card_idx);
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
-                                self.parents_list.update_item_count(parents.len());
-                                self.children_list.update_item_count(children.len());
+                                self.relationship
+                                    .parents_list
+                                    .update_item_count(parents.len());
+                                self.relationship
+                                    .children_list
+                                    .update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
-                                self.card_focus = CardFocus::Title;
+                                self.focus.card_focus = CardFocus::Title;
                             }
                         }
                         CardListAction::Edit(card_id) => {
                             if let Some(card_idx) =
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
-                                self.active_card_index = Some(card_idx);
+                                self.selection.active_card_index = Some(card_idx);
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
-                                self.parents_list.update_item_count(parents.len());
-                                self.children_list.update_item_count(children.len());
+                                self.relationship
+                                    .parents_list
+                                    .update_item_count(parents.len());
+                                self.relationship
+                                    .children_list
+                                    .update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
-                                self.card_focus = CardFocus::Title;
+                                self.focus.card_focus = CardFocus::Title;
                             }
                         }
                         CardListAction::Complete(card_id) => {
@@ -653,8 +695,9 @@ impl App {
                                     CardStatus::Done
                                 };
 
-                                let toggle_result = self.active_board_index.and_then(|idx| {
-                                    self.ctx.boards.get(idx).and_then(|board| {
+                                let toggle_result =
+                                    self.selection.active_board_index.and_then(|idx| {
+                                        self.ctx.boards.get(idx).and_then(|board| {
                                         kanban_domain::card_lifecycle::compute_completion_toggle(
                                             card,
                                             board,
@@ -662,7 +705,7 @@ impl App {
                                             &self.ctx.cards,
                                         )
                                     })
-                                });
+                                    });
 
                                 let mut updates = CardUpdate {
                                     status: Some(new_status),
@@ -688,9 +731,9 @@ impl App {
                             if let Some(card_idx) =
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
-                                self.active_card_index = Some(card_idx);
+                                self.selection.active_card_index = Some(card_idx);
                                 let priority_idx = self.get_current_priority_selection_index();
-                                self.priority_selection.set(Some(priority_idx));
+                                self.dialog_input.priority_selection.set(Some(priority_idx));
                                 self.open_dialog(DialogMode::SetCardPriority);
                             }
                         }
@@ -698,8 +741,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
-                                self.active_card_index = Some(card_idx);
-                                if let Some(board_idx) = self.active_board_index {
+                                self.selection.active_card_index = Some(card_idx);
+                                if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.ctx.boards.get(board_idx) {
                                         let sprint_count = self
                                             .ctx
@@ -710,7 +753,9 @@ impl App {
                                         if sprint_count > 0 {
                                             let selection_idx =
                                                 self.get_current_sprint_selection_index();
-                                            self.sprint_assign_selection.set(Some(selection_idx));
+                                            self.dialog_input
+                                                .sprint_assign_selection
+                                                .set(Some(selection_idx));
                                             self.open_dialog(DialogMode::AssignCardToSprint);
                                         }
                                     }
@@ -721,8 +766,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.ctx.cards.iter().position(|c| c.id == card_id)
                             {
-                                self.active_card_index = Some(card_idx);
-                                if let Some(board_idx) = self.active_board_index {
+                                self.selection.active_card_index = Some(card_idx);
+                                if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.ctx.boards.get(board_idx) {
                                         let sprint_count = self
                                             .ctx
@@ -733,7 +778,9 @@ impl App {
                                         if sprint_count > 0 {
                                             let selection_idx =
                                                 self.get_current_sprint_selection_index();
-                                            self.sprint_assign_selection.set(Some(selection_idx));
+                                            self.dialog_input
+                                                .sprint_assign_selection
+                                                .set(Some(selection_idx));
                                             self.open_dialog(DialogMode::AssignCardToSprint);
                                         }
                                     }
@@ -742,11 +789,11 @@ impl App {
                         }
                         CardListAction::Sort => {
                             let sort_idx = self.get_current_sort_field_selection_index();
-                            self.sort_field_selection.set(Some(sort_idx));
+                            self.filter.sort_field_selection.set(Some(sort_idx));
                             self.open_dialog(DialogMode::OrderCards);
                         }
                         CardListAction::OrderCards => {
-                            if let Some(current_order) = self.current_sort_order {
+                            if let Some(current_order) = self.filter.current_sort_order {
                                 let new_order = match current_order {
                                     kanban_domain::SortOrder::Ascending => {
                                         kanban_domain::SortOrder::Descending
@@ -755,9 +802,9 @@ impl App {
                                         kanban_domain::SortOrder::Ascending
                                     }
                                 };
-                                self.current_sort_order = Some(new_order);
+                                self.filter.current_sort_order = Some(new_order);
 
-                                if let Some(field) = self.current_sort_field {
+                                if let Some(field) = self.filter.current_sort_field {
                                     self.apply_sort_to_sprint_lists(field, new_order);
                                     tracing::info!("Toggled sort order to: {:?}", new_order);
                                 }
@@ -773,17 +820,18 @@ impl App {
                                     kanban_domain::card_lifecycle::MoveDirection::Left
                                 };
 
-                                let move_result = self.active_board_index.and_then(|idx| {
-                                    self.ctx.boards.get(idx).and_then(|board| {
-                                        kanban_domain::card_lifecycle::compute_card_column_move(
-                                            &card,
-                                            board,
-                                            &self.ctx.columns,
-                                            &self.ctx.cards,
-                                            direction,
-                                        )
-                                    })
-                                });
+                                let move_result =
+                                    self.selection.active_board_index.and_then(|idx| {
+                                        self.ctx.boards.get(idx).and_then(|board| {
+                                            kanban_domain::card_lifecycle::compute_card_column_move(
+                                                &card,
+                                                board,
+                                                &self.ctx.columns,
+                                                &self.ctx.cards,
+                                                direction,
+                                            )
+                                        })
+                                    });
 
                                 if let Some(result) = move_result {
                                     let move_cmd = Box::new(kanban_domain::commands::MoveCard {
@@ -817,29 +865,35 @@ impl App {
                             self.input.clear();
                         }
                         CardListAction::ToggleMultiSelect(card_id) => {
-                            let component = match self.sprint_task_panel {
+                            let component = match self.sprint_view.panel {
                                 SprintTaskPanel::Uncompleted => {
-                                    &mut self.sprint_uncompleted_component
+                                    &mut self.sprint_view.uncompleted_component
                                 }
-                                SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                                SprintTaskPanel::Completed => {
+                                    &mut self.sprint_view.completed_component
+                                }
                             };
                             component.toggle_multi_select(card_id);
                         }
                         CardListAction::ClearMultiSelect => {
-                            let component = match self.sprint_task_panel {
+                            let component = match self.sprint_view.panel {
                                 SprintTaskPanel::Uncompleted => {
-                                    &mut self.sprint_uncompleted_component
+                                    &mut self.sprint_view.uncompleted_component
                                 }
-                                SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                                SprintTaskPanel::Completed => {
+                                    &mut self.sprint_view.completed_component
+                                }
                             };
                             component.clear_multi_select();
                         }
                         CardListAction::SelectAll => {
-                            let component = match self.sprint_task_panel {
+                            let component = match self.sprint_view.panel {
                                 SprintTaskPanel::Uncompleted => {
-                                    &mut self.sprint_uncompleted_component
+                                    &mut self.sprint_view.uncompleted_component
                                 }
-                                SprintTaskPanel::Completed => &mut self.sprint_completed_component,
+                                SprintTaskPanel::Completed => {
+                                    &mut self.sprint_view.completed_component
+                                }
                             };
                             component.select_all();
                         }
@@ -847,14 +901,14 @@ impl App {
                 }
 
                 // Sync component selection back to CardList for rendering
-                let (active_component, active_card_list) = match self.sprint_task_panel {
+                let (active_component, active_card_list) = match self.sprint_view.panel {
                     SprintTaskPanel::Uncompleted => (
-                        &self.sprint_uncompleted_component,
-                        &mut self.sprint_uncompleted_cards,
+                        &self.sprint_view.uncompleted_component,
+                        &mut self.sprint_view.uncompleted_cards,
                     ),
                     SprintTaskPanel::Completed => (
-                        &self.sprint_completed_component,
-                        &mut self.sprint_completed_cards,
+                        &self.sprint_view.completed_component,
+                        &mut self.sprint_view.completed_cards,
                     ),
                 };
                 active_card_list.set_selected_index(active_component.get_selected_index());
@@ -863,7 +917,7 @@ impl App {
     }
 
     pub(crate) fn handle_manage_parents(&mut self) {
-        if let Some(card_idx) = self.active_card_index {
+        if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
@@ -904,10 +958,10 @@ impl App {
                         self.ctx.graph.cards.parents(card_id).into_iter().collect();
 
                     // Set up dialog state
-                    self.relationship_card_ids = eligible_cards;
-                    self.relationship_selected = current_parents;
-                    self.relationship_selection.set(Some(0));
-                    self.relationship_search.clear();
+                    self.relationship.card_ids = eligible_cards;
+                    self.relationship.selected = current_parents;
+                    self.relationship.selection.set(Some(0));
+                    self.relationship.search.clear();
 
                     self.open_dialog(DialogMode::ManageParents);
                 }
@@ -916,7 +970,7 @@ impl App {
     }
 
     pub(crate) fn handle_manage_children(&mut self) {
-        if let Some(card_idx) = self.active_card_index {
+        if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
@@ -957,10 +1011,10 @@ impl App {
                         self.ctx.graph.cards.children(card_id).into_iter().collect();
 
                     // Set up dialog state
-                    self.relationship_card_ids = eligible_cards;
-                    self.relationship_selected = current_children;
-                    self.relationship_selection.set(Some(0));
-                    self.relationship_search.clear();
+                    self.relationship.card_ids = eligible_cards;
+                    self.relationship.selected = current_children;
+                    self.relationship.selection.set(Some(0));
+                    self.relationship.search.clear();
 
                     self.open_dialog(DialogMode::ManageChildren);
                 }
@@ -969,7 +1023,7 @@ impl App {
     }
 
     pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
-        if let Some(card_idx) = self.active_card_index {
+        if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 return self.ctx.graph.cards.parents(card.id);
             }
@@ -978,7 +1032,7 @@ impl App {
     }
 
     pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
-        if let Some(card_idx) = self.active_card_index {
+        if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 return self.ctx.graph.cards.children(card.id);
             }
@@ -988,19 +1042,25 @@ impl App {
 
     fn navigate_to_selected_parent(&mut self, current_card_idx: usize) {
         let parents = self.get_current_card_parents();
-        if let Some(selected_idx) = self.parents_list.selection.get() {
+        if let Some(selected_idx) = self.relationship.parents_list.selection.get() {
             if let Some(&parent_id) = parents.get(selected_idx) {
                 if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parent_id) {
                     // Push current card to history
-                    self.card_navigation_history.push(current_card_idx);
+                    self.selection
+                        .card_navigation_history
+                        .push(current_card_idx);
                     // Navigate to parent
-                    self.active_card_index = Some(parent_idx);
-                    self.card_focus = CardFocus::Title;
+                    self.selection.active_card_index = Some(parent_idx);
+                    self.focus.card_focus = CardFocus::Title;
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
                     let new_children = self.get_current_card_children();
-                    self.parents_list.update_item_count(new_parents.len());
-                    self.children_list.update_item_count(new_children.len());
+                    self.relationship
+                        .parents_list
+                        .update_item_count(new_parents.len());
+                    self.relationship
+                        .children_list
+                        .update_item_count(new_children.len());
                     return;
                 }
             }
@@ -1008,33 +1068,45 @@ impl App {
         // If no valid selection, navigate to first parent if available
         if !parents.is_empty() {
             if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parents[0]) {
-                self.card_navigation_history.push(current_card_idx);
-                self.active_card_index = Some(parent_idx);
-                self.card_focus = CardFocus::Title;
+                self.selection
+                    .card_navigation_history
+                    .push(current_card_idx);
+                self.selection.active_card_index = Some(parent_idx);
+                self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
                 let new_children = self.get_current_card_children();
-                self.parents_list.update_item_count(new_parents.len());
-                self.children_list.update_item_count(new_children.len());
+                self.relationship
+                    .parents_list
+                    .update_item_count(new_parents.len());
+                self.relationship
+                    .children_list
+                    .update_item_count(new_children.len());
             }
         }
     }
 
     fn navigate_to_selected_child(&mut self, current_card_idx: usize) {
         let children = self.get_current_card_children();
-        if let Some(selected_idx) = self.children_list.selection.get() {
+        if let Some(selected_idx) = self.relationship.children_list.selection.get() {
             if let Some(&child_id) = children.get(selected_idx) {
                 if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == child_id) {
                     // Push current card to history
-                    self.card_navigation_history.push(current_card_idx);
+                    self.selection
+                        .card_navigation_history
+                        .push(current_card_idx);
                     // Navigate to child
-                    self.active_card_index = Some(child_idx);
-                    self.card_focus = CardFocus::Title;
+                    self.selection.active_card_index = Some(child_idx);
+                    self.focus.card_focus = CardFocus::Title;
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
                     let new_children = self.get_current_card_children();
-                    self.parents_list.update_item_count(new_parents.len());
-                    self.children_list.update_item_count(new_children.len());
+                    self.relationship
+                        .parents_list
+                        .update_item_count(new_parents.len());
+                    self.relationship
+                        .children_list
+                        .update_item_count(new_children.len());
                     return;
                 }
             }
@@ -1042,14 +1114,20 @@ impl App {
         // If no valid selection, navigate to first child if available
         if !children.is_empty() {
             if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == children[0]) {
-                self.card_navigation_history.push(current_card_idx);
-                self.active_card_index = Some(child_idx);
-                self.card_focus = CardFocus::Title;
+                self.selection
+                    .card_navigation_history
+                    .push(current_card_idx);
+                self.selection.active_card_index = Some(child_idx);
+                self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
                 let new_children = self.get_current_card_children();
-                self.parents_list.update_item_count(new_parents.len());
-                self.children_list.update_item_count(new_children.len());
+                self.relationship
+                    .parents_list
+                    .update_item_count(new_parents.len());
+                self.relationship
+                    .children_list
+                    .update_item_count(new_children.len());
             }
         }
     }

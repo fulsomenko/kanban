@@ -37,7 +37,7 @@ impl SelectionDialog for PriorityDialog {
             CardPriority::Critical,
         ];
 
-        let selected = app.priority_selection.get();
+        let selected = app.dialog_input.priority_selection.get();
 
         let items: Vec<ListItem> = priorities
             .iter()
@@ -86,7 +86,7 @@ impl SelectionDialog for BulkPriorityDialog {
             CardPriority::Critical,
         ];
 
-        let selected = app.priority_selection.get();
+        let selected = app.dialog_input.priority_selection.get();
 
         let items: Vec<ListItem> = priorities
             .iter()
@@ -137,7 +137,7 @@ impl SelectionDialog for SortFieldDialog {
 
         let active_idx = sort_fields
             .iter()
-            .position(|f| Some(*f) == app.current_sort_field);
+            .position(|f| Some(*f) == app.filter.current_sort_field);
 
         render_selection_popup_with_lines(
             frame,
@@ -156,7 +156,7 @@ impl SelectionDialog for SortFieldDialog {
                 };
 
                 let order_indicator = if is_active {
-                    match app.current_sort_order {
+                    match app.filter.current_sort_order {
                         Some(SortOrder::Ascending) => Some(" (↑)".to_string()),
                         Some(SortOrder::Descending) => Some(" (↓)".to_string()),
                         None => None,
@@ -167,7 +167,7 @@ impl SelectionDialog for SortFieldDialog {
 
                 (field_name.to_string(), order_indicator)
             },
-            app.sort_field_selection.get(),
+            app.filter.sort_field_selection.get(),
             active_idx,
             60,
             50,
@@ -187,7 +187,7 @@ impl SelectionDialog for SprintAssignDialog {
     }
 
     fn options_count(&self, app: &App) -> usize {
-        if let Some(board_idx) = app.active_board_index {
+        if let Some(board_idx) = app.selection.active_board_index {
             if let Some(board) = app.ctx.boards.get(board_idx) {
                 let sprint_count = Sprint::assignable(&app.ctx.sprints, board.id).len();
                 sprint_count + 1 // +1 for None option
@@ -230,11 +230,11 @@ impl SelectionDialog for SprintAssignDialog {
 
         let mut lines = vec![];
 
-        if let Some(board_idx) = app.active_board_index {
+        if let Some(board_idx) = app.selection.active_board_index {
             if let Some(board) = app.ctx.boards.get(board_idx) {
                 let board_sprints = Sprint::assignable(&app.ctx.sprints, board.id);
 
-                let current_sprint_id = if let Some(card_idx) = app.active_card_index {
+                let current_sprint_id = if let Some(card_idx) = app.selection.active_card_index {
                     app.ctx.cards.get(card_idx).and_then(|c| c.sprint_id)
                 } else {
                     None
@@ -244,7 +244,7 @@ impl SelectionDialog for SprintAssignDialog {
                     .chain(board_sprints.iter().map(|s| Some(*s)))
                     .enumerate()
                 {
-                    let is_selected = app.sprint_assign_selection.get() == Some(idx);
+                    let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);
                     let is_current = match (sprint_option, current_sprint_id) {
                         (None, None) => true,
                         (Some(s), Some(id)) => s.id == id,

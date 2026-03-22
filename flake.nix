@@ -66,9 +66,7 @@
         in {
           default = kanban;
           kanban-cli = kanban-cli;
-          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {
-            kanban = kanban-cli;
-          };
+          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {};
           kanban-web = pkgs.callPackage ./web/default.nix {};
           mcp-server-git = servers.packages.${system}.mcp-server-git;
           aggregate-changelog = aggregateChangelog;

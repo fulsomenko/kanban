@@ -40,10 +40,10 @@ impl TuiSnapshot for Snapshot {
         app.ctx.graph = self.graph.clone();
 
         // Sync sort field/order from active board to preserve user's selection after reload
-        if let Some(board_idx) = app.active_board_index {
+        if let Some(board_idx) = app.selection.active_board_index {
             if let Some(board) = app.ctx.boards.get(board_idx) {
-                app.current_sort_field = Some(board.task_sort_field);
-                app.current_sort_order = Some(board.task_sort_order);
+                app.filter.current_sort_field = Some(board.task_sort_field);
+                app.filter.current_sort_order = Some(board.task_sort_order);
             }
         }
     }
@@ -52,6 +52,7 @@ impl TuiSnapshot for Snapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::{FilterState, SelectionHub};
     use kanban_domain::{Board, DependencyGraph, SortField};
 
     #[test]
@@ -87,18 +88,25 @@ mod tests {
         };
 
         // Create a minimal app with active_board_index set
-        let mut app = App {
-            active_board_index: Some(0),
-            current_sort_field: Some(SortField::Default), // Old value
+        let app = App {
+            selection: SelectionHub {
+                active_board_index: Some(0),
+                ..SelectionHub::default()
+            },
+            filter: FilterState {
+                current_sort_field: Some(SortField::Default),
+                ..FilterState::default()
+            },
             ..Default::default()
         };
+        let mut app = app;
 
         // Apply snapshot - should sync sort field from board
         snapshot.apply_to_app(&mut app);
 
         // After apply, current_sort_field should match the board's task_sort_field
         assert_eq!(
-            app.current_sort_field,
+            app.filter.current_sort_field,
             Some(SortField::Position),
             "apply_to_app should sync current_sort_field from active board"
         );

@@ -18,6 +18,7 @@ path = "src/main.rs"
 # Workspace crates
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+kanban-service = { path = "../kanban-service", version = "^0.3" }
 
 # MCP SDK
 rmcp = { version = "0.11", features = ["server", "transport-io"] }
@@ -35,15 +36,17 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 
-# Synchronization (non-poisoning mutex)
-parking_lot = "0.12"
-
-# Temp files (for import)
-tempfile.workspace = true
-
 # Error handling (for main.rs only)
 anyhow.workspace = true
 
 # Logging
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+kanban-service = { path = "../kanban-service", version = "^0.3" }
+tempfile.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+uuid.workspace = true

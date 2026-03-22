@@ -18,9 +18,9 @@ impl KeybindingRegistry {
     pub fn get_provider(app: &App) -> Box<dyn KeybindingProvider> {
         Self::get_provider_for_mode(
             &app.mode,
-            app.focus.clone(),
-            app.card_focus,
-            app.board_focus,
+            app.focus.active.clone(),
+            app.focus.card_focus,
+            app.focus.board_focus,
         )
     }
 

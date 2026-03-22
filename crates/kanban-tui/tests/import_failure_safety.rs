@@ -50,7 +50,7 @@ fn test_import_failure_prevents_empty_state_save() {
     );
     assert_eq!(app.ctx.boards[0].name, "Test Board");
     assert!(
-        app.save_file.is_some(),
+        app.persistence.save_file.is_some(),
         "save_file should still be enabled after successful V2 import"
     );
 }
@@ -68,7 +68,7 @@ fn test_import_failure_disables_save_file() {
 
     // save_file should be None due to import failure
     assert!(
-        app.save_file.is_none(),
+        app.persistence.save_file.is_none(),
         "save_file should be None when import fails"
     );
 
@@ -130,7 +130,7 @@ fn test_v2_format_is_imported_correctly() {
     assert_eq!(app.ctx.cards.len(), 1);
     assert_eq!(app.ctx.cards[0].title, "Important Task");
     assert!(
-        app.save_file.is_some(),
+        app.persistence.save_file.is_some(),
         "save_file should remain enabled after successful V2 import"
     );
 }

@@ -34,6 +34,14 @@ impl SearchState {
     pub fn is_empty(&self) -> bool {
         self.input.as_str().is_empty()
     }
+
+    pub fn active_query(&self) -> Option<&str> {
+        if self.is_active {
+            Some(self.query())
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for SearchState {
