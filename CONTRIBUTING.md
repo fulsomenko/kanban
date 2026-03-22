@@ -131,6 +131,20 @@ graph LR
     DOM --> CORE[kanban-core]
 ```
 
+### Adding a Field to a Domain Model
+
+When adding a new field to any struct in `kanban-domain` (e.g., `Card`, `Board`, `Column`, `Sprint`):
+
+1. Add the field to the struct in `kanban-domain`.
+
+2. **If the field is non-optional** (no `#[serde(default)]`): `row_to_*()` in `kanban-persistence-sqlite/src/sqlite_store.rs` will **fail to compile** because the struct literal is exhaustive — add the column to `schema.sql`, write a migration if the database already exists, and update both `row_to_*()` and the corresponding `upsert_*()` binds.
+
+3. **If the field is optional** (`Option<T>` with `#[serde(default)]`): the SQLite code compiles but silently returns `None` on load — manually update `row_to_*()` and `upsert_*()`, then set the new field to a non-`None` value in `fully_populated_snapshot()` inside both:
+   - `crates/kanban-persistence-sqlite/tests/roundtrip.rs`
+   - `crates/kanban-persistence-json/tests/roundtrip.rs`
+
+   The roundtrip test (`full_roundtrip_preserves_all_fields`) will fail until all three are updated.
+
 ### Adding New Features
 
 **Domain First Approach:**
