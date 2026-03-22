@@ -6,6 +6,7 @@ pub struct SelectionHub {
     pub active_card_index: Option<usize>,
     pub sprint: SelectionState,
     pub active_sprint_index: Option<usize>,
+    pub card_navigation_history: Vec<usize>,
 }
 
 impl SelectionHub {
@@ -16,6 +17,7 @@ impl SelectionHub {
             active_card_index: None,
             sprint: SelectionState::new(),
             active_sprint_index: None,
+            card_navigation_history: Vec::new(),
         }
     }
 }

@@ -6,7 +6,6 @@ pub struct UiState {
     pub banner: Option<Banner>,
     pub help_list: ListComponent,
     pub help_pending_action: Option<(Instant, KeybindingAction)>,
-    pub card_navigation_history: Vec<usize>,
 }
 
 impl UiState {
@@ -15,7 +14,6 @@ impl UiState {
             banner: None,
             help_list: ListComponent::new(false),
             help_pending_action: None,
-            card_navigation_history: Vec::new(),
         }
     }
 }
