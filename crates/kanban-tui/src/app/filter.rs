@@ -15,4 +15,3 @@ pub struct FilterState {
     pub search: SearchState,
     pub dialog_state: Option<FilterDialogState>,
 }
-

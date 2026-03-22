@@ -9,4 +9,3 @@ pub struct DialogInputState {
     pub sprint_assign_selection: SelectionState,
     pub task_list_view_selection: SelectionState,
 }
-

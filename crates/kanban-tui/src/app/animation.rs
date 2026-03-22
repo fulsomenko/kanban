@@ -14,4 +14,3 @@ pub struct CardAnimation {
 pub struct AnimationState {
     pub animating: HashMap<Uuid, CardAnimation>,
 }
-

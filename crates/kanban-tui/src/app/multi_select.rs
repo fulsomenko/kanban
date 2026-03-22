@@ -6,4 +6,3 @@ pub struct MultiSelectState {
     pub selected_cards: HashSet<Uuid>,
     pub selection_mode_active: bool,
 }
-

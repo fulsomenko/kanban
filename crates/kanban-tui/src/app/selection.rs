@@ -9,4 +9,3 @@ pub struct SelectionHub {
     pub active_sprint_index: Option<usize>,
     pub card_navigation_history: Vec<usize>,
 }
-
