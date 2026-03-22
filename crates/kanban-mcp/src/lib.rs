@@ -7,7 +7,6 @@ use kanban_domain::{
     ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate,
     ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
 };
-use tokio::sync::Mutex;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
@@ -18,6 +17,7 @@ use rmcp::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 // ============================================================================
@@ -111,7 +111,9 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
     }
     let card = {
         let guard = ctx.lock().await;
-        guard.find_card_by_identifier(s).map_err(kanban_err_to_mcp)?
+        guard
+            .find_card_by_identifier(s)
+            .map_err(kanban_err_to_mcp)?
     };
     card.map(|c| c.id)
         .ok_or_else(|| McpError::invalid_params(format!("Card not found: '{}'", s), None))

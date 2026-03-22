@@ -278,7 +278,9 @@ async fn test_create_board_persists() {
     let path_str = path.to_string_lossy().to_string();
 
     let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
-    mcp_ctx.create_board("Persistent Board".into(), None).unwrap();
+    mcp_ctx
+        .create_board("Persistent Board".into(), None)
+        .unwrap();
     mcp_ctx.save().await.unwrap();
 
     let fresh = KanbanContext::load_json(&path_str).await.unwrap();
@@ -295,7 +297,9 @@ async fn test_mutation_sequence_persists() {
 
     let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
     let board = mcp_ctx.create_board("Board".into(), None).unwrap();
-    let col = mcp_ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    let col = mcp_ctx
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
     mcp_ctx
         .create_card(board.id, col.id, "Task".into(), Default::default())
         .unwrap();
