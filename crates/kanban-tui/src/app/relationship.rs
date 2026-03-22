@@ -13,8 +13,8 @@ pub struct RelationshipState {
     pub children_list: ListComponent,
 }
 
-impl RelationshipState {
-    pub fn new() -> Self {
+impl Default for RelationshipState {
+    fn default() -> Self {
         Self {
             card_ids: Vec::new(),
             selected: HashSet::new(),
@@ -24,11 +24,5 @@ impl RelationshipState {
             parents_list: ListComponent::new(false),
             children_list: ListComponent::new(false),
         }
-    }
-}
-
-impl Default for RelationshipState {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -15,8 +15,8 @@ pub struct SprintViewState {
     pub completed_component: CardListComponent,
 }
 
-impl SprintViewState {
-    pub fn new() -> Self {
+impl Default for SprintViewState {
+    fn default() -> Self {
         Self {
             panel: SprintTaskPanel::Uncompleted,
             uncompleted_cards: CardList::new(CardListId::All),
@@ -45,11 +45,5 @@ impl SprintViewState {
                     .with_multi_select(false),
             ),
         }
-    }
-}
-
-impl Default for SprintViewState {
-    fn default() -> Self {
-        Self::new()
     }
 }

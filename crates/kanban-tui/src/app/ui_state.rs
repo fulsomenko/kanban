@@ -8,18 +8,12 @@ pub struct UiState {
     pub help_pending_action: Option<(Instant, KeybindingAction)>,
 }
 
-impl UiState {
-    pub fn new() -> Self {
+impl Default for UiState {
+    fn default() -> Self {
         Self {
             banner: None,
             help_list: ListComponent::new(false),
             help_pending_action: None,
         }
-    }
-}
-
-impl Default for UiState {
-    fn default() -> Self {
-        Self::new()
     }
 }

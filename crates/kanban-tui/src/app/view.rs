@@ -12,12 +12,6 @@ pub struct ViewState {
 
 impl Default for ViewState {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ViewState {
-    pub fn new() -> Self {
         Self {
             strategy: Box::new(UnifiedViewStrategy::grouped()),
             card_list_component: CardListComponent::new(
