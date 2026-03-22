@@ -1,12 +1,44 @@
+pub mod mode;
+pub use mode::{AppMode, DialogMode};
+
+pub mod focus;
+pub use focus::{BoardFocus, CardFocus, Focus, FocusState};
+
+pub mod sprint_view;
+pub use sprint_view::{SprintTaskPanel, SprintViewState};
+
+pub mod animation;
+pub use animation::{AnimationState, CardAnimation};
+
+pub mod selection;
+pub use selection::SelectionHub;
+
+pub mod filter;
+pub use filter::FilterState;
+
+pub mod multi_select;
+pub use multi_select::MultiSelectState;
+
+pub mod dialog_input;
+pub use dialog_input::DialogInputState;
+
+pub mod relationship;
+pub use relationship::RelationshipState;
+
+pub mod view;
+pub use view::ViewState;
+
+pub mod persistence;
+pub use persistence::PersistenceState;
+
+pub mod ui_state;
+pub use ui_state::UiState;
+
 use crate::{
-    card_list::{CardList, CardListId},
-    card_list_component::{CardListComponent, CardListComponentConfig},
     clipboard,
-    components::{generic_list::ListComponent, Banner},
+    components::Banner,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
-    filters::FilterDialogState,
-    search::SearchState,
     state::TuiSnapshot,
     tui_context::TuiContext,
     ui,
@@ -16,7 +48,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, Editable, InputState, KanbanResult, SelectionState};
+use kanban_core::{AppConfig, Editable, InputState, KanbanResult};
 use kanban_domain::AnimationType;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
@@ -27,16 +59,8 @@ use kanban_domain::{
 };
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
-use std::collections::HashMap;
 use std::io;
 use std::time::Instant;
-
-const ANIMATION_DURATION_MS: u128 = 150;
-
-pub struct CardAnimation {
-    pub animation_type: AnimationType,
-    pub start_time: Instant,
-}
 
 pub struct App {
     pub should_quit: bool,
@@ -45,87 +69,19 @@ pub struct App {
     pub mode_stack: Vec<AppMode>,
     pub input: InputState,
     pub ctx: TuiContext,
-    pub board_selection: SelectionState,
-    pub active_board_index: Option<usize>,
-    pub active_card_index: Option<usize>,
-    pub animating_cards: HashMap<uuid::Uuid, CardAnimation>,
-    pub sprint_selection: SelectionState,
-    pub active_sprint_index: Option<usize>,
-    pub active_sprint_filters: std::collections::HashSet<uuid::Uuid>,
-    pub hide_assigned_cards: bool,
-    pub sprint_assign_selection: SelectionState,
-    pub focus: Focus,
-    pub card_focus: CardFocus,
-    pub board_focus: BoardFocus,
-    pub import_files: Vec<String>,
-    pub import_selection: SelectionState,
-    pub save_file: Option<String>,
     pub app_config: AppConfig,
-    pub sort_field_selection: SelectionState,
-    pub current_sort_field: Option<SortField>,
-    pub current_sort_order: Option<SortOrder>,
-    pub selected_cards: std::collections::HashSet<uuid::Uuid>,
-    pub selection_mode_active: bool,
-    pub priority_selection: SelectionState,
-    pub column_selection: SelectionState,
-    pub task_list_view_selection: SelectionState,
-    pub help_list: ListComponent,
-    pub last_frame_area: ratatui::layout::Rect,
-    pub help_pending_action: Option<(Instant, crate::keybindings::KeybindingAction)>,
-    pub sprint_task_panel: SprintTaskPanel,
-    pub sprint_uncompleted_cards: CardList,
-    pub sprint_completed_cards: CardList,
-    pub sprint_uncompleted_component: CardListComponent,
-    pub sprint_completed_component: CardListComponent,
-    pub view_strategy: Box<dyn ViewStrategy>,
-    pub card_list_component: CardListComponent,
-    pub search: SearchState,
-    pub filter_dialog_state: Option<FilterDialogState>,
-    pub relationship_card_ids: Vec<uuid::Uuid>,
-    pub relationship_selected: std::collections::HashSet<uuid::Uuid>,
-    pub relationship_selection: SelectionState,
-    pub relationship_search: String,
-    pub relationship_search_active: bool,
-    pub parents_list: ListComponent,
-    pub children_list: ListComponent,
-    pub card_navigation_history: Vec<usize>,
-    pub viewport_height: usize,
+    pub selection: SelectionHub,
+    pub animation: AnimationState,
+    pub filter: FilterState,
+    pub dialog_input: DialogInputState,
+    pub focus: FocusState,
+    pub persistence: PersistenceState,
+    pub multi_select: MultiSelectState,
+    pub ui_state: UiState,
+    pub sprint_view: SprintViewState,
+    pub view: ViewState,
+    pub relationship: RelationshipState,
     pub pending_key: Option<char>,
-    pub file_change_rx: Option<tokio::sync::broadcast::Receiver<kanban_persistence::ChangeEvent>>,
-    pub file_watcher: Option<kanban_persistence::FileWatcher>,
-    pub save_worker_handle: Option<tokio::task::JoinHandle<()>>,
-    pub save_completion_rx: Option<tokio::sync::mpsc::UnboundedReceiver<()>>,
-    pub banner: Option<Banner>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Focus {
-    Boards,
-    Cards,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum CardFocus {
-    Title,
-    Metadata,
-    Description,
-    Parents,
-    Children,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BoardFocus {
-    Name,
-    Description,
-    Settings,
-    Sprints,
-    Columns,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SprintTaskPanel {
-    Uncompleted,
-    Completed,
 }
 
 pub enum CardField {
@@ -136,48 +92,6 @@ pub enum CardField {
 pub enum BoardField {
     Name,
     Description,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DialogMode {
-    CreateBoard,
-    CreateCard,
-    RenameBoard,
-    ExportBoard,
-    ExportAll,
-    ImportBoard,
-    SetCardPoints,
-    SetCardPriority,
-    SetMultipleCardsPriority,
-    SetBranchPrefix,
-    OrderCards,
-    CreateSprint,
-    AssignCardToSprint,
-    AssignMultipleCardsToSprint,
-    CreateColumn,
-    RenameColumn,
-    DeleteColumnConfirm,
-    SelectTaskListView,
-    SetSprintPrefix,
-    SetSprintCardPrefix,
-    ConfirmSprintPrefixCollision,
-    FilterOptions,
-    ConflictResolution,
-    ExternalChangeDetected,
-    ManageParents,
-    ManageChildren,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AppMode {
-    Normal,
-    CardDetail,
-    BoardDetail,
-    SprintDetail,
-    Search,
-    ArchivedCardsView,
-    Help(Box<AppMode>),
-    Dialog(DialogMode),
 }
 
 impl App {
@@ -196,88 +110,26 @@ impl App {
             mode_stack: Vec::new(),
             input: InputState::new(),
             ctx,
-            board_selection: SelectionState::new(),
-            active_board_index: None,
-            active_card_index: None,
-            animating_cards: HashMap::new(),
-            sprint_selection: SelectionState::new(),
-            active_sprint_index: None,
-            active_sprint_filters: std::collections::HashSet::new(),
-            hide_assigned_cards: false,
-            sprint_assign_selection: SelectionState::new(),
-            focus: Focus::Boards,
-            card_focus: CardFocus::Title,
-            board_focus: BoardFocus::Name,
-            import_files: Vec::new(),
-            import_selection: SelectionState::new(),
-            save_file: save_file.clone(),
             app_config,
-            sort_field_selection: SelectionState::new(),
-            current_sort_field: None,
-            current_sort_order: None,
-            selected_cards: std::collections::HashSet::new(),
-            selection_mode_active: false,
-            priority_selection: SelectionState::new(),
-            column_selection: SelectionState::new(),
-            task_list_view_selection: SelectionState::new(),
-            help_list: ListComponent::new(false),
-            last_frame_area: ratatui::layout::Rect::default(),
-            help_pending_action: None,
-            sprint_task_panel: SprintTaskPanel::Uncompleted,
-            sprint_uncompleted_cards: CardList::new(CardListId::All),
-            sprint_completed_cards: CardList::new(CardListId::All),
-            sprint_uncompleted_component: CardListComponent::new(
-                CardListId::All,
-                CardListComponentConfig::new()
-                    .with_actions(vec![
-                        crate::card_list_component::CardListActionType::Navigation,
-                        crate::card_list_component::CardListActionType::Selection,
-                        crate::card_list_component::CardListActionType::Editing,
-                        crate::card_list_component::CardListActionType::Completion,
-                        crate::card_list_component::CardListActionType::Priority,
-                        crate::card_list_component::CardListActionType::Sorting,
-                    ])
-                    .with_movement(false),
-            ),
-            sprint_completed_component: CardListComponent::new(
-                CardListId::All,
-                CardListComponentConfig::new()
-                    .with_actions(vec![
-                        crate::card_list_component::CardListActionType::Navigation,
-                        crate::card_list_component::CardListActionType::Selection,
-                        crate::card_list_component::CardListActionType::Sorting,
-                    ])
-                    .with_multi_select(false),
-            ),
-            view_strategy: Box::new(UnifiedViewStrategy::grouped()),
-            card_list_component: CardListComponent::new(
-                CardListId::All,
-                CardListComponentConfig::new(),
-            ),
-            search: SearchState::new(),
-            filter_dialog_state: None,
-            relationship_card_ids: Vec::new(),
-            relationship_selected: std::collections::HashSet::new(),
-            relationship_selection: SelectionState::new(),
-            relationship_search: String::new(),
-            relationship_search_active: false,
-            parents_list: ListComponent::new(false),
-            children_list: ListComponent::new(false),
-            card_navigation_history: Vec::new(),
-            viewport_height: 20,
+            selection: SelectionHub::default(),
+            animation: AnimationState::default(),
+            filter: FilterState::default(),
+            dialog_input: DialogInputState::default(),
+            focus: FocusState::default(),
+            persistence: PersistenceState::new(save_file.clone(), save_completion_rx),
+            multi_select: MultiSelectState::default(),
+            ui_state: UiState::default(),
+            sprint_view: SprintViewState::default(),
+            view: ViewState::default(),
+            relationship: RelationshipState::default(),
             pending_key: None,
-            file_change_rx: None,
-            file_watcher: None,
-            save_worker_handle: None,
-            save_completion_rx,
-            banner: None,
         };
 
         if let Some(ref filename) = save_file {
             if std::path::Path::new(filename).exists() {
                 if let Err(e) = app.import_board_from_file(filename) {
                     tracing::error!("Failed to load file {}: {}", filename, e);
-                    app.save_file = None;
+                    app.persistence.save_file = None;
                     app.ctx.state_manager.clear_store();
                 } else {
                     // Clear undo/redo history after initial file load (not an undoable action)
@@ -322,15 +174,15 @@ impl App {
     }
 
     pub fn set_error(&mut self, message: impl Into<String>) {
-        self.banner = Some(Banner::error(message));
+        self.ui_state.banner = Some(Banner::error(message));
     }
 
     pub fn set_success(&mut self, message: impl Into<String>) {
-        self.banner = Some(Banner::success(message));
+        self.ui_state.banner = Some(Banner::success(message));
     }
 
     pub fn clear_banner(&mut self) {
-        self.banner = None;
+        self.ui_state.banner = None;
     }
 
     fn keycode_matches_binding_key(
@@ -431,8 +283,8 @@ impl App {
             KeybindingAction::SelectAllCards => self.handle_select_all_cards_in_view(),
             KeybindingAction::SetSelectedCardsPriority => self.handle_set_selected_cards_priority(),
             KeybindingAction::Search => {
-                if self.focus == Focus::Cards {
-                    self.search.activate();
+                if self.focus.active == Focus::Cards {
+                    self.filter.search.activate();
                     self.mode = AppMode::Search;
                 }
             }
@@ -468,7 +320,7 @@ impl App {
         let mut should_restart_events = false;
 
         // Clear banner on any key press
-        if self.banner.is_some() {
+        if self.ui_state.banner.is_some() {
             self.clear_banner();
             return false;
         }
@@ -515,8 +367,10 @@ impl App {
             let previous_mode = self.mode.clone();
             let provider = crate::keybindings::KeybindingRegistry::get_provider(self);
             let context = provider.get_context();
-            self.help_list.update_item_count(context.bindings.len());
-            self.help_list.set_scroll_offset(0);
+            self.ui_state
+                .help_list
+                .update_item_count(context.bindings.len());
+            self.ui_state.help_list.set_scroll_offset(0);
             self.mode = AppMode::Help(Box::new(previous_mode));
             return false;
         }
@@ -537,8 +391,8 @@ impl App {
             AppMode::Normal => match key.code {
                 KeyCode::Char('/') => {
                     self.pending_key = None;
-                    if self.focus == Focus::Cards {
-                        self.search.activate();
+                    if self.focus.active == Focus::Cards {
+                        self.filter.search.activate();
                         self.mode = AppMode::Search;
                     }
                 }
@@ -564,7 +418,7 @@ impl App {
                 }
                 KeyCode::Char('n') => {
                     self.pending_key = None;
-                    match self.focus {
+                    match self.focus.active {
                         Focus::Boards => self.handle_create_board_key(),
                         Focus::Cards => self.handle_create_card_key(),
                     }
@@ -575,7 +429,7 @@ impl App {
                 }
                 KeyCode::Char('e') => {
                     self.pending_key = None;
-                    match self.focus {
+                    match self.focus.active {
                         Focus::Boards => self.handle_edit_board_key(),
                         Focus::Cards => {
                             should_restart_events =
@@ -613,7 +467,7 @@ impl App {
                 }
                 KeyCode::Char('s') => {
                     self.pending_key = None;
-                    if self.focus == Focus::Cards {
+                    if self.focus.active == Focus::Cards {
                         self.handle_manage_children_from_list();
                     }
                 }
@@ -793,11 +647,11 @@ impl App {
         use crossterm::event::KeyCode;
         match key_code {
             KeyCode::Char(c) => {
-                self.search.input.insert_char(c);
+                self.filter.search.input.insert_char(c);
                 self.refresh_view();
             }
             KeyCode::Backspace => {
-                self.search.input.backspace();
+                self.filter.search.input.backspace();
                 self.refresh_view();
             }
             KeyCode::Enter => {
@@ -805,7 +659,7 @@ impl App {
                 self.refresh_view();
             }
             KeyCode::Esc => {
-                self.search.deactivate();
+                self.filter.search.deactivate();
                 self.mode = AppMode::Normal;
                 self.refresh_view();
             }
@@ -815,8 +669,8 @@ impl App {
 
     fn handle_archived_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
         use crossterm::event::KeyCode;
-        if self.focus != Focus::Cards {
-            self.focus = Focus::Cards;
+        if self.focus.active != Focus::Cards {
+            self.focus.active = Focus::Cards;
         }
 
         match key_code {
@@ -842,15 +696,15 @@ impl App {
     /// first `ensure_selected_visible` call — changing the available height. A
     /// second pass with the updated height corrects any residual mis-alignment.
     fn scroll_help_into_view(&mut self) {
-        let raw = crate::ui::help_popup_viewport_height(self.last_frame_area);
+        let raw = crate::ui::help_popup_viewport_height(self.view.last_frame_area);
         if raw == 0 {
             return;
         }
-        let h0 = self.help_list.get_adjusted_viewport_height(raw);
-        self.help_list.ensure_selected_visible(h0);
-        let h1 = self.help_list.get_adjusted_viewport_height(raw);
+        let h0 = self.ui_state.help_list.get_adjusted_viewport_height(raw);
+        self.ui_state.help_list.ensure_selected_visible(h0);
+        let h1 = self.ui_state.help_list.get_adjusted_viewport_height(raw);
         if h1 != h0 {
-            self.help_list.ensure_selected_visible(h1);
+            self.ui_state.help_list.ensure_selected_visible(h1);
         }
     }
 
@@ -860,21 +714,21 @@ impl App {
 
         match key_code {
             KeyCode::Char('j') | KeyCode::Down => {
-                self.help_pending_action = None;
-                self.help_list.navigate_down();
+                self.ui_state.help_pending_action = None;
+                self.ui_state.help_list.navigate_down();
                 self.scroll_help_into_view();
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.help_pending_action = None;
-                self.help_list.navigate_up();
+                self.ui_state.help_pending_action = None;
+                self.ui_state.help_list.navigate_up();
                 self.scroll_help_into_view();
             }
             KeyCode::Char('h') | KeyCode::Char('l') => {
-                self.help_pending_action = None;
+                self.ui_state.help_pending_action = None;
             }
             KeyCode::Enter => {
-                self.help_pending_action = None;
-                if let Some(index) = self.help_list.get_selected_index() {
+                self.ui_state.help_pending_action = None;
+                if let Some(index) = self.ui_state.help_list.get_selected_index() {
                     let provider = KeybindingRegistry::get_provider(self);
                     let context = provider.get_context();
 
@@ -884,20 +738,20 @@ impl App {
                         } else {
                             self.mode = AppMode::Normal;
                         }
-                        self.help_list.reset();
+                        self.ui_state.help_list.reset();
 
                         self.execute_action(&binding.action);
                     }
                 }
             }
             KeyCode::Esc | KeyCode::Char('?') => {
-                self.help_pending_action = None;
+                self.ui_state.help_pending_action = None;
                 if let AppMode::Help(previous_mode) = &self.mode {
                     self.mode = (**previous_mode).clone();
                 } else {
                     self.mode = AppMode::Normal;
                 }
-                self.help_list.reset();
+                self.ui_state.help_list.reset();
             }
             _ => {
                 let provider = KeybindingRegistry::get_provider(self);
@@ -909,9 +763,9 @@ impl App {
                     .enumerate()
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
-                    self.help_list.jump_to(index);
+                    self.ui_state.help_list.jump_to(index);
                     self.scroll_help_into_view();
-                    self.help_pending_action = Some((Instant::now(), binding.action));
+                    self.ui_state.help_pending_action = Some((Instant::now(), binding.action));
                 }
             }
         }
@@ -921,9 +775,9 @@ impl App {
         let now = Instant::now();
         let mut completed_animations = Vec::new();
 
-        for (&card_id, animation) in &self.animating_cards {
+        for (&card_id, animation) in &self.animation.animating {
             let elapsed = now.duration_since(animation.start_time).as_millis();
-            if elapsed >= ANIMATION_DURATION_MS {
+            if elapsed >= animation::ANIMATION_DURATION_MS {
                 completed_animations.push((card_id, animation.animation_type));
             }
         }
@@ -936,7 +790,7 @@ impl App {
         let mut last_archive_position = None;
 
         for (card_id, animation_type) in completed_animations {
-            self.animating_cards.remove(&card_id);
+            self.animation.animating.remove(&card_id);
             match animation_type {
                 AnimationType::Archiving => {
                     if let Some(card_pos) = self.ctx.cards.iter().position(|c| c.id == card_id) {
@@ -1015,9 +869,9 @@ impl App {
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
-        let sprint_filter = if !self.active_sprint_filters.is_empty() {
+        let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
             Some(SprintFilter::in_sprints(
-                self.active_sprint_filters.iter().copied(),
+                self.filter.active_sprint_filters.iter().copied(),
             ))
         } else {
             None
@@ -1035,7 +889,7 @@ impl App {
                         return false;
                     }
                 }
-                if self.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
+                if self.filter.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
                     return false;
                 }
                 true
@@ -1046,9 +900,9 @@ impl App {
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
         let board = self.ctx.boards.iter().find(|b| b.id == board_id).unwrap();
         let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
-        let sprint_filter = if !self.active_sprint_filters.is_empty() {
+        let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
             Some(SprintFilter::in_sprints(
-                self.active_sprint_filters.iter().copied(),
+                self.filter.active_sprint_filters.iter().copied(),
             ))
         } else {
             None
@@ -1067,7 +921,7 @@ impl App {
                         return false;
                     }
                 }
-                if self.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
+                if self.filter.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
                     return false;
                 }
                 true
@@ -1082,7 +936,7 @@ impl App {
     }
 
     pub fn get_selected_card_in_context(&self) -> Option<&Card> {
-        if let Some(task_list) = self.view_strategy.get_active_task_list() {
+        if let Some(task_list) = self.view.strategy.get_active_task_list() {
             if let Some(card_id) = task_list.get_selected_card_id() {
                 if self.mode == AppMode::ArchivedCardsView {
                     return self
@@ -1100,13 +954,14 @@ impl App {
     }
 
     pub fn get_selected_card_id(&self) -> Option<uuid::Uuid> {
-        self.view_strategy
+        self.view
+            .strategy
             .get_active_task_list()
             .and_then(|list| list.get_selected_card_id())
     }
 
     pub fn select_card_by_id(&mut self, card_id: uuid::Uuid) {
-        if let Some(task_list) = self.view_strategy.get_active_task_list_mut() {
+        if let Some(task_list) = self.view.strategy.get_active_task_list_mut() {
             task_list.select_card(card_id);
         }
     }
@@ -1126,41 +981,49 @@ impl App {
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &self.ctx.cards);
 
-        self.sprint_uncompleted_cards.update_cards(uncompleted_ids);
-        self.sprint_completed_cards.update_cards(completed_ids);
+        self.sprint_view
+            .uncompleted_cards
+            .update_cards(uncompleted_ids);
+        self.sprint_view.completed_cards.update_cards(completed_ids);
 
-        self.sprint_uncompleted_component
-            .update_cards(self.sprint_uncompleted_cards.cards.clone());
-        self.sprint_completed_component
-            .update_cards(self.sprint_completed_cards.cards.clone());
+        self.sprint_view
+            .uncompleted_component
+            .update_cards(self.sprint_view.uncompleted_cards.cards.clone());
+        self.sprint_view
+            .completed_component
+            .update_cards(self.sprint_view.completed_cards.cards.clone());
 
         // Default to uncompleted panel
-        self.sprint_task_panel = SprintTaskPanel::Uncompleted;
+        self.sprint_view.panel = SprintTaskPanel::Uncompleted;
     }
 
     pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
         let sorted_uncompleted_ids = sort_card_ids(
-            &self.sprint_uncompleted_cards.cards,
+            &self.sprint_view.uncompleted_cards.cards,
             &self.ctx.cards,
             sort_field,
             sort_order,
         );
         let sorted_completed_ids = sort_card_ids(
-            &self.sprint_completed_cards.cards,
+            &self.sprint_view.completed_cards.cards,
             &self.ctx.cards,
             sort_field,
             sort_order,
         );
 
-        self.sprint_uncompleted_cards
+        self.sprint_view
+            .uncompleted_cards
             .update_cards(sorted_uncompleted_ids);
-        self.sprint_completed_cards
+        self.sprint_view
+            .completed_cards
             .update_cards(sorted_completed_ids);
 
-        self.sprint_uncompleted_component
-            .update_cards(self.sprint_uncompleted_cards.cards.clone());
-        self.sprint_completed_component
-            .update_cards(self.sprint_completed_cards.cards.clone());
+        self.sprint_view
+            .uncompleted_component
+            .update_cards(self.sprint_view.uncompleted_cards.cards.clone());
+        self.sprint_view
+            .completed_component
+            .update_cards(self.sprint_view.completed_cards.cards.clone());
     }
 
     /// Execute multiple commands as a batch with a single pause/resume cycle
@@ -1183,11 +1046,14 @@ impl App {
     }
 
     pub fn refresh_view(&mut self) {
-        let board_idx = self.active_board_index.or(self.board_selection.get());
+        let board_idx = self
+            .selection
+            .active_board_index
+            .or(self.selection.board.get());
         if let Some(idx) = board_idx {
             if let Some(board) = self.ctx.boards.get(idx) {
-                let search_query = if self.search.is_active {
-                    Some(self.search.query())
+                let search_query = if self.filter.search.is_active {
+                    Some(self.filter.search.query())
                 } else {
                     None
                 };
@@ -1208,11 +1074,11 @@ impl App {
                     all_cards: &cards_for_display,
                     all_columns: &self.ctx.columns,
                     all_sprints: &self.ctx.sprints,
-                    active_sprint_filters: self.active_sprint_filters.clone(),
-                    hide_assigned_cards: self.hide_assigned_cards,
+                    active_sprint_filters: self.filter.active_sprint_filters.clone(),
+                    hide_assigned_cards: self.filter.hide_assigned_cards,
                     search_query,
                 };
-                self.view_strategy.refresh_task_lists(&ctx);
+                self.view.strategy.refresh_task_lists(&ctx);
             }
         }
         self.sync_card_list_component();
@@ -1285,8 +1151,9 @@ impl App {
     }
 
     pub fn sync_card_list_component(&mut self) {
-        if let Some(active_list) = self.view_strategy.get_active_task_list() {
-            self.card_list_component
+        if let Some(active_list) = self.view.strategy.get_active_task_list() {
+            self.view
+                .card_list_component
                 .update_cards(active_list.cards.clone());
         }
     }
@@ -1300,12 +1167,12 @@ impl App {
             kanban_domain::TaskListView::ColumnView => Box::new(UnifiedViewStrategy::kanban()),
         };
 
-        self.view_strategy = new_strategy;
+        self.view.strategy = new_strategy;
         self.refresh_view();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
-        if let Some(board_idx) = self.board_selection.get() {
+        if let Some(board_idx) = self.selection.board.get() {
             if let Some(board) = self.ctx.boards.get(board_idx) {
                 let board_export = BoardExporter::export_board(
                     board,
@@ -1338,7 +1205,7 @@ impl App {
     }
 
     pub fn auto_save(&self) -> io::Result<()> {
-        if let Some(ref filename) = self.save_file {
+        if let Some(ref filename) = self.persistence.save_file {
             let export = BoardExporter::export_all_boards(
                 &self.ctx.boards,
                 &self.ctx.columns,
@@ -1380,7 +1247,7 @@ impl App {
         event_handler: &EventHandler,
         field: BoardField,
     ) -> io::Result<()> {
-        if let Some(board_idx) = self.board_selection.get() {
+        if let Some(board_idx) = self.selection.board.get() {
             if let Some(board) = self.ctx.boards.get(board_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
@@ -1435,7 +1302,7 @@ impl App {
         event_handler: &EventHandler,
         field: CardField,
     ) -> io::Result<()> {
-        if let Some(card_idx) = self.active_card_index {
+        if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
@@ -1519,12 +1386,12 @@ impl App {
 
         // Initialize file watching if a save file is configured
         // (Done before spawning save worker so worker can pause/resume it)
-        if let Some(ref save_file) = self.save_file {
+        if let Some(ref save_file) = self.persistence.save_file {
             use kanban_persistence::ChangeDetector;
             tracing::info!("Initializing file watcher for: {}", save_file);
             let watcher = kanban_persistence::FileWatcher::new();
             let rx = watcher.subscribe();
-            self.file_change_rx = Some(rx);
+            self.persistence.file_change_rx = Some(rx);
             tracing::debug!("File change broadcast receiver subscribed");
 
             let path = std::path::PathBuf::from(save_file);
@@ -1539,7 +1406,7 @@ impl App {
             }
 
             // Store the watcher to keep the background task alive
-            self.file_watcher = Some(watcher.clone());
+            self.persistence.file_watcher = Some(watcher.clone());
             // Also set it on the state manager (wrapped in Arc) so queue_snapshot can pause it
             let watcher_arc = std::sync::Arc::new(watcher);
             self.ctx.state_manager.set_file_watcher(watcher_arc);
@@ -1550,7 +1417,7 @@ impl App {
             tracing::debug!("Save channel receiver available");
             if let Some(store) = self.ctx.state_manager.store().cloned() {
                 let instance_id = self.ctx.state_manager.instance_id();
-                let file_watcher = self.file_watcher.clone();
+                let file_watcher = self.persistence.file_watcher.clone();
                 let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
 
                 tracing::info!("Spawning save worker to process snapshots");
@@ -1623,7 +1490,7 @@ impl App {
                     }
                     tracing::info!("Save worker exited recv loop (channel closed)");
                 });
-                self.save_worker_handle = Some(handle);
+                self.persistence.save_worker_handle = Some(handle);
             } else {
                 tracing::warn!("Could not spawn save worker: no store available");
             }
@@ -1650,7 +1517,7 @@ impl App {
                                 self.handle_animation_tick();
 
                                 // Auto-clear banner after 3 seconds
-                                if let Some(ref banner) = self.banner {
+                                if let Some(ref banner) = self.ui_state.banner {
                                     if banner.is_expired(std::time::Duration::from_secs(3)) {
                                         self.clear_banner();
                                     }
@@ -1663,7 +1530,7 @@ impl App {
                                     Some('o') => {
                                         self.pending_key = None;
                                         // Pause file watcher to avoid conflict detection for our own save
-                                        if let Some(ref watcher) = self.file_watcher {
+                                        if let Some(ref watcher) = self.persistence.file_watcher {
                                             watcher.pause();
                                         }
                                         let snapshot = kanban_domain::Snapshot::from_app(self);
@@ -1671,7 +1538,7 @@ impl App {
                                             tracing::error!("Failed to force overwrite: {}", e);
                                         }
                                         // Resume file watcher after save completes
-                                        if let Some(ref watcher) = self.file_watcher {
+                                        if let Some(ref watcher) = self.persistence.file_watcher {
                                             watcher.resume();
                                         }
                                     }
@@ -1708,17 +1575,17 @@ impl App {
                                 }
 
                                 // Check if help menu pending action should execute
-                                if let Some((start_time, action)) = &self.help_pending_action {
+                                if let Some((start_time, action)) = &self.ui_state.help_pending_action {
                                     if start_time.elapsed().as_millis() >= 100 {
                                         if let AppMode::Help(previous_mode) = &self.mode {
                                             self.mode = (**previous_mode).clone();
                                         } else {
                                             self.mode = AppMode::Normal;
                                         }
-                                        self.help_list.reset();
+                                        self.ui_state.help_list.reset();
 
                                         let action = *action;
-                                        self.help_pending_action = None;
+                                        self.ui_state.help_pending_action = None;
                                         self.execute_action(&action);
                                     }
                                 }
@@ -1732,7 +1599,7 @@ impl App {
                         }
                     }
                     _ = async {
-                        if let Some(ref mut rx) = &mut self.save_completion_rx {
+                        if let Some(ref mut rx) = &mut self.persistence.save_completion_rx {
                             rx.recv().await
                         } else {
                             std::future::pending().await
@@ -1747,7 +1614,7 @@ impl App {
                         }
                     }
                     Some(_change_event) = async {
-                        if let Some(ref mut rx) = &mut self.file_change_rx {
+                        if let Some(ref mut rx) = &mut self.persistence.file_change_rx {
                             match rx.recv().await {
                                 Ok(event) => {
                                     tracing::debug!(
@@ -1823,7 +1690,7 @@ impl App {
         self.ctx.state_manager.close_save_channel(); // Close save_tx channel to signal worker to finish
 
         // Wait for save worker to finish processing all queued saves
-        if let Some(handle) = self.save_worker_handle.take() {
+        if let Some(handle) = self.persistence.save_worker_handle.take() {
             handle.await.ok();
             tracing::info!("Save worker finished, all saves complete");
         }
@@ -1852,7 +1719,7 @@ impl App {
             self.ctx.sprints.extend(snapshot.sprints);
             self.ctx.graph = snapshot.graph;
 
-            self.board_selection.set(Some(first_new_index));
+            self.selection.board.set(Some(first_new_index));
             self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
             // Queue snapshot for persistence
@@ -1873,7 +1740,7 @@ impl App {
         self.ctx.archived_cards.extend(entities.archived_cards);
         self.ctx.sprints.extend(entities.sprints);
 
-        self.board_selection.set(Some(first_new_index));
+        self.selection.board.set(Some(first_new_index));
 
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
@@ -1925,8 +1792,8 @@ impl App {
     where
         F: Fn(&Card, &Board, &[Sprint], &str) -> String,
     {
-        if let Some(card_idx) = self.active_card_index {
-            if let Some(board_idx) = self.active_board_index {
+        if let Some(card_idx) = self.selection.active_card_index {
+            if let Some(board_idx) = self.selection.active_board_index {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     if let Some(card) = self.ctx.cards.get(card_idx) {
                         let output = get_output(
@@ -1959,7 +1826,7 @@ impl App {
     }
 
     pub fn get_current_priority_selection_index(&self) -> usize {
-        if let Some(card_idx) = self.active_card_index {
+        if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
@@ -1974,10 +1841,10 @@ impl App {
     }
 
     pub fn get_current_sprint_selection_index(&self) -> usize {
-        if let Some(card_idx) = self.active_card_index {
+        if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.ctx.cards.get(card_idx) {
                 if let Some(card_sprint_id) = card.sprint_id {
-                    if let Some(board_idx) = self.active_board_index {
+                    if let Some(board_idx) = self.selection.active_board_index {
                         if let Some(board) = self.ctx.boards.get(board_idx) {
                             let board_sprints = Sprint::assignable(&self.ctx.sprints, board.id);
                             for (idx, sprint) in board_sprints.iter().enumerate() {
@@ -1994,7 +1861,7 @@ impl App {
     }
 
     pub fn get_current_sort_field_selection_index(&self) -> usize {
-        if let Some(sort_field) = self.current_sort_field {
+        if let Some(sort_field) = self.filter.current_sort_field {
             return match sort_field {
                 SortField::Points => 0,
                 SortField::Priority => 1,
@@ -2040,20 +1907,18 @@ mod tests {
 
     #[test]
     fn test_scroll_help_into_view_scrolls_deep_item() {
-        let mut app = App {
-            last_frame_area: Rect {
-                x: 0,
-                y: 0,
-                width: 100,
-                height: 50,
-            },
-            ..App::default()
+        let mut app = App::default();
+        app.view.last_frame_area = Rect {
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 50,
         };
-        app.help_list.update_item_count(50);
-        app.help_list.jump_to(49);
+        app.ui_state.help_list.update_item_count(50);
+        app.ui_state.help_list.jump_to(49);
         app.scroll_help_into_view();
         assert!(
-            app.help_list.get_scroll_offset() > 0,
+            app.ui_state.help_list.get_scroll_offset() > 0,
             "help list should have scrolled to bring item 49 into view"
         );
     }

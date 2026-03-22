@@ -17,7 +17,7 @@ fn test_export_single_board() {
     app.ctx.boards.push(board.clone());
     app.ctx.columns.push(column.clone());
     app.ctx.cards.push(card.clone());
-    app.board_selection.set(Some(0));
+    app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
     app.export_board_with_filename().unwrap();
@@ -75,7 +75,7 @@ fn test_export_empty_boards() {
     let file_path = dir.path().join("test_empty.json");
 
     let (mut app, _rx) = App::new(None);
-    app.save_file = Some(file_path.to_str().unwrap().to_string());
+    app.persistence.save_file = Some(file_path.to_str().unwrap().to_string());
 
     app.auto_save().unwrap();
 
@@ -186,7 +186,7 @@ fn test_failed_import_clears_save_file() {
 
     let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
 
-    assert!(app.save_file.is_none());
+    assert!(app.persistence.save_file.is_none());
 }
 
 #[test]
@@ -211,7 +211,7 @@ fn test_export_import_sprint_and_card_prefixes() {
     app.ctx.columns.push(column);
     app.ctx.cards.push(card);
     app.ctx.sprints.push(sprint.clone());
-    app.board_selection.set(Some(0));
+    app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
     // Export

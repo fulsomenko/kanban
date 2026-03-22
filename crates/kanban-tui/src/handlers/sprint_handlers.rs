@@ -4,14 +4,14 @@ use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
 
 impl App {
     pub fn handle_create_sprint_key(&mut self) {
-        if self.board_focus == BoardFocus::Sprints && self.board_selection.get().is_some() {
+        if self.focus.board_focus == BoardFocus::Sprints && self.selection.board.get().is_some() {
             self.open_dialog(DialogMode::CreateSprint);
             self.input.clear();
         }
     }
 
     pub fn handle_activate_sprint_key(&mut self) {
-        if let Some(sprint_idx) = self.active_sprint_index {
+        if let Some(sprint_idx) = self.selection.active_sprint_index {
             // Collect sprint info before mutations
             let sprint_info = {
                 if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
@@ -19,7 +19,7 @@ impl App {
                         Some((
                             sprint.id,
                             sprint.formatted_name(
-                                &self.ctx.boards[self.board_selection.get().unwrap_or(0)],
+                                &self.ctx.boards[self.selection.board.get().unwrap_or(0)],
                                 "sprint",
                             ),
                         ))
@@ -32,7 +32,10 @@ impl App {
             };
 
             if let Some((sprint_id, _)) = sprint_info {
-                let board_idx = self.active_board_index.or(self.board_selection.get());
+                let board_idx = self
+                    .selection
+                    .active_board_index
+                    .or(self.selection.board.get());
                 if let Some(board_idx) = board_idx {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
                         let duration = board.sprint_duration_days.unwrap_or(14);
@@ -76,14 +79,17 @@ impl App {
     }
 
     pub fn handle_complete_sprint_key(&mut self) {
-        if let Some(sprint_idx) = self.active_sprint_index {
+        if let Some(sprint_idx) = self.selection.active_sprint_index {
             // Collect sprint and board info before mutations
             let sprint_info = {
                 if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                     if sprint.status == SprintStatus::Active
                         || sprint.status == SprintStatus::Planning
                     {
-                        let board_idx = self.active_board_index.or(self.board_selection.get());
+                        let board_idx = self
+                            .selection
+                            .active_board_index
+                            .or(self.selection.board.get());
                         board_idx.and_then(|board_idx| {
                             self.ctx.boards.get(board_idx).map(|board| {
                                 (sprint.id, board.id, sprint.formatted_name(board, "sprint"))
@@ -115,19 +121,22 @@ impl App {
                     return;
                 }
 
-                self.active_sprint_filters.remove(&sprint_id);
+                self.filter.active_sprint_filters.remove(&sprint_id);
 
                 tracing::info!("Completed sprint: {}", sprint_name);
 
                 self.pop_mode();
-                self.board_focus = BoardFocus::Sprints;
-                self.active_sprint_index = None;
+                self.focus.board_focus = BoardFocus::Sprints;
+                self.selection.active_sprint_index = None;
             }
         }
     }
 
     pub fn create_sprint(&mut self) {
-        let board_idx = self.active_board_index.or(self.board_selection.get());
+        let board_idx = self
+            .selection
+            .active_board_index
+            .or(self.selection.board.get());
         if let Some(board_idx) = board_idx {
             let (sprint_number, name_index, board_id, effective_sprint_prefix) = {
                 if let Some(board) = self.ctx.boards.get_mut(board_idx) {
@@ -186,7 +195,7 @@ impl App {
             }
 
             let new_index = board_sprints.len() - 1;
-            self.sprint_selection.set(Some(new_index));
+            self.selection.sprint.set(Some(new_index));
         }
     }
 }

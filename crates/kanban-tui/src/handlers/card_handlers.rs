@@ -8,14 +8,14 @@ use std::io;
 
 impl App {
     pub fn handle_create_card_key(&mut self) {
-        if self.focus == Focus::Cards && self.active_board_index.is_some() {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
             self.open_dialog(DialogMode::CreateCard);
             self.input.clear();
         }
     }
 
     fn get_focused_column_id(&mut self) -> Option<uuid::Uuid> {
-        if let Some(task_list) = self.view_strategy.get_active_task_list() {
+        if let Some(task_list) = self.view.strategy.get_active_task_list() {
             if let CardListId::Column(column_id) = task_list.id {
                 return Some(column_id);
             }
@@ -24,11 +24,11 @@ impl App {
     }
 
     pub fn handle_toggle_card_completion(&mut self) {
-        if self.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
-        if !self.selected_cards.is_empty() {
+        if !self.multi_select.selected_cards.is_empty() {
             self.toggle_selected_cards_completion();
         } else {
             self.toggle_card_completion();
@@ -36,68 +36,70 @@ impl App {
     }
 
     pub fn handle_card_selection_toggle(&mut self) {
-        if self.focus == Focus::Cards {
-            if self.selection_mode_active {
+        if self.focus.active == Focus::Cards {
+            if self.multi_select.selection_mode_active {
                 // Exit selection mode (keep selections)
-                self.selection_mode_active = false;
+                self.multi_select.selection_mode_active = false;
             } else {
                 // Enter selection mode and select current card
-                self.selection_mode_active = true;
+                self.multi_select.selection_mode_active = true;
                 if let Some(card) = self.get_selected_card_in_context() {
-                    self.selected_cards.insert(card.id);
+                    self.multi_select.selected_cards.insert(card.id);
                 }
             }
         }
     }
 
     pub fn handle_clear_card_selection(&mut self) {
-        self.selected_cards.clear();
+        self.multi_select.selected_cards.clear();
     }
 
     pub fn handle_select_all_cards_in_view(&mut self) {
-        if self.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
-        if let Some(task_list) = self.view_strategy.get_active_task_list() {
+        if let Some(task_list) = self.view.strategy.get_active_task_list() {
             for card_id in &task_list.cards {
-                self.selected_cards.insert(*card_id);
+                self.multi_select.selected_cards.insert(*card_id);
             }
             if !task_list.cards.is_empty() {
-                self.selection_mode_active = true;
+                self.multi_select.selection_mode_active = true;
             }
         }
     }
 
     pub fn handle_set_selected_cards_priority(&mut self) {
-        if self.focus != Focus::Cards || self.selected_cards.is_empty() {
+        if self.focus.active != Focus::Cards || self.multi_select.selected_cards.is_empty() {
             return;
         }
 
-        self.priority_selection.set(Some(0));
+        self.dialog_input.priority_selection.set(Some(0));
         self.open_dialog(DialogMode::SetMultipleCardsPriority);
     }
 
     pub fn handle_assign_to_sprint_key(&mut self) {
-        if self.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
-        if !self.selected_cards.is_empty() {
-            self.sprint_assign_selection.clear();
+        if !self.multi_select.selected_cards.is_empty() {
+            self.dialog_input.sprint_assign_selection.clear();
             self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
         } else if self.get_selected_card_id().is_some() {
-            if let Some(board_idx) = self.active_board_index {
+            if let Some(board_idx) = self.selection.active_board_index {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
                     if sprint_count > 0 {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
                             let card_id = selected_card.id;
                             let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
-                            self.active_card_index = actual_idx;
+                            self.selection.active_card_index = actual_idx;
                         }
                         let selection_idx = self.get_current_sprint_selection_index();
-                        self.sprint_assign_selection.set(Some(selection_idx));
+                        self.dialog_input
+                            .sprint_assign_selection
+                            .set(Some(selection_idx));
                         self.open_dialog(DialogMode::AssignCardToSprint);
                     }
                 }
@@ -106,25 +108,25 @@ impl App {
     }
 
     pub fn handle_order_cards_key(&mut self) {
-        if self.focus == Focus::Cards && self.active_board_index.is_some() {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
             let sort_idx = self.get_current_sort_field_selection_index();
-            self.sort_field_selection.set(Some(sort_idx));
+            self.filter.sort_field_selection.set(Some(sort_idx));
             self.open_dialog(DialogMode::OrderCards);
         }
     }
 
     pub fn handle_toggle_sort_order_key(&mut self) {
-        if self.focus == Focus::Cards && self.active_board_index.is_some() {
-            if let Some(current_order) = self.current_sort_order {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
+            if let Some(current_order) = self.filter.current_sort_order {
                 let new_order = match current_order {
                     SortOrder::Ascending => SortOrder::Descending,
                     SortOrder::Descending => SortOrder::Ascending,
                 };
-                self.current_sort_order = Some(new_order);
+                self.filter.current_sort_order = Some(new_order);
 
-                if let Some(board_idx) = self.active_board_index {
+                if let Some(board_idx) = self.selection.active_board_index {
                     if let Some(board) = self.ctx.boards.get(board_idx) {
-                        if let Some(field) = self.current_sort_field {
+                        if let Some(field) = self.filter.current_sort_field {
                             let cmd = Box::new(SetBoardTaskSort {
                                 board_id: board.id,
                                 field,
@@ -146,9 +148,9 @@ impl App {
     }
 
     pub fn handle_toggle_hide_assigned(&mut self) {
-        if self.focus == Focus::Cards && self.active_board_index.is_some() {
-            self.hide_assigned_cards = !self.hide_assigned_cards;
-            let status = if self.hide_assigned_cards {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
+            self.filter.hide_assigned_cards = !self.filter.hide_assigned_cards;
+            let status = if self.filter.hide_assigned_cards {
                 "enabled"
             } else {
                 "disabled"
@@ -160,16 +162,20 @@ impl App {
     }
 
     pub fn handle_toggle_sprint_filter(&mut self) {
-        if self.focus == Focus::Cards && self.active_board_index.is_some() {
-            if let Some(board_idx) = self.active_board_index {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
+            if let Some(board_idx) = self.selection.active_board_index {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     if let Some(active_sprint_id) = board.active_sprint_id {
-                        if self.active_sprint_filters.contains(&active_sprint_id) {
-                            self.active_sprint_filters.remove(&active_sprint_id);
+                        if self
+                            .filter
+                            .active_sprint_filters
+                            .contains(&active_sprint_id)
+                        {
+                            self.filter.active_sprint_filters.remove(&active_sprint_id);
                             tracing::info!("Disabled sprint filter - showing all cards");
                         } else {
-                            self.active_sprint_filters.clear();
-                            self.active_sprint_filters.insert(active_sprint_id);
+                            self.filter.active_sprint_filters.clear();
+                            self.filter.active_sprint_filters.insert(active_sprint_id);
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
 
@@ -188,11 +194,11 @@ impl App {
         event_handler: &EventHandler,
     ) -> bool {
         let mut should_restart = false;
-        if self.focus == Focus::Cards {
+        if self.focus.active == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
                 let card_id = selected_card.id;
                 let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
-                self.active_card_index = actual_idx;
+                self.selection.active_card_index = actual_idx;
 
                 if let Err(e) =
                     self.edit_card_field(terminal, event_handler, CardField::Description)
@@ -214,7 +220,7 @@ impl App {
                 CardStatus::Done
             };
 
-            let toggle_result = self.active_board_index.and_then(|idx| {
+            let toggle_result = self.selection.active_board_index.and_then(|idx| {
                 self.ctx.boards.get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
                         card,
@@ -248,7 +254,7 @@ impl App {
     }
 
     fn toggle_selected_cards_completion(&mut self) {
-        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
         let mut toggled_count = 0;
         let first_card_id = card_ids.first().copied();
 
@@ -266,7 +272,7 @@ impl App {
                 CardStatus::Done
             };
 
-            let toggle_result = self.active_board_index.and_then(|idx| {
+            let toggle_result = self.selection.active_board_index.and_then(|idx| {
                 self.ctx.boards.get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
                         &card,
@@ -302,8 +308,8 @@ impl App {
         }
 
         tracing::info!("Toggled {} cards completion status", toggled_count);
-        self.selected_cards.clear();
-        self.selection_mode_active = false;
+        self.multi_select.selected_cards.clear();
+        self.multi_select.selection_mode_active = false;
         self.refresh_view();
         if let Some(card_id) = first_card_id {
             self.select_card_by_id(card_id);
@@ -311,7 +317,7 @@ impl App {
     }
 
     pub fn create_card(&mut self) {
-        if let Some(idx) = self.active_board_index {
+        if let Some(idx) = self.selection.active_board_index {
             let focused_col_id = self.get_focused_column_id();
             let board_id = self.ctx.boards.get(idx).map(|b| b.id);
 
@@ -423,17 +429,18 @@ impl App {
     }
 
     fn handle_move_card(&mut self, direction: kanban_domain::card_lifecycle::MoveDirection) {
-        if self.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
-        if !self.selected_cards.is_empty() {
+        if !self.multi_select.selected_cards.is_empty() {
             self.move_selected_cards(direction);
             return;
         }
 
         if let Some(card) = self.get_selected_card_in_context() {
             let board = self
+                .selection
                 .active_board_index
                 .and_then(|idx| self.ctx.boards.get(idx));
             let board = match board {
@@ -483,15 +490,18 @@ impl App {
             }
 
             if self.is_kanban_view() {
-                if let Some(current_col_idx) = self.column_selection.get() {
+                if let Some(current_col_idx) = self.dialog_input.column_selection.get() {
                     match direction {
                         kanban_domain::card_lifecycle::MoveDirection::Left => {
                             if current_col_idx > 0 {
-                                self.column_selection.set(Some(current_col_idx - 1));
+                                self.dialog_input
+                                    .column_selection
+                                    .set(Some(current_col_idx - 1));
                             }
                         }
                         kanban_domain::card_lifecycle::MoveDirection::Right => {
                             let num_cols = self
+                                .selection
                                 .active_board_index
                                 .and_then(|idx| self.ctx.boards.get(idx))
                                 .map(|b| {
@@ -503,7 +513,9 @@ impl App {
                                 })
                                 .unwrap_or(0);
                             if current_col_idx < num_cols - 1 {
-                                self.column_selection.set(Some(current_col_idx + 1));
+                                self.dialog_input
+                                    .column_selection
+                                    .set(Some(current_col_idx + 1));
                             }
                         }
                     }
@@ -517,6 +529,7 @@ impl App {
 
     fn move_selected_cards(&mut self, direction: kanban_domain::card_lifecycle::MoveDirection) {
         let board = self
+            .selection
             .active_board_index
             .and_then(|idx| self.ctx.boards.get(idx));
         let board = match board {
@@ -524,7 +537,7 @@ impl App {
             None => return,
         };
 
-        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
         let first_card_id = card_ids.first().copied();
         let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
         let mut moved_count = 0;
@@ -579,8 +592,8 @@ impl App {
         }
 
         tracing::info!("Moved {} cards", moved_count);
-        self.selected_cards.clear();
-        self.selection_mode_active = false;
+        self.multi_select.selected_cards.clear();
+        self.multi_select.selection_mode_active = false;
         self.refresh_view();
         if let Some(card_id) = first_card_id {
             self.select_card_by_id(card_id);
@@ -588,11 +601,11 @@ impl App {
     }
 
     pub fn handle_archive_card(&mut self) {
-        if self.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
-        if !self.selected_cards.is_empty() {
+        if !self.multi_select.selected_cards.is_empty() {
             self.start_delete_animations_for_selected();
         } else if let Some(card_id) = self.get_selected_card_id() {
             self.start_delete_animation(card_id);
@@ -600,12 +613,12 @@ impl App {
     }
 
     fn start_delete_animations_for_selected(&mut self) {
-        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
         for card_id in card_ids {
             self.start_delete_animation(card_id);
         }
-        self.selected_cards.clear();
-        self.selection_mode_active = false;
+        self.multi_select.selected_cards.clear();
+        self.multi_select.selection_mode_active = false;
     }
 
     fn start_delete_animation(&mut self, card_id: uuid::Uuid) {
@@ -614,7 +627,7 @@ impl App {
         use std::time::Instant;
 
         if self.ctx.cards.iter().any(|c| c.id == card_id) {
-            self.animating_cards.insert(
+            self.animation.animating.insert(
                 card_id,
                 CardAnimation {
                     animation_type: AnimationType::Archiving,
@@ -659,7 +672,7 @@ impl App {
             return;
         }
 
-        if !self.selected_cards.is_empty() {
+        if !self.multi_select.selected_cards.is_empty() {
             self.start_restore_animations_for_selected();
         } else if let Some(card_id) = self.get_selected_card_id() {
             self.start_restore_animation(card_id);
@@ -667,12 +680,12 @@ impl App {
     }
 
     fn start_restore_animations_for_selected(&mut self) {
-        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
         for card_id in card_ids {
             self.start_restore_animation(card_id);
         }
-        self.selected_cards.clear();
-        self.selection_mode_active = false;
+        self.multi_select.selected_cards.clear();
+        self.multi_select.selection_mode_active = false;
     }
 
     fn start_restore_animation(&mut self, card_id: uuid::Uuid) {
@@ -686,7 +699,7 @@ impl App {
             .iter()
             .any(|dc| dc.card.id == card_id)
         {
-            self.animating_cards.insert(
+            self.animation.animating.insert(
                 card_id,
                 CardAnimation {
                     animation_type: AnimationType::Restoring,
@@ -703,6 +716,7 @@ impl App {
         let card_title = archived_card.card.title.clone();
 
         let board_id = self
+            .selection
             .active_board_index
             .and_then(|idx| self.ctx.boards.get(idx))
             .map(|b| b.id);
@@ -736,7 +750,7 @@ impl App {
             return;
         }
 
-        if !self.selected_cards.is_empty() {
+        if !self.multi_select.selected_cards.is_empty() {
             self.start_permanent_delete_animations_for_selected();
         } else if let Some(card_id) = self.get_selected_card_id() {
             self.start_permanent_delete_animation(card_id);
@@ -744,12 +758,12 @@ impl App {
     }
 
     fn start_permanent_delete_animations_for_selected(&mut self) {
-        let card_ids: Vec<uuid::Uuid> = self.selected_cards.iter().copied().collect();
+        let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
         for card_id in card_ids {
             self.start_permanent_delete_animation(card_id);
         }
-        self.selected_cards.clear();
-        self.selection_mode_active = false;
+        self.multi_select.selected_cards.clear();
+        self.multi_select.selection_mode_active = false;
     }
 
     fn start_permanent_delete_animation(&mut self, card_id: uuid::Uuid) {
@@ -763,7 +777,7 @@ impl App {
             .iter()
             .any(|dc| dc.card.id == card_id)
         {
-            self.animating_cards.insert(
+            self.animation.animating.insert(
                 card_id,
                 CardAnimation {
                     animation_type: AnimationType::Deleting,
@@ -780,10 +794,10 @@ impl App {
                 self.refresh_view();
 
                 // Initialize selection in view strategy
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                     if !list.is_empty() {
                         list.set_selected_index(Some(0));
-                        list.ensure_selected_visible(self.viewport_height);
+                        list.ensure_selected_visible(self.view.viewport_height);
                     }
                 }
             }
@@ -792,10 +806,10 @@ impl App {
                 self.refresh_view();
 
                 // Re-initialize selection when returning to normal view
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                     if !list.is_empty() {
                         list.set_selected_index(Some(0));
-                        list.ensure_selected_visible(self.viewport_height);
+                        list.ensure_selected_visible(self.view.viewport_height);
                     }
                 }
             }
@@ -815,7 +829,7 @@ impl App {
         let card_id = card.id;
 
         // Get the board ID for filtering
-        let board_id = match self.active_board_index {
+        let board_id = match self.selection.active_board_index {
             Some(idx) => match self.ctx.boards.get(idx) {
                 Some(board) => board.id,
                 None => return,
@@ -850,13 +864,13 @@ impl App {
             self.ctx.graph.cards.children(card_id).into_iter().collect();
 
         // Store the card index so the popup knows which card we're managing
-        self.active_card_index = self.ctx.cards.iter().position(|c| c.id == card_id);
+        self.selection.active_card_index = self.ctx.cards.iter().position(|c| c.id == card_id);
 
         // Set up dialog state
-        self.relationship_card_ids = eligible_cards;
-        self.relationship_selected = current_children;
-        self.relationship_selection.set(Some(0));
-        self.relationship_search.clear();
+        self.relationship.card_ids = eligible_cards;
+        self.relationship.selected = current_children;
+        self.relationship.selection.set(Some(0));
+        self.relationship.search.clear();
 
         self.open_dialog(DialogMode::ManageChildren);
     }

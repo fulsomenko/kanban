@@ -231,9 +231,9 @@ impl App {
     /// Calculate actual usable viewport height accounting for indicators and headers
     /// Must match the rendering logic to ensure page boundaries align with visible cards
     fn get_adjusted_viewport_height(&self) -> usize {
-        let raw_viewport = self.viewport_height;
+        let raw_viewport = self.view.viewport_height;
 
-        if let Some(list) = self.view_strategy.get_active_task_list() {
+        if let Some(list) = self.view.strategy.get_active_task_list() {
             let scroll_offset = list.get_scroll_offset();
 
             // Calculate "above" indicator overhead (fixed based on scroll position)
@@ -247,7 +247,8 @@ impl App {
 
             // Try to get column boundaries from UnifiedViewStrategy
             if let Some(unified) = self
-                .view_strategy
+                .view
+                .strategy
                 .as_any()
                 .downcast_ref::<UnifiedViewStrategy>()
             {
@@ -300,12 +301,17 @@ impl App {
     /// Compute page boundaries appropriate for the current view mode
     fn compute_pages_for_current_view(&self, total_items: usize) -> Vec<PageBoundary> {
         // For GroupedByColumn view, use header-aware pagination
-        if let Some(board_idx) = self.active_board_index.or(self.board_selection.get()) {
+        if let Some(board_idx) = self
+            .selection
+            .active_board_index
+            .or(self.selection.board.get())
+        {
             if let Some(board) = self.ctx.boards.get(board_idx) {
                 if board.task_list_view == TaskListView::GroupedByColumn {
                     // Try to get column boundaries for header-aware pagination
                     if let Some(unified) = self
-                        .view_strategy
+                        .view
+                        .strategy
                         .as_any()
                         .downcast_ref::<UnifiedViewStrategy>()
                     {
@@ -324,7 +330,7 @@ impl App {
 
                             return compute_page_boundaries_with_headers(
                                 total_items,
-                                self.viewport_height,
+                                self.view.viewport_height,
                                 &column_boundaries,
                             );
                         }
@@ -334,26 +340,26 @@ impl App {
         }
 
         // For Flat view or any other view, use standard pagination
-        compute_page_boundaries(total_items, self.viewport_height)
+        compute_page_boundaries(total_items, self.view.viewport_height)
     }
 
     pub fn handle_focus_switch(&mut self, focus_target: Focus) {
         match focus_target {
             Focus::Boards => {
-                self.focus = Focus::Boards;
+                self.focus.active = Focus::Boards;
             }
             Focus::Cards => {
-                if self.active_board_index.is_some() {
-                    self.focus = Focus::Cards;
+                if self.selection.active_board_index.is_some() {
+                    self.focus.active = Focus::Cards;
                 }
             }
         }
     }
 
     pub fn handle_navigation_down(&mut self) {
-        match self.focus {
+        match self.focus.active {
             Focus::Boards => {
-                self.board_selection.next(self.ctx.boards.len());
+                self.selection.board.next(self.ctx.boards.len());
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
@@ -362,7 +368,7 @@ impl App {
 
                 // Simple smooth navigation: move by 1 with viewport spanning pages
                 let was_at_bottom =
-                    if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                         let was_at_bottom = list.navigate_down();
 
                         // Smooth scroll with initial viewport
@@ -376,30 +382,30 @@ impl App {
                 // Recalculate viewport after scroll may have changed indicators/headers
                 let final_adjusted_viewport = self.get_adjusted_viewport_height();
                 if final_adjusted_viewport != initial_adjusted_viewport {
-                    if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                         list.ensure_selected_visible(final_adjusted_viewport);
                     }
                 }
 
                 // If selection mode active, add the new current card to selection
-                if self.selection_mode_active {
+                if self.multi_select.selection_mode_active {
                     if let Some(card) = self.get_selected_card_in_context() {
-                        self.selected_cards.insert(card.id);
+                        self.multi_select.selected_cards.insert(card.id);
                     }
                 }
 
                 // Check for bottom navigation: only switch columns if we were ALREADY at bottom
                 if was_at_bottom {
-                    self.view_strategy.navigate_right(false);
+                    self.view.strategy.navigate_right(false);
                 }
             }
         }
     }
 
     pub fn handle_navigation_up(&mut self) {
-        match self.focus {
+        match self.focus.active {
             Focus::Boards => {
-                self.board_selection.prev();
+                self.selection.board.prev();
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
@@ -407,7 +413,7 @@ impl App {
                 let initial_adjusted_viewport = self.get_adjusted_viewport_height();
 
                 // Simple smooth navigation: move by 1 with viewport spanning pages
-                let was_at_top = if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                let was_at_top = if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                     let was_at_top = list.navigate_up();
 
                     // Smooth scroll with initial viewport
@@ -421,33 +427,33 @@ impl App {
                 // Recalculate viewport after scroll may have changed indicators/headers
                 let final_adjusted_viewport = self.get_adjusted_viewport_height();
                 if final_adjusted_viewport != initial_adjusted_viewport {
-                    if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                    if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                         list.ensure_selected_visible(final_adjusted_viewport);
                     }
                 }
 
                 // If selection mode active, add the new current card to selection
-                if self.selection_mode_active {
+                if self.multi_select.selection_mode_active {
                     if let Some(card) = self.get_selected_card_in_context() {
-                        self.selected_cards.insert(card.id);
+                        self.multi_select.selected_cards.insert(card.id);
                     }
                 }
 
                 // Check for top navigation: only switch columns if we were ALREADY at top
                 if was_at_top {
-                    self.view_strategy.navigate_left(true);
+                    self.view.strategy.navigate_left(true);
                 }
             }
         }
     }
 
     pub fn handle_selection_activate(&mut self) {
-        match self.focus {
+        match self.focus.active {
             Focus::Boards => {
-                if self.board_selection.get().is_some() {
-                    self.active_board_index = self.board_selection.get();
+                if self.selection.board.get().is_some() {
+                    self.selection.active_board_index = self.selection.board.get();
 
-                    if let Some(board_idx) = self.active_board_index {
+                    if let Some(board_idx) = self.selection.active_board_index {
                         let (task_list_view, task_sort_field, task_sort_order) = {
                             if let Some(board) = self.ctx.boards.get(board_idx) {
                                 (
@@ -464,31 +470,35 @@ impl App {
                             }
                         };
 
-                        self.current_sort_field = Some(task_sort_field);
-                        self.current_sort_order = Some(task_sort_order);
+                        self.filter.current_sort_field = Some(task_sort_field);
+                        self.filter.current_sort_order = Some(task_sort_order);
                         self.switch_view_strategy(task_list_view);
 
-                        if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                        if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                             if !list.is_empty() {
                                 list.set_selected_index(Some(0));
-                                list.ensure_selected_visible(self.viewport_height);
+                                list.ensure_selected_visible(self.view.viewport_height);
                             }
                         }
                     }
 
-                    self.focus = Focus::Cards;
+                    self.focus.active = Focus::Cards;
                 }
             }
             Focus::Cards => {
                 if let Some(selected_card) = self.get_selected_card_in_context() {
                     let card_id = selected_card.id;
                     let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
-                    self.active_card_index = actual_idx;
+                    self.selection.active_card_index = actual_idx;
                     // Initialize list components with item counts
                     let parents = self.get_current_card_parents();
                     let children = self.get_current_card_children();
-                    self.parents_list.update_item_count(parents.len());
-                    self.children_list.update_item_count(children.len());
+                    self.relationship
+                        .parents_list
+                        .update_item_count(parents.len());
+                    self.relationship
+                        .children_list
+                        .update_item_count(children.len());
                     self.push_mode(AppMode::CardDetail);
                 }
             }
@@ -496,29 +506,33 @@ impl App {
     }
 
     pub fn handle_escape_key(&mut self) {
-        if self.search.is_active {
-            self.search.deactivate();
+        if self.filter.search.is_active {
+            self.filter.search.deactivate();
             self.refresh_view();
             return;
         }
 
         // Clear selection mode first (only when actively in selection mode)
-        if self.selection_mode_active {
-            self.selection_mode_active = false;
-            self.selected_cards.clear();
+        if self.multi_select.selection_mode_active {
+            self.multi_select.selection_mode_active = false;
+            self.multi_select.selected_cards.clear();
             return;
         }
 
-        if self.active_board_index.is_some() {
-            self.active_board_index = None;
-            self.focus = Focus::Boards;
+        if self.selection.active_board_index.is_some() {
+            self.selection.active_board_index = None;
+            self.focus.active = Focus::Boards;
 
             self.switch_view_strategy(TaskListView::GroupedByColumn);
         }
     }
 
     pub fn is_kanban_view(&self) -> bool {
-        if let Some(board_idx) = self.active_board_index.or(self.board_selection.get()) {
+        if let Some(board_idx) = self
+            .selection
+            .active_board_index
+            .or(self.selection.board.get())
+        {
             if let Some(board) = self.ctx.boards.get(board_idx) {
                 return board.task_list_view == TaskListView::ColumnView;
             }
@@ -527,42 +541,43 @@ impl App {
     }
 
     pub fn handle_kanban_column_left(&mut self) {
-        if !self.is_kanban_view() || self.focus != Focus::Cards {
+        if !self.is_kanban_view() || self.focus.active != Focus::Cards {
             return;
         }
 
-        if self.view_strategy.navigate_left(false) {
+        if self.view.strategy.navigate_left(false) {
             tracing::info!("Moved to previous column");
         }
     }
 
     pub fn handle_kanban_column_right(&mut self) {
-        if !self.is_kanban_view() || self.focus != Focus::Cards {
+        if !self.is_kanban_view() || self.focus.active != Focus::Cards {
             return;
         }
 
-        if self.view_strategy.navigate_right(false) {
+        if self.view.strategy.navigate_right(false) {
             tracing::info!("Moved to next column");
         }
     }
 
     pub fn handle_column_or_focus_switch(&mut self, index: usize) {
-        if self.is_kanban_view() && self.focus == Focus::Cards {
-            let column_count = self.view_strategy.get_all_task_lists().len();
+        if self.is_kanban_view() && self.focus.active == Focus::Cards {
+            let column_count = self.view.strategy.get_all_task_lists().len();
 
             if index < column_count {
-                self.view_strategy
+                self.view
+                    .strategy
                     .as_any_mut()
                     .downcast_mut::<UnifiedViewStrategy>()
                     .map(|unified| unified.try_set_active_column_index(index));
 
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                     if list.is_empty() {
                         list.clear();
                     } else if list.get_selected_index().is_none() {
                         list.set_selected_index(Some(0));
                     }
-                    list.ensure_selected_visible(self.viewport_height);
+                    list.ensure_selected_visible(self.view.viewport_height);
                 }
                 tracing::info!("Switched to column {}", index);
             }
@@ -576,14 +591,14 @@ impl App {
     }
 
     pub fn handle_jump_to_top(&mut self) {
-        match self.focus {
+        match self.focus.active {
             Focus::Boards => {
-                self.board_selection.jump_to_first();
+                self.selection.board.jump_to_first();
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
                 let adjusted_viewport = self.get_adjusted_viewport_height();
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                     list.jump_to_top();
                     list.ensure_selected_visible(adjusted_viewport);
                 }
@@ -592,15 +607,15 @@ impl App {
     }
 
     pub fn handle_jump_to_bottom(&mut self) {
-        match self.focus {
+        match self.focus.active {
             Focus::Boards => {
-                self.board_selection.jump_to_last(self.ctx.boards.len());
+                self.selection.board.jump_to_last(self.ctx.boards.len());
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
                 // Get adjusted viewport first (immutable borrow), then do all mutable work
                 let adjusted_viewport = self.get_adjusted_viewport_height();
-                if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+                if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                     if !list.is_empty() {
                         let last_idx = list.len() - 1;
                         list.jump_to(last_idx);
@@ -612,10 +627,11 @@ impl App {
     }
 
     pub fn handle_jump_half_viewport_up(&mut self) {
-        if self.focus == Focus::Cards {
+        if self.focus.active == Focus::Cards {
             // Get total items before borrowing mutably
             let total_items = self
-                .view_strategy
+                .view
+                .strategy
                 .get_active_task_list()
                 .map(|list| list.len())
                 .unwrap_or(0);
@@ -633,7 +649,7 @@ impl App {
             }
 
             // Now borrow list mutably
-            if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+            if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                 // Find current page and position
                 if let Some(current_idx) = list.get_selected_index() {
                     if let Some(page_idx) = find_current_page(&pages, current_idx) {
@@ -656,10 +672,11 @@ impl App {
     }
 
     pub fn handle_jump_half_viewport_down(&mut self) {
-        if self.focus == Focus::Cards {
+        if self.focus.active == Focus::Cards {
             // Get total items before borrowing mutably
             let total_items = self
-                .view_strategy
+                .view
+                .strategy
                 .get_active_task_list()
                 .map(|list| list.len())
                 .unwrap_or(0);
@@ -677,7 +694,7 @@ impl App {
             }
 
             // Now borrow list mutably
-            if let Some(list) = self.view_strategy.get_active_task_list_mut() {
+            if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                 // Find current page and position
                 if let Some(current_idx) = list.get_selected_index() {
                     if let Some(page_idx) = find_current_page(&pages, current_idx) {

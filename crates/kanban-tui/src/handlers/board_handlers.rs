@@ -4,15 +4,15 @@ use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {
     pub fn handle_create_board_key(&mut self) {
-        if self.focus == Focus::Boards {
+        if self.focus.active == Focus::Boards {
             self.open_dialog(DialogMode::CreateBoard);
             self.input.clear();
         }
     }
 
     pub fn handle_rename_board_key(&mut self) {
-        if self.focus == Focus::Boards && self.board_selection.get().is_some() {
-            if let Some(board_idx) = self.board_selection.get() {
+        if self.focus.active == Focus::Boards && self.selection.board.get().is_some() {
+            if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     self.input.set(board.name.clone());
                     self.open_dialog(DialogMode::RenameBoard);
@@ -22,15 +22,15 @@ impl App {
     }
 
     pub fn handle_edit_board_key(&mut self) {
-        if self.focus == Focus::Boards && self.board_selection.get().is_some() {
+        if self.focus.active == Focus::Boards && self.selection.board.get().is_some() {
             self.push_mode(AppMode::BoardDetail);
-            self.board_focus = BoardFocus::Name;
+            self.focus.board_focus = BoardFocus::Name;
         }
     }
 
     pub fn handle_export_board_key(&mut self) {
-        if self.focus == Focus::Boards && self.board_selection.get().is_some() {
-            if let Some(board_idx) = self.board_selection.get() {
+        if self.focus.active == Focus::Boards && self.selection.board.get().is_some() {
+            if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     let filename = format!(
                         "{}-{}.json",
@@ -45,7 +45,7 @@ impl App {
     }
 
     pub fn handle_export_all_key(&mut self) {
-        if self.focus == Focus::Boards && !self.ctx.boards.is_empty() {
+        if self.focus.active == Focus::Boards && !self.ctx.boards.is_empty() {
             let filename = format!(
                 "kanban-all-{}.json",
                 chrono::Utc::now().format("%Y%m%d-%H%M%S")
@@ -56,10 +56,10 @@ impl App {
     }
 
     pub fn handle_import_board_key(&mut self) {
-        if self.focus == Focus::Boards {
+        if self.focus.active == Focus::Boards {
             self.scan_import_files();
-            if !self.import_files.is_empty() {
-                self.import_selection.set(Some(0));
+            if !self.dialog_input.import_files.is_empty() {
+                self.dialog_input.import_selection.set(Some(0));
                 self.open_dialog(DialogMode::ImportBoard);
             }
         }
@@ -111,12 +111,12 @@ impl App {
         tracing::info!("Created default columns: TODO, Doing, Complete");
 
         let new_index = self.ctx.boards.len() - 1;
-        self.board_selection.set(Some(new_index));
+        self.selection.board.set(Some(new_index));
         self.switch_view_strategy(task_list_view);
     }
 
     pub fn rename_board(&mut self) {
-        if let Some(idx) = self.board_selection.get() {
+        if let Some(idx) = self.selection.board.get() {
             if let Some(board) = self.ctx.boards.get(idx) {
                 let board_id = board.id;
                 let new_name = self.input.as_str().to_string();
@@ -141,20 +141,20 @@ impl App {
     }
 
     fn scan_import_files(&mut self) {
-        self.import_files.clear();
+        self.dialog_input.import_files.clear();
         if let Ok(entries) = std::fs::read_dir(".") {
             for entry in entries.flatten() {
                 if let Ok(metadata) = entry.metadata() {
                     if metadata.is_file() {
                         if let Some(filename) = entry.file_name().to_str() {
                             if filename.ends_with(".json") {
-                                self.import_files.push(filename.to_string());
+                                self.dialog_input.import_files.push(filename.to_string());
                             }
                         }
                     }
                 }
             }
         }
-        self.import_files.sort();
+        self.dialog_input.import_files.sort();
     }
 }

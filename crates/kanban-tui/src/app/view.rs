@@ -1,0 +1,25 @@
+use crate::card_list::CardListId;
+use crate::card_list_component::{CardListComponent, CardListComponentConfig};
+use crate::view_strategy::{UnifiedViewStrategy, ViewStrategy};
+use ratatui::layout::Rect;
+
+pub struct ViewState {
+    pub strategy: Box<dyn ViewStrategy>,
+    pub card_list_component: CardListComponent,
+    pub viewport_height: usize,
+    pub last_frame_area: Rect,
+}
+
+impl Default for ViewState {
+    fn default() -> Self {
+        Self {
+            strategy: Box::new(UnifiedViewStrategy::grouped()),
+            card_list_component: CardListComponent::new(
+                CardListId::All,
+                CardListComponentConfig::new(),
+            ),
+            viewport_height: 20,
+            last_frame_area: Rect::default(),
+        }
+    }
+}
