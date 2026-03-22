@@ -1,21 +1,21 @@
 use kanban_domain::KanbanOperations;
+use kanban_mcp::context::McpContext;
 use kanban_service::KanbanContext;
 use tempfile::TempDir;
 
-fn setup() -> (KanbanContext, TempDir) {
+async fn setup() -> (McpContext, TempDir) {
     let dir = TempDir::new().expect("failed to create temp dir");
     let path = dir.path().join("test.kanban");
     let path_str = path.to_string_lossy().to_string();
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let ctx = rt.block_on(KanbanContext::load_json(&path_str)).unwrap();
+    let ctx = McpContext::new(&path_str).await.unwrap();
     (ctx, dir)
 }
 
 // Board round-trips
 
-#[test]
-fn board_create_list_get() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn board_create_list_get() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
@@ -29,9 +29,9 @@ fn board_create_list_get() {
     assert_eq!(fetched.name, "Test Board");
 }
 
-#[test]
-fn board_get_nonexistent() {
-    let (ctx, _tmp) = setup();
+#[tokio::test]
+async fn board_get_nonexistent() {
+    let (ctx, _tmp) = setup().await;
     let id = uuid::Uuid::new_v4();
     let result = ctx.get_board(id).unwrap();
     assert!(result.is_none());
@@ -39,9 +39,9 @@ fn board_get_nonexistent() {
 
 // Column round-trips
 
-#[test]
-fn column_create_list_update() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn column_create_list_update() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
     assert_eq!(col.name, "To Do");
@@ -62,9 +62,9 @@ fn column_create_list_update() {
     assert_eq!(updated.name, "Done");
 }
 
-#[test]
-fn column_reorder() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn column_reorder() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let _c1 = ctx
         .create_column(board.id, "Col A".into(), Some(0))
@@ -78,9 +78,9 @@ fn column_reorder() {
 
 // Card round-trips
 
-#[test]
-fn card_create_get_move_archive_restore() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn card_create_get_move_archive_restore() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col1 = ctx.create_column(board.id, "To Do".into(), None).unwrap();
     let col2 = ctx.create_column(board.id, "Done".into(), None).unwrap();
@@ -104,9 +104,9 @@ fn card_create_get_move_archive_restore() {
     assert_eq!(restored.id, card.id);
 }
 
-#[test]
-fn create_card_then_update_with_all_fields() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn create_card_then_update_with_all_fields() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
 
@@ -139,9 +139,9 @@ fn create_card_then_update_with_all_fields() {
 
 // Sprint round-trips
 
-#[test]
-fn sprint_create_list_activate_complete() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn sprint_create_list_activate_complete() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
 
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
@@ -156,9 +156,9 @@ fn sprint_create_list_activate_complete() {
     assert_eq!(completed.id, sprint.id);
 }
 
-#[test]
-fn sprint_update_via_trait() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn sprint_update_via_trait() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
 
@@ -191,9 +191,9 @@ fn sprint_update_via_trait() {
     assert_eq!(updated.id, sprint.id);
 }
 
-#[test]
-fn sprint_cancel() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn sprint_cancel() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
     let _ = ctx.activate_sprint(sprint.id, None).unwrap();
@@ -203,9 +203,9 @@ fn sprint_cancel() {
 
 // Card-sprint assignment
 
-#[test]
-fn card_assign_unassign_sprint() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn card_assign_unassign_sprint() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "To Do".into(), None).unwrap();
     let card = ctx
@@ -222,9 +222,9 @@ fn card_assign_unassign_sprint() {
 
 // Bulk operations
 
-#[test]
-fn bulk_archive() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn bulk_archive() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
     let c1 = ctx
@@ -238,9 +238,9 @@ fn bulk_archive() {
     assert_eq!(count, 2);
 }
 
-#[test]
-fn bulk_move() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn bulk_move() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col1 = ctx.create_column(board.id, "From".into(), None).unwrap();
     let col2 = ctx.create_column(board.id, "To".into(), None).unwrap();
@@ -257,9 +257,9 @@ fn bulk_move() {
 
 // Export/Import round-trip
 
-#[test]
-fn export_import_roundtrip() {
-    let (mut ctx, _tmp) = setup();
+#[tokio::test]
+async fn export_import_roundtrip() {
+    let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Export Board".into(), None).unwrap();
     let _col = ctx.create_column(board.id, "Col".into(), None).unwrap();
 
@@ -267,4 +267,65 @@ fn export_import_roundtrip() {
     assert!(json.contains("Export Board"));
 
     ctx.import_board(&json).unwrap();
+}
+
+// Persistence round-trips
+
+#[tokio::test]
+async fn test_create_board_persists() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.kanban");
+    let path_str = path.to_string_lossy().to_string();
+
+    let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
+    mcp_ctx.create_board("Persistent Board".into(), None).unwrap();
+    mcp_ctx.save().await.unwrap();
+
+    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    let boards = fresh.list_boards().unwrap();
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].name, "Persistent Board");
+}
+
+#[tokio::test]
+async fn test_mutation_sequence_persists() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.kanban");
+    let path_str = path.to_string_lossy().to_string();
+
+    let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
+    let board = mcp_ctx.create_board("Board".into(), None).unwrap();
+    let col = mcp_ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    mcp_ctx
+        .create_card(board.id, col.id, "Task".into(), Default::default())
+        .unwrap();
+    mcp_ctx.save().await.unwrap();
+
+    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    assert_eq!(fresh.list_boards().unwrap().len(), 1);
+    assert_eq!(fresh.list_columns(board.id).unwrap().len(), 1);
+    assert_eq!(
+        fresh
+            .list_cards(kanban_domain::CardListFilter::default())
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn test_delete_persists() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.kanban");
+    let path_str = path.to_string_lossy().to_string();
+
+    let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
+    let board = mcp_ctx.create_board("Temp Board".into(), None).unwrap();
+    mcp_ctx.save().await.unwrap();
+
+    mcp_ctx.delete_board(board.id).unwrap();
+    mcp_ctx.save().await.unwrap();
+
+    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    assert!(fresh.list_boards().unwrap().is_empty());
 }
