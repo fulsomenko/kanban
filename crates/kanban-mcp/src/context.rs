@@ -17,6 +17,10 @@ impl McpContext {
         })
     }
 
+    pub async fn save(&self) -> KanbanResult<()> {
+        self.inner.save().await
+    }
+
     /// MCP-specific method that exposes pagination.
     /// `KanbanOperations::list_cards` cannot carry pagination params, so
     /// `tool_list_cards` calls this directly.
@@ -37,9 +41,7 @@ impl KanbanOperations for McpContext {
     // ========================================================================
 
     fn create_board(&mut self, name: String, card_prefix: Option<String>) -> KanbanResult<Board> {
-        let result = self.inner.create_board(name, card_prefix)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.create_board(name, card_prefix)
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
@@ -51,14 +53,11 @@ impl KanbanOperations for McpContext {
     }
 
     fn update_board(&mut self, id: Uuid, updates: BoardUpdate) -> KanbanResult<Board> {
-        let result = self.inner.update_board(id, updates)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.update_board(id, updates)
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.delete_board(id)?;
-        self.inner.save_sync()
+        self.inner.delete_board(id)
     }
 
     // ========================================================================
@@ -71,9 +70,7 @@ impl KanbanOperations for McpContext {
         name: String,
         position: Option<i32>,
     ) -> KanbanResult<Column> {
-        let result = self.inner.create_column(board_id, name, position)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.create_column(board_id, name, position)
     }
 
     fn list_columns(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
@@ -85,20 +82,15 @@ impl KanbanOperations for McpContext {
     }
 
     fn update_column(&mut self, id: Uuid, updates: ColumnUpdate) -> KanbanResult<Column> {
-        let result = self.inner.update_column(id, updates)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.update_column(id, updates)
     }
 
     fn delete_column(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.delete_column(id)?;
-        self.inner.save_sync()
+        self.inner.delete_column(id)
     }
 
     fn reorder_column(&mut self, id: Uuid, new_position: i32) -> KanbanResult<Column> {
-        let result = self.inner.reorder_column(id, new_position)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.reorder_column(id, new_position)
     }
 
     // ========================================================================
@@ -112,9 +104,7 @@ impl KanbanOperations for McpContext {
         title: String,
         options: CreateCardOptions,
     ) -> KanbanResult<Card> {
-        let result = self.inner.create_card(board_id, column_id, title, options)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.create_card(board_id, column_id, title, options)
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
@@ -130,9 +120,7 @@ impl KanbanOperations for McpContext {
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
-        let result = self.inner.update_card(id, updates)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.update_card(id, updates)
     }
 
     fn move_card(
@@ -141,25 +129,19 @@ impl KanbanOperations for McpContext {
         column_id: Uuid,
         position: Option<i32>,
     ) -> KanbanResult<Card> {
-        let result = self.inner.move_card(id, column_id, position)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.move_card(id, column_id, position)
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.archive_card(id)?;
-        self.inner.save_sync()
+        self.inner.archive_card(id)
     }
 
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card> {
-        let result = self.inner.restore_card(id, column_id)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.restore_card(id, column_id)
     }
 
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.delete_card(id)?;
-        self.inner.save_sync()
+        self.inner.delete_card(id)
     }
 
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
@@ -171,15 +153,11 @@ impl KanbanOperations for McpContext {
     // ========================================================================
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
-        let result = self.inner.assign_card_to_sprint(card_id, sprint_id)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.assign_card_to_sprint(card_id, sprint_id)
     }
 
     fn unassign_card_from_sprint(&mut self, card_id: Uuid) -> KanbanResult<Card> {
-        let result = self.inner.unassign_card_from_sprint(card_id)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.unassign_card_from_sprint(card_id)
     }
 
     // ========================================================================
@@ -199,21 +177,15 @@ impl KanbanOperations for McpContext {
     // ========================================================================
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        let result = self.inner.bulk_archive_cards(ids)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.bulk_archive_cards(ids)
     }
 
     fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        let result = self.inner.bulk_move_cards(ids, column_id)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.bulk_move_cards(ids, column_id)
     }
 
     fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        let result = self.inner.bulk_assign_sprint(ids, sprint_id)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.bulk_assign_sprint(ids, sprint_id)
     }
 
     // ========================================================================
@@ -226,9 +198,7 @@ impl KanbanOperations for McpContext {
         prefix: Option<String>,
         name: Option<String>,
     ) -> KanbanResult<Sprint> {
-        let result = self.inner.create_sprint(board_id, prefix, name)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.create_sprint(board_id, prefix, name)
     }
 
     fn list_sprints(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
@@ -240,32 +210,23 @@ impl KanbanOperations for McpContext {
     }
 
     fn update_sprint(&mut self, id: Uuid, updates: SprintUpdate) -> KanbanResult<Sprint> {
-        let result = self.inner.update_sprint(id, updates)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.update_sprint(id, updates)
     }
 
     fn activate_sprint(&mut self, id: Uuid, duration_days: Option<i32>) -> KanbanResult<Sprint> {
-        let result = self.inner.activate_sprint(id, duration_days)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.activate_sprint(id, duration_days)
     }
 
     fn complete_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
-        let result = self.inner.complete_sprint(id)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.complete_sprint(id)
     }
 
     fn cancel_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
-        let result = self.inner.cancel_sprint(id)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.cancel_sprint(id)
     }
 
     fn delete_sprint(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.delete_sprint(id)?;
-        self.inner.save_sync()
+        self.inner.delete_sprint(id)
     }
 
     // ========================================================================
@@ -277,8 +238,6 @@ impl KanbanOperations for McpContext {
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        let result = self.inner.import_board(data)?;
-        self.inner.save_sync()?;
-        Ok(result)
+        self.inner.import_board(data)
     }
 }

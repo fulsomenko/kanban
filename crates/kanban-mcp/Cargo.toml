@@ -36,9 +36,6 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 
-# Synchronization (non-poisoning mutex)
-parking_lot = "0.12"
-
 # Error handling (for main.rs only)
 anyhow.workspace = true
 

@@ -4,10 +4,10 @@ use context::McpContext;
 use kanban_core::KanbanError;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardUpdate,
+    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate,
     ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
 };
-use parking_lot::Mutex;
+use tokio::sync::Mutex;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
@@ -109,47 +109,31 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
     if let Ok(id) = Uuid::parse_str(s) {
         return Ok(id);
     }
-    let identifier = s.to_string();
-    let card: Option<Card> = {
-        let ctx = ctx.clone();
-        tokio::task::spawn_blocking(move || {
-            let guard = ctx.lock();
-            guard.find_card_by_identifier(&identifier)
-        })
-        .await
-        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
-        .map_err(kanban_err_to_mcp)?
+    let card = {
+        let guard = ctx.lock().await;
+        guard.find_card_by_identifier(s).map_err(kanban_err_to_mcp)?
     };
-
     card.map(|c| c.id)
         .ok_or_else(|| McpError::invalid_params(format!("Card not found: '{}'", s), None))
 }
 
-/// Runs a KanbanOperations method on McpContext via spawn_blocking.
-macro_rules! spawn_op {
+/// Lock, mutate, save.
+macro_rules! mutating_op {
     ($ctx:expr, $method:ident $(, $arg:expr)*) => {{
-        let ctx = $ctx.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut guard = ctx.lock();
-            guard.$method($($arg),*)
-        })
+        async {
+            let mut guard = $ctx.lock().await;
+            let result = guard.$method($($arg),*).map_err(kanban_err_to_mcp)?;
+            guard.save().await.map_err(kanban_err_to_mcp)?;
+            Ok::<_, McpError>(result)
+        }
         .await
-        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
-        .map_err(kanban_err_to_mcp)
     }};
 }
 
-/// Same as spawn_op but for &self methods (no mutation needed).
-macro_rules! spawn_op_ref {
+/// Lock, read (no save).
+macro_rules! read_op {
     ($ctx:expr, $method:ident $(, $arg:expr)*) => {{
-        let ctx = $ctx.clone();
-        tokio::task::spawn_blocking(move || {
-            let guard = ctx.lock();
-            guard.$method($($arg),*)
-        })
-        .await
-        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
-        .map_err(kanban_err_to_mcp)
+        $ctx.lock().await.$method($($arg),*).map_err(kanban_err_to_mcp)
     }};
 }
 
@@ -523,13 +507,13 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CreateBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board = spawn_op!(self.ctx, create_board, req.name, req.card_prefix)?;
+        let board = mutating_op!(self.ctx, create_board, req.name, req.card_prefix)?;
         to_call_tool_result(&board)
     }
 
     #[tool(description = "List all kanban boards")]
     async fn tool_list_boards(&self) -> Result<CallToolResult, McpError> {
-        let boards = spawn_op_ref!(self.ctx, list_boards)?;
+        let boards = read_op!(self.ctx, list_boards)?;
         to_call_tool_result(&boards)
     }
 
@@ -539,7 +523,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<GetBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.board_id)?;
-        let board = spawn_op_ref!(self.ctx, get_board, id)?;
+        let board = read_op!(self.ctx, get_board, id)?;
         to_call_tool_result(&board)
     }
 
@@ -567,7 +551,7 @@ impl KanbanMcpServer {
                 .unwrap_or(FieldUpdate::NoChange),
             ..Default::default()
         };
-        let board = spawn_op!(self.ctx, update_board, id, updates)?;
+        let board = mutating_op!(self.ctx, update_board, id, updates)?;
         to_call_tool_result(&board)
     }
 
@@ -577,7 +561,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<DeleteBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.board_id)?;
-        spawn_op!(self.ctx, delete_board, id)?;
+        mutating_op!(self.ctx, delete_board, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": req.board_id}))
     }
 
@@ -589,7 +573,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<CreateColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
         let board_id = parse_uuid(&req.board_id)?;
-        let column = spawn_op!(self.ctx, create_column, board_id, req.name, req.position)?;
+        let column = mutating_op!(self.ctx, create_column, board_id, req.name, req.position)?;
         to_call_tool_result(&column)
     }
 
@@ -599,7 +583,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ListColumnsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let board_id = parse_uuid(&req.board_id)?;
-        let columns = spawn_op_ref!(self.ctx, list_columns, board_id)?;
+        let columns = read_op!(self.ctx, list_columns, board_id)?;
         to_call_tool_result(&columns)
     }
 
@@ -609,7 +593,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<GetColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.column_id)?;
-        let column = spawn_op_ref!(self.ctx, get_column, id)?;
+        let column = read_op!(self.ctx, get_column, id)?;
         to_call_tool_result(&column)
     }
 
@@ -630,7 +614,7 @@ impl KanbanMcpServer {
                     .unwrap_or(FieldUpdate::NoChange)
             },
         };
-        let column = spawn_op!(self.ctx, update_column, id, updates)?;
+        let column = mutating_op!(self.ctx, update_column, id, updates)?;
         to_call_tool_result(&column)
     }
 
@@ -640,7 +624,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<DeleteColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.column_id)?;
-        spawn_op!(self.ctx, delete_column, id)?;
+        mutating_op!(self.ctx, delete_column, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": req.column_id}))
     }
 
@@ -650,7 +634,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ReorderColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.column_id)?;
-        let column = spawn_op!(self.ctx, reorder_column, id, req.position)?;
+        let column = mutating_op!(self.ctx, reorder_column, id, req.position)?;
         to_call_tool_result(&column)
     }
 
@@ -673,7 +657,7 @@ impl KanbanMcpServer {
             due_date,
         };
 
-        let card = spawn_op!(
+        let card = mutating_op!(
             self.ctx,
             create_card,
             board_id,
@@ -704,7 +688,7 @@ impl KanbanMcpServer {
         };
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
-        let result = spawn_op_ref!(self.ctx, list_cards_paged, filter, page, page_size)?;
+        let result = read_op!(self.ctx, list_cards_paged, filter, page, page_size)?;
         to_call_tool_result(&result)
     }
 
@@ -714,7 +698,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<GetCardRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        let card = spawn_op_ref!(self.ctx, get_card, id)?;
+        let card = read_op!(self.ctx, get_card, id)?;
         to_call_tool_result(&card)
     }
 
@@ -755,7 +739,7 @@ impl KanbanMcpServer {
             assigned_prefix: FieldUpdate::NoChange,
             card_prefix: FieldUpdate::NoChange,
         };
-        let card = spawn_op!(self.ctx, update_card, id, updates)?;
+        let card = mutating_op!(self.ctx, update_card, id, updates)?;
         to_call_tool_result(&card)
     }
 
@@ -766,7 +750,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let column_id = parse_uuid(&req.column_id)?;
-        let card = spawn_op!(self.ctx, move_card, id, column_id, req.position)?;
+        let card = mutating_op!(self.ctx, move_card, id, column_id, req.position)?;
         to_call_tool_result(&card)
     }
 
@@ -776,7 +760,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        spawn_op!(self.ctx, archive_card, id)?;
+        mutating_op!(self.ctx, archive_card, id)?;
         to_call_tool_result_json(serde_json::json!({"archived": id.to_string()}))
     }
 
@@ -787,7 +771,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let column_id = req.column_id.as_deref().map(parse_uuid).transpose()?;
-        let card = spawn_op!(self.ctx, restore_card, id, column_id)?;
+        let card = mutating_op!(self.ctx, restore_card, id, column_id)?;
         to_call_tool_result(&card)
     }
 
@@ -797,7 +781,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        spawn_op!(self.ctx, delete_card, id)?;
+        mutating_op!(self.ctx, delete_card, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
 
@@ -808,7 +792,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListArchivedCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let cards = spawn_op_ref!(self.ctx, list_archived_cards)?;
+        let cards = read_op!(self.ctx, list_archived_cards)?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
         let summaries: Vec<ArchivedCardSummary> =
@@ -827,7 +811,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let card_id = resolve_card_id(&self.ctx, &req.card_id).await?;
         let sprint_id = parse_uuid(&req.sprint_id)?;
-        let card = spawn_op!(self.ctx, assign_card_to_sprint, card_id, sprint_id)?;
+        let card = mutating_op!(self.ctx, assign_card_to_sprint, card_id, sprint_id)?;
         to_call_tool_result(&card)
     }
 
@@ -837,7 +821,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<UnassignCardFromSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let card_id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        let card = spawn_op!(self.ctx, unassign_card_from_sprint, card_id)?;
+        let card = mutating_op!(self.ctx, unassign_card_from_sprint, card_id)?;
         to_call_tool_result(&card)
     }
 
@@ -849,7 +833,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<GetCardBranchNameRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        let branch_name = spawn_op_ref!(self.ctx, get_card_branch_name, id)?;
+        let branch_name = read_op!(self.ctx, get_card_branch_name, id)?;
         to_call_tool_result_json(serde_json::json!({"branch_name": branch_name}))
     }
 
@@ -859,7 +843,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<GetCardGitCheckoutRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        let command = spawn_op_ref!(self.ctx, get_card_git_checkout, id)?;
+        let command = read_op!(self.ctx, get_card_git_checkout, id)?;
         to_call_tool_result_json(serde_json::json!({"command": command}))
     }
 
@@ -871,7 +855,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<BulkArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
-        let count = spawn_op!(self.ctx, bulk_archive_cards, ids)?;
+        let count = mutating_op!(self.ctx, bulk_archive_cards, ids)?;
         to_call_tool_result_json(serde_json::json!({"archived_count": count}))
     }
 
@@ -882,7 +866,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let column_id = parse_uuid(&req.column_id)?;
-        let count = spawn_op!(self.ctx, bulk_move_cards, ids, column_id)?;
+        let count = mutating_op!(self.ctx, bulk_move_cards, ids, column_id)?;
         to_call_tool_result_json(serde_json::json!({"moved_count": count}))
     }
 
@@ -893,7 +877,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let sprint_id = parse_uuid(&req.sprint_id)?;
-        let count = spawn_op!(self.ctx, bulk_assign_sprint, ids, sprint_id)?;
+        let count = mutating_op!(self.ctx, bulk_assign_sprint, ids, sprint_id)?;
         to_call_tool_result_json(serde_json::json!({"assigned_count": count}))
     }
 
@@ -905,7 +889,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<CreateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let board_id = parse_uuid(&req.board_id)?;
-        let sprint = spawn_op!(self.ctx, create_sprint, board_id, req.prefix, req.name)?;
+        let sprint = mutating_op!(self.ctx, create_sprint, board_id, req.prefix, req.name)?;
         to_call_tool_result(&sprint)
     }
 
@@ -915,7 +899,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ListSprintsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let board_id = parse_uuid(&req.board_id)?;
-        let sprints = spawn_op_ref!(self.ctx, list_sprints, board_id)?;
+        let sprints = read_op!(self.ctx, list_sprints, board_id)?;
         to_call_tool_result(&sprints)
     }
 
@@ -925,7 +909,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<GetSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.sprint_id)?;
-        let sprint = spawn_op_ref!(self.ctx, get_sprint, id)?;
+        let sprint = read_op!(self.ctx, get_sprint, id)?;
         to_call_tool_result(&sprint)
     }
 
@@ -972,7 +956,7 @@ impl KanbanMcpServer {
             end_date,
         };
 
-        let sprint = spawn_op!(self.ctx, update_sprint, id, updates)?;
+        let sprint = mutating_op!(self.ctx, update_sprint, id, updates)?;
         to_call_tool_result(&sprint)
     }
 
@@ -982,7 +966,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ActivateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.sprint_id)?;
-        let sprint = spawn_op!(self.ctx, activate_sprint, id, req.duration_days)?;
+        let sprint = mutating_op!(self.ctx, activate_sprint, id, req.duration_days)?;
         to_call_tool_result(&sprint)
     }
 
@@ -992,7 +976,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<CompleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.sprint_id)?;
-        let sprint = spawn_op!(self.ctx, complete_sprint, id)?;
+        let sprint = mutating_op!(self.ctx, complete_sprint, id)?;
         to_call_tool_result(&sprint)
     }
 
@@ -1002,7 +986,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<CancelSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.sprint_id)?;
-        let sprint = spawn_op!(self.ctx, cancel_sprint, id)?;
+        let sprint = mutating_op!(self.ctx, cancel_sprint, id)?;
         to_call_tool_result(&sprint)
     }
 
@@ -1012,7 +996,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<DeleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let id = parse_uuid(&req.sprint_id)?;
-        spawn_op!(self.ctx, delete_sprint, id)?;
+        mutating_op!(self.ctx, delete_sprint, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": req.sprint_id}))
     }
 
@@ -1024,7 +1008,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ExportBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
         let board_id = req.board_id.as_deref().map(parse_uuid).transpose()?;
-        let json = spawn_op_ref!(self.ctx, export_board, board_id)?;
+        let json = read_op!(self.ctx, export_board, board_id)?;
         Ok(CallToolResult::success(vec![Content::text(json)]))
     }
 
@@ -1034,7 +1018,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ImportBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
         let data = req.data;
-        let board = spawn_op!(self.ctx, import_board, &data)?;
+        let board = mutating_op!(self.ctx, import_board, &data)?;
         to_call_tool_result(&board)
     }
 }
