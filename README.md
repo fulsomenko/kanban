@@ -145,9 +145,21 @@ crates/
 ├── kanban-core        → Shared traits, error handling & reusable state primitives
 ├── kanban-domain      → Domain models, business logic, filtering & sorting
 ├── kanban-persistence → JSON storage, versioning & migrations
+├── kanban-service     → Service layer: KanbanContext, persistence orchestration
 ├── kanban-tui         → Terminal UI with ratatui
 ├── kanban-cli         → CLI entry point
 └── kanban-mcp         → Model Context Protocol server for LLM integration
+```
+
+```mermaid
+graph TD
+    CLI[kanban-cli] --> TUI[kanban-tui]
+    CLI --> SVC[kanban-service]
+    MCP[kanban-mcp] --> SVC
+    TUI --> SVC
+    SVC --> PER[kanban-persistence]
+    PER --> DOM[kanban-domain]
+    DOM --> CORE[kanban-core]
 ```
 
 **Key Design Patterns:**
