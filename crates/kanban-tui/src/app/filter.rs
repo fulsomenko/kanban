@@ -16,8 +16,3 @@ pub struct FilterState {
     pub dialog_state: Option<FilterDialogState>,
 }
 
-impl FilterState {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}

@@ -10,8 +10,3 @@ pub struct DialogInputState {
     pub task_list_view_selection: SelectionState,
 }
 
-impl DialogInputState {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}

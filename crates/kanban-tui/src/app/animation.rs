@@ -15,8 +15,3 @@ pub struct AnimationState {
     pub animating: HashMap<Uuid, CardAnimation>,
 }
 
-impl AnimationState {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}

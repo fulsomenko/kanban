@@ -1,33 +1,20 @@
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Focus {
+    #[default]
     Boards,
     Cards,
 }
 
+#[derive(Default)]
 pub struct FocusState {
     pub active: Focus,
     pub card_focus: CardFocus,
     pub board_focus: BoardFocus,
 }
 
-impl FocusState {
-    pub fn new() -> Self {
-        Self {
-            active: Focus::Boards,
-            card_focus: CardFocus::Title,
-            board_focus: BoardFocus::Name,
-        }
-    }
-}
-
-impl Default for FocusState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum CardFocus {
+    #[default]
     Title,
     Metadata,
     Description,
@@ -35,8 +22,9 @@ pub enum CardFocus {
     Children,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum BoardFocus {
+    #[default]
     Name,
     Description,
     Settings,

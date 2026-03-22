@@ -7,8 +7,3 @@ pub struct MultiSelectState {
     pub selection_mode_active: bool,
 }
 
-impl MultiSelectState {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}

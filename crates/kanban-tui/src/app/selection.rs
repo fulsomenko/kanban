@@ -10,8 +10,3 @@ pub struct SelectionHub {
     pub card_navigation_history: Vec<usize>,
 }
 
-impl SelectionHub {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
