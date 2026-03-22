@@ -1,3 +1,10 @@
+## [0.3.5] - 2026-03-22 ([#193](https://github.com/fulsomenko/kanban/pull/193))
+
+### KAN-229 Fix Publish Crates Order Add Kanban Service Before Kanban Mcp (2026-03-22)
+
+- fix(ci): add kanban-service to publish script and order mcp as last
+
+
 ## [0.3.4] - 2026-03-22 ([#191](https://github.com/fulsomenko/kanban/pull/191))
 
 ### KAN-123 Escape Bind To Clear Search Enter To Apply (2026-03-22)
