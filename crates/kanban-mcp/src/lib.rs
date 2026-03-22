@@ -122,6 +122,7 @@ macro_rules! mutating_op {
     ($ctx:expr, $method:ident $(, $arg:expr)*) => {{
         async {
             let mut guard = $ctx.lock().await;
+            guard.reload().await.map_err(kanban_err_to_mcp)?;
             let result = guard.$method($($arg),*).map_err(kanban_err_to_mcp)?;
             guard.save().await.map_err(kanban_err_to_mcp)?;
             Ok::<_, McpError>(result)

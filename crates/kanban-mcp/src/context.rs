@@ -17,6 +17,10 @@ impl McpContext {
         })
     }
 
+    pub async fn reload(&mut self) -> KanbanResult<()> {
+        self.inner.reload().await
+    }
+
     pub async fn save(&self) -> KanbanResult<()> {
         self.inner.save().await
     }
