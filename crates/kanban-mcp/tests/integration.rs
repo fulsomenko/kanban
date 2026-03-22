@@ -1,52 +1,13 @@
 use kanban_domain::KanbanOperations;
-use kanban_mcp::context::McpContext;
+use kanban_service::KanbanContext;
 use tempfile::TempDir;
 
-fn kanban_bin() -> String {
-    if let Ok(path) = std::env::var("KANBAN_BIN") {
-        return path;
-    }
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .join("target")
-        });
-    // Check direct profiles first (plain `cargo build` without --target)
-    for profile in &["release", "debug"] {
-        let p = target_dir.join(profile).join("kanban");
-        if p.is_file() {
-            return p.to_string_lossy().into_owned();
-        }
-    }
-    // Search target-triple subdirectories (nix / cross-compiled builds)
-    for entry in std::fs::read_dir(&target_dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-    {
-        for profile in &["release", "debug"] {
-            let p = entry.path().join(profile).join("kanban");
-            if p.is_file() {
-                return p.to_string_lossy().into_owned();
-            }
-        }
-    }
-    panic!(
-        "kanban binary not found under {:?}. Run `cargo build --bin kanban` or set KANBAN_BIN.",
-        target_dir
-    );
-}
-
-fn setup() -> (McpContext, TempDir) {
+fn setup() -> (KanbanContext, TempDir) {
     let dir = TempDir::new().expect("failed to create temp dir");
     let path = dir.path().join("test.kanban");
     let path_str = path.to_string_lossy().to_string();
-    let ctx = McpContext::new(&path_str).with_kanban_path(&kanban_bin());
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let ctx = rt.block_on(KanbanContext::load_json(&path_str)).unwrap();
     (ctx, dir)
 }
 
