@@ -124,11 +124,7 @@ UI-agnostic building blocks used by the TUI and available to any consumer:
 
 Foundation layer with no workspace dependencies. All other crates depend on `kanban-core` for shared abstractions and error types.
 
-```
-kanban-core (foundation)
-    ↑
-    └── kanban-domain, kanban-tui, kanban-cli
-```
+`kanban-core` is the foundation crate with no workspace dependencies — all other crates depend on it. See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for the full workspace dependency graph.
 
 ## Examples
 

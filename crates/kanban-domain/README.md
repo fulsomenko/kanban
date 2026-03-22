@@ -211,13 +211,7 @@ pub struct BoardImporter;
 
 Pure domain layer depending only on `kanban-core`. Implements rich domain models with encapsulated business logic:
 
-```
-kanban-core
-    ↑
-    └── kanban-domain (pure business logic)
-            ↑
-            └── kanban-tui, kanban-cli
-```
+`kanban-domain` depends only on `kanban-core` and has no infrastructure dependencies. See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for the full workspace dependency graph.
 
 ### Key Design Patterns
 

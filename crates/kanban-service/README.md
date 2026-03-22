@@ -102,16 +102,7 @@ pub struct BulkOperationFailure {
 
 ## Architecture
 
-```mermaid
-graph TD
-    CLI[kanban-cli] --> TUI[kanban-tui]
-    CLI --> SVC[kanban-service]
-    MCP[kanban-mcp] --> SVC
-    TUI --> SVC
-    SVC --> PER[kanban-persistence]
-    PER --> DOM[kanban-domain]
-    DOM --> CORE[kanban-core]
-```
+`kanban-service` sits between `kanban-persistence` and the consumers (`kanban-tui`, `kanban-mcp`, `kanban-cli`). See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for the full workspace dependency graph.
 
 ### Command Pattern Flow
 
