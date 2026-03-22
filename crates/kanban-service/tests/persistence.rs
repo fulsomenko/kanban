@@ -38,3 +38,23 @@ async fn test_save_overwrites_correctly() {
     assert!(boards.iter().any(|b| b.name == "Board One"));
     assert!(boards.iter().any(|b| b.name == "Board Two"));
 }
+
+#[tokio::test]
+async fn test_reload_picks_up_external_changes() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.kanban");
+    let path_str = path.to_string_lossy().to_string();
+
+    let mut ctx_a = KanbanContext::load_json(&path_str).await.unwrap();
+    ctx_a.create_board("Board A".into(), None).unwrap();
+    ctx_a.save().await.unwrap();
+
+    let mut ctx_b = KanbanContext::load_json(&path_str).await.unwrap();
+    ctx_b.create_board("Board B".into(), None).unwrap();
+    ctx_b.save().await.unwrap();
+
+    ctx_a.reload().await.unwrap();
+    let boards = ctx_a.list_boards().unwrap();
+    assert_eq!(boards.len(), 2);
+    assert!(boards.iter().any(|b| b.name == "Board B"));
+}
