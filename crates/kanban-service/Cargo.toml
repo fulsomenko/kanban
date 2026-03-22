@@ -1,0 +1,24 @@
+[package]
+name = "kanban-service"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Shared service layer implementing KanbanOperations over a pluggable PersistenceStore"
+
+[dependencies]
+kanban-core = { path = "../kanban-core", version = "^0.3" }
+kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }

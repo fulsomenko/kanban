@@ -937,6 +937,7 @@ dependencies = [
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
+ "kanban-service",
  "kanban-tui",
  "predicates",
  "serde",
@@ -986,6 +987,7 @@ dependencies = [
  "chrono",
  "kanban-core",
  "kanban-domain",
+ "kanban-service",
  "parking_lot",
  "rmcp",
  "schemars",
@@ -1013,6 +1015,22 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "kanban-service"
+version = "0.3.3"
+dependencies = [
+ "chrono",
+ "kanban-core",
+ "kanban-domain",
+ "kanban-persistence",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
  "uuid",

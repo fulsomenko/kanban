@@ -4,6 +4,7 @@ members = [
     "crates/kanban-core",
     "crates/kanban-domain",
     "crates/kanban-persistence",
+    "crates/kanban-service",
     "crates/kanban-tui",
     "crates/kanban-cli",
     "crates/kanban-mcp",
