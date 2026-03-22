@@ -1278,6 +1278,8 @@ dependencies = [
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
+ "kanban-persistence-json",
+ "kanban-persistence-sqlite",
  "kanban-service",
  "kanban-tui",
  "predicates",
@@ -1328,6 +1330,9 @@ dependencies = [
  "chrono",
  "kanban-core",
  "kanban-domain",
+ "kanban-persistence",
+ "kanban-persistence-json",
+ "kanban-persistence-sqlite",
  "kanban-service",
  "rmcp",
  "schemars",
@@ -1353,9 +1358,44 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
- "sqlx",
  "tempfile",
  "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "kanban-persistence-json"
+version = "0.3.3"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "kanban-core",
+ "kanban-domain",
+ "kanban-persistence",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "kanban-persistence-sqlite"
+version = "0.3.3"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "kanban-core",
+ "kanban-domain",
+ "kanban-persistence",
+ "kanban-service",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
  "tokio",
  "tracing",
  "uuid",
@@ -1369,6 +1409,7 @@ dependencies = [
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
+ "kanban-persistence-json",
  "serde",
  "serde_json",
  "tempfile",
@@ -1389,6 +1430,8 @@ dependencies = [
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
+ "kanban-persistence-json",
+ "kanban-persistence-sqlite",
  "pulldown-cmark",
  "ratatui",
  "serde",
