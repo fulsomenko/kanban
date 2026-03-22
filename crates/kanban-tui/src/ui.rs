@@ -17,7 +17,7 @@ const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
 const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
 
 fn render_banner(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(ref banner) = app.ui.banner {
+    if let Some(ref banner) = app.ui_state.banner {
         banner.render(frame, area);
     }
 }
@@ -93,7 +93,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     }
 
     // Render banner on top if present
-    if app.ui.banner.is_some() {
+    if app.ui_state.banner.is_some() {
         let banner_area = Rect {
             x: 0,
             y: 0,
@@ -1518,10 +1518,13 @@ fn render_help_popup(app: &App, frame: &mut Frame) {
     // Scrollable bindings body
     let raw_height = help_popup_viewport_height(frame.area());
 
-    let selected_idx = app.ui.help_list.get_selected_index();
+    let selected_idx = app.ui_state.help_list.get_selected_index();
 
-    let adjusted_height = app.ui.help_list.get_adjusted_viewport_height(raw_height);
-    let page_info = app.ui.help_list.get_render_info(adjusted_height);
+    let adjusted_height = app
+        .ui_state
+        .help_list
+        .get_adjusted_viewport_height(raw_height);
+    let page_info = app.ui_state.help_list.get_render_info(adjusted_height);
 
     let mut rendered_lines: Vec<Line> = crate::scroll_indicators::render_above_indicator(
         page_info.show_above_indicator,

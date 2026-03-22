@@ -8,7 +8,7 @@ pub mod sprint_view;
 pub use sprint_view::{SprintTaskPanel, SprintViewState};
 
 pub mod animation;
-pub use animation::{AnimationState, CardAnimation, ANIMATION_DURATION_MS};
+pub use animation::{AnimationState, CardAnimation};
 
 pub mod selection;
 pub use selection::SelectionHub;
@@ -77,7 +77,7 @@ pub struct App {
     pub focus: FocusState,
     pub persistence: PersistenceState,
     pub multi_select: MultiSelectState,
-    pub ui: UiState,
+    pub ui_state: UiState,
     pub sprint_view: SprintViewState,
     pub view: ViewState,
     pub relationship: RelationshipState,
@@ -118,7 +118,7 @@ impl App {
             focus: FocusState::new(),
             persistence: PersistenceState::new(save_file.clone(), save_completion_rx),
             multi_select: MultiSelectState::new(),
-            ui: UiState::new(),
+            ui_state: UiState::new(),
             sprint_view: SprintViewState::new(),
             view: ViewState::new(),
             relationship: RelationshipState::new(),
@@ -174,15 +174,15 @@ impl App {
     }
 
     pub fn set_error(&mut self, message: impl Into<String>) {
-        self.ui.banner = Some(Banner::error(message));
+        self.ui_state.banner = Some(Banner::error(message));
     }
 
     pub fn set_success(&mut self, message: impl Into<String>) {
-        self.ui.banner = Some(Banner::success(message));
+        self.ui_state.banner = Some(Banner::success(message));
     }
 
     pub fn clear_banner(&mut self) {
-        self.ui.banner = None;
+        self.ui_state.banner = None;
     }
 
     fn keycode_matches_binding_key(
@@ -320,7 +320,7 @@ impl App {
         let mut should_restart_events = false;
 
         // Clear banner on any key press
-        if self.ui.banner.is_some() {
+        if self.ui_state.banner.is_some() {
             self.clear_banner();
             return false;
         }
@@ -367,8 +367,10 @@ impl App {
             let previous_mode = self.mode.clone();
             let provider = crate::keybindings::KeybindingRegistry::get_provider(self);
             let context = provider.get_context();
-            self.ui.help_list.update_item_count(context.bindings.len());
-            self.ui.help_list.set_scroll_offset(0);
+            self.ui_state
+                .help_list
+                .update_item_count(context.bindings.len());
+            self.ui_state.help_list.set_scroll_offset(0);
             self.mode = AppMode::Help(Box::new(previous_mode));
             return false;
         }
@@ -698,11 +700,11 @@ impl App {
         if raw == 0 {
             return;
         }
-        let h0 = self.ui.help_list.get_adjusted_viewport_height(raw);
-        self.ui.help_list.ensure_selected_visible(h0);
-        let h1 = self.ui.help_list.get_adjusted_viewport_height(raw);
+        let h0 = self.ui_state.help_list.get_adjusted_viewport_height(raw);
+        self.ui_state.help_list.ensure_selected_visible(h0);
+        let h1 = self.ui_state.help_list.get_adjusted_viewport_height(raw);
         if h1 != h0 {
-            self.ui.help_list.ensure_selected_visible(h1);
+            self.ui_state.help_list.ensure_selected_visible(h1);
         }
     }
 
@@ -712,21 +714,21 @@ impl App {
 
         match key_code {
             KeyCode::Char('j') | KeyCode::Down => {
-                self.ui.help_pending_action = None;
-                self.ui.help_list.navigate_down();
+                self.ui_state.help_pending_action = None;
+                self.ui_state.help_list.navigate_down();
                 self.scroll_help_into_view();
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.ui.help_pending_action = None;
-                self.ui.help_list.navigate_up();
+                self.ui_state.help_pending_action = None;
+                self.ui_state.help_list.navigate_up();
                 self.scroll_help_into_view();
             }
             KeyCode::Char('h') | KeyCode::Char('l') => {
-                self.ui.help_pending_action = None;
+                self.ui_state.help_pending_action = None;
             }
             KeyCode::Enter => {
-                self.ui.help_pending_action = None;
-                if let Some(index) = self.ui.help_list.get_selected_index() {
+                self.ui_state.help_pending_action = None;
+                if let Some(index) = self.ui_state.help_list.get_selected_index() {
                     let provider = KeybindingRegistry::get_provider(self);
                     let context = provider.get_context();
 
@@ -736,20 +738,20 @@ impl App {
                         } else {
                             self.mode = AppMode::Normal;
                         }
-                        self.ui.help_list.reset();
+                        self.ui_state.help_list.reset();
 
                         self.execute_action(&binding.action);
                     }
                 }
             }
             KeyCode::Esc | KeyCode::Char('?') => {
-                self.ui.help_pending_action = None;
+                self.ui_state.help_pending_action = None;
                 if let AppMode::Help(previous_mode) = &self.mode {
                     self.mode = (**previous_mode).clone();
                 } else {
                     self.mode = AppMode::Normal;
                 }
-                self.ui.help_list.reset();
+                self.ui_state.help_list.reset();
             }
             _ => {
                 let provider = KeybindingRegistry::get_provider(self);
@@ -761,9 +763,9 @@ impl App {
                     .enumerate()
                     .find(|(_, b)| Self::keycode_matches_binding_key(&key_code, &b.key))
                 {
-                    self.ui.help_list.jump_to(index);
+                    self.ui_state.help_list.jump_to(index);
                     self.scroll_help_into_view();
-                    self.ui.help_pending_action = Some((Instant::now(), binding.action));
+                    self.ui_state.help_pending_action = Some((Instant::now(), binding.action));
                 }
             }
         }
@@ -775,7 +777,7 @@ impl App {
 
         for (&card_id, animation) in &self.animation.animating {
             let elapsed = now.duration_since(animation.start_time).as_millis();
-            if elapsed >= ANIMATION_DURATION_MS {
+            if elapsed >= animation::ANIMATION_DURATION_MS {
                 completed_animations.push((card_id, animation.animation_type));
             }
         }
@@ -1515,7 +1517,7 @@ impl App {
                                 self.handle_animation_tick();
 
                                 // Auto-clear banner after 3 seconds
-                                if let Some(ref banner) = self.ui.banner {
+                                if let Some(ref banner) = self.ui_state.banner {
                                     if banner.is_expired(std::time::Duration::from_secs(3)) {
                                         self.clear_banner();
                                     }
@@ -1573,17 +1575,17 @@ impl App {
                                 }
 
                                 // Check if help menu pending action should execute
-                                if let Some((start_time, action)) = &self.ui.help_pending_action {
+                                if let Some((start_time, action)) = &self.ui_state.help_pending_action {
                                     if start_time.elapsed().as_millis() >= 100 {
                                         if let AppMode::Help(previous_mode) = &self.mode {
                                             self.mode = (**previous_mode).clone();
                                         } else {
                                             self.mode = AppMode::Normal;
                                         }
-                                        self.ui.help_list.reset();
+                                        self.ui_state.help_list.reset();
 
                                         let action = *action;
-                                        self.ui.help_pending_action = None;
+                                        self.ui_state.help_pending_action = None;
                                         self.execute_action(&action);
                                     }
                                 }
@@ -1912,11 +1914,11 @@ mod tests {
             width: 100,
             height: 50,
         };
-        app.ui.help_list.update_item_count(50);
-        app.ui.help_list.jump_to(49);
+        app.ui_state.help_list.update_item_count(50);
+        app.ui_state.help_list.jump_to(49);
         app.scroll_help_into_view();
         assert!(
-            app.ui.help_list.get_scroll_offset() > 0,
+            app.ui_state.help_list.get_scroll_offset() > 0,
             "help list should have scrolled to bring item 49 into view"
         );
     }
