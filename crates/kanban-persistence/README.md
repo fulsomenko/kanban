@@ -60,82 +60,28 @@ store.save(snapshot).await?;
 let (snapshot, metadata) = store.load().await?;
 ```
 
-### StateManager (kanban-tui)
-
-Manages state mutations and persistence:
-
-```rust
-use kanban_tui::state::StateManager;
-use kanban_domain::commands::Command;
-
-let mut manager = StateManager::new(Some("board.json".into()));
-
-// Execute command (sets dirty flag)
-manager.execute_with_context(
-    &mut boards,
-    &mut columns,
-    &mut cards,
-    &mut sprints,
-    &mut archived_cards,
-    Box::new(CreateCard { /* ... */ }),
-)?;
-
-// Periodically save (respects 500ms debounce)
-manager.save_if_needed(&snapshot).await?;
-
-// Force save immediately (bypasses debounce)
-manager.save_now(&snapshot).await?;
-```
+Persistence is consumed via `kanban-service::KanbanContext`, which owns a `JsonFileStore` and
+exposes `load`, `save`, and `reload` as high-level lifecycle methods. Direct use of
+`JsonFileStore` is only needed when building custom persistence consumers.
 
 ## Architecture
 
-```
-kanban-core
-    ↑
-    └── kanban-domain
-         ↑
-         └── kanban-persistence
-              ↑
-              └── kanban-tui (StateManager uses persistence)
+```mermaid
+flowchart TD
+    CORE[kanban-core] --> DOM[kanban-domain]
+    DOM --> PER[kanban-persistence]
+    PER --> SVC[kanban-service<br/>KanbanContext]
+    SVC --> TUI[kanban-tui]
+    SVC --> MCP[kanban-mcp]
 ```
 
 ### Command Pattern Flow
 
 1. **Event Handler** collects data and creates Command
-2. **Command** is executed via StateManager::execute_command()
-3. **CommandContext** applies mutation to data
-4. **Dirty Flag** is set by StateManager
-5. **Periodic Timer** calls save_if_needed()
-6. **Debounce Check** ensures 500ms minimum interval
-7. **Atomic Write** saves to disk with temp file + rename
-
-### Data Flow
-
-```
-User Input
-    ↓
-Event Handler
-    ↓
-Command Creation
-    ↓
-StateManager::execute_command()
-    ↓
-CommandContext::execute()
-    ↓
-Data Mutation
-    ↓
-Dirty Flag = true
-    ↓
-[500ms timer]
-    ↓
-StateManager::save_if_needed()
-    ↓
-JsonFileStore::save()
-    ↓
-Atomic Write
-    ↓
-Disk (persisted)
-```
+2. **Command** is executed via `KanbanContext::execute()`
+3. **CommandContext** applies mutation to in-memory vecs
+4. **Save**: `KanbanContext::save()` serializes state and calls `JsonFileStore::save()`
+5. **Atomic Write** persists to disk with temp file + rename
 
 ## Format Specification
 
@@ -213,35 +159,27 @@ if version == FormatVersion::V1 {
 
 ## Examples
 
-### Setting up Progressive Save
+### Load, Mutate, Save via KanbanContext
 
 ```rust
-use kanban_tui::state::StateManager;
-use tokio::time::{interval, Duration};
+use kanban_service::KanbanContext;
+use kanban_domain::KanbanOperations;
 
-let mut manager = StateManager::new(Some("board.json".into()));
+let mut ctx = KanbanContext::load_json("board.json").await?;
 
-// Periodic save task (runs in background)
-tokio::spawn(async move {
-    let mut save_interval = interval(Duration::from_millis(100));
+let board = ctx.create_board("My Project".into(), None)?;
+ctx.save().await?;
 
-    loop {
-        save_interval.tick().await;
-
-        // Respects 500ms debounce internally
-        if let Err(e) = manager.save_if_needed(&snapshot).await {
-            tracing::error!("Failed to save: {}", e);
-        }
-    }
-});
+// Pick up changes written by another process
+ctx.reload().await?;
 ```
 
 ### Handling Concurrent Modifications
 
 ```rust
 // When file is modified externally (multi-instance editing)
-// JsonFileStore detects the change via file watching
-// Application can prompt user for reload with conflict resolution
+// KanbanContext::reload() re-reads state from disk
+// mutating_op! in kanban-mcp calls reload() before every write
 // Last-write-wins strategy automatically applied
 ```
 
