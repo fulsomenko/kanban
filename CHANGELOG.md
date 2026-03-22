@@ -1,3 +1,63 @@
+## [0.3.4] - 2026-03-22 ([#191](https://github.com/fulsomenko/kanban/pull/191))
+
+### KAN-123 Escape Bind To Clear Search Enter To Apply (2026-03-22)
+
+- fix: remove trailing spaces from active search footer text
+- KAN-123: update search mode keybinding descriptions
+- KAN-123: show active search filter indicator in footer
+- KAN-123: highlight search matches in card titles
+- KAN-123: split Enter/Esc in search mode and add n/N navigation
+
+### KAN-221 Help Menu List Doesnt Scroll (2026-03-22)
+
+- fix(help): fixed header/footer layout with ListComponent scroll in render_help_popup
+- refactor(help): replace help_selection+help_page with help_list ListComponent
+- refactor(generic_list): delegate get_adjusted_viewport_height to Page
+- refactor(pagination): add get_adjusted_viewport_height to Page
+- refactor: use render_scroll_indicators helper at all scroll indicator sites
+- feat: add scroll support to help menu popup (KAN-221)
+- refactor: generalize render_scroll_indicators to accept plain args and label
+
+### KAN-222 Fix Post Search Ux Issues Gg Scroll Unicode Panic Footer Hint N N Nav (2026-03-22)
+
+- fix: remove n/N search-navigation shortcuts — n is for new card only
+- fix: drop n/N from active-search footer hint — redundant with j/k when results are filtered
+- fix: active-search footer shows navigation hint alongside ESC
+- refactor: add SearchState::active_query() and collapse repeated search_query expressions
+- fix: Unicode panic in build_title_spans — map lowercase byte offsets back to original
+- fix: gg jumps to top but doesn't scroll view — call ensure_selected_visible
+
+### KAN-224 Decompose App Rs Into Focused Modules (2026-03-22)
+
+- refactor: decompose app.rs into focused sub-modules
+- Split 2060-line `app.rs` into 12 focused sub-modules under `app/`
+- Each concern now lives in its own file: `mode`, `focus`, `selection`, `filter`, `multi_select`, `dialog_input`, `sprint_view`, `relationship`, `view`, `animation`, `persistence`, `ui_state`
+- Zero behavioral change — all types re-exported from `app/mod.rs`
+
+### KAN-226 Extract Kanban Service Crate From Kanban Cli Handlers (2026-03-22)
+
+- docs: use graph LR for dependency diagram in README to match other docs
+- docs: replace repeated workspace graphs in crate READMEs with CONTRIBUTING.md links
+- docs: add kanban-service to architecture section with Mermaid diagram
+- docs: update CONTRIBUTING.md workspace structure to 7 crates with Mermaid diagram
+- docs: update CLAUDE.md workspace structure to 7 crates with Mermaid diagram
+- docs: replace StateManager references with KanbanContext in persistence README
+- docs: rewrite kanban-mcp README for in-process KanbanContext architecture
+- docs: add kanban-service README
+- test: verify reload() picks up external changes to the kanban file
+- feat: reload from disk before every mutating_op in kanban-mcp
+- feat: add reload() to KanbanContext to re-read state from disk
+- test: restore McpContext in kanban-mcp integration tests, add persistence coverage
+- test: add KanbanContext persistence round-trip tests
+- refactor: replace parking_lot::Mutex with tokio::sync::Mutex in kanban-mcp
+- refactor: remove instance_id field and save_sync from KanbanContext
+- chore: remove kanban binary dep from kanban-mcp Nix build
+- test: rewrite kanban-mcp integration tests to use KanbanContext directly
+- refactor: migrate McpContext to KanbanContext, delete subprocess executor
+- refactor: delegate CliContext to KanbanContext from kanban-service
+- feat: add kanban-service crate with KanbanContext over PersistenceStore
+
+
 ## [0.3.3] - 2026-03-18 ([#184](https://github.com/fulsomenko/kanban/pull/184))
 
 ### KAN-220 Fix Kanban Binary Discovery In Mcp Integration Tests For Nix Builds (2026-03-18)
