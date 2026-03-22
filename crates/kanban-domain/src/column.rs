@@ -7,7 +7,7 @@ use crate::field_update::FieldUpdate;
 
 pub type ColumnId = Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Column {
     pub id: ColumnId,
     pub board_id: BoardId,

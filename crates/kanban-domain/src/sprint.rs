@@ -13,7 +13,7 @@ pub enum SprintStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sprint {
     pub id: Uuid,
     pub board_id: Uuid,

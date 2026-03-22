@@ -9,7 +9,7 @@ use super::edge::{Edge, EdgeDirection};
 ///
 /// Stores edges as an edge list for efficient serialization.
 /// Provides adjacency list views for graph algorithms.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Graph<E> {
     edges: Vec<Edge<E>>,
 }

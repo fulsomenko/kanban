@@ -25,7 +25,7 @@ pub enum SortOrder {
     Descending,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Board {
     pub id: BoardId,
     pub name: String,
