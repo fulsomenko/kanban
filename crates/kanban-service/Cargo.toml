@@ -20,5 +20,6 @@ chrono.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }

@@ -4,9 +4,7 @@ use kanban_domain::{
     ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
-use kanban_persistence::{
-    JsonFileStore, PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot,
-};
+use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -23,7 +21,7 @@ pub struct BulkOperationFailure {
     pub error: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DataSnapshot {
     #[serde(default)]
     pub boards: Vec<Board>,
@@ -68,11 +66,6 @@ impl KanbanContext {
             graph: data.graph,
             store,
         })
-    }
-
-    pub async fn load_json(file_path: &str) -> KanbanResult<Self> {
-        let store = JsonFileStore::new(file_path);
-        Self::load(Arc::new(store)).await
     }
 
     fn empty(store: Arc<dyn PersistenceStore + Send + Sync>) -> Self {
