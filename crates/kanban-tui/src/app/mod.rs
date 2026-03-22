@@ -58,7 +58,7 @@ use kanban_domain::{
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
 use kanban_domain::{KanbanError, KanbanResult};
-use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
 
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
