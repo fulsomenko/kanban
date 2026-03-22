@@ -5,6 +5,7 @@ use kanban_domain::{SortField, SortOrder};
 use std::collections::HashSet;
 use uuid::Uuid;
 
+#[derive(Default)]
 pub struct FilterState {
     pub active_sprint_filters: HashSet<Uuid>,
     pub hide_assigned_cards: bool,
@@ -17,20 +18,6 @@ pub struct FilterState {
 
 impl FilterState {
     pub fn new() -> Self {
-        Self {
-            active_sprint_filters: HashSet::new(),
-            hide_assigned_cards: false,
-            current_sort_field: None,
-            current_sort_order: None,
-            sort_field_selection: SelectionState::new(),
-            search: SearchState::new(),
-            dialog_state: None,
-        }
-    }
-}
-
-impl Default for FilterState {
-    fn default() -> Self {
-        Self::new()
+        Default::default()
     }
 }

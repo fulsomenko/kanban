@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use uuid::Uuid;
 
+#[derive(Default)]
 pub struct MultiSelectState {
     pub selected_cards: HashSet<Uuid>,
     pub selection_mode_active: bool,
@@ -8,15 +9,6 @@ pub struct MultiSelectState {
 
 impl MultiSelectState {
     pub fn new() -> Self {
-        Self {
-            selected_cards: HashSet::new(),
-            selection_mode_active: false,
-        }
-    }
-}
-
-impl Default for MultiSelectState {
-    fn default() -> Self {
-        Self::new()
+        Default::default()
     }
 }

@@ -1,5 +1,6 @@
 use kanban_core::SelectionState;
 
+#[derive(Default)]
 pub struct SelectionHub {
     pub board: SelectionState,
     pub active_board_index: Option<usize>,
@@ -11,19 +12,6 @@ pub struct SelectionHub {
 
 impl SelectionHub {
     pub fn new() -> Self {
-        Self {
-            board: SelectionState::new(),
-            active_board_index: None,
-            active_card_index: None,
-            sprint: SelectionState::new(),
-            active_sprint_index: None,
-            card_navigation_history: Vec::new(),
-        }
-    }
-}
-
-impl Default for SelectionHub {
-    fn default() -> Self {
-        Self::new()
+        Default::default()
     }
 }
