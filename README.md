@@ -152,7 +152,7 @@ crates/
 ```
 
 ```mermaid
-graph TD
+graph LR
     CLI[kanban-cli] --> TUI[kanban-tui]
     CLI --> SVC[kanban-service]
     MCP[kanban-mcp] --> SVC
