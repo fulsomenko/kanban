@@ -737,12 +737,8 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.focus.card_focus == CardFocus::Metadata);
-                        let meta_lines = build_metadata_lines(
-                            card,
-                            board,
-                            &app.ctx.sprints,
-                            &app.app_config,
-                        );
+                        let meta_lines =
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
 
@@ -775,12 +771,8 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                         let meta_config = FieldSectionConfig::new("Metadata")
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.focus.card_focus == CardFocus::Metadata);
-                        let meta_lines = build_metadata_lines(
-                            card,
-                            board,
-                            &app.ctx.sprints,
-                            &app.app_config,
-                        );
+                        let meta_lines =
+                            build_metadata_lines(card, board, &app.ctx.sprints, &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
 
@@ -911,9 +903,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Sprint Prefix: ", label_text()),
                         Span::styled(
-                            app.app_config
-                                .effective_default_sprint_prefix()
-                                .to_string(),
+                            app.app_config.effective_default_sprint_prefix().to_string(),
                             normal_text(),
                         ),
                         Span::styled(" (default)", label_text()),
@@ -925,9 +915,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Card Prefix: ", label_text()),
                         Span::styled(
-                            app.app_config
-                                .effective_default_card_prefix()
-                                .to_string(),
+                            app.app_config.effective_default_card_prefix().to_string(),
                             normal_text(),
                         ),
                         Span::styled(" (default)", label_text()),

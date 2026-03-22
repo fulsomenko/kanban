@@ -188,7 +188,8 @@ impl RenderStrategy for SinglePanelRenderer {
                                             board,
                                             sprints: &app.ctx.sprints,
                                             is_selected,
-                                            is_focused: app.focus.active == crate::app::Focus::Cards,
+                                            is_focused: app.focus.active
+                                                == crate::app::Focus::Cards,
                                             is_multi_selected: app
                                                 .multi_select
                                                 .selected_cards

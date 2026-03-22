@@ -1046,7 +1046,9 @@ impl App {
             if let Some(&parent_id) = parents.get(selected_idx) {
                 if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parent_id) {
                     // Push current card to history
-                    self.selection.card_navigation_history.push(current_card_idx);
+                    self.selection
+                        .card_navigation_history
+                        .push(current_card_idx);
                     // Navigate to parent
                     self.selection.active_card_index = Some(parent_idx);
                     self.focus.card_focus = CardFocus::Title;
@@ -1066,7 +1068,9 @@ impl App {
         // If no valid selection, navigate to first parent if available
         if !parents.is_empty() {
             if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parents[0]) {
-                self.selection.card_navigation_history.push(current_card_idx);
+                self.selection
+                    .card_navigation_history
+                    .push(current_card_idx);
                 self.selection.active_card_index = Some(parent_idx);
                 self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
@@ -1088,7 +1092,9 @@ impl App {
             if let Some(&child_id) = children.get(selected_idx) {
                 if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == child_id) {
                     // Push current card to history
-                    self.selection.card_navigation_history.push(current_card_idx);
+                    self.selection
+                        .card_navigation_history
+                        .push(current_card_idx);
                     // Navigate to child
                     self.selection.active_card_index = Some(child_idx);
                     self.focus.card_focus = CardFocus::Title;
@@ -1108,7 +1114,9 @@ impl App {
         // If no valid selection, navigate to first child if available
         if !children.is_empty() {
             if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == children[0]) {
-                self.selection.card_navigation_history.push(current_card_idx);
+                self.selection
+                    .card_navigation_history
+                    .push(current_card_idx);
                 self.selection.active_card_index = Some(child_idx);
                 self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
