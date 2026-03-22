@@ -43,6 +43,9 @@ pub enum Commands {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Migrate JSON data file to SQLite database
+    #[cfg(feature = "sqlite")]
+    Migrate(MigrateArgs),
 }
 
 // Board commands
@@ -388,6 +391,18 @@ pub struct SprintUpdateArgs {
     pub clear_start_date: bool,
     #[arg(long)]
     pub clear_end_date: bool,
+}
+
+// Migrate command
+#[cfg(feature = "sqlite")]
+#[derive(Args)]
+pub struct MigrateArgs {
+    /// Path to source JSON file
+    #[arg(long)]
+    pub from: String,
+    /// Path to destination SQLite file
+    #[arg(long)]
+    pub to: String,
 }
 
 // Export/Import commands

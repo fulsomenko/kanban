@@ -4,8 +4,23 @@ use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
 };
+use kanban_persistence::PersistenceStore;
 use kanban_service::KanbanContext;
+use std::sync::Arc;
 use uuid::Uuid;
+
+fn make_store(path: &str) -> Arc<dyn PersistenceStore + Send + Sync> {
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    #[cfg(feature = "sqlite")]
+    if matches!(ext, "db" | "sqlite") {
+        return Arc::new(kanban_persistence_sqlite::SqliteStore::new(path));
+    }
+    let _ = ext;
+    Arc::new(kanban_persistence_json::JsonFileStore::new(path))
+}
 
 pub struct McpContext {
     inner: KanbanContext,
@@ -14,7 +29,7 @@ pub struct McpContext {
 impl McpContext {
     pub async fn new(data_file: &str) -> KanbanResult<Self> {
         Ok(Self {
-            inner: KanbanContext::load_json(data_file).await?,
+            inner: KanbanContext::load(make_store(data_file)).await?,
         })
     }
 

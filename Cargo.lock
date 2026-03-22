@@ -1367,7 +1367,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-persistence-json"
-version = "0.3.3"
+version = "0.3.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1384,7 +1384,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-persistence-sqlite"
-version = "0.3.3"
+version = "0.3.5"
 dependencies = [
  "async-trait",
  "chrono",

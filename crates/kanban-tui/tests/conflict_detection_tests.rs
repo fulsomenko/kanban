@@ -1,6 +1,7 @@
 use kanban_domain::{Board, Card, Column, Snapshot};
 use kanban_persistence::PersistenceError;
-use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence_json::JsonFileStore;
 use std::fs;
 use std::time::Duration;
 use tempfile::tempdir;

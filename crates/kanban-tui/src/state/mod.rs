@@ -5,14 +5,15 @@ use kanban_domain::commands::Command;
 use kanban_domain::commands::CommandContext;
 use kanban_domain::KanbanResult;
 use kanban_domain::{ArchivedCard, Board, Card, Column, HistoryManager, Snapshot, Sprint};
-use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence_json::JsonFileStore;
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 #[cfg(feature = "sqlite")]
-use kanban_persistence::SqliteStore;
+use kanban_persistence_sqlite::SqliteStore;
 
 pub use kanban_domain::commands;
 pub use snapshot::TuiSnapshot;
