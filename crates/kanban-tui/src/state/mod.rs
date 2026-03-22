@@ -15,10 +15,10 @@ use tokio::sync::mpsc;
 use kanban_persistence::SqliteStore;
 
 pub use kanban_domain::commands;
-pub use snapshot::DataSnapshot;
+pub use snapshot::TuiSnapshot;
 
 type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
-type SaveChannel = (mpsc::Sender<DataSnapshot>, mpsc::Receiver<DataSnapshot>);
+type SaveChannel = (mpsc::Sender<Snapshot>, mpsc::Receiver<Snapshot>);
 
 /// Manages state mutations and persistence with immediate auto-saving
 ///
