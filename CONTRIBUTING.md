@@ -110,15 +110,25 @@ The codebase follows SOLID principles:
 ```
 crates/
 ├── kanban-core/        # Core traits, errors, result types
-├── kanban-domain/      # Domain models (Board, Card, Column)
+├── kanban-domain/      # Domain models (Board, Card, Column, Sprint)
 ├── kanban-persistence/ # JSON storage, versioning & migrations
+├── kanban-service/     # Service layer: KanbanContext, persistence orchestration
 ├── kanban-tui/         # Terminal UI (ratatui + crossterm)
-└── kanban-cli/         # CLI entry point (clap)
+├── kanban-cli/         # CLI entry point (clap)
+└── kanban-mcp/         # Model Context Protocol server for LLM integration
 ```
 
 **Dependency Flow:**
-```
-kanban-cli → kanban-tui → kanban-persistence → kanban-domain → kanban-core
+
+```mermaid
+graph LR
+    CLI[kanban-cli] --> TUI[kanban-tui]
+    CLI --> SVC[kanban-service]
+    MCP[kanban-mcp] --> SVC
+    TUI --> SVC
+    SVC --> PER[kanban-persistence]
+    PER --> DOM[kanban-domain]
+    DOM --> CORE[kanban-core]
 ```
 
 ### Adding New Features
@@ -152,10 +162,9 @@ The application uses a **command pattern** for all state mutations, enabling pro
 **Command Pattern Flow:**
 1. **Event Handler** (kanban-tui): Processes keyboard input, collects data
 2. **Command** (kanban-domain): Encapsulates the mutation with parameters
-3. **StateManager** (kanban-tui): Executes command via CommandContext
+3. **KanbanContext** (kanban-service): Executes command via CommandContext
 4. **CommandContext**: Applies mutation to data vectors
-5. **Dirty Flag**: StateManager marks state as dirty after execution
-6. **Progressive Save**: Auto-saves immediately after each command via async channel
+5. **Save**: KanbanContext writes state to disk via PersistenceStore
 
 **Example Handler Pattern:**
 ```rust
@@ -192,7 +201,7 @@ pub fn handle_create_card_key(&mut self) {
 1. **Define domain command** in `kanban-domain/src/commands/`
 2. **Implement Command trait** with execute() and description()
 3. **Update handler** in kanban-tui to use `self.execute_command()`
-4. **StateManager** handles dirty flag and persistence automatically
+4. **KanbanContext** in kanban-service handles persistence automatically
 
 ## Testing
 
@@ -293,8 +302,10 @@ mod tests {
 When publishing:
 1. `kanban-core` publishes first (no internal dependencies)
 2. `kanban-domain` publishes second (depends on kanban-core)
-3. `kanban-tui` publishes third (depends on kanban-domain)
-4. `kanban-cli` publishes last (depends on all others)
+3. `kanban-persistence` publishes third (depends on kanban-domain)
+4. `kanban-service` publishes fourth (depends on kanban-persistence)
+5. `kanban-tui` and `kanban-mcp` publish fifth (depend on kanban-service)
+6. `kanban-cli` publishes last (depends on all others)
 
 If versions diverge between crates, the published versions on crates.io won't resolve dependencies correctly, causing build failures for users.
 
