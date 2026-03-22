@@ -97,6 +97,22 @@ impl KanbanContext {
         command.execute(&mut ctx)
     }
 
+    pub async fn reload(&mut self) -> KanbanResult<()> {
+        if !self.store.exists().await {
+            return Ok(());
+        }
+        let (snapshot, _metadata) = self.store.load().await?;
+        let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
+            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+        self.boards = data.boards;
+        self.columns = data.columns;
+        self.cards = data.cards;
+        self.sprints = data.sprints;
+        self.archived_cards = data.archived_cards;
+        self.graph = data.graph;
+        Ok(())
+    }
+
     pub async fn save(&self) -> KanbanResult<()> {
         let snapshot = DataSnapshot {
             boards: self.boards.clone(),
