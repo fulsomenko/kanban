@@ -8,7 +8,7 @@ use std::io;
 
 impl App {
     pub fn handle_create_card_key(&mut self) {
-        if self.focus.focus == Focus::Cards && self.selection.active_board_index.is_some() {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
             self.open_dialog(DialogMode::CreateCard);
             self.input.clear();
         }
@@ -24,7 +24,7 @@ impl App {
     }
 
     pub fn handle_toggle_card_completion(&mut self) {
-        if self.focus.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
@@ -36,7 +36,7 @@ impl App {
     }
 
     pub fn handle_card_selection_toggle(&mut self) {
-        if self.focus.focus == Focus::Cards {
+        if self.focus.active == Focus::Cards {
             if self.multi_select.selection_mode_active {
                 // Exit selection mode (keep selections)
                 self.multi_select.selection_mode_active = false;
@@ -55,7 +55,7 @@ impl App {
     }
 
     pub fn handle_select_all_cards_in_view(&mut self) {
-        if self.focus.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
@@ -70,7 +70,7 @@ impl App {
     }
 
     pub fn handle_set_selected_cards_priority(&mut self) {
-        if self.focus.focus != Focus::Cards || self.multi_select.selected_cards.is_empty() {
+        if self.focus.active != Focus::Cards || self.multi_select.selected_cards.is_empty() {
             return;
         }
 
@@ -79,7 +79,7 @@ impl App {
     }
 
     pub fn handle_assign_to_sprint_key(&mut self) {
-        if self.focus.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
@@ -108,7 +108,7 @@ impl App {
     }
 
     pub fn handle_order_cards_key(&mut self) {
-        if self.focus.focus == Focus::Cards && self.selection.active_board_index.is_some() {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
             let sort_idx = self.get_current_sort_field_selection_index();
             self.filter.sort_field_selection.set(Some(sort_idx));
             self.open_dialog(DialogMode::OrderCards);
@@ -116,7 +116,7 @@ impl App {
     }
 
     pub fn handle_toggle_sort_order_key(&mut self) {
-        if self.focus.focus == Focus::Cards && self.selection.active_board_index.is_some() {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
             if let Some(current_order) = self.filter.current_sort_order {
                 let new_order = match current_order {
                     SortOrder::Ascending => SortOrder::Descending,
@@ -148,7 +148,7 @@ impl App {
     }
 
     pub fn handle_toggle_hide_assigned(&mut self) {
-        if self.focus.focus == Focus::Cards && self.selection.active_board_index.is_some() {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
             self.filter.hide_assigned_cards = !self.filter.hide_assigned_cards;
             let status = if self.filter.hide_assigned_cards {
                 "enabled"
@@ -162,7 +162,7 @@ impl App {
     }
 
     pub fn handle_toggle_sprint_filter(&mut self) {
-        if self.focus.focus == Focus::Cards && self.selection.active_board_index.is_some() {
+        if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
             if let Some(board_idx) = self.selection.active_board_index {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     if let Some(active_sprint_id) = board.active_sprint_id {
@@ -194,7 +194,7 @@ impl App {
         event_handler: &EventHandler,
     ) -> bool {
         let mut should_restart = false;
-        if self.focus.focus == Focus::Cards {
+        if self.focus.active == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
                 let card_id = selected_card.id;
                 let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
@@ -429,7 +429,7 @@ impl App {
     }
 
     fn handle_move_card(&mut self, direction: kanban_domain::card_lifecycle::MoveDirection) {
-        if self.focus.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 
@@ -601,7 +601,7 @@ impl App {
     }
 
     pub fn handle_archive_card(&mut self) {
-        if self.focus.focus != Focus::Cards {
+        if self.focus.active != Focus::Cards {
             return;
         }
 

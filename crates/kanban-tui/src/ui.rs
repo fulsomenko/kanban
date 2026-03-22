@@ -142,7 +142,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
         for (idx, board) in app.ctx.boards.iter().enumerate() {
             let config = ListItemConfig::new()
                 .selected(app.selection.board.get() == Some(idx))
-                .focused(app.focus.focus == Focus::Boards)
+                .focused(app.focus.active == Focus::Boards)
                 .active(app.selection.active_board_index == Some(idx));
 
             lines.push(styled_list_item(&board.name, &config));
@@ -151,7 +151,7 @@ fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     let panel_config = PanelConfig::new("Projects")
         .with_focus_indicator("Projects [1]")
-        .focused(app.focus.focus == Focus::Boards);
+        .focused(app.focus.active == Focus::Boards);
 
     let content = Paragraph::new(lines);
     render_panel(frame, area, &panel_config, content);
@@ -194,7 +194,7 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
 pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
     let mut title = if app.mode == AppMode::ArchivedCardsView {
         "Archive".to_string()
-    } else if app.focus.focus == Focus::Cards {
+    } else if app.focus.active == Focus::Cards {
         "Tasks [2]".to_string()
     } else {
         "Tasks".to_string()
@@ -741,7 +741,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             card,
                             board,
                             &app.ctx.sprints,
-                            &app.persistence.app_config,
+                            &app.app_config,
                         );
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
@@ -779,7 +779,7 @@ fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                             card,
                             board,
                             &app.ctx.sprints,
-                            &app.persistence.app_config,
+                            &app.app_config,
                         );
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
@@ -911,8 +911,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Sprint Prefix: ", label_text()),
                         Span::styled(
-                            app.persistence
-                                .app_config
+                            app.app_config
                                 .effective_default_sprint_prefix()
                                 .to_string(),
                             normal_text(),
@@ -926,8 +925,7 @@ fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
                     Line::from(vec![
                         Span::styled("Card Prefix: ", label_text()),
                         Span::styled(
-                            app.persistence
-                                .app_config
+                            app.app_config
                                 .effective_default_card_prefix()
                                 .to_string(),
                             normal_text(),

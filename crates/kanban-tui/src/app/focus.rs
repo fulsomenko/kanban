@@ -5,7 +5,7 @@ pub enum Focus {
 }
 
 pub struct FocusState {
-    pub focus: Focus,
+    pub active: Focus,
     pub card_focus: CardFocus,
     pub board_focus: BoardFocus,
 }
@@ -13,7 +13,7 @@ pub struct FocusState {
 impl FocusState {
     pub fn new() -> Self {
         Self {
-            focus: Focus::Boards,
+            active: Focus::Boards,
             card_focus: CardFocus::Title,
             board_focus: BoardFocus::Name,
         }

@@ -69,6 +69,7 @@ pub struct App {
     pub mode_stack: Vec<AppMode>,
     pub input: InputState,
     pub ctx: TuiContext,
+    pub app_config: AppConfig,
     pub selection: SelectionHub,
     pub animation: AnimationState,
     pub filter: FilterState,
@@ -109,12 +110,13 @@ impl App {
             mode_stack: Vec::new(),
             input: InputState::new(),
             ctx,
+            app_config,
             selection: SelectionHub::new(),
             animation: AnimationState::new(),
             filter: FilterState::new(),
             dialog_input: DialogInputState::new(),
             focus: FocusState::new(),
-            persistence: PersistenceState::new(save_file.clone(), app_config, save_completion_rx),
+            persistence: PersistenceState::new(save_file.clone(), save_completion_rx),
             multi_select: MultiSelectState::new(),
             ui: UiState::new(),
             sprint_view: SprintViewState::new(),
@@ -281,7 +283,7 @@ impl App {
             KeybindingAction::SelectAllCards => self.handle_select_all_cards_in_view(),
             KeybindingAction::SetSelectedCardsPriority => self.handle_set_selected_cards_priority(),
             KeybindingAction::Search => {
-                if self.focus.focus == Focus::Cards {
+                if self.focus.active == Focus::Cards {
                     self.filter.search.activate();
                     self.mode = AppMode::Search;
                 }
@@ -387,7 +389,7 @@ impl App {
             AppMode::Normal => match key.code {
                 KeyCode::Char('/') => {
                     self.pending_key = None;
-                    if self.focus.focus == Focus::Cards {
+                    if self.focus.active == Focus::Cards {
                         self.filter.search.activate();
                         self.mode = AppMode::Search;
                     }
@@ -414,7 +416,7 @@ impl App {
                 }
                 KeyCode::Char('n') => {
                     self.pending_key = None;
-                    match self.focus.focus {
+                    match self.focus.active {
                         Focus::Boards => self.handle_create_board_key(),
                         Focus::Cards => self.handle_create_card_key(),
                     }
@@ -425,7 +427,7 @@ impl App {
                 }
                 KeyCode::Char('e') => {
                     self.pending_key = None;
-                    match self.focus.focus {
+                    match self.focus.active {
                         Focus::Boards => self.handle_edit_board_key(),
                         Focus::Cards => {
                             should_restart_events =
@@ -463,7 +465,7 @@ impl App {
                 }
                 KeyCode::Char('s') => {
                     self.pending_key = None;
-                    if self.focus.focus == Focus::Cards {
+                    if self.focus.active == Focus::Cards {
                         self.handle_manage_children_from_list();
                     }
                 }
@@ -665,8 +667,8 @@ impl App {
 
     fn handle_archived_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
         use crossterm::event::KeyCode;
-        if self.focus.focus != Focus::Cards {
-            self.focus.focus = Focus::Cards;
+        if self.focus.active != Focus::Cards {
+            self.focus.active = Focus::Cards;
         }
 
         match key_code {
@@ -1796,7 +1798,7 @@ impl App {
                             card,
                             board,
                             &self.ctx.sprints,
-                            self.persistence.app_config.effective_default_card_prefix(),
+                            self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&output) {
                             self.set_error(format!("Failed to copy: {}", e));

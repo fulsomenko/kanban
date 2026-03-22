@@ -346,18 +346,18 @@ impl App {
     pub fn handle_focus_switch(&mut self, focus_target: Focus) {
         match focus_target {
             Focus::Boards => {
-                self.focus.focus = Focus::Boards;
+                self.focus.active = Focus::Boards;
             }
             Focus::Cards => {
                 if self.selection.active_board_index.is_some() {
-                    self.focus.focus = Focus::Cards;
+                    self.focus.active = Focus::Cards;
                 }
             }
         }
     }
 
     pub fn handle_navigation_down(&mut self) {
-        match self.focus.focus {
+        match self.focus.active {
             Focus::Boards => {
                 self.selection.board.next(self.ctx.boards.len());
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
@@ -403,7 +403,7 @@ impl App {
     }
 
     pub fn handle_navigation_up(&mut self) {
-        match self.focus.focus {
+        match self.focus.active {
             Focus::Boards => {
                 self.selection.board.prev();
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
@@ -448,7 +448,7 @@ impl App {
     }
 
     pub fn handle_selection_activate(&mut self) {
-        match self.focus.focus {
+        match self.focus.active {
             Focus::Boards => {
                 if self.selection.board.get().is_some() {
                     self.selection.active_board_index = self.selection.board.get();
@@ -482,7 +482,7 @@ impl App {
                         }
                     }
 
-                    self.focus.focus = Focus::Cards;
+                    self.focus.active = Focus::Cards;
                 }
             }
             Focus::Cards => {
@@ -521,7 +521,7 @@ impl App {
 
         if self.selection.active_board_index.is_some() {
             self.selection.active_board_index = None;
-            self.focus.focus = Focus::Boards;
+            self.focus.active = Focus::Boards;
 
             self.switch_view_strategy(TaskListView::GroupedByColumn);
         }
@@ -541,7 +541,7 @@ impl App {
     }
 
     pub fn handle_kanban_column_left(&mut self) {
-        if !self.is_kanban_view() || self.focus.focus != Focus::Cards {
+        if !self.is_kanban_view() || self.focus.active != Focus::Cards {
             return;
         }
 
@@ -551,7 +551,7 @@ impl App {
     }
 
     pub fn handle_kanban_column_right(&mut self) {
-        if !self.is_kanban_view() || self.focus.focus != Focus::Cards {
+        if !self.is_kanban_view() || self.focus.active != Focus::Cards {
             return;
         }
 
@@ -561,7 +561,7 @@ impl App {
     }
 
     pub fn handle_column_or_focus_switch(&mut self, index: usize) {
-        if self.is_kanban_view() && self.focus.focus == Focus::Cards {
+        if self.is_kanban_view() && self.focus.active == Focus::Cards {
             let column_count = self.view.strategy.get_all_task_lists().len();
 
             if index < column_count {
@@ -591,7 +591,7 @@ impl App {
     }
 
     pub fn handle_jump_to_top(&mut self) {
-        match self.focus.focus {
+        match self.focus.active {
             Focus::Boards => {
                 self.selection.board.jump_to_first();
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
@@ -607,7 +607,7 @@ impl App {
     }
 
     pub fn handle_jump_to_bottom(&mut self) {
-        match self.focus.focus {
+        match self.focus.active {
             Focus::Boards => {
                 self.selection.board.jump_to_last(self.ctx.boards.len());
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
@@ -627,7 +627,7 @@ impl App {
     }
 
     pub fn handle_jump_half_viewport_up(&mut self) {
-        if self.focus.focus == Focus::Cards {
+        if self.focus.active == Focus::Cards {
             // Get total items before borrowing mutably
             let total_items = self
                 .view
@@ -672,7 +672,7 @@ impl App {
     }
 
     pub fn handle_jump_half_viewport_down(&mut self) {
-        if self.focus.focus == Focus::Cards {
+        if self.focus.active == Focus::Cards {
             // Get total items before borrowing mutably
             let total_items = self
                 .view

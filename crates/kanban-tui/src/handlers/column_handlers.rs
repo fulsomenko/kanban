@@ -180,7 +180,7 @@ impl App {
     }
 
     pub fn handle_toggle_task_list_view(&mut self) {
-        if self.focus.focus != crate::app::Focus::Cards {
+        if self.focus.active != crate::app::Focus::Cards {
             return;
         }
 

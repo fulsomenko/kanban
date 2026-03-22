@@ -5,7 +5,7 @@ use kanban_domain::CardFilters;
 
 impl App {
     pub fn handle_open_filter_dialog(&mut self) {
-        if self.focus.focus != Focus::Cards || self.selection.active_board_index.is_none() {
+        if self.focus.active != Focus::Cards || self.selection.active_board_index.is_none() {
             return;
         }
 

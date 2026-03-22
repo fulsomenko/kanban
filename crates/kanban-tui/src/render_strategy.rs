@@ -188,7 +188,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                             board,
                                             sprints: &app.ctx.sprints,
                                             is_selected,
-                                            is_focused: app.focus.focus == crate::app::Focus::Cards,
+                                            is_focused: app.focus.active == crate::app::Focus::Cards,
                                             is_multi_selected: app
                                                 .multi_select
                                                 .selected_cards
@@ -281,7 +281,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         sprints: &app.ctx.sprints,
                                         is_selected: task_list.get_selected_index()
                                             == Some(*card_idx),
-                                        is_focused: app.focus.focus == crate::app::Focus::Cards,
+                                        is_focused: app.focus.active == crate::app::Focus::Cards,
                                         is_multi_selected: app
                                             .multi_select
                                             .selected_cards
@@ -317,10 +317,10 @@ impl RenderStrategy for SinglePanelRenderer {
 
         let mut panel_config = PanelConfig::new(&title)
             .with_focus_indicator(&title)
-            .focused(app.focus.focus == crate::app::Focus::Cards);
+            .focused(app.focus.active == crate::app::Focus::Cards);
 
         if app.mode == crate::app::AppMode::ArchivedCardsView
-            && app.focus.focus == crate::app::Focus::Cards
+            && app.focus.active == crate::app::Focus::Cards
         {
             panel_config = panel_config.with_custom_border_style(deleted_view_focused_border());
         }
@@ -351,7 +351,7 @@ impl RenderStrategy for MultiPanelRenderer {
 
                     let panel_config = PanelConfig::new("Tasks")
                         .with_focus_indicator("Tasks [2]")
-                        .focused(app.focus.focus == crate::app::Focus::Cards);
+                        .focused(app.focus.active == crate::app::Focus::Cards);
 
                     let content = Paragraph::new(lines).block(panel_config.block());
                     frame.render_widget(content, area);
@@ -429,7 +429,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                         board,
                                         sprints: &app.ctx.sprints,
                                         is_selected,
-                                        is_focused: app.focus.focus == crate::app::Focus::Cards
+                                        is_focused: app.focus.active == crate::app::Focus::Cards
                                             && is_focused_column,
                                         is_multi_selected: app
                                             .multi_select
@@ -480,7 +480,7 @@ impl RenderStrategy for MultiPanelRenderer {
 
                     let mut panel_config = PanelConfig::new(&title)
                         .with_focus_indicator(&title)
-                        .focused(app.focus.focus == crate::app::Focus::Cards && is_focused_column);
+                        .focused(app.focus.active == crate::app::Focus::Cards && is_focused_column);
 
                     if app.mode == crate::app::AppMode::ArchivedCardsView && is_focused_column {
                         panel_config =
@@ -499,7 +499,7 @@ impl RenderStrategy for MultiPanelRenderer {
 
             let panel_config = PanelConfig::new("Tasks")
                 .with_focus_indicator("Tasks [2]")
-                .focused(app.focus.focus == crate::app::Focus::Cards);
+                .focused(app.focus.active == crate::app::Focus::Cards);
 
             let content = Paragraph::new(lines).block(panel_config.block());
             frame.render_widget(content, area);

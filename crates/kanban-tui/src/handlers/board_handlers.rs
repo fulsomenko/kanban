@@ -4,14 +4,14 @@ use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {
     pub fn handle_create_board_key(&mut self) {
-        if self.focus.focus == Focus::Boards {
+        if self.focus.active == Focus::Boards {
             self.open_dialog(DialogMode::CreateBoard);
             self.input.clear();
         }
     }
 
     pub fn handle_rename_board_key(&mut self) {
-        if self.focus.focus == Focus::Boards && self.selection.board.get().is_some() {
+        if self.focus.active == Focus::Boards && self.selection.board.get().is_some() {
             if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     self.input.set(board.name.clone());
@@ -22,14 +22,14 @@ impl App {
     }
 
     pub fn handle_edit_board_key(&mut self) {
-        if self.focus.focus == Focus::Boards && self.selection.board.get().is_some() {
+        if self.focus.active == Focus::Boards && self.selection.board.get().is_some() {
             self.push_mode(AppMode::BoardDetail);
             self.focus.board_focus = BoardFocus::Name;
         }
     }
 
     pub fn handle_export_board_key(&mut self) {
-        if self.focus.focus == Focus::Boards && self.selection.board.get().is_some() {
+        if self.focus.active == Focus::Boards && self.selection.board.get().is_some() {
             if let Some(board_idx) = self.selection.board.get() {
                 if let Some(board) = self.ctx.boards.get(board_idx) {
                     let filename = format!(
@@ -45,7 +45,7 @@ impl App {
     }
 
     pub fn handle_export_all_key(&mut self) {
-        if self.focus.focus == Focus::Boards && !self.ctx.boards.is_empty() {
+        if self.focus.active == Focus::Boards && !self.ctx.boards.is_empty() {
             let filename = format!(
                 "kanban-all-{}.json",
                 chrono::Utc::now().format("%Y%m%d-%H%M%S")
@@ -56,7 +56,7 @@ impl App {
     }
 
     pub fn handle_import_board_key(&mut self) {
-        if self.focus.focus == Focus::Boards {
+        if self.focus.active == Focus::Boards {
             self.scan_import_files();
             if !self.dialog_input.import_files.is_empty() {
                 self.dialog_input.import_selection.set(Some(0));
