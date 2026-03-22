@@ -44,7 +44,6 @@ pub struct KanbanContext {
     pub sprints: Vec<Sprint>,
     pub archived_cards: Vec<ArchivedCard>,
     pub graph: DependencyGraph,
-    instance_id: Uuid,
     store: Arc<dyn PersistenceStore + Send + Sync>,
 }
 
@@ -65,7 +64,6 @@ impl KanbanContext {
             sprints: data.sprints,
             archived_cards: data.archived_cards,
             graph: data.graph,
-            instance_id: Uuid::new_v4(),
             store,
         })
     }
@@ -83,7 +81,6 @@ impl KanbanContext {
             sprints: Vec::new(),
             archived_cards: Vec::new(),
             graph: DependencyGraph::new(),
-            instance_id: Uuid::new_v4(),
             store,
         }
     }
@@ -115,15 +112,11 @@ impl KanbanContext {
 
         let store_snapshot = StoreSnapshot {
             data: bytes,
-            metadata: PersistenceMetadata::new(self.instance_id),
+            metadata: PersistenceMetadata::new(Uuid::new_v4()),
         };
 
         self.store.save(store_snapshot).await?;
         Ok(())
-    }
-
-    pub fn save_sync(&self) -> KanbanResult<()> {
-        tokio::runtime::Handle::current().block_on(self.save())
     }
 
     pub fn bulk_archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
