@@ -359,6 +359,15 @@ pub enum SprintAction {
         /// Sprint ID
         id: Uuid,
     },
+    /// Carry over uncompleted cards from a completed sprint to a planning sprint
+    CarryOver {
+        /// ID of the completed sprint to carry cards from
+        #[arg(long)]
+        from: Uuid,
+        /// ID of the planning sprint to carry cards to
+        #[arg(long)]
+        to: Uuid,
+    },
 }
 
 #[derive(Args)]
