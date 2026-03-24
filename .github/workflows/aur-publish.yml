@@ -13,14 +13,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Update PKGBUILD version
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" ./aur/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" ./aur/PKGBUILD
+
       - name: Deploy to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        uses: KSXGitHub/github-actions-deploy-aur@2ac5a4c1d7035885d46b10e3193393be8460b6f1
         with:
           pkgname: kanban
-          pkgver: ${{ github.event.release.tag_name }}
-          pkgbuild-path: ./aur/PKGBUILD
+          pkgbuild: ./aur/PKGBUILD
           commit-username: github-actions[bot]
-          commit-email: github-actions[bot]@users.noreply.github.com
+          commit-email: 41898282+github-actions[bot]@users.noreply.github.com
           commit-message: "Update to ${{ github.event.release.tag_name }}"
           ssh-private-key: ${{ secrets.AUR_SSH_KEY }}
           updpkgsums: true
