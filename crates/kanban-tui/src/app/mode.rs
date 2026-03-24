@@ -26,6 +26,7 @@ pub enum DialogMode {
     ExternalChangeDetected,
     ManageParents,
     ManageChildren,
+    CarryOverSprint,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
