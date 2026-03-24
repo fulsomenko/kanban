@@ -638,6 +638,7 @@ impl App {
                 }
                 DialogMode::ManageParents => self.handle_manage_parents_popup(key.code),
                 DialogMode::ManageChildren => self.handle_manage_children_popup(key.code),
+                DialogMode::CarryOverSprint => self.handle_carry_over_sprint_popup(key.code),
             },
         }
         should_restart_events
