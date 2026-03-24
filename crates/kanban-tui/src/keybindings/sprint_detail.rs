@@ -106,6 +106,12 @@ impl KeybindingProvider for SprintDetailProvider {
                     "Copy git checkout command",
                     KeybindingAction::EditCard,
                 ),
+                Keybinding::new(
+                    "R",
+                    "carry-over",
+                    "Carry over uncompleted tasks to a planning sprint",
+                    KeybindingAction::RestoreCard,
+                ),
             ],
         )
     }
