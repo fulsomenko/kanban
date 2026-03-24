@@ -1,0 +1,78 @@
+use kanban_domain::{CardStatus, CardUpdate, CreateCardOptions, KanbanOperations};
+use kanban_service::KanbanContext;
+use tempfile::TempDir;
+
+#[tokio::test]
+async fn carry_over_skips_done_cards() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.kanban").to_string_lossy().to_string();
+
+    let mut ctx = KanbanContext::load_json(&path).await.unwrap();
+
+    let board = ctx.create_board("Test Board".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "Backlog".into(), None).unwrap();
+
+    let from_sprint = ctx.create_sprint(board.id, None, None).unwrap();
+    let to_sprint = ctx.create_sprint(board.id, None, None).unwrap();
+
+    // Activate then complete the from_sprint so it's eligible
+    ctx.activate_sprint(from_sprint.id, Some(14)).unwrap();
+    ctx.complete_sprint(from_sprint.id).unwrap();
+
+    // Create three cards and assign them to from_sprint
+    let card_todo = ctx
+        .create_card(
+            board.id,
+            col.id,
+            "Todo card".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    ctx.assign_card_to_sprint(card_todo.id, from_sprint.id).unwrap();
+
+    let card_in_progress = ctx
+        .create_card(
+            board.id,
+            col.id,
+            "In Progress card".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    ctx.assign_card_to_sprint(card_in_progress.id, from_sprint.id).unwrap();
+
+    let card_done = ctx
+        .create_card(
+            board.id,
+            col.id,
+            "Done card".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    ctx.assign_card_to_sprint(card_done.id, from_sprint.id).unwrap();
+
+    // Mark the done card as Done
+    ctx.update_card(
+        card_done.id,
+        CardUpdate {
+            status: Some(CardStatus::Done),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let count = ctx
+        .carry_over_sprint_cards(from_sprint.id, to_sprint.id)
+        .unwrap();
+
+    // Only the two non-Done cards should be moved
+    assert_eq!(count, 2);
+
+    let moved_todo = ctx.get_card(card_todo.id).unwrap().unwrap();
+    assert_eq!(moved_todo.sprint_id, Some(to_sprint.id));
+
+    let moved_in_progress = ctx.get_card(card_in_progress.id).unwrap().unwrap();
+    assert_eq!(moved_in_progress.sprint_id, Some(to_sprint.id));
+
+    let done_card = ctx.get_card(card_done.id).unwrap().unwrap();
+    assert_eq!(done_card.sprint_id, Some(from_sprint.id));
+}
