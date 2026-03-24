@@ -1,0 +1,54 @@
+name: Publish to AUR
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  aur-publish:
+    name: Update AUR package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.repository == 'fulsomenko/kanban'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update PKGBUILD version and sha256
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          URL="https://github.com/fulsomenko/kanban/archive/v${VERSION}.tar.gz"
+          SHA256=$(curl -sL "$URL" | sha256sum | cut -d' ' -f1)
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" ./aur/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" ./aur/PKGBUILD
+          sed -i "s/sha256sums=.*/sha256sums=(\"${SHA256}\")/" ./aur/PKGBUILD
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Generate .SRCINFO
+        run: nix shell nixpkgs#pacman -c sh -c "cd aur && makepkg --printsrcinfo > .SRCINFO"
+
+      - name: Commit updated AUR files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add aur/PKGBUILD aur/.SRCINFO
+          git diff --cached --quiet || git commit -m "chore: update AUR package to ${{ github.event.release.tag_name }}"
+          git push
+
+      - name: Deploy to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@2ac5a4c1d7035885d46b10e3193393be8460b6f1
+        with:
+          pkgname: kanban
+          pkgbuild: ./aur/PKGBUILD
+          commit-username: github-actions[bot]
+          commit-email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit-message: "Update to ${{ github.event.release.tag_name }}"
+          ssh-private-key: ${{ secrets.AUR_SSH_KEY }}
+          updpkgsums: false
+          allow-empty-commits: false

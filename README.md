@@ -54,6 +54,11 @@ cargo install --path crates/kanban-cli
 nix run github:fulsomenko/kanban
 ```
 
+### Arch Linux (AUR)
+```bash
+yay -S kanban
+```
+
 ### Linux Clipboard Support
 
 For clipboard operations (`y`/`Y` to copy branch names) to persist after exiting, you need a clipboard manager running:
