@@ -580,7 +580,28 @@ impl App {
                 self.handle_activate_sprint_key();
             }
             KeyCode::Char('c') => {
-                self.handle_complete_sprint_key();
+                let selected = if self.sprint_view.panel == SprintTaskPanel::Uncompleted {
+                    self.sprint_view.uncompleted_component.get_multi_selected()
+                } else {
+                    vec![]
+                };
+                if !selected.is_empty() {
+                    self.toggle_completion_for_card_ids(selected);
+                    self.sprint_view.uncompleted_component.clear_multi_select();
+                } else {
+                    self.handle_complete_sprint_key();
+                }
+            }
+            KeyCode::Char('d') => {
+                let selected = if self.sprint_view.panel == SprintTaskPanel::Uncompleted {
+                    self.sprint_view.uncompleted_component.get_multi_selected()
+                } else {
+                    vec![]
+                };
+                if !selected.is_empty() {
+                    self.start_delete_animations_for_card_ids(selected);
+                    self.sprint_view.uncompleted_component.clear_multi_select();
+                }
             }
             KeyCode::Char('p') => {
                 if let Some(sprint_idx) = self.selection.active_sprint_index {
@@ -616,6 +637,32 @@ impl App {
                     if let Some(field) = self.filter.current_sort_field {
                         self.apply_sort_to_sprint_lists(field, new_order);
                         tracing::info!("Toggled sort order to: {:?}", new_order);
+                    }
+                }
+            }
+            KeyCode::Char('R') => {
+                if let Some(sprint_idx) = self.selection.active_sprint_index {
+                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
+                        use kanban_domain::SprintStatus;
+                        if sprint.status == SprintStatus::Completed
+                            || sprint.status == SprintStatus::Cancelled
+                        {
+                            let sprint_id = sprint.id;
+                            let selected =
+                                self.sprint_view.uncompleted_component.get_multi_selected();
+                            let card_ids = if selected.is_empty() {
+                                use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+                                get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards)
+                                    .iter()
+                                    .map(|c| c.id)
+                                    .collect()
+                            } else {
+                                selected
+                            };
+                            if !card_ids.is_empty() {
+                                self.handle_carry_over_for_sprint(sprint_id, card_ids);
+                            }
+                        }
                     }
                 }
             }
@@ -1130,5 +1177,65 @@ impl App {
                     .update_item_count(new_children.len());
             }
         }
+    }
+
+    pub fn start_delete_animations_for_card_ids(&mut self, ids: Vec<uuid::Uuid>) {
+        for card_id in ids {
+            self.start_delete_animation(card_id);
+        }
+    }
+
+    pub fn toggle_completion_for_card_ids(&mut self, ids: Vec<uuid::Uuid>) {
+        use kanban_domain::commands::UpdateCard;
+        use kanban_domain::{CardStatus, CardUpdate};
+
+        let mut update_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+
+        for card_id in &ids {
+            let card = match self.ctx.cards.iter().find(|c| c.id == *card_id) {
+                Some(c) => c.clone(),
+                None => continue,
+            };
+
+            let new_status = if card.status == CardStatus::Done {
+                CardStatus::Todo
+            } else {
+                CardStatus::Done
+            };
+
+            let toggle_result = self.selection.active_board_index.and_then(|idx| {
+                self.ctx.boards.get(idx).and_then(|board| {
+                    kanban_domain::card_lifecycle::compute_completion_toggle(
+                        &card,
+                        board,
+                        &self.ctx.columns,
+                        &self.ctx.cards,
+                    )
+                })
+            });
+
+            let mut updates = CardUpdate {
+                status: Some(new_status),
+                ..Default::default()
+            };
+
+            if let Some(ref result) = toggle_result {
+                updates.column_id = Some(result.target_column_id);
+                updates.position = Some(result.new_position);
+                updates.status = Some(result.new_status);
+            }
+
+            update_commands.push(Box::new(UpdateCard { card_id: *card_id, updates })
+                as Box<dyn kanban_domain::commands::Command>);
+        }
+
+        if !update_commands.is_empty() {
+            if let Err(e) = self.execute_commands_batch(update_commands) {
+                tracing::error!("Failed to toggle card completion: {}", e);
+                return;
+            }
+        }
+
+        self.refresh_view();
     }
 }
