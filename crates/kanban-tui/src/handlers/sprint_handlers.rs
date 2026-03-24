@@ -1,6 +1,6 @@
 use crate::app::{App, BoardFocus, DialogMode};
 use kanban_domain::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
-use kanban_domain::{BoardUpdate, FieldUpdate, KanbanOperations, SprintStatus};
+use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
 use uuid::Uuid;
 
 impl App {
@@ -162,15 +162,6 @@ impl App {
         match planning_sprint_ids.len() {
             0 => {
                 self.set_error("No Planning sprint available for carry-over");
-            }
-            1 => {
-                let to_sprint_id = planning_sprint_ids[0];
-                let count = card_ids.len();
-                if let Err(e) = self.ctx.bulk_assign_sprint(card_ids, to_sprint_id) {
-                    self.set_error(format!("Carry-over failed: {}", e));
-                } else {
-                    self.set_success(format!("Carried over {} card(s) to sprint", count));
-                }
             }
             _ => {
                 self.dialog_input.carry_over_source_sprint_id = Some(from_sprint_id);
