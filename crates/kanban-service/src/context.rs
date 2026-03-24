@@ -555,6 +555,19 @@ impl KanbanOperations for KanbanContext {
         Ok(count)
     }
 
+    fn carry_over_sprint_cards(
+        &mut self,
+        from_sprint_id: Uuid,
+        to_sprint_id: Uuid,
+    ) -> KanbanResult<usize> {
+        use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+        let ids: Vec<Uuid> = get_sprint_uncompleted_cards(from_sprint_id, &self.cards)
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        self.bulk_assign_sprint(ids, to_sprint_id)
+    }
+
     fn create_sprint(
         &mut self,
         board_id: Uuid,
