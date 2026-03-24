@@ -522,6 +522,24 @@ impl App {
                                 .collect();
 
                             if let Some(&to_sprint_id) = planning_sprint_ids.get(idx) {
+                                let sprint_label = self
+                                    .ctx
+                                    .sprints
+                                    .iter()
+                                    .find(|s| s.id == to_sprint_id)
+                                    .map(|s| {
+                                        self.ctx
+                                            .boards
+                                            .iter()
+                                            .find(|b| b.id == board_id)
+                                            .and_then(|b| s.get_name(b))
+                                            .map(|n| n.to_string())
+                                            .unwrap_or_else(|| {
+                                                format!("Sprint {}", s.sprint_number)
+                                            })
+                                    })
+                                    .unwrap_or_else(|| "sprint".to_string());
+
                                 let card_ids =
                                     std::mem::take(&mut self.dialog_input.carry_over_card_ids);
                                 let count = card_ids.len();
@@ -531,9 +549,10 @@ impl App {
                                     self.set_error(format!("Carry-over failed: {}", e));
                                 } else {
                                     self.set_success(format!(
-                                        "Carried over {} card(s) to sprint",
-                                        count
+                                        "Carried over {} card(s) to {}",
+                                        count, sprint_label
                                     ));
+                                    self.populate_sprint_task_lists(source_id);
                                 }
                             }
                         }
