@@ -1,0 +1,27 @@
+name: Publish to AUR
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  aur-publish:
+    name: Update AUR package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.repository == 'fulsomenko/kanban'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: kanban
+          pkgver: ${{ github.event.release.tag_name }}
+          pkgbuild-path: ./aur/PKGBUILD
+          commit-username: github-actions[bot]
+          commit-email: github-actions[bot]@users.noreply.github.com
+          commit-message: "Update to ${{ github.event.release.tag_name }}"
+          ssh-private-key: ${{ secrets.AUR_SSH_KEY }}
+          updpkgsums: true
+          allow-empty-commits: false
