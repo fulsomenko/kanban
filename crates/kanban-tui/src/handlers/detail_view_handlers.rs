@@ -648,14 +648,7 @@ impl App {
                             || sprint.status == SprintStatus::Cancelled
                         {
                             let sprint_id = sprint.id;
-                            use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
-                            let card_ids = get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards)
-                                .iter()
-                                .map(|c| c.id)
-                                .collect::<Vec<_>>();
-                            if !card_ids.is_empty() {
-                                self.handle_carry_over_for_sprint(sprint_id, card_ids);
-                            }
+                            self.handle_carry_over_for_sprint(sprint_id);
                         }
                     }
                 }

@@ -11,5 +11,4 @@ pub struct DialogInputState {
     pub task_list_view_selection: SelectionState,
     pub carry_over_sprint_selection: SelectionState,
     pub carry_over_source_sprint_id: Option<Uuid>,
-    pub carry_over_card_ids: Vec<Uuid>,
 }

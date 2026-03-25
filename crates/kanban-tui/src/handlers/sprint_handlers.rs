@@ -126,49 +126,38 @@ impl App {
 
                 tracing::info!("Completed sprint: {}", sprint_name);
 
-                let uncompleted_ids: Vec<Uuid> = {
-                    use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
-                    get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards)
-                        .iter()
-                        .map(|c| c.id)
-                        .collect()
-                };
-
                 self.pop_mode();
                 self.focus.board_focus = BoardFocus::Sprints;
                 self.selection.active_sprint_index = None;
 
-                if !uncompleted_ids.is_empty() {
-                    self.handle_carry_over_for_sprint(sprint_id, uncompleted_ids);
+                {
+                    use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+                    if !get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards).is_empty() {
+                        self.handle_carry_over_for_sprint(sprint_id);
+                    }
                 }
             }
         }
     }
 
-    pub fn handle_carry_over_for_sprint(&mut self, from_sprint_id: Uuid, card_ids: Vec<Uuid>) {
+    pub fn handle_carry_over_for_sprint(&mut self, from_sprint_id: Uuid) {
         let board_id = match self.ctx.sprints.iter().find(|s| s.id == from_sprint_id) {
             Some(sprint) => sprint.board_id,
             None => return,
         };
 
-        let planning_sprint_ids: Vec<Uuid> = self
+        let has_planning_sprint = self
             .ctx
             .sprints
             .iter()
-            .filter(|s| s.board_id == board_id && s.status == SprintStatus::Planning)
-            .map(|s| s.id)
-            .collect();
+            .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning);
 
-        match planning_sprint_ids.len() {
-            0 => {
-                self.set_error("No Planning sprint available for carry-over");
-            }
-            _ => {
-                self.dialog_input.carry_over_source_sprint_id = Some(from_sprint_id);
-                self.dialog_input.carry_over_card_ids = card_ids;
-                self.dialog_input.carry_over_sprint_selection.set(Some(0));
-                self.open_dialog(DialogMode::CarryOverSprint);
-            }
+        if has_planning_sprint {
+            self.dialog_input.carry_over_source_sprint_id = Some(from_sprint_id);
+            self.dialog_input.carry_over_sprint_selection.set(Some(0));
+            self.open_dialog(DialogMode::CarryOverSprint);
+        } else {
+            self.set_error("No Planning sprint available for carry-over");
         }
     }
 

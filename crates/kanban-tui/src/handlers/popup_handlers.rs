@@ -483,7 +483,6 @@ impl App {
                 self.pop_mode();
                 self.dialog_input.carry_over_sprint_selection.clear();
                 self.dialog_input.carry_over_source_sprint_id = None;
-                self.dialog_input.carry_over_card_ids.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(source_id) = self.dialog_input.carry_over_source_sprint_id {
@@ -540,19 +539,18 @@ impl App {
                                     })
                                     .unwrap_or_else(|| "sprint".to_string());
 
-                                let card_ids =
-                                    std::mem::take(&mut self.dialog_input.carry_over_card_ids);
-                                let count = card_ids.len();
-                                if let Err(e) = self.ctx.bulk_assign_sprint(card_ids, to_sprint_id)
-                                {
-                                    tracing::error!("Carry-over failed: {}", e);
-                                    self.set_error(format!("Carry-over failed: {}", e));
-                                } else {
-                                    self.set_success(format!(
-                                        "Carried over {} card(s) to {}",
-                                        count, sprint_label
-                                    ));
-                                    self.populate_sprint_task_lists(source_id);
+                                match self.ctx.carry_over_sprint_cards(source_id, to_sprint_id) {
+                                    Ok(count) => {
+                                        self.set_success(format!(
+                                            "Carried over {} card(s) to {}",
+                                            count, sprint_label
+                                        ));
+                                        self.populate_sprint_task_lists(source_id);
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("Carry-over failed: {}", e);
+                                        self.set_error(format!("Carry-over failed: {}", e));
+                                    }
                                 }
                             }
                         }
@@ -561,7 +559,6 @@ impl App {
                 self.pop_mode();
                 self.dialog_input.carry_over_sprint_selection.clear();
                 self.dialog_input.carry_over_source_sprint_id = None;
-                self.dialog_input.carry_over_card_ids.clear();
             }
             _ => {}
         }

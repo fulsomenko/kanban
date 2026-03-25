@@ -1689,7 +1689,14 @@ fn render_manage_children_popup(app: &App, frame: &mut Frame) {
 fn render_carry_over_sprint_popup(app: &App, frame: &mut Frame) {
     use crate::components::selection_dialog::CarryOverSprintDialog;
     use crate::components::SelectionDialog;
-    let card_count = app.dialog_input.carry_over_card_ids.len();
+    let card_count = app
+        .dialog_input
+        .carry_over_source_sprint_id
+        .map(|id| {
+            use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+            get_sprint_uncompleted_cards(id, &app.ctx.cards).len()
+        })
+        .unwrap_or(0);
     CarryOverSprintDialog { card_count }.render(app, frame);
 }
 
