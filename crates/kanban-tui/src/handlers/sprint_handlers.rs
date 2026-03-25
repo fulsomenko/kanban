@@ -132,8 +132,18 @@ impl App {
 
                 {
                     use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
-                    if !get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards).is_empty() {
-                        self.handle_carry_over_for_sprint(sprint_id);
+                    let has_planning = self
+                        .ctx
+                        .sprints
+                        .iter()
+                        .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning);
+
+                    if has_planning
+                        && !get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards).is_empty()
+                    {
+                        self.dialog_input.carry_over_source_sprint_id = Some(sprint_id);
+                        self.dialog_input.carry_over_sprint_selection.set(Some(0));
+                        self.open_dialog(DialogMode::CarryOverSprint);
                     }
                 }
             }
