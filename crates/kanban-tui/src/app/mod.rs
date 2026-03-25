@@ -297,6 +297,7 @@ impl App {
             KeybindingAction::JumpHalfViewportDown => self.handle_jump_half_viewport_down(),
             KeybindingAction::ManageParents => self.handle_manage_parents(),
             KeybindingAction::ManageChildren => self.handle_manage_children(),
+            KeybindingAction::CarryOver => {}
             KeybindingAction::Undo => {
                 if let Err(e) = self.undo() {
                     self.set_error(format!("Undo failed: {}", e));
