@@ -1,6 +1,7 @@
 use crate::app::{App, BoardFocus, DialogMode};
 use kanban_domain::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
 use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
+use uuid::Uuid;
 
 impl App {
     pub fn handle_create_sprint_key(&mut self) {
@@ -128,7 +129,35 @@ impl App {
                 self.pop_mode();
                 self.focus.board_focus = BoardFocus::Sprints;
                 self.selection.active_sprint_index = None;
+
+                {
+                    use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+                    if !get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards).is_empty() {
+                        self.handle_carry_over_for_sprint(sprint_id);
+                    }
+                }
             }
+        }
+    }
+
+    pub fn handle_carry_over_for_sprint(&mut self, from_sprint_id: Uuid) {
+        let board_id = match self.ctx.sprints.iter().find(|s| s.id == from_sprint_id) {
+            Some(sprint) => sprint.board_id,
+            None => return,
+        };
+
+        let has_planning_sprint = self
+            .ctx
+            .sprints
+            .iter()
+            .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning);
+
+        if has_planning_sprint {
+            self.dialog_input.carry_over_source_sprint_id = Some(from_sprint_id);
+            self.dialog_input.carry_over_sprint_selection.set(Some(0));
+            self.open_dialog(DialogMode::CarryOverSprint);
+        } else {
+            self.set_error("No Planning sprint available for carry-over");
         }
     }
 

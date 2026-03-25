@@ -2,7 +2,8 @@ use crate::app::App;
 use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
 use kanban_domain::{
-    dependencies::CardGraphExt, FieldUpdate, Snapshot, SortField, SortOrder, Sprint,
+    dependencies::CardGraphExt, FieldUpdate, KanbanOperations, Snapshot, SortField, SortOrder,
+    Sprint,
 };
 
 const PRIORITY_COUNT: usize = 4;
@@ -474,6 +475,93 @@ impl App {
 
     pub fn handle_manage_children_popup(&mut self, key_code: KeyCode) {
         self.handle_relationship_popup(key_code, false);
+    }
+
+    pub fn handle_carry_over_sprint_popup(&mut self, key_code: KeyCode) {
+        match key_code {
+            KeyCode::Esc => {
+                self.pop_mode();
+                self.dialog_input.carry_over_sprint_selection.clear();
+                self.dialog_input.carry_over_source_sprint_id = None;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if let Some(source_id) = self.dialog_input.carry_over_source_sprint_id {
+                    if let Some(sprint) = self.ctx.sprints.iter().find(|s| s.id == source_id) {
+                        let board_id = sprint.board_id;
+                        let count = self
+                            .ctx
+                            .sprints
+                            .iter()
+                            .filter(|s| {
+                                s.board_id == board_id
+                                    && s.status == kanban_domain::SprintStatus::Planning
+                            })
+                            .count();
+                        self.dialog_input.carry_over_sprint_selection.next(count);
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.dialog_input.carry_over_sprint_selection.prev();
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                if let Some(idx) = self.dialog_input.carry_over_sprint_selection.get() {
+                    if let Some(source_id) = self.dialog_input.carry_over_source_sprint_id {
+                        if let Some(sprint) = self.ctx.sprints.iter().find(|s| s.id == source_id) {
+                            let board_id = sprint.board_id;
+                            let planning_sprint_ids: Vec<uuid::Uuid> = self
+                                .ctx
+                                .sprints
+                                .iter()
+                                .filter(|s| {
+                                    s.board_id == board_id
+                                        && s.status == kanban_domain::SprintStatus::Planning
+                                })
+                                .map(|s| s.id)
+                                .collect();
+
+                            if let Some(&to_sprint_id) = planning_sprint_ids.get(idx) {
+                                let sprint_label = self
+                                    .ctx
+                                    .sprints
+                                    .iter()
+                                    .find(|s| s.id == to_sprint_id)
+                                    .map(|s| {
+                                        self.ctx
+                                            .boards
+                                            .iter()
+                                            .find(|b| b.id == board_id)
+                                            .and_then(|b| s.get_name(b))
+                                            .map(|n| n.to_string())
+                                            .unwrap_or_else(|| {
+                                                format!("Sprint {}", s.sprint_number)
+                                            })
+                                    })
+                                    .unwrap_or_else(|| "sprint".to_string());
+
+                                match self.ctx.carry_over_sprint_cards(source_id, to_sprint_id) {
+                                    Ok(count) => {
+                                        self.set_success(format!(
+                                            "Carried over {} card(s) to {}",
+                                            count, sprint_label
+                                        ));
+                                        self.populate_sprint_task_lists(source_id);
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("Carry-over failed: {}", e);
+                                        self.set_error(format!("Carry-over failed: {}", e));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                self.pop_mode();
+                self.dialog_input.carry_over_sprint_selection.clear();
+                self.dialog_input.carry_over_source_sprint_id = None;
+            }
+            _ => {}
+        }
     }
 
     fn handle_relationship_popup(&mut self, key_code: KeyCode, is_parent_mode: bool) {

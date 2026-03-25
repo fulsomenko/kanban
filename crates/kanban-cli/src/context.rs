@@ -173,6 +173,15 @@ impl KanbanOperations for CliContext {
         self.inner.bulk_assign_sprint(ids, sprint_id)
     }
 
+    fn carry_over_sprint_cards(
+        &mut self,
+        from_sprint_id: Uuid,
+        to_sprint_id: Uuid,
+    ) -> KanbanResult<usize> {
+        self.inner
+            .carry_over_sprint_cards(from_sprint_id, to_sprint_id)
+    }
+
     fn create_sprint(
         &mut self,
         board_id: Uuid,

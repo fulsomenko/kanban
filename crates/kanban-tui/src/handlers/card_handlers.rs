@@ -621,7 +621,7 @@ impl App {
         self.multi_select.selection_mode_active = false;
     }
 
-    fn start_delete_animation(&mut self, card_id: uuid::Uuid) {
+    pub fn start_delete_animation(&mut self, card_id: uuid::Uuid) {
         use crate::app::CardAnimation;
         use kanban_domain::AnimationType;
         use std::time::Instant;

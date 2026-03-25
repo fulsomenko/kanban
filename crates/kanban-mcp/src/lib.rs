@@ -464,6 +464,16 @@ pub struct DeleteSprintRequest {
     pub sprint_id: String,
 }
 
+// Carry-over
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CarryOverSprintCardsRequest {
+    #[schemars(description = "ID of the completed or cancelled sprint to carry cards from")]
+    pub from_sprint_id: String,
+    #[schemars(description = "ID of the planning sprint to carry cards to")]
+    pub to_sprint_id: String,
+}
+
 // Export/Import
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -1001,6 +1011,20 @@ impl KanbanMcpServer {
         let id = parse_uuid(&req.sprint_id)?;
         mutating_op!(self.ctx, delete_sprint, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": req.sprint_id}))
+    }
+
+    #[tool(
+        description = "Carry over uncompleted cards from a completed/cancelled sprint to a planning sprint"
+    )]
+    async fn tool_carry_over_sprint_cards(
+        &self,
+        Parameters(req): Parameters<CarryOverSprintCardsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let from_id = parse_uuid(&req.from_sprint_id)?;
+        let to_id = parse_uuid(&req.to_sprint_id)?;
+
+        let count = mutating_op!(self.ctx, carry_over_sprint_cards, from_id, to_id)?;
+        to_call_tool_result_json(serde_json::json!({ "carried_over_count": count }))
     }
 
     // Export/Import

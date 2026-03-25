@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
 use std::time::{Duration, Instant};
@@ -78,6 +78,7 @@ impl Banner {
             .alignment(Alignment::Center)
             .block(block);
 
+        frame.render_widget(Clear, banner_area);
         frame.render_widget(widget, banner_area);
     }
 }

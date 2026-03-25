@@ -94,6 +94,9 @@ impl KeybindingRegistry {
                 DialogMode::ManageChildren => {
                     Box::new(DialogSelectionProvider::new("Set Children"))
                 }
+                DialogMode::CarryOverSprint => {
+                    Box::new(DialogSelectionProvider::new("Carry Over to Sprint"))
+                }
             },
         }
     }

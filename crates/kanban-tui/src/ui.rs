@@ -77,6 +77,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 DialogMode::ConfirmSprintPrefixCollision => {}
                 DialogMode::ManageParents => render_manage_parents_popup(app, frame),
                 DialogMode::ManageChildren => render_manage_children_popup(app, frame),
+                DialogMode::CarryOverSprint => render_carry_over_sprint_popup(app, frame),
             }
         }
     } else {
@@ -1683,6 +1684,20 @@ fn render_manage_parents_popup(app: &App, frame: &mut Frame) {
 
 fn render_manage_children_popup(app: &App, frame: &mut Frame) {
     render_relationship_popup(app, frame, "Set Children", false);
+}
+
+fn render_carry_over_sprint_popup(app: &App, frame: &mut Frame) {
+    use crate::components::selection_dialog::CarryOverSprintDialog;
+    use crate::components::SelectionDialog;
+    let card_count = app
+        .dialog_input
+        .carry_over_source_sprint_id
+        .map(|id| {
+            use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+            get_sprint_uncompleted_cards(id, &app.ctx.cards).len()
+        })
+        .unwrap_or(0);
+    CarryOverSprintDialog { card_count }.render(app, frame);
 }
 
 fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str, _is_parent_mode: bool) {

@@ -403,33 +403,111 @@ impl KanbanOperations for TuiContext {
     }
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        let mut count = 0;
-        for id in ids {
-            if self.archive_card(id).is_ok() {
-                count += 1;
-            }
+        let commands: Vec<Box<dyn Command>> = ids
+            .iter()
+            .filter(|id| self.cards.iter().any(|c| c.id == **id))
+            .map(|&card_id| Box::new(ArchiveCard { card_id }) as Box<dyn Command>)
+            .collect();
+        let count = commands.len();
+        if !commands.is_empty() {
+            self.execute_commands_batch(commands)?;
         }
         Ok(count)
     }
 
     fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        let mut count = 0;
-        for id in ids {
-            if self.move_card(id, column_id, None).is_ok() {
-                count += 1;
-            }
+        let valid_ids: Vec<Uuid> = ids
+            .into_iter()
+            .filter(|id| self.cards.iter().any(|c| c.id == *id))
+            .collect();
+        let count = valid_ids.len();
+        if count == 0 {
+            return Ok(0);
         }
+        let base_position =
+            kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
+        let commands: Vec<Box<dyn Command>> = valid_ids
+            .into_iter()
+            .enumerate()
+            .map(|(i, card_id)| {
+                Box::new(MoveCard {
+                    card_id,
+                    new_column_id: column_id,
+                    new_position: base_position + i as i32,
+                }) as Box<dyn Command>
+            })
+            .collect();
+        self.execute_commands_batch(commands)?;
         Ok(count)
     }
 
     fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        let mut count = 0;
-        for id in ids {
-            if self.assign_card_to_sprint(id, sprint_id).is_ok() {
-                count += 1;
-            }
+        let sprint = self
+            .get_sprint(sprint_id)?
+            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", sprint_id)))?;
+        let board = self
+            .boards
+            .iter()
+            .find(|b| b.id == sprint.board_id)
+            .ok_or_else(|| {
+                kanban_core::KanbanError::NotFound(format!("Board {}", sprint.board_id))
+            })?;
+        let sprint_name = sprint.get_name(board).map(|s| s.to_string());
+        let sprint_number = sprint.sprint_number;
+        let sprint_status = format!("{:?}", sprint.status);
+        let commands: Vec<Box<dyn Command>> = ids
+            .into_iter()
+            .filter(|id| self.cards.iter().any(|c| c.id == *id))
+            .map(|card_id| {
+                Box::new(AssignCardToSprint {
+                    card_id,
+                    sprint_id,
+                    sprint_number,
+                    sprint_name: sprint_name.clone(),
+                    sprint_status: sprint_status.clone(),
+                }) as Box<dyn Command>
+            })
+            .collect();
+        let count = commands.len();
+        if !commands.is_empty() {
+            self.execute_commands_batch(commands)?;
         }
         Ok(count)
+    }
+
+    fn carry_over_sprint_cards(
+        &mut self,
+        from_sprint_id: Uuid,
+        to_sprint_id: Uuid,
+    ) -> KanbanResult<usize> {
+        use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+
+        let from_sprint = self.get_sprint(from_sprint_id)?.ok_or_else(|| {
+            kanban_core::KanbanError::NotFound(format!("Sprint {}", from_sprint_id))
+        })?;
+        if from_sprint.status != kanban_domain::SprintStatus::Completed
+            && from_sprint.status != kanban_domain::SprintStatus::Cancelled
+        {
+            return Err(kanban_core::KanbanError::Validation(format!(
+                "Source sprint must be Completed or Cancelled, got {:?}",
+                from_sprint.status
+            )));
+        }
+        let to_sprint = self.get_sprint(to_sprint_id)?.ok_or_else(|| {
+            kanban_core::KanbanError::NotFound(format!("Sprint {}", to_sprint_id))
+        })?;
+        if to_sprint.status != kanban_domain::SprintStatus::Planning {
+            return Err(kanban_core::KanbanError::Validation(format!(
+                "Target sprint must be Planning, got {:?}",
+                to_sprint.status
+            )));
+        }
+
+        let ids: Vec<Uuid> = get_sprint_uncompleted_cards(from_sprint_id, &self.cards)
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        self.bulk_assign_sprint(ids, to_sprint_id)
     }
 
     fn create_sprint(
