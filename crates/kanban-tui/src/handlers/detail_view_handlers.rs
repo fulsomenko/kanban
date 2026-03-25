@@ -580,14 +580,13 @@ impl App {
                 self.handle_activate_sprint_key();
             }
             KeyCode::Char('c') => {
-                let selected = if self.sprint_view.panel == SprintTaskPanel::Uncompleted {
-                    self.sprint_view.uncompleted_component.get_multi_selected()
-                } else {
-                    vec![]
-                };
-                if !selected.is_empty() {
-                    self.toggle_completion_for_card_ids(selected);
-                    self.sprint_view.uncompleted_component.clear_multi_select();
+                if self.sprint_view.panel == SprintTaskPanel::Uncompleted {
+                    let selected = self.sprint_view.uncompleted_component.get_multi_selected();
+                    if !selected.is_empty() {
+                        self.toggle_completion_for_card_ids(selected);
+                        self.sprint_view.uncompleted_component.clear_multi_select();
+                    }
+                    // else: no-op; avoid accidentally completing the sprint
                 } else {
                     self.handle_complete_sprint_key();
                 }
