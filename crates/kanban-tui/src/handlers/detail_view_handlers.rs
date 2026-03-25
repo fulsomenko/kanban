@@ -1183,12 +1183,6 @@ impl App {
                 None => continue,
             };
 
-            let new_status = if card.status == CardStatus::Done {
-                CardStatus::Todo
-            } else {
-                CardStatus::Done
-            };
-
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
                 self.ctx.boards.get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
@@ -1200,16 +1194,24 @@ impl App {
                 })
             });
 
-            let mut updates = CardUpdate {
-                status: Some(new_status),
-                ..Default::default()
+            let updates = if let Some(ref result) = toggle_result {
+                CardUpdate {
+                    status: Some(result.new_status),
+                    column_id: Some(result.target_column_id),
+                    position: Some(result.new_position),
+                    ..Default::default()
+                }
+            } else {
+                let fallback = if card.status == CardStatus::Done {
+                    CardStatus::Todo
+                } else {
+                    CardStatus::Done
+                };
+                CardUpdate {
+                    status: Some(fallback),
+                    ..Default::default()
+                }
             };
-
-            if let Some(ref result) = toggle_result {
-                updates.column_id = Some(result.target_column_id);
-                updates.position = Some(result.new_position);
-                updates.status = Some(result.new_status);
-            }
 
             update_commands.push(Box::new(UpdateCard {
                 card_id: *card_id,
