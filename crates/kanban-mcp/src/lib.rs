@@ -1051,10 +1051,7 @@ impl KanbanMcpServer {
                 })?;
             if to_sprint.status != kanban_domain::SprintStatus::Planning {
                 return Err(McpError::invalid_params(
-                    format!(
-                        "Target sprint must be Planning, got {:?}",
-                        to_sprint.status
-                    ),
+                    format!("Target sprint must be Planning, got {:?}", to_sprint.status),
                     None,
                 ));
             }

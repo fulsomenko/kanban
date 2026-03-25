@@ -28,7 +28,8 @@ async fn carry_over_skips_done_cards() {
             CreateCardOptions::default(),
         )
         .unwrap();
-    ctx.assign_card_to_sprint(card_todo.id, from_sprint.id).unwrap();
+    ctx.assign_card_to_sprint(card_todo.id, from_sprint.id)
+        .unwrap();
 
     let card_in_progress = ctx
         .create_card(
@@ -38,7 +39,8 @@ async fn carry_over_skips_done_cards() {
             CreateCardOptions::default(),
         )
         .unwrap();
-    ctx.assign_card_to_sprint(card_in_progress.id, from_sprint.id).unwrap();
+    ctx.assign_card_to_sprint(card_in_progress.id, from_sprint.id)
+        .unwrap();
 
     let card_done = ctx
         .create_card(
@@ -48,7 +50,8 @@ async fn carry_over_skips_done_cards() {
             CreateCardOptions::default(),
         )
         .unwrap();
-    ctx.assign_card_to_sprint(card_done.id, from_sprint.id).unwrap();
+    ctx.assign_card_to_sprint(card_done.id, from_sprint.id)
+        .unwrap();
 
     // Mark the done card as Done
     ctx.update_card(
@@ -115,18 +118,40 @@ async fn carry_over_returns_zero_when_all_cards_are_done() {
     ctx.complete_sprint(from_sprint.id).unwrap();
 
     let card1 = ctx
-        .create_card(board.id, col.id, "Done card 1".into(), CreateCardOptions::default())
+        .create_card(
+            board.id,
+            col.id,
+            "Done card 1".into(),
+            CreateCardOptions::default(),
+        )
         .unwrap();
     ctx.assign_card_to_sprint(card1.id, from_sprint.id).unwrap();
-    ctx.update_card(card1.id, CardUpdate { status: Some(CardStatus::Done), ..Default::default() })
-        .unwrap();
+    ctx.update_card(
+        card1.id,
+        CardUpdate {
+            status: Some(CardStatus::Done),
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     let card2 = ctx
-        .create_card(board.id, col.id, "Done card 2".into(), CreateCardOptions::default())
+        .create_card(
+            board.id,
+            col.id,
+            "Done card 2".into(),
+            CreateCardOptions::default(),
+        )
         .unwrap();
     ctx.assign_card_to_sprint(card2.id, from_sprint.id).unwrap();
-    ctx.update_card(card2.id, CardUpdate { status: Some(CardStatus::Done), ..Default::default() })
-        .unwrap();
+    ctx.update_card(
+        card2.id,
+        CardUpdate {
+            status: Some(CardStatus::Done),
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     let count = ctx
         .carry_over_sprint_cards(from_sprint.id, to_sprint.id)
@@ -157,21 +182,42 @@ async fn carry_over_includes_blocked_cards() {
     ctx.complete_sprint(from_sprint.id).unwrap();
 
     let card_blocked = ctx
-        .create_card(board.id, col.id, "Blocked card".into(), CreateCardOptions::default())
+        .create_card(
+            board.id,
+            col.id,
+            "Blocked card".into(),
+            CreateCardOptions::default(),
+        )
         .unwrap();
-    ctx.assign_card_to_sprint(card_blocked.id, from_sprint.id).unwrap();
+    ctx.assign_card_to_sprint(card_blocked.id, from_sprint.id)
+        .unwrap();
     ctx.update_card(
         card_blocked.id,
-        CardUpdate { status: Some(CardStatus::Blocked), ..Default::default() },
+        CardUpdate {
+            status: Some(CardStatus::Blocked),
+            ..Default::default()
+        },
     )
     .unwrap();
 
     let card_done = ctx
-        .create_card(board.id, col.id, "Done card".into(), CreateCardOptions::default())
+        .create_card(
+            board.id,
+            col.id,
+            "Done card".into(),
+            CreateCardOptions::default(),
+        )
         .unwrap();
-    ctx.assign_card_to_sprint(card_done.id, from_sprint.id).unwrap();
-    ctx.update_card(card_done.id, CardUpdate { status: Some(CardStatus::Done), ..Default::default() })
+    ctx.assign_card_to_sprint(card_done.id, from_sprint.id)
         .unwrap();
+    ctx.update_card(
+        card_done.id,
+        CardUpdate {
+            status: Some(CardStatus::Done),
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     let count = ctx
         .carry_over_sprint_cards(from_sprint.id, to_sprint.id)

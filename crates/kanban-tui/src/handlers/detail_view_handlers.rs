@@ -1219,8 +1219,10 @@ impl App {
                 updates.status = Some(result.new_status);
             }
 
-            update_commands.push(Box::new(UpdateCard { card_id: *card_id, updates })
-                as Box<dyn kanban_domain::commands::Command>);
+            update_commands.push(Box::new(UpdateCard {
+                card_id: *card_id,
+                updates,
+            }) as Box<dyn kanban_domain::commands::Command>);
         }
 
         if !update_commands.is_empty() {

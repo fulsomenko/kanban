@@ -230,7 +230,11 @@ mod tests {
         card_blocked.sprint_id = Some(sprint_id);
         card_blocked.status = CardStatus::Blocked;
 
-        let cards = vec![card_todo.clone(), card_in_progress.clone(), card_blocked.clone()];
+        let cards = vec![
+            card_todo.clone(),
+            card_in_progress.clone(),
+            card_blocked.clone(),
+        ];
         let result = get_sprint_uncompleted_cards(sprint_id, &cards);
 
         assert_eq!(result.len(), 3);

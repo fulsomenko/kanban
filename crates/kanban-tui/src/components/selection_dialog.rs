@@ -185,7 +185,10 @@ impl SelectionDialog for CarryOverSprintDialog {
     }
 
     fn get_current_selection(&self, app: &App) -> usize {
-        app.dialog_input.carry_over_sprint_selection.get().unwrap_or(0)
+        app.dialog_input
+            .carry_over_sprint_selection
+            .get()
+            .unwrap_or(0)
     }
 
     fn options_count(&self, app: &App) -> usize {
