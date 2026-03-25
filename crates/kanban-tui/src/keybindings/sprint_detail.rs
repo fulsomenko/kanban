@@ -107,9 +107,9 @@ impl KeybindingProvider for SprintDetailProvider {
                     KeybindingAction::EditCard,
                 ),
                 Keybinding::new(
-                    "R",
-                    "carry-over",
-                    "Carry over uncompleted tasks to a planning sprint",
+                    "M",
+                    "move all",
+                    "Move all uncompleted tasks to a planning sprint",
                     KeybindingAction::RestoreCard,
                 ),
             ],

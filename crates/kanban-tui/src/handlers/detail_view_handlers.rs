@@ -640,7 +640,7 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('R') => {
+            KeyCode::Char('M') => {
                 if let Some(sprint_idx) = self.selection.active_sprint_index {
                     if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
                         use kanban_domain::SprintStatus;
@@ -648,17 +648,11 @@ impl App {
                             || sprint.status == SprintStatus::Cancelled
                         {
                             let sprint_id = sprint.id;
-                            let selected =
-                                self.sprint_view.uncompleted_component.get_multi_selected();
-                            let card_ids = if selected.is_empty() {
-                                use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
-                                get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards)
-                                    .iter()
-                                    .map(|c| c.id)
-                                    .collect()
-                            } else {
-                                selected
-                            };
+                            use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+                            let card_ids = get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards)
+                                .iter()
+                                .map(|c| c.id)
+                                .collect::<Vec<_>>();
                             if !card_ids.is_empty() {
                                 self.handle_carry_over_for_sprint(sprint_id, card_ids);
                             }
