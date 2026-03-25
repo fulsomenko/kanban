@@ -561,6 +561,28 @@ impl KanbanOperations for KanbanContext {
         to_sprint_id: Uuid,
     ) -> KanbanResult<usize> {
         use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
+
+        let from_sprint = self
+            .get_sprint(from_sprint_id)?
+            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", from_sprint_id)))?;
+        if from_sprint.status != kanban_domain::SprintStatus::Completed
+            && from_sprint.status != kanban_domain::SprintStatus::Cancelled
+        {
+            return Err(kanban_core::KanbanError::Validation(format!(
+                "Source sprint must be Completed or Cancelled, got {:?}",
+                from_sprint.status
+            )));
+        }
+        let to_sprint = self
+            .get_sprint(to_sprint_id)?
+            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", to_sprint_id)))?;
+        if to_sprint.status != kanban_domain::SprintStatus::Planning {
+            return Err(kanban_core::KanbanError::Validation(format!(
+                "Target sprint must be Planning, got {:?}",
+                to_sprint.status
+            )));
+        }
+
         let ids: Vec<Uuid> = get_sprint_uncompleted_cards(from_sprint_id, &self.cards)
             .iter()
             .map(|c| c.id)

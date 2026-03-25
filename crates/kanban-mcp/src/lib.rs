@@ -1023,40 +1023,6 @@ impl KanbanMcpServer {
         let from_id = parse_uuid(&req.from_sprint_id)?;
         let to_id = parse_uuid(&req.to_sprint_id)?;
 
-        // Validate sprint statuses
-        {
-            let guard = self.ctx.lock().await;
-            let from_sprint = guard
-                .get_sprint(from_id)
-                .map_err(kanban_err_to_mcp)?
-                .ok_or_else(|| {
-                    McpError::invalid_params(format!("Sprint not found: {}", from_id), None)
-                })?;
-            if from_sprint.status != kanban_domain::SprintStatus::Completed
-                && from_sprint.status != kanban_domain::SprintStatus::Cancelled
-            {
-                return Err(McpError::invalid_params(
-                    format!(
-                        "Source sprint must be Completed or Cancelled, got {:?}",
-                        from_sprint.status
-                    ),
-                    None,
-                ));
-            }
-            let to_sprint = guard
-                .get_sprint(to_id)
-                .map_err(kanban_err_to_mcp)?
-                .ok_or_else(|| {
-                    McpError::invalid_params(format!("Sprint not found: {}", to_id), None)
-                })?;
-            if to_sprint.status != kanban_domain::SprintStatus::Planning {
-                return Err(McpError::invalid_params(
-                    format!("Target sprint must be Planning, got {:?}", to_sprint.status),
-                    None,
-                ));
-            }
-        }
-
         let count = mutating_op!(self.ctx, carry_over_sprint_cards, from_id, to_id)?;
         to_call_tool_result_json(serde_json::json!({ "carried_over_count": count }))
     }
