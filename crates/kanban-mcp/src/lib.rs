@@ -2,12 +2,12 @@ pub mod context;
 
 use context::McpContext;
 use kanban_core::{resolve_page_params, PaginatedList};
-use kanban_domain::{KanbanError, KanbanResult};
 use kanban_domain::{
     format_ambiguous_matches, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
     CardStatus, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
     SprintUpdate,
 };
+use kanban_domain::{KanbanError, KanbanResult};
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
@@ -705,8 +705,8 @@ impl KanbanMcpServer {
             sprint_id,
             status,
         };
-        let (page, page_size) =
-            resolve_page_params(req.page, req.page_size).map_err(|e| kanban_err_to_mcp(e.into()))?;
+        let (page, page_size) = resolve_page_params(req.page, req.page_size)
+            .map_err(|e| kanban_err_to_mcp(e.into()))?;
         let result = read_op!(self.ctx, list_cards_paged, filter, page, page_size)?;
         to_call_tool_result(&result)
     }
@@ -829,12 +829,13 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ListArchivedCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let cards = read_op!(self.ctx, list_archived_cards)?;
-        let (page, page_size) =
-            resolve_page_params(req.page, req.page_size).map_err(|e| kanban_err_to_mcp(e.into()))?;
+        let (page, page_size) = resolve_page_params(req.page, req.page_size)
+            .map_err(|e| kanban_err_to_mcp(e.into()))?;
         let summaries: Vec<ArchivedCardSummary> =
             cards.iter().map(ArchivedCardSummary::from).collect();
         to_call_tool_result(
-            &PaginatedList::paginate(summaries, page, page_size).map_err(|e| kanban_err_to_mcp(e.into()))?,
+            &PaginatedList::paginate(summaries, page, page_size)
+                .map_err(|e| kanban_err_to_mcp(e.into()))?,
         )
     }
 

@@ -1,9 +1,9 @@
-use kanban_domain::{KanbanError, KanbanResult};
 use kanban_domain::commands::{Command, CommandContext};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
+use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -195,9 +195,7 @@ impl KanbanOperations for KanbanContext {
         let cmd = CreateBoard { name, card_prefix };
         self.execute(Box::new(cmd))?;
         self.boards.last().cloned().ok_or_else(|| {
-            KanbanError::Internal(
-                "Board creation succeeded but board not found".into(),
-            )
+            KanbanError::Internal("Board creation succeeded but board not found".into())
         })
     }
 
@@ -246,9 +244,7 @@ impl KanbanOperations for KanbanContext {
         };
         self.execute(Box::new(cmd))?;
         self.columns.last().cloned().ok_or_else(|| {
-            KanbanError::Internal(
-                "Column creation succeeded but column not found".into(),
-            )
+            KanbanError::Internal("Column creation succeeded but column not found".into())
         })
     }
 
@@ -456,9 +452,7 @@ impl KanbanOperations for KanbanContext {
             .boards
             .iter()
             .find(|b| b.id == sprint.board_id)
-            .ok_or_else(|| {
-                KanbanError::not_found("board", sprint.board_id)
-            })?;
+            .ok_or_else(|| KanbanError::not_found("board", sprint.board_id))?;
         let sprint_name = sprint.get_name(board).map(|s| s.to_string());
         let cmd = AssignCardToSprint {
             card_id,
@@ -488,16 +482,12 @@ impl KanbanOperations for KanbanContext {
             .columns
             .iter()
             .find(|c| c.id == card.column_id)
-            .ok_or_else(|| {
-                KanbanError::not_found("column", card.column_id)
-            })?;
+            .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
         let board = self
             .boards
             .iter()
             .find(|b| b.id == column.board_id)
-            .ok_or_else(|| {
-                KanbanError::not_found("board", column.board_id)
-            })?;
+            .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
         Ok(card.branch_name(board, &self.sprints, "task"))
     }
 
@@ -509,16 +499,12 @@ impl KanbanOperations for KanbanContext {
             .columns
             .iter()
             .find(|c| c.id == card.column_id)
-            .ok_or_else(|| {
-                KanbanError::not_found("column", card.column_id)
-            })?;
+            .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
         let board = self
             .boards
             .iter()
             .find(|b| b.id == column.board_id)
-            .ok_or_else(|| {
-                KanbanError::not_found("board", column.board_id)
-            })?;
+            .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
         Ok(card.git_checkout_command(board, &self.sprints, "task"))
     }
 
@@ -559,9 +545,9 @@ impl KanbanOperations for KanbanContext {
     ) -> KanbanResult<usize> {
         use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
 
-        let from_sprint = self.get_sprint(from_sprint_id)?.ok_or_else(|| {
-            KanbanError::not_found("sprint", from_sprint_id)
-        })?;
+        let from_sprint = self
+            .get_sprint(from_sprint_id)?
+            .ok_or_else(|| KanbanError::not_found("sprint", from_sprint_id))?;
         if from_sprint.status != kanban_domain::SprintStatus::Completed
             && from_sprint.status != kanban_domain::SprintStatus::Cancelled
         {
@@ -570,9 +556,9 @@ impl KanbanOperations for KanbanContext {
                 from_sprint.status
             )));
         }
-        let to_sprint = self.get_sprint(to_sprint_id)?.ok_or_else(|| {
-            KanbanError::not_found("sprint", to_sprint_id)
-        })?;
+        let to_sprint = self
+            .get_sprint(to_sprint_id)?
+            .ok_or_else(|| KanbanError::not_found("sprint", to_sprint_id))?;
         if to_sprint.status != kanban_domain::SprintStatus::Planning {
             return Err(KanbanError::validation(format!(
                 "Target sprint must be Planning, got {:?}",
@@ -621,9 +607,7 @@ impl KanbanOperations for KanbanContext {
         };
         self.execute(Box::new(cmd))?;
         self.sprints.last().cloned().ok_or_else(|| {
-            KanbanError::Internal(
-                "Sprint creation succeeded but sprint not found".into(),
-            )
+            KanbanError::Internal("Sprint creation succeeded but sprint not found".into())
         })
     }
 
@@ -731,13 +715,14 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        let imported: DataSnapshot = serde_json::from_str(data)
-            .map_err(|e| KanbanError::Serialization(e.to_string()))?;
+        let imported: DataSnapshot =
+            serde_json::from_str(data).map_err(|e| KanbanError::Serialization(e.to_string()))?;
 
-        let board =
-            imported.boards.first().cloned().ok_or_else(|| {
-                KanbanError::validation("No board in import data")
-            })?;
+        let board = imported
+            .boards
+            .first()
+            .cloned()
+            .ok_or_else(|| KanbanError::validation("No board in import data"))?;
 
         self.boards.extend(imported.boards);
         self.columns.extend(imported.columns);

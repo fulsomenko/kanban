@@ -35,9 +35,7 @@ pub fn resolve_page_params(
         ));
     }
     if page_size == 0 {
-        return Err(CoreError::Validation(
-            "page_size must be >= 1".to_string(),
-        ));
+        return Err(CoreError::Validation("page_size must be >= 1".to_string()));
     }
     if page_size > MAX_PAGE_SIZE {
         return Err(CoreError::Validation(format!(
@@ -81,9 +79,7 @@ impl<T> PaginatedList<T> {
             ));
         }
         if page_size == 0 {
-            return Err(CoreError::Validation(
-                "page_size must be >= 1".to_string(),
-            ));
+            return Err(CoreError::Validation("page_size must be >= 1".to_string()));
         }
         if page_size > MAX_PAGE_SIZE {
             return Err(CoreError::Validation(format!(

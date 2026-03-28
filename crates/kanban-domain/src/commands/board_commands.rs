@@ -1,6 +1,6 @@
 use super::{Command, CommandContext};
-use crate::{Board, BoardUpdate};
 use crate::KanbanResult;
+use crate::{Board, BoardUpdate};
 use uuid::Uuid;
 
 /// Create a new board

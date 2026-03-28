@@ -1,7 +1,7 @@
 use super::{Command, CommandContext};
+use crate::KanbanResult;
 use crate::SprintUpdate;
 use chrono::Utc;
-use crate::KanbanResult;
 use uuid::Uuid;
 
 /// Update sprint properties (name_index, prefix, card_prefix, status, dates)

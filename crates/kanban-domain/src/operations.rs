@@ -1,8 +1,8 @@
+use crate::KanbanResult;
 use crate::{
     ArchivedCard, Board, BoardUpdate, Card, CardStatus, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, Sprint, SprintUpdate,
 };
-use crate::KanbanResult;
 use uuid::Uuid;
 
 /// Filter options for listing cards

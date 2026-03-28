@@ -25,7 +25,10 @@ pub enum DomainError {
 
 impl DomainError {
     pub fn board_not_found(id: Uuid) -> Self {
-        Self::NotFound { entity: "board", id }
+        Self::NotFound {
+            entity: "board",
+            id,
+        }
     }
     pub fn card_not_found(id: Uuid) -> Self {
         Self::NotFound { entity: "card", id }

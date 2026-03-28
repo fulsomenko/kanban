@@ -1,6 +1,6 @@
-use chrono::Utc;
 use crate::error::DependencyError;
 use crate::KanbanResult;
+use chrono::Utc;
 use kanban_core::{Edge, EdgeDirection, Graph};
 
 use super::CardEdgeType;

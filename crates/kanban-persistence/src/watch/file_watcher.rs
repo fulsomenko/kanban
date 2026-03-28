@@ -1,6 +1,6 @@
 use crate::traits::{ChangeDetector, ChangeEvent};
-use chrono::Utc;
 use crate::PersistenceResult;
+use chrono::Utc;
 use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};

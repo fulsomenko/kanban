@@ -1,6 +1,6 @@
+use crate::PersistenceResult;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crate::PersistenceResult;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;

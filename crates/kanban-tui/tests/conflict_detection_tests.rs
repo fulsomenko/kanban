@@ -1,5 +1,5 @@
-use kanban_persistence::PersistenceError;
 use kanban_domain::{Board, Card, Column, Snapshot};
+use kanban_persistence::PersistenceError;
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::fs;
 use std::time::Duration;
