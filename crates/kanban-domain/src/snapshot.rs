@@ -77,20 +77,6 @@ impl Snapshot {
             && self.archived_cards.is_empty()
             && self.sprints.is_empty()
     }
-
-    /// Serialize snapshot to JSON bytes.
-    pub fn to_json_bytes(&self) -> crate::KanbanResult<Vec<u8>> {
-        let json = serde_json::to_vec_pretty(self)
-            .map_err(|e| crate::KanbanError::Serialization(e.to_string()))?;
-        Ok(json)
-    }
-
-    /// Deserialize snapshot from JSON bytes.
-    pub fn from_json_bytes(bytes: &[u8]) -> crate::KanbanResult<Snapshot> {
-        let snapshot = serde_json::from_slice(bytes)
-            .map_err(|e| crate::KanbanError::Serialization(e.to_string()))?;
-        Ok(snapshot)
-    }
 }
 
 #[cfg(test)]
