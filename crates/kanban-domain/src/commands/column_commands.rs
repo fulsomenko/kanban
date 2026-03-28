@@ -11,9 +11,8 @@ pub struct UpdateColumn {
 
 impl Command for UpdateColumn {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(column) = context.columns.iter_mut().find(|c| c.id == self.column_id) {
-            column.update(self.updates.clone());
-        }
+        let column = context.column_mut(self.column_id)?;
+        column.update(self.updates.clone());
         Ok(())
     }
 
@@ -73,5 +72,34 @@ impl Command for DeleteColumn {
 
     fn description(&self) -> String {
         format!("Delete column {}", self.column_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DependencyGraph;
+    use kanban_core::KanbanError;
+
+    fn create_test_context() -> CommandContext<'static> {
+        CommandContext {
+            boards: Box::leak(Box::new(Vec::new())),
+            columns: Box::leak(Box::new(Vec::new())),
+            cards: Box::leak(Box::new(Vec::new())),
+            sprints: Box::leak(Box::new(Vec::new())),
+            archived_cards: Box::leak(Box::new(Vec::new())),
+            graph: Box::leak(Box::new(DependencyGraph::new())),
+        }
+    }
+
+    #[test]
+    fn test_update_column_not_found_returns_error() {
+        let mut context = create_test_context();
+        let cmd = UpdateColumn {
+            column_id: Uuid::new_v4(),
+            updates: ColumnUpdate::default(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(matches!(result, Err(KanbanError::NotFound(_))));
     }
 }
