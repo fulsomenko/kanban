@@ -709,8 +709,8 @@ impl KanbanMcpServer {
             sprint_id,
             status,
         };
-        let (page, page_size) = resolve_page_params(req.page, req.page_size)
-            .map_err(core_err_to_mcp)?;
+        let (page, page_size) =
+            resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let result = read_op!(self.ctx, list_cards_paged, filter, page, page_size)?;
         to_call_tool_result(&result)
     }
@@ -833,13 +833,12 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ListArchivedCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let cards = read_op!(self.ctx, list_archived_cards)?;
-        let (page, page_size) = resolve_page_params(req.page, req.page_size)
-            .map_err(core_err_to_mcp)?;
+        let (page, page_size) =
+            resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let summaries: Vec<ArchivedCardSummary> =
             cards.iter().map(ArchivedCardSummary::from).collect();
         to_call_tool_result(
-            &PaginatedList::paginate(summaries, page, page_size)
-                .map_err(core_err_to_mcp)?,
+            &PaginatedList::paginate(summaries, page, page_size).map_err(core_err_to_mcp)?,
         )
     }
 
