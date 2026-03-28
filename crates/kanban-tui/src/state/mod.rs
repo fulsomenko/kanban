@@ -269,8 +269,7 @@ impl StateManager {
             let (snapshot, _metadata) = store.load().await?;
 
             // Deserialize and apply loaded data to app
-            let data: Snapshot =
-                kanban_persistence::snapshot_from_json_bytes(&snapshot.data)?;
+            let data: Snapshot = kanban_persistence::snapshot_from_json_bytes(&snapshot.data)?;
 
             data.apply_to_app(app);
 

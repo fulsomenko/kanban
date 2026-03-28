@@ -717,8 +717,8 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        let imported: DataSnapshot =
-            serde_json::from_str(data).map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let imported: DataSnapshot = serde_json::from_str(data)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         let board = imported
             .boards

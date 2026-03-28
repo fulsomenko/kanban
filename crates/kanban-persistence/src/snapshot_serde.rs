@@ -2,8 +2,7 @@ use crate::{PersistenceError, PersistenceResult};
 use kanban_domain::Snapshot;
 
 pub fn snapshot_to_json_bytes(snapshot: &Snapshot) -> PersistenceResult<Vec<u8>> {
-    serde_json::to_vec_pretty(snapshot)
-        .map_err(|e| PersistenceError::Serialization(e.to_string()))
+    serde_json::to_vec_pretty(snapshot).map_err(|e| PersistenceError::Serialization(e.to_string()))
 }
 
 pub fn snapshot_from_json_bytes(bytes: &[u8]) -> PersistenceResult<Snapshot> {
