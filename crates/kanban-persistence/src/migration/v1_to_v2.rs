@@ -1,5 +1,5 @@
 use crate::traits::{FormatVersion, MigrationStrategy};
-use kanban_core::KanbanResult;
+use crate::PersistenceResult;
 use std::path::Path;
 
 /// V1 to V2 format migration strategy
@@ -8,7 +8,7 @@ pub struct V1ToV2Migration;
 
 #[async_trait::async_trait]
 impl MigrationStrategy for V1ToV2Migration {
-    async fn detect_version(&self, path: &Path) -> KanbanResult<FormatVersion> {
+    async fn detect_version(&self, path: &Path) -> PersistenceResult<FormatVersion> {
         crate::migration::Migrator::detect_version(path).await
     }
 
@@ -17,7 +17,7 @@ impl MigrationStrategy for V1ToV2Migration {
         from: FormatVersion,
         to: FormatVersion,
         path: &Path,
-    ) -> KanbanResult<std::path::PathBuf> {
+    ) -> PersistenceResult<std::path::PathBuf> {
         crate::migration::Migrator::migrate(from, to, path).await?;
         Ok(path.to_path_buf())
     }
