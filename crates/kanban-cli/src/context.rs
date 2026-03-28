@@ -112,8 +112,8 @@ impl KanbanOperations for CliContext {
         self.inner.get_card(id)
     }
 
-    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>> {
-        self.inner.find_card_by_identifier(identifier)
+    fn find_cards_by_identifier(&self, identifier: &str) -> KanbanResult<Vec<Card>> {
+        self.inner.find_cards_by_identifier(identifier)
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {

@@ -349,16 +349,12 @@ impl KanbanOperations for KanbanContext {
         Ok(self.cards.iter().find(|c| c.id == id).cloned())
     }
 
-    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>> {
-        use kanban_domain::search::find_card_by_identifier as search_by_identifier;
-        Ok(search_by_identifier(
-            identifier,
-            &self.cards,
-            &self.columns,
-            &self.boards,
-            &self.sprints,
-        )
-        .cloned())
+    fn find_cards_by_identifier(&self, identifier: &str) -> KanbanResult<Vec<Card>> {
+        use kanban_domain::search::find_cards_by_identifier as search;
+        Ok(search(identifier, &self.cards, &self.columns, &self.boards, &self.sprints)
+            .into_iter()
+            .cloned()
+            .collect())
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
