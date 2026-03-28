@@ -52,7 +52,7 @@ mod tests {
 
         let err = PersistenceError::ConflictDetected {
             path: "test.json".to_string(),
-            source: Some(Box::new(io::Error::new(io::ErrorKind::Other, "inner"))),
+            source: Some(Box::new(io::Error::other("inner"))),
         };
         assert!(err.source().is_some());
 
