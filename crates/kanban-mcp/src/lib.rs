@@ -118,9 +118,14 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
         [card] => Ok(card.id),
         cards => Err(McpError::invalid_params(
             format!(
-                "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.",
+                "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.\n{}",
                 s,
-                cards.len()
+                cards.len(),
+                cards
+                    .iter()
+                    .map(|c| format!("  {} — {}", c.id, c.title))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             ),
             None,
         )),
@@ -713,14 +718,29 @@ impl KanbanMcpServer {
         to_call_tool_result(&result)
     }
 
-    #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
+    #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5). Returns a single card for UUID or unambiguous identifier, or a list of all matching cards if the identifier is ambiguous.")]
     async fn tool_get_card(
         &self,
         Parameters(req): Parameters<GetCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        let card = read_op!(self.ctx, get_card, id)?;
-        to_call_tool_result(&card)
+        if let Ok(uuid) = uuid::Uuid::parse_str(&req.card_id) {
+            let card = read_op!(self.ctx, get_card, uuid)?;
+            return to_call_tool_result(&card);
+        }
+        let cards = {
+            let guard = self.ctx.lock().await;
+            guard
+                .find_cards_by_identifier(&req.card_id)
+                .map_err(kanban_err_to_mcp)?
+        };
+        match cards.as_slice() {
+            [] => Err(McpError::invalid_params(
+                format!("Card not found: '{}'", req.card_id),
+                None,
+            )),
+            [_] => to_call_tool_result(&cards[0]),
+            _ => to_call_tool_result(&cards),
+        }
     }
 
     #[tool(

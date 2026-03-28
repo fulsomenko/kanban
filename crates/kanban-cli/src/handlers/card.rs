@@ -17,9 +17,14 @@ fn resolve_card_id(ctx: &CliContext, id: &str) -> anyhow::Result<Uuid> {
         [] => Err(anyhow::anyhow!("Card not found: '{}'", id)),
         [card] => Ok(card.id),
         matches => Err(anyhow::anyhow!(
-            "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.",
+            "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.\n{}",
             id,
-            matches.len()
+            matches.len(),
+            matches
+                .iter()
+                .map(|c| format!("  {} — {}", c.id, c.title))
+                .collect::<Vec<_>>()
+                .join("\n")
         )),
     }
 }
@@ -52,13 +57,18 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             }
         }
         CardAction::Get { id } => {
-            let uuid = match resolve_card_id(ctx, &id) {
-                Ok(uuid) => uuid,
-                Err(e) => return output::output_error(&e.to_string()),
-            };
-            match ctx.get_card(uuid)? {
-                Some(card) => output::output_success(&card),
-                None => return output::output_error(&format!("Card not found: {}", id)),
+            if let Ok(uuid) = Uuid::parse_str(&id) {
+                match ctx.get_card(uuid)? {
+                    Some(card) => output::output_success(&card),
+                    None => return output::output_error(&format!("Card not found: '{}'", id)),
+                }
+            } else {
+                let cards = ctx.find_cards_by_identifier(&id)?;
+                match cards.as_slice() {
+                    [] => return output::output_error(&format!("Card not found: '{}'", id)),
+                    [card] => output::output_success(card),
+                    _ => output::output_success(&cards),
+                }
             }
         }
         CardAction::Update(args) => {
