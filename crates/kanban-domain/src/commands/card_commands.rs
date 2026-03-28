@@ -1,7 +1,6 @@
 use super::{Command, CommandContext};
 use crate::dependencies::card_graph::CardGraphExt;
-use crate::KanbanResult;
-use crate::{CardUpdate, CreateCardOptions};
+use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -13,9 +12,8 @@ pub struct UpdateCard {
 
 impl Command for UpdateCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(card) = context.cards.iter_mut().find(|c| c.id == self.card_id) {
-            card.update(self.updates.clone());
-        }
+        let card = context.card_mut(self.card_id)?;
+        card.update(self.updates.clone());
         Ok(())
     }
 
@@ -35,55 +33,53 @@ pub struct CreateCard {
 
 impl Command for CreateCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        // Get the prefix from the board first
         let prefix = context
             .boards
             .iter()
             .find(|b| b.id == self.board_id)
-            .and_then(|b| b.card_prefix.as_deref())
+            .ok_or_else(|| KanbanError::not_found("board", self.board_id))?
+            .card_prefix
+            .as_deref()
             .unwrap_or("task")
             .to_string();
 
-        // Now find the board again and create the card
-        if let Some(board) = context.boards.iter_mut().find(|b| b.id == self.board_id) {
-            let card = crate::Card::new(
-                board,
-                self.column_id,
-                self.title.clone(),
-                self.position,
-                &prefix,
-            );
-            context.cards.push(card);
+        let board = context.board_mut(self.board_id)?;
+        let card = crate::Card::new(
+            board,
+            self.column_id,
+            self.title.clone(),
+            self.position,
+            &prefix,
+        );
+        context.cards.push(card);
 
-            // Apply optional fields
-            if self.options.description.is_some()
-                || self.options.priority.is_some()
-                || self.options.points.is_some()
-                || self.options.due_date.is_some()
-            {
-                if let Some(card) = context.cards.last_mut() {
-                    let updates = CardUpdate {
-                        description: self
-                            .options
-                            .description
-                            .clone()
-                            .map(crate::FieldUpdate::Set)
-                            .unwrap_or(crate::FieldUpdate::NoChange),
-                        priority: self.options.priority,
-                        points: self
-                            .options
-                            .points
-                            .map(crate::FieldUpdate::Set)
-                            .unwrap_or(crate::FieldUpdate::NoChange),
-                        due_date: self
-                            .options
-                            .due_date
-                            .map(crate::FieldUpdate::Set)
-                            .unwrap_or(crate::FieldUpdate::NoChange),
-                        ..Default::default()
-                    };
-                    card.update(updates);
-                }
+        if self.options.description.is_some()
+            || self.options.priority.is_some()
+            || self.options.points.is_some()
+            || self.options.due_date.is_some()
+        {
+            if let Some(card) = context.cards.last_mut() {
+                let updates = CardUpdate {
+                    description: self
+                        .options
+                        .description
+                        .clone()
+                        .map(crate::FieldUpdate::Set)
+                        .unwrap_or(crate::FieldUpdate::NoChange),
+                    priority: self.options.priority,
+                    points: self
+                        .options
+                        .points
+                        .map(crate::FieldUpdate::Set)
+                        .unwrap_or(crate::FieldUpdate::NoChange),
+                    due_date: self
+                        .options
+                        .due_date
+                        .map(crate::FieldUpdate::Set)
+                        .unwrap_or(crate::FieldUpdate::NoChange),
+                    ..Default::default()
+                };
+                card.update(updates);
             }
         }
         Ok(())
@@ -103,9 +99,11 @@ pub struct MoveCard {
 
 impl Command for MoveCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(card) = context.cards.iter_mut().find(|c| c.id == self.card_id) {
-            card.move_to_column(self.new_column_id, self.new_position);
+        if !context.columns.iter().any(|c| c.id == self.new_column_id) {
+            return Err(KanbanError::not_found("column", self.new_column_id));
         }
+        let card = context.card_mut(self.card_id)?;
+        card.move_to_column(self.new_column_id, self.new_position);
         Ok(())
     }
 
@@ -124,14 +122,17 @@ pub struct ArchiveCard {
 
 impl Command for ArchiveCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(pos) = context.cards.iter().position(|c| c.id == self.card_id) {
-            let card = context.cards.remove(pos);
-            let original_column_id = card.column_id;
-            let original_position = card.position;
-            let archived = crate::ArchivedCard::new(card, original_column_id, original_position);
-            context.archived_cards.push(archived);
-            context.graph.cards.archive_card_edges(self.card_id);
-        }
+        let pos = context
+            .cards
+            .iter()
+            .position(|c| c.id == self.card_id)
+            .ok_or_else(|| KanbanError::not_found("card", self.card_id))?;
+        let card = context.cards.remove(pos);
+        let original_column_id = card.column_id;
+        let original_position = card.position;
+        let archived = crate::ArchivedCard::new(card, original_column_id, original_position);
+        context.archived_cards.push(archived);
+        context.graph.cards.archive_card_edges(self.card_id);
         Ok(())
     }
 
@@ -149,19 +150,18 @@ pub struct RestoreCard {
 
 impl Command for RestoreCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(pos) = context
+        let pos = context
             .archived_cards
             .iter()
             .position(|c| c.card.id == self.card_id)
-        {
-            let archived = context.archived_cards.remove(pos);
-            let mut card = archived.into_card();
-            card.column_id = self.column_id;
-            card.position = self.position;
-            card.updated_at = Utc::now();
-            context.cards.push(card);
-            context.graph.cards.unarchive_node(self.card_id);
-        }
+            .ok_or_else(|| KanbanError::not_found("archived card", self.card_id))?;
+        let archived = context.archived_cards.remove(pos);
+        let mut card = archived.into_card();
+        card.column_id = self.column_id;
+        card.position = self.position;
+        card.updated_at = Utc::now();
+        context.cards.push(card);
+        context.graph.cards.unarchive_node(self.card_id);
         Ok(())
     }
 
@@ -198,21 +198,18 @@ pub struct AssignCardToSprint {
 
 impl Command for AssignCardToSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(card) = context.cards.iter_mut().find(|c| c.id == self.card_id) {
-            // End the current sprint log if moving to a different sprint
-            if let Some(old_sprint_id) = card.sprint_id {
-                if old_sprint_id != self.sprint_id {
-                    card.end_current_sprint_log();
-                }
+        let card = context.card_mut(self.card_id)?;
+        if let Some(old_sprint_id) = card.sprint_id {
+            if old_sprint_id != self.sprint_id {
+                card.end_current_sprint_log();
             }
-            // Assign to the new sprint
-            card.assign_to_sprint(
-                self.sprint_id,
-                self.sprint_number,
-                self.sprint_name.clone(),
-                self.sprint_status.clone(),
-            );
         }
+        card.assign_to_sprint(
+            self.sprint_id,
+            self.sprint_number,
+            self.sprint_name.clone(),
+            self.sprint_status.clone(),
+        );
         Ok(())
     }
 
@@ -228,15 +225,136 @@ pub struct UnassignCardFromSprint {
 
 impl Command for UnassignCardFromSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(card) = context.cards.iter_mut().find(|c| c.id == self.card_id) {
-            card.end_current_sprint_log();
-            card.sprint_id = None;
-            card.updated_at = Utc::now();
-        }
+        let card = context.card_mut(self.card_id)?;
+        card.end_current_sprint_log();
+        card.sprint_id = None;
+        card.updated_at = Utc::now();
         Ok(())
     }
 
     fn description(&self) -> String {
         format!("Unassign card {} from sprint", self.card_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::test_helpers::TestContext;
+
+    #[test]
+    fn test_update_card_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = UpdateCard {
+            card_id: Uuid::new_v4(),
+            updates: CardUpdate::default(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_create_card_board_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = CreateCard {
+            board_id: Uuid::new_v4(),
+            column_id: Uuid::new_v4(),
+            title: "Test".to_string(),
+            position: 0,
+            options: CreateCardOptions::default(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_move_card_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let column = crate::Column::new(Uuid::new_v4(), "Col".to_string(), 0);
+        let column_id = column.id;
+        context.columns.push(column);
+        let cmd = MoveCard {
+            card_id: Uuid::new_v4(),
+            new_column_id: column_id,
+            new_position: 0,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_move_card_column_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let card = crate::Card::new(
+            &mut board,
+            Uuid::new_v4(),
+            "Card".to_string(),
+            0,
+            "TST",
+        );
+        let card_id = card.id;
+        context.cards.push(card);
+        let cmd = MoveCard {
+            card_id,
+            new_column_id: Uuid::new_v4(),
+            new_position: 0,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_archive_card_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = ArchiveCard {
+            card_id: Uuid::new_v4(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_restore_card_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = RestoreCard {
+            card_id: Uuid::new_v4(),
+            column_id: Uuid::new_v4(),
+            position: 0,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_assign_card_to_sprint_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = AssignCardToSprint {
+            card_id: Uuid::new_v4(),
+            sprint_id: Uuid::new_v4(),
+            sprint_number: 1,
+            sprint_name: None,
+            sprint_status: "Active".to_string(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_unassign_card_from_sprint_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = UnassignCardFromSprint {
+            card_id: Uuid::new_v4(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
     }
 }
