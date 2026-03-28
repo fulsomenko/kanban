@@ -4,7 +4,9 @@ use kanban_domain::{
     ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
-use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{
+    JsonFileStore, PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -55,7 +57,7 @@ impl KanbanContext {
 
         let (snapshot, _metadata) = store.load().await?;
         let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
-            .map_err(|e| KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         Ok(Self {
             boards: data.boards,
@@ -103,7 +105,7 @@ impl KanbanContext {
         }
         let (snapshot, _metadata) = self.store.load().await?;
         let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
-            .map_err(|e| KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         self.boards = data.boards;
         self.columns = data.columns;
         self.cards = data.cards;
@@ -124,7 +126,7 @@ impl KanbanContext {
         };
 
         let bytes = serde_json::to_vec_pretty(&snapshot)
-            .map_err(|e| KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         let store_snapshot = StoreSnapshot {
             data: bytes,
@@ -711,12 +713,12 @@ impl KanbanOperations for KanbanContext {
         };
 
         serde_json::to_string_pretty(&snapshot)
-            .map_err(|e| KanbanError::Serialization(e.to_string()))
+            .map_err(|e| PersistenceError::Serialization(e.to_string()).into())
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
         let imported: DataSnapshot =
-            serde_json::from_str(data).map_err(|e| KanbanError::Serialization(e.to_string()))?;
+            serde_json::from_str(data).map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         let board = imported
             .boards
