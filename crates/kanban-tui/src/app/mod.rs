@@ -50,7 +50,6 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, InputState};
 use kanban_domain::AnimationType;
-use kanban_domain::{KanbanError, KanbanResult};
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
     filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter},
@@ -58,6 +57,7 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
+use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -1446,7 +1446,11 @@ impl App {
                             metadata: PersistenceMetadata::new(instance_id),
                         };
 
-                        match store.save(persistence_snapshot).await.map_err(KanbanError::from) {
+                        match store
+                            .save(persistence_snapshot)
+                            .await
+                            .map_err(KanbanError::from)
+                        {
                             Ok(_) => {
                                 tracing::debug!("Save worker completed save");
                                 // Signal that save is complete

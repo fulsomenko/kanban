@@ -633,8 +633,8 @@ impl KanbanOperations for TuiContext {
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        let imported: Snapshot = serde_json::from_str(data)
-            .map_err(|e| KanbanError::serialization(e.to_string()))?;
+        let imported: Snapshot =
+            serde_json::from_str(data).map_err(|e| KanbanError::serialization(e.to_string()))?;
 
         let board = imported
             .boards
