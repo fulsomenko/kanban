@@ -245,7 +245,7 @@ impl StateManager {
         self.conflict_pending = false;
 
         if let Some(ref store) = self.store {
-            let data = snapshot.to_json_bytes()?;
+            let data = kanban_persistence::snapshot_to_json_bytes(snapshot)?;
             let persistence_snapshot = StoreSnapshot {
                 data,
                 metadata: PersistenceMetadata::new(self.instance_id),
@@ -269,8 +269,8 @@ impl StateManager {
             let (snapshot, _metadata) = store.load().await?;
 
             // Deserialize and apply loaded data to app
-            let data: Snapshot = serde_json::from_slice(&snapshot.data)
-                .map_err(|e| kanban_domain::KanbanError::Serialization(e.to_string()))?;
+            let data: Snapshot =
+                kanban_persistence::snapshot_from_json_bytes(&snapshot.data)?;
 
             data.apply_to_app(app);
 

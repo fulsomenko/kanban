@@ -629,12 +629,12 @@ impl KanbanOperations for TuiContext {
         };
 
         serde_json::to_string_pretty(&snapshot)
-            .map_err(|e| KanbanError::Serialization(e.to_string()))
+            .map_err(|e| kanban_persistence::PersistenceError::Serialization(e.to_string()).into())
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        let imported: Snapshot =
-            serde_json::from_str(data).map_err(|e| KanbanError::Serialization(e.to_string()))?;
+        let imported: Snapshot = serde_json::from_str(data)
+            .map_err(|e| kanban_persistence::PersistenceError::Serialization(e.to_string()))?;
 
         let board = imported
             .boards

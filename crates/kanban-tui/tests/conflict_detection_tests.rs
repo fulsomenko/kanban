@@ -26,7 +26,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
 
     let store_id = uuid::Uuid::new_v4();
     let store = JsonFileStore::with_instance_id(&file_path, store_id);
-    let data1 = snapshot1.to_json_bytes().unwrap();
+    let data1 = kanban_persistence::snapshot_to_json_bytes(&snapshot1).unwrap();
     let persist_snapshot1 = StoreSnapshot {
         data: data1,
         metadata: PersistenceMetadata::new(store_id),
@@ -53,7 +53,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Same instance tries to save and should detect conflict
-    let data2 = snapshot1.to_json_bytes().unwrap();
+    let data2 = kanban_persistence::snapshot_to_json_bytes(&snapshot1).unwrap();
     let persist_snapshot2 = StoreSnapshot {
         data: data2,
         metadata: PersistenceMetadata::new(store_id),
@@ -93,7 +93,7 @@ async fn test_no_conflict_when_file_unchanged() {
     };
 
     let store = JsonFileStore::new(&file_path);
-    let data = snapshot.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot).unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
         metadata: PersistenceMetadata::new(store.instance_id()),
@@ -128,7 +128,7 @@ async fn test_conflict_detection_tracks_file_metadata() {
     };
 
     let store = JsonFileStore::new(&file_path);
-    let data = snapshot.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot).unwrap();
     let persist_snapshot = StoreSnapshot {
         data,
         metadata: PersistenceMetadata::new(store.instance_id()),
@@ -188,7 +188,7 @@ async fn test_multiple_instances_with_different_ids() {
     // First instance saves
     let store1_id = uuid::Uuid::new_v4();
     let store1 = JsonFileStore::with_instance_id(&file_path, store1_id);
-    let data = snapshot.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot).unwrap();
     let persist_snapshot1 = StoreSnapshot {
         data: data.clone(),
         metadata: PersistenceMetadata::new(store1_id),
@@ -232,7 +232,7 @@ async fn test_conflict_resolution_with_force_overwrite() {
     let store = JsonFileStore::new(&file_path);
 
     // Save initial state
-    let data = snapshot.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot).unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
         metadata: PersistenceMetadata::new(store.instance_id()),
@@ -286,7 +286,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
         archived_cards: vec![],
     };
 
-    let data = snapshot1.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot1).unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
         metadata: PersistenceMetadata::new(instance1_id),
@@ -309,7 +309,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     );
     snapshot2.cards.push(new_card);
 
-    let data2 = snapshot2.to_json_bytes().unwrap();
+    let data2 = kanban_persistence::snapshot_to_json_bytes(&snapshot2).unwrap();
     let persist_snapshot2 = StoreSnapshot {
         data: data2,
         metadata: PersistenceMetadata::new(instance2_id),
@@ -334,7 +334,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     // Rename the first card
     snapshot3.cards[0].title = "Task A - Updated by Instance 3".to_string();
 
-    let data3 = snapshot3.to_json_bytes().unwrap();
+    let data3 = kanban_persistence::snapshot_to_json_bytes(&snapshot3).unwrap();
     let persist_snapshot3 = StoreSnapshot {
         data: data3,
         metadata: PersistenceMetadata::new(instance3_id),

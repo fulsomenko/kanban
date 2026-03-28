@@ -1429,7 +1429,7 @@ impl App {
                     while let Some(snapshot) = rx.recv().await {
                         tracing::debug!("Save worker received snapshot, starting save operation");
 
-                        let data = match snapshot.to_json_bytes() {
+                        let data = match kanban_persistence::snapshot_to_json_bytes(&snapshot) {
                             Ok(d) => d,
                             Err(e) => {
                                 tracing::error!("Failed to serialize snapshot: {}", e);
