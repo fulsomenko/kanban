@@ -13,7 +13,11 @@ fn resolve_card_id(ctx: &CliContext, id: &str) -> anyhow::Result<Uuid> {
     if let Ok(uuid) = Uuid::parse_str(id) {
         return Ok(uuid);
     }
-    match ctx.find_cards_by_identifier(id).map_err(anyhow::Error::from)?.as_slice() {
+    match ctx
+        .find_cards_by_identifier(id)
+        .map_err(anyhow::Error::from)?
+        .as_slice()
+    {
         [] => Err(anyhow::anyhow!("Card not found: '{}'", id)),
         [card] => Ok(card.id),
         matches => Err(anyhow::anyhow!(

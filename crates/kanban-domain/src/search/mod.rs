@@ -714,6 +714,8 @@ mod tests {
         assert!(find_cards_by_identifier("KAN-", &cards, &columns, &boards, &[]).is_empty());
         assert!(find_cards_by_identifier("KAN-abc", &cards, &columns, &boards, &[]).is_empty());
         assert!(find_cards_by_identifier("-5", &cards, &columns, &boards, &[]).is_empty());
-        assert!(find_cards_by_identifier("not-a-number", &cards, &columns, &boards, &[]).is_empty());
+        assert!(
+            find_cards_by_identifier("not-a-number", &cards, &columns, &boards, &[]).is_empty()
+        );
     }
 }

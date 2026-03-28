@@ -111,10 +111,15 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
     }
     let matches = {
         let guard = ctx.lock().await;
-        guard.find_cards_by_identifier(s).map_err(kanban_err_to_mcp)?
+        guard
+            .find_cards_by_identifier(s)
+            .map_err(kanban_err_to_mcp)?
     };
     match matches.as_slice() {
-        [] => Err(McpError::invalid_params(format!("Card not found: '{}'", s), None)),
+        [] => Err(McpError::invalid_params(
+            format!("Card not found: '{}'", s),
+            None,
+        )),
         [card] => Ok(card.id),
         cards => Err(McpError::invalid_params(
             format!(
@@ -718,7 +723,9 @@ impl KanbanMcpServer {
         to_call_tool_result(&result)
     }
 
-    #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5). Returns a single card for UUID or unambiguous identifier, or a list of all matching cards if the identifier is ambiguous.")]
+    #[tool(
+        description = "Get a specific card by UUID or identifier (e.g. KAN-5). Returns a single card for UUID or unambiguous identifier, or a list of all matching cards if the identifier is ambiguous."
+    )]
     async fn tool_get_card(
         &self,
         Parameters(req): Parameters<GetCardRequest>,

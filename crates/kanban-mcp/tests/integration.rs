@@ -339,7 +339,9 @@ async fn test_delete_persists() {
 #[tokio::test]
 async fn find_cards_by_identifier_single_match() {
     let (mut ctx, _tmp) = setup().await;
-    let board = ctx.create_board("Project".into(), Some("KAN".into())).unwrap();
+    let board = ctx
+        .create_board("Project".into(), Some("KAN".into()))
+        .unwrap();
     let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
     let card = ctx
         .create_card(board.id, col.id, "My Task".into(), Default::default())
@@ -354,13 +356,17 @@ async fn find_cards_by_identifier_single_match() {
 async fn find_cards_by_identifier_multiple_matches() {
     let (mut ctx, _tmp) = setup().await;
 
-    let board_a = ctx.create_board("Board A".into(), Some("KAN".into())).unwrap();
+    let board_a = ctx
+        .create_board("Board A".into(), Some("KAN".into()))
+        .unwrap();
     let col_a = ctx.create_column(board_a.id, "Todo".into(), None).unwrap();
     let card_a = ctx
         .create_card(board_a.id, col_a.id, "Card on A".into(), Default::default())
         .unwrap();
 
-    let board_b = ctx.create_board("Board B".into(), Some("KAN".into())).unwrap();
+    let board_b = ctx
+        .create_board("Board B".into(), Some("KAN".into()))
+        .unwrap();
     let col_b = ctx.create_column(board_b.id, "Todo".into(), None).unwrap();
     let card_b = ctx
         .create_card(board_b.id, col_b.id, "Card on B".into(), Default::default())
@@ -376,7 +382,9 @@ async fn find_cards_by_identifier_multiple_matches() {
 #[tokio::test]
 async fn find_cards_by_identifier_not_found() {
     let (mut ctx, _tmp) = setup().await;
-    let board = ctx.create_board("Project".into(), Some("KAN".into())).unwrap();
+    let board = ctx
+        .create_board("Project".into(), Some("KAN".into()))
+        .unwrap();
     let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
     ctx.create_card(board.id, col.id, "My Task".into(), Default::default())
         .unwrap();

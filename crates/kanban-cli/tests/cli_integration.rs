@@ -1432,7 +1432,9 @@ mod card_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        let items = json["data"].as_array().expect("data should be an array when multiple cards match");
+        let items = json["data"]
+            .as_array()
+            .expect("data should be an array when multiple cards match");
         assert_eq!(items.len(), 2);
         let titles: Vec<&str> = items.iter().map(|c| c["title"].as_str().unwrap()).collect();
         assert!(titles.contains(&"Card on A"));
