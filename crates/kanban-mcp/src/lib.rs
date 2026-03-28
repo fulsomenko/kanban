@@ -4,8 +4,9 @@ use context::McpContext;
 use kanban_core::KanbanError;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate,
-    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    format_ambiguous_matches, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
+    CardStatus, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
+    SprintUpdate,
 };
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -122,16 +123,7 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
         )),
         [card] => Ok(card.id),
         cards => Err(McpError::invalid_params(
-            format!(
-                "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.\n{}",
-                s,
-                cards.len(),
-                cards
-                    .iter()
-                    .map(|c| format!("  {} — {}", c.id, c.title))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
+            format_ambiguous_matches(s, cards),
             None,
         )),
     }
@@ -745,7 +737,7 @@ impl KanbanMcpServer {
                 format!("Card not found: '{}'", req.card_id),
                 None,
             )),
-            [_] => to_call_tool_result(&cards[0]),
+            [card] => to_call_tool_result(card),
             _ => to_call_tool_result(&cards),
         }
     }

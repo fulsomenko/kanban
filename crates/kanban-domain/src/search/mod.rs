@@ -268,6 +268,22 @@ pub fn find_cards_by_identifier<'a>(
         .collect()
 }
 
+/// Format an error message listing ambiguous card matches.
+///
+/// Used by both CLI and MCP when an identifier resolves to multiple cards.
+pub fn format_ambiguous_matches(identifier: &str, cards: &[Card]) -> String {
+    format!(
+        "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.\n{}",
+        identifier,
+        cards.len(),
+        cards
+            .iter()
+            .map(|c| format!("  {} — {}", c.id, c.title))
+            .collect::<Vec<_>>()
+            .join("\n")
+    )
+}
+
 impl CardSearcher for CompositeSearcher {
     fn matches(&self, card: &Card, board: &Board, sprints: &[Sprint]) -> bool {
         if self.searchers.is_empty() {

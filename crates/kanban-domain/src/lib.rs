@@ -44,7 +44,10 @@ pub use query::{
     },
     CardQueryBuilder,
 };
-pub use search::{BranchNameSearcher, CardSearcher, CompositeSearcher, SearchBy, TitleSearcher};
+pub use search::{
+    format_ambiguous_matches, BranchNameSearcher, CardSearcher, CompositeSearcher, SearchBy,
+    TitleSearcher,
+};
 pub use snapshot::Snapshot;
 pub use sort::{get_sorter_for_field, OrderedSorter, SortBy};
 pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};

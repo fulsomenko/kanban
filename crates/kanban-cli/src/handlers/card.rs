@@ -3,8 +3,8 @@ use crate::context::CliContext;
 use crate::output;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardUpdate, CreateCardOptions,
-    FieldUpdate, KanbanOperations,
+    format_ambiguous_matches, ArchivedCardSummary, CardListFilter, CardPriority, CardStatus,
+    CardUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
 };
 
 use uuid::Uuid;
@@ -20,16 +20,7 @@ fn resolve_card_id(ctx: &CliContext, id: &str) -> anyhow::Result<Uuid> {
     {
         [] => Err(anyhow::anyhow!("Card not found: '{}'", id)),
         [card] => Ok(card.id),
-        matches => Err(anyhow::anyhow!(
-            "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.\n{}",
-            id,
-            matches.len(),
-            matches
-                .iter()
-                .map(|c| format!("  {} — {}", c.id, c.title))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )),
+        matches => Err(anyhow::anyhow!("{}", format_ambiguous_matches(id, matches))),
     }
 }
 
