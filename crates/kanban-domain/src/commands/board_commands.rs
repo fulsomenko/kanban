@@ -29,9 +29,8 @@ pub struct UpdateBoard {
 
 impl Command for UpdateBoard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(board) = context.boards.iter_mut().find(|b| b.id == self.board_id) {
-            board.update(self.updates.clone());
-        }
+        let board = context.board_mut(self.board_id)?;
+        board.update(self.updates.clone());
         Ok(())
     }
 
@@ -49,9 +48,8 @@ pub struct SetBoardTaskSort {
 
 impl Command for SetBoardTaskSort {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(board) = context.boards.iter_mut().find(|b| b.id == self.board_id) {
-            board.update_task_sort(self.field, self.order);
-        }
+        let board = context.board_mut(self.board_id)?;
+        board.update_task_sort(self.field, self.order);
         Ok(())
     }
 
@@ -68,9 +66,8 @@ pub struct SetBoardTaskListView {
 
 impl Command for SetBoardTaskListView {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(board) = context.boards.iter_mut().find(|b| b.id == self.board_id) {
-            board.update_task_list_view(self.view);
-        }
+        let board = context.board_mut(self.board_id)?;
+        board.update_task_list_view(self.view);
         Ok(())
     }
 
@@ -105,5 +102,57 @@ impl Command for DeleteBoard {
 
     fn description(&self) -> String {
         format!("Delete board: {}", self.board_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DependencyGraph;
+    use kanban_core::KanbanError;
+
+    fn create_test_context() -> CommandContext<'static> {
+        CommandContext {
+            boards: Box::leak(Box::new(Vec::new())),
+            columns: Box::leak(Box::new(Vec::new())),
+            cards: Box::leak(Box::new(Vec::new())),
+            sprints: Box::leak(Box::new(Vec::new())),
+            archived_cards: Box::leak(Box::new(Vec::new())),
+            graph: Box::leak(Box::new(DependencyGraph::new())),
+        }
+    }
+
+    #[test]
+    fn test_update_board_not_found_returns_error() {
+        let mut context = create_test_context();
+        let cmd = UpdateBoard {
+            board_id: Uuid::new_v4(),
+            updates: BoardUpdate::default(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(matches!(result, Err(KanbanError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_set_board_task_sort_not_found_returns_error() {
+        let mut context = create_test_context();
+        let cmd = SetBoardTaskSort {
+            board_id: Uuid::new_v4(),
+            field: crate::SortField::Priority,
+            order: crate::SortOrder::Ascending,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(matches!(result, Err(KanbanError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_set_board_task_list_view_not_found_returns_error() {
+        let mut context = create_test_context();
+        let cmd = SetBoardTaskListView {
+            board_id: Uuid::new_v4(),
+            view: crate::TaskListView::default(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(matches!(result, Err(KanbanError::NotFound(_))));
     }
 }
