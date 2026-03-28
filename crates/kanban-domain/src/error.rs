@@ -117,6 +117,14 @@ impl KanbanError {
             KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound))
         )
     }
+
+    pub fn is_conflict_detected(&self) -> bool {
+        matches!(self, KanbanError::ConflictDetected { .. })
+    }
+
+    pub fn serialization(msg: impl Into<String>) -> Self {
+        Self::Serialization(msg.into())
+    }
 }
 
 impl From<DependencyError> for KanbanError {
