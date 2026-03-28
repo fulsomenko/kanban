@@ -290,13 +290,7 @@ mod tests {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(
-            &mut board,
-            Uuid::new_v4(),
-            "Card".to_string(),
-            0,
-            "TST",
-        );
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
         let card_id = card.id;
         context.cards.push(card);
         let cmd = MoveCard {
