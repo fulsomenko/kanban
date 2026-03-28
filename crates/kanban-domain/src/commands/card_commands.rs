@@ -2,7 +2,7 @@ use super::{Command, CommandContext};
 use crate::dependencies::card_graph::CardGraphExt;
 use crate::{CardUpdate, CreateCardOptions};
 use chrono::Utc;
-use kanban_core::KanbanResult;
+use crate::KanbanResult;
 use uuid::Uuid;
 
 /// Update card properties (title, description, priority, status, etc.)
