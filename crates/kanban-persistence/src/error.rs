@@ -11,6 +11,7 @@ pub enum PersistenceError {
     #[error("file conflict: {path} was modified by another instance")]
     ConflictDetected {
         path: String,
+        #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
 }
