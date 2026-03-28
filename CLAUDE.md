@@ -155,10 +155,35 @@ cargo tarpaulin        # Code coverage
 - Tokio runtime for async execution
 
 ### Testing
-- Unit tests in same file as implementation
-- Integration tests in `tests/` directory
-- Use `mockall` for mocking traits
-- Test domain logic independently of infrastructure
+
+**TDD workflow (mandatory — Red → Green → Refactor):**
+
+1. **Red**: Write a failing test that specifies the expected behavior. Present tests to the user for review before implementing anything.
+2. **Green**: Write the minimum implementation needed to make the test pass. Do not over-engineer at this step.
+3. **Refactor**: Clean up implementation and tests without breaking anything. This step is not optional.
+4. No feature or fix is complete until all tests pass and the refactor step is done.
+
+**Test naming:** Names are living documentation. Use the pattern `test_<scenario>_<expected_outcome>`, e.g. `test_move_card_to_full_column_returns_wip_limit_error`. Avoid generic names like `test1` or `it_works`.
+
+**Test return types:** Prefer `-> KanbanResult<()>` over `#[should_panic]`. This gives better failure messages and composes with `?`. Use `#[should_panic]` only for unrecoverable invariant violations.
+
+**Test requirements by layer:**
+
+| Layer | Test Type | Pattern |
+|---|---|---|
+| `kanban-core`, `kanban-domain` | Inline unit tests (`#[cfg(test)]`) | Pure logic, no I/O, no mocks needed |
+| `kanban-persistence` | Inline unit tests + real tempfile I/O | Serialization, migration, round-trips |
+| `kanban-service` | Integration tests in `tests/` | `#[tokio::test]`, `KanbanContext` with real persistence via `TempDir` |
+| `kanban-tui` | Integration tests in `tests/` | Component instantiation, key event simulation, export/import flows |
+| `kanban-cli` | Integration tests in `tests/` | `assert_cmd` + real binary invocation via `cargo_bin_cmd!` |
+| `kanban-mcp` | Integration tests in `tests/` | End-to-end tool calls against a real `KanbanContext` |
+
+**Coverage:** Use `cargo tarpaulin` to verify no untested paths exist. 100% line coverage is the floor, not the goal — every assertion must verify observable behavior or an invariant, not just execute a code path.
+
+**Refactoring for testability:** If a function cannot be tested in isolation, refactor before writing tests:
+- Extract logic from handlers/renderers into pure functions
+- Introduce trait abstractions for dependencies (e.g. I/O, time)
+- Use `mockall` for mocking traits where real I/O is impractical
 
 ## Inspirations from lazygit
 
@@ -170,6 +195,7 @@ cargo tarpaulin        # Code coverage
 
 ## Development Workflow
 
+0. **Tests First**: Follow the TDD workflow in [Testing](#testing) — write and present failing tests before any implementation.
 1. **Domain First**: Define models in `kanban-domain`
 2. **Persistence Layer**: Implement storage in `kanban-persistence`
 3. **Service Layer**: Orchestrate operations in `kanban-service`

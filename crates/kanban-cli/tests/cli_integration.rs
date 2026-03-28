@@ -1345,6 +1345,130 @@ mod card_tests {
         assert!(json["success"].as_bool().unwrap());
         assert_eq!(json["data"]["archived"], card_uuid);
     }
+
+    fn setup_two_boards_same_prefix(
+        file: &std::path::Path,
+    ) -> (String, String, String, String, String, String) {
+        let (board_a_id, col_a_id) = setup_board_and_column_with_prefix(file, "KAN");
+        let (board_b_id, col_b_id) = {
+            let board_output = kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "board",
+                    "create",
+                    "--name",
+                    "Board B",
+                    "--card-prefix",
+                    "KAN",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout
+                .clone();
+            let board_json = parse_json_output(&String::from_utf8_lossy(&board_output));
+            let board_b_id = extract_id(&board_json);
+            let col_output = kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "column",
+                    "create",
+                    "--board-id",
+                    &board_b_id,
+                    "--name",
+                    "TODO",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout
+                .clone();
+            let col_json = parse_json_output(&String::from_utf8_lossy(&col_output));
+            (board_b_id, extract_id(&col_json))
+        };
+
+        let card_a_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_a_id,
+                "--column-id",
+                &col_a_id,
+                "--title",
+                "Card on A",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let card_a_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&card_a_output)));
+
+        let card_b_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board-id",
+                &board_b_id,
+                "--column-id",
+                &col_b_id,
+                "--title",
+                "Card on B",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let card_b_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&card_b_output)));
+
+        (
+            board_a_id, col_a_id, board_b_id, col_b_id, card_a_id, card_b_id,
+        )
+    }
+
+    #[test]
+    fn test_card_get_ambiguous_identifier_returns_all_matches() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (_, _, _, _, _, _) = setup_two_boards_same_prefix(&file);
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "card", "get", "KAN-1"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        let items = json["data"]
+            .as_array()
+            .expect("data should be an array when multiple cards match");
+        assert_eq!(items.len(), 2);
+        let titles: Vec<&str> = items.iter().map(|c| c["title"].as_str().unwrap()).collect();
+        assert!(titles.contains(&"Card on A"));
+        assert!(titles.contains(&"Card on B"));
+    }
+
+    #[test]
+    fn test_card_mutate_ambiguous_identifier_error_lists_candidates() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (_, _, _, _, card_a_id, card_b_id) = setup_two_boards_same_prefix(&file);
+
+        kanban()
+            .args([file.to_str().unwrap(), "card", "archive", "KAN-1"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Ambiguous"))
+            .stderr(predicate::str::contains(&card_a_id))
+            .stderr(predicate::str::contains(&card_b_id));
+    }
 }
 
 mod sprint_tests {

@@ -4,8 +4,9 @@ use context::McpContext;
 use kanban_core::KanbanError;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate,
-    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    format_ambiguous_matches, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
+    CardStatus, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
+    SprintUpdate,
 };
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -109,14 +110,23 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
     if let Ok(id) = Uuid::parse_str(s) {
         return Ok(id);
     }
-    let card = {
+    let matches = {
         let guard = ctx.lock().await;
         guard
-            .find_card_by_identifier(s)
+            .find_cards_by_identifier(s)
             .map_err(kanban_err_to_mcp)?
     };
-    card.map(|c| c.id)
-        .ok_or_else(|| McpError::invalid_params(format!("Card not found: '{}'", s), None))
+    match matches.as_slice() {
+        [] => Err(McpError::invalid_params(
+            format!("Card not found: '{}'", s),
+            None,
+        )),
+        [card] => Ok(card.id),
+        cards => Err(McpError::invalid_params(
+            format_ambiguous_matches(s, cards),
+            None,
+        )),
+    }
 }
 
 /// Lock, mutate, save.
@@ -705,14 +715,31 @@ impl KanbanMcpServer {
         to_call_tool_result(&result)
     }
 
-    #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
+    #[tool(
+        description = "Get a specific card by UUID or identifier (e.g. KAN-5). Returns a single card for UUID or unambiguous identifier, or a list of all matching cards if the identifier is ambiguous."
+    )]
     async fn tool_get_card(
         &self,
         Parameters(req): Parameters<GetCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        let card = read_op!(self.ctx, get_card, id)?;
-        to_call_tool_result(&card)
+        if let Ok(uuid) = uuid::Uuid::parse_str(&req.card_id) {
+            let card = read_op!(self.ctx, get_card, uuid)?;
+            return to_call_tool_result(&card);
+        }
+        let cards = {
+            let guard = self.ctx.lock().await;
+            guard
+                .find_cards_by_identifier(&req.card_id)
+                .map_err(kanban_err_to_mcp)?
+        };
+        match cards.as_slice() {
+            [] => Err(McpError::invalid_params(
+                format!("Card not found: '{}'", req.card_id),
+                None,
+            )),
+            [card] => to_call_tool_result(card),
+            _ => to_call_tool_result(&cards),
+        }
     }
 
     #[tool(
