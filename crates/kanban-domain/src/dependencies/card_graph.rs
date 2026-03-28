@@ -270,7 +270,6 @@ impl CardGraphExt for CardDependencyGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DependencyError, KanbanError};
     use uuid::Uuid;
 
     #[test]
@@ -295,13 +294,7 @@ mod tests {
         graph.add_blocks(card_b, card_c).unwrap();
 
         let result = graph.add_blocks(card_c, card_a);
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(KanbanError::Domain(crate::DomainError::Dependency(
-                DependencyError::CycleDetected
-            )))
-        ));
+        assert!(result.unwrap_err().is_cycle_detected());
     }
 
     #[test]
@@ -310,13 +303,7 @@ mod tests {
         let card_a = Uuid::new_v4();
 
         let result = graph.add_blocks(card_a, card_a);
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(KanbanError::Domain(crate::DomainError::Dependency(
-                DependencyError::SelfReference
-            )))
-        ));
+        assert!(result.unwrap_err().is_self_reference());
     }
 
     #[test]
@@ -422,13 +409,7 @@ mod tests {
 
         // Try to make A a child of C (would create cycle)
         let result = graph.set_parent(card_a, card_c);
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(KanbanError::Domain(crate::DomainError::Dependency(
-                DependencyError::CycleDetected
-            )))
-        ));
+        assert!(result.unwrap_err().is_cycle_detected());
     }
 
     #[test]
@@ -437,13 +418,7 @@ mod tests {
         let card = Uuid::new_v4();
 
         let result = graph.set_parent(card, card);
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(KanbanError::Domain(crate::DomainError::Dependency(
-                DependencyError::SelfReference
-            )))
-        ));
+        assert!(result.unwrap_err().is_self_reference());
     }
 
     #[test]
@@ -506,13 +481,7 @@ mod tests {
         let child = Uuid::new_v4();
 
         let result = graph.remove_parent(child, parent);
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(KanbanError::Domain(crate::DomainError::Dependency(
-                DependencyError::EdgeNotFound
-            )))
-        ));
+        assert!(result.unwrap_err().is_edge_not_found());
     }
 
     #[test]
