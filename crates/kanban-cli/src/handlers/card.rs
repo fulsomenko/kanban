@@ -13,10 +13,15 @@ fn resolve_card_id(ctx: &CliContext, id: &str) -> anyhow::Result<Uuid> {
     if let Ok(uuid) = Uuid::parse_str(id) {
         return Ok(uuid);
     }
-    ctx.find_card_by_identifier(id)
-        .map_err(anyhow::Error::from)?
-        .map(|c| c.id)
-        .ok_or_else(|| anyhow::anyhow!("Card not found: '{}'", id))
+    match ctx.find_cards_by_identifier(id).map_err(anyhow::Error::from)?.as_slice() {
+        [] => Err(anyhow::anyhow!("Card not found: '{}'", id)),
+        [card] => Ok(card.id),
+        matches => Err(anyhow::anyhow!(
+            "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.",
+            id,
+            matches.len()
+        )),
+    }
 }
 
 pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {

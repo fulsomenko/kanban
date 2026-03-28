@@ -109,14 +109,22 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
     if let Ok(id) = Uuid::parse_str(s) {
         return Ok(id);
     }
-    let card = {
+    let matches = {
         let guard = ctx.lock().await;
-        guard
-            .find_card_by_identifier(s)
-            .map_err(kanban_err_to_mcp)?
+        guard.find_cards_by_identifier(s).map_err(kanban_err_to_mcp)?
     };
-    card.map(|c| c.id)
-        .ok_or_else(|| McpError::invalid_params(format!("Card not found: '{}'", s), None))
+    match matches.as_slice() {
+        [] => Err(McpError::invalid_params(format!("Card not found: '{}'", s), None)),
+        [card] => Ok(card.id),
+        cards => Err(McpError::invalid_params(
+            format!(
+                "Ambiguous identifier '{}': {} cards match. Use a UUID to be specific.",
+                s,
+                cards.len()
+            ),
+            None,
+        )),
+    }
 }
 
 /// Lock, mutate, save.
