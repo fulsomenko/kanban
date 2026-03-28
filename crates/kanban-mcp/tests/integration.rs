@@ -333,3 +333,54 @@ async fn test_delete_persists() {
     let fresh = KanbanContext::load_json(&path_str).await.unwrap();
     assert!(fresh.list_boards().unwrap().is_empty());
 }
+
+// find_cards_by_identifier
+
+#[tokio::test]
+async fn find_cards_by_identifier_single_match() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx.create_board("Project".into(), Some("KAN".into())).unwrap();
+    let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "My Task".into(), Default::default())
+        .unwrap();
+
+    let results = ctx.find_cards_by_identifier("KAN-1").unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, card.id);
+}
+
+#[tokio::test]
+async fn find_cards_by_identifier_multiple_matches() {
+    let (mut ctx, _tmp) = setup().await;
+
+    let board_a = ctx.create_board("Board A".into(), Some("KAN".into())).unwrap();
+    let col_a = ctx.create_column(board_a.id, "Todo".into(), None).unwrap();
+    let card_a = ctx
+        .create_card(board_a.id, col_a.id, "Card on A".into(), Default::default())
+        .unwrap();
+
+    let board_b = ctx.create_board("Board B".into(), Some("KAN".into())).unwrap();
+    let col_b = ctx.create_column(board_b.id, "Todo".into(), None).unwrap();
+    let card_b = ctx
+        .create_card(board_b.id, col_b.id, "Card on B".into(), Default::default())
+        .unwrap();
+
+    let results = ctx.find_cards_by_identifier("KAN-1").unwrap();
+    assert_eq!(results.len(), 2);
+    let ids: Vec<_> = results.iter().map(|c| c.id).collect();
+    assert!(ids.contains(&card_a.id));
+    assert!(ids.contains(&card_b.id));
+}
+
+#[tokio::test]
+async fn find_cards_by_identifier_not_found() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx.create_board("Project".into(), Some("KAN".into())).unwrap();
+    let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    ctx.create_card(board.id, col.id, "My Task".into(), Default::default())
+        .unwrap();
+
+    let results = ctx.find_cards_by_identifier("KAN-99").unwrap();
+    assert!(results.is_empty());
+}
