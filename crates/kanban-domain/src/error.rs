@@ -88,6 +88,35 @@ impl KanbanError {
     pub fn validation(msg: impl Into<String>) -> Self {
         Self::Domain(DomainError::Validation(msg.into()))
     }
+
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, KanbanError::Domain(DomainError::NotFound { .. }))
+    }
+
+    pub fn is_validation(&self) -> bool {
+        matches!(self, KanbanError::Domain(DomainError::Validation(_)))
+    }
+
+    pub fn is_cycle_detected(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected))
+        )
+    }
+
+    pub fn is_self_reference(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference))
+        )
+    }
+
+    pub fn is_edge_not_found(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound))
+        )
+    }
 }
 
 impl From<DependencyError> for KanbanError {
