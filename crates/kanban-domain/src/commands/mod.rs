@@ -1,4 +1,5 @@
-use crate::KanbanResult;
+use crate::{KanbanResult, KanbanError};
+use uuid::Uuid;
 
 pub mod board_commands;
 pub mod card_commands;
@@ -31,4 +32,41 @@ pub struct CommandContext<'a> {
     pub sprints: &'a mut Vec<crate::Sprint>,
     pub archived_cards: &'a mut Vec<crate::ArchivedCard>,
     pub graph: &'a mut crate::DependencyGraph,
+}
+
+impl<'a> CommandContext<'a> {
+    pub fn board_mut(&mut self, id: Uuid) -> KanbanResult<&mut crate::Board> {
+        self.boards
+            .iter_mut()
+            .find(|b| b.id == id)
+            .ok_or_else(|| KanbanError::not_found("board", id))
+    }
+
+    pub fn card_mut(&mut self, id: Uuid) -> KanbanResult<&mut crate::Card> {
+        self.cards
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or_else(|| KanbanError::not_found("card", id))
+    }
+
+    pub fn column_mut(&mut self, id: Uuid) -> KanbanResult<&mut crate::Column> {
+        self.columns
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or_else(|| KanbanError::not_found("column", id))
+    }
+
+    pub fn sprint_mut(&mut self, id: Uuid) -> KanbanResult<&mut crate::Sprint> {
+        self.sprints
+            .iter_mut()
+            .find(|s| s.id == id)
+            .ok_or_else(|| KanbanError::not_found("sprint", id))
+    }
+
+    pub fn archived_card_mut(&mut self, card_id: Uuid) -> KanbanResult<&mut crate::ArchivedCard> {
+        self.archived_cards
+            .iter_mut()
+            .find(|ac| ac.card.id == card_id)
+            .ok_or_else(|| KanbanError::not_found("archived card", card_id))
+    }
 }
