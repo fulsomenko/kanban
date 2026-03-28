@@ -4,7 +4,7 @@
 //! endpoints. It is distinct from [`super::pagination`], which manages TUI
 //! viewport scroll state and is never serialized.
 
-use crate::{KanbanError, KanbanResult};
+use crate::{CoreError, CoreResult};
 
 /// Default page number (1-based).
 pub const DEFAULT_PAGE: usize = 1;
@@ -21,26 +21,26 @@ pub const MAX_PAGE_SIZE: usize = 500;
 ///
 /// # Errors
 ///
-/// Returns [`KanbanError::Validation`] if the resolved `page` is 0, `page_size`
+/// Returns [`CoreError::Validation`] if the resolved `page` is 0, `page_size`
 /// is 0, or `page_size` exceeds [`MAX_PAGE_SIZE`].
 pub fn resolve_page_params(
     page: Option<u32>,
     page_size: Option<u32>,
-) -> KanbanResult<(usize, usize)> {
+) -> CoreResult<(usize, usize)> {
     let page = page.map(|p| p as usize).unwrap_or(DEFAULT_PAGE);
     let page_size = page_size.map(|p| p as usize).unwrap_or(DEFAULT_PAGE_SIZE);
     if page == 0 {
-        return Err(KanbanError::Validation(
+        return Err(CoreError::Validation(
             "page must be >= 1 (1-based)".to_string(),
         ));
     }
     if page_size == 0 {
-        return Err(KanbanError::Validation(
+        return Err(CoreError::Validation(
             "page_size must be >= 1".to_string(),
         ));
     }
     if page_size > MAX_PAGE_SIZE {
-        return Err(KanbanError::Validation(format!(
+        return Err(CoreError::Validation(format!(
             "page_size must be <= {MAX_PAGE_SIZE}"
         )));
     }
@@ -73,20 +73,20 @@ impl<T> PaginatedList<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`KanbanError::Validation`] if `page` or `page_size` is 0.
-    pub fn paginate(items: Vec<T>, page: usize, page_size: usize) -> KanbanResult<Self> {
+    /// Returns [`CoreError::Validation`] if `page` or `page_size` is 0.
+    pub fn paginate(items: Vec<T>, page: usize, page_size: usize) -> CoreResult<Self> {
         if page == 0 {
-            return Err(KanbanError::Validation(
+            return Err(CoreError::Validation(
                 "page must be >= 1 (1-based)".to_string(),
             ));
         }
         if page_size == 0 {
-            return Err(KanbanError::Validation(
+            return Err(CoreError::Validation(
                 "page_size must be >= 1".to_string(),
             ));
         }
         if page_size > MAX_PAGE_SIZE {
-            return Err(KanbanError::Validation(format!(
+            return Err(CoreError::Validation(format!(
                 "page_size must be <= {MAX_PAGE_SIZE}"
             )));
         }
