@@ -50,7 +50,7 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, InputState};
 use kanban_domain::AnimationType;
-use kanban_domain::KanbanResult;
+use kanban_domain::{KanbanError, KanbanResult};
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
     filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter},
@@ -1446,7 +1446,7 @@ impl App {
                             metadata: PersistenceMetadata::new(instance_id),
                         };
 
-                        match store.save(persistence_snapshot).await {
+                        match store.save(persistence_snapshot).await.map_err(KanbanError::from) {
                             Ok(_) => {
                                 tracing::debug!("Save worker completed save");
                                 // Signal that save is complete
@@ -1459,10 +1459,7 @@ impl App {
                                     }
                                 }
                             }
-                            Err(kanban_persistence::PersistenceError::ConflictDetected {
-                                path,
-                                ..
-                            }) => {
+                            Err(KanbanError::ConflictDetected { path, .. }) => {
                                 tracing::warn!("Save worker detected conflict at {}", path);
                                 // Signal completion even on conflict
                                 if let Some(ref tx) = save_completion_tx {
