@@ -134,7 +134,7 @@ fn test_delete_column_with_cards_fails() {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(kanban_core::KanbanError::Validation(_))
+            Err(kanban_domain::KanbanError::Domain(kanban_domain::DomainError::Validation(_)))
         ));
     }
 
@@ -200,7 +200,7 @@ fn test_delete_column_with_archived_cards_fails() {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(kanban_core::KanbanError::Validation(_))
+            Err(kanban_domain::KanbanError::Domain(kanban_domain::DomainError::Validation(_)))
         ));
     }
 
@@ -595,7 +595,7 @@ fn test_cycle_detection_parent_child() {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(kanban_core::KanbanError::CycleDetected)
+            Err(kanban_domain::KanbanError::Domain(kanban_domain::DomainError::Dependency(kanban_domain::DependencyError::CycleDetected)))
         ));
     }
 }
@@ -698,7 +698,7 @@ fn test_cycle_detection_blocks() {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(kanban_core::KanbanError::CycleDetected)
+            Err(kanban_domain::KanbanError::Domain(kanban_domain::DomainError::Dependency(kanban_domain::DependencyError::CycleDetected)))
         ));
     }
 }

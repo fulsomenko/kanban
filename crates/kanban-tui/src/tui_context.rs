@@ -1,5 +1,5 @@
 use crate::state::StateManager;
-use kanban_core::KanbanResult;
+use kanban_domain::{KanbanError, KanbanResult};
 use kanban_domain::commands::{
     ActivateSprint, ArchiveCard, AssignCardToSprint, CancelSprint, Command, CompleteSprint,
     CreateBoard, CreateCard, CreateColumn, CreateSprint, DeleteBoard, DeleteCard, DeleteColumn,
@@ -111,7 +111,7 @@ impl KanbanOperations for TuiContext {
         });
         self.execute_command(cmd)?;
         self.get_board(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Board {}", id)))
+            .ok_or_else(|| KanbanError::not_found("board", id))
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -160,7 +160,7 @@ impl KanbanOperations for TuiContext {
         });
         self.execute_command(cmd)?;
         self.get_column(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Column {}", id)))
+            .ok_or_else(|| KanbanError::not_found("column", id))
     }
 
     fn delete_column(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -250,7 +250,7 @@ impl KanbanOperations for TuiContext {
         });
         self.execute_command(cmd)?;
         self.get_card(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Card {}", id)))
+            .ok_or_else(|| KanbanError::not_found("card", id))
     }
 
     fn move_card(
@@ -269,7 +269,7 @@ impl KanbanOperations for TuiContext {
         });
         self.execute_command(cmd)?;
         self.get_card(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Card {}", id)))
+            .ok_or_else(|| KanbanError::not_found("card", id))
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -282,7 +282,7 @@ impl KanbanOperations for TuiContext {
             .archived_cards
             .iter()
             .find(|ac| ac.card.id == id)
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Archived card {}", id)))?;
+            .ok_or_else(|| KanbanError::not_found("archived card", id))?;
         let original_column_id = archived.original_column_id;
         let position = archived.original_position;
 
@@ -319,7 +319,7 @@ impl KanbanOperations for TuiContext {
         });
         self.execute_command(cmd)?;
         self.get_card(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Card {}", id)))
+            .ok_or_else(|| KanbanError::not_found("card", id))
     }
 
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -334,13 +334,13 @@ impl KanbanOperations for TuiContext {
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
         let sprint = self
             .get_sprint(sprint_id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", sprint_id)))?;
+            .ok_or_else(|| KanbanError::not_found("sprint", sprint_id))?;
         let board = self
             .boards
             .iter()
             .find(|b| b.id == sprint.board_id)
             .ok_or_else(|| {
-                kanban_core::KanbanError::NotFound(format!("Board {}", sprint.board_id))
+                KanbanError::not_found("board", sprint.board_id)
             })?;
         let sprint_name = sprint.get_name(board).map(|s| s.to_string());
         let cmd = Box::new(AssignCardToSprint {
@@ -352,33 +352,33 @@ impl KanbanOperations for TuiContext {
         });
         self.execute_command(cmd)?;
         self.get_card(card_id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Card {}", card_id)))
+            .ok_or_else(|| KanbanError::not_found("card", card_id))
     }
 
     fn unassign_card_from_sprint(&mut self, card_id: Uuid) -> KanbanResult<Card> {
         let cmd = Box::new(UnassignCardFromSprint { card_id });
         self.execute_command(cmd)?;
         self.get_card(card_id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Card {}", card_id)))
+            .ok_or_else(|| KanbanError::not_found("card", card_id))
     }
 
     fn get_card_branch_name(&self, id: Uuid) -> KanbanResult<String> {
         let card = self
             .get_card(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Card {}", id)))?;
+            .ok_or_else(|| KanbanError::not_found("card", id))?;
         let column = self
             .columns
             .iter()
             .find(|c| c.id == card.column_id)
             .ok_or_else(|| {
-                kanban_core::KanbanError::NotFound(format!("Column {}", card.column_id))
+                KanbanError::not_found("column", card.column_id)
             })?;
         let board = self
             .boards
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| {
-                kanban_core::KanbanError::NotFound(format!("Board {}", column.board_id))
+                KanbanError::not_found("board", column.board_id)
             })?;
         Ok(card.branch_name(board, &self.sprints, "task"))
     }
@@ -386,20 +386,20 @@ impl KanbanOperations for TuiContext {
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
         let card = self
             .get_card(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Card {}", id)))?;
+            .ok_or_else(|| KanbanError::not_found("card", id))?;
         let column = self
             .columns
             .iter()
             .find(|c| c.id == card.column_id)
             .ok_or_else(|| {
-                kanban_core::KanbanError::NotFound(format!("Column {}", card.column_id))
+                KanbanError::not_found("column", card.column_id)
             })?;
         let board = self
             .boards
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| {
-                kanban_core::KanbanError::NotFound(format!("Board {}", column.board_id))
+                KanbanError::not_found("board", column.board_id)
             })?;
         Ok(card.git_checkout_command(board, &self.sprints, "task"))
     }
@@ -446,13 +446,13 @@ impl KanbanOperations for TuiContext {
     fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         let sprint = self
             .get_sprint(sprint_id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", sprint_id)))?;
+            .ok_or_else(|| KanbanError::not_found("sprint", sprint_id))?;
         let board = self
             .boards
             .iter()
             .find(|b| b.id == sprint.board_id)
             .ok_or_else(|| {
-                kanban_core::KanbanError::NotFound(format!("Board {}", sprint.board_id))
+                KanbanError::not_found("board", sprint.board_id)
             })?;
         let sprint_name = sprint.get_name(board).map(|s| s.to_string());
         let sprint_number = sprint.sprint_number;
@@ -485,21 +485,21 @@ impl KanbanOperations for TuiContext {
         use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
 
         let from_sprint = self.get_sprint(from_sprint_id)?.ok_or_else(|| {
-            kanban_core::KanbanError::NotFound(format!("Sprint {}", from_sprint_id))
+            KanbanError::not_found("sprint", from_sprint_id)
         })?;
         if from_sprint.status != kanban_domain::SprintStatus::Completed
             && from_sprint.status != kanban_domain::SprintStatus::Cancelled
         {
-            return Err(kanban_core::KanbanError::Validation(format!(
+            return Err(KanbanError::validation(format!(
                 "Source sprint must be Completed or Cancelled, got {:?}",
                 from_sprint.status
             )));
         }
         let to_sprint = self.get_sprint(to_sprint_id)?.ok_or_else(|| {
-            kanban_core::KanbanError::NotFound(format!("Sprint {}", to_sprint_id))
+            KanbanError::not_found("sprint", to_sprint_id)
         })?;
         if to_sprint.status != kanban_domain::SprintStatus::Planning {
-            return Err(kanban_core::KanbanError::Validation(format!(
+            return Err(KanbanError::validation(format!(
                 "Target sprint must be Planning, got {:?}",
                 to_sprint.status
             )));
@@ -523,7 +523,7 @@ impl KanbanOperations for TuiContext {
                 .boards
                 .iter_mut()
                 .find(|b| b.id == board_id)
-                .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Board {}", board_id)))?;
+                .ok_or_else(|| KanbanError::not_found("board", board_id))?;
 
             let effective_prefix = prefix
                 .or_else(|| board.sprint_prefix.clone())
@@ -566,7 +566,7 @@ impl KanbanOperations for TuiContext {
         });
         self.execute_command(cmd)?;
         self.get_sprint(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", id)))
+            .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
 
     fn activate_sprint(&mut self, id: Uuid, duration_days: Option<i32>) -> KanbanResult<Sprint> {
@@ -577,21 +577,21 @@ impl KanbanOperations for TuiContext {
         });
         self.execute_command(cmd)?;
         self.get_sprint(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", id)))
+            .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
 
     fn complete_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
         let cmd = Box::new(CompleteSprint { sprint_id: id });
         self.execute_command(cmd)?;
         self.get_sprint(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", id)))
+            .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
 
     fn cancel_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
         let cmd = Box::new(CancelSprint { sprint_id: id });
         self.execute_command(cmd)?;
         self.get_sprint(id)?
-            .ok_or_else(|| kanban_core::KanbanError::NotFound(format!("Sprint {}", id)))
+            .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
 
     fn delete_sprint(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -641,16 +641,16 @@ impl KanbanOperations for TuiContext {
         };
 
         serde_json::to_string_pretty(&snapshot)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))
+            .map_err(|e| KanbanError::Serialization(e.to_string()))
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
         let imported: Snapshot = serde_json::from_str(data)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| KanbanError::Serialization(e.to_string()))?;
 
         let board =
             imported.boards.first().cloned().ok_or_else(|| {
-                kanban_core::KanbanError::NotFound("No board in import".to_string())
+                KanbanError::validation("No board in import data")
             })?;
 
         self.boards.extend(imported.boards);

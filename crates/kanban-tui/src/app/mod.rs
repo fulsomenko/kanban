@@ -48,7 +48,8 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, Editable, InputState, KanbanResult};
+use kanban_core::{AppConfig, Editable, InputState};
+use kanban_domain::KanbanResult;
 use kanban_domain::AnimationType;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
@@ -1458,7 +1459,7 @@ impl App {
                                     }
                                 }
                             }
-                            Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                            Err(kanban_persistence::PersistenceError::ConflictDetected { path, .. }) => {
                                 tracing::warn!("Save worker detected conflict at {}", path);
                                 // Signal completion even on conflict
                                 if let Some(ref tx) = save_completion_tx {

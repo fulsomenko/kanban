@@ -1,7 +1,7 @@
 pub mod snapshot;
 
 use crate::app::App;
-use kanban_core::KanbanResult;
+use kanban_domain::KanbanResult;
 use kanban_domain::commands::Command;
 use kanban_domain::commands::CommandContext;
 use kanban_domain::{ArchivedCard, Board, Card, Column, HistoryManager, Snapshot, Sprint};
@@ -270,7 +270,7 @@ impl StateManager {
 
             // Deserialize and apply loaded data to app
             let data: Snapshot = serde_json::from_slice(&snapshot.data)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+                .map_err(|e| kanban_domain::KanbanError::Serialization(e.to_string()))?;
 
             data.apply_to_app(app);
 

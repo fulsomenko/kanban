@@ -1,4 +1,4 @@
-use kanban_core::KanbanError;
+use kanban_persistence::PersistenceError;
 use kanban_domain::{Board, Card, Column, Snapshot};
 use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::fs;
@@ -63,7 +63,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     assert!(result.is_err(), "Should detect conflict on second save");
 
     match result {
-        Err(KanbanError::ConflictDetected { path, .. }) => {
+        Err(PersistenceError::ConflictDetected { path, .. }) => {
             assert!(
                 path.contains("kanban.json"),
                 "Error should contain file path"
@@ -361,7 +361,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     );
 
     match result1_retry {
-        Err(KanbanError::ConflictDetected { path, .. }) => {
+        Err(PersistenceError::ConflictDetected { path, .. }) => {
             assert!(path.contains("shared_board.json"));
         }
         _ => panic!("Expected ConflictDetected error"),
