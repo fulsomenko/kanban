@@ -12,23 +12,20 @@ pub(crate) enum Table {
 }
 
 impl Table {
-    pub(crate) const fn select_ids_sql(self) -> &'static str {
+    pub(crate) const fn table_name(self) -> &'static str {
         match self {
-            Table::Boards => "SELECT id FROM boards",
-            Table::Columns => "SELECT id FROM columns",
-            Table::Cards => "SELECT id FROM cards",
-            Table::ArchivedCards => "SELECT card_id AS id FROM archived_cards",
-            Table::Sprints => "SELECT id FROM sprints",
+            Table::Boards => "boards",
+            Table::Columns => "columns",
+            Table::Cards => "cards",
+            Table::ArchivedCards => "archived_cards",
+            Table::Sprints => "sprints",
         }
     }
 
-    pub(crate) const fn delete_by_id_sql(self) -> &'static str {
+    pub(crate) const fn id_column(self) -> &'static str {
         match self {
-            Table::Boards => "DELETE FROM boards WHERE id = ?",
-            Table::Columns => "DELETE FROM columns WHERE id = ?",
-            Table::Cards => "DELETE FROM cards WHERE id = ?",
-            Table::ArchivedCards => "DELETE FROM archived_cards WHERE card_id = ?",
-            Table::Sprints => "DELETE FROM sprints WHERE id = ?",
+            Table::ArchivedCards => "card_id",
+            _ => "id",
         }
     }
 }
@@ -61,16 +58,16 @@ pub(crate) fn required_str<'a>(
         .ok_or_else(|| ser_err(format!("missing required field: {field}")))
 }
 
+pub(crate) fn parse_uuid(s: &str) -> PersistenceResult<Uuid> {
+    Uuid::parse_str(s).map_err(|e| PersistenceError::Serialization(e.to_string()))
+}
+
 pub(crate) fn parse_enum<T: serde::de::DeserializeOwned>(
     s: &str,
     label: &str,
 ) -> PersistenceResult<T> {
     serde_json::from_value(serde_json::Value::String(s.to_owned()))
         .map_err(|_| ser_err(format!("unknown {label} variant: {s}")))
-}
-
-pub(crate) fn parse_uuid(s: &str) -> PersistenceResult<Uuid> {
-    Uuid::parse_str(s).map_err(|e| PersistenceError::Serialization(e.to_string()))
 }
 
 pub(crate) fn parse_datetime(s: &str) -> PersistenceResult<chrono::DateTime<chrono::Utc>> {

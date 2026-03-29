@@ -51,8 +51,8 @@ impl SqliteStore {
                 let options = SqliteConnectOptions::new()
                     .filename(&self.path)
                     .create_if_missing(true)
-                .foreign_keys(true)
-                .pragma("journal_mode", "wal");
+                    .foreign_keys(true)
+                    .pragma("journal_mode", "wal");
 
                 let pool = SqlitePoolOptions::new()
                     .max_connections(2)
@@ -73,20 +73,22 @@ impl SqliteStore {
     }
 
     async fn load_current_state(&self, pool: &Pool<Sqlite>) -> PersistenceResult<SnapshotData> {
+        let mut tx = pool.begin().await.map_err(db_err)?;
+
         let board_rows = sqlx::query(
             "SELECT id, name, description, sprint_prefix, card_prefix, task_sort_field,
                     task_sort_order, sprint_duration_days, sprint_name_used_count,
                     next_sprint_number, active_sprint_id, task_list_view,
                     completion_column_id, created_at, updated_at FROM boards",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
 
         let sprint_name_rows = sqlx::query(
             "SELECT board_id, position, name FROM board_sprint_names ORDER BY board_id, position",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
 
@@ -99,7 +101,7 @@ impl SqliteStore {
 
         let prefix_counter_rows =
             sqlx::query("SELECT board_id, prefix, counter FROM board_prefix_counters")
-                .fetch_all(pool)
+                .fetch_all(&mut *tx)
                 .await
                 .map_err(db_err)?;
 
@@ -116,7 +118,7 @@ impl SqliteStore {
 
         let sprint_counter_rows =
             sqlx::query("SELECT board_id, prefix, counter FROM board_sprint_counters")
-                .fetch_all(pool)
+                .fetch_all(&mut *tx)
                 .await
                 .map_err(db_err)?;
 
@@ -145,7 +147,7 @@ impl SqliteStore {
         let columns: Vec<serde_json::Value> = sqlx::query(
             "SELECT id, board_id, name, position, wip_limit, created_at, updated_at FROM columns",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?
         .iter()
@@ -156,7 +158,7 @@ impl SqliteStore {
             "SELECT id, board_id, sprint_number, name_index, prefix, card_prefix, status,
                     start_date, end_date, created_at, updated_at FROM sprints",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?
         .iter()
@@ -169,7 +171,7 @@ impl SqliteStore {
                     updated_at, completed_at FROM cards
              ORDER BY position ASC, created_at ASC",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
 
@@ -177,7 +179,7 @@ impl SqliteStore {
             "SELECT card_id, sprint_id, sprint_number, sprint_name, started_at, ended_at, status
              FROM sprint_logs ORDER BY card_id, id",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
 
@@ -216,7 +218,7 @@ impl SqliteStore {
             "SELECT card_id, archived_at, original_column_id, original_position
              FROM archived_cards",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
 
@@ -255,7 +257,7 @@ impl SqliteStore {
             "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
              FROM card_edges",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
 
@@ -281,24 +283,28 @@ impl SqliteStore {
     where
         F: Fn(&serde_json::Value) -> Option<String>,
     {
-        let incoming_ids: std::collections::HashSet<String> =
-            incoming.iter().filter_map(&id_extractor).collect();
+        let incoming_ids: Vec<String> = incoming.iter().filter_map(&id_extractor).collect();
 
-        let existing_ids: std::collections::HashSet<String> = sqlx::query(table.select_ids_sql())
-            .fetch_all(&mut **tx)
-            .await
-            .map_err(db_err)?
-            .into_iter()
-            .map(|row| row.get::<String, _>("id"))
-            .collect();
-
-        let to_delete: Vec<_> = existing_ids.difference(&incoming_ids).collect();
-        for id in to_delete {
-            sqlx::query(table.delete_by_id_sql())
-                .bind(id)
-                .execute(&mut **tx)
-                .await
-                .map_err(db_err)?;
+        if incoming_ids.is_empty() {
+            let sql = format!("DELETE FROM {}", table.table_name());
+            sqlx::query(&sql).execute(&mut **tx).await.map_err(db_err)?;
+        } else {
+            let placeholders: String = incoming_ids
+                .iter()
+                .map(|_| "?")
+                .collect::<Vec<_>>()
+                .join(", ");
+            let sql = format!(
+                "DELETE FROM {} WHERE {} NOT IN ({})",
+                table.table_name(),
+                table.id_column(),
+                placeholders,
+            );
+            let mut query = sqlx::query(&sql);
+            for id in &incoming_ids {
+                query = query.bind(id);
+            }
+            query.execute(&mut **tx).await.map_err(db_err)?;
         }
 
         Ok(())
@@ -435,6 +441,9 @@ impl PersistenceStore for SqliteStore {
 
         tx.commit().await.map_err(db_err)?;
 
+        // If the process dies between tx.commit() and this cache update,
+        // the in-memory metadata goes stale. This self-heals on next app
+        // start because load() re-reads metadata from the database.
         {
             let mut guard = self.lock_metadata().await;
             *guard = Some(snapshot.metadata.clone());
@@ -774,8 +783,13 @@ mod tests {
         let kid = Uuid::new_v4().to_string();
         let ts = "2024-01-01T00:00:00Z";
         sqlx::query("INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)")
-            .bind(&bid).bind("B").bind(ts).bind(ts)
-            .execute(pool).await.unwrap();
+            .bind(&bid)
+            .bind("B")
+            .bind(ts)
+            .bind(ts)
+            .execute(pool)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO columns (id, board_id, name, position, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)")
             .bind(&cid).bind(&bid).bind("Col").bind(ts).bind(ts)
             .execute(pool).await.unwrap();
@@ -801,8 +815,13 @@ mod tests {
         let sid = Uuid::new_v4().to_string();
         let ts = "2024-01-01T00:00:00Z";
         sqlx::query("INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)")
-            .bind(&bid).bind("B").bind(ts).bind(ts)
-            .execute(pool).await.unwrap();
+            .bind(&bid)
+            .bind("B")
+            .bind(ts)
+            .bind(ts)
+            .execute(pool)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO sprints (id, board_id, sprint_number, status, created_at, updated_at) VALUES (?, ?, 1, 'BadStatus', ?, ?)")
             .bind(&sid).bind(&bid).bind(ts).bind(ts)
             .execute(pool).await.unwrap();
