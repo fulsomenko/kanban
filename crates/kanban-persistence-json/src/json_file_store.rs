@@ -204,6 +204,10 @@ impl PersistenceStore for JsonFileStore {
     fn path(&self) -> &Path {
         &self.path
     }
+
+    fn instance_id(&self) -> Uuid {
+        self.instance_id
+    }
 }
 
 #[cfg(test)]
