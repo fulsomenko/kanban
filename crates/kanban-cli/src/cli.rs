@@ -43,8 +43,7 @@ pub enum Commands {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
-    /// Migrate JSON data file to SQLite database
-    #[cfg(feature = "sqlite")]
+    /// Migrate data between storage backends
     Migrate(MigrateArgs),
 }
 
@@ -394,13 +393,12 @@ pub struct SprintUpdateArgs {
 }
 
 // Migrate command
-#[cfg(feature = "sqlite")]
 #[derive(Args)]
 pub struct MigrateArgs {
-    /// Path to source JSON file
+    /// Path to source file
     #[arg(long)]
     pub from: String,
-    /// Path to destination SQLite file
+    /// Path to destination file
     #[arg(long)]
     pub to: String,
 }

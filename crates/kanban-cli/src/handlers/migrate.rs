@@ -1,34 +1,33 @@
 use crate::cli::MigrateArgs;
-use kanban_persistence::PersistenceStore;
 
 pub async fn handle(args: MigrateArgs) -> anyhow::Result<()> {
     use std::path::Path;
 
-    let json_path = Path::new(&args.from);
-    let sqlite_path = Path::new(&args.to);
+    let from = Path::new(&args.from);
+    let to = Path::new(&args.to);
 
-    if !json_path.exists() {
-        anyhow::bail!("JSON file not found: {}", json_path.display());
+    if !from.exists() {
+        anyhow::bail!("Source file not found: {}", from.display());
     }
 
-    if sqlite_path.exists() {
+    if to.exists() {
         anyhow::bail!(
-            "SQLite database already exists: {}. Remove it first or use a different path.",
-            sqlite_path.display()
+            "Destination already exists: {}. Remove it first or use a different path.",
+            to.display()
         );
     }
 
     println!(
-        "Migrating from JSON ({}) to SQLite ({})",
-        json_path.display(),
-        sqlite_path.display()
+        "Migrating from {} to {}",
+        from.display(),
+        to.display()
     );
 
-    let json_store = kanban_persistence_json::JsonFileStore::new(json_path);
-    let (snapshot, _metadata) = json_store.load().await?;
+    let source = kanban_service::make_store(&args.from);
+    let (snapshot, _metadata) = source.load().await?;
 
-    let sqlite_store = kanban_persistence_sqlite::SqliteStore::new(sqlite_path);
-    sqlite_store.save(snapshot).await?;
+    let target = kanban_service::make_store(&args.to);
+    target.save(snapshot).await?;
 
     println!("Migration completed successfully");
     Ok(())

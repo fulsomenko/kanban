@@ -56,7 +56,6 @@ async fn run() -> anyhow::Result<()> {
         Some(Commands::Completions { shell }) => {
             clap_complete::generate(shell, &mut Cli::command(), "kanban", &mut std::io::stdout());
         }
-        #[cfg(feature = "sqlite")]
         Some(Commands::Migrate(args)) => {
             handlers::migrate::handle(args).await?;
         }
@@ -89,7 +88,6 @@ async fn run() -> anyhow::Result<()> {
                     handlers::export::handle_import(&mut ctx, args).await?;
                 }
                 Commands::Completions { .. } => unreachable!(),
-                #[cfg(feature = "sqlite")]
                 Commands::Migrate(_) => unreachable!(),
             }
         }
