@@ -61,6 +61,14 @@ pub(crate) fn required_str<'a>(
         .ok_or_else(|| ser_err(format!("missing required field: {field}")))
 }
 
+pub(crate) fn parse_enum<T: serde::de::DeserializeOwned>(
+    s: &str,
+    label: &str,
+) -> PersistenceResult<T> {
+    serde_json::from_value(serde_json::Value::String(s.to_owned()))
+        .map_err(|_| ser_err(format!("unknown {label} variant: {s}")))
+}
+
 pub(crate) fn parse_uuid(s: &str) -> PersistenceResult<Uuid> {
     Uuid::parse_str(s).map_err(|e| PersistenceError::Serialization(e.to_string()))
 }

@@ -1,4 +1,4 @@
-use crate::helpers::{db_err, parse_datetime, parse_uuid, ser_err};
+use crate::helpers::{db_err, parse_datetime, parse_enum, parse_uuid, ser_err};
 use kanban_core::graph::{Edge, EdgeDirection, Graph};
 use kanban_domain::{CardEdgeType, DependencyGraph};
 use kanban_persistence::PersistenceResult;
@@ -31,10 +31,8 @@ pub(crate) fn build_board(
         description: row.try_get("description").map_err(db_err)?,
         sprint_prefix: row.try_get("sprint_prefix").map_err(db_err)?,
         card_prefix: row.try_get("card_prefix").map_err(db_err)?,
-        task_sort_field: serde_json::from_str(&format!("\"{}\"", task_sort_field_str))
-            .map_err(|_| ser_err(format!("unknown task_sort_field variant: {task_sort_field_str}")))?,
-        task_sort_order: serde_json::from_str(&format!("\"{}\"", task_sort_order_str))
-            .map_err(|_| ser_err(format!("unknown task_sort_order variant: {task_sort_order_str}")))?,
+        task_sort_field: parse_enum(&task_sort_field_str, "task_sort_field")?,
+        task_sort_order: parse_enum(&task_sort_order_str, "task_sort_order")?,
         sprint_duration_days: sprint_duration_days_raw.map(|v| v as u32),
         sprint_names,
         sprint_name_used_count: row
@@ -47,8 +45,7 @@ pub(crate) fn build_board(
             .as_deref()
             .map(parse_uuid)
             .transpose()?,
-        task_list_view: serde_json::from_str(&format!("\"{}\"", task_list_view_str))
-            .map_err(|_| ser_err(format!("unknown task_list_view variant: {task_list_view_str}")))?,
+        task_list_view: parse_enum(&task_list_view_str, "task_list_view")?,
         prefix_counters,
         sprint_counters,
         completion_column_id: completion_column_id_str
@@ -105,21 +102,13 @@ pub(crate) fn build_card(
         column_id: parse_uuid(&column_id_str)?,
         title: row.try_get("title").map_err(db_err)?,
         description: row.try_get("description").map_err(db_err)?,
-        priority: serde_json::from_str(&format!("\"{}\"", priority_str))
-            .map_err(|_| ser_err(format!("unknown priority variant: {priority_str}")))?,
-        status: serde_json::from_str(&format!("\"{}\"", status_str))
-            .map_err(|_| ser_err(format!("unknown status variant: {status_str}")))?,
+        priority: parse_enum(&priority_str, "priority")?,
+        status: parse_enum(&status_str, "status")?,
         position: row.try_get("position").map_err(db_err)?,
-        due_date: due_date_str
-            .as_deref()
-            .map(parse_datetime)
-            .transpose()?,
+        due_date: due_date_str.as_deref().map(parse_datetime).transpose()?,
         points: points_raw.map(|v| v as u8),
         card_number: row.try_get::<i32, _>("card_number").map_err(db_err)? as u32,
-        sprint_id: sprint_id_str
-            .as_deref()
-            .map(parse_uuid)
-            .transpose()?,
+        sprint_id: sprint_id_str.as_deref().map(parse_uuid).transpose()?,
         assigned_prefix: row.try_get("assigned_prefix").map_err(db_err)?,
         card_prefix: row.try_get("card_prefix").map_err(db_err)?,
         created_at: parse_datetime(&created_at_str)?,
@@ -153,16 +142,9 @@ pub(crate) fn build_sprint(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<s
         name_index: name_index_raw.map(|v| v as usize),
         prefix: row.try_get("prefix").map_err(db_err)?,
         card_prefix: row.try_get("card_prefix").map_err(db_err)?,
-        status: serde_json::from_str(&format!("\"{}\"", status_str))
-            .map_err(|_| ser_err(format!("unknown sprint status variant: {status_str}")))?,
-        start_date: start_date_str
-            .as_deref()
-            .map(parse_datetime)
-            .transpose()?,
-        end_date: end_date_str
-            .as_deref()
-            .map(parse_datetime)
-            .transpose()?,
+        status: parse_enum(&status_str, "sprint status")?,
+        start_date: start_date_str.as_deref().map(parse_datetime).transpose()?,
+        end_date: end_date_str.as_deref().map(parse_datetime).transpose()?,
         created_at: parse_datetime(&created_at_str)?,
         updated_at: parse_datetime(&updated_at_str)?,
     };
@@ -183,10 +165,8 @@ pub(crate) fn build_graph(
         let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
         let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
 
-        let edge_type: CardEdgeType =
-            serde_json::from_str(&format!("\"{}\"", edge_type_str)).map_err(ser_err)?;
-        let direction: EdgeDirection =
-            serde_json::from_str(&format!("\"{}\"", direction_str)).map_err(ser_err)?;
+        let edge_type: CardEdgeType = parse_enum(&edge_type_str, "edge_type")?;
+        let direction: EdgeDirection = parse_enum(&direction_str, "edge direction")?;
 
         card_graph.add_edge(Edge {
             source: parse_uuid(&source_str)?,
