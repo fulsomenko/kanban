@@ -24,7 +24,6 @@ pub fn make_store(path: &str) -> Result<Arc<dyn PersistenceStore + Send + Sync>,
              Recompile with `--features sqlite` or use a .json file."
         )));
     }
-    let _ = ext;
     #[cfg(feature = "json-storage")]
     {
         Ok(Arc::new(kanban_persistence_json::JsonFileStore::new(path)))
