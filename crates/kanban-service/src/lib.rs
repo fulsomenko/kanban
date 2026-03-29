@@ -16,6 +16,13 @@ pub fn make_store(path: &str) -> Arc<dyn PersistenceStore + Send + Sync> {
     if matches!(ext, "db" | "sqlite") {
         return Arc::new(kanban_persistence_sqlite::SqliteStore::new(path));
     }
+    #[cfg(not(feature = "sqlite-storage"))]
+    if matches!(ext, "db" | "sqlite") {
+        panic!(
+            "SQLite storage requested ({path}) but the 'sqlite-storage' feature is not enabled. \
+             Recompile with `--features sqlite` or use a .json file."
+        );
+    }
     let _ = ext;
     #[cfg(feature = "json-storage")]
     {
