@@ -1,6 +1,6 @@
 use super::{Command, CommandContext};
-use crate::KanbanResult;
 use crate::SprintUpdate;
+use crate::{KanbanError, KanbanResult};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -19,19 +19,16 @@ impl Command for UpdateSprint {
                 .sprints
                 .iter()
                 .find(|s| s.id == self.sprint_id)
-                .map(|s| s.board_id);
+                .ok_or_else(|| KanbanError::not_found("sprint", self.sprint_id))?
+                .board_id;
 
-            if let Some(board_id) = board_id {
-                if let Some(board) = context.boards.iter_mut().find(|b| b.id == board_id) {
-                    let idx = board.add_sprint_name_at_used_index(name.clone());
-                    updates.name_index = crate::FieldUpdate::Set(idx);
-                }
-            }
+            let board = context.board_mut(board_id)?;
+            let idx = board.add_sprint_name_at_used_index(name.clone());
+            updates.name_index = crate::FieldUpdate::Set(idx);
         }
 
-        if let Some(sprint) = context.sprints.iter_mut().find(|s| s.id == self.sprint_id) {
-            sprint.update(updates);
-        }
+        let sprint = context.sprint_mut(self.sprint_id)?;
+        sprint.update(updates);
         Ok(())
     }
 
@@ -73,9 +70,8 @@ pub struct ActivateSprint {
 
 impl Command for ActivateSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(sprint) = context.sprints.iter_mut().find(|s| s.id == self.sprint_id) {
-            sprint.activate(self.duration_days);
-        }
+        let sprint = context.sprint_mut(self.sprint_id)?;
+        sprint.activate(self.duration_days);
         Ok(())
     }
 
@@ -91,9 +87,8 @@ pub struct CompleteSprint {
 
 impl Command for CompleteSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(sprint) = context.sprints.iter_mut().find(|s| s.id == self.sprint_id) {
-            sprint.complete();
-        }
+        let sprint = context.sprint_mut(self.sprint_id)?;
+        sprint.complete();
         Ok(())
     }
 
@@ -109,9 +104,8 @@ pub struct CancelSprint {
 
 impl Command for CancelSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if let Some(sprint) = context.sprints.iter_mut().find(|s| s.id == self.sprint_id) {
-            sprint.cancel();
-        }
+        let sprint = context.sprint_mut(self.sprint_id)?;
+        sprint.cancel();
         Ok(())
     }
 
@@ -148,5 +142,77 @@ impl Command for DeleteSprint {
 
     fn description(&self) -> String {
         format!("Delete sprint {}", self.sprint_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_helpers::TestContext;
+    use super::*;
+
+    #[test]
+    fn test_update_sprint_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = UpdateSprint {
+            sprint_id: Uuid::new_v4(),
+            updates: SprintUpdate::default(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_update_sprint_name_with_nonexistent_board_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let nonexistent_board_id = Uuid::new_v4();
+        let sprint = crate::Sprint::new(nonexistent_board_id, 1, None, None);
+        let sprint_id = sprint.id;
+        context.sprints.push(sprint);
+
+        let cmd = UpdateSprint {
+            sprint_id,
+            updates: SprintUpdate {
+                name: Some("New Name".to_string()),
+                ..Default::default()
+            },
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_activate_sprint_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = ActivateSprint {
+            sprint_id: Uuid::new_v4(),
+            duration_days: 14,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_complete_sprint_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = CompleteSprint {
+            sprint_id: Uuid::new_v4(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_cancel_sprint_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let cmd = CancelSprint {
+            sprint_id: Uuid::new_v4(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
     }
 }

@@ -131,36 +131,24 @@ pub struct CreateSubcardCommand {
 
 impl Command for CreateSubcardCommand {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        // Get the prefix from the board first
-        let prefix = context
-            .boards
-            .iter()
-            .find(|b| b.id == self.board_id)
-            .and_then(|b| b.card_prefix.as_deref())
-            .unwrap_or("task")
-            .to_string();
+        let board = context.board_mut(self.board_id)?;
+        let prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
+        let mut card = Card::new(
+            board,
+            self.column_id,
+            self.title.clone(),
+            self.position,
+            &prefix,
+        );
 
-        // Find the board and create the card
-        if let Some(board) = context.boards.iter_mut().find(|b| b.id == self.board_id) {
-            let mut card = Card::new(
-                board,
-                self.column_id,
-                self.title.clone(),
-                self.position,
-                &prefix,
-            );
-
-            // Set description if provided
-            if let Some(desc) = &self.description {
-                card.description = Some(desc.clone());
-            }
-
-            let card_id = card.id;
-            context.cards.push(card);
-
-            // Set parent relationship
-            context.graph.cards.set_parent(card_id, self.parent_id)?;
+        if let Some(desc) = &self.description {
+            card.description = Some(desc.clone());
         }
+
+        let card_id = card.id;
+        context.cards.push(card);
+
+        context.graph.cards.set_parent(card_id, self.parent_id)?;
         Ok(())
     }
 
@@ -174,23 +162,13 @@ impl Command for CreateSubcardCommand {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::TestContext;
     use super::*;
-    use crate::DependencyGraph;
-
-    fn create_test_context() -> CommandContext<'static> {
-        CommandContext {
-            boards: Box::leak(Box::new(Vec::new())),
-            columns: Box::leak(Box::new(Vec::new())),
-            cards: Box::leak(Box::new(Vec::new())),
-            sprints: Box::leak(Box::new(Vec::new())),
-            archived_cards: Box::leak(Box::new(Vec::new())),
-            graph: Box::leak(Box::new(DependencyGraph::new())),
-        }
-    }
 
     #[test]
     fn test_add_blocks_dependency() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let card_a = Uuid::new_v4();
         let card_b = Uuid::new_v4();
 
@@ -205,7 +183,8 @@ mod tests {
 
     #[test]
     fn test_add_relates_to_dependency() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let card_a = Uuid::new_v4();
         let card_b = Uuid::new_v4();
 
@@ -221,7 +200,8 @@ mod tests {
 
     #[test]
     fn test_remove_dependency() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let card_a = Uuid::new_v4();
         let card_b = Uuid::new_v4();
 
@@ -239,7 +219,8 @@ mod tests {
 
     #[test]
     fn test_set_parent_command() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
 
@@ -256,18 +237,17 @@ mod tests {
 
     #[test]
     fn test_set_parent_command_prevents_cycle() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let card_a = Uuid::new_v4();
         let card_b = Uuid::new_v4();
 
-        // Set A as parent of B
         let cmd1 = SetParentCommand {
             child_id: card_b,
             parent_id: card_a,
         };
         assert!(cmd1.execute(&mut context).is_ok());
 
-        // Try to set B as parent of A (would create cycle)
         let cmd2 = SetParentCommand {
             child_id: card_a,
             parent_id: card_b,
@@ -277,15 +257,14 @@ mod tests {
 
     #[test]
     fn test_remove_parent_command() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
 
-        // First set parent
         context.graph.cards.set_parent(child_id, parent_id).unwrap();
         assert_eq!(context.graph.cards.children(parent_id).len(), 1);
 
-        // Remove parent
         let cmd = RemoveParentCommand {
             child_id,
             parent_id,
@@ -297,7 +276,8 @@ mod tests {
 
     #[test]
     fn test_remove_parent_command_nonexistent() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
 
@@ -312,11 +292,11 @@ mod tests {
     fn test_create_subcard_command() {
         use crate::Board;
 
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let column_id = Uuid::new_v4();
         let parent_id = Uuid::new_v4();
 
-        // Add a board to the context
         let mut board = Board::new("Test Board".to_string(), None);
         board.card_prefix = Some("TEST".to_string());
         let board_id = board.id;
@@ -333,14 +313,12 @@ mod tests {
 
         assert!(cmd.execute(&mut context).is_ok());
 
-        // Verify card was created
         assert_eq!(context.cards.len(), 1);
         let card = &context.cards[0];
         assert_eq!(card.title, "Test Subcard");
         assert_eq!(card.description, Some("Test description".to_string()));
         assert_eq!(card.column_id, column_id);
 
-        // Verify parent relationship was set
         assert_eq!(context.graph.cards.children(parent_id).len(), 1);
         assert_eq!(context.graph.cards.parents(card.id).len(), 1);
         assert!(context.graph.cards.children(parent_id).contains(&card.id));
@@ -350,11 +328,11 @@ mod tests {
     fn test_create_subcard_without_description() {
         use crate::Board;
 
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let parent_id = Uuid::new_v4();
         let column_id = Uuid::new_v4();
 
-        // Add a board to the context
         let mut board = Board::new("Test Board".to_string(), None);
         board.card_prefix = Some("TEST".to_string());
         let board_id = board.id;

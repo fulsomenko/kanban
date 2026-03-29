@@ -1,4 +1,5 @@
-use crate::KanbanResult;
+use crate::{KanbanError, KanbanResult};
+use uuid::Uuid;
 
 pub mod board_commands;
 pub mod card_commands;
@@ -31,4 +32,73 @@ pub struct CommandContext<'a> {
     pub sprints: &'a mut Vec<crate::Sprint>,
     pub archived_cards: &'a mut Vec<crate::ArchivedCard>,
     pub graph: &'a mut crate::DependencyGraph,
+}
+
+impl<'a> CommandContext<'a> {
+    pub fn board_mut(&mut self, id: Uuid) -> KanbanResult<&mut crate::Board> {
+        self.boards
+            .iter_mut()
+            .find(|b| b.id == id)
+            .ok_or_else(|| KanbanError::not_found("board", id))
+    }
+
+    pub fn card_mut(&mut self, id: Uuid) -> KanbanResult<&mut crate::Card> {
+        self.cards
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or_else(|| KanbanError::not_found("card", id))
+    }
+
+    pub fn column_mut(&mut self, id: Uuid) -> KanbanResult<&mut crate::Column> {
+        self.columns
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or_else(|| KanbanError::not_found("column", id))
+    }
+
+    pub fn sprint_mut(&mut self, id: Uuid) -> KanbanResult<&mut crate::Sprint> {
+        self.sprints
+            .iter_mut()
+            .find(|s| s.id == id)
+            .ok_or_else(|| KanbanError::not_found("sprint", id))
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    use super::*;
+    use crate::DependencyGraph;
+
+    pub struct TestContext {
+        pub boards: Vec<crate::Board>,
+        pub columns: Vec<crate::Column>,
+        pub cards: Vec<crate::Card>,
+        pub sprints: Vec<crate::Sprint>,
+        pub archived_cards: Vec<crate::ArchivedCard>,
+        pub graph: DependencyGraph,
+    }
+
+    impl TestContext {
+        pub fn new() -> Self {
+            Self {
+                boards: vec![],
+                columns: vec![],
+                cards: vec![],
+                sprints: vec![],
+                archived_cards: vec![],
+                graph: DependencyGraph::new(),
+            }
+        }
+
+        pub fn as_command_context(&mut self) -> CommandContext<'_> {
+            CommandContext {
+                boards: &mut self.boards,
+                columns: &mut self.columns,
+                cards: &mut self.cards,
+                sprints: &mut self.sprints,
+                archived_cards: &mut self.archived_cards,
+                graph: &mut self.graph,
+            }
+        }
+    }
 }
