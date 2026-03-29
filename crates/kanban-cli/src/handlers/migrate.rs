@@ -17,11 +17,7 @@ pub async fn handle(args: MigrateArgs) -> anyhow::Result<()> {
         );
     }
 
-    println!(
-        "Migrating from {} to {}",
-        from.display(),
-        to.display()
-    );
+    println!("Migrating from {} to {}", from.display(), to.display());
 
     let source = kanban_service::make_store(&args.from);
     let (snapshot, _metadata) = source.load().await?;

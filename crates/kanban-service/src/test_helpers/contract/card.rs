@@ -9,9 +9,7 @@ pub async fn test_card_all_fields_roundtrip(factory: &StoreFactory) {
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("FB".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("FB".into())).unwrap();
     let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
 

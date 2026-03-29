@@ -8,9 +8,7 @@ pub async fn test_card_sprint_logs_roundtrip(factory: &StoreFactory) {
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
 
     let sprint1 = ctx.create_sprint(board.id, None, None).unwrap();
@@ -55,9 +53,7 @@ pub async fn test_sprint_log_with_name_roundtrip(factory: &StoreFactory) {
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
 
     let b = ctx.boards.iter_mut().find(|b| b.id == board.id).unwrap();

@@ -9,7 +9,9 @@ async fn carry_over_skips_done_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
 
-    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path))).await.unwrap();
+    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path)))
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Test Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Backlog".into(), None).unwrap();
@@ -87,7 +89,9 @@ async fn carry_over_returns_zero_when_sprint_has_no_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
 
-    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path))).await.unwrap();
+    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path)))
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Test Board".into(), None).unwrap();
     let from_sprint = ctx.create_sprint(board.id, None, None).unwrap();
@@ -108,7 +112,9 @@ async fn carry_over_returns_zero_when_all_cards_are_done() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
 
-    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path))).await.unwrap();
+    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path)))
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Test Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Done".into(), None).unwrap();
@@ -172,7 +178,9 @@ async fn carry_over_includes_blocked_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
 
-    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path))).await.unwrap();
+    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path)))
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Test Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Backlog".into(), None).unwrap();

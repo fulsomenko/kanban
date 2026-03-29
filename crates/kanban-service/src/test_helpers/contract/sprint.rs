@@ -9,9 +9,7 @@ pub async fn test_sprint_planning_fields_roundtrip(factory: &StoreFactory) {
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx
         .create_sprint(board.id, Some("SP".into()), Some("Alpha".into()))
         .unwrap();
@@ -37,9 +35,7 @@ pub async fn test_sprint_active_fields_roundtrip(factory: &StoreFactory) {
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
     ctx.activate_sprint(sprint.id, Some(14)).unwrap();
 
@@ -91,9 +87,7 @@ pub async fn test_sprint_with_card_prefix_override_roundtrip(factory: &StoreFact
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx
         .create_sprint(board.id, Some("SP".into()), None)
         .unwrap();

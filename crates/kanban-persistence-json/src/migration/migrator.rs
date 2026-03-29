@@ -32,7 +32,11 @@ impl Migrator {
     }
 
     /// Migrate a file from one version to another
-    pub async fn migrate(from: FormatVersion, to: FormatVersion, path: &Path) -> PersistenceResult<()> {
+    pub async fn migrate(
+        from: FormatVersion,
+        to: FormatVersion,
+        path: &Path,
+    ) -> PersistenceResult<()> {
         if from == to {
             return Ok(());
         }

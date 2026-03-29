@@ -79,9 +79,7 @@ pub async fn test_board_sprint_names_roundtrip(factory: &StoreFactory) {
     let store = factory(&path);
     let mut ctx = KanbanContext::load(store).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
 
     let b = ctx.boards.iter_mut().find(|b| b.id == board.id).unwrap();
     b.sprint_names = vec!["Alpha".into(), "Beta".into(), "Gamma".into()];

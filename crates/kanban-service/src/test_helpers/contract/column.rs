@@ -54,15 +54,11 @@ pub async fn test_multiple_columns_preserve_positions(factory: &StoreFactory) {
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
-    let col1 = ctx
-        .create_column(board.id, "Todo".into(), Some(0))
-        .unwrap();
+    let col1 = ctx.create_column(board.id, "Todo".into(), Some(0)).unwrap();
     let col2 = ctx
         .create_column(board.id, "In Progress".into(), Some(1))
         .unwrap();
-    let col3 = ctx
-        .create_column(board.id, "Done".into(), Some(2))
-        .unwrap();
+    let col3 = ctx.create_column(board.id, "Done".into(), Some(2)).unwrap();
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load(factory(&path)).await.unwrap();

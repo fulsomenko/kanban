@@ -9,9 +9,7 @@ pub async fn test_archive_card_roundtrip(factory: &StoreFactory) {
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
 
     let card = ctx
@@ -52,9 +50,7 @@ pub async fn test_archive_card_with_sprint_logs_roundtrip(factory: &StoreFactory
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
     ctx.activate_sprint(sprint.id, Some(14)).unwrap();
@@ -83,9 +79,7 @@ pub async fn test_restore_archived_card_roundtrip(factory: &StoreFactory) {
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
 
-    let board = ctx
-        .create_board("Board".into(), Some("B".into()))
-        .unwrap();
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
 
     let card = ctx
