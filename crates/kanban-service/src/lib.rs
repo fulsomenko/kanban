@@ -5,33 +5,18 @@ pub use context::{BulkOperationFailure, BulkOperationResult, DataSnapshot, Kanba
 pub mod test_helpers;
 
 use kanban_domain::KanbanError;
-use kanban_persistence::PersistenceStore;
+use kanban_persistence::{PersistenceStore, StoreRegistry};
 use std::sync::Arc;
 
-pub fn make_store(path: &str) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
-    let ext = std::path::Path::new(path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+pub fn default_registry() -> StoreRegistry {
+    let mut registry = StoreRegistry::new();
     #[cfg(feature = "sqlite-storage")]
-    if matches!(ext, "db" | "sqlite") {
-        return Ok(Arc::new(kanban_persistence_sqlite::SqliteStore::new(path)));
-    }
-    #[cfg(not(feature = "sqlite-storage"))]
-    if matches!(ext, "db" | "sqlite") {
-        return Err(KanbanError::Internal(format!(
-            "SQLite storage requested ({path}) but the 'sqlite-storage' feature is not enabled. \
-             Recompile with `--features sqlite` or use a .json file."
-        )));
-    }
+    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
     #[cfg(feature = "json-storage")]
-    {
-        Ok(Arc::new(kanban_persistence_json::JsonFileStore::new(path)))
-    }
-    #[cfg(not(feature = "json-storage"))]
-    {
-        Err(KanbanError::Internal(
-            "No storage backend enabled".to_string(),
-        ))
-    }
+    registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+    registry
+}
+
+pub fn make_store(locator: &str) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
+    Ok(default_registry().create_store(locator)?)
 }

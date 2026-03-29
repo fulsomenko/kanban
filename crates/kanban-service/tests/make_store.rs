@@ -34,14 +34,29 @@ async fn test_make_store_no_extension_defaults_to_json_roundtrip() {
 
 #[cfg(feature = "sqlite-storage")]
 #[test]
-fn test_make_store_db_extension() {
-    let store = make_store("/tmp/test_board.db").unwrap();
-    assert!(store.path().to_str().unwrap().ends_with(".db"));
+fn test_make_store_sqlite_extension() {
+    let store = make_store("/tmp/test_board.sqlite").unwrap();
+    assert!(store.path().to_str().unwrap().ends_with(".sqlite"));
 }
 
 #[cfg(feature = "sqlite-storage")]
 #[test]
-fn test_make_store_sqlite_extension() {
-    let store = make_store("/tmp/test_board.sqlite").unwrap();
-    assert!(store.path().to_str().unwrap().ends_with(".sqlite"));
+fn test_make_store_sqlite3_extension() {
+    let store = make_store("/tmp/test_board.sqlite3").unwrap();
+    assert!(store.path().to_str().unwrap().ends_with(".sqlite3"));
+}
+
+#[test]
+fn test_make_store_unrecognized_uri_returns_error() {
+    let result = make_store("postgres://localhost/kanban");
+    match result {
+        Ok(_) => panic!("Expected error for unsupported URI"),
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("unsupported storage locator"),
+                "Expected unsupported locator error, got: {msg}"
+            );
+        }
+    }
 }
