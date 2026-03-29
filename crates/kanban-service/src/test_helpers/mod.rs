@@ -5,8 +5,7 @@ use kanban_persistence::PersistenceStore;
 use std::path::Path;
 use std::sync::Arc;
 
-pub type StoreFactory =
-    Box<dyn Fn(&Path) -> Arc<dyn PersistenceStore + Send + Sync> + Send + Sync>;
+pub type StoreFactory = Box<dyn Fn(&Path) -> Arc<dyn PersistenceStore + Send + Sync> + Send + Sync>;
 
 #[macro_export]
 macro_rules! contract_tests {
@@ -187,6 +186,10 @@ macro_rules! contract_tests {
         #[tokio::test]
         async fn test_reload_picks_up_external_changes() {
             $crate::test_helpers::contract::lifecycle::test_reload_picks_up_external_changes(&$factory_fn()).await;
+        }
+        #[tokio::test]
+        async fn test_save_with_stale_metadata_returns_conflict() {
+            $crate::test_helpers::contract::lifecycle::test_save_with_stale_metadata_returns_conflict(&$factory_fn()).await;
         }
     };
 }

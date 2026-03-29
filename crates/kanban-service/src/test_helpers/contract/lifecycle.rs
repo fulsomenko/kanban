@@ -25,12 +25,8 @@ pub async fn test_multiple_boards_roundtrip(factory: &StoreFactory) {
         .create_board("Board Two".into(), Some("B2".into()))
         .unwrap();
 
-    let col1 = ctx
-        .create_column(board1.id, "Col1".into(), None)
-        .unwrap();
-    let col2 = ctx
-        .create_column(board2.id, "Col2".into(), None)
-        .unwrap();
+    let col1 = ctx.create_column(board1.id, "Col1".into(), None).unwrap();
+    let col2 = ctx.create_column(board2.id, "Col2".into(), None).unwrap();
 
     ctx.create_card(
         board1.id,
@@ -162,12 +158,8 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     b.prefix_counters.insert("FB".into(), 10);
     b.sprint_counters.insert("SP".into(), 5);
 
-    let col_todo = ctx
-        .create_column(board.id, "Todo".into(), Some(0))
-        .unwrap();
-    let col_done = ctx
-        .create_column(board.id, "Done".into(), Some(1))
-        .unwrap();
+    let col_todo = ctx.create_column(board.id, "Todo".into(), Some(0)).unwrap();
+    let col_done = ctx.create_column(board.id, "Done".into(), Some(1)).unwrap();
     ctx.update_column(
         col_done.id,
         ColumnUpdate {
@@ -429,4 +421,30 @@ pub async fn test_reload_picks_up_external_changes(factory: &StoreFactory) {
     let boards = ctx_a.list_boards().unwrap();
     assert_eq!(boards.len(), 2);
     assert!(boards.iter().any(|b| b.name == "Board B"));
+}
+
+pub async fn test_save_with_stale_metadata_returns_conflict(factory: &StoreFactory) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+
+    // Store A saves a board
+    let mut ctx_a = KanbanContext::load(factory(&path)).await.unwrap();
+    ctx_a.create_board("Board A".into(), None).unwrap();
+    ctx_a.save().await.unwrap();
+
+    // Store B loads, modifies, and saves — updates metadata
+    let mut ctx_b = KanbanContext::load(factory(&path)).await.unwrap();
+    ctx_b.create_board("Board B".into(), None).unwrap();
+    ctx_b.save().await.unwrap();
+
+    // Store A tries to save again with stale metadata
+    ctx_a.create_board("Board C".into(), None).unwrap();
+    let result = ctx_a.save().await;
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, kanban_domain::KanbanError::ConflictDetected { .. }),
+        "Expected ConflictDetected error, got: {err:?}"
+    );
 }
