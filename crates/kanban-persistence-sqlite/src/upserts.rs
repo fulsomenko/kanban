@@ -11,13 +11,13 @@ pub(crate) async fn upsert_board(
     let description = board["description"].as_str();
     let sprint_prefix = board["sprint_prefix"].as_str();
     let card_prefix = board["card_prefix"].as_str();
-    let task_sort_field = board["task_sort_field"].as_str().unwrap_or("Default");
-    let task_sort_order = board["task_sort_order"].as_str().unwrap_or("Ascending");
+    let task_sort_field = required_str(board, "task_sort_field")?;
+    let task_sort_order = required_str(board, "task_sort_order")?;
     let sprint_duration_days = board["sprint_duration_days"].as_i64().map(|v| v as i32);
     let sprint_name_used_count = board["sprint_name_used_count"].as_i64().unwrap_or(0) as i32;
     let next_sprint_number = board["next_sprint_number"].as_i64().unwrap_or(1) as i32;
     let active_sprint_id = board["active_sprint_id"].as_str();
-    let task_list_view = board["task_list_view"].as_str().unwrap_or("Flat");
+    let task_list_view = required_str(board, "task_list_view")?;
     let completion_column_id = board["completion_column_id"].as_str();
     let created_at = required_str(board, "created_at")?;
     let updated_at = required_str(board, "updated_at")?;
@@ -171,8 +171,8 @@ pub(crate) async fn upsert_card(
     let column_id = required_str(card, "column_id")?;
     let title = required_str(card, "title")?;
     let description = card["description"].as_str();
-    let priority = card["priority"].as_str().unwrap_or("Medium");
-    let status = card["status"].as_str().unwrap_or("Todo");
+    let priority = required_str(card, "priority")?;
+    let status = required_str(card, "status")?;
     let position = card["position"].as_i64().unwrap_or(0) as i32;
     let due_date = card["due_date"].as_str();
     let points = card["points"].as_i64().map(|v| v as i32);
@@ -264,7 +264,7 @@ pub(crate) async fn upsert_sprint(
     let name_index = sprint["name_index"].as_i64().map(|v| v as i32);
     let prefix = sprint["prefix"].as_str();
     let card_prefix = sprint["card_prefix"].as_str();
-    let status = sprint["status"].as_str().unwrap_or("Planning");
+    let status = required_str(sprint, "status")?;
     let start_date = sprint["start_date"].as_str();
     let end_date = sprint["end_date"].as_str();
     let created_at = required_str(sprint, "created_at")?;
@@ -312,7 +312,7 @@ pub(crate) async fn upsert_archived_card(
 
     let card_id = required_str(card, "id")?;
     let archived_at = required_str(archived, "archived_at")?;
-    let original_column_id = archived["original_column_id"].as_str();
+    let original_column_id = required_str(archived, "original_column_id")?;
     let original_position = archived["original_position"].as_i64().unwrap_or(0) as i32;
 
     sqlx::query(
