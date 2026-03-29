@@ -108,51 +108,42 @@ impl Command for DeleteBoard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DependencyGraph;
-    use kanban_core::KanbanError;
-
-    fn create_test_context() -> CommandContext<'static> {
-        CommandContext {
-            boards: Box::leak(Box::new(Vec::new())),
-            columns: Box::leak(Box::new(Vec::new())),
-            cards: Box::leak(Box::new(Vec::new())),
-            sprints: Box::leak(Box::new(Vec::new())),
-            archived_cards: Box::leak(Box::new(Vec::new())),
-            graph: Box::leak(Box::new(DependencyGraph::new())),
-        }
-    }
+    use super::super::test_helpers::TestContext;
 
     #[test]
     fn test_update_board_not_found_returns_error() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let cmd = UpdateBoard {
             board_id: Uuid::new_v4(),
             updates: BoardUpdate::default(),
         };
         let result = cmd.execute(&mut context);
-        assert!(matches!(result, Err(KanbanError::NotFound(_))));
+        assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_set_board_task_sort_not_found_returns_error() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let cmd = SetBoardTaskSort {
             board_id: Uuid::new_v4(),
             field: crate::SortField::Priority,
             order: crate::SortOrder::Ascending,
         };
         let result = cmd.execute(&mut context);
-        assert!(matches!(result, Err(KanbanError::NotFound(_))));
+        assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_set_board_task_list_view_not_found_returns_error() {
-        let mut context = create_test_context();
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
         let cmd = SetBoardTaskListView {
             board_id: Uuid::new_v4(),
             view: crate::TaskListView::default(),
         };
         let result = cmd.execute(&mut context);
-        assert!(matches!(result, Err(KanbanError::NotFound(_))));
+        assert!(result.unwrap_err().is_not_found());
     }
 }

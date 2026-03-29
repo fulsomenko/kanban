@@ -70,3 +70,42 @@ impl<'a> CommandContext<'a> {
             .ok_or_else(|| KanbanError::not_found("archived card", card_id))
     }
 }
+
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    use super::*;
+    use crate::DependencyGraph;
+
+    pub struct TestContext {
+        pub boards: Vec<crate::Board>,
+        pub columns: Vec<crate::Column>,
+        pub cards: Vec<crate::Card>,
+        pub sprints: Vec<crate::Sprint>,
+        pub archived_cards: Vec<crate::ArchivedCard>,
+        pub graph: DependencyGraph,
+    }
+
+    impl TestContext {
+        pub fn new() -> Self {
+            Self {
+                boards: vec![],
+                columns: vec![],
+                cards: vec![],
+                sprints: vec![],
+                archived_cards: vec![],
+                graph: DependencyGraph::new(),
+            }
+        }
+
+        pub fn as_command_context(&mut self) -> CommandContext<'_> {
+            CommandContext {
+                boards: &mut self.boards,
+                columns: &mut self.columns,
+                cards: &mut self.cards,
+                sprints: &mut self.sprints,
+                archived_cards: &mut self.archived_cards,
+                graph: &mut self.graph,
+            }
+        }
+    }
+}
