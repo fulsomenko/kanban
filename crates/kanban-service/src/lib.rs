@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 pub fn default_registry() -> StoreRegistry {
     let mut registry = StoreRegistry::new();
+    // SQLite first for priority; JSON last as catch-all fallback for plain file paths.
     #[cfg(feature = "sqlite-storage")]
     registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
     #[cfg(feature = "json-storage")]
