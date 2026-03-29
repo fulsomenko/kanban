@@ -4,7 +4,6 @@ use kanban_domain::{CardEdgeType, DependencyGraph};
 use kanban_persistence::PersistenceResult;
 use sqlx::Row;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 pub(crate) fn build_board(
     row: &sqlx::sqlite::SqliteRow,
@@ -46,14 +45,16 @@ pub(crate) fn build_board(
             .map_err(db_err)? as u32,
         active_sprint_id: active_sprint_id_str
             .as_deref()
-            .and_then(|s| Uuid::parse_str(s).ok()),
+            .map(parse_uuid)
+            .transpose()?,
         task_list_view: serde_json::from_str(&format!("\"{}\"", task_list_view_str))
             .map_err(|_| ser_err(format!("unknown task_list_view variant: {task_list_view_str}")))?,
         prefix_counters,
         sprint_counters,
         completion_column_id: completion_column_id_str
             .as_deref()
-            .and_then(|s| Uuid::parse_str(s).ok()),
+            .map(parse_uuid)
+            .transpose()?,
         created_at: parse_datetime(&created_at_str)?,
         updated_at: parse_datetime(&updated_at_str)?,
     };
@@ -111,21 +112,22 @@ pub(crate) fn build_card(
         position: row.try_get("position").map_err(db_err)?,
         due_date: due_date_str
             .as_deref()
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&chrono::Utc)),
+            .map(parse_datetime)
+            .transpose()?,
         points: points_raw.map(|v| v as u8),
         card_number: row.try_get::<i32, _>("card_number").map_err(db_err)? as u32,
         sprint_id: sprint_id_str
             .as_deref()
-            .and_then(|s| Uuid::parse_str(s).ok()),
+            .map(parse_uuid)
+            .transpose()?,
         assigned_prefix: row.try_get("assigned_prefix").map_err(db_err)?,
         card_prefix: row.try_get("card_prefix").map_err(db_err)?,
         created_at: parse_datetime(&created_at_str)?,
         updated_at: parse_datetime(&updated_at_str)?,
         completed_at: completed_at_str
             .as_deref()
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&chrono::Utc)),
+            .map(parse_datetime)
+            .transpose()?,
         sprint_logs,
     };
 
@@ -155,12 +157,12 @@ pub(crate) fn build_sprint(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<s
             .map_err(|_| ser_err(format!("unknown sprint status variant: {status_str}")))?,
         start_date: start_date_str
             .as_deref()
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&chrono::Utc)),
+            .map(parse_datetime)
+            .transpose()?,
         end_date: end_date_str
             .as_deref()
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&chrono::Utc)),
+            .map(parse_datetime)
+            .transpose()?,
         created_at: parse_datetime(&created_at_str)?,
         updated_at: parse_datetime(&updated_at_str)?,
     };
