@@ -30,13 +30,15 @@ This is a **terminal-based kanban/project management tool** written in **Rust**,
 
 ```
 crates/
-├── kanban-core/        # Core traits, errors, and result types
-├── kanban-domain/      # Domain models (Board, Card, Column, Sprint)
-├── kanban-persistence/ # JSON storage, versioning & migrations
-├── kanban-service/     # Service layer: KanbanContext, persistence orchestration
-├── kanban-tui/         # Terminal UI with ratatui
-├── kanban-cli/         # CLI entry point
-└── kanban-mcp/         # Model Context Protocol server for LLM integration
+├── kanban-core/               # Core traits, errors, and result types
+├── kanban-domain/             # Domain models (Board, Card, Column, Sprint)
+├── kanban-persistence/        # Persistence traits, registry, and shared types
+├── kanban-persistence-json/   # JSON file storage backend
+├── kanban-persistence-sqlite/ # SQLite storage backend
+├── kanban-service/            # Service layer: KanbanContext, persistence orchestration
+├── kanban-tui/                # Terminal UI with ratatui
+├── kanban-cli/                # CLI entry point
+└── kanban-mcp/                # Model Context Protocol server for LLM integration
 ```
 
 **Dependency Flow** (respecting dependency inversion):
@@ -48,6 +50,10 @@ graph LR
     MCP[kanban-mcp] --> SVC
     TUI --> SVC
     SVC --> PER[kanban-persistence]
+    SVC -.-> JSON[kanban-persistence-json]
+    SVC -.-> SQL[kanban-persistence-sqlite]
+    JSON --> PER
+    SQL --> PER
     PER --> DOM[kanban-domain]
     DOM --> CORE[kanban-core]
 ```
@@ -119,6 +125,34 @@ cargo tarpaulin        # Code coverage
 
 **Design Pattern**: Rich domain models with behavior, no infrastructure dependencies
 
+### kanban-persistence
+**Purpose**: Persistence trait layer — defines `PersistenceStore`, `StoreFactory`, `StoreRegistry`, and shared types (errors, snapshots, conflict detection, file watching)
+
+- `PersistenceStore` - Async trait for load/save operations
+- `StoreFactory` - Trait for backend registration (`name`, `supported_patterns`, `matches`, `create`)
+- `StoreRegistry` - Registry that matches a locator string to the right factory
+- `StoreSnapshot`, `PersistenceMetadata` - Shared serialization types
+- `ConflictResolver`, `FormatVersion`, `MigrationStrategy` - Shared abstractions
+
+**Design Pattern**: Trait-based abstraction layer; backends register via `StoreFactory`
+
+### kanban-persistence-json
+**Purpose**: JSON file storage backend implementing `StoreFactory`
+
+- `JsonFileStore` - `PersistenceStore` impl with atomic writes (temp file + rename)
+- `JsonStoreFactory` - Matches `*.json` and any non-URI path (catch-all fallback)
+- V2 format with metadata envelope; automatic V1→V2 migration with `.v1.backup`
+- Debounced saving (500ms minimum interval)
+
+### kanban-persistence-sqlite
+**Purpose**: SQLite storage backend implementing `StoreFactory`
+
+- `SqliteStore` - `PersistenceStore` impl with WAL mode, foreign keys, max 2 connections
+- `SqliteStoreFactory` - Matches `*.sqlite` and `*.sqlite3`
+- Relational schema (14 tables: metadata, boards, columns, cards, sprints, etc.)
+- Schema versioning (v1) with migration skeleton
+- Auto-creates database file on first use
+
 ### kanban-tui
 **Purpose**: Terminal UI implementation
 
@@ -172,7 +206,9 @@ cargo tarpaulin        # Code coverage
 | Layer | Test Type | Pattern |
 |---|---|---|
 | `kanban-core`, `kanban-domain` | Inline unit tests (`#[cfg(test)]`) | Pure logic, no I/O, no mocks needed |
-| `kanban-persistence` | Inline unit tests + real tempfile I/O | Serialization, migration, round-trips |
+| `kanban-persistence` | Inline unit tests | Trait contracts, registry logic |
+| `kanban-persistence-json` | Inline unit tests + real tempfile I/O | Serialization, migration, round-trips |
+| `kanban-persistence-sqlite` | Inline unit tests + real tempfile I/O | Schema, round-trips, concurrent access |
 | `kanban-service` | Integration tests in `tests/` | `#[tokio::test]`, `KanbanContext` with real persistence via `TempDir` |
 | `kanban-tui` | Integration tests in `tests/` | Component instantiation, key event simulation, export/import flows |
 | `kanban-cli` | Integration tests in `tests/` | `assert_cmd` + real binary invocation via `cargo_bin_cmd!` |

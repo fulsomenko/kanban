@@ -109,13 +109,15 @@ The codebase follows SOLID principles:
 
 ```
 crates/
-├── kanban-core/        # Core traits, errors, result types
-├── kanban-domain/      # Domain models (Board, Card, Column, Sprint)
-├── kanban-persistence/ # JSON storage, versioning & migrations
-├── kanban-service/     # Service layer: KanbanContext, persistence orchestration
-├── kanban-tui/         # Terminal UI (ratatui + crossterm)
-├── kanban-cli/         # CLI entry point (clap)
-└── kanban-mcp/         # Model Context Protocol server for LLM integration
+├── kanban-core/               # Core traits, errors, result types
+├── kanban-domain/             # Domain models (Board, Card, Column, Sprint)
+├── kanban-persistence/        # Persistence traits, registry, and shared types
+├── kanban-persistence-json/   # JSON file storage backend
+├── kanban-persistence-sqlite/ # SQLite storage backend
+├── kanban-service/            # Service layer: KanbanContext, persistence orchestration
+├── kanban-tui/                # Terminal UI (ratatui + crossterm)
+├── kanban-cli/                # CLI entry point (clap)
+└── kanban-mcp/                # Model Context Protocol server for LLM integration
 ```
 
 **Dependency Flow:**
@@ -127,6 +129,10 @@ graph LR
     MCP[kanban-mcp] --> SVC
     TUI --> SVC
     SVC --> PER[kanban-persistence]
+    SVC -.-> JSON[kanban-persistence-json]
+    SVC -.-> SQL[kanban-persistence-sqlite]
+    JSON --> PER
+    SQL --> PER
     PER --> DOM[kanban-domain]
     DOM --> CORE[kanban-core]
 ```
