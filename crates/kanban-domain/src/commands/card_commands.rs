@@ -33,17 +33,8 @@ pub struct CreateCard {
 
 impl Command for CreateCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let prefix = context
-            .boards
-            .iter()
-            .find(|b| b.id == self.board_id)
-            .ok_or_else(|| KanbanError::not_found("board", self.board_id))?
-            .card_prefix
-            .as_deref()
-            .unwrap_or("task")
-            .to_string();
-
         let board = context.board_mut(self.board_id)?;
+        let prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
         let card = crate::Card::new(
             board,
             self.column_id,
@@ -239,8 +230,8 @@ impl Command for UnassignCardFromSprint {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::test_helpers::TestContext;
+    use super::*;
 
     #[test]
     fn test_update_card_not_found_returns_error() {

@@ -1,4 +1,4 @@
-use crate::{KanbanError, KanbanResult};
+use crate::KanbanResult;
 use uuid::Uuid;
 
 use super::{Command, CommandContext};
@@ -131,17 +131,8 @@ pub struct CreateSubcardCommand {
 
 impl Command for CreateSubcardCommand {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let prefix = context
-            .boards
-            .iter()
-            .find(|b| b.id == self.board_id)
-            .ok_or_else(|| KanbanError::not_found("board", self.board_id))?
-            .card_prefix
-            .as_deref()
-            .unwrap_or("task")
-            .to_string();
-
         let board = context.board_mut(self.board_id)?;
+        let prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
         let mut card = Card::new(
             board,
             self.column_id,
@@ -171,8 +162,8 @@ impl Command for CreateSubcardCommand {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::test_helpers::TestContext;
+    use super::*;
 
     #[test]
     fn test_add_blocks_dependency() {
