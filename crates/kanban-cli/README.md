@@ -35,8 +35,9 @@ kanban /path/to/myproject.json
 ### CLI Mode
 
 ```bash
-# All CLI commands require a data file
+# All CLI commands require a data file (JSON or SQLite)
 kanban myproject.json board list
+kanban myproject.sqlite board list
 kanban myproject.json card create --board-id <ID> --column-id <ID> --title "New task"
 
 # Or use KANBAN_FILE environment variable
@@ -44,6 +45,35 @@ export KANBAN_FILE=myproject.json
 kanban board list
 kanban card list --board-id <ID>
 ```
+
+## Storage Backends
+
+The backend is selected automatically by file extension:
+
+| Extension | Backend | Feature Flag |
+|-----------|---------|--------------|
+| `.json` (or any unknown) | JSON | `json-storage` (default) |
+| `.sqlite`, `.sqlite3` | SQLite | `sqlite-storage` |
+
+To build with SQLite support:
+
+```bash
+cargo build --features sqlite-storage
+```
+
+## Migrate Command
+
+Convert data between storage backends:
+
+```bash
+# JSON to SQLite
+kanban myproject.json migrate myproject.sqlite
+
+# SQLite to JSON
+kanban myproject.sqlite migrate myproject.json
+```
+
+The migrate command loads the full snapshot from the source file and saves it to the target, using the appropriate backend for each based on file extension.
 
 ## CLI Commands
 

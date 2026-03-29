@@ -21,10 +21,11 @@ from disk.
 ## Usage
 
 ```rust
-use kanban_service::KanbanContext;
+use kanban_service::{make_store, KanbanContext};
 use kanban_domain::KanbanOperations;
 
-let mut ctx = KanbanContext::load_json("board.json").await?;
+let store = make_store("board.json")?;   // or "board.sqlite"
+let mut ctx = KanbanContext::load(store).await?;
 let board = ctx.create_board("My Board".into(), None)?;
 ctx.save().await?;
 
@@ -44,7 +45,6 @@ The central runtime object. Holds all board state in memory and delegates persis
 | Method | Description |
 |--------|-------------|
 | `KanbanContext::load(store)` | Load from a `PersistenceStore` instance |
-| `KanbanContext::load_json(path)` | Convenience: create a `JsonFileStore` and load |
 | `ctx.reload()` | Re-read state from disk, discarding in-memory state |
 | `ctx.save()` | Serialize current state and write to the store |
 | `ctx.execute(command)` | Execute any `Command` against the in-memory state |
@@ -122,6 +122,14 @@ sequenceDiagram
     PersistenceStore-->>KanbanContext: Ok(())
 ```
 
+## Storage Backend Selection
+
+`make_store(locator)` uses `default_registry()` to match the locator string to the right backend:
+
+- `default_registry()` registers backends based on feature flags: `sqlite-storage` (SQLite first, for specific patterns) then `json-storage` (JSON, catch-all fallback)
+- Feature flags: `json-storage` (default), `sqlite-storage`
+- Extension mapping: `.json` → JSON, `.sqlite`/`.sqlite3` → SQLite, anything else → JSON fallback
+
 ## Bulk Operations
 
 The `_detailed` variants return per-item results instead of a success count, which is useful
@@ -137,7 +145,9 @@ when callers need to report partial failures:
 
 - `kanban-core` — Foundation types and error handling
 - `kanban-domain` — Domain models and `KanbanOperations` trait
-- `kanban-persistence` — `JsonFileStore` and `PersistenceStore` trait
+- `kanban-persistence` — `PersistenceStore` trait and `StoreRegistry`
+- `kanban-persistence-json` — JSON backend (via `json-storage` feature)
+- `kanban-persistence-sqlite` — SQLite backend (via `sqlite-storage` feature)
 - `serde`, `serde_json` — Serialization
 - `tokio` — Async runtime
 - `uuid` — ID generation
