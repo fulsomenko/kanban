@@ -16,7 +16,7 @@ impl StoreFactory for SqliteStoreFactory {
     }
 
     fn supported_patterns(&self) -> &[&str] {
-        &["*.sqlite", "*.sqlite3"]
+        &["*.sqlite", "*.sqlite3", "*.db"]
     }
 
     fn matches(&self, locator: &str) -> bool {
@@ -24,7 +24,7 @@ impl StoreFactory for SqliteStoreFactory {
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("");
-        matches!(ext, "sqlite" | "sqlite3")
+        matches!(ext, "sqlite" | "sqlite3" | "db")
     }
 
     fn create(
