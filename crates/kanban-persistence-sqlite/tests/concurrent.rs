@@ -67,6 +67,6 @@ async fn test_concurrent_saves_no_corruption() {
 
     let (loaded, _meta) = store.load().await.unwrap();
     let data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
-    assert!(data["boards"].as_array().unwrap().len() >= 1);
-    assert!(data["columns"].as_array().unwrap().len() >= 1);
+    assert!(!data["boards"].as_array().unwrap().is_empty());
+    assert!(!data["columns"].as_array().unwrap().is_empty());
 }
