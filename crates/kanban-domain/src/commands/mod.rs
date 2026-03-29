@@ -1,4 +1,4 @@
-use crate::{KanbanResult, KanbanError};
+use crate::{KanbanError, KanbanResult};
 use uuid::Uuid;
 
 pub mod board_commands;
@@ -61,13 +61,6 @@ impl<'a> CommandContext<'a> {
             .iter_mut()
             .find(|s| s.id == id)
             .ok_or_else(|| KanbanError::not_found("sprint", id))
-    }
-
-    pub fn archived_card_mut(&mut self, card_id: Uuid) -> KanbanResult<&mut crate::ArchivedCard> {
-        self.archived_cards
-            .iter_mut()
-            .find(|ac| ac.card.id == card_id)
-            .ok_or_else(|| KanbanError::not_found("archived card", card_id))
     }
 }
 
