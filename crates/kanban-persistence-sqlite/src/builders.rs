@@ -12,7 +12,7 @@ pub(crate) fn build_board(
     prefix_counters: HashMap<String, u32>,
     sprint_counters: HashMap<String, u32>,
 ) -> PersistenceResult<serde_json::Value> {
-    use kanban_domain::board::{Board, SortField, SortOrder};
+    use kanban_domain::board::Board;
 
     let id_str: String = row.try_get("id").map_err(db_err)?;
     let task_sort_field_str: String = row.try_get("task_sort_field").map_err(db_err)?;
@@ -33,15 +33,9 @@ pub(crate) fn build_board(
         sprint_prefix: row.try_get("sprint_prefix").map_err(db_err)?,
         card_prefix: row.try_get("card_prefix").map_err(db_err)?,
         task_sort_field: serde_json::from_str(&format!("\"{}\"", task_sort_field_str))
-            .unwrap_or_else(|_| {
-                tracing::warn!(field = "task_sort_field", value = %task_sort_field_str, "Unknown enum variant, using default");
-                SortField::Default
-            }),
+            .map_err(|_| ser_err(format!("unknown task_sort_field variant: {task_sort_field_str}")))?,
         task_sort_order: serde_json::from_str(&format!("\"{}\"", task_sort_order_str))
-            .unwrap_or_else(|_| {
-                tracing::warn!(field = "task_sort_order", value = %task_sort_order_str, "Unknown enum variant, using default");
-                SortOrder::Ascending
-            }),
+            .map_err(|_| ser_err(format!("unknown task_sort_order variant: {task_sort_order_str}")))?,
         sprint_duration_days: sprint_duration_days_raw.map(|v| v as u32),
         sprint_names,
         sprint_name_used_count: row
@@ -54,10 +48,7 @@ pub(crate) fn build_board(
             .as_deref()
             .and_then(|s| Uuid::parse_str(s).ok()),
         task_list_view: serde_json::from_str(&format!("\"{}\"", task_list_view_str))
-            .unwrap_or_else(|_| {
-                tracing::warn!(field = "task_list_view", value = %task_list_view_str, "Unknown enum variant, using default");
-                Default::default()
-            }),
+            .map_err(|_| ser_err(format!("unknown task_list_view variant: {task_list_view_str}")))?,
         prefix_counters,
         sprint_counters,
         completion_column_id: completion_column_id_str
@@ -95,7 +86,7 @@ pub(crate) fn build_card(
     row: &sqlx::sqlite::SqliteRow,
     sprint_logs: Vec<kanban_domain::SprintLog>,
 ) -> PersistenceResult<serde_json::Value> {
-    use kanban_domain::card::{Card, CardPriority, CardStatus};
+    use kanban_domain::card::Card;
 
     let id_str: String = row.try_get("id").map_err(db_err)?;
     let column_id_str: String = row.try_get("column_id").map_err(db_err)?;
@@ -114,15 +105,9 @@ pub(crate) fn build_card(
         title: row.try_get("title").map_err(db_err)?,
         description: row.try_get("description").map_err(db_err)?,
         priority: serde_json::from_str(&format!("\"{}\"", priority_str))
-            .unwrap_or_else(|_| {
-                tracing::warn!(field = "priority", value = %priority_str, "Unknown enum variant, using default");
-                CardPriority::Medium
-            }),
+            .map_err(|_| ser_err(format!("unknown priority variant: {priority_str}")))?,
         status: serde_json::from_str(&format!("\"{}\"", status_str))
-            .unwrap_or_else(|_| {
-                tracing::warn!(field = "status", value = %status_str, "Unknown enum variant, using default");
-                CardStatus::Todo
-            }),
+            .map_err(|_| ser_err(format!("unknown status variant: {status_str}")))?,
         position: row.try_get("position").map_err(db_err)?,
         due_date: due_date_str
             .as_deref()
@@ -148,7 +133,7 @@ pub(crate) fn build_card(
 }
 
 pub(crate) fn build_sprint(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<serde_json::Value> {
-    use kanban_domain::sprint::{Sprint, SprintStatus};
+    use kanban_domain::sprint::Sprint;
 
     let id_str: String = row.try_get("id").map_err(db_err)?;
     let board_id_str: String = row.try_get("board_id").map_err(db_err)?;
@@ -167,10 +152,7 @@ pub(crate) fn build_sprint(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<s
         prefix: row.try_get("prefix").map_err(db_err)?,
         card_prefix: row.try_get("card_prefix").map_err(db_err)?,
         status: serde_json::from_str(&format!("\"{}\"", status_str))
-            .unwrap_or_else(|_| {
-                tracing::warn!(field = "sprint_status", value = %status_str, "Unknown enum variant, using default");
-                SprintStatus::Planning
-            }),
+            .map_err(|_| ser_err(format!("unknown sprint status variant: {status_str}")))?,
         start_date: start_date_str
             .as_deref()
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
@@ -209,6 +191,8 @@ pub(crate) fn build_graph(
             target: parse_uuid(&target_str)?,
             edge_type,
             direction,
+            // SQLite stores REAL as f64; domain uses f32. Precision loss is acceptable
+            // for edge weights (relative ordering hint, not exact measurement).
             weight: weight.map(|w| w as f32),
             created_at: parse_datetime(&created_at_str)?,
             archived_at: archived_at_str.as_deref().map(parse_datetime).transpose()?,
