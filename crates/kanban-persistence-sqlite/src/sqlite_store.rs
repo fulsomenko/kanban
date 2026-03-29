@@ -72,8 +72,26 @@ impl SqliteStore {
             .await
     }
 
-    async fn load_current_state(&self, pool: &Pool<Sqlite>) -> PersistenceResult<SnapshotData> {
+    async fn load_current_state(
+        &self,
+        pool: &Pool<Sqlite>,
+    ) -> PersistenceResult<(SnapshotData, PersistenceMetadata)> {
         let mut tx = pool.begin().await.map_err(db_err)?;
+
+        let meta_row: Option<(String, String)> =
+            sqlx::query_as("SELECT instance_id, saved_at FROM metadata WHERE id = 1")
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(db_err)?;
+
+        let metadata = if let Some((instance_id_str, saved_at_str)) = meta_row {
+            PersistenceMetadata {
+                instance_id: parse_uuid(&instance_id_str)?,
+                saved_at: parse_datetime(&saved_at_str)?,
+            }
+        } else {
+            PersistenceMetadata::new(self.instance_id)
+        };
 
         let board_rows = sqlx::query(
             "SELECT id, name, description, sprint_prefix, card_prefix, task_sort_field,
@@ -263,14 +281,17 @@ impl SqliteStore {
 
         let graph = build_graph(&edge_rows)?;
 
-        Ok(SnapshotData {
-            boards,
-            columns,
-            cards,
-            archived_cards,
-            sprints,
-            graph,
-        })
+        Ok((
+            SnapshotData {
+                boards,
+                columns,
+                cards,
+                archived_cards,
+                sprints,
+                graph,
+            },
+            metadata,
+        ))
     }
 
     async fn sync_table<F>(
@@ -457,22 +478,7 @@ impl PersistenceStore for SqliteStore {
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
         let pool = self.get_pool().await?;
 
-        let meta_row: Option<(String, String)> =
-            sqlx::query_as("SELECT instance_id, saved_at FROM metadata WHERE id = 1")
-                .fetch_optional(pool)
-                .await
-                .map_err(db_err)?;
-
-        let metadata = if let Some((instance_id_str, saved_at_str)) = meta_row {
-            PersistenceMetadata {
-                instance_id: parse_uuid(&instance_id_str)?,
-                saved_at: parse_datetime(&saved_at_str)?,
-            }
-        } else {
-            PersistenceMetadata::new(self.instance_id)
-        };
-
-        let data = self.load_current_state(pool).await?;
+        let (data, metadata) = self.load_current_state(pool).await?;
         let data_bytes = serde_json::to_vec(&data).map_err(ser_err)?;
 
         let snapshot = StoreSnapshot {
