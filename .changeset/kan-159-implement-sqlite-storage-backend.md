@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 - feat(tui,cli): add pluggable storage backend support
