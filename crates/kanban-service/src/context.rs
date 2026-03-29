@@ -123,7 +123,7 @@ impl KanbanContext {
 
         let store_snapshot = StoreSnapshot {
             data: bytes,
-            metadata: PersistenceMetadata::new(Uuid::new_v4()),
+            metadata: PersistenceMetadata::new(self.store.instance_id()),
         };
 
         self.store.save(store_snapshot).await?;
