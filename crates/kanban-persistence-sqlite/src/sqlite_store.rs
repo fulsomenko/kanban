@@ -103,9 +103,15 @@ fn build_board(
         sprint_prefix: row.try_get("sprint_prefix").map_err(db_err)?,
         card_prefix: row.try_get("card_prefix").map_err(db_err)?,
         task_sort_field: serde_json::from_str(&format!("\"{}\"", task_sort_field_str))
-            .unwrap_or(SortField::Default),
+            .unwrap_or_else(|_| {
+                tracing::warn!(field = "task_sort_field", value = %task_sort_field_str, "Unknown enum variant, using default");
+                SortField::Default
+            }),
         task_sort_order: serde_json::from_str(&format!("\"{}\"", task_sort_order_str))
-            .unwrap_or(SortOrder::Ascending),
+            .unwrap_or_else(|_| {
+                tracing::warn!(field = "task_sort_order", value = %task_sort_order_str, "Unknown enum variant, using default");
+                SortOrder::Ascending
+            }),
         sprint_duration_days: sprint_duration_days_raw.map(|v| v as u32),
         sprint_names,
         sprint_name_used_count: row
@@ -118,7 +124,10 @@ fn build_board(
             .as_deref()
             .and_then(|s| Uuid::parse_str(s).ok()),
         task_list_view: serde_json::from_str(&format!("\"{}\"", task_list_view_str))
-            .unwrap_or_default(),
+            .unwrap_or_else(|_| {
+                tracing::warn!(field = "task_list_view", value = %task_list_view_str, "Unknown enum variant, using default");
+                Default::default()
+            }),
         prefix_counters,
         sprint_counters,
         completion_column_id: completion_column_id_str
@@ -175,9 +184,15 @@ fn build_card(
         title: row.try_get("title").map_err(db_err)?,
         description: row.try_get("description").map_err(db_err)?,
         priority: serde_json::from_str(&format!("\"{}\"", priority_str))
-            .unwrap_or(CardPriority::Medium),
+            .unwrap_or_else(|_| {
+                tracing::warn!(field = "priority", value = %priority_str, "Unknown enum variant, using default");
+                CardPriority::Medium
+            }),
         status: serde_json::from_str(&format!("\"{}\"", status_str))
-            .unwrap_or(CardStatus::Todo),
+            .unwrap_or_else(|_| {
+                tracing::warn!(field = "status", value = %status_str, "Unknown enum variant, using default");
+                CardStatus::Todo
+            }),
         position: row.try_get("position").map_err(db_err)?,
         due_date: due_date_str
             .as_deref()
@@ -222,7 +237,10 @@ fn build_sprint(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<serde_json::
         prefix: row.try_get("prefix").map_err(db_err)?,
         card_prefix: row.try_get("card_prefix").map_err(db_err)?,
         status: serde_json::from_str(&format!("\"{}\"", status_str))
-            .unwrap_or(SprintStatus::Planning),
+            .unwrap_or_else(|_| {
+                tracing::warn!(field = "sprint_status", value = %status_str, "Unknown enum variant, using default");
+                SprintStatus::Planning
+            }),
         start_date: start_date_str
             .as_deref()
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
@@ -457,7 +475,7 @@ impl SqliteStore {
         for row in &archived_rows {
             let card_id: String = row.try_get("card_id").map_err(db_err)?;
             let archived_at: String = row.try_get("archived_at").map_err(db_err)?;
-            let original_column_id: Option<String> =
+            let original_column_id: String =
                 row.try_get("original_column_id").map_err(db_err)?;
             let original_position: i32 = row.try_get("original_position").map_err(db_err)?;
 
@@ -1020,7 +1038,7 @@ impl PersistenceStore for SqliteStore {
                 .bind(edge["target"].as_str().unwrap_or_default())
                 .bind(edge["edge_type"].as_str().unwrap_or_default())
                 .bind(edge["direction"].as_str().unwrap_or_default())
-                .bind(edge["weight"].as_f64())
+                .bind(edge["weight"].as_f64().map(|w| w as f32 as f64))
                 .bind(edge["created_at"].as_str().unwrap_or_default())
                 .bind(edge["archived_at"].as_str())
                 .execute(&mut *tx)
@@ -1098,6 +1116,10 @@ impl PersistenceStore for SqliteStore {
 
     fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn instance_id(&self) -> Uuid {
+        self.instance_id
     }
 }
 
