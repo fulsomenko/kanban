@@ -68,10 +68,10 @@ Convert data between storage backends:
 
 ```bash
 # JSON to SQLite
-kanban myproject.json migrate myproject.sqlite
+kanban migrate --from myproject.json --to myproject.sqlite
 
 # SQLite to JSON
-kanban myproject.sqlite migrate myproject.json
+kanban migrate --from myproject.sqlite --to myproject.json
 ```
 
 The migrate command loads the full snapshot from the source file and saves it to the target, using the appropriate backend for each based on file extension.
