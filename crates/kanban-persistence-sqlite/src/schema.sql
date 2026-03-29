@@ -1,9 +1,6 @@
 -- SQLite schema for kanban persistence
 -- Version: 1
 
--- Enable WAL mode for better concurrent read performance
-PRAGMA journal_mode=WAL;
-
 -- Metadata table for tracking persistence state and conflict detection
 CREATE TABLE IF NOT EXISTS metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton row
@@ -111,6 +108,8 @@ CREATE TABLE IF NOT EXISTS cards (
 );
 
 -- Sprint logs
+-- Note: No FK on sprint_id — sprint logs are historical records
+-- and must survive sprint deletion.
 CREATE TABLE IF NOT EXISTS sprint_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     card_id TEXT NOT NULL,
