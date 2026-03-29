@@ -6,23 +6,14 @@ use kanban_service::KanbanContext;
 use std::sync::Arc;
 use tempfile::TempDir;
 
-async fn create_populated_context(
-    store: Arc<dyn PersistenceStore + Send + Sync>,
-) -> KanbanContext {
+async fn create_populated_context(store: Arc<dyn PersistenceStore + Send + Sync>) -> KanbanContext {
     let mut ctx = KanbanContext::load(store).await.unwrap();
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
-    let col = ctx
-        .create_column(board.id, "Todo".into(), None)
+    let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    ctx.create_card(board.id, col.id, "Test Card".into(), Default::default())
         .unwrap();
-    ctx.create_card(
-        board.id,
-        col.id,
-        "Test Card".into(),
-        Default::default(),
-    )
-    .unwrap();
     ctx.save().await.unwrap();
     ctx
 }
@@ -44,7 +35,10 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
         .await
         .unwrap();
 
-    assert_eq!(original.list_boards().unwrap().len(), loaded.list_boards().unwrap().len());
+    assert_eq!(
+        original.list_boards().unwrap().len(),
+        loaded.list_boards().unwrap().len()
+    );
     let orig_board = &original.list_boards().unwrap()[0];
     let loaded_board = &loaded.list_boards().unwrap()[0];
     assert_eq!(orig_board.name, loaded_board.name);
@@ -68,7 +62,10 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
         .await
         .unwrap();
 
-    assert_eq!(original.list_boards().unwrap().len(), loaded.list_boards().unwrap().len());
+    assert_eq!(
+        original.list_boards().unwrap().len(),
+        loaded.list_boards().unwrap().len()
+    );
     let orig_board = &original.list_boards().unwrap()[0];
     let loaded_board = &loaded.list_boards().unwrap()[0];
     assert_eq!(orig_board.name, loaded_board.name);
@@ -96,6 +93,27 @@ async fn test_migrate_json_to_json_roundtrip() {
 }
 
 #[tokio::test]
+async fn test_migrate_sqlite_to_sqlite_roundtrip() {
+    let dir = TempDir::new().unwrap();
+    let src_path = dir.path().join("source.db");
+    let dst_path = dir.path().join("dest.db");
+
+    let src_store = Arc::new(SqliteStore::new(&src_path));
+    create_populated_context(src_store.clone()).await;
+
+    let (snapshot, _) = src_store.load().await.unwrap();
+    let dst_store = Arc::new(SqliteStore::new(&dst_path));
+    dst_store.save(snapshot).await.unwrap();
+
+    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&dst_path)))
+        .await
+        .unwrap();
+
+    assert_eq!(loaded.list_boards().unwrap().len(), 1);
+    assert_eq!(loaded.list_boards().unwrap()[0].name, "Test Board");
+}
+
+#[tokio::test]
 async fn test_migrate_rejects_missing_source() {
     use assert_cmd::cargo_bin_cmd;
 
@@ -104,7 +122,13 @@ async fn test_migrate_rejects_missing_source() {
     let dest = dir.path().join("dest.db");
 
     let output = cargo_bin_cmd!("kanban")
-        .args(["migrate", "--from", missing.to_str().unwrap(), "--to", dest.to_str().unwrap()])
+        .args([
+            "migrate",
+            "--from",
+            missing.to_str().unwrap(),
+            "--to",
+            dest.to_str().unwrap(),
+        ])
         .output()
         .unwrap();
 
@@ -127,11 +151,20 @@ async fn test_migrate_rejects_existing_target() {
     std::fs::write(&dst_path, "existing").unwrap();
 
     let output = cargo_bin_cmd!("kanban")
-        .args(["migrate", "--from", src_path.to_str().unwrap(), "--to", dst_path.to_str().unwrap()])
+        .args([
+            "migrate",
+            "--from",
+            src_path.to_str().unwrap(),
+            "--to",
+            dst_path.to_str().unwrap(),
+        ])
         .output()
         .unwrap();
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Destination already exists"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("Destination already exists"),
+        "stderr: {stderr}"
+    );
 }
