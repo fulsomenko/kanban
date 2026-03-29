@@ -7,14 +7,14 @@ PRAGMA journal_mode=WAL;
 -- Metadata table for tracking persistence state and conflict detection
 CREATE TABLE IF NOT EXISTS metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton row
-    instance_id TEXT NOT NULL,
+    instance_id VARCHAR(36) NOT NULL,
     saved_at TEXT NOT NULL,
     schema_version INTEGER NOT NULL DEFAULT 1
 );
 
 -- Boards table
 CREATE TABLE IF NOT EXISTS boards (
-    id TEXT PRIMARY KEY,
+    id VARCHAR(36) PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
     sprint_prefix TEXT,
@@ -22,22 +22,46 @@ CREATE TABLE IF NOT EXISTS boards (
     task_sort_field TEXT NOT NULL DEFAULT 'Default',
     task_sort_order TEXT NOT NULL DEFAULT 'Ascending',
     sprint_duration_days INTEGER,
-    sprint_names TEXT NOT NULL DEFAULT '[]',  -- JSON array
     sprint_name_used_count INTEGER NOT NULL DEFAULT 0,
     next_sprint_number INTEGER NOT NULL DEFAULT 1,
-    active_sprint_id TEXT,
+    active_sprint_id VARCHAR(36),
     task_list_view TEXT NOT NULL DEFAULT 'Flat',
-    prefix_counters TEXT NOT NULL DEFAULT '{}',  -- JSON object
-    sprint_counters TEXT NOT NULL DEFAULT '{}',  -- JSON object
-    completion_column_id TEXT,
+    completion_column_id VARCHAR(36),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 
+-- Board sprint names
+CREATE TABLE IF NOT EXISTS board_sprint_names (
+    board_id VARCHAR(36) NOT NULL,
+    position INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (board_id, position),
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+);
+
+-- Board prefix counters
+CREATE TABLE IF NOT EXISTS board_prefix_counters (
+    board_id VARCHAR(36) NOT NULL,
+    prefix TEXT NOT NULL,
+    counter INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, prefix),
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+);
+
+-- Board sprint counters
+CREATE TABLE IF NOT EXISTS board_sprint_counters (
+    board_id VARCHAR(36) NOT NULL,
+    prefix TEXT NOT NULL,
+    counter INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, prefix),
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+);
+
 -- Columns table
 CREATE TABLE IF NOT EXISTS columns (
-    id TEXT PRIMARY KEY,
-    board_id TEXT NOT NULL,
+    id VARCHAR(36) PRIMARY KEY,
+    board_id VARCHAR(36) NOT NULL,
     name TEXT NOT NULL,
     position INTEGER NOT NULL,
     wip_limit INTEGER,
@@ -48,8 +72,8 @@ CREATE TABLE IF NOT EXISTS columns (
 
 -- Sprints table (defined before cards since cards reference sprints)
 CREATE TABLE IF NOT EXISTS sprints (
-    id TEXT PRIMARY KEY,
-    board_id TEXT NOT NULL,
+    id VARCHAR(36) PRIMARY KEY,
+    board_id VARCHAR(36) NOT NULL,
     sprint_number INTEGER NOT NULL,
     name_index INTEGER,
     prefix TEXT,
@@ -62,10 +86,10 @@ CREATE TABLE IF NOT EXISTS sprints (
     FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
 );
 
--- Cards table
+-- Cards table (holds both active and archived cards)
 CREATE TABLE IF NOT EXISTS cards (
-    id TEXT PRIMARY KEY,
-    column_id TEXT NOT NULL,
+    id VARCHAR(36) PRIMARY KEY,
+    column_id VARCHAR(36) NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
     priority TEXT NOT NULL DEFAULT 'Medium',
@@ -74,25 +98,54 @@ CREATE TABLE IF NOT EXISTS cards (
     due_date TEXT,
     points INTEGER,
     card_number INTEGER NOT NULL DEFAULT 0,
-    sprint_id TEXT,
+    sprint_id VARCHAR(36),
     assigned_prefix TEXT,
     card_prefix TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     completed_at TEXT,
-    sprint_logs TEXT NOT NULL DEFAULT '[]',  -- JSON array
     FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
     FOREIGN KEY (sprint_id) REFERENCES sprints(id) ON DELETE SET NULL
 );
 
--- Archived cards table
-CREATE TABLE IF NOT EXISTS archived_cards (
-    id TEXT PRIMARY KEY,  -- Same as embedded card.id
-    card_data TEXT NOT NULL,  -- JSON blob of Card
-    archived_at TEXT NOT NULL,
-    original_column_id TEXT NOT NULL,
-    original_position INTEGER NOT NULL
+-- Sprint logs
+CREATE TABLE IF NOT EXISTS sprint_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id VARCHAR(36) NOT NULL,
+    sprint_id VARCHAR(36) NOT NULL,
+    sprint_number INTEGER NOT NULL,
+    sprint_name TEXT,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    status TEXT NOT NULL,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_sprint_logs_card_id ON sprint_logs(card_id);
+
+-- Archived cards metadata (card data lives in cards table)
+CREATE TABLE IF NOT EXISTS archived_cards (
+    card_id VARCHAR(36) PRIMARY KEY,
+    archived_at TEXT NOT NULL,
+    original_column_id VARCHAR(36),
+    original_position INTEGER NOT NULL,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
+
+-- Card dependency edges
+CREATE TABLE IF NOT EXISTS card_edges (
+    source_id VARCHAR(36) NOT NULL,
+    target_id VARCHAR(36) NOT NULL,
+    edge_type TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    weight REAL,
+    created_at TEXT NOT NULL,
+    archived_at TEXT,
+    PRIMARY KEY (source_id, target_id, edge_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_edges_source ON card_edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_card_edges_target ON card_edges(target_id);
 
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_columns_board_id ON columns(board_id);
