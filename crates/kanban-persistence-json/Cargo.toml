@@ -24,5 +24,6 @@ tracing.workspace = true
 tempfile.workspace = true
 
 [dev-dependencies]
+kanban-service = { path = "../kanban-service", version = "^0.3", features = ["test-helpers"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
