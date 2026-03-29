@@ -7,7 +7,7 @@ use tempfile::TempDir;
 
 async fn setup() -> (McpContext, TempDir) {
     let dir = TempDir::new().expect("failed to create temp dir");
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
     let ctx = McpContext::new(&path_str).await.unwrap();
     (ctx, dir)
@@ -276,7 +276,7 @@ async fn export_import_roundtrip() {
 #[tokio::test]
 async fn test_create_board_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
     let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
@@ -296,7 +296,7 @@ async fn test_create_board_persists() {
 #[tokio::test]
 async fn test_mutation_sequence_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
     let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
@@ -326,7 +326,7 @@ async fn test_mutation_sequence_persists() {
 #[tokio::test]
 async fn test_delete_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
     let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
