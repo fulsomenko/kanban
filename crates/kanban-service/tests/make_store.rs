@@ -54,6 +54,21 @@ fn test_make_store_sqlite3_extension() {
 }
 
 #[test]
+fn test_make_store_unknown_extension_returns_error() {
+    let result = make_store("/tmp/test_board.txt");
+    match result {
+        Ok(_) => panic!("Expected error for unknown extension"),
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("unsupported storage locator"),
+                "Expected unsupported locator error, got: {msg}"
+            );
+        }
+    }
+}
+
+#[test]
 fn test_make_store_unrecognized_uri_returns_error() {
     let result = make_store("postgres://localhost/kanban");
     match result {
