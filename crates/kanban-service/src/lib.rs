@@ -1,6 +1,9 @@
 mod context;
 pub use context::{BulkOperationFailure, BulkOperationResult, DataSnapshot, KanbanContext};
 
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;
+
 use kanban_persistence::PersistenceStore;
 use std::sync::Arc;
 
