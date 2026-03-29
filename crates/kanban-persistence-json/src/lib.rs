@@ -17,7 +17,7 @@ impl StoreFactory for JsonStoreFactory {
     }
 
     fn supported_patterns(&self) -> &[&str] {
-        &["*.json", "<any file path>"]
+        &["*.json", "<path without extension>"]
     }
 
     fn matches(&self, locator: &str) -> bool {
@@ -25,7 +25,7 @@ impl StoreFactory for JsonStoreFactory {
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("");
-        ext == "json" || (!locator.contains("://") && !matches!(ext, "sqlite" | "sqlite3" | "db"))
+        ext == "json" || (!locator.contains("://") && ext.is_empty())
     }
 
     fn create(
