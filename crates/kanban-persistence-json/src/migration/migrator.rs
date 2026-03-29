@@ -1,7 +1,5 @@
-use crate::error::PersistenceError;
-use crate::store::json_file_store::JsonEnvelope;
-use crate::traits::FormatVersion;
-use crate::PersistenceResult;
+use crate::json_file_store::JsonEnvelope;
+use kanban_persistence::{FormatVersion, PersistenceError, PersistenceResult};
 use serde_json::Value;
 use std::path::Path;
 
@@ -215,45 +213,9 @@ mod tests {
         assert!(v2_data["metadata"].is_object());
         assert!(v2_data["data"]["boards"].is_array());
 
-        // Check backup was removed after successful verification
         assert!(
             !file_path.with_extension("v1.backup").exists(),
             "Backup should be removed after successful migration"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_migrate_v1_to_v2_with_backup_handling() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("test.json");
-
-        // Create V1 data
-        let v1_data = json!({
-            "boards": [{ "id": "1", "name": "Test Board" }],
-            "columns": [],
-            "cards": []
-        });
-
-        tokio::fs::write(&file_path, v1_data.to_string())
-            .await
-            .unwrap();
-
-        // Perform migration
-        Migrator::migrate(FormatVersion::V1, FormatVersion::V2, &file_path)
-            .await
-            .unwrap();
-
-        // Verify migrated file is valid V2
-        let migrated = tokio::fs::read_to_string(&file_path).await.unwrap();
-        let v2_data: Value = serde_json::from_str(&migrated).unwrap();
-        assert_eq!(v2_data["version"], 2);
-        assert_eq!(v2_data["data"], v1_data);
-
-        // Verify backup was cleaned up after successful migration
-        let backup_path = file_path.with_extension("v1.backup");
-        assert!(
-            !backup_path.exists(),
-            "Backup should be removed after successful migration and verification"
         );
     }
 }

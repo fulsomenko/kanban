@@ -5,12 +5,16 @@ use kanban_domain::commands::Command;
 use kanban_domain::commands::CommandContext;
 use kanban_domain::KanbanResult;
 use kanban_domain::{ArchivedCard, Board, Card, Column, HistoryManager, Snapshot, Sprint};
-use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+pub use kanban_domain::commands;
 pub use snapshot::TuiSnapshot;
+
+type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
+type SaveChannel = (mpsc::Sender<Snapshot>, mpsc::Receiver<Snapshot>);
 
 /// Manages state mutations and persistence with immediate auto-saving
 ///
@@ -33,7 +37,7 @@ pub use snapshot::TuiSnapshot;
 /// state_manager.save(&snapshot).await?;
 /// ```
 pub struct StateManager {
-    store: Option<Arc<JsonFileStore>>,
+    store: Option<DynStore>,
     command_queue: VecDeque<String>,
     dirty: bool,
     instance_id: uuid::Uuid,
@@ -53,20 +57,28 @@ impl StateManager {
     /// - StateManager instance
     /// - Optional receiver for async save processing (snapshots to save)
     /// - Optional receiver for save completion notifications
+    ///
+    /// Storage backend is selected based on file extension:
+    /// - `.db` or `.sqlite` -> SQLite (requires `sqlite` feature)
+    /// - `.json` or other -> JSON file
+    #[allow(clippy::type_complexity)]
     pub fn new(
         save_file: Option<String>,
-    ) -> (
+    ) -> kanban_domain::KanbanResult<(
         Self,
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
-    ) {
+    )> {
         // Use bounded channel (capacity: 100) to prevent unbounded memory growth
         // If queue is full, save_if_needed() will log a warning instead of blocking
         const SAVE_QUEUE_CAPACITY: usize = 100;
 
-        let (store, instance_id, save_channel) = if let Some(path) = save_file {
-            let store = Arc::new(JsonFileStore::new(&path));
-            let id = store.instance_id();
+        let (store, instance_id, save_channel): (
+            Option<DynStore>,
+            uuid::Uuid,
+            Option<SaveChannel>,
+        ) = if let Some(ref path) = save_file {
+            let (store, id) = Self::create_store(path)?;
             let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
             (Some(store), id, Some((tx, rx)))
         } else {
@@ -95,7 +107,13 @@ impl StateManager {
             history: HistoryManager::new(),
         };
 
-        (manager, save_rx, Some(save_completion_rx))
+        Ok((manager, save_rx, Some(save_completion_rx)))
+    }
+
+    fn create_store(path: &str) -> kanban_domain::KanbanResult<(DynStore, uuid::Uuid)> {
+        let store = kanban_service::make_store(path)?;
+        let id = store.instance_id();
+        Ok((store, id))
     }
 
     /// Execute a command and mark state as dirty
@@ -205,7 +223,7 @@ impl StateManager {
     }
 
     /// Get the store reference
-    pub fn store(&self) -> Option<&Arc<JsonFileStore>> {
+    pub fn store(&self) -> Option<&DynStore> {
         self.store.as_ref()
     }
 
@@ -426,13 +444,13 @@ mod tests {
 
     #[test]
     fn test_state_manager_creation() {
-        let (manager, _rx, _completion_rx) = StateManager::new(None);
+        let (manager, _rx, _completion_rx) = StateManager::new(None).unwrap();
         assert!(!manager.is_dirty());
     }
 
     #[test]
     fn test_dirty_flag_after_execute() {
-        let (mut manager, _rx, _completion_rx) = StateManager::new(None);
+        let (mut manager, _rx, _completion_rx) = StateManager::new(None).unwrap();
 
         struct DummyCommand;
         impl Command for DummyCommand {
@@ -446,7 +464,7 @@ mod tests {
         }
 
         let command = Box::new(DummyCommand);
-        let (mut app, _app_rx) = App::new(None);
+        let (mut app, _app_rx) = App::new(None).unwrap();
         manager.execute(&mut app, command).unwrap();
 
         assert!(manager.is_dirty());

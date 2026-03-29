@@ -45,15 +45,7 @@ async fn run() -> anyhow::Result<()> {
         None => {
             #[cfg(feature = "tui")]
             {
-                if let Some(ref file_path) = cli.file {
-                    if !std::path::Path::new(file_path).exists() {
-                        let empty_state =
-                            kanban_persistence::JsonEnvelope::empty().to_json_string()?;
-                        std::fs::write(file_path, empty_state)?;
-                        tracing::info!("Created new board file: {}", file_path);
-                    }
-                }
-                let (mut app, save_rx) = App::new(cli.file);
+                let (mut app, save_rx) = App::new(cli.file)?;
                 app.run(save_rx).await?;
             }
             #[cfg(not(feature = "tui"))]
@@ -63,6 +55,9 @@ async fn run() -> anyhow::Result<()> {
         }
         Some(Commands::Completions { shell }) => {
             clap_complete::generate(shell, &mut Cli::command(), "kanban", &mut std::io::stdout());
+        }
+        Some(Commands::Migrate(args)) => {
+            handlers::migrate::handle(args).await?;
         }
         Some(cmd) => {
             let file_path = cli.file.ok_or_else(|| {
@@ -93,6 +88,7 @@ async fn run() -> anyhow::Result<()> {
                     handlers::export::handle_import(&mut ctx, args).await?;
                 }
                 Commands::Completions { .. } => unreachable!(),
+                Commands::Migrate(_) => unreachable!(),
             }
         }
     }

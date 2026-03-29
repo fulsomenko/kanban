@@ -1,4 +1,4 @@
-use crate::PersistenceResult;
+use kanban_persistence::PersistenceResult;
 use std::path::Path;
 use tokio::fs;
 

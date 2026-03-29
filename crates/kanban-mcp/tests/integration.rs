@@ -1,11 +1,13 @@
 use kanban_domain::KanbanOperations;
 use kanban_mcp::context::McpContext;
+use kanban_persistence_json::JsonFileStore;
 use kanban_service::KanbanContext;
+use std::sync::Arc;
 use tempfile::TempDir;
 
 async fn setup() -> (McpContext, TempDir) {
     let dir = TempDir::new().expect("failed to create temp dir");
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
     let ctx = McpContext::new(&path_str).await.unwrap();
     (ctx, dir)
@@ -274,7 +276,7 @@ async fn export_import_roundtrip() {
 #[tokio::test]
 async fn test_create_board_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
     let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
@@ -283,7 +285,9 @@ async fn test_create_board_persists() {
         .unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    let fresh = KanbanContext::load(Arc::new(JsonFileStore::new(&path_str)))
+        .await
+        .unwrap();
     let boards = fresh.list_boards().unwrap();
     assert_eq!(boards.len(), 1);
     assert_eq!(boards[0].name, "Persistent Board");
@@ -292,7 +296,7 @@ async fn test_create_board_persists() {
 #[tokio::test]
 async fn test_mutation_sequence_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
     let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
@@ -305,7 +309,9 @@ async fn test_mutation_sequence_persists() {
         .unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    let fresh = KanbanContext::load(Arc::new(JsonFileStore::new(&path_str)))
+        .await
+        .unwrap();
     assert_eq!(fresh.list_boards().unwrap().len(), 1);
     assert_eq!(fresh.list_columns(board.id).unwrap().len(), 1);
     assert_eq!(
@@ -320,7 +326,7 @@ async fn test_mutation_sequence_persists() {
 #[tokio::test]
 async fn test_delete_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
     let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
@@ -330,7 +336,9 @@ async fn test_delete_persists() {
     mcp_ctx.delete_board(board.id).unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    let fresh = KanbanContext::load(Arc::new(JsonFileStore::new(&path_str)))
+        .await
+        .unwrap();
     assert!(fresh.list_boards().unwrap().is_empty());
 }
 

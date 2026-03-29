@@ -14,10 +14,14 @@ categories = ["command-line-utilities"]
 name = "kanban-mcp"
 path = "src/main.rs"
 
+[features]
+sqlite = ["kanban-service/sqlite-storage"]
+
 [dependencies]
 # Workspace crates
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
 kanban-service = { path = "../kanban-service", version = "^0.3" }
 
 # MCP SDK
@@ -45,6 +49,7 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
 kanban-service = { path = "../kanban-service", version = "^0.3" }
 tempfile.workspace = true
 tokio.workspace = true

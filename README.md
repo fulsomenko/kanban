@@ -147,13 +147,15 @@ Built with **Rust** for speed and reliability:
 
 ```
 crates/
-├── kanban-core        → Shared traits, error handling & reusable state primitives
-├── kanban-domain      → Domain models, business logic, filtering & sorting
-├── kanban-persistence → JSON storage, versioning & migrations
-├── kanban-service     → Service layer: KanbanContext, persistence orchestration
-├── kanban-tui         → Terminal UI with ratatui
-├── kanban-cli         → CLI entry point
-└── kanban-mcp         → Model Context Protocol server for LLM integration
+├── kanban-core               → Shared traits, error handling & reusable state primitives
+├── kanban-domain             → Domain models, business logic, filtering & sorting
+├── kanban-persistence        → Persistence traits, registry & shared types
+├── kanban-persistence-json   → JSON file storage backend
+├── kanban-persistence-sqlite → SQLite storage backend
+├── kanban-service            → Service layer: KanbanContext, persistence orchestration
+├── kanban-tui                → Terminal UI with ratatui
+├── kanban-cli                → CLI entry point
+└── kanban-mcp                → Model Context Protocol server for LLM integration
 ```
 
 ```mermaid
@@ -163,6 +165,10 @@ graph LR
     MCP[kanban-mcp] --> SVC
     TUI --> SVC
     SVC --> PER[kanban-persistence]
+    SVC -.-> JSON[kanban-persistence-json]
+    SVC -.-> SQL[kanban-persistence-sqlite]
+    JSON --> PER
+    SQL --> PER
     PER --> DOM[kanban-domain]
     DOM --> CORE[kanban-core]
 ```
@@ -175,8 +181,10 @@ graph LR
 
 ## Data & Persistence
 
-- **Format**: JSON-based import/export
-- **Automatic Migration**: V1 data files are automatically upgraded to V2 format on load with backup creation
+- **Pluggable Backends**: JSON and SQLite storage via a `StoreFactory` registry. Backend is selected by file extension: `.json` for JSON, `.sqlite`/`.sqlite3`/`.db` for SQLite
+- **JSON Backend**: V2 format with metadata envelope, automatic V1→V2 migration with backup creation, atomic writes
+- **SQLite Backend**: Relational schema with WAL mode, foreign keys, connection pooling, auto-created on first use
+- **Migration**: Convert between backends with `kanban <source> migrate <target>`
 - **Multi-Instance Support**:
   - Real-time file watching detects changes from other running instances
   - Automatic reload when no local changes exist
@@ -195,7 +203,7 @@ graph LR
 - [ ] Attachments, adding files to cards
 - [ ] Configurable keybindings
 - [ ] Audit log
-- [ ] Multiple storage backends (.md archive, SQL, MongoDB) with pluggable architecture
+- [x] Multiple storage backends (JSON, SQLite) with pluggable StoreFactory registry
 - [ ] HTTP API for remote board access and programmatic control
 - [ ] Collaborative features (multi-user, sync)
 

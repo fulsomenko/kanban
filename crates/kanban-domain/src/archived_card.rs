@@ -6,7 +6,7 @@ use crate::{
     column::ColumnId,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArchivedCard {
     pub card: Card,
     pub archived_at: DateTime<Utc>,

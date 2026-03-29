@@ -43,6 +43,8 @@ pub enum Commands {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Migrate data between storage backends
+    Migrate(MigrateArgs),
 }
 
 // Board commands
@@ -388,6 +390,17 @@ pub struct SprintUpdateArgs {
     pub clear_start_date: bool,
     #[arg(long)]
     pub clear_end_date: bool,
+}
+
+// Migrate command
+#[derive(Args)]
+pub struct MigrateArgs {
+    /// Path to source file
+    #[arg(long)]
+    pub from: String,
+    /// Path to destination file
+    #[arg(long)]
+    pub to: String,
 }
 
 // Export/Import commands

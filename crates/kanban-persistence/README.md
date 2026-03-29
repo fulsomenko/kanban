@@ -1,6 +1,6 @@
 # kanban-persistence
 
-Persistence layer for the kanban project management tool. Handles JSON storage, format versioning, and data migration.
+Persistence trait layer for the kanban project management tool. Defines the storage abstractions, factory registry, and shared types used by all storage backends.
 
 ## Installation
 
@@ -11,68 +11,73 @@ Add to your `Cargo.toml`:
 kanban-persistence = { path = "../kanban-persistence" }
 ```
 
-## Features
+## Overview
 
-### Progressive Auto-Save
-
-- **Dirty Flag Tracking**: Changes are marked and queued for persistence
-- **Debounced Saving**: 500ms minimum interval between disk writes to prevent excessive I/O
-- **Atomic Writes**: Temporary file writes with atomic rename for crash safety
-- **Command Audit Log**: All commands are tracked for audit trails
-
-### Format Versioning
-
-- **V2 JSON Format**: Structured format with metadata and version tracking
-- **Automatic V1→V2 Migration**: Legacy files are transparently upgraded on first load
-- **Backup Creation**: V1 files backed up as `.v1.backup` before migration
-- **Version Detection**: Automatic format detection without user intervention
-
-### Multi-Instance Support
-
-- **Instance IDs**: Each application instance has a unique ID for coordination
-- **Last-Write-Wins**: Concurrent modifications resolved by latest timestamp
-- **File Watching**: Detects external changes for reload prompts
-- **Conflict Resolution**: Automatic merging strategies for safe concurrent access
+This crate is the **abstraction layer** between `kanban-service` and concrete storage backends (`kanban-persistence-json`, `kanban-persistence-sqlite`). It contains no backend-specific logic — only traits, shared types, and the registry that routes a locator string to the correct backend.
 
 ## API Reference
 
-### JsonFileStore
+### `PersistenceStore` trait
 
-Main persistence store implementation:
+Core async trait implemented by every storage backend:
 
 ```rust
-use kanban_persistence::{JsonFileStore, PersistenceStore};
-
-// Create store
-let store = JsonFileStore::new("board.json");
-
-// Get instance ID
-let instance_id = store.instance_id();
-
-// Save data
-let snapshot = StoreSnapshot {
-    data: serde_json::to_vec(&data)?,
-    metadata: PersistenceMetadata::new(instance_id),
-};
-store.save(snapshot).await?;
-
-// Load data (automatically migrates V1 to V2)
-let (snapshot, metadata) = store.load().await?;
+#[async_trait]
+pub trait PersistenceStore: Send + Sync {
+    async fn save(&self, snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata>;
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)>;
+    fn exists(&self) -> bool;
+    fn path(&self) -> &Path;
+    fn instance_id(&self) -> Uuid;
+}
 ```
 
-Persistence is consumed via `kanban-service::KanbanContext`, which owns a `JsonFileStore` and
-exposes `load`, `save`, and `reload` as high-level lifecycle methods. Direct use of
-`JsonFileStore` is only needed when building custom persistence consumers.
+### `StoreFactory` trait
+
+Backend registration interface. Each backend provides a factory that declares which locator patterns it supports:
+
+```rust
+pub trait StoreFactory: Send + Sync {
+    fn name(&self) -> &str;
+    fn supported_patterns(&self) -> &[&str];
+    fn matches(&self, locator: &str) -> bool;
+    fn create(&self, locator: &str) -> Result<Arc<dyn PersistenceStore>>;
+}
+```
+
+### `StoreRegistry`
+
+Manages factory registrations and routes locator strings to the matching backend:
+
+```rust
+let mut registry = StoreRegistry::new();
+registry.register(Box::new(SqliteStoreFactory));
+registry.register(Box::new(JsonStoreFactory));
+
+let store = registry.create_store("board.sqlite")?;
+```
+
+Factories are tried in registration order. The first factory whose `matches()` returns `true` wins.
+
+### Shared Types
+
+- `StoreSnapshot` — Contains `data: Vec<u8>` and `metadata: PersistenceMetadata`
+- `PersistenceMetadata` — Contains `instance_id: Uuid` and `saved_at: DateTime<Utc>`
+- `PersistenceEvent` — Events for file watching and change notification
+- `FormatVersion`, `MigrationStrategy` — Version detection and migration abstractions
+- `ConflictResolver` — Multi-instance conflict resolution
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    CORE[kanban-core] --> DOM[kanban-domain]
-    DOM --> PER[kanban-persistence]
-    PER --> SVC[kanban-service<br/>KanbanContext]
-    SVC --> TUI[kanban-tui]
-    SVC --> MCP[kanban-mcp]
+    SVC[kanban-service<br/>KanbanContext] --> PER[kanban-persistence<br/>traits + registry]
+    SVC -.-> JSON[kanban-persistence-json]
+    SVC -.-> SQL[kanban-persistence-sqlite]
+    JSON --> PER
+    SQL --> PER
+    PER --> DOM[kanban-domain]
+    DOM --> CORE[kanban-core]
 ```
 
 ### Command Pattern Flow
@@ -80,139 +85,52 @@ flowchart TD
 1. **Event Handler** collects data and creates Command
 2. **Command** is executed via `KanbanContext::execute()`
 3. **CommandContext** applies mutation to in-memory vecs
-4. **Save**: `KanbanContext::save()` serializes state and calls `JsonFileStore::save()`
-5. **Atomic Write** persists to disk with temp file + rename
+4. **Save**: `KanbanContext::save()` serializes state and calls `PersistenceStore::save()`
+5. Backend writes to its storage format (JSON file, SQLite database, etc.)
 
-## Format Specification
+## Progressive Auto-Save
 
-### V2 Format
+- **Dirty Flag Tracking**: Changes are marked and queued for persistence
+- **Debounced Saving**: Configurable minimum interval between writes to prevent excessive I/O
+- **Command Audit Log**: All commands are tracked for audit trails
 
-```json
-{
-  "version": 2,
-  "metadata": {
-    "instance_id": "uuid-here",
-    "saved_at": "2024-01-15T10:30:00Z"
-  },
-  "data": {
-    "boards": [],
-    "columns": [],
-    "cards": [],
-    "sprints": [],
-    "archived_cards": []
-  }
-}
-```
+## Multi-Instance Support
 
-### V1 Format (Deprecated)
-
-Legacy format without version field or metadata:
-
-```json
-{
-  "boards": [],
-  "columns": [],
-  "cards": [],
-  "sprints": []
-}
-```
-
-Migration automatically adds metadata and wraps data.
-
-## Migration Strategy
-
-### Automatic V1→V2 Migration
-
-1. **Detection**: `Migrator::detect_version()` checks for `version` field
-2. **Backup**: Original V1 file copied to `.v1.backup`
-3. **Transform**: Data wrapped with V2 metadata
-4. **Write**: Migrated file written atomically
-5. **Logging**: Migration progress logged for user visibility
-
-### Manual Migration
-
-```rust
-use kanban_persistence::migration::{Migrator, FormatVersion};
-
-// Detect current version
-let version = Migrator::detect_version("board.json").await?;
-
-// Migrate if needed
-if version == FormatVersion::V1 {
-    Migrator::migrate(FormatVersion::V1, FormatVersion::V2, "board.json").await?;
-}
-```
-
-## Performance Characteristics
-
-### Debouncing Benefits
-
-- **Reduced I/O**: Prevents disk thrashing during rapid edits
-- **Better Responsiveness**: 500ms debounce balances persistence with UI responsiveness
-- **Predictable Load**: Steady-state save frequency ~2 saves/second maximum
-
-### Atomic Write Safety
-
-- **Crash Safety**: Incomplete writes cannot corrupt file
-- **Two-Phase Commit**: Write to temp, then atomic rename
-- **Recovery**: Interrupted writes leave original file intact
-
-## Examples
-
-### Load, Mutate, Save via KanbanContext
-
-```rust
-use kanban_service::KanbanContext;
-use kanban_domain::KanbanOperations;
-
-let mut ctx = KanbanContext::load_json("board.json").await?;
-
-let board = ctx.create_board("My Project".into(), None)?;
-ctx.save().await?;
-
-// Pick up changes written by another process
-ctx.reload().await?;
-```
-
-### Handling Concurrent Modifications
-
-```rust
-// When file is modified externally (multi-instance editing)
-// KanbanContext::reload() re-reads state from disk
-// mutating_op! in kanban-mcp calls reload() before every write
-// Last-write-wins strategy automatically applied
-```
+- **Instance IDs**: Each application instance has a unique ID for coordination
+- **Last-Write-Wins**: Concurrent modifications resolved by latest timestamp
+- **File Watching**: Detects external changes for reload prompts
+- **Conflict Resolution**: Pluggable strategies via `ConflictResolver` trait
 
 ## Error Handling
 
-All public APIs return `KanbanResult<T>`:
+All public APIs return `PersistenceResult<T>`:
 
 ```rust
-use kanban_persistence::JsonFileStore;
-
 match store.load().await {
-    Ok((snapshot, metadata)) => {
-        // Handle loaded data
-    }
-    Err(e) => {
-        // Could be serialization error, missing file, or version error
-        eprintln!("Failed to load: {}", e);
-    }
+    Ok((snapshot, metadata)) => { /* handle loaded data */ }
+    Err(e) => { /* serialization error, missing file, version error, etc. */ }
 }
 ```
 
+## Available Backends
+
+| Backend | Crate | Patterns | Description |
+|---------|-------|----------|-------------|
+| JSON | `kanban-persistence-json` | `*.json`, any non-URI path | V2 format, atomic writes, V1 migration |
+| SQLite | `kanban-persistence-sqlite` | `*.sqlite`, `*.sqlite3`, `*.db` | WAL mode, relational schema, connection pooling |
+
 ## Dependencies
 
-- `kanban-core` - Foundation types and traits
-- `kanban-domain` - Domain models
-- `serde`, `serde_json` - Serialization
-- `tokio` - Async runtime
-- `uuid` - ID generation
-- `chrono` - Timestamps
-- `async-trait` - Async trait support
-- `thiserror` - Error handling
-- `notify` - File watching
+- `kanban-core` — Foundation types and traits
+- `kanban-domain` — Domain models
+- `serde`, `serde_json` — Serialization
+- `tokio` — Async runtime
+- `uuid` — ID generation
+- `chrono` — Timestamps
+- `async-trait` — Async trait support
+- `thiserror` — Error handling
+- `notify` — File watching
 
 ## License
 
-Apache 2.0 - See [LICENSE.md](../../LICENSE.md) for details
+Apache 2.0 — See [LICENSE.md](../../LICENSE.md) for details

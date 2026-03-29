@@ -63,6 +63,9 @@ pub trait PersistenceStore: Send + Sync {
 
     /// Get the path to the store file
     fn path(&self) -> &Path;
+
+    /// Get the unique instance ID for this store
+    fn instance_id(&self) -> uuid::Uuid;
 }
 
 /// Trait for detecting changes to the storage file

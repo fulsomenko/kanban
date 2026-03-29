@@ -87,14 +87,14 @@
         <div class="card">
           <h3 class="card-title">🛠️ Developer Workflow</h3>
           <p class="card-description">
-            Automatic git branch names from cards, sprint-based card prefixes (e.g., KAN-123), external editor support (vim, nvim, emacs), and JSON import/export.
+            Automatic git branch names from cards, sprint-based card prefixes (e.g., KAN-123), external editor support (vim, nvim, emacs), JSON and SQLite storage, import/export.
           </p>
         </div>
 
         <div class="card">
           <h3 class="card-title">🔒 Local-First</h3>
           <p class="card-description">
-            All data stored locally in JSON format. No cloud dependencies, full privacy and control, atomic saves with crash protection.
+            All data stored locally in JSON or SQLite format. No cloud dependencies, full privacy and control, atomic saves with crash protection.
           </p>
         </div>
       </div>
@@ -114,6 +114,7 @@
             <li><span class="status-badge completed">[x]</span> Card dependencies (parent-child and blocking)</li>
             <li><span class="status-badge completed">[x]</span> Undo/redo support (<code>u</code>/<code>U</code>)</li>
             <li><span class="status-badge completed">[x]</span> MCP server for LLM integration</li>
+            <li><span class="status-badge completed">[x]</span> Multiple storage backends (JSON, SQLite) with pluggable architecture</li>
           </ul>
         </div>
 
@@ -124,7 +125,6 @@
             <li><span class="status-badge planned">[ ]</span> HTTP API for remote board access</li>
             <li><span class="status-badge planned">[ ]</span> Collaborative features (multi-user, sync)</li>
             <li><span class="status-badge planned">[ ]</span> Web UI to complement TUI and CLI</li>
-            <li><span class="status-badge planned">[ ]</span> Multiple storage backends (markdown, SQL)</li>
             <li><span class="status-badge planned">[ ]</span> Configurable keybindings</li>
             <li><span class="status-badge planned">[ ]</span> Audit log for compliance tracking</li>
           </ul>

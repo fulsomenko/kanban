@@ -5,14 +5,18 @@ set -uo pipefail
 # - kanban-core: no internal deps
 # - kanban-domain: depends on kanban-core
 # - kanban-persistence: depends on kanban-core, kanban-domain
-# - kanban-service: depends on kanban-core, kanban-domain, kanban-persistence
-# - kanban-tui: depends on kanban-core, kanban-domain, kanban-persistence
-# - kanban-mcp: depends on kanban-core, kanban-domain, kanban-persistence, kanban-service
+# - kanban-persistence-json: depends on kanban-core, kanban-domain, kanban-persistence
+# - kanban-persistence-sqlite: depends on kanban-core, kanban-domain, kanban-persistence
+# - kanban-service: depends on kanban-core, kanban-domain, kanban-persistence, kanban-persistence-json
+# - kanban-tui: depends on kanban-core, kanban-domain, kanban-persistence, kanban-persistence-json, kanban-persistence-sqlite
+# - kanban-mcp: depends on kanban-core, kanban-domain, kanban-persistence, kanban-persistence-json, kanban-persistence-sqlite, kanban-service
 # - kanban-cli: depends on all above
 CRATES=(
   "crates/kanban-core"
   "crates/kanban-domain"
   "crates/kanban-persistence"
+  "crates/kanban-persistence-json"
+  "crates/kanban-persistence-sqlite"
   "crates/kanban-service"
   "crates/kanban-tui"
   "crates/kanban-mcp"

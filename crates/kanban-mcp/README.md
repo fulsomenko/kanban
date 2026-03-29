@@ -12,8 +12,8 @@ and persist state after every mutating operation.
 graph TD
     CLIENT[MCP Client<br/>Claude / Cursor / etc.] -->|JSON-RPC| MCP[kanban-mcp<br/>McpContext]
     MCP --> SVC[KanbanContext<br/>kanban-service]
-    SVC --> STORE[JsonFileStore<br/>kanban-persistence]
-    STORE --> FILE[kanban.json]
+    SVC --> STORE[PersistenceStore<br/>kanban-persistence]
+    STORE --> STORAGE[*.json / *.sqlite / *.db]
 ```
 
 ### Concurrency Model

@@ -8,17 +8,27 @@ repository.workspace = true
 homepage.workspace = true
 description = "Shared service layer implementing KanbanOperations over a pluggable PersistenceStore"
 
+[features]
+default = ["json-storage"]
+json-storage = ["dep:kanban-persistence-json"]
+sqlite-storage = ["dep:kanban-persistence-sqlite"]
+test-helpers = ["dep:tempfile"]
+
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3", optional = true }
+kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.3", optional = true }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }

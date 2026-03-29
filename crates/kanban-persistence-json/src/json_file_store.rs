@@ -1,9 +1,10 @@
 use crate::atomic_writer::AtomicWriter;
 use crate::conflict::FileMetadata;
-use crate::error::PersistenceError;
 use crate::migration::Migrator;
-use crate::traits::{FormatVersion, PersistenceMetadata, PersistenceStore, StoreSnapshot};
-use crate::PersistenceResult;
+use kanban_persistence::{
+    FormatVersion, PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore,
+    StoreSnapshot,
+};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -94,7 +95,8 @@ impl PersistenceStore for JsonFileStore {
     async fn save(&self, mut snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
         // Check for external file modifications before saving
         if self.path.exists() {
-            let current_metadata = FileMetadata::from_file(&self.path)?;
+            let current_metadata =
+                FileMetadata::from_file(&self.path).map_err(PersistenceError::Io)?;
 
             // Compare with last known metadata
             let guard = self.lock_metadata();
@@ -201,6 +203,10 @@ impl PersistenceStore for JsonFileStore {
 
     fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn instance_id(&self) -> Uuid {
+        self.instance_id
     }
 }
 

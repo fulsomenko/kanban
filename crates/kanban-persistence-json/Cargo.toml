@@ -1,0 +1,29 @@
+[package]
+name = "kanban-persistence-json"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "JSON file storage backend for the kanban project management tool"
+keywords = ["kanban", "persistence", "json", "storage"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
+kanban-core = { path = "../kanban-core", version = "^0.3" }
+kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+tokio.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+kanban-service = { path = "../kanban-service", version = "^0.3", features = ["test-helpers"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }

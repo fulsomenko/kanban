@@ -1,5 +1,4 @@
-use crate::traits::{FormatVersion, MigrationStrategy};
-use crate::PersistenceResult;
+use kanban_persistence::{FormatVersion, MigrationStrategy, PersistenceResult};
 use std::path::Path;
 
 /// V1 to V2 format migration strategy
@@ -70,7 +69,6 @@ mod tests {
 
         assert_eq!(result, file_path);
 
-        // Verify it was migrated
         let migrated = tokio::fs::read_to_string(&file_path).await.unwrap();
         let data: serde_json::Value = serde_json::from_str(&migrated).unwrap();
         assert_eq!(data["version"], 2);

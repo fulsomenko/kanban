@@ -6,7 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Persistence layer for the kanban project management tool with progressive saving and multi-instance support"
+description = "Persistence traits and shared types for the kanban project management tool"
 keywords = ["kanban", "persistence", "storage", "file-watching"]
 categories = ["command-line-utilities", "development-tools"]
 
@@ -30,10 +30,10 @@ chrono.workspace = true
 
 # File operations
 notify.workspace = true
-tempfile.workspace = true
 
 # Logging
 tracing.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
+tempfile.workspace = true
