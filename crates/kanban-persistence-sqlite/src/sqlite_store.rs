@@ -13,6 +13,7 @@ use crate::helpers::{db_err, parse_datetime, parse_uuid, ser_err, SnapshotData, 
 use crate::upserts;
 
 const SCHEMA: &str = include_str!("schema.sql");
+const CURRENT_SCHEMA_VERSION: i32 = 1;
 
 pub struct SqliteStore {
     path: PathBuf,
@@ -63,6 +64,8 @@ impl SqliteStore {
                     .execute(&pool)
                     .await
                     .map_err(|e| PersistenceError::Database(e.to_string()))?;
+
+                migrate(&pool).await?;
 
                 Ok(pool)
             })
@@ -306,6 +309,25 @@ impl SqliteStore {
     }
 }
 
+async fn migrate(pool: &Pool<Sqlite>) -> PersistenceResult<()> {
+    let version: i32 = sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .unwrap_or(0);
+
+    if version > CURRENT_SCHEMA_VERSION {
+        return Err(PersistenceError::Database(format!(
+            "database schema version ({version}) is newer than supported ({CURRENT_SCHEMA_VERSION})"
+        )));
+    }
+
+    // Version 0 → 1: initial schema (handled by CREATE IF NOT EXISTS above)
+    // Future: if version < 2 { ALTER TABLE ... ; update schema_version }
+
+    Ok(())
+}
+
 #[async_trait]
 impl PersistenceStore for SqliteStore {
     async fn save(&self, mut snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
@@ -326,8 +348,11 @@ impl PersistenceStore for SqliteStore {
                 .map_err(db_err)?;
 
         if let Some((db_instance_id, db_saved_at)) = existing_meta {
-            let guard = self.lock_metadata().await;
-            if let Some(ref last_known) = *guard {
+            let last_known = {
+                let guard = self.lock_metadata().await;
+                guard.clone()
+            };
+            if let Some(ref last_known) = last_known {
                 let db_instance = parse_uuid(&db_instance_id)?;
                 let db_time = parse_datetime(&db_saved_at)?;
 
@@ -717,6 +742,8 @@ mod tests {
                 "id": uuid::Uuid::new_v4().to_string(),
                 "column_id": col_id,
                 "title": "Test",
+                "priority": "Medium",
+                "status": "Todo",
                 "position": 0, "card_number": 0
             })],
             archived_cards: vec![],
