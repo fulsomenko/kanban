@@ -7,14 +7,14 @@ PRAGMA journal_mode=WAL;
 -- Metadata table for tracking persistence state and conflict detection
 CREATE TABLE IF NOT EXISTS metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton row
-    instance_id VARCHAR(36) NOT NULL,
+    instance_id TEXT NOT NULL,
     saved_at TEXT NOT NULL,
     schema_version INTEGER NOT NULL DEFAULT 1
 );
 
 -- Boards table
 CREATE TABLE IF NOT EXISTS boards (
-    id VARCHAR(36) PRIMARY KEY,
+    id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
     sprint_prefix TEXT,
@@ -24,16 +24,18 @@ CREATE TABLE IF NOT EXISTS boards (
     sprint_duration_days INTEGER,
     sprint_name_used_count INTEGER NOT NULL DEFAULT 0,
     next_sprint_number INTEGER NOT NULL DEFAULT 1,
-    active_sprint_id VARCHAR(36),
+    active_sprint_id TEXT,
     task_list_view TEXT NOT NULL DEFAULT 'Flat',
-    completion_column_id VARCHAR(36),
+    completion_column_id TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (active_sprint_id) REFERENCES sprints(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY (completion_column_id) REFERENCES columns(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED
 );
 
 -- Board sprint names
 CREATE TABLE IF NOT EXISTS board_sprint_names (
-    board_id VARCHAR(36) NOT NULL,
+    board_id TEXT NOT NULL,
     position INTEGER NOT NULL,
     name TEXT NOT NULL,
     PRIMARY KEY (board_id, position),
@@ -42,7 +44,7 @@ CREATE TABLE IF NOT EXISTS board_sprint_names (
 
 -- Board prefix counters
 CREATE TABLE IF NOT EXISTS board_prefix_counters (
-    board_id VARCHAR(36) NOT NULL,
+    board_id TEXT NOT NULL,
     prefix TEXT NOT NULL,
     counter INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (board_id, prefix),
@@ -51,7 +53,7 @@ CREATE TABLE IF NOT EXISTS board_prefix_counters (
 
 -- Board sprint counters
 CREATE TABLE IF NOT EXISTS board_sprint_counters (
-    board_id VARCHAR(36) NOT NULL,
+    board_id TEXT NOT NULL,
     prefix TEXT NOT NULL,
     counter INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (board_id, prefix),
@@ -60,8 +62,8 @@ CREATE TABLE IF NOT EXISTS board_sprint_counters (
 
 -- Columns table
 CREATE TABLE IF NOT EXISTS columns (
-    id VARCHAR(36) PRIMARY KEY,
-    board_id VARCHAR(36) NOT NULL,
+    id TEXT PRIMARY KEY,
+    board_id TEXT NOT NULL,
     name TEXT NOT NULL,
     position INTEGER NOT NULL,
     wip_limit INTEGER,
@@ -72,8 +74,8 @@ CREATE TABLE IF NOT EXISTS columns (
 
 -- Sprints table (defined before cards since cards reference sprints)
 CREATE TABLE IF NOT EXISTS sprints (
-    id VARCHAR(36) PRIMARY KEY,
-    board_id VARCHAR(36) NOT NULL,
+    id TEXT PRIMARY KEY,
+    board_id TEXT NOT NULL,
     sprint_number INTEGER NOT NULL,
     name_index INTEGER,
     prefix TEXT,
@@ -88,8 +90,8 @@ CREATE TABLE IF NOT EXISTS sprints (
 
 -- Cards table (holds both active and archived cards)
 CREATE TABLE IF NOT EXISTS cards (
-    id VARCHAR(36) PRIMARY KEY,
-    column_id VARCHAR(36) NOT NULL,
+    id TEXT PRIMARY KEY,
+    column_id TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
     priority TEXT NOT NULL DEFAULT 'Medium',
@@ -98,7 +100,7 @@ CREATE TABLE IF NOT EXISTS cards (
     due_date TEXT,
     points INTEGER,
     card_number INTEGER NOT NULL DEFAULT 0,
-    sprint_id VARCHAR(36),
+    sprint_id TEXT,
     assigned_prefix TEXT,
     card_prefix TEXT,
     created_at TEXT NOT NULL,
@@ -111,8 +113,8 @@ CREATE TABLE IF NOT EXISTS cards (
 -- Sprint logs
 CREATE TABLE IF NOT EXISTS sprint_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    card_id VARCHAR(36) NOT NULL,
-    sprint_id VARCHAR(36) NOT NULL,
+    card_id TEXT NOT NULL,
+    sprint_id TEXT NOT NULL,
     sprint_number INTEGER NOT NULL,
     sprint_name TEXT,
     started_at TEXT NOT NULL,
@@ -125,17 +127,17 @@ CREATE INDEX IF NOT EXISTS idx_sprint_logs_card_id ON sprint_logs(card_id);
 
 -- Archived cards metadata (card data lives in cards table)
 CREATE TABLE IF NOT EXISTS archived_cards (
-    card_id VARCHAR(36) PRIMARY KEY,
+    card_id TEXT PRIMARY KEY,
     archived_at TEXT NOT NULL,
-    original_column_id VARCHAR(36),
+    original_column_id TEXT NOT NULL,
     original_position INTEGER NOT NULL,
     FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
 -- Card dependency edges
 CREATE TABLE IF NOT EXISTS card_edges (
-    source_id VARCHAR(36) NOT NULL,
-    target_id VARCHAR(36) NOT NULL,
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
     edge_type TEXT NOT NULL,
     direction TEXT NOT NULL,
     weight REAL,
