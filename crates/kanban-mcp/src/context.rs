@@ -14,7 +14,7 @@ pub struct McpContext {
 impl McpContext {
     pub async fn new(data_file: &str) -> KanbanResult<Self> {
         Ok(Self {
-            inner: KanbanContext::load(kanban_service::make_store(data_file)).await?,
+            inner: KanbanContext::load(kanban_service::make_store(data_file)?).await?,
         })
     }
 

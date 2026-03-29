@@ -15,7 +15,7 @@ pub struct CliContext {
 impl CliContext {
     pub async fn load(file_path: &str) -> KanbanResult<Self> {
         Ok(Self {
-            inner: KanbanContext::load(kanban_service::make_store(file_path)).await?,
+            inner: KanbanContext::load(kanban_service::make_store(file_path)?).await?,
         })
     }
 

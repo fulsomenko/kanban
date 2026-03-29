@@ -99,12 +99,12 @@ pub enum BoardField {
 impl App {
     pub fn new(
         save_file: Option<String>,
-    ) -> (
+    ) -> kanban_domain::KanbanResult<(
         Self,
         Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
-    ) {
+    )> {
         let app_config = AppConfig::load();
-        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone());
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone())?;
         let mut app = Self {
             should_quit: false,
             quit_with_pending: false,
@@ -143,7 +143,7 @@ impl App {
         app.migrate_sprint_logs();
         app.check_ended_sprints();
 
-        (app, save_rx)
+        Ok((app, save_rx))
     }
 
     pub fn quit(&mut self) {
@@ -1903,7 +1903,7 @@ fn restore_terminal(
 
 impl Default for App {
     fn default() -> Self {
-        let (app, _rx) = Self::new(None);
+        let (app, _rx) = Self::new(None).expect("App::new(None) should never fail");
         app
     }
 }

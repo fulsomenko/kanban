@@ -45,7 +45,7 @@ async fn run() -> anyhow::Result<()> {
         None => {
             #[cfg(feature = "tui")]
             {
-                let (mut app, save_rx) = App::new(cli.file);
+                let (mut app, save_rx) = App::new(cli.file)?;
                 app.run(save_rx).await?;
             }
             #[cfg(not(feature = "tui"))]

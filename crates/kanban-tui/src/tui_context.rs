@@ -25,14 +25,15 @@ pub struct TuiContext {
 }
 
 impl TuiContext {
+    #[allow(clippy::type_complexity)]
     pub fn new(
         save_file: Option<String>,
-    ) -> (
+    ) -> KanbanResult<(
         Self,
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
-    ) {
-        let (state_manager, save_rx, completion_rx) = StateManager::new(save_file);
+    )> {
+        let (state_manager, save_rx, completion_rx) = StateManager::new(save_file)?;
 
         let ctx = Self {
             boards: Vec::new(),
@@ -44,7 +45,7 @@ impl TuiContext {
             state_manager,
         };
 
-        (ctx, save_rx, completion_rx)
+        Ok((ctx, save_rx, completion_rx))
     }
 
     pub fn execute_command(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {

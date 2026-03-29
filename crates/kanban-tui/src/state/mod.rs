@@ -61,13 +61,14 @@ impl StateManager {
     /// Storage backend is selected based on file extension:
     /// - `.db` or `.sqlite` -> SQLite (requires `sqlite` feature)
     /// - `.json` or other -> JSON file
+    #[allow(clippy::type_complexity)]
     pub fn new(
         save_file: Option<String>,
-    ) -> (
+    ) -> kanban_domain::KanbanResult<(
         Self,
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
-    ) {
+    )> {
         // Use bounded channel (capacity: 100) to prevent unbounded memory growth
         // If queue is full, save_if_needed() will log a warning instead of blocking
         const SAVE_QUEUE_CAPACITY: usize = 100;
@@ -77,7 +78,7 @@ impl StateManager {
             uuid::Uuid,
             Option<SaveChannel>,
         ) = if let Some(ref path) = save_file {
-            let (store, id) = Self::create_store(path);
+            let (store, id) = Self::create_store(path)?;
             let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
             (Some(store), id, Some((tx, rx)))
         } else {
@@ -106,13 +107,13 @@ impl StateManager {
             history: HistoryManager::new(),
         };
 
-        (manager, save_rx, Some(save_completion_rx))
+        Ok((manager, save_rx, Some(save_completion_rx)))
     }
 
-    fn create_store(path: &str) -> (DynStore, uuid::Uuid) {
-        let store = kanban_service::make_store(path);
+    fn create_store(path: &str) -> kanban_domain::KanbanResult<(DynStore, uuid::Uuid)> {
+        let store = kanban_service::make_store(path)?;
         let id = store.instance_id();
-        (store, id)
+        Ok((store, id))
     }
 
     /// Execute a command and mark state as dirty
@@ -443,13 +444,13 @@ mod tests {
 
     #[test]
     fn test_state_manager_creation() {
-        let (manager, _rx, _completion_rx) = StateManager::new(None);
+        let (manager, _rx, _completion_rx) = StateManager::new(None).unwrap();
         assert!(!manager.is_dirty());
     }
 
     #[test]
     fn test_dirty_flag_after_execute() {
-        let (mut manager, _rx, _completion_rx) = StateManager::new(None);
+        let (mut manager, _rx, _completion_rx) = StateManager::new(None).unwrap();
 
         struct DummyCommand;
         impl Command for DummyCommand {
@@ -463,7 +464,7 @@ mod tests {
         }
 
         let command = Box::new(DummyCommand);
-        let (mut app, _app_rx) = App::new(None);
+        let (mut app, _app_rx) = App::new(None).unwrap();
         manager.execute(&mut app, command).unwrap();
 
         assert!(manager.is_dirty());
