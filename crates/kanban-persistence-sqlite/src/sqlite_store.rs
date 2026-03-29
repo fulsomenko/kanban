@@ -1,6 +1,7 @@
 use async_trait::async_trait;
-use kanban_core::KanbanResult;
-use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{
+    PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Pool, Row, Sqlite, Transaction};
@@ -82,14 +83,14 @@ impl SqliteStore {
         self.instance_id
     }
 
-    async fn get_pool(&self) -> KanbanResult<&Pool<Sqlite>> {
+    async fn get_pool(&self) -> PersistenceResult<&Pool<Sqlite>> {
         self.pool
             .get_or_try_init(|| async {
                 let options = SqliteConnectOptions::from_str(&format!(
                     "sqlite://{}?mode=rwc",
                     self.path.display()
                 ))
-                .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+                .map_err(|e| PersistenceError::Database(e.to_string()))?
                 .create_if_missing(true)
                 .foreign_keys(true);
 
@@ -97,13 +98,13 @@ impl SqliteStore {
                     .max_connections(5)
                     .connect_with(options)
                     .await
-                    .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+                    .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
                 // Initialize schema
                 sqlx::raw_sql(SCHEMA)
                     .execute(&pool)
                     .await
-                    .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+                    .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
                 Ok(pool)
             })
@@ -113,7 +114,7 @@ impl SqliteStore {
     async fn load_current_state(
         &self,
         pool: &Pool<Sqlite>,
-    ) -> KanbanResult<HashMap<String, serde_json::Value>> {
+    ) -> PersistenceResult<HashMap<String, serde_json::Value>> {
         let mut state = HashMap::new();
 
         // Load boards
@@ -125,10 +126,10 @@ impl SqliteStore {
         )
         .fetch_all(pool)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+        .map_err(|e| PersistenceError::Database(e.to_string()))?
         .into_iter()
         .map(|row| self.row_to_board(&row))
-        .collect::<KanbanResult<Vec<_>>>()?;
+        .collect::<PersistenceResult<Vec<_>>>()?;
 
         // Load columns
         let columns: Vec<serde_json::Value> = sqlx::query(
@@ -136,10 +137,10 @@ impl SqliteStore {
         )
         .fetch_all(pool)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+        .map_err(|e| PersistenceError::Database(e.to_string()))?
         .into_iter()
         .map(|row| self.row_to_column(&row))
-        .collect::<KanbanResult<Vec<_>>>()?;
+        .collect::<PersistenceResult<Vec<_>>>()?;
 
         // Load cards
         let cards: Vec<serde_json::Value> = sqlx::query(
@@ -149,10 +150,10 @@ impl SqliteStore {
         )
         .fetch_all(pool)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+        .map_err(|e| PersistenceError::Database(e.to_string()))?
         .into_iter()
         .map(|row| self.row_to_card(&row))
-        .collect::<KanbanResult<Vec<_>>>()?;
+        .collect::<PersistenceResult<Vec<_>>>()?;
 
         // Load sprints
         let sprints: Vec<serde_json::Value> = sqlx::query(
@@ -161,10 +162,10 @@ impl SqliteStore {
         )
         .fetch_all(pool)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+        .map_err(|e| PersistenceError::Database(e.to_string()))?
         .into_iter()
         .map(|row| self.row_to_sprint(&row))
-        .collect::<KanbanResult<Vec<_>>>()?;
+        .collect::<PersistenceResult<Vec<_>>>()?;
 
         // Load archived cards
         let archived_cards: Vec<serde_json::Value> = sqlx::query(
@@ -172,10 +173,10 @@ impl SqliteStore {
         )
         .fetch_all(pool)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+        .map_err(|e| PersistenceError::Database(e.to_string()))?
         .into_iter()
         .map(|row| self.row_to_archived_card(&row))
-        .collect::<KanbanResult<Vec<_>>>()?;
+        .collect::<PersistenceResult<Vec<_>>>()?;
 
         state.insert("boards".to_string(), serde_json::to_value(boards).unwrap());
         state.insert(
@@ -195,12 +196,12 @@ impl SqliteStore {
         Ok(state)
     }
 
-    fn row_to_board(&self, row: &sqlx::sqlite::SqliteRow) -> KanbanResult<serde_json::Value> {
+    fn row_to_board(&self, row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<serde_json::Value> {
         use kanban_domain::board::{Board, SortField, SortOrder};
         use std::collections::HashMap;
 
-        let db_err = |e: sqlx::Error| kanban_core::KanbanError::Database(e.to_string());
-        let ser_err = |e: serde_json::Error| kanban_core::KanbanError::Serialization(e.to_string());
+        let db_err = |e: sqlx::Error| PersistenceError::Database(e.to_string());
+        let ser_err = |e: serde_json::Error| PersistenceError::Serialization(e.to_string());
 
         let id_str: String = row.try_get("id").map_err(db_err)?;
         let sprint_names_json: String = row.try_get("sprint_names").map_err(db_err)?;
@@ -217,7 +218,7 @@ impl SqliteStore {
 
         let board = Board {
             id: Uuid::parse_str(&id_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?,
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?,
             name: row.try_get("name").map_err(db_err)?,
             description: row.try_get("description").map_err(db_err)?,
             sprint_prefix: row.try_get("sprint_prefix").map_err(db_err)?,
@@ -243,21 +244,21 @@ impl SqliteStore {
                 .as_deref()
                 .and_then(|s| Uuid::parse_str(s).ok()),
             created_at: chrono::DateTime::parse_from_rfc3339(&created_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc),
             updated_at: chrono::DateTime::parse_from_rfc3339(&updated_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc),
         };
 
         serde_json::to_value(&board).map_err(ser_err)
     }
 
-    fn row_to_column(&self, row: &sqlx::sqlite::SqliteRow) -> KanbanResult<serde_json::Value> {
+    fn row_to_column(&self, row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<serde_json::Value> {
         use kanban_domain::Column;
 
-        let db_err = |e: sqlx::Error| kanban_core::KanbanError::Database(e.to_string());
-        let ser_err = |e: serde_json::Error| kanban_core::KanbanError::Serialization(e.to_string());
+        let db_err = |e: sqlx::Error| PersistenceError::Database(e.to_string());
+        let ser_err = |e: serde_json::Error| PersistenceError::Serialization(e.to_string());
 
         let id_str: String = row.try_get("id").map_err(db_err)?;
         let board_id_str: String = row.try_get("board_id").map_err(db_err)?;
@@ -266,29 +267,29 @@ impl SqliteStore {
 
         let column = Column {
             id: Uuid::parse_str(&id_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?,
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?,
             board_id: Uuid::parse_str(&board_id_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?,
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?,
             name: row.try_get("name").map_err(db_err)?,
             position: row.try_get("position").map_err(db_err)?,
             wip_limit: row.try_get("wip_limit").map_err(db_err)?,
             created_at: chrono::DateTime::parse_from_rfc3339(&created_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc),
             updated_at: chrono::DateTime::parse_from_rfc3339(&updated_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc),
         };
 
         serde_json::to_value(&column).map_err(ser_err)
     }
 
-    fn row_to_card(&self, row: &sqlx::sqlite::SqliteRow) -> KanbanResult<serde_json::Value> {
+    fn row_to_card(&self, row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<serde_json::Value> {
         use kanban_domain::card::{Card, CardPriority, CardStatus};
         use kanban_domain::SprintLog;
 
-        let db_err = |e: sqlx::Error| kanban_core::KanbanError::Database(e.to_string());
-        let ser_err = |e: serde_json::Error| kanban_core::KanbanError::Serialization(e.to_string());
+        let db_err = |e: sqlx::Error| PersistenceError::Database(e.to_string());
+        let ser_err = |e: serde_json::Error| PersistenceError::Serialization(e.to_string());
 
         let id_str: String = row.try_get("id").map_err(db_err)?;
         let column_id_str: String = row.try_get("column_id").map_err(db_err)?;
@@ -304,9 +305,9 @@ impl SqliteStore {
 
         let card = Card {
             id: Uuid::parse_str(&id_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?,
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?,
             column_id: Uuid::parse_str(&column_id_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?,
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?,
             title: row.try_get("title").map_err(db_err)?,
             description: row.try_get("description").map_err(db_err)?,
             priority: serde_json::from_str(&format!("\"{}\"", priority_str))
@@ -324,10 +325,10 @@ impl SqliteStore {
             assigned_prefix: row.try_get("assigned_prefix").map_err(db_err)?,
             card_prefix: row.try_get("card_prefix").map_err(db_err)?,
             created_at: chrono::DateTime::parse_from_rfc3339(&created_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc),
             updated_at: chrono::DateTime::parse_from_rfc3339(&updated_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc),
             completed_at: completed_at_str
                 .as_deref()
@@ -340,11 +341,11 @@ impl SqliteStore {
         serde_json::to_value(&card).map_err(ser_err)
     }
 
-    fn row_to_sprint(&self, row: &sqlx::sqlite::SqliteRow) -> KanbanResult<serde_json::Value> {
+    fn row_to_sprint(&self, row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<serde_json::Value> {
         use kanban_domain::sprint::{Sprint, SprintStatus};
 
-        let db_err = |e: sqlx::Error| kanban_core::KanbanError::Database(e.to_string());
-        let ser_err = |e: serde_json::Error| kanban_core::KanbanError::Serialization(e.to_string());
+        let db_err = |e: sqlx::Error| PersistenceError::Database(e.to_string());
+        let ser_err = |e: serde_json::Error| PersistenceError::Serialization(e.to_string());
 
         let id_str: String = row.try_get("id").map_err(db_err)?;
         let board_id_str: String = row.try_get("board_id").map_err(db_err)?;
@@ -357,9 +358,9 @@ impl SqliteStore {
 
         let sprint = Sprint {
             id: Uuid::parse_str(&id_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?,
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?,
             board_id: Uuid::parse_str(&board_id_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?,
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?,
             sprint_number: row.try_get::<i32, _>("sprint_number").map_err(db_err)? as u32,
             name_index: name_index_raw.map(|v| v as usize),
             prefix: row.try_get("prefix").map_err(db_err)?,
@@ -375,10 +376,10 @@ impl SqliteStore {
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&chrono::Utc)),
             created_at: chrono::DateTime::parse_from_rfc3339(&created_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc),
             updated_at: chrono::DateTime::parse_from_rfc3339(&updated_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc),
         };
 
@@ -388,10 +389,10 @@ impl SqliteStore {
     fn row_to_archived_card(
         &self,
         row: &sqlx::sqlite::SqliteRow,
-    ) -> KanbanResult<serde_json::Value> {
+    ) -> PersistenceResult<serde_json::Value> {
         let card_data: String = row.get("card_data");
         let card: serde_json::Value = serde_json::from_str(&card_data)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         Ok(serde_json::json!({
             "card": card,
@@ -407,7 +408,7 @@ impl SqliteStore {
         table: Table,
         incoming: &[serde_json::Value],
         id_extractor: F,
-    ) -> KanbanResult<()>
+    ) -> PersistenceResult<()>
     where
         F: Fn(&serde_json::Value) -> Option<String>,
     {
@@ -418,7 +419,7 @@ impl SqliteStore {
         let existing_ids: std::collections::HashSet<String> = sqlx::query(table.select_ids_sql())
             .fetch_all(&mut **tx)
             .await
-            .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?
+            .map_err(|e| PersistenceError::Database(e.to_string()))?
             .into_iter()
             .map(|row| row.get::<String, _>("id"))
             .collect();
@@ -430,7 +431,7 @@ impl SqliteStore {
                 .bind(id)
                 .execute(&mut **tx)
                 .await
-                .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+                .map_err(|e| PersistenceError::Database(e.to_string()))?;
         }
 
         Ok(())
@@ -440,7 +441,7 @@ impl SqliteStore {
         &self,
         tx: &mut Transaction<'_, Sqlite>,
         board: &serde_json::Value,
-    ) -> KanbanResult<()> {
+    ) -> PersistenceResult<()> {
         let id = board["id"].as_str().unwrap_or_default();
         let name = board["name"].as_str().unwrap_or_default();
         let description = board["description"].as_str();
@@ -507,7 +508,7 @@ impl SqliteStore {
         .bind(updated_at)
         .execute(&mut **tx)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         Ok(())
     }
@@ -516,7 +517,7 @@ impl SqliteStore {
         &self,
         tx: &mut Transaction<'_, Sqlite>,
         column: &serde_json::Value,
-    ) -> KanbanResult<()> {
+    ) -> PersistenceResult<()> {
         let id = column["id"].as_str().unwrap_or_default();
         let board_id = column["board_id"].as_str().unwrap_or_default();
         let name = column["name"].as_str().unwrap_or_default();
@@ -544,7 +545,7 @@ impl SqliteStore {
         .bind(updated_at)
         .execute(&mut **tx)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         Ok(())
     }
@@ -553,7 +554,7 @@ impl SqliteStore {
         &self,
         tx: &mut Transaction<'_, Sqlite>,
         card: &serde_json::Value,
-    ) -> KanbanResult<()> {
+    ) -> PersistenceResult<()> {
         let id = card["id"].as_str().unwrap_or_default();
         let column_id = card["column_id"].as_str().unwrap_or_default();
         let title = card["title"].as_str().unwrap_or_default();
@@ -614,7 +615,7 @@ impl SqliteStore {
         .bind(&sprint_logs)
         .execute(&mut **tx)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         Ok(())
     }
@@ -623,7 +624,7 @@ impl SqliteStore {
         &self,
         tx: &mut Transaction<'_, Sqlite>,
         sprint: &serde_json::Value,
-    ) -> KanbanResult<()> {
+    ) -> PersistenceResult<()> {
         let id = sprint["id"].as_str().unwrap_or_default();
         let board_id = sprint["board_id"].as_str().unwrap_or_default();
         let sprint_number = sprint["sprint_number"].as_i64().unwrap_or(0) as i32;
@@ -664,7 +665,7 @@ impl SqliteStore {
         .bind(updated_at)
         .execute(&mut **tx)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         Ok(())
     }
@@ -673,11 +674,11 @@ impl SqliteStore {
         &self,
         tx: &mut Transaction<'_, Sqlite>,
         archived: &serde_json::Value,
-    ) -> KanbanResult<()> {
+    ) -> PersistenceResult<()> {
         let card = &archived["card"];
         let id = card["id"].as_str().unwrap_or_default();
         let card_data = serde_json::to_string(card)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let archived_at = archived["archived_at"].as_str().unwrap_or_default();
         let original_column_id = archived["original_column_id"].as_str().unwrap_or_default();
         let original_position = archived["original_position"].as_i64().unwrap_or(0) as i32;
@@ -698,7 +699,7 @@ impl SqliteStore {
         .bind(original_position)
         .execute(&mut **tx)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         Ok(())
     }
@@ -713,7 +714,7 @@ impl SqliteStore {
 
 #[async_trait]
 impl PersistenceStore for SqliteStore {
-    async fn save(&self, mut snapshot: StoreSnapshot) -> KanbanResult<PersistenceMetadata> {
+    async fn save(&self, mut snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
         let pool = self.get_pool().await?;
 
         // Check for conflicts using metadata table
@@ -721,19 +722,19 @@ impl PersistenceStore for SqliteStore {
             sqlx::query_as("SELECT instance_id, saved_at FROM metadata WHERE id = 1")
                 .fetch_optional(pool)
                 .await
-                .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+                .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         if let Some((db_instance_id, db_saved_at)) = existing_meta {
             let guard = self.lock_metadata();
             if let Some(ref last_known) = *guard {
                 let db_instance = Uuid::parse_str(&db_instance_id)
-                    .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+                    .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
                 let db_time = chrono::DateTime::parse_from_rfc3339(&db_saved_at)
-                    .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                    .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                     .with_timezone(&chrono::Utc);
 
                 if db_instance != last_known.instance_id || db_time != last_known.saved_at {
-                    return Err(kanban_core::KanbanError::ConflictDetected {
+                    return Err(PersistenceError::ConflictDetected {
                         path: self.path.to_string_lossy().to_string(),
                         source: None,
                     });
@@ -747,13 +748,13 @@ impl PersistenceStore for SqliteStore {
 
         // Parse incoming data
         let data: SnapshotData = serde_json::from_slice(&snapshot.data)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         // Begin transaction
         let mut tx = pool
             .begin()
             .await
-            .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         // Sync deletions first (respecting foreign key order)
         self.sync_table(&mut tx, Table::ArchivedCards, &data.archived_cards, |v| {
@@ -807,11 +808,11 @@ impl PersistenceStore for SqliteStore {
         .bind(&saved_at_str)
         .execute(&mut *tx)
         .await
-        .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         tx.commit()
             .await
-            .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         // Update last known metadata
         {
@@ -824,7 +825,7 @@ impl PersistenceStore for SqliteStore {
         Ok(snapshot.metadata)
     }
 
-    async fn load(&self) -> KanbanResult<(StoreSnapshot, PersistenceMetadata)> {
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
         let pool = self.get_pool().await?;
 
         // Load metadata
@@ -832,13 +833,13 @@ impl PersistenceStore for SqliteStore {
             sqlx::query_as("SELECT instance_id, saved_at FROM metadata WHERE id = 1")
                 .fetch_optional(pool)
                 .await
-                .map_err(|e| kanban_core::KanbanError::Database(e.to_string()))?;
+                .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
         let metadata = if let Some((instance_id_str, saved_at_str)) = meta_row {
             let instance_id = Uuid::parse_str(&instance_id_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
             let saved_at = chrono::DateTime::parse_from_rfc3339(&saved_at_str)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
                 .with_timezone(&chrono::Utc);
             PersistenceMetadata {
                 instance_id,
@@ -867,7 +868,7 @@ impl PersistenceStore for SqliteStore {
         };
 
         let data_bytes = serde_json::to_vec(&data)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         let snapshot = StoreSnapshot {
             data: data_bytes,

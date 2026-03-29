@@ -1,8 +1,10 @@
 use crate::atomic_writer::AtomicWriter;
 use crate::conflict::FileMetadata;
 use crate::migration::Migrator;
-use kanban_core::KanbanResult;
-use kanban_persistence::{FormatVersion, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{
+    FormatVersion, PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore,
+    StoreSnapshot,
+};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -90,17 +92,17 @@ impl JsonFileStore {
 
 #[async_trait::async_trait]
 impl PersistenceStore for JsonFileStore {
-    async fn save(&self, mut snapshot: StoreSnapshot) -> KanbanResult<PersistenceMetadata> {
+    async fn save(&self, mut snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
         // Check for external file modifications before saving
         if self.path.exists() {
             let current_metadata =
-                FileMetadata::from_file(&self.path).map_err(kanban_core::KanbanError::Io)?;
+                FileMetadata::from_file(&self.path).map_err(PersistenceError::Io)?;
 
             // Compare with last known metadata
             let guard = self.lock_metadata();
             if let Some(last_known) = *guard {
                 if last_known != current_metadata {
-                    return Err(kanban_core::KanbanError::ConflictDetected {
+                    return Err(PersistenceError::ConflictDetected {
                         path: self.path.to_string_lossy().to_string(),
                         source: None,
                     });
@@ -114,7 +116,7 @@ impl PersistenceStore for JsonFileStore {
 
         // Create JSON envelope with v2 format
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let envelope = JsonEnvelope {
             version: 2,
             metadata: snapshot.metadata.clone(),
@@ -123,7 +125,7 @@ impl PersistenceStore for JsonFileStore {
 
         // Serialize envelope to JSON
         let json_bytes = serde_json::to_vec_pretty(&envelope)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         // Write atomically to disk for crash safety
         AtomicWriter::write_atomic(&self.path, &json_bytes).await?;
@@ -143,7 +145,7 @@ impl PersistenceStore for JsonFileStore {
         Ok(snapshot.metadata)
     }
 
-    async fn load(&self) -> KanbanResult<(StoreSnapshot, PersistenceMetadata)> {
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
         // Detect current file version
         let current_version = Migrator::detect_version(&self.path).await?;
 
@@ -162,11 +164,11 @@ impl PersistenceStore for JsonFileStore {
 
         // Parse JSON envelope
         let envelope: JsonEnvelope = serde_json::from_slice(&file_bytes)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         // Validate version
         if envelope.version != 2 {
-            return Err(kanban_core::KanbanError::Serialization(format!(
+            return Err(PersistenceError::Serialization(format!(
                 "Unsupported format version: {}",
                 envelope.version
             )));
@@ -174,7 +176,7 @@ impl PersistenceStore for JsonFileStore {
 
         // Reconstruct snapshot
         let data = serde_json::to_vec(&envelope.data)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let snapshot = StoreSnapshot {
             data,
             metadata: envelope.metadata.clone(),

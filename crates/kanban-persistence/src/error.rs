@@ -8,6 +8,9 @@ pub enum PersistenceError {
     #[error("serialization error: {0}")]
     Serialization(String),
 
+    #[error("database error: {0}")]
+    Database(String),
+
     #[error("file conflict: {path} was modified by another instance")]
     ConflictDetected {
         path: String,
@@ -23,6 +26,7 @@ impl From<PersistenceError> for kanban_domain::KanbanError {
         match e {
             PersistenceError::Io(io) => kanban_domain::KanbanError::Io(io),
             PersistenceError::Serialization(s) => kanban_domain::KanbanError::Serialization(s),
+            PersistenceError::Database(s) => kanban_domain::KanbanError::Database(s),
             PersistenceError::ConflictDetected { path, source } => {
                 kanban_domain::KanbanError::ConflictDetected { path, source }
             }

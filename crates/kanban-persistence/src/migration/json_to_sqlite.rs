@@ -1,27 +1,30 @@
 #[cfg(feature = "sqlite")]
+use crate::error::{PersistenceError, PersistenceResult};
+#[cfg(feature = "sqlite")]
 use crate::store::JsonFileStore;
 #[cfg(feature = "sqlite")]
 use crate::store::SqliteStore;
 #[cfg(feature = "sqlite")]
 use crate::traits::PersistenceStore;
 #[cfg(feature = "sqlite")]
-use kanban_core::KanbanResult;
-#[cfg(feature = "sqlite")]
 use std::path::Path;
 
 #[cfg(feature = "sqlite")]
-pub async fn migrate_json_to_sqlite(json_path: &Path, sqlite_path: &Path) -> KanbanResult<()> {
+pub async fn migrate_json_to_sqlite(json_path: &Path, sqlite_path: &Path) -> PersistenceResult<()> {
     if !json_path.exists() {
-        return Err(kanban_core::KanbanError::NotFound(format!(
-            "JSON file not found: {}",
-            json_path.display()
+        return Err(PersistenceError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("JSON file not found: {}", json_path.display()),
         )));
     }
 
     if sqlite_path.exists() {
-        return Err(kanban_core::KanbanError::Validation(format!(
-            "SQLite database already exists: {}. Remove it first or use a different path.",
-            sqlite_path.display()
+        return Err(PersistenceError::Io(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "SQLite database already exists: {}. Remove it first or use a different path.",
+                sqlite_path.display()
+            ),
         )));
     }
 
@@ -45,7 +48,7 @@ pub async fn migrate_json_to_sqlite(json_path: &Path, sqlite_path: &Path) -> Kan
 }
 
 #[cfg(feature = "sqlite")]
-pub async fn auto_migrate_if_needed(json_path: &Path, sqlite_path: &Path) -> KanbanResult<bool> {
+pub async fn auto_migrate_if_needed(json_path: &Path, sqlite_path: &Path) -> PersistenceResult<bool> {
     // If SQLite already exists, no migration needed
     if sqlite_path.exists() {
         return Ok(false);

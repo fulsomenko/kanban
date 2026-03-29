@@ -74,6 +74,9 @@ pub enum KanbanError {
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
 
+    #[error("database error: {0}")]
+    Database(String),
+
     #[error("internal error: {0}")]
     Internal(String),
 }

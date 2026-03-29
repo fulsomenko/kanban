@@ -1,4 +1,4 @@
-use kanban_core::KanbanResult;
+use kanban_persistence::PersistenceResult;
 use std::path::Path;
 use tokio::fs;
 
@@ -10,7 +10,7 @@ impl AtomicWriter {
     /// Write data to a file atomically
     /// Writes to a temporary file first, then atomically renames it
     /// This prevents corruption if the process crashes mid-write
-    pub async fn write_atomic(path: &Path, data: &[u8]) -> KanbanResult<()> {
+    pub async fn write_atomic(path: &Path, data: &[u8]) -> PersistenceResult<()> {
         // Create temp file in same directory to ensure same filesystem
         let parent = path.parent().unwrap_or_else(|| Path::new("."));
         let temp_file = tempfile::NamedTempFile::new_in(parent)?;
@@ -31,7 +31,7 @@ impl AtomicWriter {
     }
 
     /// Read all data from a file
-    pub async fn read_all(path: &Path) -> KanbanResult<Vec<u8>> {
+    pub async fn read_all(path: &Path) -> PersistenceResult<Vec<u8>> {
         let data = fs::read(path).await?;
         tracing::debug!("Read {} bytes from {}", data.len(), path.display());
         Ok(data)
