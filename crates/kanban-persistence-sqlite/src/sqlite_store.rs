@@ -6,8 +6,6 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Pool, Row, Sqlite, Transaction};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::sync::Mutex;
 use uuid::Uuid;
 
 use crate::builders::{build_board, build_card, build_column, build_graph, build_sprint};
@@ -20,7 +18,7 @@ pub struct SqliteStore {
     path: PathBuf,
     instance_id: Uuid,
     pool: tokio::sync::OnceCell<Pool<Sqlite>>,
-    last_known_metadata: Mutex<Option<PersistenceMetadata>>,
+    last_known_metadata: tokio::sync::Mutex<Option<PersistenceMetadata>>,
 }
 
 impl SqliteStore {
@@ -29,7 +27,7 @@ impl SqliteStore {
             path: path.as_ref().to_path_buf(),
             instance_id: Uuid::new_v4(),
             pool: tokio::sync::OnceCell::new(),
-            last_known_metadata: Mutex::new(None),
+            last_known_metadata: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -38,7 +36,7 @@ impl SqliteStore {
             path: path.as_ref().to_path_buf(),
             instance_id,
             pool: tokio::sync::OnceCell::new(),
-            last_known_metadata: Mutex::new(None),
+            last_known_metadata: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -49,17 +47,14 @@ impl SqliteStore {
     async fn get_pool(&self) -> PersistenceResult<&Pool<Sqlite>> {
         self.pool
             .get_or_try_init(|| async {
-                let options = SqliteConnectOptions::from_str(&format!(
-                    "sqlite://{}?mode=rwc",
-                    self.path.display()
-                ))
-                .map_err(|e| PersistenceError::Database(e.to_string()))?
-                .create_if_missing(true)
+                let options = SqliteConnectOptions::new()
+                    .filename(&self.path)
+                    .create_if_missing(true)
                 .foreign_keys(true)
                 .pragma("journal_mode", "wal");
 
                 let pool = SqlitePoolOptions::new()
-                    .max_connections(5)
+                    .max_connections(2)
                     .connect_with(options)
                     .await
                     .map_err(|e| PersistenceError::Database(e.to_string()))?;
@@ -168,7 +163,8 @@ impl SqliteStore {
         let card_rows = sqlx::query(
             "SELECT id, column_id, title, description, priority, status, position, due_date,
                     points, card_number, sprint_id, assigned_prefix, card_prefix, created_at,
-                    updated_at, completed_at FROM cards",
+                    updated_at, completed_at FROM cards
+             ORDER BY position ASC, created_at ASC",
         )
         .fetch_all(pool)
         .await
@@ -240,10 +236,16 @@ impl SqliteStore {
             }
         }
 
-        let cards: Vec<serde_json::Value> = all_cards_map
-            .into_iter()
-            .filter(|(id, _)| !archived_card_ids.contains(id))
-            .map(|(_, v)| v)
+        let cards: Vec<serde_json::Value> = card_rows
+            .iter()
+            .filter_map(|row| {
+                let id_str: String = row.try_get("id").ok()?;
+                if archived_card_ids.contains(&id_str) {
+                    None
+                } else {
+                    all_cards_map.remove(&id_str)
+                }
+            })
             .collect();
 
         let edge_rows = sqlx::query(
@@ -299,11 +301,8 @@ impl SqliteStore {
         Ok(())
     }
 
-    fn lock_metadata(&self) -> std::sync::MutexGuard<'_, Option<PersistenceMetadata>> {
-        self.last_known_metadata.lock().expect(
-            "Metadata mutex poisoned - a panic occurred while holding the lock. \
-             Application state may be corrupted and recovery is not safe.",
-        )
+    async fn lock_metadata(&self) -> tokio::sync::MutexGuard<'_, Option<PersistenceMetadata>> {
+        self.last_known_metadata.lock().await
     }
 }
 
@@ -327,7 +326,7 @@ impl PersistenceStore for SqliteStore {
                 .map_err(db_err)?;
 
         if let Some((db_instance_id, db_saved_at)) = existing_meta {
-            let guard = self.lock_metadata();
+            let guard = self.lock_metadata().await;
             if let Some(ref last_known) = *guard {
                 let db_instance = parse_uuid(&db_instance_id)?;
                 let db_time = parse_datetime(&db_saved_at)?;
@@ -412,7 +411,7 @@ impl PersistenceStore for SqliteStore {
         tx.commit().await.map_err(db_err)?;
 
         {
-            let mut guard = self.lock_metadata();
+            let mut guard = self.lock_metadata().await;
             *guard = Some(snapshot.metadata.clone());
         }
 
@@ -448,7 +447,7 @@ impl PersistenceStore for SqliteStore {
         };
 
         {
-            let mut guard = self.lock_metadata();
+            let mut guard = self.lock_metadata().await;
             *guard = Some(metadata.clone());
         }
 
@@ -523,6 +522,337 @@ mod tests {
         store.save(snapshot).await.unwrap();
 
         assert!(store.exists().await);
+    }
+
+    #[tokio::test]
+    async fn test_path_with_spaces_roundtrip() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("path with spaces/test board.db");
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        let store = SqliteStore::new(&db_path);
+
+        let data = serde_json::json!({
+            "boards": [],
+            "columns": [],
+            "cards": [],
+            "archived_cards": [],
+            "sprints": []
+        });
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&data).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+
+        store.save(snapshot).await.unwrap();
+        let (loaded, _) = store.load().await.unwrap();
+        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
+        assert!(loaded_data["boards"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_cards_loaded_in_position_order() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("order.db");
+        let store = SqliteStore::new(&db_path);
+
+        let board_id = uuid::Uuid::new_v4().to_string();
+        let col_id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        let cards: Vec<serde_json::Value> = [2, 0, 1]
+            .iter()
+            .map(|pos| {
+                serde_json::json!({
+                    "id": uuid::Uuid::new_v4().to_string(),
+                    "column_id": col_id,
+                    "title": format!("Card pos {pos}"),
+                    "priority": "Medium",
+                    "status": "Todo",
+                    "position": pos,
+                    "card_number": pos,
+                    "created_at": now,
+                    "updated_at": now,
+                    "sprint_logs": []
+                })
+            })
+            .collect();
+
+        let data = serde_json::json!({
+            "boards": [{
+                "id": board_id,
+                "name": "B",
+                "task_sort_field": "Default",
+                "task_sort_order": "Ascending",
+                "sprint_name_used_count": 0,
+                "next_sprint_number": 1,
+                "task_list_view": "Flat",
+                "prefix_counters": {},
+                "sprint_counters": {},
+                "created_at": now,
+                "updated_at": now
+            }],
+            "columns": [{
+                "id": col_id,
+                "board_id": board_id,
+                "name": "Col",
+                "position": 0,
+                "created_at": now,
+                "updated_at": now
+            }],
+            "cards": cards,
+            "archived_cards": [],
+            "sprints": []
+        });
+
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&data).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+        store.save(snapshot).await.unwrap();
+
+        let (loaded, _) = store.load().await.unwrap();
+        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
+        let loaded_cards = loaded_data["cards"].as_array().unwrap();
+        let positions: Vec<i64> = loaded_cards
+            .iter()
+            .map(|c| c["position"].as_i64().unwrap())
+            .collect();
+        assert_eq!(positions, vec![0, 1, 2]);
+    }
+
+    #[tokio::test]
+    async fn test_upsert_board_missing_name_returns_error() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let store = SqliteStore::new(&db_path);
+
+        let data = SnapshotData {
+            boards: vec![serde_json::json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            })],
+            columns: vec![],
+            cards: vec![],
+            archived_cards: vec![],
+            sprints: vec![],
+            graph: serde_json::json!({}),
+        };
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&data).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+
+        let result = store.save(snapshot).await;
+        assert!(
+            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("name")),
+            "Expected Serialization error about 'name', got: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_upsert_card_missing_title_returns_error() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let store = SqliteStore::new(&db_path);
+
+        let board_id = uuid::Uuid::new_v4().to_string();
+        let col_id = uuid::Uuid::new_v4().to_string();
+        let now = "2024-01-01T00:00:00Z";
+        let data = SnapshotData {
+            boards: vec![serde_json::json!({
+                "id": board_id, "name": "B",
+                "task_sort_field": "Default", "task_sort_order": "Ascending",
+                "sprint_name_used_count": 0, "next_sprint_number": 1,
+                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                "created_at": now, "updated_at": now
+            })],
+            columns: vec![serde_json::json!({
+                "id": col_id, "board_id": board_id, "name": "Col", "position": 0,
+                "created_at": now, "updated_at": now
+            })],
+            cards: vec![serde_json::json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "column_id": col_id,
+                "position": 0, "card_number": 0,
+                "created_at": now, "updated_at": now
+            })],
+            archived_cards: vec![],
+            sprints: vec![],
+            graph: serde_json::json!({}),
+        };
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&data).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+
+        let result = store.save(snapshot).await;
+        assert!(
+            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("title")),
+            "Expected Serialization error about 'title', got: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_upsert_card_missing_timestamps_returns_error() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let store = SqliteStore::new(&db_path);
+
+        let board_id = uuid::Uuid::new_v4().to_string();
+        let col_id = uuid::Uuid::new_v4().to_string();
+        let now = "2024-01-01T00:00:00Z";
+        let data = SnapshotData {
+            boards: vec![serde_json::json!({
+                "id": board_id, "name": "B",
+                "task_sort_field": "Default", "task_sort_order": "Ascending",
+                "sprint_name_used_count": 0, "next_sprint_number": 1,
+                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                "created_at": now, "updated_at": now
+            })],
+            columns: vec![serde_json::json!({
+                "id": col_id, "board_id": board_id, "name": "Col", "position": 0,
+                "created_at": now, "updated_at": now
+            })],
+            cards: vec![serde_json::json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "column_id": col_id,
+                "title": "Test",
+                "position": 0, "card_number": 0
+            })],
+            archived_cards: vec![],
+            sprints: vec![],
+            graph: serde_json::json!({}),
+        };
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&data).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+
+        let result = store.save(snapshot).await;
+        assert!(
+            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("created_at")),
+            "Expected Serialization error about 'created_at', got: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_unknown_priority_returns_error() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let store = SqliteStore::new(&db_path);
+        let pool = store.get_pool().await.unwrap();
+
+        let bid = Uuid::new_v4().to_string();
+        let cid = Uuid::new_v4().to_string();
+        let kid = Uuid::new_v4().to_string();
+        let ts = "2024-01-01T00:00:00Z";
+        sqlx::query("INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)")
+            .bind(&bid).bind("B").bind(ts).bind(ts)
+            .execute(pool).await.unwrap();
+        sqlx::query("INSERT INTO columns (id, board_id, name, position, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)")
+            .bind(&cid).bind(&bid).bind("Col").bind(ts).bind(ts)
+            .execute(pool).await.unwrap();
+        sqlx::query("INSERT INTO cards (id, column_id, title, priority, status, position, card_number, created_at, updated_at) VALUES (?, ?, ?, 'InvalidPriority', 'Todo', 0, 0, ?, ?)")
+            .bind(&kid).bind(&cid).bind("T").bind(ts).bind(ts)
+            .execute(pool).await.unwrap();
+
+        let result = store.load().await;
+        assert!(
+            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("priority")),
+            "Expected Serialization error about 'priority', got: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_unknown_sprint_status_returns_error() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let store = SqliteStore::new(&db_path);
+        let pool = store.get_pool().await.unwrap();
+
+        let bid = Uuid::new_v4().to_string();
+        let sid = Uuid::new_v4().to_string();
+        let ts = "2024-01-01T00:00:00Z";
+        sqlx::query("INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)")
+            .bind(&bid).bind("B").bind(ts).bind(ts)
+            .execute(pool).await.unwrap();
+        sqlx::query("INSERT INTO sprints (id, board_id, sprint_number, status, created_at, updated_at) VALUES (?, ?, 1, 'BadStatus', ?, ?)")
+            .bind(&sid).bind(&bid).bind(ts).bind(ts)
+            .execute(pool).await.unwrap();
+
+        let result = store.load().await;
+        assert!(
+            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("sprint status")),
+            "Expected Serialization error about 'sprint status', got: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_upsert_edges_removes_stale_edges() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let store = SqliteStore::new(&db_path);
+
+        let board_id = uuid::Uuid::new_v4().to_string();
+        let col_id = uuid::Uuid::new_v4().to_string();
+        let card1_id = uuid::Uuid::new_v4().to_string();
+        let card2_id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let make_data = |edges: serde_json::Value| -> serde_json::Value {
+            serde_json::json!({
+                "boards": [{"id": board_id, "name": "B", "task_sort_field": "Default",
+                    "task_sort_order": "Ascending", "sprint_name_used_count": 0,
+                    "next_sprint_number": 1, "task_list_view": "Flat",
+                    "prefix_counters": {}, "sprint_counters": {},
+                    "created_at": now, "updated_at": now}],
+                "columns": [{"id": col_id, "board_id": board_id, "name": "C", "position": 0,
+                    "created_at": now, "updated_at": now}],
+                "cards": [
+                    {"id": card1_id, "column_id": col_id, "title": "A", "priority": "Medium",
+                     "status": "Todo", "position": 0, "card_number": 0,
+                     "created_at": now, "updated_at": now, "sprint_logs": []},
+                    {"id": card2_id, "column_id": col_id, "title": "B", "priority": "Medium",
+                     "status": "Todo", "position": 1, "card_number": 1,
+                     "created_at": now, "updated_at": now, "sprint_logs": []}
+                ],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": edges
+            })
+        };
+
+        let two_edges = serde_json::json!({"cards": {"edges": [
+            {"source": card1_id, "target": card2_id, "edge_type": "Blocks",
+             "direction": "Directed", "created_at": now},
+            {"source": card1_id, "target": card2_id, "edge_type": "RelatesTo",
+             "direction": "Bidirectional", "created_at": now}
+        ]}});
+
+        let data1 = make_data(two_edges);
+        let snap1 = StoreSnapshot {
+            data: serde_json::to_vec(&data1).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+        store.save(snap1).await.unwrap();
+
+        let one_edge = serde_json::json!({"cards": {"edges": [
+            {"source": card1_id, "target": card2_id, "edge_type": "Blocks",
+             "direction": "Directed", "created_at": now}
+        ]}});
+
+        let data2 = make_data(one_edge);
+        let snap2 = StoreSnapshot {
+            data: serde_json::to_vec(&data2).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+        store.save(snap2).await.unwrap();
+
+        let (loaded, _) = store.load().await.unwrap();
+        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
+        let edges = loaded_data["graph"]["cards"]["edges"].as_array().unwrap();
+        assert_eq!(edges.len(), 1, "Stale edge should have been removed");
+        assert_eq!(edges[0]["edge_type"], "Blocks");
     }
 
     #[tokio::test]
