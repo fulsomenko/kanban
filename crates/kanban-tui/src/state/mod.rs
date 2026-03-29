@@ -6,14 +6,9 @@ use kanban_domain::commands::CommandContext;
 use kanban_domain::KanbanResult;
 use kanban_domain::{ArchivedCard, Board, Card, Column, HistoryManager, Snapshot, Sprint};
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
-use kanban_persistence_json::JsonFileStore;
 use std::collections::VecDeque;
-use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-
-#[cfg(feature = "sqlite")]
-use kanban_persistence_sqlite::SqliteStore;
 
 pub use kanban_domain::commands;
 pub use snapshot::TuiSnapshot;
@@ -114,29 +109,10 @@ impl StateManager {
         (manager, save_rx, Some(save_completion_rx))
     }
 
-    /// Create the appropriate store based on file extension
     fn create_store(path: &str) -> (DynStore, uuid::Uuid) {
-        let path_ref = Path::new(path);
-        let extension = path_ref
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("json");
-
-        match extension {
-            #[cfg(feature = "sqlite")]
-            "db" | "sqlite" => {
-                tracing::info!("Using SQLite storage backend for: {}", path);
-                let store = Arc::new(SqliteStore::new(path));
-                let id = store.instance_id();
-                (store, id)
-            }
-            _ => {
-                tracing::info!("Using JSON file storage backend for: {}", path);
-                let store = Arc::new(JsonFileStore::new(path));
-                let id = store.instance_id();
-                (store, id)
-            }
-        }
+        let store = kanban_service::make_store(path);
+        let id = store.instance_id();
+        (store, id)
     }
 
     /// Execute a command and mark state as dirty

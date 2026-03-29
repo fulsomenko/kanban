@@ -17,13 +17,13 @@ path = "src/main.rs"
 [features]
 default = ["tui"]
 tui = ["dep:kanban-tui"]
-sqlite = ["dep:kanban-persistence-sqlite", "kanban-tui/sqlite"]
+sqlite = ["kanban-service/sqlite-storage", "kanban-tui/sqlite", "dep:kanban-persistence-json", "dep:kanban-persistence-sqlite"]
 
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
-kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3", optional = true }
 kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.3", optional = true }
 kanban-service = { path = "../kanban-service", version = "^0.3" }
 kanban-tui = { path = "../kanban-tui", version = "^0.3", optional = true }
