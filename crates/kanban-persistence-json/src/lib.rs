@@ -25,7 +25,7 @@ impl StoreFactory for JsonStoreFactory {
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("");
-        ext == "json" || !locator.contains("://")
+        ext == "json" || (!locator.contains("://") && !matches!(ext, "sqlite" | "sqlite3" | "db"))
     }
 
     fn create(
