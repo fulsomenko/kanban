@@ -41,6 +41,13 @@ fn test_make_store_sqlite_extension() {
 
 #[cfg(feature = "sqlite-storage")]
 #[test]
+fn test_make_store_db_extension() {
+    let store = make_store("/tmp/test_board.db").unwrap();
+    assert!(store.path().to_str().unwrap().ends_with(".db"));
+}
+
+#[cfg(feature = "sqlite-storage")]
+#[test]
 fn test_make_store_sqlite3_extension() {
     let store = make_store("/tmp/test_board.sqlite3").unwrap();
     assert!(store.path().to_str().unwrap().ends_with(".sqlite3"));
