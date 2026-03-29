@@ -1,6 +1,6 @@
 use crate::traits::{ChangeDetector, ChangeEvent};
+use crate::PersistenceResult;
 use chrono::Utc;
-use kanban_core::KanbanResult;
 use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -70,7 +70,7 @@ impl Default for FileWatcher {
 
 #[async_trait::async_trait]
 impl ChangeDetector for FileWatcher {
-    async fn start_watching(&self, path: PathBuf) -> KanbanResult<()> {
+    async fn start_watching(&self, path: PathBuf) -> PersistenceResult<()> {
         let tx = self.tx.clone();
         let task_handle = self.task_handle.clone();
         let paused = self.paused.clone();
@@ -186,7 +186,7 @@ impl ChangeDetector for FileWatcher {
         Ok(())
     }
 
-    async fn stop_watching(&self) -> KanbanResult<()> {
+    async fn stop_watching(&self) -> PersistenceResult<()> {
         let mut guard = self.task_handle.lock().await;
         if let Some(handle) = guard.take() {
             handle.abort();

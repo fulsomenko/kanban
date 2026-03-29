@@ -1,5 +1,7 @@
+use crate::error::DependencyError;
+use crate::KanbanResult;
 use chrono::Utc;
-use kanban_core::{Edge, EdgeDirection, Graph, KanbanError, KanbanResult};
+use kanban_core::{Edge, EdgeDirection, Graph};
 
 use super::CardEdgeType;
 use crate::CardId;
@@ -65,11 +67,11 @@ pub trait CardGraphExt {
 impl CardGraphExt for CardDependencyGraph {
     fn add_blocks(&mut self, blocker: CardId, blocked: CardId) -> KanbanResult<()> {
         if blocker == blocked {
-            return Err(KanbanError::SelfReference);
+            return Err(DependencyError::SelfReference.into());
         }
 
         if self.would_create_cycle(blocker, blocked) {
-            return Err(KanbanError::CycleDetected);
+            return Err(DependencyError::CycleDetected.into());
         }
 
         let edge = Edge {
@@ -82,12 +84,13 @@ impl CardGraphExt for CardDependencyGraph {
             archived_at: None,
         };
 
-        self.add_edge(edge)
+        self.add_edge(edge);
+        Ok(())
     }
 
     fn add_relates_to(&mut self, card_a: CardId, card_b: CardId) -> KanbanResult<()> {
         if card_a == card_b {
-            return Err(KanbanError::SelfReference);
+            return Err(DependencyError::SelfReference.into());
         }
 
         let edge = Edge {
@@ -100,7 +103,8 @@ impl CardGraphExt for CardDependencyGraph {
             archived_at: None,
         };
 
-        self.add_edge(edge)
+        self.add_edge(edge);
+        Ok(())
     }
 
     fn blockers(&self, card_id: CardId) -> Vec<CardId> {
@@ -145,7 +149,7 @@ impl CardGraphExt for CardDependencyGraph {
 
     fn set_parent(&mut self, child_id: CardId, parent_id: CardId) -> KanbanResult<()> {
         if child_id == parent_id {
-            return Err(KanbanError::SelfReference);
+            return Err(DependencyError::SelfReference.into());
         }
 
         // Check if adding this edge would create a cycle in the ParentOf subgraph
@@ -161,7 +165,7 @@ impl CardGraphExt for CardDependencyGraph {
         }
 
         if kanban_core::graph::algorithms::would_create_cycle(&adj_list, parent_id, child_id) {
-            return Err(KanbanError::CycleDetected);
+            return Err(DependencyError::CycleDetected.into());
         }
 
         let edge = Edge {
@@ -174,14 +178,15 @@ impl CardGraphExt for CardDependencyGraph {
             archived_at: None,
         };
 
-        self.add_edge(edge)
+        self.add_edge(edge);
+        Ok(())
     }
 
     fn remove_parent(&mut self, child_id: CardId, parent_id: CardId) -> KanbanResult<()> {
         if self.remove_edge(parent_id, child_id) {
             Ok(())
         } else {
-            Err(KanbanError::EdgeNotFound)
+            Err(DependencyError::EdgeNotFound.into())
         }
     }
 
@@ -289,8 +294,7 @@ mod tests {
         graph.add_blocks(card_b, card_c).unwrap();
 
         let result = graph.add_blocks(card_c, card_a);
-        assert!(result.is_err());
-        assert!(matches!(result, Err(KanbanError::CycleDetected)));
+        assert!(result.unwrap_err().is_cycle_detected());
     }
 
     #[test]
@@ -299,8 +303,7 @@ mod tests {
         let card_a = Uuid::new_v4();
 
         let result = graph.add_blocks(card_a, card_a);
-        assert!(result.is_err());
-        assert!(matches!(result, Err(KanbanError::SelfReference)));
+        assert!(result.unwrap_err().is_self_reference());
     }
 
     #[test]
@@ -406,8 +409,7 @@ mod tests {
 
         // Try to make A a child of C (would create cycle)
         let result = graph.set_parent(card_a, card_c);
-        assert!(result.is_err());
-        assert!(matches!(result, Err(KanbanError::CycleDetected)));
+        assert!(result.unwrap_err().is_cycle_detected());
     }
 
     #[test]
@@ -416,8 +418,7 @@ mod tests {
         let card = Uuid::new_v4();
 
         let result = graph.set_parent(card, card);
-        assert!(result.is_err());
-        assert!(matches!(result, Err(KanbanError::SelfReference)));
+        assert!(result.unwrap_err().is_self_reference());
     }
 
     #[test]
@@ -480,8 +481,7 @@ mod tests {
         let child = Uuid::new_v4();
 
         let result = graph.remove_parent(child, parent);
-        assert!(result.is_err());
-        assert!(matches!(result, Err(KanbanError::EdgeNotFound)));
+        assert!(result.unwrap_err().is_edge_not_found());
     }
 
     #[test]

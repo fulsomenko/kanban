@@ -131,11 +131,7 @@ fn test_delete_column_with_cards_fails() {
         let cmd = DeleteColumn { column_id };
         let result = cmd.execute(&mut ctx);
 
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(kanban_core::KanbanError::Validation(_))
-        ));
+        assert!(result.unwrap_err().is_validation());
     }
 
     assert!(columns.iter().any(|c| c.id == column_id));
@@ -197,11 +193,7 @@ fn test_delete_column_with_archived_cards_fails() {
         let cmd = DeleteColumn { column_id };
         let result = cmd.execute(&mut ctx);
 
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(kanban_core::KanbanError::Validation(_))
-        ));
+        assert!(result.unwrap_err().is_validation());
     }
 
     assert!(columns.iter().any(|c| c.id == column_id));
@@ -592,11 +584,7 @@ fn test_cycle_detection_parent_child() {
             graph: &mut graph,
         };
         let result = ctx.graph.cards.set_parent(card_a, card_c);
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(kanban_core::KanbanError::CycleDetected)
-        ));
+        assert!(result.unwrap_err().is_cycle_detected());
     }
 }
 
@@ -695,10 +683,6 @@ fn test_cycle_detection_blocks() {
             graph: &mut graph,
         };
         let result = ctx.graph.cards.add_blocks(card_c, card_a);
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(kanban_core::KanbanError::CycleDetected)
-        ));
+        assert!(result.unwrap_err().is_cycle_detected());
     }
 }

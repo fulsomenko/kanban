@@ -1,13 +1,13 @@
 pub mod context;
 
 use context::McpContext;
-use kanban_core::KanbanError;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
     format_ambiguous_matches, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
     CardStatus, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
     SprintUpdate,
 };
+use kanban_domain::{KanbanError, KanbanResult};
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
@@ -39,13 +39,13 @@ fn to_call_tool_result_json(value: serde_json::Value) -> Result<CallToolResult, 
 
 fn kanban_err_to_mcp(e: KanbanError) -> McpError {
     match &e {
-        KanbanError::NotFound(_)
-        | KanbanError::Validation(_)
-        | KanbanError::CycleDetected
-        | KanbanError::SelfReference
-        | KanbanError::EdgeNotFound => McpError::invalid_params(e.to_string(), None),
+        KanbanError::Domain(_) => McpError::invalid_params(e.to_string(), None),
         _ => McpError::internal_error(e.to_string(), None),
     }
+}
+
+fn core_err_to_mcp(e: kanban_core::CoreError) -> McpError {
+    kanban_err_to_mcp(KanbanError::from(e))
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, McpError> {
@@ -509,7 +509,7 @@ pub struct KanbanMcpServer {
 }
 
 impl KanbanMcpServer {
-    pub async fn new(data_file: &str) -> kanban_core::KanbanResult<Self> {
+    pub async fn new(data_file: &str) -> KanbanResult<Self> {
         Ok(Self {
             ctx: Arc::new(Mutex::new(McpContext::new(data_file).await?)),
             tool_router: Self::tool_router(),
@@ -710,7 +710,7 @@ impl KanbanMcpServer {
             status,
         };
         let (page, page_size) =
-            resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
+            resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let result = read_op!(self.ctx, list_cards_paged, filter, page, page_size)?;
         to_call_tool_result(&result)
     }
@@ -834,11 +834,11 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let cards = read_op!(self.ctx, list_archived_cards)?;
         let (page, page_size) =
-            resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
+            resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let summaries: Vec<ArchivedCardSummary> =
             cards.iter().map(ArchivedCardSummary::from).collect();
         to_call_tool_result(
-            &PaginatedList::paginate(summaries, page, page_size).map_err(kanban_err_to_mcp)?,
+            &PaginatedList::paginate(summaries, page, page_size).map_err(core_err_to_mcp)?,
         )
     }
 
@@ -1284,36 +1284,39 @@ mod tests {
     #[test]
     fn err_not_found_maps_to_invalid_params() {
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::NotFound("board xyz".into()));
+        let err = kanban_err_to_mcp(KanbanError::not_found("board", uuid::Uuid::new_v4()));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("board xyz"));
+        assert!(err.message.contains("board"));
     }
 
     #[test]
     fn err_validation_maps_to_invalid_params() {
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::Validation("bad input".into()));
+        let err = kanban_err_to_mcp(KanbanError::validation("bad input"));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn err_cycle_maps_to_invalid_params() {
+        use kanban_domain::DependencyError;
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::CycleDetected);
+        let err = kanban_err_to_mcp(KanbanError::from(DependencyError::CycleDetected));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn err_self_ref_maps_to_invalid_params() {
+        use kanban_domain::DependencyError;
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::SelfReference);
+        let err = kanban_err_to_mcp(KanbanError::from(DependencyError::SelfReference));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn err_edge_not_found_maps_to_invalid_params() {
+        use kanban_domain::DependencyError;
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::EdgeNotFound);
+        let err = kanban_err_to_mcp(KanbanError::from(DependencyError::EdgeNotFound));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 

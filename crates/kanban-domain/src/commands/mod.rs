@@ -1,4 +1,4 @@
-use kanban_core::KanbanResult;
+use crate::KanbanResult;
 
 pub mod board_commands;
 pub mod card_commands;

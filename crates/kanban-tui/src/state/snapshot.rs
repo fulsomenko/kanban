@@ -57,6 +57,8 @@ mod tests {
 
     #[test]
     fn test_snapshot_serialization() {
+        use kanban_persistence::{snapshot_from_json_bytes, snapshot_to_json_bytes};
+
         let snapshot = Snapshot {
             boards: vec![],
             columns: vec![],
@@ -66,8 +68,8 @@ mod tests {
             graph: DependencyGraph::new(),
         };
 
-        let bytes = snapshot.to_json_bytes().unwrap();
-        let restored = Snapshot::from_json_bytes(&bytes).unwrap();
+        let bytes = snapshot_to_json_bytes(&snapshot).unwrap();
+        let restored = snapshot_from_json_bytes(&bytes).unwrap();
 
         assert_eq!(restored.boards.len(), 0);
     }

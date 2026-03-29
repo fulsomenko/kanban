@@ -1,6 +1,7 @@
+use crate::error::PersistenceError;
 use crate::store::json_file_store::JsonEnvelope;
 use crate::traits::FormatVersion;
-use kanban_core::KanbanResult;
+use crate::PersistenceResult;
 use serde_json::Value;
 use std::path::Path;
 
@@ -9,14 +10,14 @@ pub struct Migrator;
 
 impl Migrator {
     /// Detect the version of a persisted file
-    pub async fn detect_version(path: &Path) -> KanbanResult<FormatVersion> {
+    pub async fn detect_version(path: &Path) -> PersistenceResult<FormatVersion> {
         if !path.exists() {
             return Ok(FormatVersion::V2); // Default to V2 for new files
         }
 
         let content = tokio::fs::read_to_string(path).await?;
         let value: Value = serde_json::from_str(&content)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         // V2 files have a "version" field at root level
         if let Some(version) = value.get("version").and_then(|v| v.as_u64()) {
@@ -33,14 +34,18 @@ impl Migrator {
     }
 
     /// Migrate a file from one version to another
-    pub async fn migrate(from: FormatVersion, to: FormatVersion, path: &Path) -> KanbanResult<()> {
+    pub async fn migrate(
+        from: FormatVersion,
+        to: FormatVersion,
+        path: &Path,
+    ) -> PersistenceResult<()> {
         if from == to {
             return Ok(());
         }
 
         match (from, to) {
             (FormatVersion::V1, FormatVersion::V2) => Self::migrate_v1_to_v2(path).await,
-            _ => Err(kanban_core::KanbanError::Serialization(format!(
+            _ => Err(PersistenceError::Serialization(format!(
                 "Unsupported migration: {:?} -> {:?}",
                 from, to
             ))),
@@ -48,11 +53,11 @@ impl Migrator {
     }
 
     /// Migrate from V1 format to V2 format
-    async fn migrate_v1_to_v2(path: &Path) -> KanbanResult<()> {
+    async fn migrate_v1_to_v2(path: &Path) -> PersistenceResult<()> {
         // Read V1 file
         let content = tokio::fs::read_to_string(path).await?;
         let v1_data: Value = serde_json::from_str(&content)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         // Create backup
         let backup_path = path.with_extension("v1.backup");
@@ -65,7 +70,7 @@ impl Migrator {
         // Write V2 file
         let json_str = v2_envelope
             .to_json_string()
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         tokio::fs::write(path, json_str).await?;
 
         tracing::info!("Migrated {} from V1 to V2 format", path.display());
@@ -97,11 +102,11 @@ impl Migrator {
     }
 
     /// Verify that a migration was successful
-    async fn verify_migration(path: &Path, original_data: &Value) -> KanbanResult<()> {
+    async fn verify_migration(path: &Path, original_data: &Value) -> PersistenceResult<()> {
         // Read the migrated file
         let migrated_content = tokio::fs::read_to_string(path).await?;
         let migrated_value: Value = serde_json::from_str(&migrated_content).map_err(|e| {
-            kanban_core::KanbanError::Serialization(format!("Failed to parse migrated file: {}", e))
+            PersistenceError::Serialization(format!("Failed to parse migrated file: {}", e))
         })?;
 
         // Verify V2 structure
@@ -110,7 +115,7 @@ impl Migrator {
             .and_then(|v| v.as_u64())
             .filter(|&v| v == 2)
             .ok_or_else(|| {
-                kanban_core::KanbanError::Serialization(
+                PersistenceError::Serialization(
                     "Migrated file missing or invalid version field".to_string(),
                 )
             })?;
@@ -119,18 +124,18 @@ impl Migrator {
             .get("metadata")
             .filter(|m| m.is_object())
             .ok_or_else(|| {
-                kanban_core::KanbanError::Serialization(
+                PersistenceError::Serialization(
                     "Migrated file missing or invalid metadata field".to_string(),
                 )
             })?;
 
         // Verify data was preserved
         let migrated_data = migrated_value.get("data").ok_or_else(|| {
-            kanban_core::KanbanError::Serialization("Migrated file missing data field".to_string())
+            PersistenceError::Serialization("Migrated file missing data field".to_string())
         })?;
 
         if migrated_data != original_data {
-            return Err(kanban_core::KanbanError::Serialization(
+            return Err(PersistenceError::Serialization(
                 "Migrated data does not match original data".to_string(),
             ));
         }
@@ -250,11 +255,5 @@ mod tests {
             !backup_path.exists(),
             "Backup should be removed after successful migration and verification"
         );
-
-        // Note: The migration code handles backup removal failure gracefully by logging
-        // a warning (lines 82-90 in migrate_v1_to_v2). This is difficult to test with
-        // file permissions as making a directory read-only prevents the entire migration.
-        // The code path exists and is correct - it preserves the backup and logs a warning
-        // if removal fails, which is the desired behavior for reliability.
     }
 }

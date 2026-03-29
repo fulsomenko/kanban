@@ -1,3 +1,5 @@
+pub mod error;
+
 pub mod archived_card;
 pub mod board;
 pub mod card;
@@ -54,3 +56,5 @@ pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
 pub use task_list_view::TaskListView;
+
+pub use error::{DependencyError, DomainError, KanbanError, KanbanResult};

@@ -1,4 +1,5 @@
-use kanban_core::{KanbanResult, PaginatedList};
+use kanban_core::PaginatedList;
+use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
@@ -35,7 +36,7 @@ impl McpContext {
         page_size: usize,
     ) -> KanbanResult<PaginatedList<CardSummary>> {
         let cards = self.inner.list_cards(filter)?;
-        PaginatedList::paginate(cards, page, page_size)
+        Ok(PaginatedList::paginate(cards, page, page_size)?)
     }
 }
 

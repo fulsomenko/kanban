@@ -4,7 +4,6 @@ use uuid::Uuid;
 
 use super::algorithms;
 use super::edge::{Edge, EdgeDirection};
-use crate::KanbanResult;
 
 /// Generic graph structure that can hold any edge type E
 ///
@@ -31,9 +30,8 @@ impl<E> Graph<E> {
     ///
     /// Note: Cycle checking must be done by caller if needed
     /// (see `would_create_cycle` method)
-    pub fn add_edge(&mut self, edge: Edge<E>) -> KanbanResult<()> {
+    pub fn add_edge(&mut self, edge: Edge<E>) {
         self.edges.push(edge);
-        Ok(())
     }
 
     /// Remove an edge between two nodes
@@ -241,7 +239,7 @@ mod tests {
         let target = Uuid::new_v4();
         let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
 
-        graph.add_edge(edge).unwrap();
+        graph.add_edge(edge);
         assert_eq!(graph.edge_count(), 1);
         assert!(graph.has_edge(source, target));
     }
@@ -253,7 +251,7 @@ mod tests {
         let target = Uuid::new_v4();
         let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
 
-        graph.add_edge(edge).unwrap();
+        graph.add_edge(edge);
         assert!(graph.remove_edge(source, target));
         assert_eq!(graph.edge_count(), 0);
         assert!(!graph.has_edge(source, target));
@@ -266,30 +264,24 @@ mod tests {
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_b,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
-        graph
-            .add_edge(Edge::new(
-                node_b,
-                node_c,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
-        graph
-            .add_edge(Edge::new(
-                node_c,
-                node_a,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
+        graph.add_edge(Edge::new(
+            node_a,
+            node_b,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
+        graph.add_edge(Edge::new(
+            node_b,
+            node_c,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
+        graph.add_edge(Edge::new(
+            node_c,
+            node_a,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
 
         assert_eq!(graph.edge_count(), 3);
 
@@ -307,22 +299,18 @@ mod tests {
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_b,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
-        graph
-            .add_edge(Edge::new(
-                node_b,
-                node_c,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
+        graph.add_edge(Edge::new(
+            node_a,
+            node_b,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
+        graph.add_edge(Edge::new(
+            node_b,
+            node_c,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
 
         assert_eq!(graph.active_edge_count(), 2);
 
@@ -337,14 +325,12 @@ mod tests {
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
 
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_b,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
+        graph.add_edge(Edge::new(
+            node_a,
+            node_b,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
         graph.archive_node(node_a);
         assert_eq!(graph.active_edge_count(), 0);
 
@@ -359,30 +345,24 @@ mod tests {
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_b,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_c,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
-        graph
-            .add_edge(Edge::new(
-                node_c,
-                node_a,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
+        graph.add_edge(Edge::new(
+            node_a,
+            node_b,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
+        graph.add_edge(Edge::new(
+            node_a,
+            node_c,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
+        graph.add_edge(Edge::new(
+            node_c,
+            node_a,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
 
         assert_eq!(graph.outgoing(node_a).len(), 2);
         assert_eq!(graph.incoming(node_a).len(), 1);
@@ -397,22 +377,18 @@ mod tests {
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_b,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_c,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
+        graph.add_edge(Edge::new(
+            node_a,
+            node_b,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
+        graph.add_edge(Edge::new(
+            node_a,
+            node_c,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
 
         let neighbors = graph.neighbors(node_a);
         assert_eq!(neighbors.len(), 2);
@@ -428,14 +404,12 @@ mod tests {
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
 
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_b,
-                TestEdgeType::TypeA,
-                EdgeDirection::Bidirectional,
-            ))
-            .unwrap();
+        graph.add_edge(Edge::new(
+            node_a,
+            node_b,
+            TestEdgeType::TypeA,
+            EdgeDirection::Bidirectional,
+        ));
 
         let neighbors_a = graph.neighbors(node_a);
         let neighbors_b = graph.neighbors(node_b);
@@ -453,22 +427,18 @@ mod tests {
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_b,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
-        graph
-            .add_edge(Edge::new(
-                node_b,
-                node_c,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
+        graph.add_edge(Edge::new(
+            node_a,
+            node_b,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
+        graph.add_edge(Edge::new(
+            node_b,
+            node_c,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
 
         // c -> a would create cycle: a -> b -> c -> a
         assert!(graph.would_create_cycle(node_c, node_a));
@@ -484,22 +454,18 @@ mod tests {
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph
-            .add_edge(Edge::new(
-                node_a,
-                node_b,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
-        graph
-            .add_edge(Edge::new(
-                node_b,
-                node_c,
-                TestEdgeType::TypeA,
-                EdgeDirection::Directed,
-            ))
-            .unwrap();
+        graph.add_edge(Edge::new(
+            node_a,
+            node_b,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
+        graph.add_edge(Edge::new(
+            node_b,
+            node_c,
+            TestEdgeType::TypeA,
+            EdgeDirection::Directed,
+        ));
 
         let adj_list = graph.adjacency_list();
         assert_eq!(adj_list.len(), 2);

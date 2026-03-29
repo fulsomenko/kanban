@@ -1,4 +1,4 @@
-use kanban_core::KanbanResult;
+use crate::KanbanResult;
 use uuid::Uuid;
 
 use super::{Command, CommandContext};

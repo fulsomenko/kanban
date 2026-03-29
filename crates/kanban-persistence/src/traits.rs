@@ -1,6 +1,6 @@
+use crate::PersistenceResult;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use kanban_core::KanbanResult;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -53,10 +53,10 @@ pub enum PersistenceEvent {
 #[async_trait]
 pub trait PersistenceStore: Send + Sync {
     /// Save a snapshot to the store
-    async fn save(&self, snapshot: StoreSnapshot) -> KanbanResult<PersistenceMetadata>;
+    async fn save(&self, snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata>;
 
     /// Load the current snapshot from the store
-    async fn load(&self) -> KanbanResult<(StoreSnapshot, PersistenceMetadata)>;
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)>;
 
     /// Check if the store file exists
     async fn exists(&self) -> bool;
@@ -70,10 +70,10 @@ pub trait PersistenceStore: Send + Sync {
 #[async_trait]
 pub trait ChangeDetector: Send + Sync {
     /// Start watching the file for changes
-    async fn start_watching(&self, path: PathBuf) -> KanbanResult<()>;
+    async fn start_watching(&self, path: PathBuf) -> PersistenceResult<()>;
 
     /// Stop watching the file
-    async fn stop_watching(&self) -> KanbanResult<()>;
+    async fn stop_watching(&self) -> PersistenceResult<()>;
 
     /// Subscribe to change events
     /// Returns a broadcast receiver that yields `ChangeEvent` when the file changes
@@ -96,10 +96,10 @@ pub struct ChangeEvent {
 /// Allows swapping JSON for binary formats, databases, etc.
 pub trait Serializer<T: Send + Sync>: Send + Sync {
     /// Serialize data to bytes
-    fn serialize(&self, data: &T) -> KanbanResult<Vec<u8>>;
+    fn serialize(&self, data: &T) -> PersistenceResult<Vec<u8>>;
 
     /// Deserialize data from bytes
-    fn deserialize(&self, bytes: &[u8]) -> KanbanResult<T>;
+    fn deserialize(&self, bytes: &[u8]) -> PersistenceResult<T>;
 }
 
 /// Format versions for migration tracking
@@ -130,7 +130,7 @@ impl FormatVersion {
 #[async_trait]
 pub trait MigrationStrategy: Send + Sync {
     /// Detect the version of a file on disk
-    async fn detect_version(&self, path: &Path) -> KanbanResult<FormatVersion>;
+    async fn detect_version(&self, path: &Path) -> PersistenceResult<FormatVersion>;
 
     /// Migrate from one version to another
     /// Returns the path to the migrated file
@@ -139,7 +139,7 @@ pub trait MigrationStrategy: Send + Sync {
         from: FormatVersion,
         to: FormatVersion,
         path: &Path,
-    ) -> KanbanResult<PathBuf>;
+    ) -> PersistenceResult<PathBuf>;
 }
 
 /// Trait for conflict resolution between local and external changes

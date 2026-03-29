@@ -48,7 +48,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use kanban_core::{AppConfig, Editable, InputState, KanbanResult};
+use kanban_core::{AppConfig, Editable, InputState};
 use kanban_domain::AnimationType;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
@@ -57,6 +57,7 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
+use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -1428,7 +1429,7 @@ impl App {
                     while let Some(snapshot) = rx.recv().await {
                         tracing::debug!("Save worker received snapshot, starting save operation");
 
-                        let data = match snapshot.to_json_bytes() {
+                        let data = match kanban_persistence::snapshot_to_json_bytes(&snapshot) {
                             Ok(d) => d,
                             Err(e) => {
                                 tracing::error!("Failed to serialize snapshot: {}", e);
@@ -1445,7 +1446,11 @@ impl App {
                             metadata: PersistenceMetadata::new(instance_id),
                         };
 
-                        match store.save(persistence_snapshot).await {
+                        match store
+                            .save(persistence_snapshot)
+                            .await
+                            .map_err(KanbanError::from)
+                        {
                             Ok(_) => {
                                 tracing::debug!("Save worker completed save");
                                 // Signal that save is complete
@@ -1458,7 +1463,7 @@ impl App {
                                     }
                                 }
                             }
-                            Err(kanban_core::KanbanError::ConflictDetected { path, .. }) => {
+                            Err(KanbanError::ConflictDetected { path, .. }) => {
                                 tracing::warn!("Save worker detected conflict at {}", path);
                                 // Signal completion even on conflict
                                 if let Some(ref tx) = save_completion_tx {
