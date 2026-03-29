@@ -148,7 +148,7 @@ cargo tarpaulin        # Code coverage
 **Purpose**: SQLite storage backend implementing `StoreFactory`
 
 - `SqliteStore` - `PersistenceStore` impl with WAL mode, foreign keys, max 2 connections
-- `SqliteStoreFactory` - Matches `*.sqlite` and `*.sqlite3`
+- `SqliteStoreFactory` - Matches `*.sqlite`, `*.sqlite3`, and `*.db`
 - Relational schema (14 tables: metadata, boards, columns, cards, sprints, etc.)
 - Schema versioning (v1) with migration skeleton
 - Auto-creates database file on first use

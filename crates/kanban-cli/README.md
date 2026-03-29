@@ -38,6 +38,7 @@ kanban /path/to/myproject.json
 # All CLI commands require a data file (JSON or SQLite)
 kanban myproject.json board list
 kanban myproject.sqlite board list
+kanban myproject.db board list
 kanban myproject.json card create --board-id <ID> --column-id <ID> --title "New task"
 
 # Or use KANBAN_FILE environment variable
@@ -53,7 +54,7 @@ The backend is selected automatically by file extension:
 | Extension | Backend | Feature Flag |
 |-----------|---------|--------------|
 | `.json` (or any unknown) | JSON | `json-storage` (default) |
-| `.sqlite`, `.sqlite3` | SQLite | `sqlite-storage` |
+| `.sqlite`, `.sqlite3`, `.db` | SQLite | `sqlite-storage` |
 
 To build with SQLite support:
 

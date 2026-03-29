@@ -13,7 +13,7 @@ graph TD
     CLIENT[MCP Client<br/>Claude / Cursor / etc.] -->|JSON-RPC| MCP[kanban-mcp<br/>McpContext]
     MCP --> SVC[KanbanContext<br/>kanban-service]
     SVC --> STORE[PersistenceStore<br/>kanban-persistence]
-    STORE --> STORAGE[*.json / *.sqlite]
+    STORE --> STORAGE[*.json / *.sqlite / *.db]
 ```
 
 ### Concurrency Model

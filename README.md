@@ -181,7 +181,7 @@ graph LR
 
 ## Data & Persistence
 
-- **Pluggable Backends**: JSON and SQLite storage via a `StoreFactory` registry. Backend is selected by file extension: `.json` for JSON, `.sqlite`/`.sqlite3` for SQLite
+- **Pluggable Backends**: JSON and SQLite storage via a `StoreFactory` registry. Backend is selected by file extension: `.json` for JSON, `.sqlite`/`.sqlite3`/`.db` for SQLite
 - **JSON Backend**: V2 format with metadata envelope, automatic V1→V2 migration with backup creation, atomic writes
 - **SQLite Backend**: Relational schema with WAL mode, foreign keys, connection pooling, auto-created on first use
 - **Migration**: Convert between backends with `kanban <source> migrate <target>`

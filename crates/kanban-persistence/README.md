@@ -117,7 +117,7 @@ match store.load().await {
 | Backend | Crate | Patterns | Description |
 |---------|-------|----------|-------------|
 | JSON | `kanban-persistence-json` | `*.json`, any non-URI path | V2 format, atomic writes, V1 migration |
-| SQLite | `kanban-persistence-sqlite` | `*.sqlite`, `*.sqlite3` | WAL mode, relational schema, connection pooling |
+| SQLite | `kanban-persistence-sqlite` | `*.sqlite`, `*.sqlite3`, `*.db` | WAL mode, relational schema, connection pooling |
 
 ## Dependencies
 

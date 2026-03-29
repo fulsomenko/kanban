@@ -128,7 +128,7 @@ sequenceDiagram
 
 - `default_registry()` registers backends based on feature flags: `sqlite-storage` (SQLite first, for specific patterns) then `json-storage` (JSON, catch-all fallback)
 - Feature flags: `json-storage` (default), `sqlite-storage`
-- Extension mapping: `.json` → JSON, `.sqlite`/`.sqlite3` → SQLite, anything else → JSON fallback
+- Extension mapping: `.json` → JSON, `.sqlite`/`.sqlite3`/`.db` → SQLite, anything else → JSON fallback
 
 ## Bulk Operations
 

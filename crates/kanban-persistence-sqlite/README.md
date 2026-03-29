@@ -19,6 +19,7 @@ Provides `SqliteStore` (implements `PersistenceStore`) and `SqliteStoreFactory` 
 
 - `*.sqlite`
 - `*.sqlite3`
+- `*.db`
 
 ## API Reference
 
@@ -30,6 +31,7 @@ use kanban_persistence_sqlite::SqliteStoreFactory;
 let factory = SqliteStoreFactory;
 assert!(factory.matches("board.sqlite"));
 assert!(factory.matches("project.sqlite3"));
+assert!(factory.matches("board.db"));
 assert!(!factory.matches("board.json"));
 ```
 
