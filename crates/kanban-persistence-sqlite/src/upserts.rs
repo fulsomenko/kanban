@@ -1,3 +1,8 @@
+// Strategy: sprint_logs, prefix_counters, and sprint_counters use a
+// delete-and-reinsert pattern (DELETE WHERE parent_id = ? then INSERT)
+// because they are value-type collections keyed by parent — there is no
+// stable primary key to upsert against, and the full set is always
+// available in the snapshot.
 use crate::helpers::{db_err, required_str};
 use kanban_persistence::PersistenceResult;
 use sqlx::{Row, Sqlite, Transaction};
