@@ -1373,6 +1373,7 @@ dependencies = [
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
+ "kanban-service",
  "serde",
  "serde_json",
  "tempfile",
