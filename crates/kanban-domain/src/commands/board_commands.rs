@@ -107,8 +107,8 @@ impl Command for DeleteBoard {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::test_helpers::TestContext;
+    use super::*;
 
     #[test]
     fn test_update_board_not_found_returns_error() {

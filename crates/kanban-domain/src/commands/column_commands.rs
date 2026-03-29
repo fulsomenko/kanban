@@ -77,8 +77,8 @@ impl Command for DeleteColumn {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::test_helpers::TestContext;
+    use super::*;
 
     #[test]
     fn test_update_column_not_found_returns_error() {
