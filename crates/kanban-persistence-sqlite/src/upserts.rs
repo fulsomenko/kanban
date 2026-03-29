@@ -1,13 +1,13 @@
 use crate::helpers::{db_err, required_str};
 use kanban_persistence::PersistenceResult;
-use sqlx::{Sqlite, Transaction};
+use sqlx::{Row, Sqlite, Transaction};
 
 pub(crate) async fn upsert_board(
     tx: &mut Transaction<'_, Sqlite>,
     board: &serde_json::Value,
 ) -> PersistenceResult<()> {
     let id = required_str(board, "id")?;
-    let name = board["name"].as_str().unwrap_or_default();
+    let name = required_str(board, "name")?;
     let description = board["description"].as_str();
     let sprint_prefix = board["sprint_prefix"].as_str();
     let card_prefix = board["card_prefix"].as_str();
@@ -19,8 +19,8 @@ pub(crate) async fn upsert_board(
     let active_sprint_id = board["active_sprint_id"].as_str();
     let task_list_view = board["task_list_view"].as_str().unwrap_or("Flat");
     let completion_column_id = board["completion_column_id"].as_str();
-    let created_at = board["created_at"].as_str().unwrap_or_default();
-    let updated_at = board["updated_at"].as_str().unwrap_or_default();
+    let created_at = required_str(board, "created_at")?;
+    let updated_at = required_str(board, "updated_at")?;
 
     sqlx::query(
         "INSERT INTO boards (id, name, description, sprint_prefix, card_prefix,
@@ -133,11 +133,11 @@ pub(crate) async fn upsert_column(
 ) -> PersistenceResult<()> {
     let id = required_str(column, "id")?;
     let board_id = required_str(column, "board_id")?;
-    let name = column["name"].as_str().unwrap_or_default();
+    let name = required_str(column, "name")?;
     let position = column["position"].as_i64().unwrap_or(0) as i32;
     let wip_limit = column["wip_limit"].as_i64().map(|v| v as i32);
-    let created_at = column["created_at"].as_str().unwrap_or_default();
-    let updated_at = column["updated_at"].as_str().unwrap_or_default();
+    let created_at = required_str(column, "created_at")?;
+    let updated_at = required_str(column, "updated_at")?;
 
     sqlx::query(
         "INSERT INTO columns (id, board_id, name, position, wip_limit, created_at, updated_at)
@@ -169,7 +169,7 @@ pub(crate) async fn upsert_card(
 ) -> PersistenceResult<()> {
     let id = required_str(card, "id")?;
     let column_id = required_str(card, "column_id")?;
-    let title = card["title"].as_str().unwrap_or_default();
+    let title = required_str(card, "title")?;
     let description = card["description"].as_str();
     let priority = card["priority"].as_str().unwrap_or("Medium");
     let status = card["status"].as_str().unwrap_or("Todo");
@@ -180,8 +180,8 @@ pub(crate) async fn upsert_card(
     let sprint_id = card["sprint_id"].as_str();
     let assigned_prefix = card["assigned_prefix"].as_str();
     let card_prefix = card["card_prefix"].as_str();
-    let created_at = card["created_at"].as_str().unwrap_or_default();
-    let updated_at = card["updated_at"].as_str().unwrap_or_default();
+    let created_at = required_str(card, "created_at")?;
+    let updated_at = required_str(card, "updated_at")?;
     let completed_at = card["completed_at"].as_str();
 
     sqlx::query(
@@ -267,8 +267,8 @@ pub(crate) async fn upsert_sprint(
     let status = sprint["status"].as_str().unwrap_or("Planning");
     let start_date = sprint["start_date"].as_str();
     let end_date = sprint["end_date"].as_str();
-    let created_at = sprint["created_at"].as_str().unwrap_or_default();
-    let updated_at = sprint["updated_at"].as_str().unwrap_or_default();
+    let created_at = required_str(sprint, "created_at")?;
+    let updated_at = required_str(sprint, "updated_at")?;
 
     sqlx::query(
         "INSERT INTO sprints (id, board_id, sprint_number, name_index, prefix, card_prefix,
@@ -311,7 +311,7 @@ pub(crate) async fn upsert_archived_card(
     upsert_card(tx, card).await?;
 
     let card_id = required_str(card, "id")?;
-    let archived_at = archived["archived_at"].as_str().unwrap_or_default();
+    let archived_at = required_str(archived, "archived_at")?;
     let original_column_id = archived["original_column_id"].as_str();
     let original_position = archived["original_position"].as_i64().unwrap_or(0) as i32;
 
@@ -338,36 +338,73 @@ pub(crate) async fn upsert_edges(
     tx: &mut Transaction<'_, Sqlite>,
     graph: &serde_json::Value,
 ) -> PersistenceResult<()> {
-    sqlx::query("DELETE FROM card_edges")
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
-
-    if let Some(edges) = graph
+    let incoming_edges: Vec<&serde_json::Value> = graph
         .get("cards")
         .and_then(|c| c.get("edges"))
         .and_then(|e| e.as_array())
-    {
-        for edge in edges {
-            let source_id = required_str(edge, "source")?;
-            let target_id = required_str(edge, "target")?;
+        .map(|a| a.iter().collect())
+        .unwrap_or_default();
 
+    let incoming_keys: std::collections::HashSet<(String, String, String)> = incoming_edges
+        .iter()
+        .filter_map(|e| {
+            Some((
+                e["source"].as_str()?.to_string(),
+                e["target"].as_str()?.to_string(),
+                e["edge_type"].as_str()?.to_string(),
+            ))
+        })
+        .collect();
+
+    let existing_rows =
+        sqlx::query("SELECT source_id, target_id, edge_type FROM card_edges")
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(db_err)?;
+
+    for row in &existing_rows {
+        let key: (String, String, String) = (
+            row.try_get("source_id").map_err(db_err)?,
+            row.try_get("target_id").map_err(db_err)?,
+            row.try_get("edge_type").map_err(db_err)?,
+        );
+        if !incoming_keys.contains(&key) {
             sqlx::query(
-                "INSERT INTO card_edges
-                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "DELETE FROM card_edges WHERE source_id = ? AND target_id = ? AND edge_type = ?",
             )
-            .bind(source_id)
-            .bind(target_id)
-            .bind(edge["edge_type"].as_str().unwrap_or_default())
-            .bind(edge["direction"].as_str().unwrap_or_default())
-            .bind(edge["weight"].as_f64().map(|w| w as f32))
-            .bind(edge["created_at"].as_str().unwrap_or_default())
-            .bind(edge["archived_at"].as_str())
+            .bind(&key.0)
+            .bind(&key.1)
+            .bind(&key.2)
             .execute(&mut **tx)
             .await
             .map_err(db_err)?;
         }
+    }
+
+    for edge in &incoming_edges {
+        let source_id = required_str(edge, "source")?;
+        let target_id = required_str(edge, "target")?;
+
+        sqlx::query(
+            "INSERT INTO card_edges
+                (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(source_id, target_id, edge_type) DO UPDATE SET
+                direction = excluded.direction,
+                weight = excluded.weight,
+                archived_at = excluded.archived_at",
+        )
+        .bind(source_id)
+        .bind(target_id)
+        .bind(edge["edge_type"].as_str().unwrap_or_default())
+        .bind(edge["direction"].as_str().unwrap_or_default())
+        // f64→f32: acceptable precision loss for edge weights (see builders.rs)
+        .bind(edge["weight"].as_f64().map(|w| w as f32))
+        .bind(edge["created_at"].as_str().unwrap_or_default())
+        .bind(edge["archived_at"].as_str())
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
     }
 
     Ok(())
