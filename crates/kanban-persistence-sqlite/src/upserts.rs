@@ -175,7 +175,13 @@ pub(crate) async fn upsert_card(
     let status = required_str(card, "status")?;
     let position = card["position"].as_i64().unwrap_or(0) as i32;
     let due_date = card["due_date"].as_str();
-    let points = card["points"].as_i64().map(|v| v as i32);
+    let points = card["points"]
+        .as_i64()
+        .map(|v| {
+            i32::try_from(v)
+                .map_err(|_| crate::helpers::ser_err(format!("points value {v} out of i32 range")))
+        })
+        .transpose()?;
     let card_number = card["card_number"].as_i64().unwrap_or(0) as i32;
     let sprint_id = card["sprint_id"].as_str();
     let assigned_prefix = card["assigned_prefix"].as_str();
@@ -356,11 +362,10 @@ pub(crate) async fn upsert_edges(
         })
         .collect();
 
-    let existing_rows =
-        sqlx::query("SELECT source_id, target_id, edge_type FROM card_edges")
-            .fetch_all(&mut **tx)
-            .await
-            .map_err(db_err)?;
+    let existing_rows = sqlx::query("SELECT source_id, target_id, edge_type FROM card_edges")
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(db_err)?;
 
     for row in &existing_rows {
         let key: (String, String, String) = (

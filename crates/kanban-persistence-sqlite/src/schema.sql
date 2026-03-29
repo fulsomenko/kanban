@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS cards (
     status TEXT NOT NULL DEFAULT 'Todo',
     position INTEGER NOT NULL,
     due_date TEXT,
-    points INTEGER,
+    points INTEGER CHECK (points >= 0 AND points <= 255),
     card_number INTEGER NOT NULL DEFAULT 0,
     sprint_id TEXT,
     assigned_prefix TEXT,

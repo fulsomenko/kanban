@@ -106,7 +106,11 @@ pub(crate) fn build_card(
         status: parse_enum(&status_str, "status")?,
         position: row.try_get("position").map_err(db_err)?,
         due_date: due_date_str.as_deref().map(parse_datetime).transpose()?,
-        points: points_raw.map(|v| v as u8),
+        points: points_raw
+            .map(|v| {
+                u8::try_from(v).map_err(|_| ser_err(format!("points value {v} out of u8 range")))
+            })
+            .transpose()?,
         card_number: row.try_get::<i32, _>("card_number").map_err(db_err)? as u32,
         sprint_id: sprint_id_str.as_deref().map(parse_uuid).transpose()?,
         assigned_prefix: row.try_get("assigned_prefix").map_err(db_err)?,
