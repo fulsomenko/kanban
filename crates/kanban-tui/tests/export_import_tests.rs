@@ -176,17 +176,61 @@ fn test_auto_save() {
     assert_eq!(parsed["boards"][0]["board"]["name"], "Auto Save Board");
 }
 
-#[test]
-fn test_failed_import_clears_save_file() {
+#[tokio::test]
+async fn test_failed_import_clears_save_file() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_bad.json");
 
     let json = r#"{"boards": [{"invalid": true}]}"#;
     fs::write(&file_path, json).unwrap();
 
-    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    app.load_initial_state().await;
 
     assert!(app.persistence.save_file.is_none());
+}
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn test_async_load_initial_state_sqlite() {
+    use kanban_domain::{Board, Column};
+    use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+    use uuid::Uuid;
+
+    let dir = tempdir().unwrap();
+    let db_path = dir.path().join("test_load.db");
+
+    // Create and populate a SQLite store
+    let store = kanban_persistence_sqlite::SqliteStore::new(db_path.to_str().unwrap());
+
+    let board = Board::new("SQLite Board".to_string(), None);
+    let column = Column::new(board.id, "Backlog".to_string(), 0);
+
+    let snapshot = kanban_domain::Snapshot {
+        boards: vec![board.clone()],
+        columns: vec![column.clone()],
+        cards: vec![],
+        archived_cards: vec![],
+        sprints: vec![],
+        graph: Default::default(),
+    };
+    let data = serde_json::to_vec(&snapshot).unwrap();
+    store
+        .save(StoreSnapshot {
+            data,
+            metadata: PersistenceMetadata::new(Uuid::new_v4()),
+        })
+        .await
+        .unwrap();
+
+    // Now load via App
+    let (mut app, _rx) = App::new(Some(db_path.to_str().unwrap().to_string())).unwrap();
+    app.load_initial_state().await;
+
+    assert_eq!(app.ctx.boards.len(), 1);
+    assert_eq!(app.ctx.boards[0].name, "SQLite Board");
+    assert_eq!(app.ctx.columns.len(), 1);
+    assert_eq!(app.ctx.columns[0].name, "Backlog");
 }
 
 #[test]
