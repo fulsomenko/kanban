@@ -128,8 +128,7 @@ mod tests {
         fn matches_content(&self, header: &[u8]) -> bool {
             let trimmed = header
                 .iter()
-                .skip_while(|b| b.is_ascii_whitespace())
-                .next();
+                .find(|b| !b.is_ascii_whitespace());
             matches!(trimmed, Some(b'{') | Some(b'['))
         }
         fn create(
