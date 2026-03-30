@@ -7,6 +7,10 @@
 .pgdata/
 *.db
 *.sqlite
+*.sqlite3
+*-wal
+*-shm
+*-journal
 
 # IDE
 .vscode/
