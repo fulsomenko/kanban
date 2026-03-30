@@ -83,6 +83,43 @@ impl Default for StoreRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::traits::{PersistenceMetadata, StoreSnapshot};
+    use async_trait::async_trait;
+    use std::path::{Path, PathBuf};
+
+    const SQLITE_INSTANCE_ID: uuid::Uuid = uuid::Uuid::from_u128(1);
+    const JSON_INSTANCE_ID: uuid::Uuid = uuid::Uuid::from_u128(2);
+
+    struct StubStore {
+        instance_id: uuid::Uuid,
+        path: PathBuf,
+    }
+
+    #[async_trait]
+    impl PersistenceStore for StubStore {
+        async fn save(
+            &self,
+            _snapshot: StoreSnapshot,
+        ) -> crate::PersistenceResult<PersistenceMetadata> {
+            unimplemented!()
+        }
+
+        async fn load(&self) -> crate::PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
+            unimplemented!()
+        }
+
+        async fn exists(&self) -> bool {
+            unimplemented!()
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+
+        fn instance_id(&self) -> uuid::Uuid {
+            self.instance_id
+        }
+    }
 
     struct FakeSqliteFactory;
     impl StoreFactory for FakeSqliteFactory {
@@ -104,9 +141,12 @@ mod tests {
         }
         fn create(
             &self,
-            _locator: &str,
+            locator: &str,
         ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
-            unimplemented!("test only checks matching")
+            Ok(Arc::new(StubStore {
+                instance_id: SQLITE_INSTANCE_ID,
+                path: PathBuf::from(locator),
+            }))
         }
     }
 
@@ -131,10 +171,20 @@ mod tests {
         }
         fn create(
             &self,
-            _locator: &str,
+            locator: &str,
         ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
-            unimplemented!("test only checks matching")
+            Ok(Arc::new(StubStore {
+                instance_id: JSON_INSTANCE_ID,
+                path: PathBuf::from(locator),
+            }))
         }
+    }
+
+    fn registry_with_both_factories() -> StoreRegistry {
+        let mut registry = StoreRegistry::new();
+        registry.register(Box::new(FakeSqliteFactory));
+        registry.register(Box::new(FakeJsonFactory));
+        registry
     }
 
     #[test]
@@ -180,5 +230,57 @@ mod tests {
 
         assert!(FakeJsonFactory.matches_locator(path.to_str().unwrap()));
         assert!(!FakeSqliteFactory.matches_locator(path.to_str().unwrap()));
+    }
+
+    #[test]
+    fn test_create_store_content_beats_wrong_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("misleading.json");
+        std::fs::write(&path, b"SQLite format 3\0").unwrap();
+
+        let registry = registry_with_both_factories();
+        let store = registry.create_store(path.to_str().unwrap()).unwrap();
+
+        assert_eq!(store.instance_id(), SQLITE_INSTANCE_ID);
+    }
+
+    #[test]
+    fn test_create_store_new_file_uses_locator() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new_board.json");
+        assert!(!path.exists());
+
+        let registry = registry_with_both_factories();
+        let store = registry.create_store(path.to_str().unwrap()).unwrap();
+
+        assert_eq!(store.instance_id(), JSON_INSTANCE_ID);
+    }
+
+    #[test]
+    fn test_create_store_json_content_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.db");
+        std::fs::write(&path, b"{\"boards\":[]}").unwrap();
+
+        let registry = registry_with_both_factories();
+        let store = registry.create_store(path.to_str().unwrap()).unwrap();
+
+        assert_eq!(store.instance_id(), JSON_INSTANCE_ID);
+    }
+
+    #[test]
+    fn test_create_store_unsupported_locator() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.xyz");
+        assert!(!path.exists());
+
+        let registry = registry_with_both_factories();
+        let result = registry.create_store(path.to_str().unwrap());
+
+        match result {
+            Err(PersistenceError::UnsupportedLocator { .. }) => {}
+            Err(e) => panic!("expected UnsupportedLocator, got: {e:?}"),
+            Ok(_) => panic!("expected error, got Ok"),
+        }
     }
 }
