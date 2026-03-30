@@ -28,9 +28,9 @@ Provides `JsonFileStore` (implements `PersistenceStore`) and `JsonStoreFactory` 
 use kanban_persistence_json::JsonStoreFactory;
 
 let factory = JsonStoreFactory;
-assert!(factory.matches("board.json"));
-assert!(factory.matches("myboard"));        // catch-all
-assert!(!factory.matches("http://example")); // URI excluded
+assert!(factory.matches_locator("board.json"));
+assert!(factory.matches_locator("myboard"));        // catch-all
+assert!(!factory.matches_locator("http://example")); // URI excluded
 ```
 
 ### `JsonFileStore`
