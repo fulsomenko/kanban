@@ -126,9 +126,7 @@ mod tests {
             ext == "json" || ext.is_empty()
         }
         fn matches_content(&self, header: &[u8]) -> bool {
-            let trimmed = header
-                .iter()
-                .find(|b| !b.is_ascii_whitespace());
+            let trimmed = header.iter().find(|b| !b.is_ascii_whitespace());
             matches!(trimmed, Some(b'{') | Some(b'['))
         }
         fn create(
