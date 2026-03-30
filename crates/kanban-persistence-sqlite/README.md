@@ -29,10 +29,10 @@ Provides `SqliteStore` (implements `PersistenceStore`) and `SqliteStoreFactory` 
 use kanban_persistence_sqlite::SqliteStoreFactory;
 
 let factory = SqliteStoreFactory;
-assert!(factory.matches("board.sqlite"));
-assert!(factory.matches("project.sqlite3"));
-assert!(factory.matches("board.db"));
-assert!(!factory.matches("board.json"));
+assert!(factory.matches_locator("board.sqlite"));
+assert!(factory.matches_locator("project.sqlite3"));
+assert!(factory.matches_locator("board.db"));
+assert!(!factory.matches_locator("board.json"));
 ```
 
 ### `SqliteStore`

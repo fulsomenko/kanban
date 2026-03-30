@@ -19,7 +19,7 @@ impl StoreFactory for SqliteStoreFactory {
         &["*.sqlite", "*.sqlite3", "*.db"]
     }
 
-    fn matches(&self, locator: &str) -> bool {
+    fn matches_locator(&self, locator: &str) -> bool {
         let ext = std::path::Path::new(locator)
             .extension()
             .and_then(|e| e.to_str())
@@ -27,10 +27,35 @@ impl StoreFactory for SqliteStoreFactory {
         matches!(ext, "sqlite" | "sqlite3" | "db")
     }
 
+    fn matches_content(&self, header: &[u8]) -> bool {
+        header.starts_with(b"SQLite format 3\0")
+    }
+
     fn create(
         &self,
         locator: &str,
     ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
         Ok(Arc::new(SqliteStore::new(locator)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_matches_content_valid_sqlite_header() {
+        let factory = SqliteStoreFactory;
+        assert!(factory.matches_content(b"SQLite format 3\0"));
+        assert!(factory.matches_content(b"SQLite format 3\0extra data"));
+    }
+
+    #[test]
+    fn test_matches_content_invalid_header() {
+        let factory = SqliteStoreFactory;
+        assert!(!factory.matches_content(b""));
+        assert!(!factory.matches_content(b"{\"boards\": []}"));
+        assert!(!factory.matches_content(b"SQLite format 2\0"));
+        assert!(!factory.matches_content(b"not sqlite"));
     }
 }
