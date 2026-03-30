@@ -128,13 +128,17 @@ impl App {
         };
 
         if let Some(ref filename) = save_file {
-            if std::path::Path::new(filename).exists() {
+            let path = std::path::Path::new(filename);
+            let needs_async_load = matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("db" | "sqlite" | "sqlite3")
+            );
+            if !needs_async_load && path.exists() {
                 if let Err(e) = app.import_board_from_file(filename) {
                     tracing::error!("Failed to load file {}: {}", filename, e);
                     app.persistence.save_file = None;
                     app.ctx.state_manager.clear_store();
                 } else {
-                    // Clear undo/redo history after initial file load (not an undoable action)
                     app.ctx.state_manager.clear_history();
                 }
             }
@@ -1386,6 +1390,36 @@ impl App {
         &mut self,
         save_rx: Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     ) -> KanbanResult<()> {
+        // Load initial state from persistence store (async)
+        if let Some(store) = self.ctx.state_manager.store().cloned() {
+            if store.exists().await {
+                match store.load().await {
+                    Ok((snapshot, _metadata)) => {
+                        match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
+                            Ok(data) => {
+                                data.apply_to_app(self);
+                                self.ctx.state_manager.mark_clean();
+                                self.ctx.state_manager.clear_history();
+                                self.migrate_sprint_logs();
+                                self.check_ended_sprints();
+                                tracing::info!("Loaded initial state from store");
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to deserialize store data: {}", e);
+                                self.persistence.save_file = None;
+                                self.ctx.state_manager.clear_store();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to load from store: {}", e);
+                        self.persistence.save_file = None;
+                        self.ctx.state_manager.clear_store();
+                    }
+                }
+            }
+        }
+
         let mut terminal = setup_terminal()?;
 
         // Initialize file watching if a save file is configured
