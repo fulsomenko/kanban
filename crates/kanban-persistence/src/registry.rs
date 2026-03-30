@@ -46,7 +46,7 @@ impl StoreRegistry {
 
         // Phase 1: If the file exists, try content-based detection
         if path.exists() {
-            if let Ok(header) = read_header(path, 16) {
+            if let Ok(header) = read_header(path, 32) {
                 for factory in &self.factories {
                     if factory.matches_content(&header) {
                         return factory.create(locator);
@@ -204,7 +204,7 @@ mod tests {
         let path = dir.path().join("data.json");
         std::fs::write(&path, b"{\"boards\": []}").unwrap();
 
-        let header = read_header(&path, 16).unwrap();
+        let header = read_header(&path, 32).unwrap();
         assert!(FakeJsonFactory.matches_content(&header));
         assert!(!FakeSqliteFactory.matches_content(&header));
     }
@@ -216,7 +216,7 @@ mod tests {
         let path = dir.path().join("misleading.json");
         std::fs::write(&path, b"SQLite format 3\0").unwrap();
 
-        let header = read_header(&path, 16).unwrap();
+        let header = read_header(&path, 32).unwrap();
         assert!(FakeSqliteFactory.matches_content(&header));
         assert!(!FakeJsonFactory.matches_content(&header));
     }
