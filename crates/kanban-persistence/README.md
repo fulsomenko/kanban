@@ -40,7 +40,8 @@ Backend registration interface. Each backend provides a factory that declares wh
 pub trait StoreFactory: Send + Sync {
     fn name(&self) -> &str;
     fn supported_patterns(&self) -> &[&str];
-    fn matches(&self, locator: &str) -> bool;
+    fn matches_locator(&self, locator: &str) -> bool;
+    fn matches_content(&self, header: &[u8]) -> bool { false }
     fn create(&self, locator: &str) -> Result<Arc<dyn PersistenceStore>>;
 }
 ```
