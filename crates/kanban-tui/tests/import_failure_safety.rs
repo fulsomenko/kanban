@@ -3,8 +3,8 @@ use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
 
-#[test]
-fn test_import_failure_prevents_empty_state_save() {
+#[tokio::test]
+async fn test_import_failure_prevents_empty_state_save() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
 
@@ -27,7 +27,7 @@ fn test_import_failure_prevents_empty_state_save() {
     let v2_content = serde_json::json!({
         "version": 2,
         "metadata": {
-            "instance_id": "test-instance-id",
+            "instance_id": "00000000-0000-0000-0000-000000000001",
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
         "data": snapshot_json
@@ -40,7 +40,8 @@ fn test_import_failure_prevents_empty_state_save() {
     .unwrap();
 
     // Create app with the V2 format file - should handle it gracefully now
-    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    app.load_initial_state().await;
 
     // App should load the board from V2 format
     assert_eq!(
@@ -55,8 +56,8 @@ fn test_import_failure_prevents_empty_state_save() {
     );
 }
 
-#[test]
-fn test_import_failure_disables_save_file() {
+#[tokio::test]
+async fn test_import_failure_disables_save_file() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
 
@@ -64,7 +65,8 @@ fn test_import_failure_disables_save_file() {
     fs::write(&file_path, "{ invalid json }").unwrap();
 
     // Create app with invalid file
-    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    app.load_initial_state().await;
 
     // save_file should be None due to import failure
     assert!(
@@ -76,8 +78,8 @@ fn test_import_failure_disables_save_file() {
     assert_eq!(app.ctx.boards.len(), 0);
 }
 
-#[test]
-fn test_v2_format_is_imported_correctly() {
+#[tokio::test]
+async fn test_v2_format_is_imported_correctly() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
 
@@ -108,7 +110,7 @@ fn test_v2_format_is_imported_correctly() {
     let v2_content = serde_json::json!({
         "version": 2,
         "metadata": {
-            "instance_id": "test-instance",
+            "instance_id": "00000000-0000-0000-0000-000000000002",
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
         "data": snapshot_json
@@ -121,7 +123,8 @@ fn test_v2_format_is_imported_correctly() {
     .unwrap();
 
     // Create app with V2 format file
-    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    app.load_initial_state().await;
 
     // Should successfully import the board with its column and card
     assert_eq!(app.ctx.boards.len(), 1);

@@ -105,7 +105,7 @@ impl App {
     )> {
         let app_config = AppConfig::load();
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone())?;
-        let mut app = Self {
+        let app = Self {
             should_quit: false,
             quit_with_pending: false,
             mode: AppMode::Normal,
@@ -126,26 +126,6 @@ impl App {
             relationship: RelationshipState::default(),
             pending_key: None,
         };
-
-        if let Some(ref filename) = save_file {
-            let path = std::path::Path::new(filename);
-            let needs_async_load = matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("db" | "sqlite" | "sqlite3")
-            );
-            if !needs_async_load && path.exists() {
-                if let Err(e) = app.import_board_from_file(filename) {
-                    tracing::error!("Failed to load file {}: {}", filename, e);
-                    app.persistence.save_file = None;
-                    app.ctx.state_manager.clear_store();
-                } else {
-                    app.ctx.state_manager.clear_history();
-                }
-            }
-        }
-
-        app.migrate_sprint_logs();
-        app.check_ended_sprints();
 
         Ok((app, save_rx))
     }
@@ -1386,11 +1366,8 @@ impl App {
         Ok(())
     }
 
-    pub async fn run(
-        &mut self,
-        save_rx: Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
-    ) -> KanbanResult<()> {
-        // Load initial state from persistence store (async)
+    #[doc(hidden)]
+    pub async fn load_initial_state(&mut self) {
         if let Some(store) = self.ctx.state_manager.store().cloned() {
             if store.exists().await {
                 match store.load().await {
@@ -1399,9 +1376,8 @@ impl App {
                             Ok(data) => {
                                 data.apply_to_app(self);
                                 self.ctx.state_manager.mark_clean();
+                                // Clear undo/redo history after initial file load (not an undoable action)
                                 self.ctx.state_manager.clear_history();
-                                self.migrate_sprint_logs();
-                                self.check_ended_sprints();
                                 tracing::info!("Loaded initial state from store");
                             }
                             Err(e) => {
@@ -1419,6 +1395,15 @@ impl App {
                 }
             }
         }
+        self.migrate_sprint_logs();
+        self.check_ended_sprints();
+    }
+
+    pub async fn run(
+        &mut self,
+        save_rx: Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
+    ) -> KanbanResult<()> {
+        self.load_initial_state().await;
 
         let mut terminal = setup_terminal()?;
 
