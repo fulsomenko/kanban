@@ -1366,6 +1366,7 @@ impl App {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub async fn load_initial_state(&mut self) {
         if let Some(store) = self.ctx.state_manager.store().cloned() {
             if store.exists().await {
