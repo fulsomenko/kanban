@@ -28,3 +28,9 @@ pub fn make_store_for_backend(
 ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
     Ok(default_registry().create_by_name(backend, locator)?)
 }
+
+pub fn default_extension_for(backend: &str) -> Option<String> {
+    default_registry()
+        .default_extension_for(backend)
+        .map(|s| s.to_string())
+}
