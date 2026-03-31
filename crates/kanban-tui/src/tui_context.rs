@@ -22,12 +22,14 @@ pub struct TuiContext {
     pub sprints: Vec<Sprint>,
     pub graph: DependencyGraph,
     pub state_manager: StateManager,
+    pub default_card_prefix: String,
 }
 
 impl TuiContext {
     #[allow(clippy::type_complexity)]
     pub fn new(
         save_file: Option<String>,
+        default_card_prefix: String,
     ) -> KanbanResult<(
         Self,
         Option<mpsc::Receiver<Snapshot>>,
@@ -43,6 +45,7 @@ impl TuiContext {
             sprints: Vec::new(),
             graph: DependencyGraph::new(),
             state_manager,
+            default_card_prefix,
         };
 
         Ok((ctx, save_rx, completion_rx))
@@ -375,7 +378,7 @@ impl KanbanOperations for TuiContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.branch_name(board, &self.sprints, "task"))
+        Ok(card.branch_name(board, &self.sprints, &self.default_card_prefix))
     }
 
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
@@ -392,7 +395,7 @@ impl KanbanOperations for TuiContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.git_checkout_command(board, &self.sprints, "task"))
+        Ok(card.git_checkout_command(board, &self.sprints, &self.default_card_prefix))
     }
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
