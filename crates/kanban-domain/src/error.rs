@@ -140,6 +140,7 @@ impl From<kanban_core::CoreError> for KanbanError {
     fn from(e: kanban_core::CoreError) -> Self {
         match e {
             kanban_core::CoreError::Validation(msg) => KanbanError::validation(msg),
+            kanban_core::CoreError::Config(msg) => KanbanError::validation(msg),
         }
     }
 }
