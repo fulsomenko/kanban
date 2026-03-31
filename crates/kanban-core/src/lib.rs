@@ -8,7 +8,7 @@ pub mod pagination;
 pub mod selection;
 pub mod traits;
 
-pub use config::AppConfig;
+pub use config::{AppConfig, AppConfigDto};
 pub use error::{CoreError, CoreResult};
 pub use graph::{Edge, EdgeDirection, Graph, GraphNode};
 pub use input::InputState;
