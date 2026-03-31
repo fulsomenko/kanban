@@ -15,6 +15,10 @@ impl StoreFactory for SqliteStoreFactory {
         "sqlite"
     }
 
+    fn default_extension(&self) -> &str {
+        "db"
+    }
+
     fn supported_patterns(&self) -> &[&str] {
         &["*.sqlite", "*.sqlite3", "*.db"]
     }

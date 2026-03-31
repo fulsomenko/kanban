@@ -21,3 +21,16 @@ pub fn default_registry() -> StoreRegistry {
 pub fn make_store(locator: &str) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
     Ok(default_registry().create_store(locator)?)
 }
+
+pub fn make_store_for_backend(
+    backend: &str,
+    locator: &str,
+) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
+    Ok(default_registry().create_by_name(backend, locator)?)
+}
+
+pub fn default_extension_for(backend: &str) -> Option<String> {
+    default_registry()
+        .default_extension_for(backend)
+        .map(|s| s.to_string())
+}
