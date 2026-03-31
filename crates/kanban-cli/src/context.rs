@@ -1,3 +1,4 @@
+use kanban_core::AppConfig;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
@@ -13,9 +14,9 @@ pub struct CliContext {
 }
 
 impl CliContext {
-    pub async fn load(file_path: &str) -> KanbanResult<Self> {
+    pub async fn load(file_path: &str, config: AppConfig) -> KanbanResult<Self> {
         Ok(Self {
-            inner: KanbanContext::load(kanban_service::make_store(file_path)?).await?,
+            inner: KanbanContext::load(kanban_service::make_store(file_path)?, config).await?,
         })
     }
 

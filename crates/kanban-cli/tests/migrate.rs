@@ -3,11 +3,12 @@ use kanban_persistence::PersistenceStore;
 use kanban_persistence_json::JsonFileStore;
 use kanban_persistence_sqlite::SqliteStore;
 use kanban_service::KanbanContext;
+use kanban_core::AppConfig;
 use std::sync::Arc;
 use tempfile::TempDir;
 
 async fn create_populated_context(store: Arc<dyn PersistenceStore + Send + Sync>) -> KanbanContext {
-    let mut ctx = KanbanContext::load(store).await.unwrap();
+    let mut ctx = KanbanContext::load(store, AppConfig::default()).await.unwrap();
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
@@ -31,7 +32,7 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
     let sqlite_store = Arc::new(SqliteStore::new(&db_path));
     sqlite_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&db_path)))
+    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&db_path)), AppConfig::default())
         .await
         .unwrap();
 
@@ -58,7 +59,7 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     let json_store = Arc::new(JsonFileStore::new(&json_path));
     json_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(JsonFileStore::new(&json_path)))
+    let loaded = KanbanContext::load(Arc::new(JsonFileStore::new(&json_path)), AppConfig::default())
         .await
         .unwrap();
 
@@ -84,7 +85,7 @@ async fn test_migrate_json_to_json_roundtrip() {
     let dst_store = Arc::new(JsonFileStore::new(&dst_path));
     dst_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(JsonFileStore::new(&dst_path)))
+    let loaded = KanbanContext::load(Arc::new(JsonFileStore::new(&dst_path)), AppConfig::default())
         .await
         .unwrap();
 
@@ -105,7 +106,7 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     let dst_store = Arc::new(SqliteStore::new(&dst_path));
     dst_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&dst_path)), AppConfig::default())
         .await
         .unwrap();
 
