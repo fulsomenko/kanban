@@ -16,6 +16,10 @@ impl StoreFactory for JsonStoreFactory {
         "json"
     }
 
+    fn default_extension(&self) -> &str {
+        "json"
+    }
+
     fn supported_patterns(&self) -> &[&str] {
         &["*.json", "<path without extension>"]
     }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 pub trait StoreFactory: Send + Sync {
     fn name(&self) -> &str;
+    fn default_extension(&self) -> &str;
     fn supported_patterns(&self) -> &[&str];
     fn matches_locator(&self, locator: &str) -> bool;
     fn matches_content(&self, _header: &[u8]) -> bool {
@@ -95,6 +96,13 @@ impl StoreRegistry {
             .map(|f| f.name().to_string())
             .collect()
     }
+
+    pub fn default_extension_for(&self, backend: &str) -> Option<&str> {
+        self.factories
+            .iter()
+            .find(|f| f.name() == backend)
+            .map(|f| f.default_extension())
+    }
 }
 
 impl Default for StoreRegistry {
@@ -149,6 +157,9 @@ mod tests {
         fn name(&self) -> &str {
             "sqlite"
         }
+        fn default_extension(&self) -> &str {
+            "db"
+        }
         fn supported_patterns(&self) -> &[&str] {
             &["*.sqlite", "*.db"]
         }
@@ -176,6 +187,9 @@ mod tests {
     struct FakeJsonFactory;
     impl StoreFactory for FakeJsonFactory {
         fn name(&self) -> &str {
+            "json"
+        }
+        fn default_extension(&self) -> &str {
             "json"
         }
         fn supported_patterns(&self) -> &[&str] {
@@ -327,6 +341,19 @@ mod tests {
         assert!(names.contains(&"sqlite".to_string()));
         assert!(names.contains(&"json".to_string()));
         assert_eq!(names.len(), 2);
+    }
+
+    #[test]
+    fn test_default_extension_for_known_backends() {
+        let registry = registry_with_both_factories();
+        assert_eq!(registry.default_extension_for("sqlite"), Some("db"));
+        assert_eq!(registry.default_extension_for("json"), Some("json"));
+    }
+
+    #[test]
+    fn test_default_extension_for_unknown_backend_returns_none() {
+        let registry = registry_with_both_factories();
+        assert_eq!(registry.default_extension_for("postgres"), None);
     }
 
     #[test]
