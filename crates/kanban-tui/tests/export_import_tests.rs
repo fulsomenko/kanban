@@ -190,7 +190,6 @@ async fn test_failed_import_clears_save_file() {
     assert!(app.persistence.save_file.is_none());
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_async_load_initial_state_sqlite() {
     use kanban_domain::{Board, Column};

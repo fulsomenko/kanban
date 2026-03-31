@@ -14,9 +14,6 @@ categories = ["command-line-utilities"]
 name = "kanban-mcp"
 path = "src/main.rs"
 
-[features]
-sqlite = ["kanban-service/sqlite-storage"]
-
 [dependencies]
 # Workspace crates
 kanban-core = { path = "../kanban-core", version = "^0.3" }
