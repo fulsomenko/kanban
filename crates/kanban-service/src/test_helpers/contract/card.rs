@@ -1,5 +1,6 @@
 use super::super::StoreFactory;
 use crate::KanbanContext;
+use kanban_core::AppConfig;
 use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::{CardUpdate, CreateCardOptions, KanbanOperations};
 use tempfile::TempDir;
@@ -7,7 +8,7 @@ use tempfile::TempDir;
 pub async fn test_card_all_fields_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), Some("FB".into())).unwrap();
     let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
@@ -38,7 +39,7 @@ pub async fn test_card_all_fields_roundtrip(factory: &StoreFactory) {
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.title, "Full Card");
@@ -56,7 +57,7 @@ pub async fn test_card_all_fields_roundtrip(factory: &StoreFactory) {
 pub async fn test_card_minimal_fields_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -71,7 +72,7 @@ pub async fn test_card_minimal_fields_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.title, "Minimal");
@@ -88,7 +89,7 @@ pub async fn test_card_minimal_fields_roundtrip(factory: &StoreFactory) {
 pub async fn test_card_all_priority_variants_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -117,7 +118,7 @@ pub async fn test_card_all_priority_variants_roundtrip(factory: &StoreFactory) {
     }
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     for (id, expected) in card_ids.iter().zip(priorities.iter()) {
         let c = ctx.get_card(*id).unwrap().unwrap();
@@ -128,7 +129,7 @@ pub async fn test_card_all_priority_variants_roundtrip(factory: &StoreFactory) {
 pub async fn test_card_all_status_variants_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -162,7 +163,7 @@ pub async fn test_card_all_status_variants_roundtrip(factory: &StoreFactory) {
     }
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     for (id, expected) in card_ids.iter().zip(statuses.iter()) {
         let c = ctx.get_card(*id).unwrap().unwrap();
@@ -173,7 +174,7 @@ pub async fn test_card_all_status_variants_roundtrip(factory: &StoreFactory) {
 pub async fn test_card_completed_at_set_on_done_status(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -197,7 +198,7 @@ pub async fn test_card_completed_at_set_on_done_status(factory: &StoreFactory) {
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.status, CardStatus::Done);

@@ -1,5 +1,6 @@
 use super::super::StoreFactory;
 use crate::KanbanContext;
+use kanban_core::AppConfig;
 use kanban_core::{Edge, EdgeDirection};
 use kanban_domain::{CardEdgeType, CreateCardOptions, KanbanOperations};
 use tempfile::TempDir;
@@ -7,7 +8,7 @@ use tempfile::TempDir;
 pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -41,7 +42,7 @@ pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
     });
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let edges = ctx.graph.cards.edges();
     assert_eq!(edges.len(), 1);
@@ -57,7 +58,7 @@ pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
 pub async fn test_relates_to_edge_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -81,7 +82,7 @@ pub async fn test_relates_to_edge_roundtrip(factory: &StoreFactory) {
     });
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let edges = ctx.graph.cards.edges();
     assert_eq!(edges.len(), 1);
@@ -94,7 +95,7 @@ pub async fn test_relates_to_edge_roundtrip(factory: &StoreFactory) {
 pub async fn test_parent_of_edge_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -128,7 +129,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &StoreFactory) {
     });
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let edges = ctx.graph.cards.edges();
     assert_eq!(edges.len(), 1);
@@ -138,7 +139,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &StoreFactory) {
 pub async fn test_archived_edge_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -162,7 +163,7 @@ pub async fn test_archived_edge_roundtrip(factory: &StoreFactory) {
     });
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let edges = ctx.graph.cards.edges();
     assert_eq!(edges.len(), 1);
@@ -173,7 +174,7 @@ pub async fn test_archived_edge_roundtrip(factory: &StoreFactory) {
 pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -218,7 +219,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
     });
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     assert_eq!(ctx.graph.cards.edges().len(), 3);
 }
@@ -226,11 +227,11 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
 pub async fn test_empty_graph_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
 
     ctx.create_board("Board".into(), None).unwrap();
     ctx.save().await.unwrap();
 
-    let ctx = KanbanContext::load(factory(&path)).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
     assert!(ctx.graph.cards.edges().is_empty());
 }
