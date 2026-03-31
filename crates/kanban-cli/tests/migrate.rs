@@ -121,11 +121,7 @@ async fn test_migrate_rejects_missing_source() {
     let missing = dir.path().join("nonexistent.json");
 
     let output = cargo_bin_cmd!("kanban")
-        .args([
-            "migrate",
-            missing.to_str().unwrap(),
-            "sqlite",
-        ])
+        .args(["migrate", missing.to_str().unwrap(), "sqlite"])
         .output()
         .unwrap();
 
@@ -212,11 +208,7 @@ async fn test_migrate_cli_default_output_path() {
     create_populated_context(src_store).await;
 
     let output = cargo_bin_cmd!("kanban")
-        .args([
-            "migrate",
-            src_path.to_str().unwrap(),
-            "sqlite",
-        ])
+        .args(["migrate", src_path.to_str().unwrap(), "sqlite"])
         .output()
         .unwrap();
 

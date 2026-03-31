@@ -90,7 +90,10 @@ impl StoreRegistry {
     }
 
     pub fn available_backend_names(&self) -> Vec<String> {
-        self.factories.iter().map(|f| f.name().to_string()).collect()
+        self.factories
+            .iter()
+            .map(|f| f.name().to_string())
+            .collect()
     }
 }
 
