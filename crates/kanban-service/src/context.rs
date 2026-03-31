@@ -1,3 +1,4 @@
+use kanban_core::AppConfig;
 use kanban_domain::commands::{Command, CommandContext};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
@@ -44,13 +45,17 @@ pub struct KanbanContext {
     pub sprints: Vec<Sprint>,
     pub archived_cards: Vec<ArchivedCard>,
     pub graph: DependencyGraph,
+    pub app_config: AppConfig,
     store: Arc<dyn PersistenceStore + Send + Sync>,
 }
 
 impl KanbanContext {
-    pub async fn load(store: Arc<dyn PersistenceStore + Send + Sync>) -> KanbanResult<Self> {
+    pub async fn load(
+        store: Arc<dyn PersistenceStore + Send + Sync>,
+        config: AppConfig,
+    ) -> KanbanResult<Self> {
         if !store.exists().await {
-            return Ok(Self::empty(store));
+            return Ok(Self::empty(store, config));
         }
 
         let (snapshot, _metadata) = store.load().await?;
@@ -64,11 +69,12 @@ impl KanbanContext {
             sprints: data.sprints,
             archived_cards: data.archived_cards,
             graph: data.graph,
+            app_config: config,
             store,
         })
     }
 
-    fn empty(store: Arc<dyn PersistenceStore + Send + Sync>) -> Self {
+    fn empty(store: Arc<dyn PersistenceStore + Send + Sync>, config: AppConfig) -> Self {
         Self {
             boards: Vec::new(),
             columns: Vec::new(),
@@ -76,6 +82,7 @@ impl KanbanContext {
             sprints: Vec::new(),
             archived_cards: Vec::new(),
             graph: DependencyGraph::new(),
+            app_config: config,
             store,
         }
     }
@@ -483,7 +490,7 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.branch_name(board, &self.sprints, "task"))
+        Ok(card.branch_name(board, &self.sprints, self.app_config.effective_default_card_prefix()))
     }
 
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
@@ -500,7 +507,7 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.git_checkout_command(board, &self.sprints, "task"))
+        Ok(card.git_checkout_command(board, &self.sprints, self.app_config.effective_default_card_prefix()))
     }
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {

@@ -4,6 +4,8 @@ pub use context::{BulkOperationFailure, BulkOperationResult, DataSnapshot, Kanba
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers;
 
+pub use kanban_core::AppConfig;
+
 use kanban_domain::KanbanError;
 use kanban_persistence::{PersistenceStore, StoreRegistry};
 use std::sync::Arc;
@@ -33,4 +35,20 @@ pub fn default_extension_for(backend: &str) -> Option<String> {
     default_registry()
         .default_extension_for(backend)
         .map(|s| s.to_string())
+}
+
+pub fn make_store_with_config(
+    file: Option<&str>,
+    config: &AppConfig,
+) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
+    match file {
+        Some(path) => make_store(path),
+        None => {
+            let default_path = match config.effective_storage_backend() {
+                "sqlite" => "kanban.sqlite",
+                _ => "kanban.json",
+            };
+            make_store(default_path)
+        }
+    }
 }

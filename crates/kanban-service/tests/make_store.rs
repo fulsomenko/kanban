@@ -1,4 +1,5 @@
-use kanban_service::make_store;
+use kanban_core::AppConfig;
+use kanban_service::{make_store, make_store_with_config};
 
 #[test]
 fn test_make_store_json_extension() {
@@ -81,4 +82,32 @@ fn test_make_store_unrecognized_uri_returns_error() {
             );
         }
     }
+}
+
+#[test]
+fn test_make_store_with_config_explicit_path_wins() {
+    let config = AppConfig {
+        storage_backend: Some("sqlite".into()),
+        ..Default::default()
+    };
+    let store = make_store_with_config(Some("/tmp/test_explicit.json"), &config).unwrap();
+    assert!(store.path().to_str().unwrap().ends_with(".json"));
+}
+
+#[test]
+fn test_make_store_with_config_none_uses_json_default() {
+    let config = AppConfig::default();
+    let store = make_store_with_config(None, &config).unwrap();
+    assert!(store.path().to_str().unwrap().ends_with("kanban.json"));
+}
+
+#[cfg(feature = "sqlite-storage")]
+#[test]
+fn test_make_store_with_config_none_uses_sqlite_when_configured() {
+    let config = AppConfig {
+        storage_backend: Some("sqlite".into()),
+        ..Default::default()
+    };
+    let store = make_store_with_config(None, &config).unwrap();
+    assert!(store.path().to_str().unwrap().ends_with("kanban.sqlite"));
 }
