@@ -7,6 +7,7 @@ use super::{
         SearchModeProvider,
     },
     normal_mode::{ArchivedCardsViewProvider, NormalModeBoardsProvider},
+    settings::SettingsViewProvider,
     sprint_detail::SprintDetailProvider,
     KeybindingProvider,
 };
@@ -40,6 +41,7 @@ impl KeybindingRegistry {
             AppMode::SprintDetail => Box::new(SprintDetailProvider),
             AppMode::Search => Box::new(SearchModeProvider),
             AppMode::ArchivedCardsView => Box::new(ArchivedCardsViewProvider),
+            AppMode::Settings => Box::new(SettingsViewProvider),
             AppMode::Help(previous_mode) => {
                 Self::get_provider_for_mode(previous_mode, focus, card_focus, board_focus)
             }
