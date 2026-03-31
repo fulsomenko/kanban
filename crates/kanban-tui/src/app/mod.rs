@@ -84,6 +84,58 @@ pub struct App {
     pub view: ViewState,
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
+    pub export_dialog: Option<ExportDialogState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExportStep {
+    SelectBoards,
+    ExportOptions,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ExportFormat {
+    #[default]
+    Json,
+    Sqlite,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportDialogState {
+    pub board_selections: Vec<bool>,
+    pub cursor: usize,
+    pub step: ExportStep,
+    pub format: ExportFormat,
+    pub filename: String,
+}
+
+impl ExportDialogState {
+    pub fn new(board_count: usize) -> Self {
+        Self {
+            board_selections: vec![false; board_count],
+            cursor: 0,
+            step: ExportStep::SelectBoards,
+            format: ExportFormat::default(),
+            filename: "export.json".to_string(),
+        }
+    }
+
+    pub fn toggle(&mut self, index: usize) {
+        if let Some(selected) = self.board_selections.get_mut(index) {
+            *selected = !*selected;
+        }
+    }
+
+    pub fn select_all(&mut self) {
+        let all_selected = self.board_selections.iter().all(|&s| s);
+        for s in &mut self.board_selections {
+            *s = !all_selected;
+        }
+    }
+
+    pub fn any_selected(&self) -> bool {
+        self.board_selections.iter().any(|&s| s)
+    }
 }
 
 pub enum CardField {
@@ -104,7 +156,8 @@ impl App {
         Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     )> {
         let app_config = AppConfig::load();
-        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone())?;
+        let default_card_prefix = app_config.effective_default_card_prefix().to_string();
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone(), default_card_prefix)?;
         let app = Self {
             should_quit: false,
             quit_with_pending: false,
@@ -125,6 +178,7 @@ impl App {
             view: ViewState::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
+            export_dialog: None,
         };
 
         Ok((app, save_rx))
@@ -295,6 +349,7 @@ impl App {
                 }
             }
             KeybindingAction::OpenSettings => self.handle_open_settings(),
+            KeybindingAction::ExportBoards => {}
         }
     }
 
@@ -635,6 +690,7 @@ impl App {
                 DialogMode::ManageParents => self.handle_manage_parents_popup(key.code),
                 DialogMode::ManageChildren => self.handle_manage_children_popup(key.code),
                 DialogMode::CarryOverSprint => self.handle_carry_over_sprint_popup(key.code),
+                DialogMode::ExportBoards => self.handle_export_boards_dialog(key.code),
             },
         }
         should_restart_events
@@ -1354,20 +1410,37 @@ impl App {
         event_handler: &EventHandler,
         temp_file: std::path::PathBuf,
     ) -> io::Result<()> {
+        Self::edit_entity_impl::<T, E>(
+            entity,
+            terminal,
+            event_handler,
+            temp_file,
+            crate::edit_format::EditFormat::Json,
+        )
+    }
+
+    pub fn edit_entity_impl<T: Editable<E>, E>(
+        entity: &mut E,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        event_handler: &EventHandler,
+        temp_file: std::path::PathBuf,
+        format: crate::edit_format::EditFormat,
+    ) -> io::Result<()> {
         let dto = T::from_entity(entity);
-        let current_content =
-            serde_json::to_string_pretty(&dto).unwrap_or_else(|_| "{}".to_string());
+        let current_content = format
+            .serialize(&dto)
+            .unwrap_or_else(|_| "{}".to_string());
 
         if let Some(new_content) =
             edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
         {
-            match serde_json::from_str::<T>(&new_content) {
+            match format.deserialize::<T>(&new_content) {
                 Ok(updated_dto) => {
                     updated_dto.apply_to(entity);
-                    tracing::info!("Updated entity via JSON editor");
+                    tracing::info!("Updated entity via {} editor", format);
                 }
                 Err(e) => {
-                    tracing::error!("Failed to parse JSON: {}", e);
+                    tracing::error!("Failed to parse {}: {}", format, e);
                 }
             }
         }
