@@ -72,6 +72,26 @@ impl StoreRegistry {
             supported,
         })
     }
+
+    pub fn create_by_name(
+        &self,
+        backend: &str,
+        locator: &str,
+    ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
+        for factory in &self.factories {
+            if factory.name() == backend {
+                return factory.create(locator);
+            }
+        }
+        Err(PersistenceError::UnsupportedLocator {
+            locator: format!("backend={backend}"),
+            supported: self.available_backend_names(),
+        })
+    }
+
+    pub fn available_backend_names(&self) -> Vec<String> {
+        self.factories.iter().map(|f| f.name().to_string()).collect()
+    }
 }
 
 impl Default for StoreRegistry {
@@ -266,6 +286,44 @@ mod tests {
         let store = registry.create_store(path.to_str().unwrap()).unwrap();
 
         assert_eq!(store.instance_id(), JSON_INSTANCE_ID);
+    }
+
+    #[test]
+    fn test_create_by_name_returns_correct_backend() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.anything");
+
+        let registry = registry_with_both_factories();
+        let store = registry
+            .create_by_name("json", path.to_str().unwrap())
+            .unwrap();
+        assert_eq!(store.instance_id(), JSON_INSTANCE_ID);
+
+        let path2 = dir.path().join("data2.anything");
+        let store2 = registry
+            .create_by_name("sqlite", path2.to_str().unwrap())
+            .unwrap();
+        assert_eq!(store2.instance_id(), SQLITE_INSTANCE_ID);
+    }
+
+    #[test]
+    fn test_create_by_name_unknown_backend_returns_error() {
+        let registry = registry_with_both_factories();
+        let result = registry.create_by_name("postgres", "/tmp/test");
+        match result {
+            Err(PersistenceError::UnsupportedLocator { .. }) => {}
+            Err(e) => panic!("expected UnsupportedLocator, got: {e:?}"),
+            Ok(_) => panic!("expected error, got Ok"),
+        }
+    }
+
+    #[test]
+    fn test_available_backend_names() {
+        let registry = registry_with_both_factories();
+        let names = registry.available_backend_names();
+        assert!(names.contains(&"sqlite".to_string()));
+        assert!(names.contains(&"json".to_string()));
+        assert_eq!(names.len(), 2);
     }
 
     #[test]
