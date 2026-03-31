@@ -294,6 +294,7 @@ impl App {
                     self.set_error(format!("Redo failed: {}", e));
                 }
             }
+            KeybindingAction::OpenSettings => self.handle_open_settings(),
         }
     }
 
@@ -566,6 +567,10 @@ impl App {
                         self.set_error(format!("Redo failed: {}", e));
                     }
                 }
+                KeyCode::Char('S') => {
+                    self.pending_key = None;
+                    self.handle_open_settings();
+                }
                 _ => {
                     self.pending_key = None;
                 }
@@ -581,6 +586,10 @@ impl App {
             AppMode::SprintDetail => self.handle_sprint_detail_key(key.code),
             AppMode::Search => self.handle_search_mode(key.code),
             AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
+            AppMode::Settings => {
+                should_restart_events =
+                    self.handle_settings_key(key.code, terminal, event_handler);
+            }
             AppMode::Help(_) => self.handle_help_mode(key.code),
             AppMode::Dialog(ref dialog) => match dialog {
                 DialogMode::CreateBoard => self.handle_create_board_dialog(key.code),
