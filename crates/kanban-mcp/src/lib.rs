@@ -509,9 +509,9 @@ pub struct KanbanMcpServer {
 }
 
 impl KanbanMcpServer {
-    pub async fn new(data_file: &str) -> KanbanResult<Self> {
+    pub async fn new(data_file: &str, config: kanban_core::AppConfig) -> KanbanResult<Self> {
         Ok(Self {
-            ctx: Arc::new(Mutex::new(McpContext::new(data_file).await?)),
+            ctx: Arc::new(Mutex::new(McpContext::new(data_file, config).await?)),
             tool_router: Self::tool_router(),
         })
     }

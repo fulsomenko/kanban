@@ -1,4 +1,4 @@
-use kanban_core::PaginatedList;
+use kanban_core::{AppConfig, PaginatedList};
 use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
@@ -12,9 +12,9 @@ pub struct McpContext {
 }
 
 impl McpContext {
-    pub async fn new(data_file: &str) -> KanbanResult<Self> {
+    pub async fn new(data_file: &str, config: AppConfig) -> KanbanResult<Self> {
         Ok(Self {
-            inner: KanbanContext::load(kanban_service::make_store(data_file)?).await?,
+            inner: KanbanContext::load(kanban_service::make_store(data_file)?, config).await?,
         })
     }
 
