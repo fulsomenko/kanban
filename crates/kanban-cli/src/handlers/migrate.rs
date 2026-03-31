@@ -62,5 +62,8 @@ fn default_output_path(source: &str, backend: &str) -> anyhow::Result<String> {
         .ok_or_else(|| anyhow::anyhow!("No default extension for backend {backend:?}"))?;
 
     let dir = src.parent().unwrap_or_else(|| Path::new("."));
-    Ok(dir.join(format!("{stem}.{ext}")).to_string_lossy().into())
+    let path = dir.join(format!("{stem}.{ext}"));
+    path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Output path is not valid UTF-8"))
+        .map(|s| s.to_string())
 }
