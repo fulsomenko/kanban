@@ -6,7 +6,7 @@
     },
     "kanban": {
       "command": "nix",
-      "args": ["run", ".#kanban-mcp", "--", "kanban.json"]
+      "args": ["run", ".#kanban-mcp", "--", "/home/max/notes/memes/kanban.json"]
     }
   }
 }
