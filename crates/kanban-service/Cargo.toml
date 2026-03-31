@@ -9,7 +9,7 @@ homepage.workspace = true
 description = "Shared service layer implementing KanbanOperations over a pluggable PersistenceStore"
 
 [features]
-default = ["json-storage"]
+default = ["json-storage", "sqlite-storage"]
 json-storage = ["dep:kanban-persistence-json"]
 sqlite-storage = ["dep:kanban-persistence-sqlite"]
 test-helpers = ["dep:tempfile"]
