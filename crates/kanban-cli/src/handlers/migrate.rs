@@ -58,11 +58,8 @@ fn default_output_path(source: &str, backend: &str) -> anyhow::Result<String> {
         .and_then(|s| s.to_str())
         .ok_or_else(|| anyhow::anyhow!("Cannot derive filename from source path"))?;
 
-    let ext = match backend {
-        "sqlite" => "db",
-        "json" => "json",
-        other => other,
-    };
+    let ext = kanban_service::default_extension_for(backend)
+        .ok_or_else(|| anyhow::anyhow!("No default extension for backend {backend:?}"))?;
 
     let dir = src.parent().unwrap_or_else(|| Path::new("."));
     Ok(dir.join(format!("{stem}.{ext}")).to_string_lossy().into())
