@@ -4,6 +4,7 @@ pub mod card_list;
 pub mod dialog_modes;
 pub mod normal_mode;
 pub mod registry;
+pub mod settings;
 pub mod sprint_detail;
 
 pub use registry::KeybindingRegistry;
@@ -59,6 +60,7 @@ pub enum KeybindingAction {
     CarryOver,
     Undo,
     Redo,
+    OpenSettings,
 }
 
 #[derive(Debug, Clone)]
