@@ -19,3 +19,6 @@ chrono.workspace = true
 async-trait.workspace = true
 toml = "0.8"
 dirs = "5.0"
+
+[dev-dependencies]
+tempfile.workspace = true
