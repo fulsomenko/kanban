@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 pub trait StoreFactory: Send + Sync {
     fn name(&self) -> &str;
-    fn default_extension(&self) -> &str;
+    fn default_extension(&self) -> &str {
+        self.name()
+    }
     fn supported_patterns(&self) -> &[&str];
     fn matches_locator(&self, locator: &str) -> bool;
     fn matches_content(&self, _header: &[u8]) -> bool {
@@ -187,9 +189,6 @@ mod tests {
     struct FakeJsonFactory;
     impl StoreFactory for FakeJsonFactory {
         fn name(&self) -> &str {
-            "json"
-        }
-        fn default_extension(&self) -> &str {
             "json"
         }
         fn supported_patterns(&self) -> &[&str] {
