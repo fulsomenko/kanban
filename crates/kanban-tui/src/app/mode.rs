@@ -27,6 +27,7 @@ pub enum DialogMode {
     ManageParents,
     ManageChildren,
     CarryOverSprint,
+    ExportBoards,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -79,6 +79,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 DialogMode::ManageParents => render_manage_parents_popup(app, frame),
                 DialogMode::ManageChildren => render_manage_children_popup(app, frame),
                 DialogMode::CarryOverSprint => render_carry_over_sprint_popup(app, frame),
+                DialogMode::ExportBoards => render_export_boards_popup(app, frame),
             }
         }
     } else {
@@ -110,35 +111,62 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
     use crate::components::detail_view::{metadata_line, FieldSectionConfig};
 
-    let sections = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(6),
-            Constraint::Length(6),
-            Constraint::Length(5),
-            Constraint::Min(0),
-        ])
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
-    // Section 1: Configuration
+    let left_sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+        .split(columns[0]);
+
+    // Left top: Configuration
     let config_section = FieldSectionConfig::new(" Configuration (press e to edit) ");
     let config_block = config_section.block();
-    let branch_prefix = app
+    let card_prefix = app
         .app_config
-        .default_branch_prefix
+        .default_card_prefix
         .as_deref()
         .unwrap_or("(default)");
-    let db_mode = app.app_config.effective_default_db_mode();
-    let default_format = app.app_config.effective_default_format();
+    let sprint_prefix = app
+        .app_config
+        .default_sprint_prefix
+        .as_deref()
+        .unwrap_or("(default)");
+    let db_mode = app.app_config.effective_storage_backend();
+    let default_format = app.app_config.effective_editing_format();
     let config_lines = vec![
-        metadata_line("Branch Prefix", branch_prefix),
-        metadata_line("Default DB Mode", db_mode),
-        metadata_line("Default Format", default_format),
+        metadata_line("Default Card Prefix", card_prefix),
+        metadata_line("Default Sprint Prefix", sprint_prefix),
+        metadata_line("Default Storage Backend", db_mode),
+        metadata_line("Default Editing Format", default_format),
     ];
     let config_paragraph = Paragraph::new(config_lines).block(config_block);
-    frame.render_widget(config_paragraph, sections[0]);
+    frame.render_widget(config_paragraph, left_sections[0]);
 
-    // Section 2: Storage
+    // Left bottom: Config File
+    let config_file_section = FieldSectionConfig::new(" Config File ");
+    let config_file_block = config_file_section.block();
+    let config_location = app.app_config.effective_configuration_location();
+    let config_path_display = if config_location.is_empty() {
+        "(unknown)".to_string()
+    } else {
+        config_location.clone()
+    };
+    let config_exists = !config_location.is_empty()
+        && std::path::Path::new(&config_location).exists();
+    let status = if config_exists { "Loaded" } else { "Not found" };
+    let config_format = app.app_config.effective_configuration_format();
+    let config_file_lines = vec![
+        metadata_line("Path", &config_path_display),
+        metadata_line("Status", status),
+        metadata_line("Configuration Format", config_format),
+    ];
+    let config_file_paragraph = Paragraph::new(config_file_lines).block(config_file_block);
+    frame.render_widget(config_file_paragraph, left_sections[1]);
+
+    // Right: Storage
     let storage_section = FieldSectionConfig::new(" Storage ");
     let storage_block = storage_section.block();
     let file_path = app
@@ -158,25 +186,119 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         metadata_line("File", file_path),
         metadata_line("Backend", backend),
         metadata_line("Instance ID", &instance_id),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  [x] ", Style::default().fg(Color::Yellow)),
+            Span::styled("Export Boards", Style::default().fg(Color::White)),
+        ]),
     ];
     let storage_paragraph = Paragraph::new(storage_lines).block(storage_block);
-    frame.render_widget(storage_paragraph, sections[1]);
+    frame.render_widget(storage_paragraph, columns[1]);
+}
 
-    // Section 3: Config File
-    let config_file_section = FieldSectionConfig::new(" Config File ");
-    let config_file_block = config_file_section.block();
-    let config_path = kanban_core::AppConfig::config_path()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "(unknown)".to_string());
-    let config_exists = kanban_core::AppConfig::config_path()
-        .is_some_and(|p| p.exists());
-    let status = if config_exists { "Loaded" } else { "Not found" };
-    let config_file_lines = vec![
-        metadata_line("Path", &config_path),
-        metadata_line("Status", status),
-    ];
-    let config_file_paragraph = Paragraph::new(config_file_lines).block(config_file_block);
-    frame.render_widget(config_file_paragraph, sections[2]);
+fn render_export_boards_popup(app: &App, frame: &mut Frame) {
+    use crate::app::{ExportFormat, ExportStep};
+
+    let Some(ref dialog) = app.export_dialog else {
+        return;
+    };
+
+    match dialog.step {
+        ExportStep::SelectBoards => {
+            let inner = render_popup_with_block(frame, "Select Boards to Export", 60, 60);
+
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(1)
+                .constraints([Constraint::Min(0), Constraint::Length(1)])
+                .split(inner);
+
+            let items: Vec<Line> = app
+                .ctx
+                .boards
+                .iter()
+                .enumerate()
+                .map(|(i, board)| {
+                    let checkbox = if dialog.board_selections.get(i).copied().unwrap_or(false) {
+                        "[x] "
+                    } else {
+                        "[ ] "
+                    };
+                    let style = if i == dialog.cursor {
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+                    Line::from(Span::styled(format!("{}{}", checkbox, board.name), style))
+                })
+                .collect();
+
+            let list = Paragraph::new(items);
+            frame.render_widget(list, chunks[0]);
+
+            let hint = Paragraph::new(Line::from(vec![
+                Span::styled(
+                    "Space: toggle | a: all | Enter: next | Esc: cancel",
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            frame.render_widget(hint, chunks[1]);
+        }
+        ExportStep::ExportOptions => {
+            let inner = render_popup_with_block(frame, "Export Options", 60, 30);
+
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(1)
+                .constraints([
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                    Constraint::Min(0),
+                ])
+                .split(inner);
+
+            let filename_label = Paragraph::new(Line::from(vec![
+                Span::styled("Filename: ", Style::default().fg(Color::Cyan)),
+                Span::styled(&dialog.filename, Style::default().fg(Color::White)),
+                Span::styled("_", Style::default().fg(Color::Yellow)),
+            ]));
+            frame.render_widget(filename_label, chunks[0]);
+
+            frame.render_widget(Paragraph::new(""), chunks[1]);
+
+            let json_style = if dialog.format == ExportFormat::Json {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let sqlite_style = if dialog.format == ExportFormat::Sqlite {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let json_radio = if dialog.format == ExportFormat::Json { "(*)" } else { "( )" };
+            let sqlite_radio = if dialog.format == ExportFormat::Sqlite { "(*)" } else { "( )" };
+
+            let format_line = Paragraph::new(Line::from(vec![
+                Span::styled("Format: ", Style::default().fg(Color::Cyan)),
+                Span::styled(format!("{} JSON  ", json_radio), json_style),
+                Span::styled(format!("{} SQLite", sqlite_radio), sqlite_style),
+            ]));
+            frame.render_widget(format_line, chunks[2]);
+
+            let hint = Paragraph::new(Line::from(vec![
+                Span::styled(
+                    "Tab: format | Enter: export | Esc: back",
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            frame.render_widget(hint, chunks[3]);
+        }
+    }
 }
 
 fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {

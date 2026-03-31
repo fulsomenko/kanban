@@ -61,6 +61,7 @@ pub enum KeybindingAction {
     Undo,
     Redo,
     OpenSettings,
+    ExportBoards,
 }
 
 #[derive(Debug, Clone)]

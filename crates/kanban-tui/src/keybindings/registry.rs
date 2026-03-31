@@ -99,6 +99,9 @@ impl KeybindingRegistry {
                 DialogMode::CarryOverSprint => {
                     Box::new(DialogSelectionProvider::new("Carry Over to Sprint"))
                 }
+                DialogMode::ExportBoards => {
+                    Box::new(DialogSelectionProvider::new("Export Boards"))
+                }
             },
         }
     }

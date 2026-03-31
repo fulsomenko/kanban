@@ -14,6 +14,12 @@ impl KeybindingProvider for SettingsViewProvider {
                     KeybindingAction::EditCard,
                 ),
                 Keybinding::new(
+                    "x",
+                    "export",
+                    "Export boards",
+                    KeybindingAction::ExportBoards,
+                ),
+                Keybinding::new(
                     "q/Esc",
                     "back",
                     "Back to normal view",
