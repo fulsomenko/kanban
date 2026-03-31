@@ -38,6 +38,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             AppMode::CardDetail => render_card_detail_view(app, frame, chunks[0]),
             AppMode::BoardDetail => render_board_detail_view(app, frame, chunks[0]),
             AppMode::SprintDetail => render_sprint_detail_view(app, frame, chunks[0]),
+            AppMode::Settings => render_settings_view(app, frame, chunks[0]),
             _ => render_main(app, frame, chunks[0]),
         }
         render_footer(app, frame, chunks[1]);
@@ -87,6 +88,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             AppMode::CardDetail => render_card_detail_view(app, frame, frame.area()),
             AppMode::BoardDetail => render_board_detail_view(app, frame, frame.area()),
             AppMode::SprintDetail => render_sprint_detail_view(app, frame, frame.area()),
+            AppMode::Settings => render_settings_view(app, frame, frame.area()),
             _ => render_main(app, frame, frame.area()),
         }
         app.view.last_frame_area = frame.area();
@@ -103,6 +105,78 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         };
         render_banner(app, frame, banner_area);
     }
+}
+
+pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
+    use crate::components::detail_view::{metadata_line, FieldSectionConfig};
+
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(6),
+            Constraint::Length(6),
+            Constraint::Length(5),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    // Section 1: Configuration
+    let config_section = FieldSectionConfig::new(" Configuration (press e to edit) ");
+    let config_block = config_section.block();
+    let branch_prefix = app
+        .app_config
+        .default_branch_prefix
+        .as_deref()
+        .unwrap_or("(default)");
+    let db_mode = app.app_config.effective_default_db_mode();
+    let default_format = app.app_config.effective_default_format();
+    let config_lines = vec![
+        metadata_line("Branch Prefix", branch_prefix),
+        metadata_line("Default DB Mode", db_mode),
+        metadata_line("Default Format", default_format),
+    ];
+    let config_paragraph = Paragraph::new(config_lines).block(config_block);
+    frame.render_widget(config_paragraph, sections[0]);
+
+    // Section 2: Storage
+    let storage_section = FieldSectionConfig::new(" Storage ");
+    let storage_block = storage_section.block();
+    let file_path = app
+        .persistence
+        .save_file
+        .as_deref()
+        .unwrap_or("(none)");
+    let backend = match app.persistence.save_file.as_deref() {
+        Some(p) if p.ends_with(".sqlite") || p.ends_with(".sqlite3") || p.ends_with(".db") => {
+            "SQLite"
+        }
+        Some(_) => "JSON",
+        None => "(none)",
+    };
+    let instance_id = app.ctx.state_manager.instance_id().to_string();
+    let storage_lines = vec![
+        metadata_line("File", file_path),
+        metadata_line("Backend", backend),
+        metadata_line("Instance ID", &instance_id),
+    ];
+    let storage_paragraph = Paragraph::new(storage_lines).block(storage_block);
+    frame.render_widget(storage_paragraph, sections[1]);
+
+    // Section 3: Config File
+    let config_file_section = FieldSectionConfig::new(" Config File ");
+    let config_file_block = config_file_section.block();
+    let config_path = kanban_core::AppConfig::config_path()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "(unknown)".to_string());
+    let config_exists = kanban_core::AppConfig::config_path()
+        .is_some_and(|p| p.exists());
+    let status = if config_exists { "Loaded" } else { "Not found" };
+    let config_file_lines = vec![
+        metadata_line("Path", &config_path),
+        metadata_line("Status", status),
+    ];
+    let config_file_paragraph = Paragraph::new(config_file_lines).block(config_file_block);
+    frame.render_widget(config_file_paragraph, sections[2]);
 }
 
 fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
