@@ -20,6 +20,10 @@ pub fn default_registry() -> StoreRegistry {
     registry
 }
 
+pub fn detect_backend(locator: &str) -> Option<String> {
+    default_registry().detect_backend(locator).map(String::from)
+}
+
 pub fn make_store(locator: &str) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
     Ok(default_registry().create_store(locator)?)
 }
