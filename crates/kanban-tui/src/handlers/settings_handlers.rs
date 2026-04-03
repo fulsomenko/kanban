@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode, DialogMode, ExportDialogState, Focus};
+use crate::app::{App, AppMode, DialogMode, ExportDialogState, Focus, SettingsFocus};
 use crate::edit_format::EditFormat;
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
@@ -9,8 +9,20 @@ use ratatui::Terminal;
 use std::io;
 
 impl App {
+    pub fn settings_item_count(&self, panel: SettingsFocus) -> usize {
+        match panel {
+            SettingsFocus::Configuration => {
+                if self.app_config.has_data_file { 7 } else { 5 }
+            }
+            SettingsFocus::ConfigFile => 3,
+            SettingsFocus::Storage => 4,
+        }
+    }
+
     pub fn handle_open_settings(&mut self) {
         if self.focus.active == Focus::Boards {
+            self.focus.settings_focus = SettingsFocus::Configuration;
+            self.selection.settings_config.set(Some(0));
             self.push_mode(AppMode::Settings);
         }
     }
@@ -22,6 +34,17 @@ impl App {
         event_handler: &EventHandler,
     ) -> bool {
         match key {
+            KeyCode::Enter if self.focus.settings_focus == SettingsFocus::Configuration => {
+                self.handle_settings_key(KeyCode::Char('e'), terminal, event_handler)
+            }
+            KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Char('3')
+            | KeyCode::Char('j') | KeyCode::Down
+            | KeyCode::Char('k') | KeyCode::Up
+            | KeyCode::Char('h') | KeyCode::Left
+            | KeyCode::Char('l') | KeyCode::Right
+            | KeyCode::Enter => {
+                self.handle_settings_key_nav(key)
+            }
             KeyCode::Char('e') => {
                 let format = EditFormat::parse(self.app_config.effective_editing_format());
                 let ext = format.file_extension();
@@ -124,6 +147,129 @@ impl App {
             }
             _ => false,
         }
+    }
+
+    pub fn handle_settings_key_nav(&mut self, key: KeyCode) -> bool {
+        match key {
+            KeyCode::Char('1') => {
+                self.focus.settings_focus = SettingsFocus::Configuration;
+                self.selection.settings_config.auto_select_first_if_empty(true);
+            }
+            KeyCode::Char('2') => {
+                self.focus.settings_focus = SettingsFocus::ConfigFile;
+                self.selection.settings_config_file.auto_select_first_if_empty(true);
+            }
+            KeyCode::Char('3') => {
+                self.focus.settings_focus = SettingsFocus::Storage;
+                self.selection.settings_storage.auto_select_first_if_empty(true);
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.handle_settings_nav_down();
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.handle_settings_nav_up();
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                if self.focus.settings_focus == SettingsFocus::Storage {
+                    self.focus.settings_focus = SettingsFocus::Configuration;
+                    self.selection.settings_config.auto_select_first_if_empty(true);
+                }
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                if self.focus.settings_focus != SettingsFocus::Storage {
+                    self.focus.settings_focus = SettingsFocus::Storage;
+                    self.selection.settings_storage.auto_select_first_if_empty(true);
+                }
+            }
+            KeyCode::Enter => {
+                if self.focus.settings_focus == SettingsFocus::Storage
+                    && self.selection.settings_storage.get() == Some(3)
+                {
+                    return self.trigger_export();
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    pub fn handle_settings_nav_down(&mut self) {
+        match self.focus.settings_focus {
+            SettingsFocus::Configuration => {
+                let count = self.settings_item_count(SettingsFocus::Configuration);
+                let current = self.selection.settings_config.get().unwrap_or(0);
+                if current >= count - 1 {
+                    self.focus.settings_focus = SettingsFocus::ConfigFile;
+                    self.selection.settings_config_file.set(Some(0));
+                } else {
+                    self.selection.settings_config.next(count);
+                }
+            }
+            SettingsFocus::ConfigFile => {
+                let count = self.settings_item_count(SettingsFocus::ConfigFile);
+                let current = self.selection.settings_config_file.get().unwrap_or(0);
+                if current >= count - 1 {
+                    self.focus.settings_focus = SettingsFocus::Configuration;
+                    self.selection.settings_config.set(Some(0));
+                } else {
+                    self.selection.settings_config_file.next(count);
+                }
+            }
+            SettingsFocus::Storage => {
+                let count = self.settings_item_count(SettingsFocus::Storage);
+                let current = self.selection.settings_storage.get().unwrap_or(0);
+                if current >= count - 1 {
+                    self.selection.settings_storage.set(Some(0));
+                } else {
+                    self.selection.settings_storage.next(count);
+                }
+            }
+        }
+    }
+
+    fn handle_settings_nav_up(&mut self) {
+        match self.focus.settings_focus {
+            SettingsFocus::Configuration => {
+                let current = self.selection.settings_config.get().unwrap_or(0);
+                if current == 0 {
+                    let count = self.settings_item_count(SettingsFocus::ConfigFile);
+                    self.focus.settings_focus = SettingsFocus::ConfigFile;
+                    self.selection.settings_config_file.set(Some(count - 1));
+                } else {
+                    self.selection.settings_config.prev();
+                }
+            }
+            SettingsFocus::ConfigFile => {
+                let current = self.selection.settings_config_file.get().unwrap_or(0);
+                if current == 0 {
+                    let count = self.settings_item_count(SettingsFocus::Configuration);
+                    self.focus.settings_focus = SettingsFocus::Configuration;
+                    self.selection.settings_config.set(Some(count - 1));
+                } else {
+                    self.selection.settings_config_file.prev();
+                }
+            }
+            SettingsFocus::Storage => {
+                let current = self.selection.settings_storage.get().unwrap_or(0);
+                if current == 0 {
+                    let count = self.settings_item_count(SettingsFocus::Storage);
+                    self.selection.settings_storage.set(Some(count - 1));
+                } else {
+                    self.selection.settings_storage.prev();
+                }
+            }
+        }
+    }
+
+    fn trigger_export(&mut self) -> bool {
+        let board_count = self.ctx.boards.len();
+        if board_count == 0 {
+            self.set_error("No boards to export".to_string());
+            return false;
+        }
+        self.export_dialog = Some(ExportDialogState::new(board_count));
+        self.push_mode(AppMode::Dialog(DialogMode::ExportBoards));
+        false
     }
 
     pub fn handle_export_boards_dialog(&mut self, key_code: KeyCode) {
