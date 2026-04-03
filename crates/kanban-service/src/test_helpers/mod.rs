@@ -67,6 +67,18 @@ macro_rules! contract_tests {
         async fn test_sprint_with_card_prefix_override_roundtrip() {
             $crate::test_helpers::contract::sprint::test_sprint_with_card_prefix_override_roundtrip(&$factory_fn()).await;
         }
+        #[tokio::test]
+        async fn test_sprint_no_prefix_uses_app_config_default() {
+            $crate::test_helpers::contract::sprint::test_sprint_no_prefix_uses_app_config_default(&$factory_fn()).await;
+        }
+        #[tokio::test]
+        async fn test_sprint_board_prefix_overrides_app_config_default() {
+            $crate::test_helpers::contract::sprint::test_sprint_board_prefix_overrides_app_config_default(&$factory_fn()).await;
+        }
+        #[tokio::test]
+        async fn test_sprint_explicit_prefix_overrides_all_defaults() {
+            $crate::test_helpers::contract::sprint::test_sprint_explicit_prefix_overrides_all_defaults(&$factory_fn()).await;
+        }
 
         // Card tests
         #[tokio::test]
