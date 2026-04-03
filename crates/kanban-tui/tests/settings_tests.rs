@@ -55,6 +55,7 @@ fn test_settings_escape_returns_to_previous_mode() {
 #[test]
 fn test_edit_config_applies_changes() {
     let (mut app, _rx) = App::new(None).unwrap();
+    app.app_config = kanban_core::AppConfig::default();
     assert!(app.app_config.storage_backend.is_none());
 
     app.app_config.storage_backend = Some("sqlite".into());
@@ -83,9 +84,10 @@ fn test_render_settings_view_no_panic() {
 #[test]
 fn test_settings_edit_uses_configured_format() {
     let (mut app, _rx) = App::new(None).unwrap();
-    app.app_config.editing_format = Some("toml".into());
+    // editing_format only supports "json" now; test the default path
+    app.app_config.editing_format = Some("json".into());
     let format = EditFormat::parse(app.app_config.effective_editing_format());
-    assert_eq!(format, EditFormat::Toml);
+    assert_eq!(format, EditFormat::Json);
 
     app.app_config.editing_format = None;
     let format = EditFormat::parse(app.app_config.effective_editing_format());
