@@ -5,7 +5,7 @@
 
 A **fast, keyboard-driven kanban tool**
 
-![Kanban Demo](demo.gif)
+![Kanban Demo](demo/demo.gif)
 
 **Inspired by**: [lazygit](https://github.com/jesseduffield/lazygit)
 
