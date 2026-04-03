@@ -1,8 +1,8 @@
 {
   "version": 2,
   "metadata": {
-    "instance_id": "360362a1-60c0-4d10-8273-2434a7549036",
-    "saved_at": "2026-04-03T19:08:34.871075920Z"
+    "instance_id": "e7b8128d-33ea-45cb-8bcf-8081dd6de3bf",
+    "saved_at": "2026-04-03T22:22:57.869716731Z"
   },
   "data": {
     "archived_cards": [
@@ -252,64 +252,6 @@
         "task_sort_field": "CreatedAt",
         "task_sort_order": "Descending",
         "updated_at": "2026-03-16T20:36:43.090083725Z"
-      },
-      {
-        "active_sprint_id": null,
-        "card_prefix": null,
-        "completion_column_id": null,
-        "created_at": "2026-04-03T11:49:51.478918071Z",
-        "description": null,
-        "id": "55ed0a03-2e5e-4ce4-86bc-fa880de895fb",
-        "name": "test",
-        "next_sprint_number": 1,
-        "prefix_counters": {
-          "task": 2
-        },
-        "sprint_counters": {
-          "sprint": 3,
-          "sprint_test test": 2
-        },
-        "sprint_duration_days": null,
-        "sprint_name_used_count": 3,
-        "sprint_names": [
-          "te",
-          "te",
-          "das"
-        ],
-        "sprint_prefix": null,
-        "task_list_view": "Flat",
-        "task_sort_field": "Default",
-        "task_sort_order": "Ascending",
-        "updated_at": "2026-04-03T12:23:21.677665259Z"
-      },
-      {
-        "active_sprint_id": null,
-        "card_prefix": null,
-        "completion_column_id": null,
-        "created_at": "2026-04-03T11:54:43.137108059Z",
-        "description": null,
-        "id": "aa210298-805c-4e48-9935-b449192b14a6",
-        "name": "test2",
-        "next_sprint_number": 1,
-        "prefix_counters": {
-          "task": 3
-        },
-        "sprint_counters": {
-          "sprint": 2,
-          "sprint_test test": 3
-        },
-        "sprint_duration_days": null,
-        "sprint_name_used_count": 3,
-        "sprint_names": [
-          "tt",
-          "test",
-          "asda"
-        ],
-        "sprint_prefix": null,
-        "task_list_view": "Flat",
-        "task_sort_field": "Default",
-        "task_sort_order": "Ascending",
-        "updated_at": "2026-04-03T12:07:06.753302847Z"
       }
     ],
     "cards": [
@@ -6860,81 +6802,6 @@
         "status": "Todo",
         "title": "Rich description editing operations for CLI and MCP",
         "updated_at": "2026-03-16T20:36:43.090084499Z"
-      },
-      {
-        "assigned_prefix": "sprint",
-        "card_number": 1,
-        "card_prefix": null,
-        "column_id": "3c2c9077-7e7c-4c0c-8f7f-5a054dbf6a08",
-        "completed_at": null,
-        "created_at": "2026-04-03T11:53:11.589997297Z",
-        "description": null,
-        "due_date": null,
-        "id": "4a349488-efbe-41da-9cf5-77acd693f4f8",
-        "points": null,
-        "position": 0,
-        "priority": "Medium",
-        "sprint_id": "9a40c345-5330-4b95-a257-6086bd13c14a",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "9a40c345-5330-4b95-a257-6086bd13c14a",
-            "sprint_name": "te",
-            "sprint_number": 2,
-            "started_at": "2026-04-03T11:53:14.460323043Z",
-            "status": "Planning"
-          }
-        ],
-        "status": "Todo",
-        "title": "1",
-        "updated_at": "2026-04-03T11:53:17.560985297Z"
-      },
-      {
-        "assigned_prefix": "sprint_test test",
-        "card_number": 1,
-        "card_prefix": null,
-        "column_id": "05833a36-3bc8-4832-86b3-bef591f8d1b0",
-        "completed_at": null,
-        "created_at": "2026-04-03T12:04:06.572065218Z",
-        "description": null,
-        "due_date": null,
-        "id": "ab90aa2e-ce9d-42c7-ab7f-c089b56e823f",
-        "points": null,
-        "position": 0,
-        "priority": "Medium",
-        "sprint_id": "039fe1a2-c49b-4bff-923c-651276ec189b",
-        "sprint_logs": [
-          {
-            "ended_at": null,
-            "sprint_id": "039fe1a2-c49b-4bff-923c-651276ec189b",
-            "sprint_name": "asda",
-            "sprint_number": 2,
-            "started_at": "2026-04-03T12:04:08.085882966Z",
-            "status": "Planning"
-          }
-        ],
-        "status": "Todo",
-        "title": "card",
-        "updated_at": "2026-04-03T12:04:08.085897144Z"
-      },
-      {
-        "assigned_prefix": "task",
-        "card_number": 2,
-        "card_prefix": null,
-        "column_id": "05833a36-3bc8-4832-86b3-bef591f8d1b0",
-        "completed_at": null,
-        "created_at": "2026-04-03T12:04:37.556766868Z",
-        "description": null,
-        "due_date": null,
-        "id": "17b5a675-a19d-4f71-82fd-ef6ac0e767e4",
-        "points": null,
-        "position": 1,
-        "priority": "Medium",
-        "sprint_id": null,
-        "sprint_logs": [],
-        "status": "Todo",
-        "title": "hm",
-        "updated_at": "2026-04-03T12:04:37.556766868Z"
       }
     ],
     "columns": [
@@ -6963,60 +6830,6 @@
         "name": "Complete",
         "position": 2,
         "updated_at": "2025-10-30T18:52:12.692465Z",
-        "wip_limit": null
-      },
-      {
-        "board_id": "55ed0a03-2e5e-4ce4-86bc-fa880de895fb",
-        "created_at": "2026-04-03T11:49:51.479202577Z",
-        "id": "3c2c9077-7e7c-4c0c-8f7f-5a054dbf6a08",
-        "name": "TODO",
-        "position": 0,
-        "updated_at": "2026-04-03T11:49:51.479202577Z",
-        "wip_limit": null
-      },
-      {
-        "board_id": "55ed0a03-2e5e-4ce4-86bc-fa880de895fb",
-        "created_at": "2026-04-03T11:49:51.479204401Z",
-        "id": "e21493e1-6b5f-420b-a95e-4dec54becf9c",
-        "name": "Doing",
-        "position": 1,
-        "updated_at": "2026-04-03T11:49:51.479204401Z",
-        "wip_limit": null
-      },
-      {
-        "board_id": "55ed0a03-2e5e-4ce4-86bc-fa880de895fb",
-        "created_at": "2026-04-03T11:49:51.479204802Z",
-        "id": "3a915ecd-a713-49c9-9771-ef6e280a81af",
-        "name": "Complete",
-        "position": 2,
-        "updated_at": "2026-04-03T11:49:51.479204802Z",
-        "wip_limit": null
-      },
-      {
-        "board_id": "aa210298-805c-4e48-9935-b449192b14a6",
-        "created_at": "2026-04-03T11:54:43.137352710Z",
-        "id": "05833a36-3bc8-4832-86b3-bef591f8d1b0",
-        "name": "TODO",
-        "position": 0,
-        "updated_at": "2026-04-03T11:54:43.137352710Z",
-        "wip_limit": null
-      },
-      {
-        "board_id": "aa210298-805c-4e48-9935-b449192b14a6",
-        "created_at": "2026-04-03T11:54:43.137354689Z",
-        "id": "4b36aa40-9137-4985-9960-3a25a75d4b01",
-        "name": "Doing",
-        "position": 1,
-        "updated_at": "2026-04-03T11:54:43.137354689Z",
-        "wip_limit": null
-      },
-      {
-        "board_id": "aa210298-805c-4e48-9935-b449192b14a6",
-        "created_at": "2026-04-03T11:54:43.137355198Z",
-        "id": "f645d01c-0a40-4eea-a285-db08cdef2b90",
-        "name": "Complete",
-        "position": 2,
-        "updated_at": "2026-04-03T11:54:43.137355198Z",
         "wip_limit": null
       }
     ],
@@ -7116,84 +6929,6 @@
         "start_date": "2026-02-02T05:00:53.804547Z",
         "status": "Completed",
         "updated_at": "2026-03-16T20:20:25.738629940Z"
-      },
-      {
-        "board_id": "55ed0a03-2e5e-4ce4-86bc-fa880de895fb",
-        "card_prefix": null,
-        "created_at": "2026-04-03T11:50:37.165803755Z",
-        "end_date": null,
-        "id": "54e55086-41c1-4f10-bce2-74b9e3c72805",
-        "name_index": 0,
-        "prefix": "sprint",
-        "sprint_number": 1,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2026-04-03T11:50:37.165803755Z"
-      },
-      {
-        "board_id": "55ed0a03-2e5e-4ce4-86bc-fa880de895fb",
-        "card_prefix": null,
-        "created_at": "2026-04-03T11:52:56.054470863Z",
-        "end_date": null,
-        "id": "9a40c345-5330-4b95-a257-6086bd13c14a",
-        "name_index": 1,
-        "prefix": "sprint",
-        "sprint_number": 2,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2026-04-03T11:52:56.054470863Z"
-      },
-      {
-        "board_id": "aa210298-805c-4e48-9935-b449192b14a6",
-        "card_prefix": null,
-        "created_at": "2026-04-03T11:54:48.439371159Z",
-        "end_date": null,
-        "id": "74cbf2ee-a8b0-4a9f-8f5d-9cceea792b25",
-        "name_index": 0,
-        "prefix": "sprint",
-        "sprint_number": 1,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2026-04-03T11:54:48.439371159Z"
-      },
-      {
-        "board_id": "aa210298-805c-4e48-9935-b449192b14a6",
-        "card_prefix": null,
-        "created_at": "2026-04-03T12:03:57.148733730Z",
-        "end_date": null,
-        "id": "e725950c-798e-4c59-9692-8993faf47208",
-        "name_index": 1,
-        "prefix": "sprint_test test",
-        "sprint_number": 1,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2026-04-03T12:03:57.148733730Z"
-      },
-      {
-        "board_id": "aa210298-805c-4e48-9935-b449192b14a6",
-        "card_prefix": null,
-        "created_at": "2026-04-03T12:04:01.723715953Z",
-        "end_date": null,
-        "id": "039fe1a2-c49b-4bff-923c-651276ec189b",
-        "name_index": 2,
-        "prefix": "sprint_test test",
-        "sprint_number": 2,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2026-04-03T12:04:01.723715953Z"
-      },
-      {
-        "board_id": "55ed0a03-2e5e-4ce4-86bc-fa880de895fb",
-        "card_prefix": null,
-        "created_at": "2026-04-03T12:23:21.677803372Z",
-        "end_date": null,
-        "id": "09f282ea-14e5-4376-a036-4e96b0b28721",
-        "name_index": 2,
-        "prefix": "sprint_test test",
-        "sprint_number": 1,
-        "start_date": null,
-        "status": "Planning",
-        "updated_at": "2026-04-03T12:23:21.677803372Z"
       }
     ]
   }
