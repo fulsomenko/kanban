@@ -85,3 +85,54 @@ async fn test_validate_and_load_preserves_board_data() {
     assert_eq!(snapshot.boards.len(), 1);
     assert_eq!(snapshot.boards[0].name, "MyBoard");
 }
+
+#[cfg(feature = "sqlite-storage")]
+async fn create_test_sqlite(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
+    use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
+
+    let path = dir.join(name);
+    let path_str = path.to_str().unwrap().to_string();
+    let store = kanban_service::make_store(&path_str).unwrap();
+
+    let domain_boards: Vec<kanban_domain::Board> = boards
+        .iter()
+        .map(|name| kanban_domain::Board::new(name.to_string(), None))
+        .collect();
+    let snapshot = kanban_domain::Snapshot {
+        boards: domain_boards,
+        columns: vec![],
+        cards: vec![],
+        archived_cards: vec![],
+        sprints: vec![],
+        graph: Default::default(),
+    };
+
+    let store_snapshot = StoreSnapshot {
+        data: serde_json::to_vec(&snapshot).unwrap(),
+        metadata: PersistenceMetadata::new(store.instance_id()),
+    };
+    store.save(store_snapshot).await.unwrap();
+
+    path_str
+}
+
+#[cfg(feature = "sqlite-storage")]
+#[tokio::test]
+async fn test_validate_and_load_valid_sqlite_returns_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = create_test_sqlite(dir.path(), "board.sqlite", &["Board1"]).await;
+
+    let snapshot = validate_and_load_store(&path).await.unwrap();
+    assert_eq!(snapshot.boards.len(), 1);
+}
+
+#[cfg(feature = "sqlite-storage")]
+#[tokio::test]
+async fn test_validate_and_load_sqlite_preserves_board_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = create_test_sqlite(dir.path(), "board.sqlite", &["SQLiteBoard"]).await;
+
+    let snapshot = validate_and_load_store(&path).await.unwrap();
+    assert_eq!(snapshot.boards.len(), 1);
+    assert_eq!(snapshot.boards[0].name, "SQLiteBoard");
+}
