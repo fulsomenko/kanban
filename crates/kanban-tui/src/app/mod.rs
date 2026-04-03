@@ -2,7 +2,7 @@ pub mod mode;
 pub use mode::{AppMode, DialogMode};
 
 pub mod focus;
-pub use focus::{BoardFocus, CardFocus, Focus, FocusState};
+pub use focus::{BoardFocus, CardFocus, Focus, FocusState, SettingsFocus};
 
 pub mod sprint_view;
 pub use sprint_view::{SprintTaskPanel, SprintViewState};
