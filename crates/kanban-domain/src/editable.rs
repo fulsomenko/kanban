@@ -53,13 +53,14 @@ impl Editable<Board> for BoardSettingsDto {
         }
     }
 
-    fn apply_to(self, board: &mut Board) {
+    fn apply_to(self, board: &mut Board) -> kanban_core::CoreResult<()> {
         board.sprint_prefix = self.sprint_prefix;
         board.card_prefix = self.card_prefix;
         board.sprint_duration_days = self.sprint_duration_days;
         board.sprint_names = self.sprint_names;
         board.completion_column_id = self.completion_column_id;
         board.updated_at = chrono::Utc::now();
+        Ok(())
     }
 }
 
@@ -73,7 +74,7 @@ impl Editable<Card> for CardMetadataDto {
         }
     }
 
-    fn apply_to(self, card: &mut Card) {
+    fn apply_to(self, card: &mut Card) -> kanban_core::CoreResult<()> {
         if let Some(canonical_priority) = parse_card_priority_case_insensitive(&self.priority) {
             if let Ok(priority) = serde_json::from_value::<crate::CardPriority>(
                 serde_json::Value::String(canonical_priority),
@@ -101,6 +102,7 @@ impl Editable<Card> for CardMetadataDto {
         }
 
         card.updated_at = chrono::Utc::now();
+        Ok(())
     }
 }
 

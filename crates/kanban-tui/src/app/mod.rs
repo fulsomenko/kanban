@@ -1435,10 +1435,12 @@ impl App {
             edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
         {
             match format.deserialize::<T>(&new_content) {
-                Ok(updated_dto) => {
-                    updated_dto.apply_to(entity);
-                    tracing::info!("Updated entity via {} editor", format);
-                }
+                Ok(updated_dto) => match updated_dto.apply_to(entity) {
+                    Ok(()) => tracing::info!("Updated entity via {} editor", format),
+                    Err(e) => {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()));
+                    }
+                },
                 Err(e) => {
                     tracing::error!("Failed to parse {}: {}", format, e);
                 }
