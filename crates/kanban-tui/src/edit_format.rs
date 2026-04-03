@@ -90,6 +90,7 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: Some("/tmp/test.toml".into()),
+            storage_location: None,
         };
         let serialized = EditFormat::Json.serialize(&dto).unwrap();
         let deserialized: AppConfigDto = EditFormat::Json.deserialize(&serialized).unwrap();
@@ -107,6 +108,7 @@ mod tests {
             editing_format: Some("toml".into()),
             configuration_format: Some("toml".into()),
             configuration_location: Some("/tmp/test.toml".into()),
+            storage_location: None,
         };
         let serialized = EditFormat::Toml.serialize(&dto).unwrap();
         let deserialized: AppConfigDto = EditFormat::Toml.deserialize(&serialized).unwrap();

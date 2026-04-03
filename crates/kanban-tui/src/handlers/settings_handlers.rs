@@ -26,6 +26,8 @@ impl App {
                 let format = EditFormat::parse(self.app_config.effective_editing_format());
                 let ext = format.file_extension();
                 let old_location = self.app_config.effective_configuration_location();
+                let old_storage_location = self.app_config.effective_storage_location();
+                let old_config = self.app_config.clone();
                 let mut config = self.app_config.clone();
                 let temp_file =
                     std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
@@ -40,6 +42,49 @@ impl App {
                     return true;
                 }
                 self.app_config = config;
+
+                let new_storage_location = self.app_config.effective_storage_location();
+                if self.app_config.has_data_file && new_storage_location != old_storage_location {
+                    let old_path = std::path::Path::new(&old_storage_location);
+                    if old_path.exists() {
+                        match tokio::task::block_in_place(|| {
+                            tokio::runtime::Handle::current().block_on(
+                                kanban_service::migrate_store(
+                                    &old_storage_location,
+                                    &new_storage_location,
+                                ),
+                            )
+                        }) {
+                            Ok(()) => {
+                                match self
+                                    .ctx
+                                    .state_manager
+                                    .replace_store(&new_storage_location)
+                                {
+                                    Ok((save_rx, completion_rx)) => {
+                                        self.persistence.save_file =
+                                            Some(new_storage_location.clone());
+                                        self.persistence.save_completion_rx =
+                                            Some(completion_rx);
+                                        self.spawn_save_worker(save_rx);
+                                        self.set_success(format!(
+                                            "Migrated to {}",
+                                            new_storage_location
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        self.set_error(format!("Store swap failed: {}", e));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                self.app_config = old_config;
+                                self.set_error(format!("Migration failed: {}", e));
+                            }
+                        }
+                    }
+                }
+
                 if self.app_config.has_non_default_values() {
                     if let Err(e) = self.app_config.save() {
                         self.set_error(format!("Failed to save config: {}", e));
