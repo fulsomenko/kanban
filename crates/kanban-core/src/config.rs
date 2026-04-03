@@ -345,8 +345,6 @@ impl Editable<AppConfig> for AppConfigDto {
 
     fn apply_to(self, entity: &mut AppConfig) -> CoreResult<()> {
         let old_format = entity.effective_configuration_format().to_string();
-        let old_backend = entity.effective_storage_backend().to_string();
-
         entity.default_card_prefix = self.default_card_prefix;
         entity.default_sprint_prefix = self.default_sprint_prefix;
         if let Some(backend) = self.storage_backend {
@@ -365,18 +363,6 @@ impl Editable<AppConfig> for AppConfigDto {
             let location = entity.effective_configuration_location();
             if let Some((stem, _)) = location.rsplit_once('.') {
                 entity.configuration_location = Some(format!("{}.{}", stem, new_ext));
-            }
-        }
-
-        let new_backend = entity.effective_storage_backend().to_string();
-        if old_backend != new_backend {
-            let new_ext = match new_backend.as_str() {
-                "sqlite" => "sqlite",
-                _ => "json",
-            };
-            let location = entity.effective_storage_location();
-            if let Some((stem, _)) = location.rsplit_once('.') {
-                entity.storage_location = Some(format!("{}.{}", stem, new_ext));
             }
         }
 
@@ -1063,32 +1049,6 @@ mod tests {
         };
         config.strip_defaults();
         assert_eq!(config.storage_location.as_deref(), Some("my_data.json"));
-    }
-
-    #[test]
-    fn test_apply_to_auto_syncs_storage_extension_on_backend_change() {
-        let mut config = AppConfig {
-            storage_backend: Some("json".into()),
-            storage_location: Some("/tmp/myproject.json".into()),
-            has_data_file: true,
-            ..Default::default()
-        };
-
-        let dto = AppConfigDto {
-            default_card_prefix: None,
-            default_sprint_prefix: None,
-            storage_backend: Some("sqlite".into()),
-            editing_format: None,
-            configuration_format: None,
-            configuration_location: None,
-            storage_location: Some("/tmp/myproject.json".into()),
-        };
-        dto.apply_to(&mut config).unwrap();
-
-        assert_eq!(
-            config.storage_location.as_deref(),
-            Some("/tmp/myproject.sqlite")
-        );
     }
 
     #[test]
