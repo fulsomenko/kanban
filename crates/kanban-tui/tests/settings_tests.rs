@@ -601,6 +601,30 @@ fn test_settings_keybinding_provider_includes_nav_bindings() {
     assert!(keys.contains(&"q/Esc"));
 }
 
+// --- File arg overrides config backend tests ---
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_file_arg_detects_backend_from_content_ignoring_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = create_test_json_file(dir.path(), "board.json", &["TestBoard"]).await;
+
+    let (mut app, _rx) = App::new(Some(path)).unwrap();
+    app.load_initial_state().await;
+
+    assert_eq!(app.app_config.effective_storage_backend(), "json");
+    assert!(app.app_config.storage_location.as_ref().unwrap().contains("board.json"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_file_arg_new_file_defaults_to_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("brand_new.myext");
+    assert!(!path.exists());
+
+    let (app, _rx) = App::new(Some(path.to_str().unwrap().to_string())).unwrap();
+    assert_eq!(app.app_config.effective_storage_backend(), "json");
+}
+
 // --- Storage location switching tests ---
 
 async fn create_test_json_file(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
