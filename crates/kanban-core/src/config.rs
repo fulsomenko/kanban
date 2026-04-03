@@ -285,13 +285,13 @@ impl AppConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfigDto {
-    pub default_card_prefix: Option<String>,
-    pub default_sprint_prefix: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub storage_backend: Option<String>,
-    pub editing_format: Option<String>,
     pub configuration_format: Option<String>,
     pub configuration_location: Option<String>,
+    pub default_card_prefix: Option<String>,
+    pub default_sprint_prefix: Option<String>,
+    pub editing_format: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_backend: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_location: Option<String>,
 }
