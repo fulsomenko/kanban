@@ -128,13 +128,21 @@ impl AppConfig {
     }
 
     pub fn effective_storage_location(&self) -> String {
-        self.storage_location.clone().unwrap_or_else(|| {
+        let raw = self.storage_location.clone().unwrap_or_else(|| {
             match self.effective_storage_backend() {
                 "sqlite" => "kanban.sqlite",
                 _ => "kanban.json",
             }
             .to_string()
-        })
+        });
+        let path = Path::new(&raw);
+        if path.is_absolute() {
+            raw
+        } else {
+            std::env::current_dir()
+                .map(|cwd| cwd.join(path).display().to_string())
+                .unwrap_or(raw)
+        }
     }
 
     pub fn effective_configuration_location(&self) -> String {
@@ -630,7 +638,11 @@ mod tests {
         };
         let dto = AppConfigDto::from_entity(&config);
         assert_eq!(dto.storage_backend.as_deref(), Some("json"));
-        assert_eq!(dto.storage_location.as_deref(), Some("kanban.json"));
+        assert!(
+            dto.storage_location.as_deref().unwrap().ends_with("/kanban.json"),
+            "got: {:?}",
+            dto.storage_location
+        );
     }
 
     #[test]
@@ -649,7 +661,11 @@ mod tests {
         assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
         assert_eq!(dto.default_sprint_prefix.as_deref(), Some("iter"));
         assert_eq!(dto.storage_backend.as_deref(), Some("sqlite"));
-        assert_eq!(dto.storage_location.as_deref(), Some("kanban.sqlite"));
+        assert!(
+            dto.storage_location.as_deref().unwrap().ends_with("/kanban.sqlite"),
+            "got: {:?}",
+            dto.storage_location
+        );
         assert_eq!(dto.editing_format.as_deref(), Some("toml"));
         assert_eq!(dto.configuration_format.as_deref(), Some("json"));
         assert_eq!(dto.configuration_location.as_deref(), Some("/custom/path.json"));
@@ -945,7 +961,9 @@ mod tests {
     #[test]
     fn test_effective_storage_location_defaults_to_json() {
         let config = AppConfig::default();
-        assert_eq!(config.effective_storage_location(), "kanban.json");
+        let loc = config.effective_storage_location();
+        assert!(loc.ends_with("/kanban.json"), "got: {}", loc);
+        assert!(std::path::Path::new(&loc).is_absolute());
     }
 
     #[test]
@@ -954,16 +972,29 @@ mod tests {
             storage_backend: Some("sqlite".into()),
             ..Default::default()
         };
-        assert_eq!(config.effective_storage_location(), "kanban.sqlite");
+        let loc = config.effective_storage_location();
+        assert!(loc.ends_with("/kanban.sqlite"), "got: {}", loc);
+        assert!(std::path::Path::new(&loc).is_absolute());
     }
 
     #[test]
-    fn test_effective_storage_location_custom() {
+    fn test_effective_storage_location_custom_relative() {
         let config = AppConfig {
             storage_location: Some("my_data.json".into()),
             ..Default::default()
         };
-        assert_eq!(config.effective_storage_location(), "my_data.json");
+        let loc = config.effective_storage_location();
+        assert!(loc.ends_with("/my_data.json"), "got: {}", loc);
+        assert!(std::path::Path::new(&loc).is_absolute());
+    }
+
+    #[test]
+    fn test_effective_storage_location_custom_absolute() {
+        let config = AppConfig {
+            storage_location: Some("/tmp/my_data.json".into()),
+            ..Default::default()
+        };
+        assert_eq!(config.effective_storage_location(), "/tmp/my_data.json");
     }
 
     #[test]
@@ -990,7 +1021,7 @@ mod tests {
     fn test_apply_to_auto_syncs_storage_extension_on_backend_change() {
         let mut config = AppConfig {
             storage_backend: Some("json".into()),
-            storage_location: Some("myproject.json".into()),
+            storage_location: Some("/data/myproject.json".into()),
             has_data_file: true,
             ..Default::default()
         };
@@ -1002,11 +1033,14 @@ mod tests {
             editing_format: None,
             configuration_format: None,
             configuration_location: None,
-            storage_location: Some("myproject.json".into()),
+            storage_location: Some("/data/myproject.json".into()),
         };
         dto.apply_to(&mut config).unwrap();
 
-        assert_eq!(config.storage_location.as_deref(), Some("myproject.sqlite"));
+        assert_eq!(
+            config.storage_location.as_deref(),
+            Some("/data/myproject.sqlite")
+        );
     }
 
     #[test]
