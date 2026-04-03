@@ -33,11 +33,10 @@ impl From<PersistenceError> for kanban_domain::KanbanError {
             PersistenceError::Io(io) => kanban_domain::KanbanError::Io(io),
             PersistenceError::Serialization(s) => kanban_domain::KanbanError::Serialization(s),
             PersistenceError::Database(s) => kanban_domain::KanbanError::Database(s),
-            PersistenceError::UnsupportedLocator { locator, supported } => {
+            PersistenceError::UnsupportedLocator { locator, .. } => {
                 kanban_domain::KanbanError::Internal(format!(
-                    "unsupported storage locator {:?}; supported: {}",
+                    "No backend for \"{}\". This binary was compiled without SQLite support — rebuild with default features enabled.",
                     locator,
-                    supported.join(", ")
                 ))
             }
             PersistenceError::ConflictDetected { path, source } => {

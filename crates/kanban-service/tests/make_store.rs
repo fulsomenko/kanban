@@ -62,8 +62,8 @@ fn test_make_store_unknown_extension_returns_error() {
         Err(err) => {
             let msg = err.to_string();
             assert!(
-                msg.contains("unsupported storage locator"),
-                "Expected unsupported locator error, got: {msg}"
+                msg.contains("No backend for"),
+                "Expected no backend error, got: {msg}"
             );
         }
     }
@@ -77,8 +77,8 @@ fn test_make_store_unrecognized_uri_returns_error() {
         Err(err) => {
             let msg = err.to_string();
             assert!(
-                msg.contains("unsupported storage locator"),
-                "Expected unsupported locator error, got: {msg}"
+                msg.contains("No backend for"),
+                "Expected no backend error, got: {msg}"
             );
         }
     }
