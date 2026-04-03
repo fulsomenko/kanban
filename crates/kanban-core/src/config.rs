@@ -4,17 +4,17 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppConfig {
-    #[serde(default, alias = "default_branch_prefix")]
+    #[serde(default, alias = "default_branch_prefix", skip_serializing_if = "Option::is_none")]
     pub default_card_prefix: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_sprint_prefix: Option<String>,
-    #[serde(default, alias = "default_db_mode")]
+    #[serde(default, alias = "default_db_mode", skip_serializing_if = "Option::is_none")]
     pub storage_backend: Option<String>,
-    #[serde(default, alias = "default_format")]
+    #[serde(default, alias = "default_format", skip_serializing_if = "Option::is_none")]
     pub editing_format: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration_format: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration_location: Option<String>,
 }
 
@@ -121,6 +121,90 @@ impl AppConfig {
             })
     }
 
+    pub fn validate(&self) -> CoreResult<()> {
+        if let Some(ref v) = self.storage_backend {
+            if !matches!(v.as_str(), "json" | "sqlite") {
+                return Err(crate::CoreError::Validation(format!(
+                    "Invalid storage_backend '{}': must be 'json' or 'sqlite'",
+                    v
+                )));
+            }
+        }
+        if let Some(ref v) = self.editing_format {
+            if v != "json" {
+                return Err(crate::CoreError::Validation(format!(
+                    "Invalid editing_format '{}': must be 'json'",
+                    v
+                )));
+            }
+        }
+        if let Some(ref v) = self.configuration_format {
+            if !matches!(v.as_str(), "json" | "toml") {
+                return Err(crate::CoreError::Validation(format!(
+                    "Invalid configuration_format '{}': must be 'json' or 'toml'",
+                    v
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn has_non_default_values(&self) -> bool {
+        !self.is_all_defaults()
+    }
+
+    fn is_all_defaults(&self) -> bool {
+        let all_none = self.default_card_prefix.is_none()
+            && self.default_sprint_prefix.is_none()
+            && self.storage_backend.is_none()
+            && self.editing_format.is_none()
+            && self.configuration_format.is_none()
+            && self.configuration_location.is_none();
+
+        if all_none {
+            return true;
+        }
+
+        self.default_card_prefix.as_deref().is_none_or(|v| v == "task")
+            && self.default_sprint_prefix.as_deref().is_none_or(|v| v == "sprint")
+            && self.storage_backend.as_deref().is_none_or(|v| v == "json")
+            && self.editing_format.as_deref().is_none_or(|v| v == "json")
+            && self.configuration_format.as_deref().is_none_or(|v| v == "toml")
+            && self.configuration_location.as_deref().is_none_or(|loc| {
+                Self::config_path()
+                    .map(|p| p.display().to_string())
+                    .as_deref()
+                    == Some(loc)
+            })
+    }
+
+    pub fn strip_defaults(&mut self) {
+        if self.default_card_prefix.as_deref() == Some("task") {
+            self.default_card_prefix = None;
+        }
+        if self.default_sprint_prefix.as_deref() == Some("sprint") {
+            self.default_sprint_prefix = None;
+        }
+        if self.storage_backend.as_deref() == Some("json") {
+            self.storage_backend = None;
+        }
+        if self.editing_format.as_deref() == Some("json") {
+            self.editing_format = None;
+        }
+        if self.configuration_format.as_deref() == Some("toml") {
+            self.configuration_format = None;
+        }
+        if let Some(ref loc) = self.configuration_location {
+            if Self::config_path()
+                .map(|p| p.display().to_string())
+                .as_deref()
+                == Some(loc.as_str())
+            {
+                self.configuration_location = None;
+            }
+        }
+    }
+
     pub fn move_config(old_path: &Path, new_path: &Path) -> CoreResult<()> {
         if old_path == new_path || !old_path.exists() {
             return Ok(());
@@ -162,7 +246,7 @@ impl Editable<AppConfig> for AppConfigDto {
         }
     }
 
-    fn apply_to(self, entity: &mut AppConfig) {
+    fn apply_to(self, entity: &mut AppConfig) -> CoreResult<()> {
         let old_format = entity.effective_configuration_format().to_string();
 
         entity.default_card_prefix = self.default_card_prefix;
@@ -180,6 +264,10 @@ impl Editable<AppConfig> for AppConfigDto {
                 entity.configuration_location = Some(format!("{}.{}", stem, new_ext));
             }
         }
+
+        entity.validate()?;
+        entity.strip_defaults();
+        Ok(())
     }
 }
 
@@ -369,14 +457,18 @@ mod tests {
 
         let dto = AppConfigDto::from_entity(&config);
         let mut target = AppConfig::default();
-        dto.apply_to(&mut target);
+        dto.apply_to(&mut target).unwrap();
 
+        // Non-default values are preserved
         assert_eq!(target.default_card_prefix.as_deref(), Some("sprint"));
         assert_eq!(target.default_sprint_prefix.as_deref(), Some("iter"));
         assert_eq!(target.storage_backend.as_deref(), Some("sqlite"));
-        assert_eq!(target.editing_format.as_deref(), Some("json"));
-        assert_eq!(target.configuration_format.as_deref(), Some("toml"));
         assert_eq!(target.configuration_location.as_deref(), Some("/tmp/test.toml"));
+        // Default values are stripped to None (effective_* still returns defaults)
+        assert!(target.editing_format.is_none());
+        assert!(target.configuration_format.is_none());
+        assert_eq!(target.effective_editing_format(), "json");
+        assert_eq!(target.effective_configuration_format(), "toml");
     }
 
     #[test]
@@ -414,7 +506,7 @@ mod tests {
             configuration_format: Some("json".into()),
             configuration_location: Some("/home/user/.config/kanban/config.toml".into()),
         };
-        dto.apply_to(&mut config);
+        dto.apply_to(&mut config).unwrap();
 
         assert_eq!(
             config.configuration_location.as_deref(),
@@ -502,11 +594,171 @@ mod tests {
             configuration_format: Some("toml".into()),
             configuration_location: Some("/home/user/.config/kanban/config.toml".into()),
         };
-        dto.apply_to(&mut config);
+        dto.apply_to(&mut config).unwrap();
 
         assert_eq!(
             config.configuration_location.as_deref(),
             Some("/home/user/.config/kanban/config.toml")
         );
+    }
+
+    #[test]
+    fn test_validate_default_config_passes() {
+        let config = AppConfig::default();
+        config.validate().unwrap();
+    }
+
+    #[test]
+    fn test_validate_valid_storage_backend_passes() {
+        for backend in &["json", "sqlite"] {
+            let config = AppConfig {
+                storage_backend: Some(backend.to_string()),
+                ..Default::default()
+            };
+            config.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_validate_invalid_storage_backend_fails() {
+        let config = AppConfig {
+            storage_backend: Some("yaml".into()),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("storage_backend"));
+        assert!(err.to_string().contains("yaml"));
+    }
+
+    #[test]
+    fn test_validate_valid_editing_format_passes() {
+        let config = AppConfig {
+            editing_format: Some("json".into()),
+            ..Default::default()
+        };
+        config.validate().unwrap();
+    }
+
+    #[test]
+    fn test_validate_invalid_editing_format_fails() {
+        let config = AppConfig {
+            editing_format: Some("toml".into()),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("editing_format"));
+    }
+
+    #[test]
+    fn test_validate_valid_configuration_format_passes() {
+        for fmt in &["json", "toml"] {
+            let config = AppConfig {
+                configuration_format: Some(fmt.to_string()),
+                ..Default::default()
+            };
+            config.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_validate_invalid_configuration_format_fails() {
+        let config = AppConfig {
+            configuration_format: Some("yaml".into()),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("configuration_format"));
+        assert!(err.to_string().contains("yaml"));
+    }
+
+    #[test]
+    fn test_has_non_default_values_all_none_returns_false() {
+        let config = AppConfig::default();
+        assert!(!config.has_non_default_values());
+    }
+
+    #[test]
+    fn test_has_non_default_values_with_explicit_defaults_returns_false() {
+        let config = AppConfig {
+            default_card_prefix: Some("task".into()),
+            default_sprint_prefix: Some("sprint".into()),
+            storage_backend: Some("json".into()),
+            editing_format: Some("json".into()),
+            configuration_format: Some("toml".into()),
+            configuration_location: AppConfig::config_path().map(|p| p.display().to_string()),
+        };
+        assert!(!config.has_non_default_values());
+    }
+
+    #[test]
+    fn test_has_non_default_values_with_card_prefix_returns_true() {
+        let config = AppConfig {
+            default_card_prefix: Some("feat".into()),
+            ..Default::default()
+        };
+        assert!(config.has_non_default_values());
+    }
+
+    #[test]
+    fn test_has_non_default_values_with_storage_backend_returns_true() {
+        let config = AppConfig {
+            storage_backend: Some("sqlite".into()),
+            ..Default::default()
+        };
+        assert!(config.has_non_default_values());
+    }
+
+    #[test]
+    fn test_apply_to_strips_default_values() {
+        let dto = AppConfigDto {
+            default_card_prefix: Some("task".into()),
+            default_sprint_prefix: Some("sprint".into()),
+            storage_backend: Some("sqlite".into()),
+            editing_format: Some("json".into()),
+            configuration_format: Some("toml".into()),
+            configuration_location: AppConfig::config_path().map(|p| p.display().to_string()),
+        };
+        let mut config = AppConfig::default();
+        dto.apply_to(&mut config).unwrap();
+
+        assert!(config.default_card_prefix.is_none());
+        assert!(config.default_sprint_prefix.is_none());
+        assert_eq!(config.storage_backend.as_deref(), Some("sqlite"));
+        assert!(config.editing_format.is_none());
+        assert!(config.configuration_format.is_none());
+        assert!(config.configuration_location.is_none());
+    }
+
+    #[test]
+    fn test_save_only_contains_non_default_fields() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+
+        let config = AppConfig {
+            storage_backend: Some("sqlite".into()),
+            ..Default::default()
+        };
+        config.save_to(&path).unwrap();
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("storage_backend"));
+        assert!(!content.contains("default_card_prefix"));
+        assert!(!content.contains("editing_format"));
+        assert!(!content.contains("configuration_format"));
+    }
+
+    #[test]
+    fn test_apply_to_rejects_invalid_storage_backend() {
+        let dto = AppConfigDto {
+            default_card_prefix: Some("task".into()),
+            default_sprint_prefix: Some("sprint".into()),
+            storage_backend: Some("yaml".into()),
+            editing_format: Some("json".into()),
+            configuration_format: Some("toml".into()),
+            configuration_location: Some("/tmp/test.toml".into()),
+        };
+        let mut config = AppConfig::default();
+        let err = dto.apply_to(&mut config).unwrap_err();
+        assert!(err.to_string().contains("storage_backend"));
     }
 }
