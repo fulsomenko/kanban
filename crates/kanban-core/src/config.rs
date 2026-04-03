@@ -2,6 +2,18 @@ use crate::{CoreResult, Editable};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+pub fn validate_branch_prefix(prefix: &str) -> bool {
+    if prefix.is_empty() {
+        return false;
+    }
+    if prefix.starts_with('-') || prefix.ends_with('-') {
+        return false;
+    }
+    prefix
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default, alias = "default_branch_prefix", skip_serializing_if = "Option::is_none")]
@@ -142,6 +154,22 @@ impl AppConfig {
             if !matches!(v.as_str(), "json" | "toml") {
                 return Err(crate::CoreError::Validation(format!(
                     "Invalid configuration_format '{}': must be 'json' or 'toml'",
+                    v
+                )));
+            }
+        }
+        if let Some(ref v) = self.default_card_prefix {
+            if !validate_branch_prefix(v) {
+                return Err(crate::CoreError::Validation(format!(
+                    "Invalid default_card_prefix '{}': must be non-empty, alphanumeric with hyphens/underscores, no leading/trailing hyphens",
+                    v
+                )));
+            }
+        }
+        if let Some(ref v) = self.default_sprint_prefix {
+            if !validate_branch_prefix(v) {
+                return Err(crate::CoreError::Validation(format!(
+                    "Invalid default_sprint_prefix '{}': must be non-empty, alphanumeric with hyphens/underscores, no leading/trailing hyphens",
                     v
                 )));
             }
@@ -760,5 +788,70 @@ mod tests {
         let mut config = AppConfig::default();
         let err = dto.apply_to(&mut config).unwrap_err();
         assert!(err.to_string().contains("storage_backend"));
+    }
+
+    #[test]
+    fn test_validate_branch_prefix_valid() {
+        assert!(validate_branch_prefix("task"));
+        assert!(validate_branch_prefix("feat"));
+        assert!(validate_branch_prefix("FEAT-123"));
+        assert!(validate_branch_prefix("my_prefix"));
+        assert!(validate_branch_prefix("a"));
+    }
+
+    #[test]
+    fn test_validate_branch_prefix_invalid() {
+        assert!(!validate_branch_prefix(""));
+        assert!(!validate_branch_prefix("-feat"));
+        assert!(!validate_branch_prefix("feat-"));
+        assert!(!validate_branch_prefix("feat/bad"));
+        assert!(!validate_branch_prefix("feat bad"));
+        assert!(!validate_branch_prefix("feat@123"));
+    }
+
+    #[test]
+    fn test_validate_valid_card_prefix_passes() {
+        for prefix in &["task", "feat", "FEAT-123", "my_prefix"] {
+            let config = AppConfig {
+                default_card_prefix: Some(prefix.to_string()),
+                ..Default::default()
+            };
+            config.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_validate_invalid_card_prefix_fails() {
+        for prefix in &["", "-feat", "feat-", "feat/bad", "feat bad"] {
+            let config = AppConfig {
+                default_card_prefix: Some(prefix.to_string()),
+                ..Default::default()
+            };
+            let err = config.validate().unwrap_err();
+            assert!(err.to_string().contains("default_card_prefix"));
+        }
+    }
+
+    #[test]
+    fn test_validate_valid_sprint_prefix_passes() {
+        for prefix in &["sprint", "SP", "iteration-1"] {
+            let config = AppConfig {
+                default_sprint_prefix: Some(prefix.to_string()),
+                ..Default::default()
+            };
+            config.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_validate_invalid_sprint_prefix_fails() {
+        for prefix in &["", "sprint/1", "-sprint"] {
+            let config = AppConfig {
+                default_sprint_prefix: Some(prefix.to_string()),
+                ..Default::default()
+            };
+            let err = config.validate().unwrap_err();
+            assert!(err.to_string().contains("default_sprint_prefix"));
+        }
     }
 }
