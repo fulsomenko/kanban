@@ -58,11 +58,9 @@ impl StateManager {
     /// - Optional receiver for async save processing (snapshots to save)
     /// - Optional receiver for save completion notifications
     ///
-    /// Storage backend is selected based on file extension:
-    /// - `.db` or `.sqlite` -> SQLite (requires `sqlite` feature)
-    /// - `.json` or other -> JSON file
     #[allow(clippy::type_complexity)]
     pub fn new(
+        backend: &str,
         save_file: Option<String>,
     ) -> kanban_domain::KanbanResult<(
         Self,
@@ -78,7 +76,7 @@ impl StateManager {
             uuid::Uuid,
             Option<SaveChannel>,
         ) = if let Some(ref path) = save_file {
-            let (store, id) = Self::create_store(path)?;
+            let (store, id) = Self::create_store(backend, path)?;
             let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
             (Some(store), id, Some((tx, rx)))
         } else {
@@ -110,8 +108,8 @@ impl StateManager {
         Ok((manager, save_rx, Some(save_completion_rx)))
     }
 
-    fn create_store(path: &str) -> kanban_domain::KanbanResult<(DynStore, uuid::Uuid)> {
-        let store = kanban_service::make_store(path)?;
+    fn create_store(backend: &str, path: &str) -> kanban_domain::KanbanResult<(DynStore, uuid::Uuid)> {
+        let store = kanban_service::make_store(backend, path)?;
         let id = store.instance_id();
         Ok((store, id))
     }
@@ -445,11 +443,12 @@ impl StateManager {
     #[allow(clippy::type_complexity)]
     pub fn replace_store(
         &mut self,
+        backend: &str,
         path: &str,
     ) -> KanbanResult<(mpsc::Receiver<Snapshot>, mpsc::UnboundedReceiver<()>)> {
         const SAVE_QUEUE_CAPACITY: usize = 100;
 
-        let (store, instance_id) = Self::create_store(path)?;
+        let (store, instance_id) = Self::create_store(backend, path)?;
         self.store = Some(store);
         self.instance_id = instance_id;
         self.file_watcher = None;
@@ -473,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_state_manager_creation() {
-        let (manager, _rx, _completion_rx) = StateManager::new(None).unwrap();
+        let (manager, _rx, _completion_rx) = StateManager::new("json", None).unwrap();
         assert!(!manager.is_dirty());
     }
 
@@ -483,11 +482,11 @@ mod tests {
         let initial_path = dir.path().join("test.json");
         std::fs::write(&initial_path, "{}").unwrap();
         let (mut manager, _rx, _crx) =
-            StateManager::new(Some(initial_path.to_str().unwrap().to_string())).unwrap();
+            StateManager::new("json", Some(initial_path.to_str().unwrap().to_string())).unwrap();
 
         let new_path = dir.path().join("test2.json");
         std::fs::write(&new_path, "{}").unwrap();
-        let result = manager.replace_store(new_path.to_str().unwrap());
+        let result = manager.replace_store("json", new_path.to_str().unwrap());
         assert!(result.is_ok());
 
         let store = manager.store().unwrap();
@@ -500,14 +499,14 @@ mod tests {
         let path1 = dir.path().join("a.json");
         std::fs::write(&path1, "{}").unwrap();
         let (mut manager, _rx, _crx) =
-            StateManager::new(Some(path1.to_str().unwrap().to_string())).unwrap();
+            StateManager::new("json", Some(path1.to_str().unwrap().to_string())).unwrap();
         manager.mark_dirty();
         assert!(manager.is_dirty());
 
         let path2 = dir.path().join("b.json");
         std::fs::write(&path2, "{}").unwrap();
         let (_rx, _crx) = manager
-            .replace_store(path2.to_str().unwrap())
+            .replace_store("json", path2.to_str().unwrap())
             .unwrap();
         assert!(!manager.is_dirty());
         assert!(!manager.has_pending_saves());
@@ -516,7 +515,7 @@ mod tests {
 
     #[test]
     fn test_dirty_flag_after_execute() {
-        let (mut manager, _rx, _completion_rx) = StateManager::new(None).unwrap();
+        let (mut manager, _rx, _completion_rx) = StateManager::new("json", None).unwrap();
 
         struct DummyCommand;
         impl Command for DummyCommand {

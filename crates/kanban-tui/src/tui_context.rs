@@ -29,6 +29,7 @@ pub struct TuiContext {
 impl TuiContext {
     #[allow(clippy::type_complexity)]
     pub fn new(
+        backend: &str,
         save_file: Option<String>,
         default_card_prefix: String,
         default_sprint_prefix: String,
@@ -37,7 +38,7 @@ impl TuiContext {
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     )> {
-        let (state_manager, save_rx, completion_rx) = StateManager::new(save_file)?;
+        let (state_manager, save_rx, completion_rx) = StateManager::new(backend, save_file)?;
 
         let ctx = Self {
             boards: Vec::new(),
