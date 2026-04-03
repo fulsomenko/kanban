@@ -15,7 +15,7 @@ name = "kanban"
 path = "src/main.rs"
 
 [features]
-default = ["tui", "sqlite"]
+default = ["tui"]
 tui = ["dep:kanban-tui"]
 
 [dependencies]
