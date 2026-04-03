@@ -28,6 +28,10 @@ pub struct AppConfig {
     pub configuration_format: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration_location: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_location: Option<String>,
+    #[serde(skip, default)]
+    pub has_data_file: bool,
 }
 
 impl AppConfig {
@@ -123,6 +127,16 @@ impl AppConfig {
         self.configuration_format.as_deref().unwrap_or("toml")
     }
 
+    pub fn effective_storage_location(&self) -> String {
+        self.storage_location.clone().unwrap_or_else(|| {
+            match self.effective_storage_backend() {
+                "sqlite" => "kanban.sqlite",
+                _ => "kanban.json",
+            }
+            .to_string()
+        })
+    }
+
     pub fn effective_configuration_location(&self) -> String {
         self.configuration_location
             .clone()
@@ -187,7 +201,8 @@ impl AppConfig {
             && self.storage_backend.is_none()
             && self.editing_format.is_none()
             && self.configuration_format.is_none()
-            && self.configuration_location.is_none();
+            && self.configuration_location.is_none()
+            && self.storage_location.is_none();
 
         if all_none {
             return true;
@@ -203,6 +218,13 @@ impl AppConfig {
                     .map(|p| p.display().to_string())
                     .as_deref()
                     == Some(loc)
+            })
+            && self.storage_location.as_deref().is_none_or(|loc| {
+                let default = match self.effective_storage_backend() {
+                    "sqlite" => "kanban.sqlite",
+                    _ => "kanban.json",
+                };
+                loc == default
             })
     }
 
@@ -231,6 +253,15 @@ impl AppConfig {
                 self.configuration_location = None;
             }
         }
+        if let Some(ref loc) = self.storage_location {
+            let default = match self.effective_storage_backend() {
+                "sqlite" => "kanban.sqlite",
+                _ => "kanban.json",
+            };
+            if loc == default {
+                self.storage_location = None;
+            }
+        }
     }
 
     pub fn move_config(old_path: &Path, new_path: &Path) -> CoreResult<()> {
@@ -256,33 +287,51 @@ impl AppConfig {
 pub struct AppConfigDto {
     pub default_card_prefix: Option<String>,
     pub default_sprint_prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_backend: Option<String>,
     pub editing_format: Option<String>,
     pub configuration_format: Option<String>,
     pub configuration_location: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_location: Option<String>,
 }
 
 impl Editable<AppConfig> for AppConfigDto {
     fn from_entity(entity: &AppConfig) -> Self {
+        let (storage_backend, storage_location) = if entity.has_data_file {
+            (
+                Some(entity.effective_storage_backend().to_string()),
+                Some(entity.effective_storage_location()),
+            )
+        } else {
+            (None, None)
+        };
         Self {
             default_card_prefix: Some(entity.effective_default_card_prefix().to_string()),
             default_sprint_prefix: Some(entity.effective_default_sprint_prefix().to_string()),
-            storage_backend: Some(entity.effective_storage_backend().to_string()),
+            storage_backend,
             editing_format: Some(entity.effective_editing_format().to_string()),
             configuration_format: Some(entity.effective_configuration_format().to_string()),
             configuration_location: Some(entity.effective_configuration_location()),
+            storage_location,
         }
     }
 
     fn apply_to(self, entity: &mut AppConfig) -> CoreResult<()> {
         let old_format = entity.effective_configuration_format().to_string();
+        let old_backend = entity.effective_storage_backend().to_string();
 
         entity.default_card_prefix = self.default_card_prefix;
         entity.default_sprint_prefix = self.default_sprint_prefix;
-        entity.storage_backend = self.storage_backend;
+        if let Some(backend) = self.storage_backend {
+            entity.storage_backend = Some(backend);
+        }
         entity.editing_format = self.editing_format;
         entity.configuration_format = self.configuration_format;
         entity.configuration_location = self.configuration_location;
+        if let Some(location) = self.storage_location {
+            entity.storage_location = Some(location);
+        }
 
         let new_format = entity.effective_configuration_format();
         if old_format != new_format {
@@ -290,6 +339,18 @@ impl Editable<AppConfig> for AppConfigDto {
             let location = entity.effective_configuration_location();
             if let Some((stem, _)) = location.rsplit_once('.') {
                 entity.configuration_location = Some(format!("{}.{}", stem, new_ext));
+            }
+        }
+
+        let new_backend = entity.effective_storage_backend().to_string();
+        if old_backend != new_backend {
+            let new_ext = match new_backend.as_str() {
+                "sqlite" => "sqlite",
+                _ => "json",
+            };
+            let location = entity.effective_storage_location();
+            if let Some((stem, _)) = location.rsplit_once('.') {
+                entity.storage_location = Some(format!("{}.{}", stem, new_ext));
             }
         }
 
@@ -426,6 +487,7 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: Some("/tmp/test.toml".into()),
+            ..Default::default()
         };
         config.save_to(&path).unwrap();
 
@@ -450,6 +512,7 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("json".into()),
             configuration_location: Some("/tmp/test.json".into()),
+            ..Default::default()
         };
         config.save_to(&path).unwrap();
 
@@ -481,6 +544,8 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: Some("/tmp/test.toml".into()),
+            has_data_file: true,
+            ..Default::default()
         };
 
         let dto = AppConfigDto::from_entity(&config);
@@ -508,6 +573,7 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: Some("/tmp/test.toml".into()),
+            storage_location: None,
         };
         let serialized = toml::to_string(&dto).unwrap();
         assert!(serialized.contains("default_card_prefix"));
@@ -533,6 +599,7 @@ mod tests {
             editing_format: None,
             configuration_format: Some("json".into()),
             configuration_location: Some("/home/user/.config/kanban/config.toml".into()),
+            storage_location: None,
         };
         dto.apply_to(&mut config).unwrap();
 
@@ -543,15 +610,27 @@ mod tests {
     }
 
     #[test]
-    fn test_dto_from_default_config_shows_effective_values() {
+    fn test_dto_from_default_config_hides_storage_fields() {
         let config = AppConfig::default();
         let dto = AppConfigDto::from_entity(&config);
         assert_eq!(dto.default_card_prefix.as_deref(), Some("task"));
         assert_eq!(dto.default_sprint_prefix.as_deref(), Some("sprint"));
-        assert_eq!(dto.storage_backend.as_deref(), Some("json"));
+        assert!(dto.storage_backend.is_none());
+        assert!(dto.storage_location.is_none());
         assert_eq!(dto.editing_format.as_deref(), Some("json"));
         assert_eq!(dto.configuration_format.as_deref(), Some("toml"));
         assert!(dto.configuration_location.is_some());
+    }
+
+    #[test]
+    fn test_dto_from_config_with_data_file_shows_storage_fields() {
+        let config = AppConfig {
+            has_data_file: true,
+            ..Default::default()
+        };
+        let dto = AppConfigDto::from_entity(&config);
+        assert_eq!(dto.storage_backend.as_deref(), Some("json"));
+        assert_eq!(dto.storage_location.as_deref(), Some("kanban.json"));
     }
 
     #[test]
@@ -563,11 +642,14 @@ mod tests {
             editing_format: Some("toml".into()),
             configuration_format: Some("json".into()),
             configuration_location: Some("/custom/path.json".into()),
+            has_data_file: true,
+            ..Default::default()
         };
         let dto = AppConfigDto::from_entity(&config);
         assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
         assert_eq!(dto.default_sprint_prefix.as_deref(), Some("iter"));
         assert_eq!(dto.storage_backend.as_deref(), Some("sqlite"));
+        assert_eq!(dto.storage_location.as_deref(), Some("kanban.sqlite"));
         assert_eq!(dto.editing_format.as_deref(), Some("toml"));
         assert_eq!(dto.configuration_format.as_deref(), Some("json"));
         assert_eq!(dto.configuration_location.as_deref(), Some("/custom/path.json"));
@@ -621,6 +703,7 @@ mod tests {
             editing_format: None,
             configuration_format: Some("toml".into()),
             configuration_location: Some("/home/user/.config/kanban/config.toml".into()),
+            storage_location: None,
         };
         dto.apply_to(&mut config).unwrap();
 
@@ -714,6 +797,8 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: AppConfig::config_path().map(|p| p.display().to_string()),
+            storage_location: Some("kanban.json".into()),
+            ..Default::default()
         };
         assert!(!config.has_non_default_values());
     }
@@ -745,6 +830,7 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: AppConfig::config_path().map(|p| p.display().to_string()),
+            storage_location: None,
         };
         let mut config = AppConfig::default();
         dto.apply_to(&mut config).unwrap();
@@ -784,6 +870,7 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: Some("/tmp/test.toml".into()),
+            storage_location: None,
         };
         let mut config = AppConfig::default();
         let err = dto.apply_to(&mut config).unwrap_err();
@@ -853,5 +940,72 @@ mod tests {
             let err = config.validate().unwrap_err();
             assert!(err.to_string().contains("default_sprint_prefix"));
         }
+    }
+
+    #[test]
+    fn test_effective_storage_location_defaults_to_json() {
+        let config = AppConfig::default();
+        assert_eq!(config.effective_storage_location(), "kanban.json");
+    }
+
+    #[test]
+    fn test_effective_storage_location_sqlite_when_backend_sqlite() {
+        let config = AppConfig {
+            storage_backend: Some("sqlite".into()),
+            ..Default::default()
+        };
+        assert_eq!(config.effective_storage_location(), "kanban.sqlite");
+    }
+
+    #[test]
+    fn test_effective_storage_location_custom() {
+        let config = AppConfig {
+            storage_location: Some("my_data.json".into()),
+            ..Default::default()
+        };
+        assert_eq!(config.effective_storage_location(), "my_data.json");
+    }
+
+    #[test]
+    fn test_strip_defaults_strips_default_storage_location() {
+        let mut config = AppConfig {
+            storage_location: Some("kanban.json".into()),
+            ..Default::default()
+        };
+        config.strip_defaults();
+        assert!(config.storage_location.is_none());
+    }
+
+    #[test]
+    fn test_strip_defaults_keeps_custom_storage_location() {
+        let mut config = AppConfig {
+            storage_location: Some("my_data.json".into()),
+            ..Default::default()
+        };
+        config.strip_defaults();
+        assert_eq!(config.storage_location.as_deref(), Some("my_data.json"));
+    }
+
+    #[test]
+    fn test_apply_to_auto_syncs_storage_extension_on_backend_change() {
+        let mut config = AppConfig {
+            storage_backend: Some("json".into()),
+            storage_location: Some("myproject.json".into()),
+            has_data_file: true,
+            ..Default::default()
+        };
+
+        let dto = AppConfigDto {
+            default_card_prefix: None,
+            default_sprint_prefix: None,
+            storage_backend: Some("sqlite".into()),
+            editing_format: None,
+            configuration_format: None,
+            configuration_location: None,
+            storage_location: Some("myproject.json".into()),
+        };
+        dto.apply_to(&mut config).unwrap();
+
+        assert_eq!(config.storage_location.as_deref(), Some("myproject.sqlite"));
     }
 }
