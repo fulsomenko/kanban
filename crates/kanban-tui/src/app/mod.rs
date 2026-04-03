@@ -157,7 +157,8 @@ impl App {
     )> {
         let app_config = AppConfig::load();
         let default_card_prefix = app_config.effective_default_card_prefix().to_string();
-        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone(), default_card_prefix)?;
+        let default_sprint_prefix = app_config.effective_default_sprint_prefix().to_string();
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone(), default_card_prefix, default_sprint_prefix)?;
         let app = Self {
             should_quit: false,
             quit_with_pending: false,

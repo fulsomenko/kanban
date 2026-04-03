@@ -23,6 +23,7 @@ pub struct TuiContext {
     pub graph: DependencyGraph,
     pub state_manager: StateManager,
     pub default_card_prefix: String,
+    pub default_sprint_prefix: String,
 }
 
 impl TuiContext {
@@ -30,6 +31,7 @@ impl TuiContext {
     pub fn new(
         save_file: Option<String>,
         default_card_prefix: String,
+        default_sprint_prefix: String,
     ) -> KanbanResult<(
         Self,
         Option<mpsc::Receiver<Snapshot>>,
@@ -46,6 +48,7 @@ impl TuiContext {
             graph: DependencyGraph::new(),
             state_manager,
             default_card_prefix,
+            default_sprint_prefix,
         };
 
         Ok((ctx, save_rx, completion_rx))
@@ -519,7 +522,7 @@ impl KanbanOperations for TuiContext {
 
             let effective_prefix = prefix
                 .or_else(|| board.sprint_prefix.clone())
-                .unwrap_or_else(|| "sprint".to_string());
+                .unwrap_or_else(|| self.default_sprint_prefix.clone());
 
             board.ensure_sprint_counter_initialized(&effective_prefix, &self.sprints);
             let sprint_number = board.get_next_sprint_number(&effective_prefix);

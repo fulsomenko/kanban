@@ -60,6 +60,7 @@ impl App {
                     }
                 }
                 self.ctx.default_card_prefix = self.app_config.effective_default_card_prefix().to_string();
+                self.ctx.default_sprint_prefix = self.app_config.effective_default_sprint_prefix().to_string();
                 true
             }
             KeyCode::Char('x') => {

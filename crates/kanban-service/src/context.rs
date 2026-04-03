@@ -592,7 +592,7 @@ impl KanbanOperations for KanbanContext {
 
             let effective_prefix = prefix
                 .or_else(|| board.sprint_prefix.clone())
-                .unwrap_or_else(|| "sprint".to_string());
+                .unwrap_or_else(|| self.app_config.effective_default_sprint_prefix().to_string());
 
             board.ensure_sprint_counter_initialized(&effective_prefix, &self.sprints);
             let sprint_number = board.get_next_sprint_number(&effective_prefix);

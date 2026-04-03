@@ -182,7 +182,7 @@ impl App {
                     let effective_sprint_prefix = board
                         .sprint_prefix
                         .as_deref()
-                        .unwrap_or("sprint")
+                        .unwrap_or(self.app_config.effective_default_sprint_prefix())
                         .to_string();
                     // Ensure the counter for this prefix is initialized based on existing sprints
                     board.ensure_sprint_counter_initialized(
