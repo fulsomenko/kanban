@@ -47,6 +47,22 @@ pub fn make_store_with_config(
     }
 }
 
+pub async fn validate_and_load_store(
+    path: &str,
+) -> Result<kanban_domain::Snapshot, KanbanError> {
+    let store = make_store(path)?;
+    if !store.exists().await {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Storage file does not exist: {}", path),
+        )
+        .into());
+    }
+    let (snapshot, _metadata) = store.load().await?;
+    let data = kanban_persistence::snapshot_from_json_bytes(&snapshot.data)?;
+    Ok(data)
+}
+
 pub async fn migrate_store(from_path: &str, to_path: &str) -> Result<(), KanbanError> {
     let from = std::path::Path::new(from_path);
     let to = std::path::Path::new(to_path);
