@@ -60,7 +60,7 @@ impl App {
             if old_path.exists() {
                 if let Err(e) = tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(
-                        kanban_service::migrate_store(old_backend, old_storage_location, &new_backend, &new_storage_location),
+                        kanban_service::migrate_store_for_backend(Some(old_backend), old_storage_location, Some(&new_backend), &new_storage_location),
                     )
                 }) {
                     self.app_config = old_config;
@@ -72,7 +72,7 @@ impl App {
 
         let snapshot = match tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(
-                kanban_service::validate_and_load_store(&new_backend, &new_storage_location),
+                kanban_service::validate_and_load_store_for_backend(Some(&new_backend), &new_storage_location),
             )
         }) {
             Ok(s) => s,
