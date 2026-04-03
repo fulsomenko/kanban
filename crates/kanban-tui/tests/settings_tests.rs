@@ -600,3 +600,159 @@ fn test_settings_keybinding_provider_includes_nav_bindings() {
     assert!(keys.contains(&"h/l"));
     assert!(keys.contains(&"q/Esc"));
 }
+
+// --- Storage location switching tests ---
+
+async fn create_test_json_file(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
+    use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+
+    let path = dir.join(name);
+    let path_str = path.to_str().unwrap().to_string();
+    let store = kanban_persistence_json::JsonFileStore::new(&path_str);
+
+    let domain_boards: Vec<kanban_domain::Board> = boards
+        .iter()
+        .map(|n| kanban_domain::Board::new(n.to_string(), None))
+        .collect();
+    let snapshot = kanban_domain::Snapshot {
+        boards: domain_boards,
+        columns: vec![],
+        cards: vec![],
+        archived_cards: vec![],
+        sprints: vec![],
+        graph: Default::default(),
+    };
+
+    let store_snapshot = StoreSnapshot {
+        data: serde_json::to_vec(&snapshot).unwrap(),
+        metadata: PersistenceMetadata::new(store.instance_id()),
+    };
+    store.save(store_snapshot).await.unwrap();
+
+    path_str
+}
+
+#[cfg(feature = "sqlite")]
+async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
+    use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+
+    let path = dir.join(name);
+    let path_str = path.to_str().unwrap().to_string();
+    let store = kanban_persistence_sqlite::SqliteStore::new(&path_str);
+
+    let domain_boards: Vec<kanban_domain::Board> = boards
+        .iter()
+        .map(|n| kanban_domain::Board::new(n.to_string(), None))
+        .collect();
+    let snapshot = kanban_domain::Snapshot {
+        boards: domain_boards,
+        columns: vec![],
+        cards: vec![],
+        archived_cards: vec![],
+        sprints: vec![],
+        graph: Default::default(),
+    };
+
+    let store_snapshot = StoreSnapshot {
+        data: serde_json::to_vec(&snapshot).unwrap(),
+        metadata: PersistenceMetadata::new(store.instance_id()),
+    };
+    store.save(store_snapshot).await.unwrap();
+
+    path_str
+}
+
+async fn setup_app_with_json_file(dir: &std::path::Path) -> App {
+    let path = create_test_json_file(dir, "source.json", &["OriginalBoard"]).await;
+    let (mut app, _rx) = App::new(Some(path)).unwrap();
+    app.load_initial_state().await;
+    app
+}
+
+#[cfg(feature = "sqlite")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_migrate_json_to_sqlite_creates_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = setup_app_with_json_file(dir.path()).await;
+    assert_eq!(app.ctx.boards.len(), 1);
+    assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
+
+    let old_config = app.app_config.clone();
+    let old_storage_location = app.app_config.effective_storage_location();
+    let sqlite_path = dir.path().join("migrated.sqlite");
+    app.app_config.storage_location = Some(sqlite_path.to_str().unwrap().to_string());
+
+    let result = app.apply_storage_location_change(old_config, &old_storage_location);
+    assert!(result, "apply_storage_location_change should succeed");
+    assert!(sqlite_path.exists(), "SQLite file should be created");
+    assert_eq!(app.ctx.boards.len(), 1);
+    assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
+    assert_eq!(
+        app.persistence.save_file.as_deref(),
+        Some(sqlite_path.to_str().unwrap())
+    );
+}
+
+#[cfg(feature = "sqlite")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_switch_to_existing_sqlite_reloads_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = setup_app_with_json_file(dir.path()).await;
+    assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
+
+    let sqlite_path = create_test_sqlite_file(dir.path(), "other.db", &["SqliteBoard"]).await;
+
+    let old_config = app.app_config.clone();
+    let old_storage_location = app.app_config.effective_storage_location();
+    app.app_config.storage_location = Some(sqlite_path.clone());
+
+    let result = app.apply_storage_location_change(old_config, &old_storage_location);
+    assert!(result, "apply_storage_location_change should succeed");
+    assert_eq!(app.ctx.boards.len(), 1);
+    assert_eq!(app.ctx.boards[0].name, "SqliteBoard");
+    assert_eq!(app.persistence.save_file.as_deref(), Some(sqlite_path.as_str()));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_switch_to_existing_json_reloads_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = setup_app_with_json_file(dir.path()).await;
+    assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
+
+    let second_json = create_test_json_file(dir.path(), "other.json", &["SecondBoard"]).await;
+
+    let old_config = app.app_config.clone();
+    let old_storage_location = app.app_config.effective_storage_location();
+    app.app_config.storage_location = Some(second_json.clone());
+
+    let result = app.apply_storage_location_change(old_config, &old_storage_location);
+    assert!(result, "apply_storage_location_change should succeed");
+    assert_eq!(app.ctx.boards.len(), 1);
+    assert_eq!(app.ctx.boards[0].name, "SecondBoard");
+    assert_eq!(app.persistence.save_file.as_deref(), Some(second_json.as_str()));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_switch_storage_location_nonexistent_parent_shows_error() {
+    use kanban_tui::components::BannerVariant;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = setup_app_with_json_file(dir.path()).await;
+
+    let old_config = app.app_config.clone();
+    let old_storage_location = app.app_config.effective_storage_location();
+    app.app_config.storage_location =
+        Some("/nonexistent/dir/board.json".to_string());
+
+    let result = app.apply_storage_location_change(old_config.clone(), &old_storage_location);
+    assert!(!result, "should return false on error");
+
+    let banner = app.ui_state.banner.as_ref().expect("should have error banner");
+    assert_eq!(banner.variant, BannerVariant::Error);
+
+    assert_eq!(
+        app.app_config.effective_storage_location(),
+        old_config.effective_storage_location(),
+        "config should be reverted on error"
+    );
+}
