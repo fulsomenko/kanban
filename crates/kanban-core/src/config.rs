@@ -16,18 +16,18 @@ pub fn validate_branch_prefix(prefix: &str) -> bool {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppConfig {
-    #[serde(default, alias = "default_branch_prefix", skip_serializing_if = "Option::is_none")]
-    pub default_card_prefix: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_sprint_prefix: Option<String>,
-    #[serde(default, alias = "default_db_mode", skip_serializing_if = "Option::is_none")]
-    pub storage_backend: Option<String>,
-    #[serde(default, alias = "default_format", skip_serializing_if = "Option::is_none")]
-    pub editing_format: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration_format: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration_location: Option<String>,
+    #[serde(default, alias = "default_branch_prefix", skip_serializing_if = "Option::is_none")]
+    pub default_card_prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_sprint_prefix: Option<String>,
+    #[serde(default, alias = "default_format", skip_serializing_if = "Option::is_none")]
+    pub editing_format: Option<String>,
+    #[serde(default, alias = "default_db_mode", skip_serializing_if = "Option::is_none")]
+    pub storage_backend: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_location: Option<String>,
     #[serde(skip, default)]
@@ -1007,5 +1007,49 @@ mod tests {
         dto.apply_to(&mut config).unwrap();
 
         assert_eq!(config.storage_location.as_deref(), Some("myproject.sqlite"));
+    }
+
+    #[test]
+    fn test_app_config_serializes_keys_in_alphabetical_order() {
+        let config = AppConfig {
+            storage_backend: Some("sqlite".into()),
+            default_card_prefix: Some("feat".into()),
+            ..Default::default()
+        };
+        let serialized = toml::to_string(&config).unwrap();
+        let pos_card = serialized.find("default_card_prefix").unwrap();
+        let pos_backend = serialized.find("storage_backend").unwrap();
+        assert!(
+            pos_card < pos_backend,
+            "default_card_prefix should appear before storage_backend"
+        );
+    }
+
+    #[test]
+    fn test_app_config_dto_serializes_keys_in_alphabetical_order() {
+        let dto = AppConfigDto {
+            configuration_format: Some("toml".into()),
+            configuration_location: Some("/tmp/test.toml".into()),
+            default_card_prefix: Some("feat".into()),
+            default_sprint_prefix: Some("sprint".into()),
+            editing_format: Some("json".into()),
+            storage_backend: Some("json".into()),
+            storage_location: Some("kanban.json".into()),
+        };
+        let serialized = serde_json::to_string_pretty(&dto).unwrap();
+        let keys: Vec<&str> = serialized
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.starts_with('"') {
+                    trimmed.split('"').nth(1)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let mut sorted = keys.clone();
+        sorted.sort();
+        assert_eq!(keys, sorted, "DTO JSON keys should be in alphabetical order");
     }
 }
