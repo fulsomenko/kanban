@@ -254,15 +254,7 @@ impl Card {
     }
 
     pub fn validate_branch_prefix(prefix: &str) -> bool {
-        if prefix.is_empty() {
-            return false;
-        }
-        if prefix.starts_with('-') || prefix.ends_with('-') {
-            return false;
-        }
-        prefix
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        kanban_core::validate_branch_prefix(prefix)
     }
 
     pub fn is_completed(&self) -> bool {
