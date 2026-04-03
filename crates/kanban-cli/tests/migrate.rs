@@ -192,7 +192,7 @@ async fn test_migrate_cli_with_explicit_output() {
     );
     assert!(dst_path.exists());
 
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&dst_path)), AppConfig::default())
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
@@ -226,7 +226,7 @@ async fn test_migrate_cli_default_output_path() {
         expected_output.display()
     );
 
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&expected_output)))
+    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&expected_output)), AppConfig::default())
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
