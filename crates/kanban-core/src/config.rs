@@ -180,6 +180,24 @@ impl AppConfig {
                 )));
             }
         }
+        if let Some(ref v) = self.storage_location {
+            let path = std::path::Path::new(v);
+            let resolved = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                std::env::current_dir()
+                    .map(|cwd| cwd.join(path))
+                    .unwrap_or_else(|_| path.to_path_buf())
+            };
+            if let Some(parent) = resolved.parent() {
+                if !parent.as_os_str().is_empty() && !parent.exists() {
+                    return Err(crate::CoreError::Validation(format!(
+                        "Invalid storage_location '{}': parent directory does not exist",
+                        v
+                    )));
+                }
+            }
+        }
         if let Some(ref v) = self.default_card_prefix {
             if !validate_branch_prefix(v) {
                 return Err(crate::CoreError::Validation(format!(
@@ -959,6 +977,36 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_storage_location_any_extension_accepted() {
+        for name in &["/tmp/board.json", "/tmp/board.sqlite", "/tmp/board.txt", "/tmp/board.dat", "/tmp/mydata"] {
+            let config = AppConfig {
+                storage_location: Some(name.to_string()),
+                ..Default::default()
+            };
+            config.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_validate_storage_location_parent_dir_missing() {
+        let config = AppConfig {
+            storage_location: Some("/nonexistent_dir_xyz/board.json".into()),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("parent directory"));
+    }
+
+    #[test]
+    fn test_validate_storage_location_none_is_valid() {
+        let config = AppConfig {
+            storage_location: None,
+            ..Default::default()
+        };
+        config.validate().unwrap();
+    }
+
+    #[test]
     fn test_effective_storage_location_defaults_to_json() {
         let config = AppConfig::default();
         let loc = config.effective_storage_location();
@@ -1021,7 +1069,7 @@ mod tests {
     fn test_apply_to_auto_syncs_storage_extension_on_backend_change() {
         let mut config = AppConfig {
             storage_backend: Some("json".into()),
-            storage_location: Some("/data/myproject.json".into()),
+            storage_location: Some("/tmp/myproject.json".into()),
             has_data_file: true,
             ..Default::default()
         };
@@ -1033,13 +1081,13 @@ mod tests {
             editing_format: None,
             configuration_format: None,
             configuration_location: None,
-            storage_location: Some("/data/myproject.json".into()),
+            storage_location: Some("/tmp/myproject.json".into()),
         };
         dto.apply_to(&mut config).unwrap();
 
         assert_eq!(
             config.storage_location.as_deref(),
-            Some("/data/myproject.sqlite")
+            Some("/tmp/myproject.sqlite")
         );
     }
 
