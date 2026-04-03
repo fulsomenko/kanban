@@ -40,15 +40,23 @@ impl App {
                     return true;
                 }
                 self.app_config = config;
-                if let Err(e) = self.app_config.save() {
-                    self.set_error(format!("Failed to save config: {}", e));
-                } else {
-                    let new_location = self.app_config.effective_configuration_location();
-                    if new_location != old_location {
-                        let old_path = std::path::Path::new(&old_location);
-                        if old_path.exists() {
-                            let _ = std::fs::remove_file(old_path);
+                if self.app_config.has_non_default_values() {
+                    if let Err(e) = self.app_config.save() {
+                        self.set_error(format!("Failed to save config: {}", e));
+                    } else {
+                        let new_location = self.app_config.effective_configuration_location();
+                        if new_location != old_location {
+                            let old_path = std::path::Path::new(&old_location);
+                            if old_path.exists() {
+                                let _ = std::fs::remove_file(old_path);
+                            }
                         }
+                    }
+                } else {
+                    let location = self.app_config.effective_configuration_location();
+                    let path = std::path::Path::new(&location);
+                    if path.exists() {
+                        let _ = std::fs::remove_file(path);
                     }
                 }
                 self.ctx.default_card_prefix = self.app_config.effective_default_card_prefix().to_string();
