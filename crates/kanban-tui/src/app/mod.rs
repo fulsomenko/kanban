@@ -156,6 +156,20 @@ impl App {
     )> {
         let mut app_config = AppConfig::load();
         app_config.has_data_file = save_file.is_some();
+        if let Some(ref file) = save_file {
+            let path = std::path::Path::new(file);
+            let resolved = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                std::env::current_dir()
+                    .map(|cwd| cwd.join(path))
+                    .unwrap_or_else(|_| path.to_path_buf())
+            };
+            let canonical = resolved
+                .canonicalize()
+                .unwrap_or(resolved);
+            app_config.storage_location = Some(canonical.display().to_string());
+        }
         let default_card_prefix = app_config.effective_default_card_prefix().to_string();
         let default_sprint_prefix = app_config.effective_default_sprint_prefix().to_string();
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone(), default_card_prefix, default_sprint_prefix)?;
