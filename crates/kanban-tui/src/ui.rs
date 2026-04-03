@@ -124,24 +124,38 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
     // Left top: Configuration
     let config_section = FieldSectionConfig::new(" Configuration (press e to edit) ");
     let config_block = config_section.block();
-    let card_prefix = app
-        .app_config
-        .default_card_prefix
-        .as_deref()
-        .unwrap_or("(default)");
-    let sprint_prefix = app
-        .app_config
-        .default_sprint_prefix
-        .as_deref()
-        .unwrap_or("(default)");
-    let db_mode = app.app_config.effective_storage_backend();
-    let default_format = app.app_config.effective_editing_format();
-    let config_lines = vec![
-        metadata_line("Default Card Prefix", card_prefix),
-        metadata_line("Default Sprint Prefix", sprint_prefix),
-        metadata_line("Default Storage Backend", db_mode),
-        metadata_line("Default Editing Format", default_format),
+    let mut config_lines = vec![
+        metadata_line(
+            "Configuration Format",
+            app.app_config.effective_configuration_format(),
+        ),
+        metadata_line(
+            "Configuration Location",
+            app.app_config.effective_configuration_location(),
+        ),
+        metadata_line(
+            "Default Card Prefix",
+            app.app_config.effective_default_card_prefix(),
+        ),
+        metadata_line(
+            "Default Sprint Prefix",
+            app.app_config.effective_default_sprint_prefix(),
+        ),
+        metadata_line(
+            "Editing Format",
+            app.app_config.effective_editing_format(),
+        ),
     ];
+    if app.app_config.has_data_file {
+        config_lines.push(metadata_line(
+            "Storage Backend",
+            app.app_config.effective_storage_backend(),
+        ));
+        config_lines.push(metadata_line(
+            "Storage Location",
+            app.app_config.effective_storage_location(),
+        ));
+    }
     let config_paragraph = Paragraph::new(config_lines).block(config_block);
     frame.render_widget(config_paragraph, left_sections[0]);
 
