@@ -43,12 +43,33 @@ pub fn make_store_with_config(
 ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
     match file {
         Some(path) => make_store(path),
-        None => {
-            let default_path = match config.effective_storage_backend() {
-                "sqlite" => "kanban.sqlite",
-                _ => "kanban.json",
-            };
-            make_store(default_path)
-        }
+        None => make_store(&config.effective_storage_location()),
     }
+}
+
+pub async fn migrate_store(from_path: &str, to_path: &str) -> Result<(), KanbanError> {
+    let from = std::path::Path::new(from_path);
+    let to = std::path::Path::new(to_path);
+    if !from.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Source file not found: {}", from.display()),
+        )
+        .into());
+    }
+    if to.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "Destination already exists: {}. Remove it first or use a different path.",
+                to.display()
+            ),
+        )
+        .into());
+    }
+    let source = make_store(from_path)?;
+    let (snapshot, _) = source.load().await?;
+    let target = make_store(to_path)?;
+    target.save(snapshot).await?;
+    Ok(())
 }
