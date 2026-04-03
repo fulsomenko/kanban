@@ -50,6 +50,7 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, InputState};
 use kanban_domain::AnimationType;
+use kanban_domain::KanbanResult;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
     filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter},
@@ -57,7 +58,6 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
-use kanban_domain::KanbanResult;
 
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -165,22 +165,27 @@ impl App {
                     .map(|cwd| cwd.join(path))
                     .unwrap_or_else(|_| path.to_path_buf())
             };
-            let canonical = resolved
-                .canonicalize()
-                .unwrap_or(resolved);
+            let canonical = resolved.canonicalize().unwrap_or(resolved);
             app_config.storage_location = Some(canonical.display().to_string());
             // File arg is the source of truth — ignore config's storage_backend
             app_config.storage_backend = None;
         }
         let default_card_prefix = app_config.effective_default_card_prefix().to_string();
         let default_sprint_prefix = app_config.effective_default_sprint_prefix().to_string();
-        if let Some(detected) = kanban_service::detect_backend(&app_config.effective_storage_location()) {
+        if let Some(detected) =
+            kanban_service::detect_backend(&app_config.effective_storage_location())
+        {
             if detected != app_config.effective_storage_backend() {
                 app_config.storage_backend = Some(detected);
             }
         }
         let backend = app_config.effective_storage_backend();
-        let (ctx, save_rx, save_completion_rx) = TuiContext::new(backend, save_file.clone(), default_card_prefix, default_sprint_prefix)?;
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(
+            backend,
+            save_file.clone(),
+            default_card_prefix,
+            default_sprint_prefix,
+        )?;
         let app = Self {
             should_quit: false,
             quit_with_pending: false,
@@ -254,10 +259,7 @@ impl App {
                             tracing::debug!("Save worker completed save");
                             if let Some(ref tx) = save_completion_tx {
                                 if let Err(e) = tx.send(()) {
-                                    tracing::error!(
-                                        "Failed to send save completion signal: {}",
-                                        e
-                                    );
+                                    tracing::error!("Failed to send save completion signal: {}", e);
                                 }
                             }
                         }
@@ -265,10 +267,7 @@ impl App {
                             tracing::warn!("Save worker detected conflict at {}", path);
                             if let Some(ref tx) = save_completion_tx {
                                 if let Err(e) = tx.send(()) {
-                                    tracing::error!(
-                                        "Failed to send save completion signal: {}",
-                                        e
-                                    );
+                                    tracing::error!("Failed to send save completion signal: {}", e);
                                 }
                             }
                         }
@@ -276,10 +275,7 @@ impl App {
                             tracing::error!("Save worker failed: {}", e);
                             if let Some(ref tx) = save_completion_tx {
                                 if let Err(e) = tx.send(()) {
-                                    tracing::error!(
-                                        "Failed to send save completion signal: {}",
-                                        e
-                                    );
+                                    tracing::error!("Failed to send save completion signal: {}", e);
                                 }
                             }
                         }
@@ -751,8 +747,7 @@ impl App {
             AppMode::Search => self.handle_search_mode(key.code),
             AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
             AppMode::Settings => {
-                should_restart_events =
-                    self.handle_settings_key(key.code, terminal, event_handler);
+                should_restart_events = self.handle_settings_key(key.code, terminal, event_handler);
             }
             AppMode::Help(_) => self.handle_help_mode(key.code),
             AppMode::Dialog(ref dialog) => match dialog {
@@ -1536,9 +1531,7 @@ impl App {
         format: crate::edit_format::EditFormat,
     ) -> io::Result<()> {
         let dto = T::from_entity(entity);
-        let current_content = format
-            .serialize(&dto)
-            .unwrap_or_else(|_| "{}".to_string());
+        let current_content = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
 
         if let Some(new_content) =
             edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?

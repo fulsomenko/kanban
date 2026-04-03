@@ -3,7 +3,7 @@ use crate::edit_format::EditFormat;
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
 use kanban_core::AppConfigDto;
-use kanban_domain::export::{BoardExporter, AllBoardsExport};
+use kanban_domain::export::{AllBoardsExport, BoardExporter};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io;
@@ -12,7 +12,11 @@ impl App {
     pub fn settings_item_count(&self, panel: SettingsFocus) -> usize {
         match panel {
             SettingsFocus::Configuration => {
-                if self.app_config.has_data_file { 7 } else { 5 }
+                if self.app_config.has_data_file {
+                    7
+                } else {
+                    5
+                }
             }
             SettingsFocus::ConfigFile => 3,
             SettingsFocus::Storage => 4,
@@ -60,7 +64,12 @@ impl App {
             if old_path.exists() {
                 if let Err(e) = tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(
-                        kanban_service::migrate_store_for_backend(Some(old_backend), old_storage_location, Some(&new_backend), &new_storage_location),
+                        kanban_service::migrate_store_for_backend(
+                            Some(old_backend),
+                            old_storage_location,
+                            Some(&new_backend),
+                            &new_storage_location,
+                        ),
                     )
                 }) {
                     self.app_config = old_config;
@@ -72,7 +81,10 @@ impl App {
 
         let snapshot = match tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(
-                kanban_service::validate_and_load_store_for_backend(Some(&new_backend), &new_storage_location),
+                kanban_service::validate_and_load_store_for_backend(
+                    Some(&new_backend),
+                    &new_storage_location,
+                ),
             )
         }) {
             Ok(s) => s,
@@ -83,18 +95,27 @@ impl App {
             }
         };
 
-        match self.ctx.state_manager.replace_store(&new_backend, &new_storage_location) {
+        match self
+            .ctx
+            .state_manager
+            .replace_store(&new_backend, &new_storage_location)
+        {
             Ok((save_rx, completion_rx)) => {
                 use crate::state::snapshot::TuiSnapshot;
                 snapshot.apply_to_app(self);
                 self.ctx.state_manager.mark_clean();
                 self.ctx.state_manager.clear_history();
 
-                self.selection.active_board_index =
-                    if self.ctx.boards.is_empty() { None } else { Some(0) };
-                self.selection.board.set(
-                    if self.ctx.boards.is_empty() { None } else { Some(0) },
-                );
+                self.selection.active_board_index = if self.ctx.boards.is_empty() {
+                    None
+                } else {
+                    Some(0)
+                };
+                self.selection.board.set(if self.ctx.boards.is_empty() {
+                    None
+                } else {
+                    Some(0)
+                });
                 self.selection.active_card_index = None;
                 self.selection.card_navigation_history.clear();
 
@@ -127,14 +148,18 @@ impl App {
             KeyCode::Enter if self.focus.settings_focus == SettingsFocus::Configuration => {
                 self.handle_settings_key(KeyCode::Char('e'), terminal, event_handler)
             }
-            KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Char('3')
-            | KeyCode::Char('j') | KeyCode::Down
-            | KeyCode::Char('k') | KeyCode::Up
-            | KeyCode::Char('h') | KeyCode::Left
-            | KeyCode::Char('l') | KeyCode::Right
-            | KeyCode::Enter => {
-                self.handle_settings_key_nav(key)
-            }
+            KeyCode::Char('1')
+            | KeyCode::Char('2')
+            | KeyCode::Char('3')
+            | KeyCode::Char('j')
+            | KeyCode::Down
+            | KeyCode::Char('k')
+            | KeyCode::Up
+            | KeyCode::Char('h')
+            | KeyCode::Left
+            | KeyCode::Char('l')
+            | KeyCode::Right
+            | KeyCode::Enter => self.handle_settings_key_nav(key),
             KeyCode::Char('e') => {
                 let format = EditFormat::parse(self.app_config.effective_editing_format());
                 let ext = format.file_extension();
@@ -142,8 +167,7 @@ impl App {
                 let old_storage_location = self.app_config.effective_storage_location();
                 let old_config = self.app_config.clone();
                 let mut config = self.app_config.clone();
-                let temp_file =
-                    std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
+                let temp_file = std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
                 if let Err(e) = App::edit_entity_impl::<AppConfigDto, _>(
                     &mut config,
                     terminal,
@@ -179,8 +203,12 @@ impl App {
                         let _ = std::fs::remove_file(path);
                     }
                 }
-                self.ctx.default_card_prefix = self.app_config.effective_default_card_prefix().to_string();
-                self.ctx.default_sprint_prefix = self.app_config.effective_default_sprint_prefix().to_string();
+                self.ctx.default_card_prefix =
+                    self.app_config.effective_default_card_prefix().to_string();
+                self.ctx.default_sprint_prefix = self
+                    .app_config
+                    .effective_default_sprint_prefix()
+                    .to_string();
                 true
             }
             KeyCode::Char('x') => {
@@ -205,15 +233,21 @@ impl App {
         match key {
             KeyCode::Char('1') => {
                 self.focus.settings_focus = SettingsFocus::Configuration;
-                self.selection.settings_config.auto_select_first_if_empty(true);
+                self.selection
+                    .settings_config
+                    .auto_select_first_if_empty(true);
             }
             KeyCode::Char('2') => {
                 self.focus.settings_focus = SettingsFocus::ConfigFile;
-                self.selection.settings_config_file.auto_select_first_if_empty(true);
+                self.selection
+                    .settings_config_file
+                    .auto_select_first_if_empty(true);
             }
             KeyCode::Char('3') => {
                 self.focus.settings_focus = SettingsFocus::Storage;
-                self.selection.settings_storage.auto_select_first_if_empty(true);
+                self.selection
+                    .settings_storage
+                    .auto_select_first_if_empty(true);
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 self.handle_settings_nav_down();
@@ -224,13 +258,17 @@ impl App {
             KeyCode::Char('h') | KeyCode::Left => {
                 if self.focus.settings_focus == SettingsFocus::Storage {
                     self.focus.settings_focus = SettingsFocus::Configuration;
-                    self.selection.settings_config.auto_select_first_if_empty(true);
+                    self.selection
+                        .settings_config
+                        .auto_select_first_if_empty(true);
                 }
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 if self.focus.settings_focus != SettingsFocus::Storage {
                     self.focus.settings_focus = SettingsFocus::Storage;
-                    self.selection.settings_storage.auto_select_first_if_empty(true);
+                    self.selection
+                        .settings_storage
+                        .auto_select_first_if_empty(true);
                 }
             }
             KeyCode::Enter => {

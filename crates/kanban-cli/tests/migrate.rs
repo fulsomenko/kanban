@@ -1,14 +1,16 @@
+use kanban_core::AppConfig;
 use kanban_domain::KanbanOperations;
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_json::JsonFileStore;
 use kanban_persistence_sqlite::SqliteStore;
 use kanban_service::KanbanContext;
-use kanban_core::AppConfig;
 use std::sync::Arc;
 use tempfile::TempDir;
 
 async fn create_populated_context(store: Arc<dyn PersistenceStore + Send + Sync>) -> KanbanContext {
-    let mut ctx = KanbanContext::load(store, AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(store, AppConfig::default())
+        .await
+        .unwrap();
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
@@ -59,9 +61,12 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     let json_store = Arc::new(JsonFileStore::new(&json_path));
     json_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(JsonFileStore::new(&json_path)), AppConfig::default())
-        .await
-        .unwrap();
+    let loaded = KanbanContext::load(
+        Arc::new(JsonFileStore::new(&json_path)),
+        AppConfig::default(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(
         original.list_boards().unwrap().len(),
@@ -85,9 +90,12 @@ async fn test_migrate_json_to_json_roundtrip() {
     let dst_store = Arc::new(JsonFileStore::new(&dst_path));
     dst_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(JsonFileStore::new(&dst_path)), AppConfig::default())
-        .await
-        .unwrap();
+    let loaded = KanbanContext::load(
+        Arc::new(JsonFileStore::new(&dst_path)),
+        AppConfig::default(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
     assert_eq!(loaded.list_boards().unwrap()[0].name, "Test Board");
@@ -226,9 +234,12 @@ async fn test_migrate_cli_default_output_path() {
         expected_output.display()
     );
 
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&expected_output)), AppConfig::default())
-        .await
-        .unwrap();
+    let loaded = KanbanContext::load(
+        Arc::new(SqliteStore::new(&expected_output)),
+        AppConfig::default(),
+    )
+    .await
+    .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
 }
 

@@ -14,11 +14,36 @@ impl SettingsViewProvider {
 impl KeybindingProvider for SettingsViewProvider {
     fn get_context(&self) -> KeybindingContext {
         let mut bindings = vec![
-            Keybinding::new("1", "config", "Focus Configuration", KeybindingAction::FocusPanel(0)),
-            Keybinding::new("2", "file", "Focus Config File", KeybindingAction::FocusPanel(1)),
-            Keybinding::new("3", "storage", "Focus Storage", KeybindingAction::FocusPanel(2)),
-            Keybinding::new("j/k", "navigate", "Navigate items", KeybindingAction::NavigateDown),
-            Keybinding::new("h/l", "columns", "Switch columns", KeybindingAction::NavigateLeft),
+            Keybinding::new(
+                "1",
+                "config",
+                "Focus Configuration",
+                KeybindingAction::FocusPanel(0),
+            ),
+            Keybinding::new(
+                "2",
+                "file",
+                "Focus Config File",
+                KeybindingAction::FocusPanel(1),
+            ),
+            Keybinding::new(
+                "3",
+                "storage",
+                "Focus Storage",
+                KeybindingAction::FocusPanel(2),
+            ),
+            Keybinding::new(
+                "j/k",
+                "navigate",
+                "Navigate items",
+                KeybindingAction::NavigateDown,
+            ),
+            Keybinding::new(
+                "h/l",
+                "columns",
+                "Switch columns",
+                KeybindingAction::NavigateLeft,
+            ),
         ];
 
         match self.focus {

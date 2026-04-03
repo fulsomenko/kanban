@@ -132,7 +132,8 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         .with_focus_indicator(" Configuration [1] ")
         .focused(config_focused);
     let config_block = config_section.block();
-    let is_config_selected = |i: usize| config_focused && app.selection.settings_config.is_selected(i);
+    let is_config_selected =
+        |i: usize| config_focused && app.selection.settings_config.is_selected(i);
     let mut config_lines = vec![
         metadata_line_selectable(
             "Configuration Format",
@@ -180,15 +181,16 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         .with_focus_indicator(" Config File [2] ")
         .focused(config_file_focused);
     let config_file_block = config_file_section.block();
-    let is_cf_selected = |i: usize| config_file_focused && app.selection.settings_config_file.is_selected(i);
+    let is_cf_selected =
+        |i: usize| config_file_focused && app.selection.settings_config_file.is_selected(i);
     let config_location = app.app_config.effective_configuration_location();
     let config_path_display = if config_location.is_empty() {
         "(unknown)".to_string()
     } else {
         config_location.clone()
     };
-    let config_exists = !config_location.is_empty()
-        && std::path::Path::new(&config_location).exists();
+    let config_exists =
+        !config_location.is_empty() && std::path::Path::new(&config_location).exists();
     let status = if config_exists { "Loaded" } else { "Not found" };
     let config_format = app.app_config.effective_configuration_format();
     let config_file_lines = vec![
@@ -204,12 +206,9 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         .with_focus_indicator(" Storage [3] ")
         .focused(storage_focused);
     let storage_block = storage_section.block();
-    let is_storage_selected = |i: usize| storage_focused && app.selection.settings_storage.is_selected(i);
-    let file_path = app
-        .persistence
-        .save_file
-        .as_deref()
-        .unwrap_or("(none)");
+    let is_storage_selected =
+        |i: usize| storage_focused && app.selection.settings_storage.is_selected(i);
+    let file_path = app.persistence.save_file.as_deref().unwrap_or("(none)");
     let backend = match app.persistence.save_file.as_deref() {
         Some(p) if p.ends_with(".sqlite") || p.ends_with(".sqlite3") || p.ends_with(".db") => {
             "SQLite"
@@ -285,12 +284,10 @@ fn render_export_boards_popup(app: &App, frame: &mut Frame) {
             let list = Paragraph::new(items);
             frame.render_widget(list, chunks[0]);
 
-            let hint = Paragraph::new(Line::from(vec![
-                Span::styled(
-                    "Space: toggle | a: all | Enter: next | Esc: cancel",
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
+            let hint = Paragraph::new(Line::from(vec![Span::styled(
+                "Space: toggle | a: all | Enter: next | Esc: cancel",
+                Style::default().fg(Color::DarkGray),
+            )]));
             frame.render_widget(hint, chunks[1]);
         }
         ExportStep::ExportOptions => {
@@ -318,17 +315,29 @@ fn render_export_boards_popup(app: &App, frame: &mut Frame) {
             frame.render_widget(Paragraph::new(""), chunks[1]);
 
             let json_style = if dialog.format == ExportFormat::Json {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
             let sqlite_style = if dialog.format == ExportFormat::Sqlite {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
-            let json_radio = if dialog.format == ExportFormat::Json { "(*)" } else { "( )" };
-            let sqlite_radio = if dialog.format == ExportFormat::Sqlite { "(*)" } else { "( )" };
+            let json_radio = if dialog.format == ExportFormat::Json {
+                "(*)"
+            } else {
+                "( )"
+            };
+            let sqlite_radio = if dialog.format == ExportFormat::Sqlite {
+                "(*)"
+            } else {
+                "( )"
+            };
 
             let format_line = Paragraph::new(Line::from(vec![
                 Span::styled("Format: ", Style::default().fg(Color::Cyan)),
@@ -337,12 +346,10 @@ fn render_export_boards_popup(app: &App, frame: &mut Frame) {
             ]));
             frame.render_widget(format_line, chunks[2]);
 
-            let hint = Paragraph::new(Line::from(vec![
-                Span::styled(
-                    "Tab: format | Enter: export | Esc: back",
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
+            let hint = Paragraph::new(Line::from(vec![Span::styled(
+                "Tab: format | Enter: export | Esc: back",
+                Style::default().fg(Color::DarkGray),
+            )]));
             frame.render_widget(hint, chunks[3]);
         }
     }

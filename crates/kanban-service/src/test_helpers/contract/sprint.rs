@@ -8,7 +8,9 @@ use tempfile::TempDir;
 pub async fn test_sprint_planning_fields_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx
@@ -20,7 +22,9 @@ pub async fn test_sprint_planning_fields_roundtrip(factory: &StoreFactory) {
     assert!(sprint.end_date.is_none());
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let s = ctx.get_sprint(sprint.id).unwrap().unwrap();
     assert_eq!(s.board_id, board.id);
@@ -34,14 +38,18 @@ pub async fn test_sprint_planning_fields_roundtrip(factory: &StoreFactory) {
 pub async fn test_sprint_active_fields_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
     ctx.activate_sprint(sprint.id, Some(14)).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let s = ctx.get_sprint(sprint.id).unwrap().unwrap();
     assert_eq!(s.status, SprintStatus::Active);
@@ -52,7 +60,9 @@ pub async fn test_sprint_active_fields_roundtrip(factory: &StoreFactory) {
 pub async fn test_sprint_completed_status_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
@@ -60,7 +70,9 @@ pub async fn test_sprint_completed_status_roundtrip(factory: &StoreFactory) {
     ctx.complete_sprint(sprint.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let s = ctx.get_sprint(sprint.id).unwrap().unwrap();
     assert_eq!(s.status, SprintStatus::Completed);
@@ -69,7 +81,9 @@ pub async fn test_sprint_completed_status_roundtrip(factory: &StoreFactory) {
 pub async fn test_sprint_cancelled_status_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
@@ -77,7 +91,9 @@ pub async fn test_sprint_cancelled_status_roundtrip(factory: &StoreFactory) {
     ctx.cancel_sprint(sprint.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let s = ctx.get_sprint(sprint.id).unwrap().unwrap();
     assert_eq!(s.status, SprintStatus::Cancelled);
@@ -161,7 +177,9 @@ pub async fn test_sprint_explicit_prefix_overrides_all_defaults(factory: &StoreF
 pub async fn test_sprint_with_card_prefix_override_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx
@@ -178,7 +196,9 @@ pub async fn test_sprint_with_card_prefix_override_roundtrip(factory: &StoreFact
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let s = ctx.get_sprint(sprint.id).unwrap().unwrap();
     assert_eq!(s.card_prefix.as_deref(), Some("TASK"));

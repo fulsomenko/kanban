@@ -1,4 +1,6 @@
-use crate::theme::{colors::SELECTED_BG, focused_border, label_text, normal_text, unfocused_border};
+use crate::theme::{
+    colors::SELECTED_BG, focused_border, label_text, normal_text, unfocused_border,
+};
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -72,7 +74,11 @@ pub fn metadata_line_styled<'a>(
     ])
 }
 
-pub fn metadata_line_selectable<'a>(label: &'a str, value: impl Into<String>, selected: bool) -> Line<'a> {
+pub fn metadata_line_selectable<'a>(
+    label: &'a str,
+    value: impl Into<String>,
+    selected: bool,
+) -> Line<'a> {
     if selected {
         Line::from(vec![
             Span::styled(format!("{}: ", label), label_text().bg(SELECTED_BG)),

@@ -1,9 +1,9 @@
-use kanban_tui::app::mode::{AppMode, DialogMode};
 use kanban_tui::app::focus::{Focus, SettingsFocus};
+use kanban_tui::app::mode::{AppMode, DialogMode};
 use kanban_tui::app::{ExportDialogState, ExportFormat, ExportStep};
 use kanban_tui::edit_format::EditFormat;
-use kanban_tui::App;
 use kanban_tui::keybindings::KeybindingRegistry;
+use kanban_tui::App;
 
 #[test]
 fn test_settings_keybinding_provider_returns_bindings() {
@@ -124,7 +124,10 @@ fn test_render_settings_two_column_contains_configuration_section() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.push_mode(AppMode::Settings);
     let output = render_to_string(&app);
-    assert!(output.contains("Configuration"), "Missing 'Configuration' section");
+    assert!(
+        output.contains("Configuration"),
+        "Missing 'Configuration' section"
+    );
 }
 
 #[test]
@@ -140,7 +143,10 @@ fn test_render_settings_two_column_contains_config_file_section() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.push_mode(AppMode::Settings);
     let output = render_to_string(&app);
-    assert!(output.contains("Config File"), "Missing 'Config File' section");
+    assert!(
+        output.contains("Config File"),
+        "Missing 'Config File' section"
+    );
 }
 
 #[test]
@@ -148,7 +154,10 @@ fn test_render_settings_contains_export_boards() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.push_mode(AppMode::Settings);
     let output = render_to_string(&app);
-    assert!(output.contains("Export Boards"), "Missing 'Export Boards' line");
+    assert!(
+        output.contains("Export Boards"),
+        "Missing 'Export Boards' line"
+    );
 }
 
 #[test]
@@ -156,8 +165,14 @@ fn test_render_settings_hides_storage_fields_when_no_data_file() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.push_mode(AppMode::Settings);
     let output = render_to_string(&app);
-    assert!(!output.contains("Storage Backend"), "Storage Backend should be hidden without data file");
-    assert!(!output.contains("Storage Location"), "Storage Location should be hidden without data file");
+    assert!(
+        !output.contains("Storage Backend"),
+        "Storage Backend should be hidden without data file"
+    );
+    assert!(
+        !output.contains("Storage Location"),
+        "Storage Location should be hidden without data file"
+    );
 }
 
 #[test]
@@ -166,8 +181,14 @@ fn test_render_settings_shows_storage_fields_when_has_data_file() {
     app.app_config.has_data_file = true;
     app.push_mode(AppMode::Settings);
     let output = render_to_string(&app);
-    assert!(output.contains("Storage Backend"), "Missing Storage Backend label");
-    assert!(output.contains("Storage Location"), "Missing Storage Location label");
+    assert!(
+        output.contains("Storage Backend"),
+        "Missing Storage Backend label"
+    );
+    assert!(
+        output.contains("Storage Location"),
+        "Missing Storage Location label"
+    );
 }
 
 #[test]
@@ -220,7 +241,9 @@ fn setup_app_with_export_dialog(board_count: usize) -> App {
     app.focus.active = Focus::Boards;
     app.push_mode(AppMode::Settings);
     for i in 0..board_count {
-        app.ctx.boards.push(kanban_domain::Board::new(format!("Board{}", i + 1), None));
+        app.ctx
+            .boards
+            .push(kanban_domain::Board::new(format!("Board{}", i + 1), None));
     }
     app.export_dialog = Some(ExportDialogState::new(board_count));
     app.push_mode(AppMode::Dialog(DialogMode::ExportBoards));
@@ -243,7 +266,10 @@ fn test_export_dialog_esc_cancels() {
     use crossterm::event::KeyCode;
 
     let mut app = setup_app_with_export_dialog(1);
-    assert!(matches!(app.mode, AppMode::Dialog(DialogMode::ExportBoards)));
+    assert!(matches!(
+        app.mode,
+        AppMode::Dialog(DialogMode::ExportBoards)
+    ));
 
     app.handle_export_boards_dialog(KeyCode::Esc);
     assert_eq!(app.mode, AppMode::Settings);
@@ -307,7 +333,9 @@ fn test_render_export_boards_select_step_shows_board_names() {
     use ratatui::Terminal;
 
     let (mut app, _rx) = App::new(None).unwrap();
-    app.ctx.boards.push(kanban_domain::Board::new("MyTestBoard".into(), None));
+    app.ctx
+        .boards
+        .push(kanban_domain::Board::new("MyTestBoard".into(), None));
     app.export_dialog = Some(ExportDialogState::new(1));
     app.push_mode(AppMode::Settings);
     app.push_mode(AppMode::Dialog(DialogMode::ExportBoards));
@@ -327,7 +355,10 @@ fn test_render_export_boards_select_step_shows_board_names() {
             result.push_str(buffer.cell((x, y)).map(|c| c.symbol()).unwrap_or(" "));
         }
     }
-    assert!(result.contains("MyTestBoard"), "Board name not found in render output");
+    assert!(
+        result.contains("MyTestBoard"),
+        "Board name not found in render output"
+    );
 }
 
 #[test]
@@ -336,7 +367,9 @@ fn test_render_export_boards_options_step_shows_filename() {
     use ratatui::Terminal;
 
     let (mut app, _rx) = App::new(None).unwrap();
-    app.ctx.boards.push(kanban_domain::Board::new("Board1".into(), None));
+    app.ctx
+        .boards
+        .push(kanban_domain::Board::new("Board1".into(), None));
     let mut dialog = ExportDialogState::new(1);
     dialog.step = ExportStep::ExportOptions;
     dialog.board_selections[0] = true;
@@ -359,7 +392,10 @@ fn test_render_export_boards_options_step_shows_filename() {
             result.push_str(buffer.cell((x, y)).map(|c| c.symbol()).unwrap_or(" "));
         }
     }
-    assert!(result.contains("export.json"), "Default filename not found in render output");
+    assert!(
+        result.contains("export.json"),
+        "Default filename not found in render output"
+    );
 }
 
 // --- Step 7: Export execution (JSON) ---
@@ -559,12 +595,17 @@ fn test_settings_enter_on_export_triggers_dialog() {
     use crossterm::event::KeyCode;
 
     let mut app = setup_settings_app();
-    app.ctx.boards.push(kanban_domain::Board::new("B1".into(), None));
+    app.ctx
+        .boards
+        .push(kanban_domain::Board::new("B1".into(), None));
     app.focus.settings_focus = SettingsFocus::Storage;
     app.selection.settings_storage.set(Some(3));
 
     app.handle_settings_key_nav(KeyCode::Enter);
-    assert!(matches!(app.mode, AppMode::Dialog(DialogMode::ExportBoards)));
+    assert!(matches!(
+        app.mode,
+        AppMode::Dialog(DialogMode::ExportBoards)
+    ));
 }
 
 #[test]
@@ -572,11 +613,17 @@ fn test_render_settings_active_panel_has_focus_indicator() {
     let mut app = setup_settings_app();
     app.focus.settings_focus = SettingsFocus::Configuration;
     let output = render_to_string(&app);
-    assert!(output.contains("Configuration [1]"), "Missing focus indicator for Configuration");
+    assert!(
+        output.contains("Configuration [1]"),
+        "Missing focus indicator for Configuration"
+    );
 
     app.focus.settings_focus = SettingsFocus::Storage;
     let output = render_to_string(&app);
-    assert!(output.contains("Storage [3]"), "Missing focus indicator for Storage");
+    assert!(
+        output.contains("Storage [3]"),
+        "Missing focus indicator for Storage"
+    );
 }
 
 #[test]
@@ -584,7 +631,10 @@ fn test_render_settings_inactive_panel_no_indicator() {
     let mut app = setup_settings_app();
     app.focus.settings_focus = SettingsFocus::Storage;
     let output = render_to_string(&app);
-    assert!(!output.contains("Configuration [1]"), "Configuration should not show [1] when unfocused");
+    assert!(
+        !output.contains("Configuration [1]"),
+        "Configuration should not show [1] when unfocused"
+    );
 }
 
 #[test]
@@ -612,7 +662,12 @@ async fn test_file_arg_detects_backend_from_content_ignoring_config() {
     app.load_initial_state().await;
 
     assert_eq!(app.app_config.effective_storage_backend(), "json");
-    assert!(app.app_config.storage_location.as_ref().unwrap().contains("board.json"));
+    assert!(app
+        .app_config
+        .storage_location
+        .as_ref()
+        .unwrap()
+        .contains("board.json"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -734,7 +789,10 @@ async fn test_switch_to_existing_sqlite_reloads_data() {
     assert!(result, "apply_storage_location_change should succeed");
     assert_eq!(app.ctx.boards.len(), 1);
     assert_eq!(app.ctx.boards[0].name, "SqliteBoard");
-    assert_eq!(app.persistence.save_file.as_deref(), Some(sqlite_path.as_str()));
+    assert_eq!(
+        app.persistence.save_file.as_deref(),
+        Some(sqlite_path.as_str())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -753,7 +811,10 @@ async fn test_switch_to_existing_json_reloads_data() {
     assert!(result, "apply_storage_location_change should succeed");
     assert_eq!(app.ctx.boards.len(), 1);
     assert_eq!(app.ctx.boards[0].name, "SecondBoard");
-    assert_eq!(app.persistence.save_file.as_deref(), Some(second_json.as_str()));
+    assert_eq!(
+        app.persistence.save_file.as_deref(),
+        Some(second_json.as_str())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -791,13 +852,16 @@ async fn test_switch_storage_location_nonexistent_parent_shows_error() {
 
     let old_config = app.app_config.clone();
     let old_storage_location = app.app_config.effective_storage_location();
-    app.app_config.storage_location =
-        Some("/nonexistent/dir/board.json".to_string());
+    app.app_config.storage_location = Some("/nonexistent/dir/board.json".to_string());
 
     let result = app.apply_storage_location_change(old_config.clone(), &old_storage_location);
     assert!(!result, "should return false on error");
 
-    let banner = app.ui_state.banner.as_ref().expect("should have error banner");
+    let banner = app
+        .ui_state
+        .banner
+        .as_ref()
+        .expect("should have error banner");
     assert_eq!(banner.variant, BannerVariant::Error);
 
     assert_eq!(

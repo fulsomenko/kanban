@@ -47,8 +47,8 @@ async fn main() -> Result<()> {
 
     let config = kanban_core::AppConfig::load();
 
-    let data_file_path = parse_args()
-        .unwrap_or_else(|| PathBuf::from(config.effective_storage_location()));
+    let data_file_path =
+        parse_args().unwrap_or_else(|| PathBuf::from(config.effective_storage_location()));
     let validated_path = validate_path(&data_file_path)?;
 
     let data_file = validated_path

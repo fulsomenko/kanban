@@ -1,7 +1,7 @@
+use kanban_core::AppConfig;
 use kanban_domain::{CardStatus, CardUpdate, CreateCardOptions, KanbanOperations};
 use kanban_persistence_json::JsonFileStore;
 use kanban_service::KanbanContext;
-use kanban_core::AppConfig;
 use std::sync::Arc;
 use tempfile::TempDir;
 

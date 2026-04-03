@@ -490,7 +490,11 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.branch_name(board, &self.sprints, self.app_config.effective_default_card_prefix()))
+        Ok(card.branch_name(
+            board,
+            &self.sprints,
+            self.app_config.effective_default_card_prefix(),
+        ))
     }
 
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
@@ -507,7 +511,11 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.git_checkout_command(board, &self.sprints, self.app_config.effective_default_card_prefix()))
+        Ok(card.git_checkout_command(
+            board,
+            &self.sprints,
+            self.app_config.effective_default_card_prefix(),
+        ))
     }
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
@@ -592,7 +600,11 @@ impl KanbanOperations for KanbanContext {
 
             let effective_prefix = prefix
                 .or_else(|| board.sprint_prefix.clone())
-                .unwrap_or_else(|| self.app_config.effective_default_sprint_prefix().to_string());
+                .unwrap_or_else(|| {
+                    self.app_config
+                        .effective_default_sprint_prefix()
+                        .to_string()
+                });
 
             board.ensure_sprint_counter_initialized(&effective_prefix, &self.sprints);
             let sprint_number = board.get_next_sprint_number(&effective_prefix);

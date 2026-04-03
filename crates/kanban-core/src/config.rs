@@ -20,13 +20,25 @@ pub struct AppConfig {
     pub configuration_format: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration_location: Option<String>,
-    #[serde(default, alias = "default_branch_prefix", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "default_branch_prefix",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub default_card_prefix: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_sprint_prefix: Option<String>,
-    #[serde(default, alias = "default_format", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "default_format",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub editing_format: Option<String>,
-    #[serde(default, alias = "default_db_mode", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "default_db_mode",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub storage_backend: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_location: Option<String>,
@@ -97,10 +109,12 @@ impl AppConfig {
         }
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         let content = match ext {
-            "json" => serde_json::to_string_pretty(self)
-                .map_err(|e| crate::CoreError::Config(format!("Failed to serialize config: {}", e)))?,
-            _ => toml::to_string_pretty(self)
-                .map_err(|e| crate::CoreError::Config(format!("Failed to serialize config: {}", e)))?,
+            "json" => serde_json::to_string_pretty(self).map_err(|e| {
+                crate::CoreError::Config(format!("Failed to serialize config: {}", e))
+            })?,
+            _ => toml::to_string_pretty(self).map_err(|e| {
+                crate::CoreError::Config(format!("Failed to serialize config: {}", e))
+            })?,
         };
         std::fs::write(path, content)
             .map_err(|e| crate::CoreError::Config(format!("Failed to write config: {}", e)))?;
@@ -146,13 +160,11 @@ impl AppConfig {
     }
 
     pub fn effective_configuration_location(&self) -> String {
-        self.configuration_location
-            .clone()
-            .unwrap_or_else(|| {
-                Self::config_path()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_default()
-            })
+        self.configuration_location.clone().unwrap_or_else(|| {
+            Self::config_path()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default()
+        })
     }
 
     pub fn validate(&self) -> CoreResult<()> {
@@ -234,11 +246,19 @@ impl AppConfig {
             return true;
         }
 
-        self.default_card_prefix.as_deref().is_none_or(|v| v == "task")
-            && self.default_sprint_prefix.as_deref().is_none_or(|v| v == "sprint")
+        self.default_card_prefix
+            .as_deref()
+            .is_none_or(|v| v == "task")
+            && self
+                .default_sprint_prefix
+                .as_deref()
+                .is_none_or(|v| v == "sprint")
             && self.storage_backend.as_deref().is_none_or(|v| v == "json")
             && self.editing_format.as_deref().is_none_or(|v| v == "json")
-            && self.configuration_format.as_deref().is_none_or(|v| v == "toml")
+            && self
+                .configuration_format
+                .as_deref()
+                .is_none_or(|v| v == "toml")
             && self.configuration_location.as_deref().is_none_or(|loc| {
                 Self::config_path()
                     .map(|p| p.display().to_string())
@@ -300,9 +320,8 @@ impl AppConfig {
             })?;
         }
         if std::fs::rename(old_path, new_path).is_err() {
-            std::fs::copy(old_path, new_path).map_err(|e| {
-                crate::CoreError::Config(format!("Failed to copy config: {}", e))
-            })?;
+            std::fs::copy(old_path, new_path)
+                .map_err(|e| crate::CoreError::Config(format!("Failed to copy config: {}", e)))?;
             let _ = std::fs::remove_file(old_path);
         }
         Ok(())
@@ -484,7 +503,10 @@ mod tests {
             configuration_location: Some("/tmp/my_config.toml".into()),
             ..Default::default()
         };
-        assert_eq!(config.effective_configuration_location(), "/tmp/my_config.toml");
+        assert_eq!(
+            config.effective_configuration_location(),
+            "/tmp/my_config.toml"
+        );
     }
 
     #[test]
@@ -509,7 +531,10 @@ mod tests {
         assert_eq!(loaded.storage_backend.as_deref(), Some("sqlite"));
         assert_eq!(loaded.editing_format.as_deref(), Some("json"));
         assert_eq!(loaded.configuration_format.as_deref(), Some("toml"));
-        assert_eq!(loaded.configuration_location.as_deref(), Some("/tmp/test.toml"));
+        assert_eq!(
+            loaded.configuration_location.as_deref(),
+            Some("/tmp/test.toml")
+        );
     }
 
     #[test]
@@ -534,7 +559,10 @@ mod tests {
         assert_eq!(loaded.storage_backend.as_deref(), Some("sqlite"));
         assert_eq!(loaded.editing_format.as_deref(), Some("json"));
         assert_eq!(loaded.configuration_format.as_deref(), Some("json"));
-        assert_eq!(loaded.configuration_location.as_deref(), Some("/tmp/test.json"));
+        assert_eq!(
+            loaded.configuration_location.as_deref(),
+            Some("/tmp/test.json")
+        );
     }
 
     #[test]
@@ -568,7 +596,10 @@ mod tests {
         assert_eq!(target.default_card_prefix.as_deref(), Some("sprint"));
         assert_eq!(target.default_sprint_prefix.as_deref(), Some("iter"));
         assert_eq!(target.storage_backend.as_deref(), Some("sqlite"));
-        assert_eq!(target.configuration_location.as_deref(), Some("/tmp/test.toml"));
+        assert_eq!(
+            target.configuration_location.as_deref(),
+            Some("/tmp/test.toml")
+        );
         // Default values are stripped to None (effective_* still returns defaults)
         assert!(target.editing_format.is_none());
         assert!(target.configuration_format.is_none());
@@ -643,7 +674,10 @@ mod tests {
         let dto = AppConfigDto::from_entity(&config);
         assert_eq!(dto.storage_backend.as_deref(), Some("json"));
         assert!(
-            dto.storage_location.as_deref().unwrap().ends_with("/kanban.json"),
+            dto.storage_location
+                .as_deref()
+                .unwrap()
+                .ends_with("/kanban.json"),
             "got: {:?}",
             dto.storage_location
         );
@@ -666,13 +700,19 @@ mod tests {
         assert_eq!(dto.default_sprint_prefix.as_deref(), Some("iter"));
         assert_eq!(dto.storage_backend.as_deref(), Some("sqlite"));
         assert!(
-            dto.storage_location.as_deref().unwrap().ends_with("/kanban.sqlite"),
+            dto.storage_location
+                .as_deref()
+                .unwrap()
+                .ends_with("/kanban.sqlite"),
             "got: {:?}",
             dto.storage_location
         );
         assert_eq!(dto.editing_format.as_deref(), Some("toml"));
         assert_eq!(dto.configuration_format.as_deref(), Some("json"));
-        assert_eq!(dto.configuration_location.as_deref(), Some("/custom/path.json"));
+        assert_eq!(
+            dto.configuration_location.as_deref(),
+            Some("/custom/path.json")
+        );
     }
 
     #[test]
@@ -964,7 +1004,13 @@ mod tests {
 
     #[test]
     fn test_validate_storage_location_any_extension_accepted() {
-        for name in &["/tmp/board.json", "/tmp/board.sqlite", "/tmp/board.txt", "/tmp/board.dat", "/tmp/mydata"] {
+        for name in &[
+            "/tmp/board.json",
+            "/tmp/board.sqlite",
+            "/tmp/board.txt",
+            "/tmp/board.dat",
+            "/tmp/mydata",
+        ] {
             let config = AppConfig {
                 storage_location: Some(name.to_string()),
                 ..Default::default()
@@ -1092,6 +1138,9 @@ mod tests {
             .collect();
         let mut sorted = keys.clone();
         sorted.sort();
-        assert_eq!(keys, sorted, "DTO JSON keys should be in alphabetical order");
+        assert_eq!(
+            keys, sorted,
+            "DTO JSON keys should be in alphabetical order"
+        );
     }
 }

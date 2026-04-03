@@ -51,9 +51,7 @@ pub fn make_store_with_config(
     }
 }
 
-pub async fn validate_and_load_store(
-    path: &str,
-) -> Result<kanban_domain::Snapshot, KanbanError> {
+pub async fn validate_and_load_store(path: &str) -> Result<kanban_domain::Snapshot, KanbanError> {
     validate_and_load_store_for_backend(None, path).await
 }
 

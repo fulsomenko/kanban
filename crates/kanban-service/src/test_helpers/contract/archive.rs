@@ -8,7 +8,9 @@ use tempfile::TempDir;
 pub async fn test_archive_card_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -30,7 +32,9 @@ pub async fn test_archive_card_roundtrip(factory: &StoreFactory) {
     ctx.archive_card(card.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     assert!(ctx.get_card(card.id).unwrap().is_none());
 
@@ -49,7 +53,9 @@ pub async fn test_archive_card_roundtrip(factory: &StoreFactory) {
 pub async fn test_archive_card_with_sprint_logs_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -68,7 +74,9 @@ pub async fn test_archive_card_with_sprint_logs_roundtrip(factory: &StoreFactory
     ctx.archive_card(card.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let archived = ctx.list_archived_cards().unwrap();
     assert_eq!(archived.len(), 1);
@@ -78,7 +86,9 @@ pub async fn test_archive_card_with_sprint_logs_roundtrip(factory: &StoreFactory
 pub async fn test_restore_archived_card_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -96,7 +106,9 @@ pub async fn test_restore_archived_card_roundtrip(factory: &StoreFactory) {
     ctx.restore_card(card.id, None).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default()).await.unwrap();
+    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.title, "Will Restore");

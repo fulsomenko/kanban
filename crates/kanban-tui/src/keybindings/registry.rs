@@ -44,9 +44,13 @@ impl KeybindingRegistry {
             AppMode::Search => Box::new(SearchModeProvider),
             AppMode::ArchivedCardsView => Box::new(ArchivedCardsViewProvider),
             AppMode::Settings => Box::new(SettingsViewProvider::new(settings_focus)),
-            AppMode::Help(previous_mode) => {
-                Self::get_provider_for_mode(previous_mode, focus, card_focus, board_focus, settings_focus)
-            }
+            AppMode::Help(previous_mode) => Self::get_provider_for_mode(
+                previous_mode,
+                focus,
+                card_focus,
+                board_focus,
+                settings_focus,
+            ),
             AppMode::Dialog(dialog) => match dialog {
                 DialogMode::CreateBoard => Box::new(DialogInputProvider::new("Create Project")),
                 DialogMode::CreateCard => Box::new(DialogInputProvider::new("Create Task")),
@@ -101,9 +105,7 @@ impl KeybindingRegistry {
                 DialogMode::CarryOverSprint => {
                     Box::new(DialogSelectionProvider::new("Carry Over to Sprint"))
                 }
-                DialogMode::ExportBoards => {
-                    Box::new(DialogSelectionProvider::new("Export Boards"))
-                }
+                DialogMode::ExportBoards => Box::new(DialogSelectionProvider::new("Export Boards")),
             },
         }
     }
