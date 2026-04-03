@@ -54,7 +54,17 @@ pub fn make_store_with_config(
 pub async fn validate_and_load_store(
     path: &str,
 ) -> Result<kanban_domain::Snapshot, KanbanError> {
-    let store = make_store(path)?;
+    validate_and_load_store_for_backend(None, path).await
+}
+
+pub async fn validate_and_load_store_for_backend(
+    backend: Option<&str>,
+    path: &str,
+) -> Result<kanban_domain::Snapshot, KanbanError> {
+    let store = match backend {
+        Some(b) => make_store_for_backend(b, path)?,
+        None => make_store(path)?,
+    };
     if !store.exists().await {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -68,6 +78,15 @@ pub async fn validate_and_load_store(
 }
 
 pub async fn migrate_store(from_path: &str, to_path: &str) -> Result<(), KanbanError> {
+    migrate_store_for_backend(None, from_path, None, to_path).await
+}
+
+pub async fn migrate_store_for_backend(
+    from_backend: Option<&str>,
+    from_path: &str,
+    to_backend: Option<&str>,
+    to_path: &str,
+) -> Result<(), KanbanError> {
     let from = std::path::Path::new(from_path);
     let to = std::path::Path::new(to_path);
     if !from.exists() {
@@ -87,9 +106,15 @@ pub async fn migrate_store(from_path: &str, to_path: &str) -> Result<(), KanbanE
         )
         .into());
     }
-    let source = make_store(from_path)?;
+    let source = match from_backend {
+        Some(b) => make_store_for_backend(b, from_path)?,
+        None => make_store(from_path)?,
+    };
     let (snapshot, _) = source.load().await?;
-    let target = make_store(to_path)?;
+    let target = match to_backend {
+        Some(b) => make_store_for_backend(b, to_path)?,
+        None => make_store(to_path)?,
+    };
     target.save(snapshot).await?;
     Ok(())
 }

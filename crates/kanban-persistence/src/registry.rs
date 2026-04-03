@@ -41,6 +41,20 @@ impl StoreRegistry {
         self.factories.push(factory);
     }
 
+    pub fn detect_backend(&self, locator: &str) -> Option<&str> {
+        let path = std::path::Path::new(locator);
+        if path.exists() {
+            if let Ok(header) = read_header(path, 32) {
+                for factory in &self.factories {
+                    if factory.matches_content(&header) {
+                        return Some(factory.name());
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn create_store(
         &self,
         locator: &str,
