@@ -169,10 +169,18 @@ impl App {
                 .canonicalize()
                 .unwrap_or(resolved);
             app_config.storage_location = Some(canonical.display().to_string());
+            // File arg is the source of truth — ignore config's storage_backend
+            app_config.storage_backend = None;
         }
         let default_card_prefix = app_config.effective_default_card_prefix().to_string();
         let default_sprint_prefix = app_config.effective_default_sprint_prefix().to_string();
-        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone(), default_card_prefix, default_sprint_prefix)?;
+        if let Some(detected) = kanban_service::detect_backend(&app_config.effective_storage_location()) {
+            if detected != app_config.effective_storage_backend() {
+                app_config.storage_backend = Some(detected);
+            }
+        }
+        let backend = app_config.effective_storage_backend();
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(backend, save_file.clone(), default_card_prefix, default_sprint_prefix)?;
         let app = Self {
             should_quit: false,
             quit_with_pending: false,

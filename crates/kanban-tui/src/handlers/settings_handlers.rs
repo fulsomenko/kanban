@@ -52,12 +52,15 @@ impl App {
         let new_path = std::path::Path::new(&new_storage_location);
         let file_existed = new_path.exists();
 
+        let new_backend = self.app_config.effective_storage_backend().to_string();
+        let old_backend = old_config.effective_storage_backend();
+
         if !file_existed {
             let old_path = std::path::Path::new(old_storage_location);
             if old_path.exists() {
                 if let Err(e) = tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(
-                        kanban_service::migrate_store(old_storage_location, &new_storage_location),
+                        kanban_service::migrate_store(old_backend, old_storage_location, &new_backend, &new_storage_location),
                     )
                 }) {
                     self.app_config = old_config;
@@ -69,7 +72,7 @@ impl App {
 
         let snapshot = match tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(
-                kanban_service::validate_and_load_store(&new_storage_location),
+                kanban_service::validate_and_load_store(&new_backend, &new_storage_location),
             )
         }) {
             Ok(s) => s,
@@ -80,7 +83,7 @@ impl App {
             }
         };
 
-        match self.ctx.state_manager.replace_store(&new_storage_location) {
+        match self.ctx.state_manager.replace_store(&new_backend, &new_storage_location) {
             Ok((save_rx, completion_rx)) => {
                 use crate::state::snapshot::TuiSnapshot;
                 snapshot.apply_to_app(self);
