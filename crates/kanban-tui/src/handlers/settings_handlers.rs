@@ -68,42 +68,72 @@ impl App {
 
                 let new_storage_location = self.app_config.effective_storage_location();
                 if self.app_config.has_data_file && new_storage_location != old_storage_location {
-                    let old_path = std::path::Path::new(&old_storage_location);
-                    if old_path.exists() {
-                        match tokio::task::block_in_place(|| {
-                            tokio::runtime::Handle::current().block_on(
-                                kanban_service::migrate_store(
-                                    &old_storage_location,
-                                    &new_storage_location,
-                                ),
-                            )
-                        }) {
-                            Ok(()) => {
-                                match self
-                                    .ctx
-                                    .state_manager
-                                    .replace_store(&new_storage_location)
-                                {
-                                    Ok((save_rx, completion_rx)) => {
-                                        self.persistence.save_file =
-                                            Some(new_storage_location.clone());
-                                        self.persistence.save_completion_rx =
-                                            Some(completion_rx);
-                                        self.spawn_save_worker(save_rx);
-                                        self.set_success(format!(
-                                            "Migrated to {}",
-                                            new_storage_location
-                                        ));
-                                    }
-                                    Err(e) => {
-                                        self.set_error(format!("Store swap failed: {}", e));
-                                    }
-                                }
-                            }
-                            Err(e) => {
+                    let new_path = std::path::Path::new(&new_storage_location);
+                    let file_existed = new_path.exists();
+
+                    if !file_existed {
+                        let old_path = std::path::Path::new(&old_storage_location);
+                        if old_path.exists() {
+                            if let Err(e) = tokio::task::block_in_place(|| {
+                                tokio::runtime::Handle::current().block_on(
+                                    kanban_service::migrate_store(
+                                        &old_storage_location,
+                                        &new_storage_location,
+                                    ),
+                                )
+                            }) {
                                 self.app_config = old_config;
                                 self.set_error(format!("Migration failed: {}", e));
+                                return true;
                             }
+                        }
+                    }
+
+                    let snapshot = match tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(
+                            kanban_service::validate_and_load_store(&new_storage_location),
+                        )
+                    }) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            self.app_config = old_config;
+                            self.set_error(format!("Invalid storage file: {}", e));
+                            return true;
+                        }
+                    };
+
+                    match self
+                        .ctx
+                        .state_manager
+                        .replace_store(&new_storage_location)
+                    {
+                        Ok((save_rx, completion_rx)) => {
+                            use crate::state::snapshot::TuiSnapshot;
+                            snapshot.apply_to_app(self);
+                            self.ctx.state_manager.mark_clean();
+                            self.ctx.state_manager.clear_history();
+
+                            self.selection.active_board_index =
+                                if self.ctx.boards.is_empty() { None } else { Some(0) };
+                            self.selection.board.set(
+                                if self.ctx.boards.is_empty() { None } else { Some(0) },
+                            );
+                            self.selection.active_card_index = None;
+                            self.selection.card_navigation_history.clear();
+
+                            self.persistence.save_file = Some(new_storage_location.clone());
+                            self.persistence.save_completion_rx = Some(completion_rx);
+                            self.spawn_save_worker(save_rx);
+                            let msg = if file_existed {
+                                format!("Loaded from {}", new_storage_location)
+                            } else {
+                                format!("Migrated to {}", new_storage_location)
+                            };
+                            self.set_success(msg);
+                        }
+                        Err(e) => {
+                            self.app_config = old_config;
+                            self.set_error(format!("Store swap failed: {}", e));
                         }
                     }
                 }
