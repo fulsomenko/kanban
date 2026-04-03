@@ -733,6 +733,32 @@ async fn test_switch_to_existing_json_reloads_data() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_backend_mismatch_auto_corrected_with_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = setup_app_with_json_file(dir.path()).await;
+
+    let old_config = app.app_config.clone();
+    let old_storage_location = app.app_config.effective_storage_location();
+
+    // User sets backend to sqlite but location is still a JSON file
+    app.app_config.storage_backend = Some("sqlite".into());
+
+    let result = app.apply_storage_location_change(old_config, &old_storage_location);
+    assert!(result, "should succeed after auto-correction");
+
+    // Backend should be auto-corrected to json
+    assert_eq!(app.app_config.effective_storage_backend(), "json");
+
+    // Warning banner shown
+    let banner = app.ui_state.banner.as_ref().expect("should have banner");
+    assert!(
+        banner.message.contains("json"),
+        "banner should mention the detected backend: {}",
+        banner.message
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_switch_storage_location_nonexistent_parent_shows_error() {
     use kanban_tui::components::BannerVariant;
 

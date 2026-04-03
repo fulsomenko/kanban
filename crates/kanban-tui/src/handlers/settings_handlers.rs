@@ -33,6 +33,18 @@ impl App {
         old_storage_location: &str,
     ) -> bool {
         let new_storage_location = self.app_config.effective_storage_location();
+
+        if let Some(detected) = kanban_service::detect_backend(&new_storage_location) {
+            let configured = self.app_config.effective_storage_backend().to_string();
+            if detected != configured {
+                self.app_config.storage_backend = Some(detected.clone());
+                self.set_success(format!(
+                    "storage_backend changed to '{}' to match file at '{}'",
+                    detected, new_storage_location
+                ));
+            }
+        }
+
         if !self.app_config.has_data_file || new_storage_location == old_storage_location {
             return true;
         }
