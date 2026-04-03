@@ -57,8 +57,7 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
-use kanban_domain::{KanbanError, KanbanResult};
-use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
+use kanban_domain::KanbanResult;
 
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -155,7 +154,8 @@ impl App {
         Self,
         Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     )> {
-        let app_config = AppConfig::load();
+        let mut app_config = AppConfig::load();
+        app_config.has_data_file = save_file.is_some();
         let default_card_prefix = app_config.effective_default_card_prefix().to_string();
         let default_sprint_prefix = app_config.effective_default_sprint_prefix().to_string();
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone(), default_card_prefix, default_sprint_prefix)?;
@@ -187,6 +187,92 @@ impl App {
 
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    pub fn spawn_save_worker(
+        &mut self,
+        mut rx: tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>,
+    ) {
+        use kanban_domain::KanbanError;
+        use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
+
+        if let Some(store) = self.ctx.state_manager.store().cloned() {
+            let instance_id = self.ctx.state_manager.instance_id();
+            let file_watcher = self.persistence.file_watcher.clone();
+            let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
+
+            tracing::info!("Spawning save worker to process snapshots");
+            let handle = tokio::spawn(async move {
+                tracing::info!("Save worker task started, waiting for snapshots");
+                while let Some(snapshot) = rx.recv().await {
+                    tracing::debug!("Save worker received snapshot, starting save operation");
+
+                    let data = match kanban_persistence::snapshot_to_json_bytes(&snapshot) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            tracing::error!("Failed to serialize snapshot: {}", e);
+                            if let Some(ref watcher) = file_watcher {
+                                watcher.resume();
+                            }
+                            continue;
+                        }
+                    };
+
+                    let persistence_snapshot = StoreSnapshot {
+                        data,
+                        metadata: PersistenceMetadata::new(instance_id),
+                    };
+
+                    match store
+                        .save(persistence_snapshot)
+                        .await
+                        .map_err(KanbanError::from)
+                    {
+                        Ok(_) => {
+                            tracing::debug!("Save worker completed save");
+                            if let Some(ref tx) = save_completion_tx {
+                                if let Err(e) = tx.send(()) {
+                                    tracing::error!(
+                                        "Failed to send save completion signal: {}",
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                        Err(KanbanError::ConflictDetected { path, .. }) => {
+                            tracing::warn!("Save worker detected conflict at {}", path);
+                            if let Some(ref tx) = save_completion_tx {
+                                if let Err(e) = tx.send(()) {
+                                    tracing::error!(
+                                        "Failed to send save completion signal: {}",
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Save worker failed: {}", e);
+                            if let Some(ref tx) = save_completion_tx {
+                                if let Err(e) = tx.send(()) {
+                                    tracing::error!(
+                                        "Failed to send save completion signal: {}",
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(ref watcher) = file_watcher {
+                        watcher.resume();
+                    }
+                }
+                tracing::info!("Save worker exited recv loop (channel closed)");
+            });
+            self.persistence.save_worker_handle = Some(handle);
+        } else {
+            tracing::warn!("Could not spawn save worker: no store available");
+        }
     }
 
     pub fn push_mode(&mut self, new_mode: AppMode) {
@@ -1521,91 +1607,8 @@ impl App {
         }
 
         // Spawn async save worker if save channel is configured
-        if let Some(mut rx) = save_rx {
-            tracing::debug!("Save channel receiver available");
-            if let Some(store) = self.ctx.state_manager.store().cloned() {
-                let instance_id = self.ctx.state_manager.instance_id();
-                let file_watcher = self.persistence.file_watcher.clone();
-                let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
-
-                tracing::info!("Spawning save worker to process snapshots");
-                let handle = tokio::spawn(async move {
-                    tracing::info!("Save worker task started, waiting for snapshots");
-                    while let Some(snapshot) = rx.recv().await {
-                        tracing::debug!("Save worker received snapshot, starting save operation");
-
-                        let data = match kanban_persistence::snapshot_to_json_bytes(&snapshot) {
-                            Ok(d) => d,
-                            Err(e) => {
-                                tracing::error!("Failed to serialize snapshot: {}", e);
-                                // Resume file watching since save is not happening
-                                if let Some(ref watcher) = file_watcher {
-                                    watcher.resume();
-                                }
-                                continue;
-                            }
-                        };
-
-                        let persistence_snapshot = StoreSnapshot {
-                            data,
-                            metadata: PersistenceMetadata::new(instance_id),
-                        };
-
-                        match store
-                            .save(persistence_snapshot)
-                            .await
-                            .map_err(KanbanError::from)
-                        {
-                            Ok(_) => {
-                                tracing::debug!("Save worker completed save");
-                                // Signal that save is complete
-                                if let Some(ref tx) = save_completion_tx {
-                                    if let Err(e) = tx.send(()) {
-                                        tracing::error!(
-                                            "Failed to send save completion signal: {}",
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                            Err(KanbanError::ConflictDetected { path, .. }) => {
-                                tracing::warn!("Save worker detected conflict at {}", path);
-                                // Signal completion even on conflict
-                                if let Some(ref tx) = save_completion_tx {
-                                    if let Err(e) = tx.send(()) {
-                                        tracing::error!(
-                                            "Failed to send save completion signal: {}",
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!("Save worker failed: {}", e);
-                                // Signal completion even on failure
-                                if let Some(ref tx) = save_completion_tx {
-                                    if let Err(e) = tx.send(()) {
-                                        tracing::error!(
-                                            "Failed to send save completion signal: {}",
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                        }
-
-                        // Resume file watching after save completes
-                        // Metadata-based own-write detection filters out our own writes
-                        if let Some(ref watcher) = file_watcher {
-                            watcher.resume();
-                        }
-                    }
-                    tracing::info!("Save worker exited recv loop (channel closed)");
-                });
-                self.persistence.save_worker_handle = Some(handle);
-            } else {
-                tracing::warn!("Could not spawn save worker: no store available");
-            }
+        if let Some(rx) = save_rx {
+            self.spawn_save_worker(rx);
         } else {
             tracing::debug!("No save channel receiver - no saves will be processed");
         }
