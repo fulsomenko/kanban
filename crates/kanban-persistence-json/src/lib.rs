@@ -16,18 +16,6 @@ impl StoreFactory for JsonStoreFactory {
         "json"
     }
 
-    fn supported_patterns(&self) -> &[&str] {
-        &["*.json", "<path without extension>"]
-    }
-
-    fn matches_locator(&self, locator: &str) -> bool {
-        let ext = std::path::Path::new(locator)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
-        ext == "json" || (!locator.contains("://") && ext.is_empty())
-    }
-
     fn matches_content(&self, header: &[u8]) -> bool {
         let mut iter = header.iter();
         // Skip UTF-8 BOM if present

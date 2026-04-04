@@ -3,8 +3,6 @@ use std::sync::Arc;
 
 pub trait StoreFactory: Send + Sync {
     fn name(&self) -> &str;
-    fn supported_patterns(&self) -> &[&str];
-    fn matches_locator(&self, locator: &str) -> bool;
     fn matches_content(&self, _header: &[u8]) -> bool {
         false
     }
@@ -127,16 +125,6 @@ mod tests {
         fn name(&self) -> &str {
             "sqlite"
         }
-        fn supported_patterns(&self) -> &[&str] {
-            &["*.sqlite", "*.db"]
-        }
-        fn matches_locator(&self, locator: &str) -> bool {
-            let ext = std::path::Path::new(locator)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-            matches!(ext, "sqlite" | "sqlite3" | "db")
-        }
         fn matches_content(&self, header: &[u8]) -> bool {
             header.starts_with(b"SQLite format 3\0")
         }
@@ -155,16 +143,6 @@ mod tests {
     impl StoreFactory for FakeJsonFactory {
         fn name(&self) -> &str {
             "json"
-        }
-        fn supported_patterns(&self) -> &[&str] {
-            &["*.json"]
-        }
-        fn matches_locator(&self, locator: &str) -> bool {
-            let ext = std::path::Path::new(locator)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-            ext == "json" || ext.is_empty()
         }
         fn matches_content(&self, header: &[u8]) -> bool {
             let trimmed = header.iter().find(|b| !b.is_ascii_whitespace());
@@ -220,17 +198,6 @@ mod tests {
         let header = read_header(&path, 32).unwrap();
         assert!(FakeSqliteFactory.matches_content(&header));
         assert!(!FakeJsonFactory.matches_content(&header));
-    }
-
-    #[test]
-    fn test_new_file_falls_back_to_extension() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("new_board.json");
-        // File does not exist — should fall back to locator matching
-        assert!(!path.exists());
-
-        assert!(FakeJsonFactory.matches_locator(path.to_str().unwrap()));
-        assert!(!FakeSqliteFactory.matches_locator(path.to_str().unwrap()));
     }
 
     #[test]
