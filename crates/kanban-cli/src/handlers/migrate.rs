@@ -1,9 +1,29 @@
 use crate::cli::MigrateArgs;
 
+fn default_output_path(source: &str, backend: &str) -> String {
+    let path = std::path::Path::new(source);
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("kanban");
+    let ext = backend;
+    match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => {
+            parent.join(format!("{}.{}", stem, ext)).display().to_string()
+        }
+        _ => format!("{}.{}", stem, ext),
+    }
+}
+
 pub async fn handle(args: MigrateArgs) -> anyhow::Result<()> {
-    println!("Migrating from {} to {}", args.from, args.to);
-    kanban_service::migrate_store(&args.from_backend, &args.from, &args.to_backend, &args.to)
-        .await?;
+    let source_backend = args.source_backend.unwrap_or_else(|| {
+        kanban_service::detect_backend(&args.source).unwrap_or_else(|| "json".to_string())
+    });
+    let output = args
+        .output
+        .unwrap_or_else(|| default_output_path(&args.source, &args.backend));
+    println!("Migrating {} to {}", args.source, output);
+    kanban_service::migrate_store(&source_backend, &args.source, &args.backend, &output).await?;
     println!("Migration completed successfully");
     Ok(())
 }

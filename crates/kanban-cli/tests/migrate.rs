@@ -123,14 +123,10 @@ async fn test_migrate_rejects_missing_source() {
     let output = cargo_bin_cmd!("kanban")
         .args([
             "migrate",
-            "--from",
             missing.to_str().unwrap(),
-            "--from-backend",
-            "json",
-            "--to",
-            dir.path().join("dest.sqlite").to_str().unwrap(),
-            "--to-backend",
             "sqlite",
+            "--output",
+            dir.path().join("dest.sqlite").to_str().unwrap(),
         ])
         .output()
         .unwrap();
@@ -159,14 +155,10 @@ async fn test_migrate_rejects_existing_target() {
     let output = cargo_bin_cmd!("kanban")
         .args([
             "migrate",
-            "--from",
             src_path.to_str().unwrap(),
-            "--from-backend",
-            "json",
-            "--to",
-            dst_path.to_str().unwrap(),
-            "--to-backend",
             "sqlite",
+            "--output",
+            dst_path.to_str().unwrap(),
         ])
         .output()
         .unwrap();
@@ -190,14 +182,10 @@ async fn test_migrate_cli_with_explicit_output() {
     let output = cargo_bin_cmd!("kanban")
         .args([
             "migrate",
-            "--from",
             src_path.to_str().unwrap(),
-            "--from-backend",
-            "json",
-            "--to",
-            dst_path.to_str().unwrap(),
-            "--to-backend",
             "sqlite",
+            "--output",
+            dst_path.to_str().unwrap(),
         ])
         .output()
         .unwrap();
@@ -229,14 +217,10 @@ async fn test_migrate_cli_explicit_output_path() {
     let output = cargo_bin_cmd!("kanban")
         .args([
             "migrate",
-            "--from",
             src_path.to_str().unwrap(),
-            "--from-backend",
-            "json",
-            "--to",
-            dst_path.to_str().unwrap(),
-            "--to-backend",
             "sqlite",
+            "--output",
+            dst_path.to_str().unwrap(),
         ])
         .output()
         .unwrap();
@@ -272,14 +256,10 @@ async fn test_migrate_rejects_unknown_backend() {
     let output = cargo_bin_cmd!("kanban")
         .args([
             "migrate",
-            "--from",
             src_path.to_str().unwrap(),
-            "--from-backend",
-            "json",
-            "--to",
-            dir.path().join("dest.postgres").to_str().unwrap(),
-            "--to-backend",
             "postgres",
+            "--output",
+            dir.path().join("dest.postgres").to_str().unwrap(),
         ])
         .output()
         .unwrap();
