@@ -17,7 +17,7 @@ fn test_settings_keybinding_provider_returns_bindings() {
     assert!(context.bindings.len() >= 2);
 
     let keys: Vec<&str> = context.bindings.iter().map(|b| b.key.as_str()).collect();
-    assert!(keys.contains(&"e"));
+    assert!(keys.contains(&"e/Enter"));
     assert!(keys.contains(&"q/Esc"));
 }
 
@@ -178,7 +178,7 @@ fn test_render_settings_hides_storage_fields_when_no_data_file() {
 #[test]
 fn test_render_settings_shows_storage_fields_when_has_data_file() {
     let (mut app, _rx) = App::new(None).unwrap();
-    app.app_config.has_data_file = true;
+    app.has_data_file = true;
     app.push_mode(AppMode::Settings);
     let output = render_to_string(&app);
     assert!(
@@ -876,4 +876,48 @@ async fn test_switch_storage_location_nonexistent_parent_shows_error() {
         old_config.effective_storage_location(),
         "config should be reverted on error"
     );
+}
+
+// --- Fix 9: apply_config_edit tests ---
+
+#[test]
+fn test_apply_config_edit_valid_json_updates_config() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml"}"#;
+    let result = app.apply_config_edit(json, &format);
+    assert!(result.is_ok());
+    assert_eq!(app.app_config.effective_default_card_prefix(), "feat");
+}
+
+#[test]
+fn test_apply_config_edit_invalid_json_returns_error() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    let result = app.apply_config_edit("{not valid json", &format);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.contains("parse"), "error: {}", err);
+}
+
+#[test]
+fn test_apply_config_edit_invalid_backend_returns_error() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    let json = r#"{"default_card_prefix":"task","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"yaml"}"#;
+    let result = app.apply_config_edit(json, &format);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.contains("storage_backend"), "error: {}", err);
+}
+
+#[test]
+fn test_apply_config_edit_syncs_prefixes() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    let json = r#"{"default_card_prefix":"myprefix","default_sprint_prefix":"mysprint","editing_format":"json","configuration_format":"toml"}"#;
+    let result = app.apply_config_edit(json, &format);
+    assert!(result.is_ok());
+    assert_eq!(app.ctx.default_card_prefix, "myprefix");
+    assert_eq!(app.ctx.default_sprint_prefix, "mysprint");
 }
