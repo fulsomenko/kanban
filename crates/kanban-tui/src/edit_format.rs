@@ -29,7 +29,7 @@ fn strip_jsonc_comments(s: &str) -> String {
                 }
                 '/' if chars.peek() == Some(&'/') => {
                     chars.next(); // consume second '/'
-                    // Drop everything until end of line, but keep the newline
+                                  // Drop everything until end of line, but keep the newline
                     for nc in chars.by_ref() {
                         if nc == '\n' {
                             out.push('\n');
@@ -255,7 +255,8 @@ mod tests {
 
     #[test]
     fn test_json_deserialize_ignores_comment_markers_inside_strings() {
-        let input = "{\n  \"default_card_prefix\": \"feat//nope\",\n  \"editing_format\": \"json\"\n}";
+        let input =
+            "{\n  \"default_card_prefix\": \"feat//nope\",\n  \"editing_format\": \"json\"\n}";
         let dto: AppConfigDto = EditFormat::Json.deserialize(input).unwrap();
         assert_eq!(dto.default_card_prefix.as_deref(), Some("feat//nope"));
     }

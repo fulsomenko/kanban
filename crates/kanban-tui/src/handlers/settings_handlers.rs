@@ -16,7 +16,11 @@ impl App {
         match panel {
             SettingsFocus::Configuration => {
                 if self.has_data_file {
-                    if self.cli_file_override { 9 } else { 7 }
+                    if self.cli_file_override {
+                        9
+                    } else {
+                        7
+                    }
                 } else {
                     5
                 }

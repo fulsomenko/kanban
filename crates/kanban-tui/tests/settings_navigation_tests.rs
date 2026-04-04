@@ -281,4 +281,3 @@ fn test_settings_k_from_active_backend_skips_to_editing_format() {
         "k from Active Storage Backend should skip greyed indices and land on Editing Format (4)"
     );
 }
-

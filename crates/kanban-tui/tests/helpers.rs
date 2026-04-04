@@ -99,11 +99,7 @@ pub async fn create_test_json_file(dir: &std::path::Path, name: &str, boards: &[
     path_str
 }
 
-pub async fn create_test_sqlite_file(
-    dir: &std::path::Path,
-    name: &str,
-    boards: &[&str],
-) -> String {
+pub async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
     use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 
     let path = dir.join(name);
