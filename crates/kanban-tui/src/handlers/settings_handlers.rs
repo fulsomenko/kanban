@@ -237,7 +237,12 @@ impl App {
         let format = EditFormat::parse(self.app_config.effective_editing_format());
         let ext = format.file_extension();
         let dto = AppConfigDto::from_config(&self.app_config, self.has_data_file);
-        let current_content = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
+        let serialized = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
+        let current_content = if self.cli_file_override {
+            format.comment_storage_fields(&serialized)
+        } else {
+            serialized
+        };
         let temp_file = std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
         match edit_in_external_editor(terminal, event_handler, temp_file, &current_content) {
             Ok(Some(new_content)) => {

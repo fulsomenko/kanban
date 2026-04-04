@@ -35,9 +35,39 @@ impl EditFormat {
 
     pub fn deserialize<T: DeserializeOwned>(&self, s: &str) -> Result<T, String> {
         match self {
-            Self::Json => serde_json::from_str(s).map_err(|e| format!("JSON deserialize: {}", e)),
+            Self::Json => {
+                let stripped: String = s
+                    .lines()
+                    .filter(|l| !l.trim_start().starts_with("//"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                serde_json::from_str(&stripped).map_err(|e| format!("JSON deserialize: {}", e))
+            }
             Self::Toml => toml::from_str(s).map_err(|e| format!("TOML deserialize: {}", e)),
         }
+    }
+
+    pub fn comment_storage_fields(&self, content: &str) -> String {
+        let prefix = match self {
+            Self::Json => "// ",
+            Self::Toml => "# ",
+        };
+        content
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("\"storage_backend\"")
+                    || trimmed.starts_with("\"storage_location\"")
+                    || trimmed.starts_with("storage_backend")
+                    || trimmed.starts_with("storage_location")
+                {
+                    format!("{}{}", prefix, line)
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -79,6 +109,65 @@ mod tests {
     #[test]
     fn test_edit_format_file_extension_toml() {
         assert_eq!(EditFormat::Toml.file_extension(), "toml");
+    }
+
+    #[test]
+    fn test_comment_storage_fields_json() {
+        let input =
+            "{\n  \"default_card_prefix\": \"feat\",\n  \"storage_backend\": \"sqlite\",\n  \"storage_location\": \"/tmp/b.db\"\n}";
+        let result = EditFormat::Json.comment_storage_fields(input);
+        assert!(
+            result
+                .lines()
+                .any(|l| l.starts_with("// ") && l.contains("\"storage_backend\"")),
+            "storage_backend line should be commented out"
+        );
+        assert!(
+            result
+                .lines()
+                .any(|l| l.starts_with("// ") && l.contains("\"storage_location\"")),
+            "storage_location line should be commented out"
+        );
+        assert!(result.contains("\"default_card_prefix\""));
+        assert!(
+            !result
+                .lines()
+                .any(|l| l.starts_with("// ") && l.contains("\"default_card_prefix\"")),
+            "default_card_prefix should not be commented out"
+        );
+    }
+
+    #[test]
+    fn test_comment_storage_fields_toml() {
+        let input =
+            "default_card_prefix = \"feat\"\nstorage_backend = \"sqlite\"\nstorage_location = \"/tmp/b.db\"\n";
+        let result = EditFormat::Toml.comment_storage_fields(input);
+        assert!(
+            result
+                .lines()
+                .any(|l| l.starts_with("# ") && l.contains("storage_backend")),
+            "storage_backend line should be commented out"
+        );
+        assert!(
+            result
+                .lines()
+                .any(|l| l.starts_with("# ") && l.contains("storage_location")),
+            "storage_location line should be commented out"
+        );
+        assert!(
+            !result
+                .lines()
+                .any(|l| l.starts_with("# ") && l.contains("default_card_prefix")),
+            "default_card_prefix should not be commented out"
+        );
+    }
+
+    #[test]
+    fn test_json_deserialize_strips_comment_lines() {
+        let input = "{\n  \"default_card_prefix\": \"feat\",\n//   \"storage_backend\": \"sqlite\",\n  \"editing_format\": \"json\"\n}";
+        let dto: AppConfigDto = EditFormat::Json.deserialize(input).unwrap();
+        assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
+        assert!(dto.storage_backend.is_none());
     }
 
     #[test]
