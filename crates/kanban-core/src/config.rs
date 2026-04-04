@@ -882,7 +882,6 @@ mod tests {
             configuration_format: Some("toml".into()),
             configuration_location: AppConfig::config_path().map(|p| p.display().to_string()),
             storage_location: Some("kanban.json".into()),
-            ..Default::default()
         };
         // Both storage_backend and storage_location explicitly set = deliberate choice
         assert!(config.has_non_default_values());
