@@ -164,14 +164,27 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         ),
     ];
     if app.has_data_file {
+        let override_suffix = if app.cli_file_override {
+            " (overridden)"
+        } else {
+            ""
+        };
         config_lines.push(metadata_line_selectable(
             "Storage Backend",
-            app.app_config.effective_storage_backend(),
+            format!(
+                "{}{}",
+                app.app_config.effective_storage_backend(),
+                override_suffix
+            ),
             is_config_selected(5),
         ));
         config_lines.push(metadata_line_selectable(
             "Storage Location",
-            app.app_config.effective_storage_location(),
+            format!(
+                "{}{}",
+                app.app_config.effective_storage_location(),
+                override_suffix
+            ),
             is_config_selected(6),
         ));
     }

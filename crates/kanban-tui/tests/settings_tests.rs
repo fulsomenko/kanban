@@ -194,6 +194,30 @@ fn test_render_settings_shows_storage_fields_when_has_data_file() {
 }
 
 #[test]
+fn test_render_settings_shows_config_overridden_when_cli_file_provided() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.cli_file_override = true;
+    app.push_mode(AppMode::Settings);
+    let output = render_to_string(&app);
+    assert!(
+        output.contains("config overridden"),
+        "Expected '(config overridden)' label when CLI file overrides config, got:\n{}",
+        output
+    );
+}
+
+#[test]
+fn test_render_settings_no_override_label_without_cli_file() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.push_mode(AppMode::Settings);
+    let output = render_to_string(&app);
+    assert!(
+        !output.contains("config overridden"),
+        "Expected no '(config overridden)' label when no CLI override"
+    );
+}
+
+#[test]
 fn test_render_settings_shows_editing_format_label() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.push_mode(AppMode::Settings);
