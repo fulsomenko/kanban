@@ -1,4 +1,6 @@
+pub mod config;
 mod context;
+pub use config::AppConfigDto;
 pub use context::{BulkOperationFailure, BulkOperationResult, DataSnapshot, KanbanContext};
 
 #[cfg(feature = "test-helpers")]
