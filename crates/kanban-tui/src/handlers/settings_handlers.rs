@@ -1,8 +1,9 @@
 use crate::app::{App, AppMode, DialogMode, ExportDialogState, Focus, SettingsFocus};
 use crate::edit_format::EditFormat;
+use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
-use kanban_core::AppConfigDto;
+use kanban_core::{AppConfigDto, Editable};
 use kanban_domain::export::{AllBoardsExport, BoardExporter};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -36,6 +37,8 @@ impl App {
         old_config: kanban_core::AppConfig,
         old_storage_location: &str,
     ) -> bool {
+        use crate::app::MigrationState;
+
         let new_storage_location = self.app_config.effective_storage_location();
 
         if let Some(detected) = kanban_service::detect_backend(&new_storage_location) {
@@ -57,43 +60,72 @@ impl App {
         let file_existed = new_path.exists();
 
         let new_backend = self.app_config.effective_storage_backend().to_string();
-        let old_backend = old_config.effective_storage_backend();
+        let old_backend = old_config.effective_storage_backend().to_string();
+        let old_storage_location_owned = old_storage_location.to_string();
+        let old_path_exists = std::path::Path::new(old_storage_location).exists();
 
-        if !file_existed {
-            let old_path = std::path::Path::new(old_storage_location);
-            if old_path.exists() {
-                if let Err(e) = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(
-                        kanban_service::migrate_store_for_backend(
-                            Some(old_backend),
-                            old_storage_location,
-                            Some(&new_backend),
-                            &new_storage_location,
-                        ),
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        let new_storage_clone = new_storage_location.clone();
+        let new_backend_clone = new_backend.clone();
+        tokio::spawn(async move {
+            let result: Result<kanban_domain::Snapshot, String> = async {
+                if !file_existed && old_path_exists {
+                    kanban_service::migrate_store_for_backend(
+                        Some(&old_backend),
+                        &old_storage_location_owned,
+                        Some(&new_backend_clone),
+                        &new_storage_clone,
                     )
-                }) {
-                    self.app_config = old_config;
-                    self.set_error(format!("Migration failed: {}", e));
-                    return false;
+                    .await
+                    .map_err(|e| format!("Migration failed: {}", e))?;
                 }
-            }
-        }
 
-        let snapshot = match tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(
                 kanban_service::validate_and_load_store_for_backend(
-                    Some(&new_backend),
-                    &new_storage_location,
-                ),
-            )
-        }) {
+                    Some(&new_backend_clone),
+                    &new_storage_clone,
+                )
+                .await
+                .map_err(|e| format!("Invalid storage file: {}", e))
+            }
+            .await;
+
+            let _ = tx.send(result);
+        });
+
+        self.migration_state = MigrationState::Migrating {
+            old_config,
+            old_storage_location: old_storage_location.to_string(),
+        };
+        self.migration_result_rx = Some(rx);
+        self.set_success("Migrating storage...".to_string());
+        true
+    }
+
+    pub fn handle_migration_complete(&mut self, result: Result<kanban_domain::Snapshot, String>) {
+        use crate::app::MigrationState;
+
+        let (old_config, _old_storage_location) =
+            match std::mem::replace(&mut self.migration_state, MigrationState::Idle) {
+                MigrationState::Migrating {
+                    old_config,
+                    old_storage_location,
+                } => (old_config, old_storage_location),
+                MigrationState::Idle => return,
+            };
+
+        let snapshot = match result {
             Ok(s) => s,
             Err(e) => {
                 self.app_config = old_config;
-                self.set_error(format!("Invalid storage file: {}", e));
-                return false;
+                self.set_error(e);
+                return;
             }
         };
+
+        let new_storage_location = self.app_config.effective_storage_location();
+        let new_backend = self.app_config.effective_storage_backend().to_string();
+        let file_existed = std::path::Path::new(&new_storage_location).exists();
 
         match self
             .ctx
@@ -132,10 +164,16 @@ impl App {
             Err(e) => {
                 self.app_config = old_config;
                 self.set_error(format!("Store swap failed: {}", e));
-                return false;
             }
         }
-        true
+    }
+
+    pub async fn await_migration(&mut self) {
+        if let Some(rx) = self.migration_result_rx.take() {
+            if let Ok(result) = rx.await {
+                self.handle_migration_complete(result);
+            }
+        }
     }
 
     pub fn handle_settings_key(
@@ -168,15 +206,28 @@ impl App {
                 let old_config = self.app_config.clone();
                 let mut config = self.app_config.clone();
                 let temp_file = std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
-                if let Err(e) = App::edit_entity_impl::<AppConfigDto, _>(
-                    &mut config,
-                    terminal,
-                    event_handler,
-                    temp_file,
-                    format,
-                ) {
-                    self.set_error(format!("Failed to edit config: {}", e));
-                    return true;
+                let dto = AppConfigDto::from_entity(&config);
+                let current_content = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
+                match edit_in_external_editor(terminal, event_handler, temp_file, &current_content)
+                {
+                    Ok(Some(new_content)) => match format.deserialize::<AppConfigDto>(&new_content)
+                    {
+                        Ok(updated_dto) => {
+                            if let Err(e) = updated_dto.validate_and_apply(&mut config) {
+                                self.set_error(format!("Invalid config: {}", e));
+                                return true;
+                            }
+                        }
+                        Err(e) => {
+                            self.set_error(format!("Failed to parse config: {}", e));
+                            return true;
+                        }
+                    },
+                    Ok(None) => return true,
+                    Err(e) => {
+                        self.set_error(format!("Failed to edit config: {}", e));
+                        return true;
+                    }
                 }
                 self.app_config = config;
 
@@ -192,7 +243,13 @@ impl App {
                         if new_location != old_location {
                             let old_path = std::path::Path::new(&old_location);
                             if old_path.exists() {
-                                let _ = std::fs::remove_file(old_path);
+                                if let Err(e) = std::fs::remove_file(old_path) {
+                                    tracing::warn!(
+                                        "Failed to remove old config file {}: {}",
+                                        old_path.display(),
+                                        e
+                                    );
+                                }
                             }
                         }
                     }
@@ -200,7 +257,13 @@ impl App {
                     let location = self.app_config.effective_configuration_location();
                     let path = std::path::Path::new(&location);
                     if path.exists() {
-                        let _ = std::fs::remove_file(path);
+                        if let Err(e) = std::fs::remove_file(path) {
+                            tracing::warn!(
+                                "Failed to remove config file {}: {}",
+                                path.display(),
+                                e
+                            );
+                        }
                     }
                 }
                 self.ctx.default_card_prefix =

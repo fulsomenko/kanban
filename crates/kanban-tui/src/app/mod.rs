@@ -84,6 +84,9 @@ pub struct App {
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
     pub export_dialog: Option<ExportDialogState>,
+    pub migration_state: MigrationState,
+    pub migration_result_rx:
+        Option<tokio::sync::oneshot::Receiver<Result<kanban_domain::Snapshot, String>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,6 +138,14 @@ impl ExportDialogState {
     pub fn any_selected(&self) -> bool {
         self.board_selections.iter().any(|&s| s)
     }
+}
+
+pub enum MigrationState {
+    Idle,
+    Migrating {
+        old_config: AppConfig,
+        old_storage_location: String,
+    },
 }
 
 pub enum CardField {
@@ -207,6 +218,8 @@ impl App {
             relationship: RelationshipState::default(),
             pending_key: None,
             export_dialog: None,
+            migration_state: MigrationState::Idle,
+            migration_result_rx: None,
         };
 
         Ok((app, save_rx))
@@ -1537,12 +1550,10 @@ impl App {
             edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
         {
             match format.deserialize::<T>(&new_content) {
-                Ok(updated_dto) => match updated_dto.apply_to(entity) {
-                    Ok(()) => tracing::info!("Updated entity via {} editor", format),
-                    Err(e) => {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()));
-                    }
-                },
+                Ok(updated_dto) => {
+                    updated_dto.apply_to(entity);
+                    tracing::info!("Updated entity via {} editor", format);
+                }
                 Err(e) => {
                     tracing::error!("Failed to parse {}: {}", format, e);
                 }
@@ -1726,6 +1737,18 @@ impl App {
                                     self.ctx.state_manager.clear_refresh();
                                 }
                             }
+                        }
+                    }
+                    result = async {
+                        if let Some(ref mut rx) = &mut self.migration_result_rx {
+                            rx.await.ok()
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        self.migration_result_rx = None;
+                        if let Some(result) = result {
+                            self.handle_migration_complete(result);
                         }
                     }
                     _ = async {
