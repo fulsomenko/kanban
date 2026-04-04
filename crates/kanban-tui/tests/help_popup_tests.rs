@@ -33,7 +33,10 @@ fn test_help_popup_viewport_height_is_nonzero() {
     use ratatui::layout::Rect;
     let area = Rect::new(0, 0, 120, 40);
     let height = kanban_tui::components::help_popup_viewport_height(area);
-    assert!(height > 0, "Viewport height should be non-zero for a reasonable terminal size");
+    assert!(
+        height > 0,
+        "Viewport height should be non-zero for a reasonable terminal size"
+    );
 }
 
 #[test]

@@ -22,8 +22,8 @@ where
 }
 
 fn setup_app_with_filter_dialog() -> App {
-    use kanban_tui::filters::FilterDialogState;
     use kanban_domain::CardFilters;
+    use kanban_tui::filters::FilterDialogState;
     let (mut app, _rx) = App::new(None).unwrap();
     app.push_mode(AppMode::Dialog(DialogMode::FilterOptions));
     app.filter.dialog_state = Some(FilterDialogState::new(CardFilters::default()));

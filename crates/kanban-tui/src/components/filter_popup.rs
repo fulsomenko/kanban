@@ -88,12 +88,12 @@ pub fn render_filter_options_popup(app: &App, frame: &mut Frame) {
                             .filters
                             .selected_sprint_ids
                             .contains(&sprint.id);
-                        let cursor =
-                            if section_index == 0 && dialog_state.item_selection == idx + 1 {
-                                "> "
-                            } else {
-                                "  "
-                            };
+                        let cursor = if section_index == 0 && dialog_state.item_selection == idx + 1
+                        {
+                            "> "
+                        } else {
+                            "  "
+                        };
 
                         sprint_lines.push(Line::from(vec![
                             Span::raw(cursor),

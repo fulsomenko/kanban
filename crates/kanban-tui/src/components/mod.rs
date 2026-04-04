@@ -1,7 +1,7 @@
 pub mod banner;
 pub mod card_detail_sections;
-pub mod conflict_popup;
 pub mod card_list_item;
+pub mod conflict_popup;
 pub mod detail_view;
 pub mod filter_popup;
 pub mod footer;
@@ -17,8 +17,8 @@ pub mod selection_list;
 
 pub use banner::*;
 pub use card_detail_sections::*;
-pub use conflict_popup::*;
 pub use card_list_item::*;
+pub use conflict_popup::*;
 pub use detail_view::*;
 pub use filter_popup::*;
 pub use footer::*;

@@ -59,12 +59,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 DialogMode::SetMultipleCardsPriority => {
                     dialogs::render_set_multiple_cards_priority_popup(app, frame)
                 }
-                DialogMode::SetBranchPrefix => {
-                    dialogs::render_set_branch_prefix_popup(app, frame)
-                }
-                DialogMode::SetSprintPrefix => {
-                    dialogs::render_set_sprint_prefix_popup(app, frame)
-                }
+                DialogMode::SetBranchPrefix => dialogs::render_set_branch_prefix_popup(app, frame),
+                DialogMode::SetSprintPrefix => dialogs::render_set_sprint_prefix_popup(app, frame),
                 DialogMode::SetSprintCardPrefix => {
                     dialogs::render_set_sprint_card_prefix_popup(app, frame)
                 }

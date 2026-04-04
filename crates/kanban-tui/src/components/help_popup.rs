@@ -1,6 +1,6 @@
 use crate::app::App;
-use crate::components::ListItemConfig;
 use crate::components::centered_rect;
+use crate::components::ListItemConfig;
 use crate::theme::*;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
