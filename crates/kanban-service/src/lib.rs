@@ -49,7 +49,7 @@ pub fn make_store_with_config(
 ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
     let locator = match file {
         Some(path) => path.to_string(),
-        None => config.effective_storage_location(),
+        None => config::resolve_storage_location(config),
     };
     let backend =
         detect_backend(&locator).unwrap_or_else(|| config.effective_storage_backend().to_string());
@@ -76,7 +76,7 @@ pub async fn validate_and_load_store(
 pub async fn export_to_sqlite(
     export: kanban_domain::export::AllBoardsExport,
     filename: &str,
-) -> Result<(), String> {
+) -> Result<(), KanbanError> {
     use kanban_domain::export::BoardImporter;
     use kanban_domain::{DependencyGraph, Snapshot};
     use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot};
@@ -90,18 +90,13 @@ pub async fn export_to_sqlite(
         sprints: entities.sprints,
         graph: DependencyGraph::default(),
     };
-    let data =
-        snapshot_to_json_bytes(&snapshot).map_err(|e| format!("Serialization failed: {}", e))?;
+    let data = snapshot_to_json_bytes(&snapshot)?;
     let store_snapshot = StoreSnapshot {
         data,
         metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
     };
-    let store =
-        make_store("sqlite", filename).map_err(|e| format!("Failed to create store: {}", e))?;
-    store
-        .save(store_snapshot)
-        .await
-        .map_err(|e| format!("Save failed: {}", e))?;
+    let store = make_store("sqlite", filename)?;
+    store.save(store_snapshot).await?;
     Ok(())
 }
 
