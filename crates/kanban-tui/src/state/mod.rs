@@ -16,6 +16,8 @@ pub use snapshot::TuiSnapshot;
 type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
 type SaveChannel = (mpsc::Sender<Snapshot>, mpsc::Receiver<Snapshot>);
 
+const SAVE_QUEUE_CAPACITY: usize = 100;
+
 /// Manages state mutations and persistence with immediate auto-saving
 ///
 /// # Save Behavior
@@ -67,10 +69,8 @@ impl StateManager {
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     )> {
-        // Use bounded channel (capacity: 100) to prevent unbounded memory growth
-        // If queue is full, save_if_needed() will log a warning instead of blocking
-        const SAVE_QUEUE_CAPACITY: usize = 100;
-
+        // Use bounded channel to prevent unbounded memory growth.
+        // If queue is full, save_if_needed() will log a warning instead of blocking.
         let (store, instance_id, save_channel): (
             Option<DynStore>,
             uuid::Uuid,
@@ -449,8 +449,6 @@ impl StateManager {
         backend: &str,
         path: &str,
     ) -> KanbanResult<(mpsc::Receiver<Snapshot>, mpsc::UnboundedReceiver<()>)> {
-        const SAVE_QUEUE_CAPACITY: usize = 100;
-
         let (store, instance_id) = Self::create_store(backend, path)?;
         self.store = Some(store);
         self.instance_id = instance_id;
