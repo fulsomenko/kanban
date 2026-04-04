@@ -55,6 +55,11 @@ impl TuiContext {
         Ok((ctx, save_rx, completion_rx))
     }
 
+    pub fn sync_prefixes(&mut self, config: &kanban_core::AppConfig) {
+        self.default_card_prefix = config.effective_default_card_prefix().to_string();
+        self.default_sprint_prefix = config.effective_default_sprint_prefix().to_string();
+    }
+
     pub fn execute_command(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
         self.execute_commands_batch(vec![command])
     }
