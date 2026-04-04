@@ -1,25 +1,7 @@
+mod helpers;
+
 use kanban_tui::app::mode::{AppMode, DialogMode};
 use kanban_tui::App;
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
-
-fn render_to_string<F>(draw_fn: F) -> String
-where
-    F: FnOnce(&mut ratatui::Frame),
-{
-    let backend = TestBackend::new(120, 40);
-    let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(draw_fn).unwrap();
-    let buffer = terminal.backend().buffer().clone();
-    let mut result = String::new();
-    for y in 0..buffer.area.height {
-        for x in 0..buffer.area.width {
-            result.push_str(buffer.cell((x, y)).map(|c| c.symbol()).unwrap_or(" "));
-        }
-        result.push('\n');
-    }
-    result
-}
 
 fn setup_app_with_filter_dialog() -> App {
     use kanban_domain::CardFilters;
@@ -33,7 +15,7 @@ fn setup_app_with_filter_dialog() -> App {
 #[test]
 fn test_render_filter_options_popup_renders_without_dialog_state() {
     let (app, _rx) = App::new(None).unwrap();
-    let output = render_to_string(|frame| {
+    let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::components::render_filter_options_popup(&app, frame);
     });
     // Without dialog state active, the popup renders but shows nothing inside
@@ -43,26 +25,46 @@ fn test_render_filter_options_popup_renders_without_dialog_state() {
 #[test]
 fn test_render_filter_options_popup_shows_sprints_section() {
     let app = setup_app_with_filter_dialog();
-    let output = render_to_string(|frame| {
+    let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::components::render_filter_options_popup(&app, frame);
     });
-    assert!(output.contains("Sprints") || output.contains("sprint"));
+    assert!(output.contains("Sprints"));
 }
 
 #[test]
 fn test_render_filter_options_popup_shows_date_range_section() {
     let app = setup_app_with_filter_dialog();
-    let output = render_to_string(|frame| {
+    let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::components::render_filter_options_popup(&app, frame);
     });
-    assert!(output.contains("Date") || output.contains("Range"));
+    assert!(output.contains("Date Range"));
 }
 
 #[test]
 fn test_render_filter_options_popup_shows_tags_section() {
     let app = setup_app_with_filter_dialog();
-    let output = render_to_string(|frame| {
+    let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::components::render_filter_options_popup(&app, frame);
     });
-    assert!(output.contains("Tags") || output.contains("tags"));
+    assert!(output.contains("Tags"));
+}
+
+#[test]
+fn test_render_filter_popup_with_sprint_shows_sprint_name() {
+    use kanban_domain::CardFilters;
+    use kanban_domain::{Board, Sprint};
+    use kanban_tui::filters::FilterDialogState;
+    let (mut app, _rx) = App::new(None).unwrap();
+    let board = Board::new("Test Board".to_string(), None);
+    let sprint = Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
+    app.ctx.sprints.push(sprint);
+    app.ctx.boards.push(board);
+    app.selection.active_board_index = Some(0);
+    app.push_mode(AppMode::Dialog(DialogMode::FilterOptions));
+    app.filter.dialog_state = Some(FilterDialogState::new(CardFilters::default()));
+    let output = helpers::render_widget_to_string(120, 40, |frame| {
+        kanban_tui::components::render_filter_options_popup(&app, frame);
+    });
+    assert!(output.contains("Sprint 1") || output.contains("Sprint"));
+    assert!(!output.contains("no sprints available"));
 }
