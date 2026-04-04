@@ -86,8 +86,6 @@ pub struct App {
     pub has_data_file: bool,
     pub export_dialog: Option<ExportDialogState>,
     pub migration_state: MigrationState,
-    pub migration_result_rx:
-        Option<tokio::sync::oneshot::Receiver<Result<(kanban_domain::Snapshot, bool), String>>>,
     pub export_result_rx: Option<tokio::sync::oneshot::Receiver<Result<String, String>>>,
 }
 
@@ -147,6 +145,8 @@ pub enum MigrationState {
     Migrating {
         old_config: AppConfig,
         old_storage_location: String,
+        result_rx:
+            tokio::sync::oneshot::Receiver<Result<(kanban_domain::Snapshot, bool), String>>,
     },
 }
 
@@ -212,7 +212,6 @@ impl App {
             has_data_file,
             export_dialog: None,
             migration_state: MigrationState::Idle,
-            migration_result_rx: None,
             export_result_rx: None,
         };
 
@@ -1734,15 +1733,18 @@ impl App {
                         }
                     }
                     result = async {
-                        if let Some(ref mut rx) = &mut self.migration_result_rx {
-                            rx.await.ok()
+                        if let MigrationState::Migrating { ref mut result_rx, .. } = self.migration_state {
+                            result_rx.await.ok()
                         } else {
                             std::future::pending().await
                         }
                     } => {
-                        self.migration_result_rx = None;
+                        let old_config = match std::mem::replace(&mut self.migration_state, MigrationState::Idle) {
+                            MigrationState::Migrating { old_config, .. } => old_config,
+                            MigrationState::Idle => unreachable!(),
+                        };
                         if let Some(result) = result {
-                            self.handle_migration_complete(result);
+                            self.handle_migration_complete(old_config, result);
                         }
                     }
                     export_result = async {
