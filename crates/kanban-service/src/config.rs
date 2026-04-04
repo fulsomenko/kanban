@@ -103,13 +103,14 @@ pub fn move_config(old_path: &Path, new_path: &Path) -> CoreResult<()> {
     if std::fs::rename(old_path, new_path).is_err() {
         std::fs::copy(old_path, new_path)
             .map_err(|e| kanban_core::CoreError::Config(format!("Failed to copy config: {}", e)))?;
-        std::fs::remove_file(old_path).map_err(|e| {
-            kanban_core::CoreError::Config(format!(
+        if let Err(e) = std::fs::remove_file(old_path) {
+            let _ = std::fs::remove_file(new_path);
+            return Err(kanban_core::CoreError::Config(format!(
                 "Failed to remove old config '{}' after copy: {}",
                 old_path.display(),
                 e
-            ))
-        })?;
+            )));
+        }
     }
     Ok(())
 }
