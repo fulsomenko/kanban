@@ -88,8 +88,10 @@ async fn test_validate_and_load_preserves_board_data() {
 
 #[test]
 fn test_storage_location_with_dotdot_fails_validation() {
-    let mut config = kanban_core::AppConfig::default();
-    config.storage_location = Some("../../foo".to_string());
+    let config = kanban_core::AppConfig {
+        storage_location: Some("../../foo".to_string()),
+        ..Default::default()
+    };
     let result = kanban_service::config::validate(&config);
     assert!(
         result.is_err(),
@@ -101,8 +103,10 @@ fn test_storage_location_with_dotdot_fails_validation() {
 
 #[test]
 fn test_storage_location_with_nested_dotdot_fails_validation() {
-    let mut config = kanban_core::AppConfig::default();
-    config.storage_location = Some("data/../../../etc".to_string());
+    let config = kanban_core::AppConfig {
+        storage_location: Some("data/../../../etc".to_string()),
+        ..Default::default()
+    };
     let result = kanban_service::config::validate(&config);
     assert!(
         result.is_err(),
