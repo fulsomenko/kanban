@@ -341,6 +341,14 @@ pub struct AppConfigDto {
     pub storage_location: Option<String>,
 }
 
+impl AppConfigDto {
+    pub fn validate_and_apply(self, entity: &mut AppConfig) -> CoreResult<()> {
+        self.apply_to(entity);
+        entity.validate()?;
+        Ok(())
+    }
+}
+
 impl Editable<AppConfig> for AppConfigDto {
     fn from_entity(entity: &AppConfig) -> Self {
         let (storage_backend, storage_location) = if entity.has_data_file {
@@ -362,7 +370,7 @@ impl Editable<AppConfig> for AppConfigDto {
         }
     }
 
-    fn apply_to(self, entity: &mut AppConfig) -> CoreResult<()> {
+    fn apply_to(self, entity: &mut AppConfig) {
         let old_format = entity.effective_configuration_format().to_string();
         entity.default_card_prefix = self.default_card_prefix;
         entity.default_sprint_prefix = self.default_sprint_prefix;
@@ -385,9 +393,7 @@ impl Editable<AppConfig> for AppConfigDto {
             }
         }
 
-        entity.validate()?;
         entity.strip_defaults();
-        Ok(())
     }
 }
 
@@ -590,7 +596,7 @@ mod tests {
 
         let dto = AppConfigDto::from_entity(&config);
         let mut target = AppConfig::default();
-        dto.apply_to(&mut target).unwrap();
+        dto.apply_to(&mut target);
 
         // Non-default values are preserved
         assert_eq!(target.default_card_prefix.as_deref(), Some("sprint"));
@@ -644,7 +650,7 @@ mod tests {
             configuration_location: Some("/home/user/.config/kanban/config.toml".into()),
             storage_location: None,
         };
-        dto.apply_to(&mut config).unwrap();
+        dto.apply_to(&mut config);
 
         assert_eq!(
             config.configuration_location.as_deref(),
@@ -765,7 +771,7 @@ mod tests {
             configuration_location: Some("/home/user/.config/kanban/config.toml".into()),
             storage_location: None,
         };
-        dto.apply_to(&mut config).unwrap();
+        dto.apply_to(&mut config);
 
         assert_eq!(
             config.configuration_location.as_deref(),
@@ -893,7 +899,7 @@ mod tests {
             storage_location: None,
         };
         let mut config = AppConfig::default();
-        dto.apply_to(&mut config).unwrap();
+        dto.apply_to(&mut config);
 
         assert!(config.default_card_prefix.is_none());
         assert!(config.default_sprint_prefix.is_none());
@@ -933,7 +939,7 @@ mod tests {
             storage_location: None,
         };
         let mut config = AppConfig::default();
-        let err = dto.apply_to(&mut config).unwrap_err();
+        let err = dto.validate_and_apply(&mut config).unwrap_err();
         assert!(err.to_string().contains("storage_backend"));
     }
 
