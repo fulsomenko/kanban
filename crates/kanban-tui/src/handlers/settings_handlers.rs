@@ -16,7 +16,7 @@ impl App {
         match panel {
             SettingsFocus::Configuration => {
                 if self.has_data_file {
-                    7
+                    if self.cli_file_override { 9 } else { 7 }
                 } else {
                     5
                 }
@@ -375,12 +375,16 @@ impl App {
             SettingsFocus::Configuration => {
                 let count = self.settings_item_count(SettingsFocus::Configuration);
                 let current = self.selection.settings_config.get().unwrap_or(0);
-                let last_selectable = if self.cli_file_override && self.has_data_file {
-                    4
-                } else {
-                    count - 1
-                };
-                if current >= last_selectable {
+                if self.cli_file_override && self.has_data_file {
+                    match current {
+                        c if c >= count - 1 => {
+                            self.focus.settings_focus = SettingsFocus::ConfigFile;
+                            self.selection.settings_config_file.set(Some(0));
+                        }
+                        4 => self.selection.settings_config.set(Some(7)),
+                        _ => self.selection.settings_config.next(count),
+                    }
+                } else if current >= count - 1 {
                     self.focus.settings_focus = SettingsFocus::ConfigFile;
                     self.selection.settings_config_file.set(Some(0));
                 } else {
@@ -417,6 +421,8 @@ impl App {
                     let count = self.settings_item_count(SettingsFocus::ConfigFile);
                     self.focus.settings_focus = SettingsFocus::ConfigFile;
                     self.selection.settings_config_file.set(Some(count - 1));
+                } else if self.cli_file_override && self.has_data_file && current == 7 {
+                    self.selection.settings_config.set(Some(4));
                 } else {
                     self.selection.settings_config.prev();
                 }
@@ -426,12 +432,7 @@ impl App {
                 if current == 0 {
                     let count = self.settings_item_count(SettingsFocus::Configuration);
                     self.focus.settings_focus = SettingsFocus::Configuration;
-                    let last_selectable = if self.cli_file_override && self.has_data_file {
-                        4
-                    } else {
-                        count - 1
-                    };
-                    self.selection.settings_config.set(Some(last_selectable));
+                    self.selection.settings_config.set(Some(count - 1));
                 } else {
                     self.selection.settings_config_file.prev();
                 }
