@@ -193,16 +193,43 @@ fn test_render_settings_shows_storage_fields_when_has_data_file() {
     );
 }
 
+fn render_to_string_with_colors(app: &App) -> Vec<(String, Option<ratatui::style::Color>)> {
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            kanban_tui::ui::render_settings_view(app, frame, frame.area());
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let mut result = Vec::new();
+    for y in 0..buffer.area.height {
+        for x in 0..buffer.area.width {
+            let cell = buffer.cell((x, y)).unwrap();
+            result.push((cell.symbol().to_string(), cell.style().fg));
+        }
+    }
+    result
+}
+
 #[test]
-fn test_render_settings_shows_config_overridden_when_cli_file_provided() {
+fn test_render_settings_storage_fields_greyed_when_cli_file_override() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.cli_file_override = true;
+    app.app_config.storage_backend = Some("json".into());
     app.push_mode(AppMode::Settings);
-    let output = render_to_string(&app);
+    let cells = render_to_string_with_colors(&app);
+    let dark_gray_text: String = cells
+        .iter()
+        .filter(|(_, fg)| *fg == Some(ratatui::style::Color::DarkGray))
+        .map(|(s, _)| s.as_str())
+        .collect();
     assert!(
-        output.contains("config overridden"),
-        "Expected '(config overridden)' label when CLI file overrides config, got:\n{}",
-        output
+        dark_gray_text.contains('j'),
+        "Storage Backend value should render in DarkGray when cli_file_override, got dark gray text: {:?}",
+        dark_gray_text
     );
 }
 
@@ -675,6 +702,51 @@ fn test_settings_keybinding_provider_includes_nav_bindings() {
     assert!(keys.contains(&"j/k"));
     assert!(keys.contains(&"h/l"));
     assert!(keys.contains(&"q/Esc"));
+}
+
+// --- cli_file_override navigation skip tests ---
+
+#[test]
+fn test_settings_j_skips_greyed_storage_fields_when_cli_override() {
+    use crossterm::event::KeyCode;
+
+    let mut app = setup_settings_app();
+    app.cli_file_override = true;
+    app.has_data_file = true;
+    app.focus.settings_focus = SettingsFocus::Configuration;
+    app.selection.settings_config.set(Some(4)); // Editing Format (last selectable)
+
+    app.handle_settings_key_nav(KeyCode::Char('j'));
+
+    assert_eq!(
+        app.focus.settings_focus,
+        SettingsFocus::ConfigFile,
+        "j from index 4 with cli_file_override should jump to ConfigFile, skipping 5 and 6"
+    );
+}
+
+#[test]
+fn test_settings_k_skips_greyed_storage_fields_when_cli_override() {
+    use crossterm::event::KeyCode;
+
+    let mut app = setup_settings_app();
+    app.cli_file_override = true;
+    app.has_data_file = true;
+    app.focus.settings_focus = SettingsFocus::ConfigFile;
+    app.selection.settings_config_file.set(Some(0));
+
+    app.handle_settings_key_nav(KeyCode::Char('k'));
+
+    assert_eq!(
+        app.focus.settings_focus,
+        SettingsFocus::Configuration,
+        "k from ConfigFile[0] with cli_file_override should go to Configuration"
+    );
+    assert_eq!(
+        app.selection.settings_config.get(),
+        Some(4),
+        "should land on index 4 (Editing Format), skipping greyed indices 5 and 6"
+    );
 }
 
 // --- File arg overrides config backend tests ---
