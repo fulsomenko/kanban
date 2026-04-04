@@ -86,7 +86,7 @@ pub fn save_to(config: &AppConfig, path: &Path) -> CoreResult<()> {
             kanban_core::CoreError::Config(format!("Failed to serialize config: {}", e))
         })?,
     };
-    std::fs::write(path, content)
+    write_config_file(path, &content)
         .map_err(|e| kanban_core::CoreError::Config(format!("Failed to write config: {}", e)))?;
     Ok(())
 }
@@ -359,11 +359,117 @@ impl Editable<AppConfig> for AppConfigDto {
     }
 }
 
+#[cfg(unix)]
+fn write_config_file(path: &Path, content: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?
+        .write_all(content.as_bytes())
+}
+
+#[cfg(not(unix))]
+fn write_config_file(path: &Path, content: &str) -> std::io::Result<()> {
+    std::fs::write(path, content)
+}
+
+pub fn try_load_from(path: &Path) -> kanban_core::CoreResult<AppConfig> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| kanban_core::CoreError::Config(format!("Failed to read config: {}", e)))?;
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    match ext {
+        "json" => serde_json::from_str(&content).map_err(|e| {
+            kanban_core::CoreError::Config(format!("Failed to parse JSON config: {}", e))
+        }),
+        _ => toml::from_str(&content).map_err(|e| {
+            kanban_core::CoreError::Config(format!("Failed to parse TOML config: {}", e))
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::TempDir;
+
+    // --- Fix 1: file permissions (Red phase — fails before write_config_file is wired in) ---
+
+    #[cfg(unix)]
+    #[test]
+    fn test_save_to_creates_file_with_restricted_permissions() {
+        use std::os::unix::fs::MetadataExt;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        let config = AppConfig::default();
+        save_to(&config, &path).unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().mode();
+        assert_eq!(
+            mode & 0o777,
+            0o600,
+            "config file should be owner-read/write only (0o600)"
+        );
+    }
+
+    // --- Fix 2: try_load_from error surfacing (Red phase — fails before try_load_from exists) ---
+
+    #[test]
+    fn test_try_load_from_missing_file_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("nonexistent.toml");
+        let result = try_load_from(&path);
+        assert!(result.is_err(), "missing file should return Err");
+    }
+
+    #[test]
+    fn test_try_load_from_malformed_toml_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "this is not valid toml {{{").unwrap();
+        let result = try_load_from(&path);
+        assert!(result.is_err(), "malformed TOML should return Err");
+        assert!(
+            result.unwrap_err().to_string().contains("parse"),
+            "error should mention parsing"
+        );
+    }
+
+    #[test]
+    fn test_try_load_from_malformed_json_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, "{not valid json").unwrap();
+        let result = try_load_from(&path);
+        assert!(result.is_err(), "malformed JSON should return Err");
+        assert!(
+            result.unwrap_err().to_string().contains("parse"),
+            "error should mention parsing"
+        );
+    }
+
+    #[test]
+    fn test_try_load_from_valid_toml_returns_config() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "default_card_prefix = \"feat\"").unwrap();
+        let config = try_load_from(&path).unwrap();
+        assert_eq!(config.default_card_prefix.as_deref(), Some("feat"));
+    }
+
+    #[test]
+    fn test_try_load_from_valid_json_returns_config() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, r#"{"default_card_prefix":"feat"}"#).unwrap();
+        let config = try_load_from(&path).unwrap();
+        assert_eq!(config.default_card_prefix.as_deref(), Some("feat"));
+    }
 
     #[test]
     fn test_load_missing_new_fields_defaults() {
