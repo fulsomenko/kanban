@@ -103,7 +103,13 @@ pub fn move_config(old_path: &Path, new_path: &Path) -> CoreResult<()> {
     if std::fs::rename(old_path, new_path).is_err() {
         std::fs::copy(old_path, new_path)
             .map_err(|e| kanban_core::CoreError::Config(format!("Failed to copy config: {}", e)))?;
-        let _ = std::fs::remove_file(old_path);
+        std::fs::remove_file(old_path).map_err(|e| {
+            kanban_core::CoreError::Config(format!(
+                "Failed to remove old config '{}' after copy: {}",
+                old_path.display(),
+                e
+            ))
+        })?;
     }
     Ok(())
 }
@@ -114,6 +120,22 @@ pub fn effective_configuration_location(config: &AppConfig) -> String {
             .map(|p| p.display().to_string())
             .unwrap_or_default()
     })
+}
+
+/// Resolves `AppConfig::effective_storage_location` to an absolute path.
+///
+/// `kanban-core` is a pure data crate and returns relative paths as-is.
+/// This function performs the cwd join for callers that need a filesystem path.
+pub fn resolve_storage_location(config: &AppConfig) -> String {
+    let raw = config.effective_storage_location();
+    let path = Path::new(&raw);
+    if path.is_absolute() {
+        raw
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path).display().to_string())
+            .unwrap_or(raw)
+    }
 }
 
 pub fn validate(config: &AppConfig) -> CoreResult<()> {
@@ -143,6 +165,22 @@ pub fn has_non_default_values(config: &AppConfig) -> bool {
     !is_all_defaults(config)
 }
 
+/// Returns `true` only when the config carries no information worth persisting.
+///
+/// # Storage field invariant
+///
+/// When *both* `storage_backend` and `storage_location` are `Some`, this function
+/// always returns `false`, even if both hold default values (e.g. `"json"` /
+/// `"kanban.json"`).  The reasoning:
+///
+/// - For an *existing* file, the backend is detected from the file via
+///   `sync_backend_with_file` and then stored as an explicit `Some` so that
+///   the config accurately describes the on-disk reality.
+/// - For a *new* file, the user's chosen `storage_backend` determines the
+///   backend and must be persisted so the next startup uses the same backend.
+///
+/// In both cases the pair of explicit `Some` values is meaningful and must not
+/// be discarded as if it were identical to the absence of config.
 fn is_all_defaults(config: &AppConfig) -> bool {
     let all_none = config.default_card_prefix.is_none()
         && config.default_sprint_prefix.is_none()
@@ -189,6 +227,15 @@ fn is_all_defaults(config: &AppConfig) -> bool {
         })
 }
 
+/// Removes fields whose values are equal to the compile-time defaults so that
+/// the persisted config file stays minimal.
+///
+/// # Storage field invariant
+///
+/// `storage_location` is only stripped when `storage_backend` was *not*
+/// explicitly set (i.e. `had_explicit_backend == false`).  When the backend
+/// is explicit, both fields were set intentionally (see [`is_all_defaults`])
+/// and must be preserved together even if their values match the defaults.
 pub fn strip_defaults(config: &mut AppConfig) {
     let had_explicit_backend = config.storage_backend.is_some();
     if config.default_card_prefix.as_deref() == Some("task") {
@@ -242,7 +289,7 @@ impl AppConfigDto {
         let (storage_backend, storage_location) = if has_data_file {
             (
                 Some(entity.effective_storage_backend().to_string()),
-                Some(entity.effective_storage_location()),
+                Some(resolve_storage_location(entity)),
             )
         } else {
             (None, None)
