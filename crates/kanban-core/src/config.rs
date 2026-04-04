@@ -2,6 +2,10 @@ use crate::CoreResult;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+pub const DEFAULT_STORAGE_BACKEND: &str = "json";
+pub const DEFAULT_JSON_FILENAME: &str = "kanban.json";
+pub const DEFAULT_SQLITE_FILENAME: &str = "kanban.sqlite";
+
 pub fn validate_branch_prefix(prefix: &str) -> bool {
     if prefix.is_empty() {
         return false;
@@ -54,7 +58,9 @@ impl AppConfig {
     }
 
     pub fn effective_storage_backend(&self) -> &str {
-        self.storage_backend.as_deref().unwrap_or("json")
+        self.storage_backend
+            .as_deref()
+            .unwrap_or(DEFAULT_STORAGE_BACKEND)
     }
 
     pub fn effective_editing_format(&self) -> &str {
@@ -68,8 +74,8 @@ impl AppConfig {
     pub fn effective_storage_location(&self) -> String {
         let raw = self.storage_location.clone().unwrap_or_else(|| {
             match self.effective_storage_backend() {
-                "sqlite" => "kanban.sqlite",
-                _ => "kanban.json",
+                "sqlite" => DEFAULT_SQLITE_FILENAME,
+                _ => DEFAULT_JSON_FILENAME,
             }
             .to_string()
         });

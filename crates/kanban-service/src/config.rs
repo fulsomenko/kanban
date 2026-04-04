@@ -1,4 +1,7 @@
-use kanban_core::{AppConfig, CoreResult, Editable};
+use kanban_core::{
+    AppConfig, CoreResult, Editable, DEFAULT_JSON_FILENAME, DEFAULT_SQLITE_FILENAME,
+    DEFAULT_STORAGE_BACKEND,
+};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -168,7 +171,7 @@ fn is_all_defaults(config: &AppConfig) -> bool {
         && config
             .storage_backend
             .as_deref()
-            .is_none_or(|v| v == "json")
+            .is_none_or(|v| v == DEFAULT_STORAGE_BACKEND)
         && config.editing_format.as_deref().is_none_or(|v| v == "json")
         && config
             .configuration_format
@@ -179,8 +182,8 @@ fn is_all_defaults(config: &AppConfig) -> bool {
         })
         && config.storage_location.as_deref().is_none_or(|loc| {
             let default = match config.effective_storage_backend() {
-                "sqlite" => "kanban.sqlite",
-                _ => "kanban.json",
+                "sqlite" => DEFAULT_SQLITE_FILENAME,
+                _ => DEFAULT_JSON_FILENAME,
             };
             loc == default
         })
@@ -194,7 +197,7 @@ pub fn strip_defaults(config: &mut AppConfig) {
     if config.default_sprint_prefix.as_deref() == Some("sprint") {
         config.default_sprint_prefix = None;
     }
-    if config.storage_backend.as_deref() == Some("json") {
+    if config.storage_backend.as_deref() == Some(DEFAULT_STORAGE_BACKEND) {
         config.storage_backend = None;
     }
     if config.editing_format.as_deref() == Some("json") {
@@ -211,8 +214,8 @@ pub fn strip_defaults(config: &mut AppConfig) {
     if !had_explicit_backend {
         if let Some(ref loc) = config.storage_location {
             let default = match config.effective_storage_backend() {
-                "sqlite" => "kanban.sqlite",
-                _ => "kanban.json",
+                "sqlite" => DEFAULT_SQLITE_FILENAME,
+                _ => DEFAULT_JSON_FILENAME,
             };
             if loc == default {
                 config.storage_location = None;
