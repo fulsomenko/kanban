@@ -237,7 +237,19 @@ impl App {
     ) -> bool {
         let format = EditFormat::parse(self.app_config.effective_editing_format());
         let ext = format.file_extension();
-        let dto = AppConfigDto::from_config(&self.app_config, self.has_data_file);
+        let mut dto = AppConfigDto::from_config(&self.app_config, self.has_data_file);
+        if self.cli_file_override {
+            dto.storage_backend = if self.config_storage_backend.is_empty() {
+                None
+            } else {
+                Some(self.config_storage_backend.clone())
+            };
+            dto.storage_location = if self.config_storage_location.is_empty() {
+                None
+            } else {
+                Some(self.config_storage_location.clone())
+            };
+        }
         let serialized = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
         let current_content = if self.cli_file_override {
             format.comment_storage_fields(&serialized)
