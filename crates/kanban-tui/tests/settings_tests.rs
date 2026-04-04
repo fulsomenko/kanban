@@ -763,6 +763,7 @@ async fn test_migrate_json_to_sqlite_creates_file() {
 
     let result = app.apply_storage_location_change(old_config, &old_storage_location);
     assert!(result, "apply_storage_location_change should succeed");
+    app.await_migration().await;
     assert!(sqlite_path.exists(), "SQLite file should be created");
     assert_eq!(app.ctx.boards.len(), 1);
     assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
@@ -787,6 +788,7 @@ async fn test_switch_to_existing_sqlite_reloads_data() {
 
     let result = app.apply_storage_location_change(old_config, &old_storage_location);
     assert!(result, "apply_storage_location_change should succeed");
+    app.await_migration().await;
     assert_eq!(app.ctx.boards.len(), 1);
     assert_eq!(app.ctx.boards[0].name, "SqliteBoard");
     assert_eq!(
@@ -809,6 +811,7 @@ async fn test_switch_to_existing_json_reloads_data() {
 
     let result = app.apply_storage_location_change(old_config, &old_storage_location);
     assert!(result, "apply_storage_location_change should succeed");
+    app.await_migration().await;
     assert_eq!(app.ctx.boards.len(), 1);
     assert_eq!(app.ctx.boards[0].name, "SecondBoard");
     assert_eq!(
@@ -855,7 +858,11 @@ async fn test_switch_storage_location_nonexistent_parent_shows_error() {
     app.app_config.storage_location = Some("/nonexistent/dir/board.json".to_string());
 
     let result = app.apply_storage_location_change(old_config.clone(), &old_storage_location);
-    assert!(!result, "should return false on error");
+    assert!(
+        result,
+        "apply_storage_location_change starts async migration"
+    );
+    app.await_migration().await;
 
     let banner = app
         .ui_state
