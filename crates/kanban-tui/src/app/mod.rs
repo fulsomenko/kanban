@@ -84,6 +84,7 @@ pub struct App {
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
     pub has_data_file: bool,
+    pub cli_file_override: bool,
     pub export_dialog: Option<ExportDialogState>,
     pub migration_state: MigrationState,
     pub export_result_rx: Option<tokio::sync::oneshot::Receiver<Result<String, String>>>,
@@ -167,7 +168,7 @@ impl App {
         Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     )> {
         let mut app_config = kanban_service::config::load();
-        let has_data_file = save_file.is_some();
+        let config_resolved = kanban_service::config::resolve_storage_location(&app_config);
         if let Some(ref file) = save_file {
             let path = std::path::Path::new(file);
             let resolved = if path.is_absolute() {
@@ -182,12 +183,20 @@ impl App {
             // File arg is the source of truth — ignore config's storage_backend
             app_config.storage_backend = None;
         }
-        kanban_service::sync_backend_with_file(
+        if kanban_service::sync_backend_with_file(
             &app_config.effective_storage_location(),
             &mut app_config,
-        );
+        ) {
+            tracing::warn!(
+                "Storage backend auto-corrected to '{}' based on file content",
+                app_config.effective_storage_backend()
+            );
+        }
         let backend = app_config.effective_storage_backend();
-        let (ctx, save_rx, save_completion_rx) = TuiContext::new(backend, save_file.clone())?;
+        let effective_file = kanban_service::config::resolve_storage_location(&app_config);
+        let cli_file_override = save_file.is_some() && effective_file != config_resolved;
+        let (ctx, save_rx, save_completion_rx) =
+            TuiContext::new(backend, Some(effective_file.clone()))?;
         let app = Self {
             should_quit: false,
             quit_with_pending: false,
@@ -201,14 +210,15 @@ impl App {
             filter: FilterState::default(),
             dialog_input: DialogInputState::default(),
             focus: FocusState::default(),
-            persistence: PersistenceState::new(save_file.clone(), save_completion_rx),
+            persistence: PersistenceState::new(Some(effective_file), save_completion_rx),
             multi_select: MultiSelectState::default(),
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
-            has_data_file,
+            has_data_file: true,
+            cli_file_override,
             export_dialog: None,
             migration_state: MigrationState::Idle,
             export_result_rx: None,

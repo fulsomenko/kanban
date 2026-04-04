@@ -164,24 +164,23 @@ fn test_render_settings_contains_export_boards() {
 }
 
 #[test]
-fn test_render_settings_hides_storage_fields_when_no_data_file() {
+fn test_render_settings_shows_storage_fields_by_default() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.push_mode(AppMode::Settings);
     let output = render_to_string(&app);
     assert!(
-        !output.contains("Storage Backend"),
-        "Storage Backend should be hidden without data file"
+        output.contains("Storage Backend"),
+        "Storage Backend should be visible when app has an effective storage path"
     );
     assert!(
-        !output.contains("Storage Location"),
-        "Storage Location should be hidden without data file"
+        output.contains("Storage Location"),
+        "Storage Location should be visible when app has an effective storage path"
     );
 }
 
 #[test]
 fn test_render_settings_shows_storage_fields_when_has_data_file() {
     let (mut app, _rx) = App::new(None).unwrap();
-    app.has_data_file = true;
     app.push_mode(AppMode::Settings);
     let output = render_to_string(&app);
     assert!(
