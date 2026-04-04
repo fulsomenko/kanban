@@ -47,7 +47,7 @@ fn test_make_store_unknown_backend_returns_error() {
         Err(err) => {
             let msg = err.to_string();
             assert!(
-                msg.contains("No backend for"),
+                msg.contains("No backend named"),
                 "Expected no backend error, got: {msg}"
             );
         }
@@ -56,11 +56,14 @@ fn test_make_store_unknown_backend_returns_error() {
 
 #[test]
 fn test_make_store_with_config_explicit_path_wins() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("explicit.json");
+    let path_str = path.to_str().unwrap().to_string();
     let config = AppConfig {
         storage_backend: Some("sqlite".into()),
         ..Default::default()
     };
-    let store = make_store_with_config(Some("/tmp/test_explicit.json"), &config).unwrap();
+    let store = make_store_with_config(Some(&path_str), &config).unwrap();
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
