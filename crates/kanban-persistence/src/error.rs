@@ -33,10 +33,15 @@ impl From<PersistenceError> for kanban_domain::KanbanError {
             PersistenceError::Io(io) => kanban_domain::KanbanError::Io(io),
             PersistenceError::Serialization(s) => kanban_domain::KanbanError::Serialization(s),
             PersistenceError::Database(s) => kanban_domain::KanbanError::Database(s),
-            PersistenceError::UnsupportedLocator { locator, .. } => {
+            PersistenceError::UnsupportedLocator { locator, supported } => {
                 kanban_domain::KanbanError::Internal(format!(
-                    "No backend for \"{}\". This binary was compiled without SQLite support — rebuild with default features enabled.",
+                    "No backend named {:?} is registered. Available backends: {}",
                     locator,
+                    if supported.is_empty() {
+                        "none".to_string()
+                    } else {
+                        supported.join(", ")
+                    }
                 ))
             }
             PersistenceError::ConflictDetected { path, source } => {
