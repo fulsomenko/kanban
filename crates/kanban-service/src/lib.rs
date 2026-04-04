@@ -73,6 +73,12 @@ pub async fn validate_and_load_store(
     Ok(data)
 }
 
+/// Exports a board selection to a new SQLite file.
+///
+/// **Note:** The dependency graph is not part of the `AllBoardsExport` format
+/// and will not be present in the exported file. This is by design — the export
+/// format is board-centric, not a full snapshot. Use `migrate_store` instead
+/// if you need to preserve card dependencies.
 pub async fn export_to_sqlite(
     export: kanban_domain::export::AllBoardsExport,
     filename: &str,

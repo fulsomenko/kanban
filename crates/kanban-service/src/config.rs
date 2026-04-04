@@ -322,10 +322,16 @@ impl AppConfigDto {
 }
 
 impl Editable<AppConfig> for AppConfigDto {
+    /// Returns a DTO with storage fields hidden (suitable for display without a
+    /// known data file). Use [`AppConfigDto::from_config`] with `has_data_file: true`
+    /// when storage fields must be shown.
     fn from_entity(entity: &AppConfig) -> Self {
         Self::from_config(entity, false)
     }
 
+    /// Applies DTO values to the config and strips default values to keep the
+    /// persisted config minimal. Callers that need un-stripped values (e.g. for
+    /// diffing) should copy the config before calling this method.
     fn apply_to(self, entity: &mut AppConfig) {
         let old_format = entity.effective_configuration_format().to_string();
         entity.default_card_prefix = self.default_card_prefix;
