@@ -5,6 +5,25 @@ use kanban_tui::app::mode::{AppMode, DialogMode};
 use kanban_tui::app::ExportDialogState;
 use kanban_tui::App;
 
+pub fn render_widget_to_string<F>(width: u16, height: u16, draw_fn: F) -> String
+where
+    F: FnOnce(&mut ratatui::Frame),
+{
+    use ratatui::{backend::TestBackend, Terminal};
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(draw_fn).unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let mut result = String::new();
+    for y in 0..buffer.area.height {
+        for x in 0..buffer.area.width {
+            result.push_str(buffer.cell((x, y)).map(|c| c.symbol()).unwrap_or(" "));
+        }
+        result.push('\n');
+    }
+    result
+}
+
 pub fn render_to_string(app: &App) -> String {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
