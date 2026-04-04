@@ -110,7 +110,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
 pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
     use crate::app::SettingsFocus;
-    use crate::components::detail_view::{metadata_line_selectable, FieldSectionConfig};
+    use crate::components::detail_view::{
+        metadata_line_selectable, metadata_line_styled, FieldSectionConfig,
+    };
     use crate::theme::colors::SELECTED_BG;
 
     let columns = Layout::default()
@@ -164,29 +166,29 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         ),
     ];
     if app.has_data_file {
-        let override_suffix = if app.cli_file_override {
-            " (overridden)"
-        } else {
-            ""
-        };
-        config_lines.push(metadata_line_selectable(
-            "Storage Backend",
-            format!(
-                "{}{}",
+        if app.cli_file_override {
+            config_lines.push(metadata_line_styled(
+                "Storage Backend",
                 app.app_config.effective_storage_backend(),
-                override_suffix
-            ),
-            is_config_selected(5),
-        ));
-        config_lines.push(metadata_line_selectable(
-            "Storage Location",
-            format!(
-                "{}{}",
+                Style::default().fg(Color::DarkGray),
+            ));
+            config_lines.push(metadata_line_styled(
+                "Storage Location",
                 app.app_config.effective_storage_location(),
-                override_suffix
-            ),
-            is_config_selected(6),
-        ));
+                Style::default().fg(Color::DarkGray),
+            ));
+        } else {
+            config_lines.push(metadata_line_selectable(
+                "Storage Backend",
+                app.app_config.effective_storage_backend(),
+                is_config_selected(5),
+            ));
+            config_lines.push(metadata_line_selectable(
+                "Storage Location",
+                app.app_config.effective_storage_location(),
+                is_config_selected(6),
+            ));
+        }
     }
     let config_paragraph = Paragraph::new(config_lines).block(config_block);
     frame.render_widget(config_paragraph, left_sections[0]);
