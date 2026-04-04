@@ -244,6 +244,34 @@ async fn test_migrate_cli_explicit_output_path() {
 }
 
 #[tokio::test]
+async fn test_migrate_cli_default_output_path() {
+    use assert_cmd::cargo_bin_cmd;
+
+    let dir = TempDir::new().unwrap();
+    let src_path = dir.path().join("myboard.json");
+    let expected_output = dir.path().join("myboard.sqlite");
+
+    let src_store = Arc::new(JsonFileStore::new(&src_path));
+    create_populated_context(src_store).await;
+
+    let output = cargo_bin_cmd!("kanban")
+        .args(["migrate", src_path.to_str().unwrap(), "sqlite"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        expected_output.exists(),
+        "Expected default output at {}",
+        expected_output.display()
+    );
+}
+
+#[tokio::test]
 async fn test_migrate_rejects_unknown_backend() {
     use assert_cmd::cargo_bin_cmd;
 
@@ -267,7 +295,7 @@ async fn test_migrate_rejects_unknown_backend() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("No backend for") || stderr.contains("Unknown backend"),
+        stderr.contains("No backend named") || stderr.contains("Unknown backend"),
         "stderr: {stderr}"
     );
 }
