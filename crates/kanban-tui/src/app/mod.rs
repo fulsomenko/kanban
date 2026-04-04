@@ -87,6 +87,8 @@ pub struct App {
     pub cli_file_override: bool,
     pub config_storage_backend: String,
     pub config_storage_location: String,
+    pub original_storage_backend: Option<String>,
+    pub original_storage_location: Option<String>,
     pub export_dialog: Option<ExportDialogState>,
     pub migration_state: MigrationState,
     pub export_result_rx: Option<tokio::sync::oneshot::Receiver<Result<String, String>>>,
@@ -173,6 +175,8 @@ impl App {
         let config_resolved = kanban_service::config::resolve_storage_location(&app_config);
         let config_storage_backend = app_config.effective_storage_backend().to_string();
         let config_storage_location = config_resolved.clone();
+        let original_storage_backend = app_config.storage_backend.clone();
+        let original_storage_location = app_config.storage_location.clone();
         if let Some(ref file) = save_file {
             let path = std::path::Path::new(file);
             let resolved = if path.is_absolute() {
@@ -225,6 +229,8 @@ impl App {
             cli_file_override,
             config_storage_backend,
             config_storage_location,
+            original_storage_backend,
+            original_storage_location,
             export_dialog: None,
             migration_state: MigrationState::Idle,
             export_result_rx: None,

@@ -48,6 +48,10 @@ impl App {
             kanban_service::config::resolve_storage_location(&self.app_config);
         let old_config = self.app_config.clone();
         let mut config = self.app_config.clone();
+        if self.cli_file_override {
+            config.storage_backend = self.original_storage_backend.clone();
+            config.storage_location = self.original_storage_location.clone();
+        }
 
         let updated_dto: AppConfigDto = format
             .deserialize(new_content)
