@@ -1,6 +1,27 @@
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt;
 
+fn fix_trailing_commas(lines: Vec<&str>) -> String {
+    let mut result: Vec<String> = Vec::with_capacity(lines.len());
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_end();
+        if trimmed.ends_with(',') {
+            let next_significant = lines[i + 1..]
+                .iter()
+                .find(|l| !l.trim().is_empty())
+                .map(|l| l.trim_start())
+                .unwrap_or("");
+            if next_significant.starts_with('}') || next_significant.starts_with(']') {
+                let comma_pos = line.rfind(',').unwrap();
+                result.push(format!("{}{}", &line[..comma_pos], &line[comma_pos + 1..]));
+                continue;
+            }
+        }
+        result.push(line.to_string());
+    }
+    result.join("\n")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditFormat {
     Json,
@@ -36,11 +57,11 @@ impl EditFormat {
     pub fn deserialize<T: DeserializeOwned>(&self, s: &str) -> Result<T, String> {
         match self {
             Self::Json => {
-                let stripped: String = s
+                let lines: Vec<&str> = s
                     .lines()
                     .filter(|l| !l.trim_start().starts_with("//"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                    .collect();
+                let stripped = fix_trailing_commas(lines);
                 serde_json::from_str(&stripped).map_err(|e| format!("JSON deserialize: {}", e))
             }
             Self::Toml => toml::from_str(s).map_err(|e| format!("TOML deserialize: {}", e)),
@@ -168,6 +189,17 @@ mod tests {
         let dto: AppConfigDto = EditFormat::Json.deserialize(input).unwrap();
         assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
         assert!(dto.storage_backend.is_none());
+    }
+
+    #[test]
+    fn test_json_deserialize_fixes_trailing_comma_when_last_fields_commented() {
+        // Simulates the real case: storage fields are the last fields in the JSON object
+        // and the preceding field gets a dangling comma after comment lines are removed.
+        let input = "{\n  \"default_card_prefix\": \"feat\",\n  \"editing_format\": \"json\",\n//   \"storage_backend\": \"sqlite\",\n//   \"storage_location\": \"/tmp/b.db\"\n}";
+        let dto: AppConfigDto = EditFormat::Json.deserialize(input).unwrap();
+        assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
+        assert!(dto.storage_backend.is_none());
+        assert!(dto.storage_location.is_none());
     }
 
     #[test]
