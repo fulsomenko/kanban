@@ -37,6 +37,9 @@ impl App {
         new_content: &str,
         format: &EditFormat,
     ) -> Result<bool, String> {
+        if !matches!(self.migration_state, crate::app::MigrationState::Idle) {
+            return Err("Migration in progress, please wait".to_string());
+        }
         let old_location =
             kanban_service::config::effective_configuration_location(&self.app_config);
         let old_storage_location = self.app_config.effective_storage_location();
@@ -53,9 +56,7 @@ impl App {
 
         self.app_config = config;
 
-        if !self.apply_storage_location_change(old_config, &old_storage_location) {
-            return Ok(false);
-        }
+        self.apply_storage_location_change(old_config, &old_storage_location);
 
         if kanban_service::config::has_non_default_values(&self.app_config) {
             if let Err(e) = kanban_service::config::save(&self.app_config) {
@@ -86,7 +87,6 @@ impl App {
                 }
             }
         }
-        self.ctx.sync_prefixes(&self.app_config);
         Ok(true)
     }
 
@@ -94,24 +94,21 @@ impl App {
         &mut self,
         old_config: kanban_core::AppConfig,
         old_storage_location: &str,
-    ) -> bool {
+    ) {
         use crate::app::MigrationState;
 
         let new_storage_location = self.app_config.effective_storage_location();
 
-        if let Some(detected) = kanban_service::detect_backend(&new_storage_location) {
-            let configured = self.app_config.effective_storage_backend().to_string();
-            if detected != configured {
-                self.app_config.storage_backend = Some(detected.clone());
-                self.set_success(format!(
-                    "storage_backend changed to '{}' to match file at '{}'",
-                    detected, new_storage_location
-                ));
-            }
+        if kanban_service::sync_backend_with_file(&new_storage_location, &mut self.app_config) {
+            self.set_success(format!(
+                "storage_backend changed to '{}' to match file at '{}'",
+                self.app_config.effective_storage_backend(),
+                new_storage_location
+            ));
         }
 
         if !self.has_data_file || new_storage_location == old_storage_location {
-            return true;
+            return;
         }
 
         let new_backend = self.app_config.effective_storage_backend().to_string();
@@ -154,7 +151,6 @@ impl App {
         };
         self.migration_result_rx = Some(rx);
         self.set_success("Migrating storage...".to_string());
-        true
     }
 
     pub fn handle_migration_complete(
@@ -539,7 +535,17 @@ impl App {
                 }
             }
             crate::app::ExportFormat::Sqlite => {
-                self.set_error("SQLite export not yet implemented".to_string());
+                let filename_clone = filename.clone();
+                let export_clone = export.clone();
+                match tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(kanban_service::export_to_sqlite(
+                        export_clone,
+                        &filename_clone,
+                    ))
+                }) {
+                    Ok(()) => self.set_success(format!("Exported to {}", filename)),
+                    Err(e) => self.set_error(format!("Export failed: {}", e)),
+                }
             }
         }
 

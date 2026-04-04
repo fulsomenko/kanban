@@ -15,11 +15,7 @@ pub struct CliContext {
 
 impl CliContext {
     pub async fn load(file_path: &str, mut config: AppConfig) -> KanbanResult<Self> {
-        if let Some(detected) = kanban_service::detect_backend(file_path) {
-            if detected != config.effective_storage_backend() {
-                config.storage_backend = Some(detected);
-            }
-        }
+        kanban_service::sync_backend_with_file(file_path, &mut config);
         let backend = config.effective_storage_backend().to_string();
         Ok(Self {
             inner: KanbanContext::load(kanban_service::make_store(&backend, file_path)?, config)

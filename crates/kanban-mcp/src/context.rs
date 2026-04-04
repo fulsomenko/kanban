@@ -13,11 +13,7 @@ pub struct McpContext {
 
 impl McpContext {
     pub async fn new(data_file: &str, mut config: AppConfig) -> KanbanResult<Self> {
-        if let Some(detected) = kanban_service::detect_backend(data_file) {
-            if detected != config.effective_storage_backend() {
-                config.storage_backend = Some(detected);
-            }
-        }
+        kanban_service::sync_backend_with_file(data_file, &mut config);
         let backend = config.effective_storage_backend().to_string();
         Ok(Self {
             inner: KanbanContext::load(kanban_service::make_store(&backend, data_file)?, config)

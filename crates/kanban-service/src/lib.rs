@@ -22,6 +22,16 @@ pub fn default_registry() -> StoreRegistry {
     registry
 }
 
+pub fn sync_backend_with_file(locator: &str, config: &mut AppConfig) -> bool {
+    if let Some(detected) = detect_backend(locator) {
+        if detected != config.effective_storage_backend() {
+            config.storage_backend = Some(detected);
+            return true;
+        }
+    }
+    false
+}
+
 pub fn detect_backend(locator: &str) -> Option<String> {
     default_registry().detect_backend(locator).map(String::from)
 }
@@ -61,6 +71,38 @@ pub async fn validate_and_load_store(
     let (snapshot, _metadata) = store.load().await?;
     let data = kanban_persistence::snapshot_from_json_bytes(&snapshot.data)?;
     Ok(data)
+}
+
+pub async fn export_to_sqlite(
+    export: kanban_domain::export::AllBoardsExport,
+    filename: &str,
+) -> Result<(), String> {
+    use kanban_domain::export::BoardImporter;
+    use kanban_domain::{DependencyGraph, Snapshot};
+    use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot};
+
+    let entities = BoardImporter::extract_entities(export);
+    let snapshot = Snapshot {
+        boards: entities.boards,
+        columns: entities.columns,
+        cards: entities.cards,
+        archived_cards: entities.archived_cards,
+        sprints: entities.sprints,
+        graph: DependencyGraph::default(),
+    };
+    let data =
+        snapshot_to_json_bytes(&snapshot).map_err(|e| format!("Serialization failed: {}", e))?;
+    let store_snapshot = StoreSnapshot {
+        data,
+        metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
+    };
+    let store =
+        make_store("sqlite", filename).map_err(|e| format!("Failed to create store: {}", e))?;
+    store
+        .save(store_snapshot)
+        .await
+        .map_err(|e| format!("Save failed: {}", e))?;
+    Ok(())
 }
 
 pub async fn migrate_store(
