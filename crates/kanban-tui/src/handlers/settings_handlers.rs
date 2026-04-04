@@ -199,6 +199,7 @@ impl App {
                 self.persistence.save_file = Some(new_storage_location.clone());
                 self.persistence.save_completion_rx = Some(completion_rx);
                 self.spawn_save_worker(save_rx);
+                self.cli_file_override = false;
                 let msg = if file_existed {
                     format!("Loaded from {}", new_storage_location)
                 } else {
