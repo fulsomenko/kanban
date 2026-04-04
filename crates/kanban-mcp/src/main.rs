@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
         .init();
 
-    let config = kanban_core::AppConfig::load();
+    let config = kanban_service::config::load();
 
     let data_file_path =
         parse_args().unwrap_or_else(|| PathBuf::from(config.effective_storage_location()));

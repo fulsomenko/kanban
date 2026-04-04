@@ -40,7 +40,7 @@ async fn run() -> anyhow::Result<()> {
     }
 
     let cli = Cli::parse();
-    let config = kanban_core::AppConfig::load();
+    let config = kanban_service::config::load();
 
     match cli.command {
         None => {

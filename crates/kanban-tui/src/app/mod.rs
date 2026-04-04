@@ -166,7 +166,7 @@ impl App {
         Self,
         Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     )> {
-        let mut app_config = AppConfig::load();
+        let mut app_config = kanban_service::config::load();
         let has_data_file = save_file.is_some();
         if let Some(ref file) = save_file {
             let path = std::path::Path::new(file);

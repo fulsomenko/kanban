@@ -3,8 +3,8 @@ use crate::edit_format::EditFormat;
 use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
-use kanban_core::AppConfigDto;
 use kanban_domain::export::{AllBoardsExport, BoardExporter};
+use kanban_service::AppConfigDto;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io;
@@ -37,7 +37,8 @@ impl App {
         new_content: &str,
         format: &EditFormat,
     ) -> Result<bool, String> {
-        let old_location = self.app_config.effective_configuration_location();
+        let old_location =
+            kanban_service::config::effective_configuration_location(&self.app_config);
         let old_storage_location = self.app_config.effective_storage_location();
         let old_config = self.app_config.clone();
         let mut config = self.app_config.clone();
@@ -56,11 +57,12 @@ impl App {
             return Ok(false);
         }
 
-        if self.app_config.has_non_default_values() {
-            if let Err(e) = self.app_config.save() {
+        if kanban_service::config::has_non_default_values(&self.app_config) {
+            if let Err(e) = kanban_service::config::save(&self.app_config) {
                 self.set_error(format!("Failed to save config: {}", e));
             } else {
-                let new_location = self.app_config.effective_configuration_location();
+                let new_location =
+                    kanban_service::config::effective_configuration_location(&self.app_config);
                 if new_location != old_location {
                     let old_path = std::path::Path::new(&old_location);
                     if old_path.exists() {
@@ -75,7 +77,8 @@ impl App {
                 }
             }
         } else {
-            let location = self.app_config.effective_configuration_location();
+            let location =
+                kanban_service::config::effective_configuration_location(&self.app_config);
             let path = std::path::Path::new(&location);
             if path.exists() {
                 if let Err(e) = std::fs::remove_file(path) {

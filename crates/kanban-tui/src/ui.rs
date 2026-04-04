@@ -142,7 +142,7 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         ),
         metadata_line_selectable(
             "Configuration Location",
-            app.app_config.effective_configuration_location(),
+            kanban_service::config::effective_configuration_location(&app.app_config),
             is_config_selected(1),
         ),
         metadata_line_selectable(
@@ -183,7 +183,7 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
     let config_file_block = config_file_section.block();
     let is_cf_selected =
         |i: usize| config_file_focused && app.selection.settings_config_file.is_selected(i);
-    let config_location = app.app_config.effective_configuration_location();
+    let config_location = kanban_service::config::effective_configuration_location(&app.app_config);
     let config_path_display = if config_location.is_empty() {
         "(unknown)".to_string()
     } else {

@@ -53,7 +53,7 @@ impl fmt::Display for EditFormat {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kanban_core::AppConfigDto;
+    use kanban_service::AppConfigDto;
 
     #[test]
     fn test_edit_format_from_str_json() {
