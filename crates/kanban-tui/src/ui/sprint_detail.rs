@@ -1,0 +1,254 @@
+use crate::app::App;
+use crate::components::*;
+use crate::theme::*;
+use kanban_domain::{Sprint, SprintStatus};
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Paragraph},
+    Frame,
+};
+
+pub(super) fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(sprint_idx) = app.selection.active_sprint_index {
+        if let Some(sprint) = app.ctx.sprints.get(sprint_idx) {
+            if let Some(board_idx) = app.selection.active_board_index {
+                if let Some(board) = app.ctx.boards.get(board_idx) {
+                    let is_completed = sprint.status == SprintStatus::Completed;
+
+                    if is_completed {
+                        render_sprint_detail_with_tasks(app, frame, area, sprint, board);
+                    } else {
+                        render_sprint_detail_metadata(app, frame, area, sprint, board);
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub(super) fn render_sprint_detail_metadata(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    sprint: &Sprint,
+    board: &kanban_domain::Board,
+) {
+    let sprint_name = sprint.formatted_name(board, "sprint");
+
+    let mut lines = vec![
+        metadata_line_styled("Sprint", sprint_name, bold_highlight()),
+        Line::from(""),
+        metadata_line_styled(
+            "Status",
+            format!("{:?}", sprint.status),
+            sprint_status_style(sprint.status),
+        ),
+        metadata_line("Sprint Number", sprint.sprint_number.to_string()),
+    ];
+
+    if let Some(name) = sprint.get_name(board) {
+        lines.push(metadata_line("Name", name));
+    }
+
+    if let Some(start) = sprint.start_date {
+        lines.push(metadata_line(
+            "Start Date",
+            start.format("%Y-%m-%d %H:%M UTC").to_string(),
+        ));
+    }
+
+    if let Some(end) = sprint.end_date {
+        let end_style = if sprint.is_ended() {
+            Style::default().fg(Color::Red)
+        } else {
+            normal_text()
+        };
+        lines.push(metadata_line_styled(
+            "End Date",
+            end.format("%Y-%m-%d %H:%M UTC").to_string(),
+            end_style,
+        ));
+    }
+
+    lines.push(Line::from(""));
+
+    let card_count = app
+        .ctx
+        .cards
+        .iter()
+        .filter(|c| c.sprint_id == Some(sprint.id))
+        .count();
+    lines.push(metadata_line_styled(
+        "Cards Assigned",
+        card_count.to_string(),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    ));
+
+    if board.active_sprint_id == Some(sprint.id) {
+        lines.push(metadata_line_styled("Active Sprint", "Yes", active_item()));
+    }
+
+    lines.push(Line::from(""));
+
+    if let Some(prefix) = &sprint.prefix {
+        lines.push(metadata_line_styled("Sprint Prefix", prefix, active_item()));
+    }
+
+    if let Some(prefix) = &sprint.card_prefix {
+        lines.push(metadata_line_styled(
+            "Card Prefix Override",
+            prefix,
+            active_item(),
+        ));
+    }
+
+    if sprint.prefix.is_some() || sprint.card_prefix.is_some() {
+        lines.push(Line::from(""));
+    }
+
+    lines.push(metadata_line_styled(
+        "Created",
+        sprint.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+        label_text(),
+    ));
+    lines.push(metadata_line_styled(
+        "Updated",
+        sprint.updated_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+        label_text(),
+    ));
+
+    let content = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(focused_border())
+            .title("Sprint Details"),
+    );
+    frame.render_widget(content, area);
+}
+
+pub(super) fn render_sprint_detail_with_tasks(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    sprint: &Sprint,
+    board: &kanban_domain::Board,
+) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(area);
+
+    render_sprint_task_panel_with_selection(
+        app,
+        frame,
+        chunks[0],
+        sprint,
+        board,
+        &app.sprint_view.uncompleted_cards,
+        "Uncompleted",
+        app.sprint_view.panel == crate::app::SprintTaskPanel::Uncompleted,
+    );
+
+    render_sprint_task_panel_with_selection(
+        app,
+        frame,
+        chunks[1],
+        sprint,
+        board,
+        &app.sprint_view.completed_cards,
+        "Completed",
+        app.sprint_view.panel == crate::app::SprintTaskPanel::Completed,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_sprint_task_panel_with_selection(
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    _sprint: &Sprint,
+    board: &kanban_domain::Board,
+    task_list: &crate::card_list::CardList,
+    title_suffix: &str,
+    is_focused: bool,
+) {
+    let mut lines = vec![];
+    let selected_idx = task_list.get_selected_index();
+
+    if task_list.is_empty() {
+        lines.push(Line::from(Span::styled("  (no tasks)", label_text())));
+    } else {
+        let viewport_height = area.height.saturating_sub(2) as usize;
+        let render_info = task_list.get_render_info(viewport_height);
+
+        lines.extend(crate::scroll_indicators::render_above_indicator(
+            render_info.show_above_indicator,
+            render_info.cards_above_count,
+            "Task",
+        ));
+
+        for card_idx in &render_info.visible_card_indices {
+            if let Some(card_id) = task_list.cards.get(*card_idx) {
+                if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
+                    let is_selected = selected_idx == Some(*card_idx) && is_focused;
+                    let animation_type = app
+                        .animation
+                        .animating
+                        .get(&card.id)
+                        .map(|a| a.animation_type);
+                    let line = render_card_list_item(CardListItemConfig {
+                        card,
+                        board,
+                        sprints: &app.ctx.sprints,
+                        is_selected,
+                        is_focused,
+                        is_multi_selected: false,
+                        show_sprint_name: false,
+                        animation_type,
+                        search_query: None,
+                    });
+                    lines.push(line);
+                }
+            }
+        }
+
+        lines.extend(crate::scroll_indicators::render_below_indicator(
+            render_info.show_below_indicator,
+            render_info.cards_below_count,
+            "Task",
+        ));
+    }
+
+    // Calculate points from cards in this panel
+    let cards: Vec<&kanban_domain::Card> = task_list
+        .cards
+        .iter()
+        .filter_map(|card_id| app.ctx.cards.iter().find(|c| c.id == *card_id))
+        .collect();
+    let points = kanban_domain::calculate_points(&cards);
+
+    lines.push(Line::from(Span::styled(
+        format!("Points: {}", points),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )));
+
+    let border_style = if is_focused {
+        focused_border()
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let content = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(border_style)
+            .title(format!("{} ({})", title_suffix, task_list.len())),
+    );
+    frame.render_widget(content, area);
+}

@@ -1,0 +1,166 @@
+use crate::app::App;
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::Paragraph,
+    Frame,
+};
+
+pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
+    use crate::app::SettingsFocus;
+    use crate::components::detail_view::{
+        metadata_line_selectable, metadata_line_styled, FieldSectionConfig,
+    };
+    use crate::theme::colors::SELECTED_BG;
+
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(area);
+
+    let left_sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+        .split(columns[0]);
+
+    let config_focused = app.focus.settings_focus == SettingsFocus::Configuration;
+    let config_file_focused = app.focus.settings_focus == SettingsFocus::ConfigFile;
+    let storage_focused = app.focus.settings_focus == SettingsFocus::Storage;
+
+    let config_location = kanban_service::config::effective_configuration_location(&app.app_config);
+
+    // Left top: Configuration
+    let config_section = FieldSectionConfig::new(" Configuration ")
+        .with_focus_indicator(" Configuration [1] ")
+        .focused(config_focused);
+    let config_block = config_section.block();
+    let is_config_selected =
+        |i: usize| config_focused && app.selection.settings_config.is_selected(i);
+    let mut config_lines = vec![
+        metadata_line_selectable(
+            "Configuration Format",
+            app.app_config.effective_configuration_format(),
+            is_config_selected(0),
+        ),
+        metadata_line_selectable(
+            "Configuration Location",
+            &config_location,
+            is_config_selected(1),
+        ),
+        metadata_line_selectable(
+            "Default Card Prefix",
+            app.app_config.effective_default_card_prefix(),
+            is_config_selected(2),
+        ),
+        metadata_line_selectable(
+            "Default Sprint Prefix",
+            app.app_config.effective_default_sprint_prefix(),
+            is_config_selected(3),
+        ),
+        metadata_line_selectable(
+            "Editing Format",
+            app.app_config.effective_editing_format(),
+            is_config_selected(4),
+        ),
+    ];
+    if app.has_data_file {
+        if app.cli_file_override {
+            config_lines.push(metadata_line_styled(
+                "Storage Backend",
+                &app.config_storage_backend,
+                Style::default().fg(Color::DarkGray),
+            ));
+            config_lines.push(metadata_line_styled(
+                "Storage Location",
+                &app.config_storage_location,
+                Style::default().fg(Color::DarkGray),
+            ));
+            config_lines.push(metadata_line_selectable(
+                "Active Storage Backend",
+                app.app_config.effective_storage_backend(),
+                is_config_selected(7),
+            ));
+            config_lines.push(metadata_line_selectable(
+                "Active Storage Location",
+                app.app_config.effective_storage_location(),
+                is_config_selected(8),
+            ));
+        } else {
+            config_lines.push(metadata_line_selectable(
+                "Storage Backend",
+                app.app_config.effective_storage_backend(),
+                is_config_selected(5),
+            ));
+            config_lines.push(metadata_line_selectable(
+                "Storage Location",
+                app.app_config.effective_storage_location(),
+                is_config_selected(6),
+            ));
+        }
+    }
+    let config_paragraph = Paragraph::new(config_lines).block(config_block);
+    frame.render_widget(config_paragraph, left_sections[0]);
+
+    // Left bottom: Config File
+    let config_file_section = FieldSectionConfig::new(" Config File ")
+        .with_focus_indicator(" Config File [2] ")
+        .focused(config_file_focused);
+    let config_file_block = config_file_section.block();
+    let is_cf_selected =
+        |i: usize| config_file_focused && app.selection.settings_config_file.is_selected(i);
+    let config_path_display = if config_location.is_empty() {
+        "(unknown)".to_string()
+    } else {
+        config_location.clone()
+    };
+    let config_exists =
+        !config_location.is_empty() && std::path::Path::new(&config_location).exists();
+    let status = if config_exists { "Loaded" } else { "Not found" };
+    let config_format = app.app_config.effective_configuration_format();
+    let config_file_lines = vec![
+        metadata_line_selectable("Path", &config_path_display, is_cf_selected(0)),
+        metadata_line_selectable("Status", status, is_cf_selected(1)),
+        metadata_line_selectable("Configuration Format", config_format, is_cf_selected(2)),
+    ];
+    let config_file_paragraph = Paragraph::new(config_file_lines).block(config_file_block);
+    frame.render_widget(config_file_paragraph, left_sections[1]);
+
+    // Right: Storage
+    let storage_section = FieldSectionConfig::new(" Storage ")
+        .with_focus_indicator(" Storage [3] ")
+        .focused(storage_focused);
+    let storage_block = storage_section.block();
+    let is_storage_selected =
+        |i: usize| storage_focused && app.selection.settings_storage.is_selected(i);
+    let file_path = app.persistence.save_file.as_deref().unwrap_or("(none)");
+    let backend = if app.persistence.save_file.is_some() {
+        app.app_config.effective_storage_backend()
+    } else {
+        "(none)"
+    };
+    let instance_id = app.ctx.state_manager.instance_id().to_string();
+    let export_selected = is_storage_selected(3);
+    let export_checkbox_style = if export_selected {
+        Style::default().fg(Color::Yellow).bg(SELECTED_BG)
+    } else {
+        Style::default().fg(Color::Yellow)
+    };
+    let export_text_style = if export_selected {
+        Style::default().fg(Color::White).bg(SELECTED_BG)
+    } else {
+        Style::default().fg(Color::White)
+    };
+    let storage_lines = vec![
+        metadata_line_selectable("File", file_path, is_storage_selected(0)),
+        metadata_line_selectable("Backend", backend, is_storage_selected(1)),
+        metadata_line_selectable("Instance ID", &instance_id, is_storage_selected(2)),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  [x] ", export_checkbox_style),
+            Span::styled("Export Boards", export_text_style),
+        ]),
+    ];
+    let storage_paragraph = Paragraph::new(storage_lines).block(storage_block);
+    frame.render_widget(storage_paragraph, columns[1]);
+}
