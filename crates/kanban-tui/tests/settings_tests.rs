@@ -759,8 +759,7 @@ async fn test_migrate_json_to_sqlite_creates_file() {
     let sqlite_path = dir.path().join("migrated.sqlite");
     app.app_config.storage_location = Some(sqlite_path.to_str().unwrap().to_string());
 
-    let result = app.apply_storage_location_change(old_config, &old_storage_location);
-    assert!(result, "apply_storage_location_change should succeed");
+    app.apply_storage_location_change(old_config, &old_storage_location);
     app.await_migration().await;
     assert!(sqlite_path.exists(), "SQLite file should be created");
     assert_eq!(app.ctx.boards.len(), 1);
@@ -783,8 +782,7 @@ async fn test_switch_to_existing_sqlite_reloads_data() {
     let old_storage_location = app.app_config.effective_storage_location();
     app.app_config.storage_location = Some(sqlite_path.clone());
 
-    let result = app.apply_storage_location_change(old_config, &old_storage_location);
-    assert!(result, "apply_storage_location_change should succeed");
+    app.apply_storage_location_change(old_config, &old_storage_location);
     app.await_migration().await;
     assert_eq!(app.ctx.boards.len(), 1);
     assert_eq!(app.ctx.boards[0].name, "SqliteBoard");
@@ -806,8 +804,7 @@ async fn test_switch_to_existing_json_reloads_data() {
     let old_storage_location = app.app_config.effective_storage_location();
     app.app_config.storage_location = Some(second_json.clone());
 
-    let result = app.apply_storage_location_change(old_config, &old_storage_location);
-    assert!(result, "apply_storage_location_change should succeed");
+    app.apply_storage_location_change(old_config, &old_storage_location);
     app.await_migration().await;
     assert_eq!(app.ctx.boards.len(), 1);
     assert_eq!(app.ctx.boards[0].name, "SecondBoard");
@@ -828,8 +825,7 @@ async fn test_backend_mismatch_auto_corrected_with_warning() {
     // User sets backend to sqlite but location is still a JSON file
     app.app_config.storage_backend = Some("sqlite".into());
 
-    let result = app.apply_storage_location_change(old_config, &old_storage_location);
-    assert!(result, "should succeed after auto-correction");
+    app.apply_storage_location_change(old_config, &old_storage_location);
 
     // Backend should be auto-corrected to json
     assert_eq!(app.app_config.effective_storage_backend(), "json");
@@ -854,11 +850,7 @@ async fn test_switch_storage_location_nonexistent_parent_shows_error() {
     let old_storage_location = app.app_config.effective_storage_location();
     app.app_config.storage_location = Some("/nonexistent/dir/board.json".to_string());
 
-    let result = app.apply_storage_location_change(old_config.clone(), &old_storage_location);
-    assert!(
-        result,
-        "apply_storage_location_change starts async migration"
-    );
+    app.apply_storage_location_change(old_config.clone(), &old_storage_location);
     app.await_migration().await;
 
     let banner = app
@@ -915,6 +907,6 @@ fn test_apply_config_edit_syncs_prefixes() {
     let json = r#"{"default_card_prefix":"myprefix","default_sprint_prefix":"mysprint","editing_format":"json","configuration_format":"toml"}"#;
     let result = app.apply_config_edit(json, &format);
     assert!(result.is_ok());
-    assert_eq!(app.ctx.default_card_prefix, "myprefix");
-    assert_eq!(app.ctx.default_sprint_prefix, "mysprint");
+    assert_eq!(app.app_config.effective_default_card_prefix(), "myprefix");
+    assert_eq!(app.app_config.effective_default_sprint_prefix(), "mysprint");
 }
