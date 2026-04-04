@@ -177,6 +177,16 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
                 &app.config_storage_location,
                 Style::default().fg(Color::DarkGray),
             ));
+            config_lines.push(metadata_line_styled(
+                "Active Storage Backend",
+                app.app_config.effective_storage_backend(),
+                Style::default(),
+            ));
+            config_lines.push(metadata_line_styled(
+                "Active Storage Location",
+                app.app_config.effective_storage_location(),
+                Style::default(),
+            ));
         } else {
             config_lines.push(metadata_line_selectable(
                 "Storage Backend",
