@@ -8,8 +8,8 @@ use ratatui::{
 };
 use uuid::Uuid;
 
-pub(super) const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
-pub(super) const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
+const RELATIONSHIP_BOX_HEIGHT: u16 = 7;
+const RELATIONSHIP_VIEWPORT_BORDER_HEIGHT: usize = 2;
 
 pub(super) fn render_relationship_boxes(
     app: &App,
