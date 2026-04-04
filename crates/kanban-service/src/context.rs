@@ -74,6 +74,12 @@ impl KanbanContext {
         })
     }
 
+    pub async fn load_with_defaults(
+        store: Arc<dyn PersistenceStore + Send + Sync>,
+    ) -> KanbanResult<Self> {
+        Self::load(store, AppConfig::default()).await
+    }
+
     fn empty(store: Arc<dyn PersistenceStore + Send + Sync>, config: AppConfig) -> Self {
         Self {
             boards: Vec::new(),
