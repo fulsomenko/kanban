@@ -24,45 +24,31 @@ pub fn detect_backend(locator: &str) -> Option<String> {
     default_registry().detect_backend(locator).map(String::from)
 }
 
-pub fn make_store(locator: &str) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
-    Ok(default_registry().create_store(locator)?)
-}
-
-pub fn make_store_for_backend(
+pub fn make_store(
     backend: &str,
     locator: &str,
 ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
-    Ok(default_registry().create_by_name(backend, locator)?)
-}
-
-pub fn default_extension_for(backend: &str) -> Option<String> {
-    default_registry()
-        .default_extension_for(backend)
-        .map(|s| s.to_string())
+    Ok(default_registry().create_store(backend, locator)?)
 }
 
 pub fn make_store_with_config(
     file: Option<&str>,
     config: &AppConfig,
 ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, KanbanError> {
-    match file {
-        Some(path) => make_store(path),
-        None => make_store(&config.effective_storage_location()),
-    }
+    let locator = match file {
+        Some(path) => path.to_string(),
+        None => config.effective_storage_location(),
+    };
+    let backend =
+        detect_backend(&locator).unwrap_or_else(|| config.effective_storage_backend().to_string());
+    make_store(&backend, &locator)
 }
 
-pub async fn validate_and_load_store(path: &str) -> Result<kanban_domain::Snapshot, KanbanError> {
-    validate_and_load_store_for_backend(None, path).await
-}
-
-pub async fn validate_and_load_store_for_backend(
-    backend: Option<&str>,
+pub async fn validate_and_load_store(
+    backend: &str,
     path: &str,
 ) -> Result<kanban_domain::Snapshot, KanbanError> {
-    let store = match backend {
-        Some(b) => make_store_for_backend(b, path)?,
-        None => make_store(path)?,
-    };
+    let store = make_store(backend, path)?;
     if !store.exists().await {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -75,14 +61,10 @@ pub async fn validate_and_load_store_for_backend(
     Ok(data)
 }
 
-pub async fn migrate_store(from_path: &str, to_path: &str) -> Result<(), KanbanError> {
-    migrate_store_for_backend(None, from_path, None, to_path).await
-}
-
-pub async fn migrate_store_for_backend(
-    from_backend: Option<&str>,
+pub async fn migrate_store(
+    from_backend: &str,
     from_path: &str,
-    to_backend: Option<&str>,
+    to_backend: &str,
     to_path: &str,
 ) -> Result<(), KanbanError> {
     let from = std::path::Path::new(from_path);
@@ -104,15 +86,9 @@ pub async fn migrate_store_for_backend(
         )
         .into());
     }
-    let source = match from_backend {
-        Some(b) => make_store_for_backend(b, from_path)?,
-        None => make_store(from_path)?,
-    };
+    let source = make_store(from_backend, from_path)?;
     let (snapshot, _) = source.load().await?;
-    let target = match to_backend {
-        Some(b) => make_store_for_backend(b, to_path)?,
-        None => make_store(to_path)?,
-    };
+    let target = make_store(to_backend, to_path)?;
     target.save(snapshot).await?;
     Ok(())
 }
