@@ -9,6 +9,8 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io;
 
+const EXPORT_BUTTON_STORAGE_INDEX: usize = 3;
+
 impl App {
     pub fn settings_item_count(&self, panel: SettingsFocus) -> usize {
         match panel {
@@ -55,32 +57,26 @@ impl App {
             .validate_and_apply(&mut config)
             .map_err(|e| format!("Invalid config: {}", e))?;
 
-        self.app_config = config;
-
-        self.apply_storage_location_change(old_config, &old_storage_location);
-
-        if kanban_service::config::has_non_default_values(&self.app_config) {
-            if let Err(e) = kanban_service::config::save(&self.app_config) {
-                self.set_error(format!("Failed to save config: {}", e));
-            } else {
-                let new_location =
-                    kanban_service::config::effective_configuration_location(&self.app_config);
-                if new_location != old_location {
-                    let old_path = std::path::Path::new(&old_location);
-                    if old_path.exists() {
-                        if let Err(e) = std::fs::remove_file(old_path) {
-                            tracing::warn!(
-                                "Failed to remove old config file {}: {}",
-                                old_path.display(),
-                                e
-                            );
-                        }
+        if kanban_service::config::has_non_default_values(&config) {
+            kanban_service::config::save(&config)
+                .map_err(|e| format!("Failed to save config: {}", e))?;
+            let new_location =
+                kanban_service::config::effective_configuration_location(&config);
+            if new_location != old_location {
+                let old_path = std::path::Path::new(&old_location);
+                if old_path.exists() {
+                    if let Err(e) = std::fs::remove_file(old_path) {
+                        tracing::warn!(
+                            "Failed to remove old config file {}: {}",
+                            old_path.display(),
+                            e
+                        );
                     }
                 }
             }
         } else {
             let location =
-                kanban_service::config::effective_configuration_location(&self.app_config);
+                kanban_service::config::effective_configuration_location(&config);
             let path = std::path::Path::new(&location);
             if path.exists() {
                 if let Err(e) = std::fs::remove_file(path) {
@@ -88,6 +84,9 @@ impl App {
                 }
             }
         }
+
+        self.app_config = config;
+        self.apply_storage_location_change(old_config, &old_storage_location);
         Ok(true)
     }
 
@@ -150,25 +149,17 @@ impl App {
         self.migration_state = MigrationState::Migrating {
             old_config,
             old_storage_location: old_storage_location.to_string(),
+            result_rx: rx,
         };
-        self.migration_result_rx = Some(rx);
         self.set_success("Migrating storage...".to_string());
     }
 
     pub fn handle_migration_complete(
         &mut self,
+        old_config: kanban_core::AppConfig,
         result: Result<(kanban_domain::Snapshot, bool), String>,
     ) {
-        use crate::app::MigrationState;
-
-        let (old_config, _old_storage_location) =
-            match std::mem::replace(&mut self.migration_state, MigrationState::Idle) {
-                MigrationState::Migrating {
-                    old_config,
-                    old_storage_location,
-                } => (old_config, old_storage_location),
-                MigrationState::Idle => return,
-            };
+        self.migration_state = crate::app::MigrationState::Idle;
 
         let (snapshot, file_existed) = match result {
             Ok(s) => s,
@@ -225,10 +216,18 @@ impl App {
     }
 
     pub async fn await_migration(&mut self) {
-        if let Some(rx) = self.migration_result_rx.take() {
-            if let Ok(result) = rx.await {
-                self.handle_migration_complete(result);
-            }
+        use crate::app::MigrationState;
+        let (old_config, rx) =
+            match std::mem::replace(&mut self.migration_state, MigrationState::Idle) {
+                MigrationState::Migrating {
+                    old_config,
+                    result_rx,
+                    ..
+                } => (old_config, result_rx),
+                MigrationState::Idle => return,
+            };
+        if let Ok(result) = rx.await {
+            self.handle_migration_complete(old_config, result);
         }
     }
 
@@ -341,7 +340,7 @@ impl App {
             }
             KeyCode::Enter => {
                 if self.focus.settings_focus == SettingsFocus::Storage
-                    && self.selection.settings_storage.get() == Some(3)
+                    && self.selection.settings_storage.get() == Some(EXPORT_BUTTON_STORAGE_INDEX)
                 {
                     return self.trigger_export();
                 }
@@ -486,7 +485,9 @@ impl App {
                 KeyCode::Backspace => {
                     dialog.filename.pop();
                 }
-                KeyCode::Char(c) => {
+                KeyCode::Char(c)
+                    if !matches!(c, '/' | '\\' | '\0' | ':' | '*' | '?' | '"' | '<' | '>' | '|') =>
+                {
                     dialog.filename.push(c);
                 }
                 KeyCode::Enter => {
