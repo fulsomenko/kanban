@@ -1,7 +1,64 @@
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt;
 
-fn fix_trailing_commas(lines: Vec<&str>) -> String {
+/// Converts JSONC (JSON with Comments) to plain JSON.
+/// Strips `//` line comments and `/* */` block comments, preserving newlines
+/// so that line numbers in parse errors remain accurate.
+/// Correctly ignores `//` and `/*` that appear inside string literals.
+fn strip_jsonc_comments(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    let mut in_string = false;
+
+    while let Some(c) = chars.next() {
+        if in_string {
+            out.push(c);
+            if c == '\\' {
+                // Consume the escaped character verbatim
+                if let Some(escaped) = chars.next() {
+                    out.push(escaped);
+                }
+            } else if c == '"' {
+                in_string = false;
+            }
+        } else {
+            match c {
+                '"' => {
+                    in_string = true;
+                    out.push(c);
+                }
+                '/' if chars.peek() == Some(&'/') => {
+                    chars.next(); // consume second '/'
+                    // Drop everything until end of line, but keep the newline
+                    for nc in chars.by_ref() {
+                        if nc == '\n' {
+                            out.push('\n');
+                            break;
+                        }
+                    }
+                }
+                '/' if chars.peek() == Some(&'*') => {
+                    chars.next(); // consume '*'
+                    let mut prev_star = false;
+                    for nc in chars.by_ref() {
+                        if nc == '\n' {
+                            out.push('\n');
+                        }
+                        if prev_star && nc == '/' {
+                            break;
+                        }
+                        prev_star = nc == '*';
+                    }
+                }
+                _ => out.push(c),
+            }
+        }
+    }
+    out
+}
+
+fn fix_trailing_commas(s: &str) -> String {
+    let lines: Vec<&str> = s.lines().collect();
     let mut result: Vec<String> = Vec::with_capacity(lines.len());
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim_end();
@@ -38,7 +95,7 @@ impl EditFormat {
 
     pub fn file_extension(&self) -> &'static str {
         match self {
-            Self::Json => "json",
+            Self::Json => "jsonc",
             Self::Toml => "toml",
         }
     }
@@ -57,12 +114,9 @@ impl EditFormat {
     pub fn deserialize<T: DeserializeOwned>(&self, s: &str) -> Result<T, String> {
         match self {
             Self::Json => {
-                let lines: Vec<&str> = s
-                    .lines()
-                    .filter(|l| !l.trim_start().starts_with("//"))
-                    .collect();
-                let stripped = fix_trailing_commas(lines);
-                serde_json::from_str(&stripped).map_err(|e| format!("JSON deserialize: {}", e))
+                let stripped = strip_jsonc_comments(s);
+                let cleaned = fix_trailing_commas(&stripped);
+                serde_json::from_str(&cleaned).map_err(|e| format!("JSON deserialize: {}", e))
             }
             Self::Toml => toml::from_str(s).map_err(|e| format!("TOML deserialize: {}", e)),
         }
@@ -124,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_edit_format_file_extension_json() {
-        assert_eq!(EditFormat::Json.file_extension(), "json");
+        assert_eq!(EditFormat::Json.file_extension(), "jsonc");
     }
 
     #[test]
@@ -184,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn test_json_deserialize_strips_comment_lines() {
+    fn test_json_deserialize_strips_line_comments() {
         let input = "{\n  \"default_card_prefix\": \"feat\",\n//   \"storage_backend\": \"sqlite\",\n  \"editing_format\": \"json\"\n}";
         let dto: AppConfigDto = EditFormat::Json.deserialize(input).unwrap();
         assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
@@ -192,9 +246,22 @@ mod tests {
     }
 
     #[test]
+    fn test_json_deserialize_strips_inline_comments() {
+        let input = "{\n  \"default_card_prefix\": \"feat\", // the prefix\n  \"editing_format\": \"json\"\n}";
+        let dto: AppConfigDto = EditFormat::Json.deserialize(input).unwrap();
+        assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
+        assert_eq!(dto.editing_format.as_deref(), Some("json"));
+    }
+
+    #[test]
+    fn test_json_deserialize_ignores_comment_markers_inside_strings() {
+        let input = "{\n  \"default_card_prefix\": \"feat//nope\",\n  \"editing_format\": \"json\"\n}";
+        let dto: AppConfigDto = EditFormat::Json.deserialize(input).unwrap();
+        assert_eq!(dto.default_card_prefix.as_deref(), Some("feat//nope"));
+    }
+
+    #[test]
     fn test_json_deserialize_fixes_trailing_comma_when_last_fields_commented() {
-        // Simulates the real case: storage fields are the last fields in the JSON object
-        // and the preceding field gets a dangling comma after comment lines are removed.
         let input = "{\n  \"default_card_prefix\": \"feat\",\n  \"editing_format\": \"json\",\n//   \"storage_backend\": \"sqlite\",\n//   \"storage_location\": \"/tmp/b.db\"\n}";
         let dto: AppConfigDto = EditFormat::Json.deserialize(input).unwrap();
         assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
