@@ -112,7 +112,7 @@ impl StateManager {
         backend: &str,
         path: &str,
     ) -> kanban_domain::KanbanResult<(DynStore, uuid::Uuid)> {
-        let store = kanban_service::make_store_for_backend(backend, path)?;
+        let store = kanban_service::make_store(backend, path)?;
         let id = store.instance_id();
         Ok((store, id))
     }

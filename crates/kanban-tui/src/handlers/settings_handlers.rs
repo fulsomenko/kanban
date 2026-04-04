@@ -71,22 +71,19 @@ impl App {
         tokio::spawn(async move {
             let result: Result<kanban_domain::Snapshot, String> = async {
                 if !file_existed && old_path_exists {
-                    kanban_service::migrate_store_for_backend(
-                        Some(&old_backend),
+                    kanban_service::migrate_store(
+                        &old_backend,
                         &old_storage_location_owned,
-                        Some(&new_backend_clone),
+                        &new_backend_clone,
                         &new_storage_clone,
                     )
                     .await
                     .map_err(|e| format!("Migration failed: {}", e))?;
                 }
 
-                kanban_service::validate_and_load_store_for_backend(
-                    Some(&new_backend_clone),
-                    &new_storage_clone,
-                )
-                .await
-                .map_err(|e| format!("Invalid storage file: {}", e))
+                kanban_service::validate_and_load_store(&new_backend_clone, &new_storage_clone)
+                    .await
+                    .map_err(|e| format!("Invalid storage file: {}", e))
             }
             .await;
 
