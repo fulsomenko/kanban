@@ -67,12 +67,6 @@ impl KeybindingProvider for SettingsViewProvider {
         }
 
         bindings.push(Keybinding::new(
-            "e",
-            "edit",
-            "Edit configuration in external editor",
-            KeybindingAction::EditCard,
-        ));
-        bindings.push(Keybinding::new(
             "x",
             "export",
             "Export boards",
