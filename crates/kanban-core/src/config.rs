@@ -1,6 +1,5 @@
 use crate::CoreResult;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 
 pub const DEFAULT_STORAGE_BACKEND: &str = "json";
 pub const DEFAULT_JSON_FILENAME: &str = "kanban.json";
@@ -72,21 +71,13 @@ impl AppConfig {
     }
 
     pub fn effective_storage_location(&self) -> String {
-        let raw = self.storage_location.clone().unwrap_or_else(|| {
+        self.storage_location.clone().unwrap_or_else(|| {
             match self.effective_storage_backend() {
                 "sqlite" => DEFAULT_SQLITE_FILENAME,
                 _ => DEFAULT_JSON_FILENAME,
             }
             .to_string()
-        });
-        let path = Path::new(&raw);
-        if path.is_absolute() {
-            raw
-        } else {
-            std::env::current_dir()
-                .map(|cwd| cwd.join(path).display().to_string())
-                .unwrap_or(raw)
-        }
+        })
     }
 
     pub fn validate_values(&self) -> CoreResult<()> {
@@ -99,9 +90,9 @@ impl AppConfig {
             }
         }
         if let Some(ref v) = self.editing_format {
-            if v != "json" {
+            if !matches!(v.as_str(), "json" | "toml") {
                 return Err(crate::CoreError::Validation(format!(
-                    "Invalid editing_format '{}': must be 'json'",
+                    "Invalid editing_format '{}': must be 'json' or 'toml'",
                     v
                 )));
             }
@@ -201,9 +192,7 @@ mod tests {
     #[test]
     fn test_effective_storage_location_defaults_to_json() {
         let config = AppConfig::default();
-        let loc = config.effective_storage_location();
-        assert!(loc.ends_with("/kanban.json"), "got: {}", loc);
-        assert!(std::path::Path::new(&loc).is_absolute());
+        assert_eq!(config.effective_storage_location(), "kanban.json");
     }
 
     #[test]
@@ -212,9 +201,7 @@ mod tests {
             storage_backend: Some("sqlite".into()),
             ..Default::default()
         };
-        let loc = config.effective_storage_location();
-        assert!(loc.ends_with("/kanban.sqlite"), "got: {}", loc);
-        assert!(std::path::Path::new(&loc).is_absolute());
+        assert_eq!(config.effective_storage_location(), "kanban.sqlite");
     }
 
     #[test]
@@ -223,9 +210,7 @@ mod tests {
             storage_location: Some("my_data.json".into()),
             ..Default::default()
         };
-        let loc = config.effective_storage_location();
-        assert!(loc.ends_with("/my_data.json"), "got: {}", loc);
-        assert!(std::path::Path::new(&loc).is_absolute());
+        assert_eq!(config.effective_storage_location(), "my_data.json");
     }
 
     #[test]
@@ -286,8 +271,19 @@ mod tests {
 
     #[test]
     fn test_validate_values_valid_editing_format_passes() {
+        for fmt in &["json", "toml"] {
+            let config = AppConfig {
+                editing_format: Some(fmt.to_string()),
+                ..Default::default()
+            };
+            config.validate_values().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_validate_values_valid_toml_editing_format_passes() {
         let config = AppConfig {
-            editing_format: Some("json".into()),
+            editing_format: Some("toml".into()),
             ..Default::default()
         };
         config.validate_values().unwrap();
@@ -296,7 +292,7 @@ mod tests {
     #[test]
     fn test_validate_values_invalid_editing_format_fails() {
         let config = AppConfig {
-            editing_format: Some("toml".into()),
+            editing_format: Some("yaml".into()),
             ..Default::default()
         };
         let err = config.validate_values().unwrap_err();
