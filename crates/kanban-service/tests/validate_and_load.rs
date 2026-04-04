@@ -61,7 +61,12 @@ async fn test_validate_and_load_invalid_json_content_returns_error() {
     let err = validate_and_load_store("json", path.to_str().unwrap())
         .await
         .unwrap_err();
-    assert!(!err.to_string().is_empty(), "expected error, got: {}", err);
+    let msg = err.to_string();
+    assert!(
+        msg.contains("serialization") || msg.contains("parse") || msg.contains("invalid"),
+        "expected a parse/serialization error, got: {}",
+        msg
+    );
 }
 
 #[tokio::test]
@@ -99,6 +104,20 @@ fn test_storage_location_with_dotdot_fails_validation() {
     );
     let err = result.unwrap_err().to_string();
     assert!(err.contains(".."), "error should mention '..': {}", err);
+}
+
+#[test]
+fn test_storage_location_with_dotdot_in_filename_is_accepted() {
+    let config = kanban_core::AppConfig {
+        storage_location: Some("/tmp/my..file.json".to_string()),
+        ..Default::default()
+    };
+    let result = kanban_service::config::validate(&config);
+    assert!(
+        result.is_ok(),
+        "expected no error for '..' in filename (not a path component): {:?}",
+        result
+    );
 }
 
 #[test]

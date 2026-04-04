@@ -141,7 +141,10 @@ pub fn resolve_storage_location(config: &AppConfig) -> String {
 pub fn validate(config: &AppConfig) -> CoreResult<()> {
     config.validate_values()?;
     if let Some(ref v) = config.storage_location {
-        if v.contains("..") {
+        if std::path::Path::new(v)
+            .components()
+            .any(|c| c == std::path::Component::ParentDir)
+        {
             return Err(kanban_core::CoreError::Validation(
                 "storage_location cannot contain '..'".to_string(),
             ));
