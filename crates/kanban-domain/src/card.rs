@@ -253,10 +253,6 @@ impl Card {
         format!("git checkout -b {}", name)
     }
 
-    pub fn validate_branch_prefix(prefix: &str) -> bool {
-        kanban_core::validate_branch_prefix(prefix)
-    }
-
     pub fn is_completed(&self) -> bool {
         self.status == CardStatus::Done
     }
@@ -479,22 +475,6 @@ mod tests {
             card.branch_name(&board, &sprints_with_card_prefix, "task"),
             "hotfix-1/test-card".to_string()
         );
-    }
-
-    #[test]
-    fn test_validate_branch_prefix() {
-        assert!(Card::validate_branch_prefix("feat"));
-        assert!(Card::validate_branch_prefix("feature"));
-        assert!(Card::validate_branch_prefix("feat-123"));
-        assert!(Card::validate_branch_prefix("feat_123"));
-        assert!(Card::validate_branch_prefix("FEAT-123"));
-
-        assert!(!Card::validate_branch_prefix(""));
-        assert!(!Card::validate_branch_prefix("-feat"));
-        assert!(!Card::validate_branch_prefix("feat-"));
-        assert!(!Card::validate_branch_prefix("feat/123"));
-        assert!(!Card::validate_branch_prefix("feat 123"));
-        assert!(!Card::validate_branch_prefix("feat@123"));
     }
 
     #[test]

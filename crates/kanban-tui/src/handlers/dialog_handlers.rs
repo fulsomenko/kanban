@@ -1,7 +1,7 @@
 use crate::app::{App, BoardFocus, DialogMode};
 use crate::dialog::{handle_dialog_input, DialogAction};
 use crossterm::event::KeyCode;
-use kanban_domain::{Card, FieldUpdate};
+use kanban_domain::FieldUpdate;
 
 /// Context for handling different types of prefix dialogs
 enum PrefixDialogContext {
@@ -237,7 +237,7 @@ impl App {
                             }
                         }
                     }
-                } else if Card::validate_branch_prefix(&prefix_str) {
+                } else if kanban_core::validate_branch_prefix(&prefix_str) {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.selection.board.get() {
