@@ -396,12 +396,17 @@ pub struct SprintUpdateArgs {
 #[derive(Args)]
 pub struct MigrateArgs {
     /// Path to source file
-    pub source: String,
-    /// Target storage backend (e.g. json, sqlite)
-    pub backend: String,
-    /// Output file path (default: derived from source filename + backend extension)
-    #[arg(long, short)]
-    pub output: Option<String>,
+    #[arg(long)]
+    pub from: String,
+    /// Source backend (json or sqlite)
+    #[arg(long, default_value = "json")]
+    pub from_backend: String,
+    /// Path to destination file
+    #[arg(long)]
+    pub to: String,
+    /// Destination backend (json or sqlite)
+    #[arg(long, default_value = "json")]
+    pub to_backend: String,
 }
 
 // Export/Import commands
