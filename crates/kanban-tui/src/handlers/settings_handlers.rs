@@ -42,7 +42,7 @@ impl App {
         }
         let old_location =
             kanban_service::config::effective_configuration_location(&self.app_config);
-        let old_storage_location = self.app_config.effective_storage_location();
+        let old_storage_location = kanban_service::config::resolve_storage_location(&self.app_config);
         let old_config = self.app_config.clone();
         let mut config = self.app_config.clone();
 
@@ -97,7 +97,7 @@ impl App {
     ) {
         use crate::app::MigrationState;
 
-        let new_storage_location = self.app_config.effective_storage_location();
+        let new_storage_location = kanban_service::config::resolve_storage_location(&self.app_config);
 
         if kanban_service::sync_backend_with_file(&new_storage_location, &mut self.app_config) {
             self.set_success(format!(
@@ -177,7 +177,7 @@ impl App {
             }
         };
 
-        let new_storage_location = self.app_config.effective_storage_location();
+        let new_storage_location = kanban_service::config::resolve_storage_location(&self.app_config);
         let new_backend = self.app_config.effective_storage_backend().to_string();
 
         match self
@@ -229,6 +229,30 @@ impl App {
         }
     }
 
+    fn open_config_editor(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        event_handler: &EventHandler,
+    ) -> bool {
+        let format = EditFormat::parse(self.app_config.effective_editing_format());
+        let ext = format.file_extension();
+        let dto = AppConfigDto::from_config(&self.app_config, self.has_data_file);
+        let current_content = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
+        let temp_file = std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
+        match edit_in_external_editor(terminal, event_handler, temp_file, &current_content) {
+            Ok(Some(new_content)) => {
+                if let Err(e) = self.apply_config_edit(&new_content, &format) {
+                    self.set_error(e);
+                }
+            }
+            Ok(None) => {}
+            Err(e) => {
+                self.set_error(format!("Failed to edit config: {}", e));
+            }
+        }
+        true
+    }
+
     pub fn handle_settings_key(
         &mut self,
         key: KeyCode,
@@ -237,7 +261,7 @@ impl App {
     ) -> bool {
         match key {
             KeyCode::Enter if self.focus.settings_focus == SettingsFocus::Configuration => {
-                self.handle_settings_key(KeyCode::Char('e'), terminal, event_handler)
+                self.open_config_editor(terminal, event_handler)
             }
             KeyCode::Char('1')
             | KeyCode::Char('2')
@@ -251,26 +275,7 @@ impl App {
             | KeyCode::Char('l')
             | KeyCode::Right
             | KeyCode::Enter => self.handle_settings_key_nav(key),
-            KeyCode::Char('e') => {
-                let format = EditFormat::parse(self.app_config.effective_editing_format());
-                let ext = format.file_extension();
-                let dto = AppConfigDto::from_config(&self.app_config, self.has_data_file);
-                let current_content = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
-                let temp_file = std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
-                match edit_in_external_editor(terminal, event_handler, temp_file, &current_content)
-                {
-                    Ok(Some(new_content)) => {
-                        if let Err(e) = self.apply_config_edit(&new_content, &format) {
-                            self.set_error(e);
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        self.set_error(format!("Failed to edit config: {}", e));
-                    }
-                }
-                true
-            }
+            KeyCode::Char('e') => self.open_config_editor(terminal, event_handler),
             KeyCode::Char('x') => {
                 let board_count = self.ctx.boards.len();
                 if board_count == 0 {
@@ -537,15 +542,16 @@ impl App {
             crate::app::ExportFormat::Sqlite => {
                 let filename_clone = filename.clone();
                 let export_clone = export.clone();
-                match tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(kanban_service::export_to_sqlite(
-                        export_clone,
-                        &filename_clone,
-                    ))
-                }) {
-                    Ok(()) => self.set_success(format!("Exported to {}", filename)),
-                    Err(e) => self.set_error(format!("Export failed: {}", e)),
-                }
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                tokio::spawn(async move {
+                    let result = kanban_service::export_to_sqlite(export_clone, &filename_clone)
+                        .await
+                        .map(|_| filename_clone)
+                        .map_err(|e| format!("Export failed: {}", e));
+                    let _ = tx.send(result);
+                });
+                self.export_result_rx = Some(rx);
+                self.set_success("Exporting...".to_string());
             }
         }
 
