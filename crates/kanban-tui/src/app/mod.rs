@@ -88,6 +88,7 @@ pub struct App {
     pub migration_state: MigrationState,
     pub migration_result_rx:
         Option<tokio::sync::oneshot::Receiver<Result<(kanban_domain::Snapshot, bool), String>>>,
+    pub export_result_rx: Option<tokio::sync::oneshot::Receiver<Result<String, String>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -212,6 +213,7 @@ impl App {
             export_dialog: None,
             migration_state: MigrationState::Idle,
             migration_result_rx: None,
+            export_result_rx: None,
         };
 
         Ok((app, save_rx))
@@ -1741,6 +1743,21 @@ impl App {
                         self.migration_result_rx = None;
                         if let Some(result) = result {
                             self.handle_migration_complete(result);
+                        }
+                    }
+                    export_result = async {
+                        if let Some(ref mut rx) = &mut self.export_result_rx {
+                            rx.await.ok()
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        self.export_result_rx = None;
+                        if let Some(result) = export_result {
+                            match result {
+                                Ok(filename) => self.set_success(format!("Exported to {}", filename)),
+                                Err(e) => self.set_error(e),
+                            }
                         }
                     }
                     _ = async {
