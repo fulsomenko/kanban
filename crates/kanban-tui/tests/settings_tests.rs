@@ -711,7 +711,6 @@ async fn create_test_json_file(dir: &std::path::Path, name: &str, boards: &[&str
     path_str
 }
 
-#[cfg(feature = "sqlite")]
 async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
     use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 
@@ -748,7 +747,6 @@ async fn setup_app_with_json_file(dir: &std::path::Path) -> App {
     app
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_migrate_json_to_sqlite_creates_file() {
     let dir = tempfile::tempdir().unwrap();
@@ -773,7 +771,6 @@ async fn test_migrate_json_to_sqlite_creates_file() {
     );
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_switch_to_existing_sqlite_reloads_data() {
     let dir = tempfile::tempdir().unwrap();
