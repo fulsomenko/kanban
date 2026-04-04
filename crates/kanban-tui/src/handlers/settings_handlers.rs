@@ -3,7 +3,7 @@ use crate::edit_format::EditFormat;
 use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
-use kanban_core::{AppConfigDto, Editable};
+use kanban_core::AppConfigDto;
 use kanban_domain::export::{AllBoardsExport, BoardExporter};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -13,7 +13,7 @@ impl App {
     pub fn settings_item_count(&self, panel: SettingsFocus) -> usize {
         match panel {
             SettingsFocus::Configuration => {
-                if self.app_config.has_data_file {
+                if self.has_data_file {
                     7
                 } else {
                     5
@@ -30,6 +30,61 @@ impl App {
             self.selection.settings_config.set(Some(0));
             self.push_mode(AppMode::Settings);
         }
+    }
+
+    pub fn apply_config_edit(
+        &mut self,
+        new_content: &str,
+        format: &EditFormat,
+    ) -> Result<bool, String> {
+        let old_location = self.app_config.effective_configuration_location();
+        let old_storage_location = self.app_config.effective_storage_location();
+        let old_config = self.app_config.clone();
+        let mut config = self.app_config.clone();
+
+        let updated_dto: AppConfigDto = format
+            .deserialize(new_content)
+            .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+        updated_dto
+            .validate_and_apply(&mut config)
+            .map_err(|e| format!("Invalid config: {}", e))?;
+
+        self.app_config = config;
+
+        if !self.apply_storage_location_change(old_config, &old_storage_location) {
+            return Ok(false);
+        }
+
+        if self.app_config.has_non_default_values() {
+            if let Err(e) = self.app_config.save() {
+                self.set_error(format!("Failed to save config: {}", e));
+            } else {
+                let new_location = self.app_config.effective_configuration_location();
+                if new_location != old_location {
+                    let old_path = std::path::Path::new(&old_location);
+                    if old_path.exists() {
+                        if let Err(e) = std::fs::remove_file(old_path) {
+                            tracing::warn!(
+                                "Failed to remove old config file {}: {}",
+                                old_path.display(),
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+        } else {
+            let location = self.app_config.effective_configuration_location();
+            let path = std::path::Path::new(&location);
+            if path.exists() {
+                if let Err(e) = std::fs::remove_file(path) {
+                    tracing::warn!("Failed to remove config file {}: {}", path.display(), e);
+                }
+            }
+        }
+        self.ctx.sync_prefixes(&self.app_config);
+        Ok(true)
     }
 
     pub fn apply_storage_location_change(
@@ -52,12 +107,9 @@ impl App {
             }
         }
 
-        if !self.app_config.has_data_file || new_storage_location == old_storage_location {
+        if !self.has_data_file || new_storage_location == old_storage_location {
             return true;
         }
-
-        let new_path = std::path::Path::new(&new_storage_location);
-        let file_existed = new_path.exists();
 
         let new_backend = self.app_config.effective_storage_backend().to_string();
         let old_backend = old_config.effective_storage_backend().to_string();
@@ -69,7 +121,8 @@ impl App {
         let new_storage_clone = new_storage_location.clone();
         let new_backend_clone = new_backend.clone();
         tokio::spawn(async move {
-            let result: Result<kanban_domain::Snapshot, String> = async {
+            let file_existed = std::path::Path::new(&new_storage_clone).exists();
+            let result: Result<(kanban_domain::Snapshot, bool), String> = async {
                 if !file_existed && old_path_exists {
                     kanban_service::migrate_store(
                         &old_backend,
@@ -81,9 +134,11 @@ impl App {
                     .map_err(|e| format!("Migration failed: {}", e))?;
                 }
 
-                kanban_service::validate_and_load_store(&new_backend_clone, &new_storage_clone)
-                    .await
-                    .map_err(|e| format!("Invalid storage file: {}", e))
+                let snapshot =
+                    kanban_service::validate_and_load_store(&new_backend_clone, &new_storage_clone)
+                        .await
+                        .map_err(|e| format!("Invalid storage file: {}", e))?;
+                Ok((snapshot, file_existed))
             }
             .await;
 
@@ -99,7 +154,10 @@ impl App {
         true
     }
 
-    pub fn handle_migration_complete(&mut self, result: Result<kanban_domain::Snapshot, String>) {
+    pub fn handle_migration_complete(
+        &mut self,
+        result: Result<(kanban_domain::Snapshot, bool), String>,
+    ) {
         use crate::app::MigrationState;
 
         let (old_config, _old_storage_location) =
@@ -111,7 +169,7 @@ impl App {
                 MigrationState::Idle => return,
             };
 
-        let snapshot = match result {
+        let (snapshot, file_existed) = match result {
             Ok(s) => s,
             Err(e) => {
                 self.app_config = old_config;
@@ -122,7 +180,6 @@ impl App {
 
         let new_storage_location = self.app_config.effective_storage_location();
         let new_backend = self.app_config.effective_storage_backend().to_string();
-        let file_existed = std::path::Path::new(&new_storage_location).exists();
 
         match self
             .ctx
@@ -198,77 +255,21 @@ impl App {
             KeyCode::Char('e') => {
                 let format = EditFormat::parse(self.app_config.effective_editing_format());
                 let ext = format.file_extension();
-                let old_location = self.app_config.effective_configuration_location();
-                let old_storage_location = self.app_config.effective_storage_location();
-                let old_config = self.app_config.clone();
-                let mut config = self.app_config.clone();
-                let temp_file = std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
-                let dto = AppConfigDto::from_entity(&config);
+                let dto = AppConfigDto::from_config(&self.app_config, self.has_data_file);
                 let current_content = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
+                let temp_file = std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
                 match edit_in_external_editor(terminal, event_handler, temp_file, &current_content)
                 {
-                    Ok(Some(new_content)) => match format.deserialize::<AppConfigDto>(&new_content)
-                    {
-                        Ok(updated_dto) => {
-                            if let Err(e) = updated_dto.validate_and_apply(&mut config) {
-                                self.set_error(format!("Invalid config: {}", e));
-                                return true;
-                            }
+                    Ok(Some(new_content)) => {
+                        if let Err(e) = self.apply_config_edit(&new_content, &format) {
+                            self.set_error(e);
                         }
-                        Err(e) => {
-                            self.set_error(format!("Failed to parse config: {}", e));
-                            return true;
-                        }
-                    },
-                    Ok(None) => return true,
+                    }
+                    Ok(None) => {}
                     Err(e) => {
                         self.set_error(format!("Failed to edit config: {}", e));
-                        return true;
                     }
                 }
-                self.app_config = config;
-
-                if !self.apply_storage_location_change(old_config, &old_storage_location) {
-                    return true;
-                }
-
-                if self.app_config.has_non_default_values() {
-                    if let Err(e) = self.app_config.save() {
-                        self.set_error(format!("Failed to save config: {}", e));
-                    } else {
-                        let new_location = self.app_config.effective_configuration_location();
-                        if new_location != old_location {
-                            let old_path = std::path::Path::new(&old_location);
-                            if old_path.exists() {
-                                if let Err(e) = std::fs::remove_file(old_path) {
-                                    tracing::warn!(
-                                        "Failed to remove old config file {}: {}",
-                                        old_path.display(),
-                                        e
-                                    );
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    let location = self.app_config.effective_configuration_location();
-                    let path = std::path::Path::new(&location);
-                    if path.exists() {
-                        if let Err(e) = std::fs::remove_file(path) {
-                            tracing::warn!(
-                                "Failed to remove config file {}: {}",
-                                path.display(),
-                                e
-                            );
-                        }
-                    }
-                }
-                self.ctx.default_card_prefix =
-                    self.app_config.effective_default_card_prefix().to_string();
-                self.ctx.default_sprint_prefix = self
-                    .app_config
-                    .effective_default_sprint_prefix()
-                    .to_string();
                 true
             }
             KeyCode::Char('x') => {

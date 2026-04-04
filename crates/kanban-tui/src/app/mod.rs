@@ -83,10 +83,11 @@ pub struct App {
     pub view: ViewState,
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
+    pub has_data_file: bool,
     pub export_dialog: Option<ExportDialogState>,
     pub migration_state: MigrationState,
     pub migration_result_rx:
-        Option<tokio::sync::oneshot::Receiver<Result<kanban_domain::Snapshot, String>>>,
+        Option<tokio::sync::oneshot::Receiver<Result<(kanban_domain::Snapshot, bool), String>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,7 +167,7 @@ impl App {
         Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     )> {
         let mut app_config = AppConfig::load();
-        app_config.has_data_file = save_file.is_some();
+        let has_data_file = save_file.is_some();
         if let Some(ref file) = save_file {
             let path = std::path::Path::new(file);
             let resolved = if path.is_absolute() {
@@ -217,6 +218,7 @@ impl App {
             view: ViewState::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
+            has_data_file,
             export_dialog: None,
             migration_state: MigrationState::Idle,
             migration_result_rx: None,

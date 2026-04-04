@@ -161,7 +161,7 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
             is_config_selected(4),
         ),
     ];
-    if app.app_config.has_data_file {
+    if app.has_data_file {
         config_lines.push(metadata_line_selectable(
             "Storage Backend",
             app.app_config.effective_storage_backend(),
