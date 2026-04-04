@@ -169,12 +169,12 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         if app.cli_file_override {
             config_lines.push(metadata_line_styled(
                 "Storage Backend",
-                app.app_config.effective_storage_backend(),
+                &app.config_storage_backend,
                 Style::default().fg(Color::DarkGray),
             ));
             config_lines.push(metadata_line_styled(
                 "Storage Location",
-                app.app_config.effective_storage_location(),
+                &app.config_storage_location,
                 Style::default().fg(Color::DarkGray),
             ));
         } else {
