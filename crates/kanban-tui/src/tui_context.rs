@@ -22,8 +22,6 @@ pub struct TuiContext {
     pub sprints: Vec<Sprint>,
     pub graph: DependencyGraph,
     pub state_manager: StateManager,
-    pub default_card_prefix: String,
-    pub default_sprint_prefix: String,
 }
 
 impl TuiContext {
@@ -31,8 +29,6 @@ impl TuiContext {
     pub fn new(
         backend: &str,
         save_file: Option<String>,
-        default_card_prefix: String,
-        default_sprint_prefix: String,
     ) -> KanbanResult<(
         Self,
         Option<mpsc::Receiver<Snapshot>>,
@@ -48,16 +44,9 @@ impl TuiContext {
             sprints: Vec::new(),
             graph: DependencyGraph::new(),
             state_manager,
-            default_card_prefix,
-            default_sprint_prefix,
         };
 
         Ok((ctx, save_rx, completion_rx))
-    }
-
-    pub fn sync_prefixes(&mut self, config: &kanban_core::AppConfig) {
-        self.default_card_prefix = config.effective_default_card_prefix().to_string();
-        self.default_sprint_prefix = config.effective_default_sprint_prefix().to_string();
     }
 
     pub fn execute_command(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
@@ -387,7 +376,7 @@ impl KanbanOperations for TuiContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.branch_name(board, &self.sprints, &self.default_card_prefix))
+        Ok(card.branch_name(board, &self.sprints, "task"))
     }
 
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
@@ -404,7 +393,7 @@ impl KanbanOperations for TuiContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.git_checkout_command(board, &self.sprints, &self.default_card_prefix))
+        Ok(card.git_checkout_command(board, &self.sprints, "task"))
     }
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
@@ -528,7 +517,7 @@ impl KanbanOperations for TuiContext {
 
             let effective_prefix = prefix
                 .or_else(|| board.sprint_prefix.clone())
-                .unwrap_or_else(|| self.default_sprint_prefix.clone());
+                .unwrap_or_else(|| "sprint".to_string());
 
             board.ensure_sprint_counter_initialized(&effective_prefix, &self.sprints);
             let sprint_number = board.get_next_sprint_number(&effective_prefix);
