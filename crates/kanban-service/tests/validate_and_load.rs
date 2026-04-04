@@ -33,7 +33,7 @@ async fn test_validate_and_load_valid_json_returns_snapshot() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_json(dir.path(), "board.json", &["Board1"]);
 
-    let snapshot = validate_and_load_store(&path).await.unwrap();
+    let snapshot = validate_and_load_store("json", &path).await.unwrap();
     assert_eq!(snapshot.boards.len(), 1);
 }
 
@@ -42,7 +42,7 @@ async fn test_validate_and_load_nonexistent_file_returns_error() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("nonexistent.json");
 
-    let err = validate_and_load_store(path.to_str().unwrap())
+    let err = validate_and_load_store("json", path.to_str().unwrap())
         .await
         .unwrap_err();
     assert!(
@@ -58,10 +58,10 @@ async fn test_validate_and_load_invalid_json_content_returns_error() {
     let path = dir.path().join("bad.json");
     std::fs::write(&path, "hello world").unwrap();
 
-    let err = validate_and_load_store(path.to_str().unwrap())
+    let err = validate_and_load_store("json", path.to_str().unwrap())
         .await
         .unwrap_err();
-    assert!(err.to_string().len() > 0, "expected error, got: {}", err);
+    assert!(!err.to_string().is_empty(), "expected error, got: {}", err);
 }
 
 #[tokio::test]
@@ -70,10 +70,10 @@ async fn test_validate_and_load_empty_file_returns_error() {
     let path = dir.path().join("empty.json");
     std::fs::write(&path, "").unwrap();
 
-    let err = validate_and_load_store(path.to_str().unwrap())
+    let err = validate_and_load_store("json", path.to_str().unwrap())
         .await
         .unwrap_err();
-    assert!(err.to_string().len() > 0, "expected error, got: {}", err);
+    assert!(!err.to_string().is_empty(), "expected error, got: {}", err);
 }
 
 #[tokio::test]
@@ -81,7 +81,7 @@ async fn test_validate_and_load_preserves_board_data() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_json(dir.path(), "board.json", &["MyBoard"]);
 
-    let snapshot = validate_and_load_store(&path).await.unwrap();
+    let snapshot = validate_and_load_store("json", &path).await.unwrap();
     assert_eq!(snapshot.boards.len(), 1);
     assert_eq!(snapshot.boards[0].name, "MyBoard");
 }
@@ -92,7 +92,7 @@ async fn create_test_sqlite(dir: &std::path::Path, name: &str, boards: &[&str]) 
 
     let path = dir.join(name);
     let path_str = path.to_str().unwrap().to_string();
-    let store = kanban_service::make_store(&path_str).unwrap();
+    let store = kanban_service::make_store("sqlite", &path_str).unwrap();
 
     let domain_boards: Vec<kanban_domain::Board> = boards
         .iter()
@@ -122,7 +122,7 @@ async fn test_validate_and_load_valid_sqlite_returns_snapshot() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_sqlite(dir.path(), "board.sqlite", &["Board1"]).await;
 
-    let snapshot = validate_and_load_store(&path).await.unwrap();
+    let snapshot = validate_and_load_store("sqlite", &path).await.unwrap();
     assert_eq!(snapshot.boards.len(), 1);
 }
 
@@ -132,7 +132,7 @@ async fn test_validate_and_load_sqlite_preserves_board_data() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_sqlite(dir.path(), "board.sqlite", &["SQLiteBoard"]).await;
 
-    let snapshot = validate_and_load_store(&path).await.unwrap();
+    let snapshot = validate_and_load_store("sqlite", &path).await.unwrap();
     assert_eq!(snapshot.boards.len(), 1);
     assert_eq!(snapshot.boards[0].name, "SQLiteBoard");
 }

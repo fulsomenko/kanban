@@ -21,7 +21,7 @@ async fn test_migrate_store_json_to_json_round_trip() {
     let to = dir.path().join("target.json");
     let to_str = to.to_str().unwrap();
 
-    migrate_store(&from, to_str).await.unwrap();
+    migrate_store("json", &from, "json", to_str).await.unwrap();
     assert!(to.exists());
 }
 
@@ -33,7 +33,9 @@ async fn test_migrate_store_json_to_sqlite() {
     let to = dir.path().join("target.sqlite");
     let to_str = to.to_str().unwrap();
 
-    migrate_store(&from, to_str).await.unwrap();
+    migrate_store("json", &from, "sqlite", to_str)
+        .await
+        .unwrap();
     assert!(to.exists());
 }
 
@@ -43,7 +45,7 @@ async fn test_migrate_store_fails_if_target_exists() {
     let from = create_test_json(dir.path(), "source.json");
     let to = create_test_json(dir.path(), "target.json");
 
-    let err = migrate_store(&from, &to).await.unwrap_err();
+    let err = migrate_store("json", &from, "json", &to).await.unwrap_err();
     assert!(err.to_string().contains("already exists"));
 }
 
@@ -53,7 +55,7 @@ async fn test_migrate_store_fails_if_source_missing() {
     let from = dir.path().join("nonexistent.json");
     let to = dir.path().join("target.json");
 
-    let err = migrate_store(from.to_str().unwrap(), to.to_str().unwrap())
+    let err = migrate_store("json", from.to_str().unwrap(), "json", to.to_str().unwrap())
         .await
         .unwrap_err();
     assert!(err.to_string().contains("not found"));

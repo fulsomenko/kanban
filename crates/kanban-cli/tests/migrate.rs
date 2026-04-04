@@ -130,13 +130,26 @@ async fn test_migrate_rejects_missing_source() {
     let missing = dir.path().join("nonexistent.json");
 
     let output = cargo_bin_cmd!("kanban")
-        .args(["migrate", missing.to_str().unwrap(), "sqlite"])
+        .args([
+            "migrate",
+            "--from",
+            missing.to_str().unwrap(),
+            "--from-backend",
+            "json",
+            "--to",
+            dir.path().join("dest.sqlite").to_str().unwrap(),
+            "--to-backend",
+            "sqlite",
+        ])
         .output()
         .unwrap();
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Source file not found"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("not found") || stderr.contains("does not exist"),
+        "stderr: {stderr}"
+    );
 }
 
 #[tokio::test]
@@ -155,20 +168,21 @@ async fn test_migrate_rejects_existing_target() {
     let output = cargo_bin_cmd!("kanban")
         .args([
             "migrate",
+            "--from",
             src_path.to_str().unwrap(),
-            "sqlite",
-            "--output",
+            "--from-backend",
+            "json",
+            "--to",
             dst_path.to_str().unwrap(),
+            "--to-backend",
+            "sqlite",
         ])
         .output()
         .unwrap();
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("Destination already exists"),
-        "stderr: {stderr}"
-    );
+    assert!(stderr.contains("already exists"), "stderr: {stderr}");
 }
 
 #[tokio::test]
@@ -185,10 +199,14 @@ async fn test_migrate_cli_with_explicit_output() {
     let output = cargo_bin_cmd!("kanban")
         .args([
             "migrate",
+            "--from",
             src_path.to_str().unwrap(),
-            "sqlite",
-            "--output",
+            "--from-backend",
+            "json",
+            "--to",
             dst_path.to_str().unwrap(),
+            "--to-backend",
+            "sqlite",
         ])
         .output()
         .unwrap();
@@ -207,17 +225,28 @@ async fn test_migrate_cli_with_explicit_output() {
 }
 
 #[tokio::test]
-async fn test_migrate_cli_default_output_path() {
+async fn test_migrate_cli_explicit_output_path() {
     use assert_cmd::cargo_bin_cmd;
 
     let dir = TempDir::new().unwrap();
     let src_path = dir.path().join("myboard.json");
+    let dst_path = dir.path().join("myboard.db");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
     create_populated_context(src_store).await;
 
     let output = cargo_bin_cmd!("kanban")
-        .args(["migrate", src_path.to_str().unwrap(), "sqlite"])
+        .args([
+            "migrate",
+            "--from",
+            src_path.to_str().unwrap(),
+            "--from-backend",
+            "json",
+            "--to",
+            dst_path.to_str().unwrap(),
+            "--to-backend",
+            "sqlite",
+        ])
         .output()
         .unwrap();
 
@@ -227,19 +256,15 @@ async fn test_migrate_cli_default_output_path() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let expected_output = dir.path().join("myboard.db");
     assert!(
-        expected_output.exists(),
-        "Expected default output at {}",
-        expected_output.display()
+        dst_path.exists(),
+        "Expected output at {}",
+        dst_path.display()
     );
 
-    let loaded = KanbanContext::load(
-        Arc::new(SqliteStore::new(&expected_output)),
-        AppConfig::default(),
-    )
-    .await
-    .unwrap();
+    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&dst_path)), AppConfig::default())
+        .await
+        .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
 }
 
@@ -254,11 +279,24 @@ async fn test_migrate_rejects_unknown_backend() {
     create_populated_context(src_store).await;
 
     let output = cargo_bin_cmd!("kanban")
-        .args(["migrate", src_path.to_str().unwrap(), "postgres"])
+        .args([
+            "migrate",
+            "--from",
+            src_path.to_str().unwrap(),
+            "--from-backend",
+            "json",
+            "--to",
+            dir.path().join("dest.postgres").to_str().unwrap(),
+            "--to-backend",
+            "postgres",
+        ])
         .output()
         .unwrap();
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Unknown backend"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("No backend for") || stderr.contains("Unknown backend"),
+        "stderr: {stderr}"
+    );
 }
