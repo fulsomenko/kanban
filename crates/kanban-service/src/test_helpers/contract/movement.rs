@@ -1,13 +1,12 @@
 use super::super::StoreFactory;
 use crate::KanbanContext;
-use kanban_core::AppConfig;
 use kanban_domain::{CreateCardOptions, KanbanOperations};
 use tempfile::TempDir;
 
 pub async fn test_move_card_between_columns_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -27,7 +26,7 @@ pub async fn test_move_card_between_columns_roundtrip(factory: &StoreFactory) {
     ctx.move_card(card.id, col2.id, Some(0)).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 

@@ -8,7 +8,7 @@ use tempfile::TempDir;
 pub async fn test_sprint_planning_fields_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -22,7 +22,7 @@ pub async fn test_sprint_planning_fields_roundtrip(factory: &StoreFactory) {
     assert!(sprint.end_date.is_none());
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -38,7 +38,7 @@ pub async fn test_sprint_planning_fields_roundtrip(factory: &StoreFactory) {
 pub async fn test_sprint_active_fields_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -47,7 +47,7 @@ pub async fn test_sprint_active_fields_roundtrip(factory: &StoreFactory) {
     ctx.activate_sprint(sprint.id, Some(14)).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -60,7 +60,7 @@ pub async fn test_sprint_active_fields_roundtrip(factory: &StoreFactory) {
 pub async fn test_sprint_completed_status_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -70,7 +70,7 @@ pub async fn test_sprint_completed_status_roundtrip(factory: &StoreFactory) {
     ctx.complete_sprint(sprint.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -81,7 +81,7 @@ pub async fn test_sprint_completed_status_roundtrip(factory: &StoreFactory) {
 pub async fn test_sprint_cancelled_status_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -91,7 +91,7 @@ pub async fn test_sprint_cancelled_status_roundtrip(factory: &StoreFactory) {
     ctx.cancel_sprint(sprint.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -177,7 +177,7 @@ pub async fn test_sprint_explicit_prefix_overrides_all_defaults(factory: &StoreF
 pub async fn test_sprint_with_card_prefix_override_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -196,7 +196,7 @@ pub async fn test_sprint_with_card_prefix_override_roundtrip(factory: &StoreFact
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 

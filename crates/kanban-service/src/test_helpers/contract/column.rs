@@ -1,13 +1,12 @@
 use super::super::StoreFactory;
 use crate::KanbanContext;
-use kanban_core::AppConfig;
 use kanban_domain::{ColumnUpdate, FieldUpdate, KanbanOperations};
 use tempfile::TempDir;
 
 pub async fn test_column_all_fields_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -25,7 +24,7 @@ pub async fn test_column_all_fields_roundtrip(factory: &StoreFactory) {
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -40,7 +39,7 @@ pub async fn test_column_all_fields_roundtrip(factory: &StoreFactory) {
 pub async fn test_column_without_wip_limit_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -48,7 +47,7 @@ pub async fn test_column_without_wip_limit_roundtrip(factory: &StoreFactory) {
     let col = ctx.create_column(board.id, "Open".into(), None).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -60,7 +59,7 @@ pub async fn test_column_without_wip_limit_roundtrip(factory: &StoreFactory) {
 pub async fn test_multiple_columns_preserve_positions(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
@@ -72,7 +71,7 @@ pub async fn test_multiple_columns_preserve_positions(factory: &StoreFactory) {
     let col3 = ctx.create_column(board.id, "Done".into(), Some(2)).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load(factory(&path), AppConfig::default())
+    let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
 
