@@ -45,7 +45,7 @@ pub struct KanbanContext {
     pub sprints: Vec<Sprint>,
     pub archived_cards: Vec<ArchivedCard>,
     pub graph: DependencyGraph,
-    pub app_config: AppConfig,
+    app_config: AppConfig,
     store: Arc<dyn PersistenceStore + Send + Sync>,
 }
 
@@ -91,6 +91,10 @@ impl KanbanContext {
             app_config: config,
             store,
         }
+    }
+
+    pub fn app_config(&self) -> &AppConfig {
+        &self.app_config
     }
 
     pub fn execute(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
