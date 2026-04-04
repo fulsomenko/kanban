@@ -145,8 +145,7 @@ pub enum MigrationState {
     Migrating {
         old_config: AppConfig,
         old_storage_location: String,
-        result_rx:
-            tokio::sync::oneshot::Receiver<Result<(kanban_domain::Snapshot, bool), String>>,
+        result_rx: tokio::sync::oneshot::Receiver<Result<(kanban_domain::Snapshot, bool), String>>,
     },
 }
 

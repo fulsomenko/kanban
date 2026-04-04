@@ -91,7 +91,10 @@ fn test_storage_location_with_dotdot_fails_validation() {
     let mut config = kanban_core::AppConfig::default();
     config.storage_location = Some("../../foo".to_string());
     let result = kanban_service::config::validate(&config);
-    assert!(result.is_err(), "expected validation error for '..' in path");
+    assert!(
+        result.is_err(),
+        "expected validation error for '..' in path"
+    );
     let err = result.unwrap_err().to_string();
     assert!(err.contains(".."), "error should mention '..': {}", err);
 }
@@ -101,7 +104,10 @@ fn test_storage_location_with_nested_dotdot_fails_validation() {
     let mut config = kanban_core::AppConfig::default();
     config.storage_location = Some("data/../../../etc".to_string());
     let result = kanban_service::config::validate(&config);
-    assert!(result.is_err(), "expected validation error for '..' in path");
+    assert!(
+        result.is_err(),
+        "expected validation error for '..' in path"
+    );
     let err = result.unwrap_err().to_string();
     assert!(err.contains(".."), "error should mention '..': {}", err);
 }

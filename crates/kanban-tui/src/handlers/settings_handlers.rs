@@ -60,8 +60,7 @@ impl App {
         if kanban_service::config::has_non_default_values(&config) {
             kanban_service::config::save(&config)
                 .map_err(|e| format!("Failed to save config: {}", e))?;
-            let new_location =
-                kanban_service::config::effective_configuration_location(&config);
+            let new_location = kanban_service::config::effective_configuration_location(&config);
             if new_location != old_location {
                 let old_path = std::path::Path::new(&old_location);
                 if old_path.exists() {
@@ -75,8 +74,7 @@ impl App {
                 }
             }
         } else {
-            let location =
-                kanban_service::config::effective_configuration_location(&config);
+            let location = kanban_service::config::effective_configuration_location(&config);
             let path = std::path::Path::new(&location);
             if path.exists() {
                 if let Err(e) = std::fs::remove_file(path) {
@@ -486,7 +484,10 @@ impl App {
                     dialog.filename.pop();
                 }
                 KeyCode::Char(c)
-                    if !matches!(c, '/' | '\\' | '\0' | ':' | '*' | '?' | '"' | '<' | '>' | '|') =>
+                    if !matches!(
+                        c,
+                        '/' | '\\' | '\0' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+                    ) =>
                 {
                     dialog.filename.push(c);
                 }

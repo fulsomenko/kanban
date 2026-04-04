@@ -928,7 +928,10 @@ async fn test_migration_edit_rejected_while_migrating() {
     app.app_config.storage_location = Some(sqlite_path.to_str().unwrap().to_string());
 
     app.apply_storage_location_change(old_config, &old_storage);
-    assert!(matches!(app.migration_state, MigrationState::Migrating { .. }));
+    assert!(matches!(
+        app.migration_state,
+        MigrationState::Migrating { .. }
+    ));
 
     let format = EditFormat::Json;
     let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml"}"#;
@@ -957,7 +960,10 @@ fn test_export_filename_rejects_path_separator_forward_slash() {
     app.handle_export_boards_dialog(crossterm::event::KeyCode::Char('/'));
 
     let dialog = app.export_dialog.as_ref().unwrap();
-    assert_eq!(dialog.filename, "export.json", "forward slash must be rejected");
+    assert_eq!(
+        dialog.filename, "export.json",
+        "forward slash must be rejected"
+    );
 }
 
 #[test]
