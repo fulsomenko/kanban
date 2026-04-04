@@ -42,8 +42,6 @@ pub struct AppConfig {
     pub storage_backend: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_location: Option<String>,
-    #[serde(skip, default)]
-    pub has_data_file: bool,
 }
 
 impl AppConfig {
@@ -76,19 +74,26 @@ impl AppConfig {
 
     pub fn load_from(path: &Path) -> Self {
         if path.exists() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                match ext {
-                    "json" => {
-                        if let Ok(config) = serde_json::from_str(&content) {
-                            return config;
-                        }
+            match std::fs::read_to_string(path) {
+                Ok(content) => {
+                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                    match ext {
+                        "json" => match serde_json::from_str(&content) {
+                            Ok(config) => return config,
+                            Err(e) => {
+                                tracing::warn!("Failed to parse config {}: {}", path.display(), e)
+                            }
+                        },
+                        _ => match toml::from_str(&content) {
+                            Ok(config) => return config,
+                            Err(e) => {
+                                tracing::warn!("Failed to parse config {}: {}", path.display(), e)
+                            }
+                        },
                     }
-                    _ => {
-                        if let Ok(config) = toml::from_str(&content) {
-                            return config;
-                        }
-                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to read config {}: {}", path.display(), e);
                 }
             }
         }
@@ -97,6 +102,11 @@ impl AppConfig {
 
     pub fn save(&self) -> CoreResult<()> {
         let path_str = self.effective_configuration_location();
+        if path_str.is_empty() {
+            return Err(crate::CoreError::Config(
+                "No configuration location configured".to_string(),
+            ));
+        }
         let path = PathBuf::from(path_str);
         self.save_to(&path)
     }
@@ -246,6 +256,12 @@ impl AppConfig {
             return true;
         }
 
+        // If both storage_backend and storage_location are explicitly set,
+        // treat as non-default (user made a deliberate choice)
+        if self.storage_backend.is_some() && self.storage_location.is_some() {
+            return false;
+        }
+
         self.default_card_prefix
             .as_deref()
             .is_none_or(|v| v == "task")
@@ -275,6 +291,7 @@ impl AppConfig {
     }
 
     pub fn strip_defaults(&mut self) {
+        let had_explicit_backend = self.storage_backend.is_some();
         if self.default_card_prefix.as_deref() == Some("task") {
             self.default_card_prefix = None;
         }
@@ -299,13 +316,15 @@ impl AppConfig {
                 self.configuration_location = None;
             }
         }
-        if let Some(ref loc) = self.storage_location {
-            let default = match self.effective_storage_backend() {
-                "sqlite" => "kanban.sqlite",
-                _ => "kanban.json",
-            };
-            if loc == default {
-                self.storage_location = None;
+        if !had_explicit_backend {
+            if let Some(ref loc) = self.storage_location {
+                let default = match self.effective_storage_backend() {
+                    "sqlite" => "kanban.sqlite",
+                    _ => "kanban.json",
+                };
+                if loc == default {
+                    self.storage_location = None;
+                }
             }
         }
     }
@@ -342,16 +361,8 @@ pub struct AppConfigDto {
 }
 
 impl AppConfigDto {
-    pub fn validate_and_apply(self, entity: &mut AppConfig) -> CoreResult<()> {
-        self.apply_to(entity);
-        entity.validate()?;
-        Ok(())
-    }
-}
-
-impl Editable<AppConfig> for AppConfigDto {
-    fn from_entity(entity: &AppConfig) -> Self {
-        let (storage_backend, storage_location) = if entity.has_data_file {
+    pub fn from_config(entity: &AppConfig, has_data_file: bool) -> Self {
+        let (storage_backend, storage_location) = if has_data_file {
             (
                 Some(entity.effective_storage_backend().to_string()),
                 Some(entity.effective_storage_location()),
@@ -368,6 +379,18 @@ impl Editable<AppConfig> for AppConfigDto {
             configuration_location: Some(entity.effective_configuration_location()),
             storage_location,
         }
+    }
+
+    pub fn validate_and_apply(self, entity: &mut AppConfig) -> CoreResult<()> {
+        self.apply_to(entity);
+        entity.validate()?;
+        Ok(())
+    }
+}
+
+impl Editable<AppConfig> for AppConfigDto {
+    fn from_entity(entity: &AppConfig) -> Self {
+        Self::from_config(entity, false)
     }
 
     fn apply_to(self, entity: &mut AppConfig) {
@@ -590,11 +613,10 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: Some("/tmp/test.toml".into()),
-            has_data_file: true,
             ..Default::default()
         };
 
-        let dto = AppConfigDto::from_entity(&config);
+        let dto = AppConfigDto::from_config(&config, true);
         let mut target = AppConfig::default();
         dto.apply_to(&mut target);
 
@@ -673,11 +695,8 @@ mod tests {
 
     #[test]
     fn test_dto_from_config_with_data_file_shows_storage_fields() {
-        let config = AppConfig {
-            has_data_file: true,
-            ..Default::default()
-        };
-        let dto = AppConfigDto::from_entity(&config);
+        let config = AppConfig::default();
+        let dto = AppConfigDto::from_config(&config, true);
         assert_eq!(dto.storage_backend.as_deref(), Some("json"));
         assert!(
             dto.storage_location
@@ -698,10 +717,9 @@ mod tests {
             editing_format: Some("toml".into()),
             configuration_format: Some("json".into()),
             configuration_location: Some("/custom/path.json".into()),
-            has_data_file: true,
             ..Default::default()
         };
-        let dto = AppConfigDto::from_entity(&config);
+        let dto = AppConfigDto::from_config(&config, true);
         assert_eq!(dto.default_card_prefix.as_deref(), Some("feat"));
         assert_eq!(dto.default_sprint_prefix.as_deref(), Some("iter"));
         assert_eq!(dto.storage_backend.as_deref(), Some("sqlite"));
@@ -855,7 +873,7 @@ mod tests {
     }
 
     #[test]
-    fn test_has_non_default_values_with_explicit_defaults_returns_false() {
+    fn test_has_non_default_values_with_explicit_defaults_returns_true_when_both_storage_set() {
         let config = AppConfig {
             default_card_prefix: Some("task".into()),
             default_sprint_prefix: Some("sprint".into()),
@@ -864,6 +882,21 @@ mod tests {
             configuration_format: Some("toml".into()),
             configuration_location: AppConfig::config_path().map(|p| p.display().to_string()),
             storage_location: Some("kanban.json".into()),
+            ..Default::default()
+        };
+        // Both storage_backend and storage_location explicitly set = deliberate choice
+        assert!(config.has_non_default_values());
+    }
+
+    #[test]
+    fn test_has_non_default_values_with_explicit_defaults_no_storage_location_returns_false() {
+        let config = AppConfig {
+            default_card_prefix: Some("task".into()),
+            default_sprint_prefix: Some("sprint".into()),
+            storage_backend: Some("json".into()),
+            editing_format: Some("json".into()),
+            configuration_format: Some("toml".into()),
+            configuration_location: AppConfig::config_path().map(|p| p.display().to_string()),
             ..Default::default()
         };
         assert!(!config.has_non_default_values());
@@ -1148,5 +1181,74 @@ mod tests {
             keys, sorted,
             "DTO JSON keys should be in alphabetical order"
         );
+    }
+
+    #[test]
+    fn test_load_from_malformed_toml_returns_defaults() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "this is not valid toml {{{").unwrap();
+
+        let config = AppConfig::load_from(&path);
+        assert!(config.default_card_prefix.is_none());
+        assert!(config.storage_backend.is_none());
+    }
+
+    #[test]
+    fn test_load_from_malformed_json_returns_defaults() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, "{not valid json").unwrap();
+
+        let config = AppConfig::load_from(&path);
+        assert!(config.default_card_prefix.is_none());
+        assert!(config.storage_backend.is_none());
+    }
+
+    #[test]
+    fn test_load_from_empty_file_returns_defaults() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "").unwrap();
+
+        let config = AppConfig::load_from(&path);
+        assert!(config.default_card_prefix.is_none());
+        assert!(config.storage_backend.is_none());
+    }
+
+    #[test]
+    fn test_strip_defaults_preserves_location_when_backend_explicit() {
+        let mut config = AppConfig {
+            storage_backend: Some("json".into()),
+            storage_location: Some("kanban.json".into()),
+            ..Default::default()
+        };
+        config.strip_defaults();
+        // Backend was explicit, so location is preserved even though it matches default
+        assert_eq!(config.storage_location.as_deref(), Some("kanban.json"));
+    }
+
+    #[test]
+    fn test_strip_defaults_strips_location_when_backend_not_set() {
+        let mut config = AppConfig {
+            storage_location: Some("kanban.json".into()),
+            ..Default::default()
+        };
+        config.strip_defaults();
+        assert!(config.storage_location.is_none());
+    }
+
+    #[test]
+    fn test_save_returns_error_when_config_location_empty() {
+        let config = AppConfig {
+            configuration_location: Some(String::new()),
+            ..Default::default()
+        };
+        // Only test when effective_configuration_location returns empty
+        // (it falls back to config_path, so we force it via configuration_location)
+        if config.effective_configuration_location().is_empty() {
+            let err = config.save().unwrap_err();
+            assert!(err.to_string().contains("No configuration location"));
+        }
     }
 }
