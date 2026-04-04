@@ -1233,6 +1233,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.17",
  "toml",
+ "tracing",
  "uuid",
 ]
 
