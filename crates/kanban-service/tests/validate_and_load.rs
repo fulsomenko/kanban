@@ -86,6 +86,26 @@ async fn test_validate_and_load_preserves_board_data() {
     assert_eq!(snapshot.boards[0].name, "MyBoard");
 }
 
+#[test]
+fn test_storage_location_with_dotdot_fails_validation() {
+    let mut config = kanban_core::AppConfig::default();
+    config.storage_location = Some("../../foo".to_string());
+    let result = kanban_service::config::validate(&config);
+    assert!(result.is_err(), "expected validation error for '..' in path");
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains(".."), "error should mention '..': {}", err);
+}
+
+#[test]
+fn test_storage_location_with_nested_dotdot_fails_validation() {
+    let mut config = kanban_core::AppConfig::default();
+    config.storage_location = Some("data/../../../etc".to_string());
+    let result = kanban_service::config::validate(&config);
+    assert!(result.is_err(), "expected validation error for '..' in path");
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains(".."), "error should mention '..': {}", err);
+}
+
 #[cfg(feature = "sqlite-storage")]
 async fn create_test_sqlite(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
     use kanban_persistence::{PersistenceMetadata, StoreSnapshot};

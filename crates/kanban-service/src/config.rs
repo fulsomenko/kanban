@@ -141,6 +141,11 @@ pub fn resolve_storage_location(config: &AppConfig) -> String {
 pub fn validate(config: &AppConfig) -> CoreResult<()> {
     config.validate_values()?;
     if let Some(ref v) = config.storage_location {
+        if v.contains("..") {
+            return Err(kanban_core::CoreError::Validation(
+                "storage_location cannot contain '..'".to_string(),
+            ));
+        }
         let path = std::path::Path::new(v);
         let resolved = if path.is_absolute() {
             path.to_path_buf()
