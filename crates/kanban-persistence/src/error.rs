@@ -35,9 +35,13 @@ impl From<PersistenceError> for kanban_domain::KanbanError {
             PersistenceError::Database(s) => kanban_domain::KanbanError::Database(s),
             PersistenceError::UnsupportedLocator { locator, supported } => {
                 kanban_domain::KanbanError::Internal(format!(
-                    "unsupported storage locator {:?}; supported: {}",
+                    "No backend named {:?} is registered. Available backends: {}",
                     locator,
-                    supported.join(", ")
+                    if supported.is_empty() {
+                        "none".to_string()
+                    } else {
+                        supported.join(", ")
+                    }
                 ))
             }
             PersistenceError::ConflictDetected { path, source } => {

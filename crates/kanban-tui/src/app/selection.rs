@@ -8,4 +8,7 @@ pub struct SelectionHub {
     pub sprint: SelectionState,
     pub active_sprint_index: Option<usize>,
     pub card_navigation_history: Vec<usize>,
+    pub settings_config: SelectionState,
+    pub settings_config_file: SelectionState,
+    pub settings_storage: SelectionState,
 }

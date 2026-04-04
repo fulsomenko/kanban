@@ -27,6 +27,7 @@ pub enum DialogMode {
     ManageParents,
     ManageChildren,
     CarryOverSprint,
+    ExportBoards,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,7 @@ pub enum AppMode {
     SprintDetail,
     Search,
     ArchivedCardsView,
+    Settings,
     Help(Box<AppMode>),
     Dialog(DialogMode),
 }

@@ -8,7 +8,10 @@ pub mod pagination;
 pub mod selection;
 pub mod traits;
 
-pub use config::AppConfig;
+pub use config::{
+    validate_branch_prefix, AppConfig, DEFAULT_JSON_FILENAME, DEFAULT_SQLITE_FILENAME,
+    DEFAULT_STORAGE_BACKEND,
+};
 pub use error::{CoreError, CoreResult};
 pub use graph::{Edge, EdgeDirection, Graph, GraphNode};
 pub use input::InputState;

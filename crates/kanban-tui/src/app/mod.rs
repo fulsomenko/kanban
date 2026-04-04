@@ -2,7 +2,7 @@ pub mod mode;
 pub use mode::{AppMode, DialogMode};
 
 pub mod focus;
-pub use focus::{BoardFocus, CardFocus, Focus, FocusState};
+pub use focus::{BoardFocus, CardFocus, Focus, FocusState, SettingsFocus};
 
 pub mod sprint_view;
 pub use sprint_view::{SprintTaskPanel, SprintViewState};
@@ -50,6 +50,7 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, InputState};
 use kanban_domain::AnimationType;
+use kanban_domain::KanbanResult;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
     filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter},
@@ -57,8 +58,6 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
-use kanban_domain::{KanbanError, KanbanResult};
-use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
 
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -84,6 +83,75 @@ pub struct App {
     pub view: ViewState,
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
+    pub has_data_file: bool,
+    pub cli_file_override: bool,
+    pub config_storage_backend: String,
+    pub config_storage_location: String,
+    pub original_storage_backend: Option<String>,
+    pub original_storage_location: Option<String>,
+    pub export_dialog: Option<ExportDialogState>,
+    pub migration_state: MigrationState,
+    pub export_result_rx: Option<tokio::sync::oneshot::Receiver<Result<String, String>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExportStep {
+    SelectBoards,
+    ExportOptions,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ExportFormat {
+    #[default]
+    Json,
+    Sqlite,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportDialogState {
+    pub board_selections: Vec<bool>,
+    pub cursor: usize,
+    pub step: ExportStep,
+    pub format: ExportFormat,
+    pub filename: String,
+}
+
+impl ExportDialogState {
+    pub fn new(board_count: usize) -> Self {
+        Self {
+            board_selections: vec![false; board_count],
+            cursor: 0,
+            step: ExportStep::SelectBoards,
+            format: ExportFormat::default(),
+            filename: "export.json".to_string(),
+        }
+    }
+
+    pub fn toggle(&mut self, index: usize) {
+        if let Some(selected) = self.board_selections.get_mut(index) {
+            *selected = !*selected;
+        }
+    }
+
+    pub fn select_all(&mut self) {
+        let all_selected = self.board_selections.iter().all(|&s| s);
+        for s in &mut self.board_selections {
+            *s = !all_selected;
+        }
+    }
+
+    pub fn any_selected(&self) -> bool {
+        self.board_selections.iter().any(|&s| s)
+    }
+}
+
+pub enum MigrationState {
+    Idle,
+    Migrating {
+        old_config: AppConfig,
+        old_storage_location: String,
+        result_rx: tokio::sync::oneshot::Receiver<Result<(kanban_domain::Snapshot, bool), String>>,
+    },
 }
 
 pub enum CardField {
@@ -103,8 +171,40 @@ impl App {
         Self,
         Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
     )> {
-        let app_config = AppConfig::load();
-        let (ctx, save_rx, save_completion_rx) = TuiContext::new(save_file.clone())?;
+        let mut app_config = kanban_service::config::load();
+        let config_resolved = kanban_service::config::resolve_storage_location(&app_config);
+        let config_storage_backend = app_config.effective_storage_backend().to_string();
+        let config_storage_location = config_resolved.clone();
+        let original_storage_backend = app_config.storage_backend.clone();
+        let original_storage_location = app_config.storage_location.clone();
+        if let Some(ref file) = save_file {
+            let path = std::path::Path::new(file);
+            let resolved = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                std::env::current_dir()
+                    .map(|cwd| cwd.join(path))
+                    .unwrap_or_else(|_| path.to_path_buf())
+            };
+            let canonical = resolved.canonicalize().unwrap_or(resolved);
+            app_config.storage_location = Some(canonical.display().to_string());
+            // File arg is the source of truth — ignore config's storage_backend
+            app_config.storage_backend = None;
+        }
+        if kanban_service::sync_backend_with_file(
+            &app_config.effective_storage_location(),
+            &mut app_config,
+        ) {
+            tracing::warn!(
+                "Storage backend auto-corrected to '{}' based on file content",
+                app_config.effective_storage_backend()
+            );
+        }
+        let backend = app_config.effective_storage_backend();
+        let effective_file = kanban_service::config::resolve_storage_location(&app_config);
+        let cli_file_override = save_file.is_some() && effective_file != config_resolved;
+        let (ctx, save_rx, save_completion_rx) =
+            TuiContext::new(backend, Some(effective_file.clone()))?;
         let app = Self {
             should_quit: false,
             quit_with_pending: false,
@@ -118,13 +218,22 @@ impl App {
             filter: FilterState::default(),
             dialog_input: DialogInputState::default(),
             focus: FocusState::default(),
-            persistence: PersistenceState::new(save_file.clone(), save_completion_rx),
+            persistence: PersistenceState::new(Some(effective_file), save_completion_rx),
             multi_select: MultiSelectState::default(),
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
+            has_data_file: true,
+            cli_file_override,
+            config_storage_backend,
+            config_storage_location,
+            original_storage_backend,
+            original_storage_location,
+            export_dialog: None,
+            migration_state: MigrationState::Idle,
+            export_result_rx: None,
         };
 
         Ok((app, save_rx))
@@ -132,6 +241,83 @@ impl App {
 
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    pub fn spawn_save_worker(
+        &mut self,
+        mut rx: tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>,
+    ) {
+        use kanban_domain::KanbanError;
+        use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
+
+        if let Some(store) = self.ctx.state_manager.store().cloned() {
+            let instance_id = self.ctx.state_manager.instance_id();
+            let file_watcher = self.persistence.file_watcher.clone();
+            let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
+
+            tracing::info!("Spawning save worker to process snapshots");
+            let handle = tokio::spawn(async move {
+                tracing::info!("Save worker task started, waiting for snapshots");
+                while let Some(snapshot) = rx.recv().await {
+                    tracing::debug!("Save worker received snapshot, starting save operation");
+
+                    let data = match kanban_persistence::snapshot_to_json_bytes(&snapshot) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            tracing::error!("Failed to serialize snapshot: {}", e);
+                            if let Some(ref watcher) = file_watcher {
+                                watcher.resume();
+                            }
+                            continue;
+                        }
+                    };
+
+                    let persistence_snapshot = StoreSnapshot {
+                        data,
+                        metadata: PersistenceMetadata::new(instance_id),
+                    };
+
+                    match store
+                        .save(persistence_snapshot)
+                        .await
+                        .map_err(KanbanError::from)
+                    {
+                        Ok(_) => {
+                            tracing::debug!("Save worker completed save");
+                            if let Some(ref tx) = save_completion_tx {
+                                if let Err(e) = tx.send(()) {
+                                    tracing::error!("Failed to send save completion signal: {}", e);
+                                }
+                            }
+                        }
+                        Err(KanbanError::ConflictDetected { path, .. }) => {
+                            tracing::warn!("Save worker detected conflict at {}", path);
+                            if let Some(ref tx) = save_completion_tx {
+                                if let Err(e) = tx.send(()) {
+                                    tracing::error!("Failed to send save completion signal: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Save worker failed: {}", e);
+                            if let Some(ref tx) = save_completion_tx {
+                                if let Err(e) = tx.send(()) {
+                                    tracing::error!("Failed to send save completion signal: {}", e);
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(ref watcher) = file_watcher {
+                        watcher.resume();
+                    }
+                }
+                tracing::info!("Save worker exited recv loop (channel closed)");
+            });
+            self.persistence.save_worker_handle = Some(handle);
+        } else {
+            tracing::warn!("Could not spawn save worker: no store available");
+        }
     }
 
     pub fn push_mode(&mut self, new_mode: AppMode) {
@@ -294,6 +480,8 @@ impl App {
                     self.set_error(format!("Redo failed: {}", e));
                 }
             }
+            KeybindingAction::OpenSettings => self.handle_open_settings(),
+            KeybindingAction::ExportBoards => {}
         }
     }
 
@@ -566,6 +754,10 @@ impl App {
                         self.set_error(format!("Redo failed: {}", e));
                     }
                 }
+                KeyCode::Char('S') => {
+                    self.pending_key = None;
+                    self.handle_open_settings();
+                }
                 _ => {
                     self.pending_key = None;
                 }
@@ -581,6 +773,9 @@ impl App {
             AppMode::SprintDetail => self.handle_sprint_detail_key(key.code),
             AppMode::Search => self.handle_search_mode(key.code),
             AppMode::ArchivedCardsView => self.handle_archived_cards_view_mode(key.code),
+            AppMode::Settings => {
+                should_restart_events = self.handle_settings_key(key.code, terminal, event_handler);
+            }
             AppMode::Help(_) => self.handle_help_mode(key.code),
             AppMode::Dialog(ref dialog) => match dialog {
                 DialogMode::CreateBoard => self.handle_create_board_dialog(key.code),
@@ -626,6 +821,7 @@ impl App {
                 DialogMode::ManageParents => self.handle_manage_parents_popup(key.code),
                 DialogMode::ManageChildren => self.handle_manage_children_popup(key.code),
                 DialogMode::CarryOverSprint => self.handle_carry_over_sprint_popup(key.code),
+                DialogMode::ExportBoards => self.handle_export_boards_dialog(key.code),
             },
         }
         should_restart_events
@@ -1345,20 +1541,35 @@ impl App {
         event_handler: &EventHandler,
         temp_file: std::path::PathBuf,
     ) -> io::Result<()> {
+        Self::edit_entity_impl::<T, E>(
+            entity,
+            terminal,
+            event_handler,
+            temp_file,
+            crate::edit_format::EditFormat::Json,
+        )
+    }
+
+    pub fn edit_entity_impl<T: Editable<E>, E>(
+        entity: &mut E,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        event_handler: &EventHandler,
+        temp_file: std::path::PathBuf,
+        format: crate::edit_format::EditFormat,
+    ) -> io::Result<()> {
         let dto = T::from_entity(entity);
-        let current_content =
-            serde_json::to_string_pretty(&dto).unwrap_or_else(|_| "{}".to_string());
+        let current_content = format.serialize(&dto).unwrap_or_else(|_| "{}".to_string());
 
         if let Some(new_content) =
             edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
         {
-            match serde_json::from_str::<T>(&new_content) {
+            match format.deserialize::<T>(&new_content) {
                 Ok(updated_dto) => {
                     updated_dto.apply_to(entity);
-                    tracing::info!("Updated entity via JSON editor");
+                    tracing::info!("Updated entity via {} editor", format);
                 }
                 Err(e) => {
-                    tracing::error!("Failed to parse JSON: {}", e);
+                    tracing::error!("Failed to parse {}: {}", format, e);
                 }
             }
         }
@@ -1436,91 +1647,8 @@ impl App {
         }
 
         // Spawn async save worker if save channel is configured
-        if let Some(mut rx) = save_rx {
-            tracing::debug!("Save channel receiver available");
-            if let Some(store) = self.ctx.state_manager.store().cloned() {
-                let instance_id = self.ctx.state_manager.instance_id();
-                let file_watcher = self.persistence.file_watcher.clone();
-                let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
-
-                tracing::info!("Spawning save worker to process snapshots");
-                let handle = tokio::spawn(async move {
-                    tracing::info!("Save worker task started, waiting for snapshots");
-                    while let Some(snapshot) = rx.recv().await {
-                        tracing::debug!("Save worker received snapshot, starting save operation");
-
-                        let data = match kanban_persistence::snapshot_to_json_bytes(&snapshot) {
-                            Ok(d) => d,
-                            Err(e) => {
-                                tracing::error!("Failed to serialize snapshot: {}", e);
-                                // Resume file watching since save is not happening
-                                if let Some(ref watcher) = file_watcher {
-                                    watcher.resume();
-                                }
-                                continue;
-                            }
-                        };
-
-                        let persistence_snapshot = StoreSnapshot {
-                            data,
-                            metadata: PersistenceMetadata::new(instance_id),
-                        };
-
-                        match store
-                            .save(persistence_snapshot)
-                            .await
-                            .map_err(KanbanError::from)
-                        {
-                            Ok(_) => {
-                                tracing::debug!("Save worker completed save");
-                                // Signal that save is complete
-                                if let Some(ref tx) = save_completion_tx {
-                                    if let Err(e) = tx.send(()) {
-                                        tracing::error!(
-                                            "Failed to send save completion signal: {}",
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                            Err(KanbanError::ConflictDetected { path, .. }) => {
-                                tracing::warn!("Save worker detected conflict at {}", path);
-                                // Signal completion even on conflict
-                                if let Some(ref tx) = save_completion_tx {
-                                    if let Err(e) = tx.send(()) {
-                                        tracing::error!(
-                                            "Failed to send save completion signal: {}",
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!("Save worker failed: {}", e);
-                                // Signal completion even on failure
-                                if let Some(ref tx) = save_completion_tx {
-                                    if let Err(e) = tx.send(()) {
-                                        tracing::error!(
-                                            "Failed to send save completion signal: {}",
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                        }
-
-                        // Resume file watching after save completes
-                        // Metadata-based own-write detection filters out our own writes
-                        if let Some(ref watcher) = file_watcher {
-                            watcher.resume();
-                        }
-                    }
-                    tracing::info!("Save worker exited recv loop (channel closed)");
-                });
-                self.persistence.save_worker_handle = Some(handle);
-            } else {
-                tracing::warn!("Could not spawn save worker: no store available");
-            }
+        if let Some(rx) = save_rx {
+            self.spawn_save_worker(rx);
         } else {
             tracing::debug!("No save channel receiver - no saves will be processed");
         }
@@ -1622,6 +1750,36 @@ impl App {
                                     self.refresh_view();
                                     self.ctx.state_manager.clear_refresh();
                                 }
+                            }
+                        }
+                    }
+                    result = async {
+                        if let MigrationState::Migrating { ref mut result_rx, .. } = self.migration_state {
+                            result_rx.await.ok()
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        let old_config = match std::mem::replace(&mut self.migration_state, MigrationState::Idle) {
+                            MigrationState::Migrating { old_config, .. } => old_config,
+                            MigrationState::Idle => unreachable!(),
+                        };
+                        if let Some(result) = result {
+                            self.handle_migration_complete(old_config, result);
+                        }
+                    }
+                    export_result = async {
+                        if let Some(ref mut rx) = &mut self.export_result_rx {
+                            rx.await.ok()
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        self.export_result_rx = None;
+                        if let Some(result) = export_result {
+                            match result {
+                                Ok(filename) => self.set_success(format!("Exported to {}", filename)),
+                                Err(e) => self.set_error(e),
                             }
                         }
                     }

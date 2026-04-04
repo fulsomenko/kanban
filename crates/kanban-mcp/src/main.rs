@@ -5,12 +5,12 @@ use rmcp::ServiceExt;
 use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-fn parse_args() -> PathBuf {
+fn parse_args() -> Option<PathBuf> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
-        PathBuf::from(&args[1])
+        Some(PathBuf::from(&args[1]))
     } else {
-        PathBuf::from("kanban.json")
+        None
     }
 }
 
@@ -45,7 +45,10 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
         .init();
 
-    let data_file_path = parse_args();
+    let config = kanban_service::config::load();
+
+    let data_file_path =
+        parse_args().unwrap_or_else(|| PathBuf::from(config.effective_storage_location()));
     let validated_path = validate_path(&data_file_path)?;
 
     let data_file = validated_path
@@ -54,7 +57,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting Kanban MCP server with data file: {}", data_file);
 
-    let server = KanbanMcpServer::new(data_file).await?;
+    let server = KanbanMcpServer::new(data_file, config).await?;
 
     let service = server.serve(stdio()).await?;
 

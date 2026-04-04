@@ -9,7 +9,7 @@ async fn carry_over_skips_done_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
 
-    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path)))
+    let mut ctx = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&path)))
         .await
         .unwrap();
 
@@ -89,7 +89,7 @@ async fn carry_over_returns_zero_when_sprint_has_no_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
 
-    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path)))
+    let mut ctx = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&path)))
         .await
         .unwrap();
 
@@ -112,7 +112,7 @@ async fn carry_over_returns_zero_when_all_cards_are_done() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
 
-    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path)))
+    let mut ctx = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&path)))
         .await
         .unwrap();
 
@@ -178,7 +178,7 @@ async fn carry_over_includes_blocked_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
 
-    let mut ctx = KanbanContext::load(Arc::new(JsonFileStore::new(&path)))
+    let mut ctx = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&path)))
         .await
         .unwrap();
 

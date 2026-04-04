@@ -3,11 +3,6 @@ use std::sync::Arc;
 
 pub trait StoreFactory: Send + Sync {
     fn name(&self) -> &str;
-    fn default_extension(&self) -> &str {
-        self.name()
-    }
-    fn supported_patterns(&self) -> &[&str];
-    fn matches_locator(&self, locator: &str) -> bool;
     fn matches_content(&self, _header: &[u8]) -> bool {
         false
     }
@@ -41,42 +36,21 @@ impl StoreRegistry {
         self.factories.push(factory);
     }
 
-    pub fn create_store(
-        &self,
-        locator: &str,
-    ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
+    pub fn detect_backend(&self, locator: &str) -> Option<&str> {
         let path = std::path::Path::new(locator);
-
-        // Phase 1: If the file exists, try content-based detection
         if path.exists() {
             if let Ok(header) = read_header(path, 32) {
                 for factory in &self.factories {
                     if factory.matches_content(&header) {
-                        return factory.create(locator);
+                        return Some(factory.name());
                     }
                 }
             }
         }
-
-        // Phase 2: Fall back to locator-based (extension) matching
-        for factory in &self.factories {
-            if factory.matches_locator(locator) {
-                return factory.create(locator);
-            }
-        }
-
-        let supported: Vec<String> = self
-            .factories
-            .iter()
-            .flat_map(|f| f.supported_patterns().iter().map(|s| (*s).to_string()))
-            .collect();
-        Err(PersistenceError::UnsupportedLocator {
-            locator: locator.to_string(),
-            supported,
-        })
+        None
     }
 
-    pub fn create_by_name(
+    pub fn create_store(
         &self,
         backend: &str,
         locator: &str,
@@ -86,24 +60,16 @@ impl StoreRegistry {
                 return factory.create(locator);
             }
         }
-        Err(PersistenceError::UnsupportedLocator {
-            locator: format!("backend={backend}"),
-            supported: self.available_backend_names(),
-        })
-    }
 
-    pub fn available_backend_names(&self) -> Vec<String> {
-        self.factories
+        let supported: Vec<String> = self
+            .factories
             .iter()
             .map(|f| f.name().to_string())
-            .collect()
-    }
-
-    pub fn default_extension_for(&self, backend: &str) -> Option<&str> {
-        self.factories
-            .iter()
-            .find(|f| f.name() == backend)
-            .map(|f| f.default_extension())
+            .collect();
+        Err(PersistenceError::UnsupportedLocator {
+            locator: locator.to_string(),
+            supported,
+        })
     }
 }
 
@@ -159,19 +125,6 @@ mod tests {
         fn name(&self) -> &str {
             "sqlite"
         }
-        fn default_extension(&self) -> &str {
-            "db"
-        }
-        fn supported_patterns(&self) -> &[&str] {
-            &["*.sqlite", "*.db"]
-        }
-        fn matches_locator(&self, locator: &str) -> bool {
-            let ext = std::path::Path::new(locator)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-            matches!(ext, "sqlite" | "sqlite3" | "db")
-        }
         fn matches_content(&self, header: &[u8]) -> bool {
             header.starts_with(b"SQLite format 3\0")
         }
@@ -190,16 +143,6 @@ mod tests {
     impl StoreFactory for FakeJsonFactory {
         fn name(&self) -> &str {
             "json"
-        }
-        fn supported_patterns(&self) -> &[&str] {
-            &["*.json"]
-        }
-        fn matches_locator(&self, locator: &str) -> bool {
-            let ext = std::path::Path::new(locator)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-            ext == "json" || ext.is_empty()
         }
         fn matches_content(&self, header: &[u8]) -> bool {
             let trimmed = header.iter().find(|b| !b.is_ascii_whitespace());
@@ -258,112 +201,27 @@ mod tests {
     }
 
     #[test]
-    fn test_new_file_falls_back_to_extension() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("new_board.json");
-        // File does not exist — should fall back to locator matching
-        assert!(!path.exists());
-
-        assert!(FakeJsonFactory.matches_locator(path.to_str().unwrap()));
-        assert!(!FakeSqliteFactory.matches_locator(path.to_str().unwrap()));
-    }
-
-    #[test]
-    fn test_create_store_content_beats_wrong_extension() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("misleading.json");
-        std::fs::write(&path, b"SQLite format 3\0").unwrap();
-
-        let registry = registry_with_both_factories();
-        let store = registry.create_store(path.to_str().unwrap()).unwrap();
-
-        assert_eq!(store.instance_id(), SQLITE_INSTANCE_ID);
-    }
-
-    #[test]
-    fn test_create_store_new_file_uses_locator() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("new_board.json");
-        assert!(!path.exists());
-
-        let registry = registry_with_both_factories();
-        let store = registry.create_store(path.to_str().unwrap()).unwrap();
-
-        assert_eq!(store.instance_id(), JSON_INSTANCE_ID);
-    }
-
-    #[test]
-    fn test_create_store_json_content_match() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("data.db");
-        std::fs::write(&path, b"{\"boards\":[]}").unwrap();
-
-        let registry = registry_with_both_factories();
-        let store = registry.create_store(path.to_str().unwrap()).unwrap();
-
-        assert_eq!(store.instance_id(), JSON_INSTANCE_ID);
-    }
-
-    #[test]
-    fn test_create_by_name_returns_correct_backend() {
+    fn test_create_store_by_name_returns_correct_backend() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("data.anything");
 
         let registry = registry_with_both_factories();
         let store = registry
-            .create_by_name("json", path.to_str().unwrap())
+            .create_store("json", path.to_str().unwrap())
             .unwrap();
         assert_eq!(store.instance_id(), JSON_INSTANCE_ID);
 
         let path2 = dir.path().join("data2.anything");
         let store2 = registry
-            .create_by_name("sqlite", path2.to_str().unwrap())
+            .create_store("sqlite", path2.to_str().unwrap())
             .unwrap();
         assert_eq!(store2.instance_id(), SQLITE_INSTANCE_ID);
     }
 
     #[test]
-    fn test_create_by_name_unknown_backend_returns_error() {
+    fn test_create_store_unknown_backend_returns_error() {
         let registry = registry_with_both_factories();
-        let result = registry.create_by_name("postgres", "/tmp/test");
-        match result {
-            Err(PersistenceError::UnsupportedLocator { .. }) => {}
-            Err(e) => panic!("expected UnsupportedLocator, got: {e:?}"),
-            Ok(_) => panic!("expected error, got Ok"),
-        }
-    }
-
-    #[test]
-    fn test_available_backend_names() {
-        let registry = registry_with_both_factories();
-        let names = registry.available_backend_names();
-        assert!(names.contains(&"sqlite".to_string()));
-        assert!(names.contains(&"json".to_string()));
-        assert_eq!(names.len(), 2);
-    }
-
-    #[test]
-    fn test_default_extension_for_known_backends() {
-        let registry = registry_with_both_factories();
-        assert_eq!(registry.default_extension_for("sqlite"), Some("db"));
-        assert_eq!(registry.default_extension_for("json"), Some("json"));
-    }
-
-    #[test]
-    fn test_default_extension_for_unknown_backend_returns_none() {
-        let registry = registry_with_both_factories();
-        assert_eq!(registry.default_extension_for("postgres"), None);
-    }
-
-    #[test]
-    fn test_create_store_unsupported_locator() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("data.xyz");
-        assert!(!path.exists());
-
-        let registry = registry_with_both_factories();
-        let result = registry.create_store(path.to_str().unwrap());
-
+        let result = registry.create_store("postgres", "/tmp/test");
         match result {
             Err(PersistenceError::UnsupportedLocator { .. }) => {}
             Err(e) => panic!("expected UnsupportedLocator, got: {e:?}"),

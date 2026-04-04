@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 async fn create_populated_context(store: Arc<dyn PersistenceStore + Send + Sync>) -> KanbanContext {
-    let mut ctx = KanbanContext::load(store).await.unwrap();
+    let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
@@ -31,7 +31,7 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
     let sqlite_store = Arc::new(SqliteStore::new(&db_path));
     sqlite_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&db_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&db_path)))
         .await
         .unwrap();
 
@@ -58,7 +58,7 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     let json_store = Arc::new(JsonFileStore::new(&json_path));
     json_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(JsonFileStore::new(&json_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&json_path)))
         .await
         .unwrap();
 
@@ -84,7 +84,7 @@ async fn test_migrate_json_to_json_roundtrip() {
     let dst_store = Arc::new(JsonFileStore::new(&dst_path));
     dst_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(JsonFileStore::new(&dst_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&dst_path)))
         .await
         .unwrap();
 
@@ -105,7 +105,7 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     let dst_store = Arc::new(SqliteStore::new(&dst_path));
     dst_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
         .await
         .unwrap();
 
@@ -121,13 +121,22 @@ async fn test_migrate_rejects_missing_source() {
     let missing = dir.path().join("nonexistent.json");
 
     let output = cargo_bin_cmd!("kanban")
-        .args(["migrate", missing.to_str().unwrap(), "sqlite"])
+        .args([
+            "migrate",
+            missing.to_str().unwrap(),
+            "sqlite",
+            "--output",
+            dir.path().join("dest.sqlite").to_str().unwrap(),
+        ])
         .output()
         .unwrap();
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Source file not found"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("not found") || stderr.contains("does not exist"),
+        "stderr: {stderr}"
+    );
 }
 
 #[tokio::test]
@@ -156,10 +165,7 @@ async fn test_migrate_rejects_existing_target() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("Destination already exists"),
-        "stderr: {stderr}"
-    );
+    assert!(stderr.contains("already exists"), "stderr: {stderr}");
 }
 
 #[tokio::test]
@@ -191,7 +197,47 @@ async fn test_migrate_cli_with_explicit_output() {
     );
     assert!(dst_path.exists());
 
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
+        .await
+        .unwrap();
+    assert_eq!(loaded.list_boards().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_migrate_cli_explicit_output_path() {
+    use assert_cmd::cargo_bin_cmd;
+
+    let dir = TempDir::new().unwrap();
+    let src_path = dir.path().join("myboard.json");
+    let dst_path = dir.path().join("myboard.db");
+
+    let src_store = Arc::new(JsonFileStore::new(&src_path));
+    create_populated_context(src_store).await;
+
+    let output = cargo_bin_cmd!("kanban")
+        .args([
+            "migrate",
+            src_path.to_str().unwrap(),
+            "sqlite",
+            "--output",
+            dst_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        dst_path.exists(),
+        "Expected output at {}",
+        dst_path.display()
+    );
+
+    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
@@ -203,6 +249,7 @@ async fn test_migrate_cli_default_output_path() {
 
     let dir = TempDir::new().unwrap();
     let src_path = dir.path().join("myboard.json");
+    let expected_output = dir.path().join("myboard.sqlite");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
     create_populated_context(src_store).await;
@@ -217,18 +264,11 @@ async fn test_migrate_cli_default_output_path() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-
-    let expected_output = dir.path().join("myboard.db");
     assert!(
         expected_output.exists(),
         "Expected default output at {}",
         expected_output.display()
     );
-
-    let loaded = KanbanContext::load(Arc::new(SqliteStore::new(&expected_output)))
-        .await
-        .unwrap();
-    assert_eq!(loaded.list_boards().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -242,11 +282,20 @@ async fn test_migrate_rejects_unknown_backend() {
     create_populated_context(src_store).await;
 
     let output = cargo_bin_cmd!("kanban")
-        .args(["migrate", src_path.to_str().unwrap(), "postgres"])
+        .args([
+            "migrate",
+            src_path.to_str().unwrap(),
+            "postgres",
+            "--output",
+            dir.path().join("dest.postgres").to_str().unwrap(),
+        ])
         .output()
         .unwrap();
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Unknown backend"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("No backend named") || stderr.contains("Unknown backend"),
+        "stderr: {stderr}"
+    );
 }

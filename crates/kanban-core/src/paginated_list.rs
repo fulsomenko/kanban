@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn test_paginate_empty() {
         let result = PaginatedList::<i32>::paginate(vec![], 1, 10).unwrap();
-        assert_eq!(result.items, vec![]);
+        assert_eq!(result.items, Vec::<i32>::new());
         assert_eq!(result.total, 0);
         assert_eq!(result.total_pages, 0);
         assert_eq!(result.page, 1);
@@ -141,7 +141,7 @@ mod tests {
     fn test_paginate_out_of_bounds() {
         let items: Vec<i32> = (1..=5).collect();
         let result = PaginatedList::paginate(items, 3, 5).unwrap();
-        assert_eq!(result.items, vec![]);
+        assert_eq!(result.items, Vec::<i32>::new());
         assert_eq!(result.total, 5);
         assert_eq!(result.total_pages, 1);
     }
@@ -221,6 +221,6 @@ mod tests {
         let result = PaginatedList::<i32>::paginate(vec![], 1, 10).unwrap();
         assert_eq!(result.total, 0);
         assert_eq!(result.total_pages, 0);
-        assert_eq!(result.items, vec![]);
+        assert_eq!(result.items, Vec::<i32>::new());
     }
 }

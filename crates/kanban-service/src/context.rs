@@ -1,3 +1,4 @@
+use kanban_core::AppConfig;
 use kanban_domain::commands::{Command, CommandContext};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
@@ -44,13 +45,17 @@ pub struct KanbanContext {
     pub sprints: Vec<Sprint>,
     pub archived_cards: Vec<ArchivedCard>,
     pub graph: DependencyGraph,
+    app_config: AppConfig,
     store: Arc<dyn PersistenceStore + Send + Sync>,
 }
 
 impl KanbanContext {
-    pub async fn load(store: Arc<dyn PersistenceStore + Send + Sync>) -> KanbanResult<Self> {
+    pub async fn load(
+        store: Arc<dyn PersistenceStore + Send + Sync>,
+        config: AppConfig,
+    ) -> KanbanResult<Self> {
         if !store.exists().await {
-            return Ok(Self::empty(store));
+            return Ok(Self::empty(store, config));
         }
 
         let (snapshot, _metadata) = store.load().await?;
@@ -64,11 +69,18 @@ impl KanbanContext {
             sprints: data.sprints,
             archived_cards: data.archived_cards,
             graph: data.graph,
+            app_config: config,
             store,
         })
     }
 
-    fn empty(store: Arc<dyn PersistenceStore + Send + Sync>) -> Self {
+    pub async fn load_with_defaults(
+        store: Arc<dyn PersistenceStore + Send + Sync>,
+    ) -> KanbanResult<Self> {
+        Self::load(store, AppConfig::default()).await
+    }
+
+    fn empty(store: Arc<dyn PersistenceStore + Send + Sync>, config: AppConfig) -> Self {
         Self {
             boards: Vec::new(),
             columns: Vec::new(),
@@ -76,8 +88,13 @@ impl KanbanContext {
             sprints: Vec::new(),
             archived_cards: Vec::new(),
             graph: DependencyGraph::new(),
+            app_config: config,
             store,
         }
+    }
+
+    pub fn app_config(&self) -> &AppConfig {
+        &self.app_config
     }
 
     pub fn execute(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
@@ -483,7 +500,11 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.branch_name(board, &self.sprints, "task"))
+        Ok(card.branch_name(
+            board,
+            &self.sprints,
+            self.app_config.effective_default_card_prefix(),
+        ))
     }
 
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
@@ -500,7 +521,11 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .find(|b| b.id == column.board_id)
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.git_checkout_command(board, &self.sprints, "task"))
+        Ok(card.git_checkout_command(
+            board,
+            &self.sprints,
+            self.app_config.effective_default_card_prefix(),
+        ))
     }
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
@@ -585,7 +610,11 @@ impl KanbanOperations for KanbanContext {
 
             let effective_prefix = prefix
                 .or_else(|| board.sprint_prefix.clone())
-                .unwrap_or_else(|| "sprint".to_string());
+                .unwrap_or_else(|| {
+                    self.app_config
+                        .effective_default_sprint_prefix()
+                        .to_string()
+                });
 
             board.ensure_sprint_counter_initialized(&effective_prefix, &self.sprints);
             let sprint_number = board.get_next_sprint_number(&effective_prefix);

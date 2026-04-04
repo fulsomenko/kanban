@@ -1,3 +1,4 @@
+use kanban_core::AppConfig;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
@@ -13,9 +14,17 @@ pub struct CliContext {
 }
 
 impl CliContext {
-    pub async fn load(file_path: &str) -> KanbanResult<Self> {
+    pub async fn load(file_path: &str, mut config: AppConfig) -> KanbanResult<Self> {
+        if kanban_service::sync_backend_with_file(file_path, &mut config) {
+            eprintln!(
+                "Warning: storage backend auto-corrected from config value to '{}' based on file content.",
+                config.effective_storage_backend()
+            );
+        }
+        let backend = config.effective_storage_backend().to_string();
         Ok(Self {
-            inner: KanbanContext::load(kanban_service::make_store(file_path)?).await?,
+            inner: KanbanContext::load(kanban_service::make_store(&backend, file_path)?, config)
+                .await?,
         })
     }
 

@@ -84,6 +84,12 @@ impl KeybindingProvider for NormalModeBoardsProvider {
                     "Redo last undone action",
                     KeybindingAction::Redo,
                 ),
+                Keybinding::new(
+                    "S",
+                    "settings",
+                    "Open settings view",
+                    KeybindingAction::OpenSettings,
+                ),
             ],
         )
     }

@@ -15,22 +15,6 @@ impl StoreFactory for SqliteStoreFactory {
         "sqlite"
     }
 
-    fn default_extension(&self) -> &str {
-        "db"
-    }
-
-    fn supported_patterns(&self) -> &[&str] {
-        &["*.sqlite", "*.sqlite3", "*.db"]
-    }
-
-    fn matches_locator(&self, locator: &str) -> bool {
-        let ext = std::path::Path::new(locator)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
-        matches!(ext, "sqlite" | "sqlite3" | "db")
-    }
-
     fn matches_content(&self, header: &[u8]) -> bool {
         header.starts_with(b"SQLite format 3\0")
     }

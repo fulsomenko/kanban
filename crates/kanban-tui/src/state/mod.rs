@@ -16,6 +16,8 @@ pub use snapshot::TuiSnapshot;
 type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
 type SaveChannel = (mpsc::Sender<Snapshot>, mpsc::Receiver<Snapshot>);
 
+const SAVE_QUEUE_CAPACITY: usize = 100;
+
 /// Manages state mutations and persistence with immediate auto-saving
 ///
 /// # Save Behavior
@@ -58,27 +60,23 @@ impl StateManager {
     /// - Optional receiver for async save processing (snapshots to save)
     /// - Optional receiver for save completion notifications
     ///
-    /// Storage backend is selected based on file extension:
-    /// - `.db` or `.sqlite` -> SQLite (requires `sqlite` feature)
-    /// - `.json` or other -> JSON file
     #[allow(clippy::type_complexity)]
     pub fn new(
+        backend: &str,
         save_file: Option<String>,
     ) -> kanban_domain::KanbanResult<(
         Self,
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     )> {
-        // Use bounded channel (capacity: 100) to prevent unbounded memory growth
-        // If queue is full, save_if_needed() will log a warning instead of blocking
-        const SAVE_QUEUE_CAPACITY: usize = 100;
-
+        // Use bounded channel to prevent unbounded memory growth.
+        // If queue is full, save_if_needed() will log a warning instead of blocking.
         let (store, instance_id, save_channel): (
             Option<DynStore>,
             uuid::Uuid,
             Option<SaveChannel>,
         ) = if let Some(ref path) = save_file {
-            let (store, id) = Self::create_store(path)?;
+            let (store, id) = Self::create_store(backend, path)?;
             let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
             (Some(store), id, Some((tx, rx)))
         } else {
@@ -110,8 +108,11 @@ impl StateManager {
         Ok((manager, save_rx, Some(save_completion_rx)))
     }
 
-    fn create_store(path: &str) -> kanban_domain::KanbanResult<(DynStore, uuid::Uuid)> {
-        let store = kanban_service::make_store(path)?;
+    fn create_store(
+        backend: &str,
+        path: &str,
+    ) -> kanban_domain::KanbanResult<(DynStore, uuid::Uuid)> {
+        let store = kanban_service::make_store(backend, path)?;
         let id = store.instance_id();
         Ok((store, id))
     }
@@ -436,6 +437,34 @@ impl StateManager {
         self.file_watcher = Some(watcher);
         tracing::debug!("File watcher set on StateManager");
     }
+
+    /// Replace the persistence store after a backend migration.
+    ///
+    /// Drops the old save channel (causing the old save worker to exit),
+    /// creates a new store and channels. Returns receivers so the caller
+    /// can spawn a new save worker.
+    #[allow(clippy::type_complexity)]
+    pub fn replace_store(
+        &mut self,
+        backend: &str,
+        path: &str,
+    ) -> KanbanResult<(mpsc::Receiver<Snapshot>, mpsc::UnboundedReceiver<()>)> {
+        let (store, instance_id) = Self::create_store(backend, path)?;
+        self.store = Some(store);
+        self.instance_id = instance_id;
+        self.file_watcher = None;
+        self.dirty = false;
+        self.pending_saves = 0;
+
+        let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
+        self.save_tx = Some(tx);
+
+        let (completion_tx, completion_rx) = mpsc::unbounded_channel();
+        self.save_completion_tx = Some(completion_tx);
+
+        tracing::info!("Store replaced with new backend at: {}", path);
+        Ok((rx, completion_rx))
+    }
 }
 
 #[cfg(test)]
@@ -444,13 +473,50 @@ mod tests {
 
     #[test]
     fn test_state_manager_creation() {
-        let (manager, _rx, _completion_rx) = StateManager::new(None).unwrap();
+        let (manager, _rx, _completion_rx) = StateManager::new("json", None).unwrap();
         assert!(!manager.is_dirty());
     }
 
     #[test]
+    fn test_replace_store_swaps_backend() {
+        let dir = tempfile::tempdir().unwrap();
+        let initial_path = dir.path().join("test.json");
+        std::fs::write(&initial_path, "{}").unwrap();
+        let (mut manager, _rx, _crx) =
+            StateManager::new("json", Some(initial_path.to_str().unwrap().to_string())).unwrap();
+
+        let new_path = dir.path().join("test2.json");
+        std::fs::write(&new_path, "{}").unwrap();
+        let result = manager.replace_store("json", new_path.to_str().unwrap());
+        assert!(result.is_ok());
+
+        let store = manager.store().unwrap();
+        assert_eq!(store.path(), new_path.as_path());
+    }
+
+    #[test]
+    fn test_replace_store_resets_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let path1 = dir.path().join("a.json");
+        std::fs::write(&path1, "{}").unwrap();
+        let (mut manager, _rx, _crx) =
+            StateManager::new("json", Some(path1.to_str().unwrap().to_string())).unwrap();
+        manager.mark_dirty();
+        assert!(manager.is_dirty());
+
+        let path2 = dir.path().join("b.json");
+        std::fs::write(&path2, "{}").unwrap();
+        let (_rx, _crx) = manager
+            .replace_store("json", path2.to_str().unwrap())
+            .unwrap();
+        assert!(!manager.is_dirty());
+        assert!(!manager.has_pending_saves());
+        assert!(manager.has_save_channel());
+    }
+
+    #[test]
     fn test_dirty_flag_after_execute() {
-        let (mut manager, _rx, _completion_rx) = StateManager::new(None).unwrap();
+        let (mut manager, _rx, _completion_rx) = StateManager::new("json", None).unwrap();
 
         struct DummyCommand;
         impl Command for DummyCommand {

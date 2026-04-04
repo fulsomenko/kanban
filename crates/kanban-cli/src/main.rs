@@ -40,6 +40,7 @@ async fn run() -> anyhow::Result<()> {
     }
 
     let cli = Cli::parse();
+    let config = kanban_service::config::load();
 
     match cli.command {
         None => {
@@ -60,13 +61,15 @@ async fn run() -> anyhow::Result<()> {
             handlers::migrate::handle(args).await?;
         }
         Some(cmd) => {
-            let file_path = cli.file.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "File path required for CLI operations. Provide as argument or set KANBAN_FILE env var."
-                )
-            })?;
+            let file_path = match cli.file {
+                Some(f) => f,
+                None => {
+                    let store = kanban_service::make_store_with_config(None, &config)?;
+                    store.path().to_string_lossy().to_string()
+                }
+            };
 
-            let mut ctx = CliContext::load(&file_path).await?;
+            let mut ctx = CliContext::load(&file_path, config).await?;
 
             match cmd {
                 Commands::Board(board_cmd) => {

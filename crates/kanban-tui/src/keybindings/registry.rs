@@ -7,10 +7,11 @@ use super::{
         SearchModeProvider,
     },
     normal_mode::{ArchivedCardsViewProvider, NormalModeBoardsProvider},
+    settings::SettingsViewProvider,
     sprint_detail::SprintDetailProvider,
     KeybindingProvider,
 };
-use crate::app::{App, AppMode, DialogMode, Focus};
+use crate::app::{App, AppMode, DialogMode, Focus, SettingsFocus};
 
 pub struct KeybindingRegistry;
 
@@ -21,6 +22,7 @@ impl KeybindingRegistry {
             app.focus.active.clone(),
             app.focus.card_focus,
             app.focus.board_focus,
+            app.focus.settings_focus,
         )
     }
 
@@ -29,6 +31,7 @@ impl KeybindingRegistry {
         focus: Focus,
         card_focus: crate::app::CardFocus,
         board_focus: crate::app::BoardFocus,
+        settings_focus: SettingsFocus,
     ) -> Box<dyn KeybindingProvider> {
         match mode {
             AppMode::Normal => match focus {
@@ -40,9 +43,14 @@ impl KeybindingRegistry {
             AppMode::SprintDetail => Box::new(SprintDetailProvider),
             AppMode::Search => Box::new(SearchModeProvider),
             AppMode::ArchivedCardsView => Box::new(ArchivedCardsViewProvider),
-            AppMode::Help(previous_mode) => {
-                Self::get_provider_for_mode(previous_mode, focus, card_focus, board_focus)
-            }
+            AppMode::Settings => Box::new(SettingsViewProvider::new(settings_focus)),
+            AppMode::Help(previous_mode) => Self::get_provider_for_mode(
+                previous_mode,
+                focus,
+                card_focus,
+                board_focus,
+                settings_focus,
+            ),
             AppMode::Dialog(dialog) => match dialog {
                 DialogMode::CreateBoard => Box::new(DialogInputProvider::new("Create Project")),
                 DialogMode::CreateCard => Box::new(DialogInputProvider::new("Create Task")),
@@ -97,6 +105,7 @@ impl KeybindingRegistry {
                 DialogMode::CarryOverSprint => {
                     Box::new(DialogSelectionProvider::new("Carry Over to Sprint"))
                 }
+                DialogMode::ExportBoards => Box::new(DialogSelectionProvider::new("Export Boards")),
             },
         }
     }

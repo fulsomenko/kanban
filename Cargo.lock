@@ -1227,10 +1227,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
- "dirs",
  "serde",
  "thiserror 2.0.17",
- "toml",
  "uuid",
 ]
 
@@ -1334,6 +1332,7 @@ name = "kanban-service"
 version = "0.3.5"
 dependencies = [
  "chrono",
+ "dirs",
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
@@ -1343,6 +1342,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "toml",
  "tracing",
  "uuid",
 ]
@@ -1369,6 +1369,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
+ "toml",
  "tracing",
  "uuid",
 ]
