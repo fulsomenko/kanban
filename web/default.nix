@@ -3,17 +3,23 @@
   stdenv,
 }:
 
+let
+  cargoVersion = (lib.importTOML ../Cargo.toml).workspace.package.version;
+in
 stdenv.mkDerivation {
   pname = "kanban-web";
-  version = "1.0.0";
+  version = cargoVersion;
 
   src = lib.cleanSource ./.;
 
-  dontBuild = true;
+  buildPhase = ''
+    substitute index.html index.html.out \
+      --replace-fail "@VERSION@" "${cargoVersion}"
+  '';
 
   installPhase = ''
     mkdir -p $out
-    cp index.html $out/
+    cp index.html.out $out/index.html
     cp styles.css $out/
   '';
 
