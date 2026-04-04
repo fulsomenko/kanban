@@ -8,9 +8,10 @@ fn default_output_path(source: &str, backend: &str) -> String {
         .unwrap_or("kanban");
     let ext = backend;
     match path.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => {
-            parent.join(format!("{}.{}", stem, ext)).display().to_string()
-        }
+        Some(parent) if !parent.as_os_str().is_empty() => parent
+            .join(format!("{}.{}", stem, ext))
+            .display()
+            .to_string(),
         _ => format!("{}.{}", stem, ext),
     }
 }

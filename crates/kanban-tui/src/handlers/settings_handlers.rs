@@ -42,7 +42,8 @@ impl App {
         }
         let old_location =
             kanban_service::config::effective_configuration_location(&self.app_config);
-        let old_storage_location = kanban_service::config::resolve_storage_location(&self.app_config);
+        let old_storage_location =
+            kanban_service::config::resolve_storage_location(&self.app_config);
         let old_config = self.app_config.clone();
         let mut config = self.app_config.clone();
 
@@ -97,7 +98,8 @@ impl App {
     ) {
         use crate::app::MigrationState;
 
-        let new_storage_location = kanban_service::config::resolve_storage_location(&self.app_config);
+        let new_storage_location =
+            kanban_service::config::resolve_storage_location(&self.app_config);
 
         if kanban_service::sync_backend_with_file(&new_storage_location, &mut self.app_config) {
             self.set_success(format!(
@@ -177,7 +179,8 @@ impl App {
             }
         };
 
-        let new_storage_location = kanban_service::config::resolve_storage_location(&self.app_config);
+        let new_storage_location =
+            kanban_service::config::resolve_storage_location(&self.app_config);
         let new_backend = self.app_config.effective_storage_backend().to_string();
 
         match self
