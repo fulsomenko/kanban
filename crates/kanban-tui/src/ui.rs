@@ -209,12 +209,10 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
     let is_storage_selected =
         |i: usize| storage_focused && app.selection.settings_storage.is_selected(i);
     let file_path = app.persistence.save_file.as_deref().unwrap_or("(none)");
-    let backend = match app.persistence.save_file.as_deref() {
-        Some(p) if p.ends_with(".sqlite") || p.ends_with(".sqlite3") || p.ends_with(".db") => {
-            "SQLite"
-        }
-        Some(_) => "JSON",
-        None => "(none)",
+    let backend = if app.persistence.save_file.is_some() {
+        app.app_config.effective_storage_backend()
+    } else {
+        "(none)"
     };
     let instance_id = app.ctx.state_manager.instance_id().to_string();
     let export_selected = is_storage_selected(3);
