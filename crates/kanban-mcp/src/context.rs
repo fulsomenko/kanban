@@ -25,6 +25,22 @@ impl McpContext {
         self.inner.reload().await
     }
 
+    pub fn undo(&mut self) -> bool {
+        self.inner.undo()
+    }
+
+    pub fn redo(&mut self) -> bool {
+        self.inner.redo()
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.inner.can_undo()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.inner.can_redo()
+    }
+
     pub async fn save(&self) -> KanbanResult<()> {
         self.inner.save().await
     }
