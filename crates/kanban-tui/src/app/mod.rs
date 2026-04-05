@@ -1280,67 +1280,27 @@ impl App {
 
     /// Undo the last action
     pub fn undo(&mut self) -> KanbanResult<()> {
-        if !self.ctx.state_manager.can_undo() {
-            self.set_error("Nothing to undo".to_string());
-            return Ok(());
-        }
-
-        // Suppress history capture during restore
-        self.ctx.state_manager.history_mut().suppress();
-
-        // Save current state to redo stack
-        let current_snapshot = kanban_domain::Snapshot::from_app(self);
-        self.ctx
-            .state_manager
-            .history_mut()
-            .push_redo(current_snapshot);
-
-        // Restore previous state from undo stack
-        if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_undo() {
-            snapshot.apply_to_app(self);
+        if self.ctx.inner.undo() {
             self.refresh_view();
-
-            // Queue snapshot for persistence
-            let save_snapshot = kanban_domain::Snapshot::from_app(self);
-            self.ctx.state_manager.queue_snapshot(save_snapshot);
+            self.ctx
+                .state_manager
+                .queue_snapshot(self.ctx.inner.snapshot());
+        } else {
+            self.set_error("Nothing to undo".to_string());
         }
-
-        // Re-enable history capture
-        self.ctx.state_manager.history_mut().unsuppress();
-
         Ok(())
     }
 
     /// Redo the last undone action
     pub fn redo(&mut self) -> KanbanResult<()> {
-        if !self.ctx.state_manager.can_redo() {
-            self.set_error("Nothing to redo".to_string());
-            return Ok(());
-        }
-
-        // Suppress history capture during restore
-        self.ctx.state_manager.history_mut().suppress();
-
-        // Save current state to undo stack
-        let current_snapshot = kanban_domain::Snapshot::from_app(self);
-        self.ctx
-            .state_manager
-            .history_mut()
-            .push_undo(current_snapshot);
-
-        // Restore next state from redo stack
-        if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_redo() {
-            snapshot.apply_to_app(self);
+        if self.ctx.inner.redo() {
             self.refresh_view();
-
-            // Queue snapshot for persistence
-            let save_snapshot = kanban_domain::Snapshot::from_app(self);
-            self.ctx.state_manager.queue_snapshot(save_snapshot);
+            self.ctx
+                .state_manager
+                .queue_snapshot(self.ctx.inner.snapshot());
+        } else {
+            self.set_error("Nothing to redo".to_string());
         }
-
-        // Re-enable history capture
-        self.ctx.state_manager.history_mut().unsuppress();
-
         Ok(())
     }
 
@@ -1596,9 +1556,8 @@ impl App {
                         match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                             Ok(data) => {
                                 data.apply_to_app(self);
-                                self.ctx.state_manager.mark_clean();
-                                // Clear undo/redo history after initial file load (not an undoable action)
-                                self.ctx.state_manager.clear_history();
+                                self.ctx.inner.mark_clean();
+                                self.ctx.inner.clear_history();
                                 tracing::info!("Loaded initial state from store");
                             }
                             Err(e) => {
@@ -1856,7 +1815,7 @@ impl App {
                         }
 
                         // External file change detected - handle smart reload
-                        if !self.ctx.state_manager.is_dirty() {
+                        if !self.ctx.inner.is_dirty() {
                             // No local changes, auto-reload silently
                             tracing::info!("External change detected, auto-reloading");
                             self.auto_reload_from_external_change().await;
@@ -1898,10 +1857,7 @@ impl App {
         let content = std::fs::read_to_string(filename)?;
 
         // Capture snapshot before import for undo history
-        let before_snapshot = self.ctx.inner.snapshot();
-        self.ctx
-            .state_manager
-            .capture_before_command(before_snapshot);
+        self.ctx.inner.capture_before_command();
 
         // Try V2 format first (preserves graph)
         if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
@@ -1955,7 +1911,7 @@ impl App {
                     match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                         Ok(data) => {
                             data.apply_to_app(self);
-                            self.ctx.state_manager.mark_clean();
+                            self.ctx.inner.mark_clean();
                             self.ctx.state_manager.clear_conflict();
                             self.refresh_view();
                             tracing::info!("Auto-reloaded state from external file change");
