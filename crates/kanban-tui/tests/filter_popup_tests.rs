@@ -18,8 +18,11 @@ fn test_render_filter_options_popup_renders_without_dialog_state() {
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::components::render_filter_options_popup(&app, frame);
     });
-    // Without dialog state active, the popup renders but shows nothing inside
-    assert!(!output.trim().is_empty());
+    // Without dialog state active, the outer popup block still renders with its title
+    assert!(
+        output.contains("Filter Options"),
+        "Popup should render its title even without dialog state"
+    );
 }
 
 #[test]

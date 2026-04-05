@@ -15,7 +15,11 @@ fn render_footer_to_string(app: &App) -> String {
 fn test_render_footer_normal_mode_renders_without_panic() {
     let (app, _rx) = App::new(None).unwrap();
     let output = render_footer_to_string(&app);
-    assert!(output.contains('─') || output.contains('│') || output.contains('┌'));
+    // Normal mode renders keybindings in "key: description" format
+    assert!(
+        output.contains(": "),
+        "Footer should contain at least one keybinding hint"
+    );
 }
 
 #[test]
@@ -37,7 +41,15 @@ fn test_render_footer_search_mode_renders_without_panic() {
     app.focus.active = Focus::Boards;
     app.push_mode(AppMode::Search);
     let output = render_footer_to_string(&app);
-    assert!(!output.trim().is_empty());
+    // Search mode renders documented keybindings "ESC: clear | Enter: apply"
+    assert!(
+        output.contains("ESC"),
+        "Footer should show ESC keybinding in search mode"
+    );
+    assert!(
+        output.contains("Enter"),
+        "Footer should show Enter keybinding in search mode"
+    );
 }
 
 #[test]
