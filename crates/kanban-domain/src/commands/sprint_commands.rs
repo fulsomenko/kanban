@@ -53,7 +53,6 @@ pub struct CreateSprint {
     pub explicit_prefix: Option<String>,
     /// If true and `name` is None, consume next name from the board's name pool.
     /// Used by TUI; CLI/MCP pass false.
-    #[allow(dead_code)]
     pub auto_consume_name: bool,
 }
 
@@ -250,5 +249,33 @@ mod tests {
         };
         let result = cmd.execute(&mut context);
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_create_sprint_auto_consume_name_uses_name_pool() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), None);
+        board.sprint_names = vec!["Alpha".to_string(), "Beta".to_string()];
+        let board_id = board.id;
+        tc.boards.push(board);
+        let mut context = tc.as_command_context();
+
+        let cmd = CreateSprint {
+            board_id,
+            name: None,
+            default_sprint_prefix: "Sprint".to_string(),
+            explicit_prefix: None,
+            auto_consume_name: true,
+        };
+        cmd.execute(&mut context).unwrap();
+
+        assert_eq!(context.sprints.len(), 1);
+        let sprint = &context.sprints[0];
+        let board = &context.boards[0];
+        assert_eq!(
+            sprint.get_name(board),
+            Some("Alpha"),
+            "auto_consume_name should consume the first available sprint name"
+        );
     }
 }
