@@ -38,6 +38,12 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str) {
         ])
         .split(inner);
 
+    render_relationship_search_box(app, frame, chunks[0]);
+    render_relationship_card_list(app, frame, chunks[1]);
+    render_relationship_instructions(app, frame, chunks[2]);
+}
+
+fn render_relationship_search_box(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
     let search_border_style = if app.relationship.search_active {
         Style::default().fg(Color::Yellow)
     } else {
@@ -66,8 +72,10 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str) {
     };
 
     let search = Paragraph::new(search_text).block(search_block);
-    frame.render_widget(search, chunks[0]);
+    frame.render_widget(search, area);
+}
 
+fn render_relationship_card_list(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
     let filtered_cards: Vec<_> = if app.relationship.search.is_empty() {
         app.relationship.card_ids.clone()
     } else {
@@ -118,8 +126,10 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str) {
     }
 
     let list = Paragraph::new(lines);
-    frame.render_widget(list, chunks[1]);
+    frame.render_widget(list, area);
+}
 
+fn render_relationship_instructions(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
     let instructions_text = if app.relationship.search_active {
         "Type to search | Enter/Esc: exit search"
     } else {
@@ -127,5 +137,5 @@ fn render_relationship_popup(app: &App, frame: &mut Frame, title: &str) {
     };
     let instructions =
         Paragraph::new(instructions_text).style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(instructions, chunks[2]);
+    frame.render_widget(instructions, area);
 }

@@ -28,15 +28,33 @@ pub(super) fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect
     }
 }
 
-pub(super) fn render_sprint_detail_metadata(
+fn render_sprint_detail_metadata(
     app: &App,
     frame: &mut Frame,
     area: Rect,
     sprint: &Sprint,
     board: &kanban_domain::Board,
 ) {
-    let sprint_name = sprint.formatted_name(board, "sprint");
+    let mut lines = vec![];
+    lines.extend(sprint_header_lines(sprint, board));
+    lines.extend(sprint_date_lines(sprint));
+    lines.push(Line::from(""));
+    lines.extend(sprint_card_assignment_lines(app, sprint, board));
+    lines.push(Line::from(""));
+    lines.extend(sprint_prefix_lines(sprint));
+    lines.extend(sprint_timestamp_lines(sprint));
 
+    let content = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(focused_border())
+            .title("Sprint Details"),
+    );
+    frame.render_widget(content, area);
+}
+
+fn sprint_header_lines(sprint: &Sprint, board: &kanban_domain::Board) -> Vec<Line<'static>> {
+    let sprint_name = sprint.formatted_name(board, "sprint");
     let mut lines = vec![
         metadata_line_styled("Sprint", sprint_name, bold_highlight()),
         Line::from(""),
@@ -47,18 +65,20 @@ pub(super) fn render_sprint_detail_metadata(
         ),
         metadata_line("Sprint Number", sprint.sprint_number.to_string()),
     ];
-
     if let Some(name) = sprint.get_name(board) {
-        lines.push(metadata_line("Name", name));
+        lines.push(metadata_line("Name", name.to_string()));
     }
+    lines
+}
 
+fn sprint_date_lines(sprint: &Sprint) -> Vec<Line<'static>> {
+    let mut lines = vec![];
     if let Some(start) = sprint.start_date {
         lines.push(metadata_line(
             "Start Date",
             start.format("%Y-%m-%d %H:%M UTC").to_string(),
         ));
     }
-
     if let Some(end) = sprint.end_date {
         let end_style = if sprint.is_ended() {
             Style::default().fg(Color::Red)
@@ -71,63 +91,68 @@ pub(super) fn render_sprint_detail_metadata(
             end_style,
         ));
     }
+    lines
+}
 
-    lines.push(Line::from(""));
-
+fn sprint_card_assignment_lines(
+    app: &App,
+    sprint: &Sprint,
+    board: &kanban_domain::Board,
+) -> Vec<Line<'static>> {
     let card_count = app
         .ctx
         .cards
         .iter()
         .filter(|c| c.sprint_id == Some(sprint.id))
         .count();
-    lines.push(metadata_line_styled(
+    let mut lines = vec![metadata_line_styled(
         "Cards Assigned",
         card_count.to_string(),
         Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
-    ));
-
+    )];
     if board.active_sprint_id == Some(sprint.id) {
         lines.push(metadata_line_styled("Active Sprint", "Yes", active_item()));
     }
+    lines
+}
 
-    lines.push(Line::from(""));
-
+fn sprint_prefix_lines(sprint: &Sprint) -> Vec<Line<'static>> {
+    let mut lines = vec![];
     if let Some(prefix) = &sprint.prefix {
-        lines.push(metadata_line_styled("Sprint Prefix", prefix, active_item()));
-    }
-
-    if let Some(prefix) = &sprint.card_prefix {
         lines.push(metadata_line_styled(
-            "Card Prefix Override",
-            prefix,
+            "Sprint Prefix",
+            prefix.clone(),
             active_item(),
         ));
     }
-
+    if let Some(prefix) = &sprint.card_prefix {
+        lines.push(metadata_line_styled(
+            "Card Prefix Override",
+            prefix.clone(),
+            active_item(),
+        ));
+    }
     if sprint.prefix.is_some() || sprint.card_prefix.is_some() {
         lines.push(Line::from(""));
     }
+    lines
+}
 
-    lines.push(metadata_line_styled(
-        "Created",
-        sprint.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
-        label_text(),
-    ));
-    lines.push(metadata_line_styled(
-        "Updated",
-        sprint.updated_at.format("%Y-%m-%d %H:%M UTC").to_string(),
-        label_text(),
-    ));
-
-    let content = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(focused_border())
-            .title("Sprint Details"),
-    );
-    frame.render_widget(content, area);
+fn sprint_timestamp_lines(sprint: &Sprint) -> Vec<Line<'static>> {
+    vec![
+        metadata_line_styled(
+            "Created",
+            sprint.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+            label_text(),
+        ),
+        metadata_line_styled(
+            "Updated",
+            sprint.updated_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+            label_text(),
+        ),
+    ]
 }
 
 pub(super) fn render_sprint_detail_with_tasks(
@@ -163,6 +188,18 @@ pub(super) fn render_sprint_detail_with_tasks(
         "Completed",
         app.sprint_view.panel == crate::app::SprintTaskPanel::Completed,
     );
+}
+
+fn calculate_task_panel_points(
+    task_list: &crate::card_list::CardList,
+    cards: &[kanban_domain::Card],
+) -> u32 {
+    let filtered: Vec<&kanban_domain::Card> = task_list
+        .cards
+        .iter()
+        .filter_map(|card_id| cards.iter().find(|c| c.id == *card_id))
+        .collect();
+    kanban_domain::calculate_points(&filtered)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -223,13 +260,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
         ));
     }
 
-    // Calculate points from cards in this panel
-    let cards: Vec<&kanban_domain::Card> = task_list
-        .cards
-        .iter()
-        .filter_map(|card_id| app.ctx.cards.iter().find(|c| c.id == *card_id))
-        .collect();
-    let points = kanban_domain::calculate_points(&cards);
+    let points = calculate_task_panel_points(task_list, &app.ctx.cards);
 
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
