@@ -1090,14 +1090,15 @@ mod tests {
         let path = dir.path().join("config.toml");
         let config = AppConfig::default();
         save_to(&config, &path).unwrap();
-        let tmp_files: Vec<_> = std::fs::read_dir(dir.path())
+        let all_files: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .filter(|e| e.file_name().to_string_lossy() != "config.toml")
             .collect();
         assert!(
-            tmp_files.is_empty(),
-            "no temp files should remain after successful write"
+            all_files.is_empty(),
+            "no leftover files should remain after successful write, found: {:?}",
+            all_files.iter().map(|e| e.file_name()).collect::<Vec<_>>()
         );
     }
 }
