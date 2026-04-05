@@ -89,14 +89,6 @@ impl TuiContext {
         self.inner.apply_snapshot(s)
     }
 
-    pub fn push_before_snapshot(&mut self, s: Snapshot) {
-        self.inner.push_before_snapshot(s)
-    }
-
-    pub fn capture_before_command(&mut self) {
-        self.inner.capture_before_command()
-    }
-
     pub fn mark_clean(&mut self) {
         self.inner.mark_clean()
     }
@@ -139,48 +131,29 @@ impl TuiContext {
         &self.inner.boards
     }
 
-    pub fn boards_mut(&mut self) -> &mut Vec<Board> {
-        &mut self.inner.boards
-    }
-
     pub fn columns(&self) -> &Vec<Column> {
         &self.inner.columns
-    }
-
-    pub fn columns_mut(&mut self) -> &mut Vec<Column> {
-        &mut self.inner.columns
     }
 
     pub fn cards(&self) -> &Vec<Card> {
         &self.inner.cards
     }
 
-    pub fn cards_mut(&mut self) -> &mut Vec<Card> {
-        &mut self.inner.cards
-    }
-
     pub fn sprints(&self) -> &Vec<Sprint> {
         &self.inner.sprints
-    }
-
-    pub fn sprints_mut(&mut self) -> &mut Vec<Sprint> {
-        &mut self.inner.sprints
     }
 
     pub fn archived_cards(&self) -> &Vec<ArchivedCard> {
         &self.inner.archived_cards
     }
 
-    pub fn archived_cards_mut(&mut self) -> &mut Vec<ArchivedCard> {
-        &mut self.inner.archived_cards
-    }
-
     pub fn graph(&self) -> &DependencyGraph {
         &self.inner.graph
     }
 
-    pub fn graph_mut(&mut self) -> &mut DependencyGraph {
-        &mut self.inner.graph
+    #[doc(hidden)]
+    pub fn inner_mut(&mut self) -> &mut KanbanContext {
+        &mut self.inner
     }
 }
 
