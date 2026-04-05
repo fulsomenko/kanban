@@ -316,7 +316,6 @@ async fn test_null_store_context_loads_empty() {
     assert!(ctx.cards.is_empty());
 }
 
-
 #[tokio::test]
 async fn test_move_cards_single_undo_entry() {
     let mut ctx = make_ctx().await;
@@ -487,7 +486,10 @@ async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
     let result = ctx.archive_cards_detailed(vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()]);
     assert!(result.succeeded.is_empty());
     assert_eq!(result.failed.len(), 2);
-    assert!(!ctx.is_dirty(), "dirty flag should not be set when all ops fail");
+    assert!(
+        !ctx.is_dirty(),
+        "dirty flag should not be set when all ops fail"
+    );
 }
 
 #[tokio::test]

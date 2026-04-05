@@ -694,14 +694,20 @@ impl KanbanOperations for KanbanContext {
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::MoveCards;
-        let valid_count = ids.iter().filter(|&&id| self.cards.iter().any(|c| c.id == id)).count();
+        let valid_count = ids
+            .iter()
+            .filter(|&&id| self.cards.iter().any(|c| c.id == id))
+            .count();
         self.execute(Box::new(MoveCards { ids, column_id }))?;
         Ok(valid_count)
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::AssignCardsToSprint;
-        let valid_count = ids.iter().filter(|&&id| self.cards.iter().any(|c| c.id == id)).count();
+        let valid_count = ids
+            .iter()
+            .filter(|&&id| self.cards.iter().any(|c| c.id == id))
+            .count();
         self.execute(Box::new(AssignCardsToSprint { ids, sprint_id }))?;
         Ok(valid_count)
     }

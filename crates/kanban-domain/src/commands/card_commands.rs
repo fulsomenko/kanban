@@ -352,8 +352,11 @@ pub struct MigrateSprintLogs;
 
 impl Command for MigrateSprintLogs {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let count =
-            crate::card_lifecycle::migrate_sprint_logs(context.cards, context.sprints, context.boards);
+        let count = crate::card_lifecycle::migrate_sprint_logs(
+            context.cards,
+            context.sprints,
+            context.boards,
+        );
         if count > 0 {
             tracing::info!("Migrated sprint logs for {} card(s)", count);
         }
