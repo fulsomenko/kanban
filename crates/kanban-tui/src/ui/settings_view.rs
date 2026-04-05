@@ -66,6 +66,8 @@ fn render_settings_configuration(app: &App, frame: &mut Frame, area: Rect, confi
         ),
     ];
     if app.has_data_file {
+        let active_storage_location =
+            kanban_service::config::resolve_storage_location(&app.app_config);
         if app.cli_file_override {
             config_lines.push(metadata_line_styled(
                 "Storage Backend",
@@ -84,7 +86,7 @@ fn render_settings_configuration(app: &App, frame: &mut Frame, area: Rect, confi
             ));
             config_lines.push(metadata_line_selectable(
                 "Active Storage Location",
-                app.app_config.effective_storage_location(),
+                &active_storage_location,
                 is_config_selected(8),
             ));
         } else {
@@ -95,7 +97,7 @@ fn render_settings_configuration(app: &App, frame: &mut Frame, area: Rect, confi
             ));
             config_lines.push(metadata_line_selectable(
                 "Storage Location",
-                app.app_config.effective_storage_location(),
+                &active_storage_location,
                 is_config_selected(6),
             ));
         }
