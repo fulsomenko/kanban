@@ -44,7 +44,7 @@ impl TuiContext {
         let inner = KanbanContext::empty(
             store
                 .clone()
-                .unwrap_or_else(|| kanban_service::make_store("json", "/dev/null").unwrap()),
+                .unwrap_or_else(|| Arc::new(kanban_persistence::NullStore::new())),
             kanban_core::AppConfig::default(),
         );
 

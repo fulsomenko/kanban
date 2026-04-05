@@ -1,10 +1,14 @@
 use kanban_domain::commands::CreateBoard;
 use kanban_domain::{CardUpdate, KanbanOperations, Snapshot};
+use kanban_persistence::NullStore;
 use kanban_service::KanbanContext;
+use std::sync::Arc;
 
 async fn make_ctx() -> KanbanContext {
-    let store = kanban_service::make_store("json", "/dev/null").unwrap();
-    KanbanContext::empty(store, kanban_core::AppConfig::default())
+    KanbanContext::empty(
+        Arc::new(NullStore::new()),
+        kanban_core::AppConfig::default(),
+    )
 }
 
 #[tokio::test]
