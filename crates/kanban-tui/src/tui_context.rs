@@ -1,27 +1,27 @@
 use crate::state::StateManager;
-use kanban_domain::commands::{
-    ActivateSprint, ArchiveCard, AssignCardToSprint, CancelSprint, Command, CompleteSprint,
-    CreateBoard, CreateCard, CreateColumn, CreateSprint, DeleteBoard, DeleteCard, DeleteColumn,
-    DeleteSprint, MoveCard, RestoreCard, UnassignCardFromSprint, UpdateBoard, UpdateCard,
-    UpdateColumn, UpdateSprint,
-};
+use kanban_domain::commands::Command;
 use kanban_domain::Snapshot;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
 };
-use kanban_domain::{KanbanError, KanbanResult};
+use kanban_domain::KanbanResult;
+use kanban_service::KanbanContext;
+use std::ops::Deref;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
 pub struct TuiContext {
-    pub boards: Vec<Board>,
-    pub columns: Vec<Column>,
-    pub cards: Vec<Card>,
-    pub archived_cards: Vec<ArchivedCard>,
-    pub sprints: Vec<Sprint>,
-    pub graph: DependencyGraph,
+    pub inner: KanbanContext,
     pub state_manager: StateManager,
+}
+
+impl Deref for TuiContext {
+    type Target = KanbanContext;
+    fn deref(&self) -> &KanbanContext {
+        &self.inner
+    }
 }
 
 impl TuiContext {
@@ -34,15 +34,24 @@ impl TuiContext {
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     )> {
-        let (state_manager, save_rx, completion_rx) = StateManager::new(backend, save_file)?;
+        let store: Option<Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>> =
+            if let Some(ref path) = save_file {
+                Some(kanban_service::make_store(backend, path)?)
+            } else {
+                None
+            };
+
+        let inner = KanbanContext::empty(
+            store
+                .clone()
+                .unwrap_or_else(|| kanban_service::make_store("json", "/dev/null").unwrap()),
+            kanban_core::AppConfig::default(),
+        );
+
+        let (state_manager, save_rx, completion_rx) = StateManager::with_store(store);
 
         let ctx = Self {
-            boards: Vec::new(),
-            columns: Vec::new(),
-            cards: Vec::new(),
-            archived_cards: Vec::new(),
-            sprints: Vec::new(),
-            graph: DependencyGraph::new(),
+            inner,
             state_manager,
         };
 
@@ -54,71 +63,32 @@ impl TuiContext {
     }
 
     pub fn execute_commands_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
-        // Capture snapshot BEFORE execution for undo history
-        let before_snapshot = Snapshot {
-            boards: self.boards.clone(),
-            columns: self.columns.clone(),
-            cards: self.cards.clone(),
-            archived_cards: self.archived_cards.clone(),
-            sprints: self.sprints.clone(),
-            graph: self.graph.clone(),
-        };
-        self.state_manager.capture_before_command(before_snapshot);
-
-        for command in commands {
-            self.state_manager.execute_with_context(
-                &mut self.boards,
-                &mut self.columns,
-                &mut self.cards,
-                &mut self.sprints,
-                &mut self.archived_cards,
-                &mut self.graph,
-                command,
-            )?;
-        }
-
-        let snapshot = Snapshot {
-            boards: self.boards.clone(),
-            columns: self.columns.clone(),
-            cards: self.cards.clone(),
-            archived_cards: self.archived_cards.clone(),
-            sprints: self.sprints.clone(),
-            graph: self.graph.clone(),
-        };
+        self.inner.execute_batch_with_history(commands)?;
+        let snapshot = self.inner.snapshot();
         self.state_manager.queue_snapshot(snapshot);
-
         Ok(())
     }
 }
 
 impl KanbanOperations for TuiContext {
     fn create_board(&mut self, name: String, card_prefix: Option<String>) -> KanbanResult<Board> {
-        let cmd = Box::new(CreateBoard { name, card_prefix });
-        self.execute_command(cmd)?;
-        Ok(self.boards.last().unwrap().clone())
+        self.inner.create_board(name, card_prefix)
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
-        Ok(self.boards.clone())
+        self.inner.list_boards()
     }
 
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
-        Ok(self.boards.iter().find(|b| b.id == id).cloned())
+        self.inner.get_board(id)
     }
 
     fn update_board(&mut self, id: Uuid, updates: BoardUpdate) -> KanbanResult<Board> {
-        let cmd = Box::new(UpdateBoard {
-            board_id: id,
-            updates,
-        });
-        self.execute_command(cmd)?;
-        self.get_board(id)?
-            .ok_or_else(|| KanbanError::not_found("board", id))
+        self.inner.update_board(id, updates)
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
-        let cmd = Box::new(DeleteBoard { board_id: id });
-        self.execute_command(cmd)
+        self.inner.delete_board(id)
     }
 
     fn create_column(
@@ -127,56 +97,27 @@ impl KanbanOperations for TuiContext {
         name: String,
         position: Option<i32>,
     ) -> KanbanResult<Column> {
-        let position = position.unwrap_or_else(|| {
-            self.columns
-                .iter()
-                .filter(|c| c.board_id == board_id)
-                .count() as i32
-        });
-        let cmd = Box::new(CreateColumn {
-            board_id,
-            name,
-            position,
-        });
-        self.execute_command(cmd)?;
-        Ok(self.columns.last().unwrap().clone())
+        self.inner.create_column(board_id, name, position)
     }
 
     fn list_columns(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
-        Ok(self
-            .columns
-            .iter()
-            .filter(|c| c.board_id == board_id)
-            .cloned()
-            .collect())
+        self.inner.list_columns(board_id)
     }
 
     fn get_column(&self, id: Uuid) -> KanbanResult<Option<Column>> {
-        Ok(self.columns.iter().find(|c| c.id == id).cloned())
+        self.inner.get_column(id)
     }
 
     fn update_column(&mut self, id: Uuid, updates: ColumnUpdate) -> KanbanResult<Column> {
-        let cmd = Box::new(UpdateColumn {
-            column_id: id,
-            updates,
-        });
-        self.execute_command(cmd)?;
-        self.get_column(id)?
-            .ok_or_else(|| KanbanError::not_found("column", id))
+        self.inner.update_column(id, updates)
     }
 
     fn delete_column(&mut self, id: Uuid) -> KanbanResult<()> {
-        let cmd = Box::new(DeleteColumn { column_id: id });
-        self.execute_command(cmd)
+        self.inner.delete_column(id)
     }
 
     fn reorder_column(&mut self, id: Uuid, new_position: i32) -> KanbanResult<Column> {
-        let updates = ColumnUpdate {
-            name: None,
-            position: Some(new_position),
-            wip_limit: FieldUpdate::NoChange,
-        };
-        self.update_column(id, updates)
+        self.inner.reorder_column(id, new_position)
     }
 
     fn create_card(
@@ -184,75 +125,25 @@ impl KanbanOperations for TuiContext {
         board_id: Uuid,
         column_id: Uuid,
         title: String,
-        options: kanban_domain::CreateCardOptions,
+        options: CreateCardOptions,
     ) -> KanbanResult<Card> {
-        let position =
-            kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
-        let cmd = Box::new(CreateCard {
-            board_id,
-            column_id,
-            title,
-            position,
-            options,
-        });
-        self.execute_command(cmd)?;
-        Ok(self.cards.last().unwrap().clone())
+        self.inner.create_card(board_id, column_id, title, options)
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
-        let mut cards: Vec<_> = self.cards.clone();
-
-        if let Some(board_id) = filter.board_id {
-            let board_columns: Vec<_> = self
-                .columns
-                .iter()
-                .filter(|c| c.board_id == board_id)
-                .map(|c| c.id)
-                .collect();
-            cards.retain(|c| board_columns.contains(&c.column_id));
-        }
-
-        if let Some(column_id) = filter.column_id {
-            cards.retain(|c| c.column_id == column_id);
-        }
-
-        if let Some(sprint_id) = filter.sprint_id {
-            cards.retain(|c| c.sprint_id == Some(sprint_id));
-        }
-
-        if let Some(status) = filter.status {
-            cards.retain(|c| c.status == status);
-        }
-
-        Ok(cards.iter().map(CardSummary::from).collect())
+        self.inner.list_cards(filter)
     }
 
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {
-        Ok(self.cards.iter().find(|c| c.id == id).cloned())
+        self.inner.get_card(id)
     }
 
     fn find_cards_by_identifier(&self, identifier: &str) -> KanbanResult<Vec<Card>> {
-        use kanban_domain::search::find_cards_by_identifier as search;
-        Ok(search(
-            identifier,
-            &self.cards,
-            &self.columns,
-            &self.boards,
-            &self.sprints,
-        )
-        .into_iter()
-        .cloned()
-        .collect())
+        self.inner.find_cards_by_identifier(identifier)
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
-        let cmd = Box::new(UpdateCard {
-            card_id: id,
-            updates,
-        });
-        self.execute_command(cmd)?;
-        self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+        self.inner.update_card(id, updates)
     }
 
     fn move_card(
@@ -261,210 +152,51 @@ impl KanbanOperations for TuiContext {
         column_id: Uuid,
         position: Option<i32>,
     ) -> KanbanResult<Card> {
-        let position = position.unwrap_or_else(|| {
-            kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id)
-        });
-        let cmd = Box::new(MoveCard {
-            card_id: id,
-            new_column_id: column_id,
-            new_position: position,
-        });
-        self.execute_command(cmd)?;
-        self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+        self.inner.move_card(id, column_id, position)
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        let cmd = Box::new(ArchiveCard { card_id: id });
-        self.execute_command(cmd)
+        self.inner.archive_card(id)
     }
 
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card> {
-        let archived = self
-            .archived_cards
-            .iter()
-            .find(|ac| ac.card.id == id)
-            .ok_or_else(|| KanbanError::not_found("archived card", id))?;
-        let original_column_id = archived.original_column_id;
-        let position = archived.original_position;
-
-        let target_column = if let Some(col_id) = column_id {
-            col_id
-        } else {
-            // Derive board_id from the original column
-            let board_id = self
-                .columns
-                .iter()
-                .find(|c| c.id == original_column_id)
-                .map(|c| c.board_id);
-
-            if let Some(bid) = board_id {
-                kanban_domain::card_lifecycle::resolve_restore_column(
-                    original_column_id,
-                    bid,
-                    &self.columns,
-                )
-                .unwrap_or(original_column_id)
-            } else {
-                // Column was deleted; try first board's first column as fallback
-                self.columns
-                    .first()
-                    .map(|c| c.id)
-                    .unwrap_or(original_column_id)
-            }
-        };
-
-        let cmd = Box::new(RestoreCard {
-            card_id: id,
-            column_id: target_column,
-            position,
-        });
-        self.execute_command(cmd)?;
-        self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+        self.inner.restore_card(id, column_id)
     }
 
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        let cmd = Box::new(DeleteCard { card_id: id });
-        self.execute_command(cmd)
+        self.inner.delete_card(id)
     }
 
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
-        Ok(self.archived_cards.clone())
+        self.inner.list_archived_cards()
     }
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
-        let sprint = self
-            .get_sprint(sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", sprint_id))?;
-        let board = self
-            .boards
-            .iter()
-            .find(|b| b.id == sprint.board_id)
-            .ok_or_else(|| KanbanError::not_found("board", sprint.board_id))?;
-        let sprint_name = sprint.get_name(board).map(|s| s.to_string());
-        let cmd = Box::new(AssignCardToSprint {
-            card_id,
-            sprint_id,
-            sprint_number: sprint.sprint_number,
-            sprint_name,
-            sprint_status: format!("{:?}", sprint.status),
-        });
-        self.execute_command(cmd)?;
-        self.get_card(card_id)?
-            .ok_or_else(|| KanbanError::not_found("card", card_id))
+        self.inner.assign_card_to_sprint(card_id, sprint_id)
     }
 
     fn unassign_card_from_sprint(&mut self, card_id: Uuid) -> KanbanResult<Card> {
-        let cmd = Box::new(UnassignCardFromSprint { card_id });
-        self.execute_command(cmd)?;
-        self.get_card(card_id)?
-            .ok_or_else(|| KanbanError::not_found("card", card_id))
+        self.inner.unassign_card_from_sprint(card_id)
     }
 
     fn get_card_branch_name(&self, id: Uuid) -> KanbanResult<String> {
-        let card = self
-            .get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))?;
-        let column = self
-            .columns
-            .iter()
-            .find(|c| c.id == card.column_id)
-            .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
-        let board = self
-            .boards
-            .iter()
-            .find(|b| b.id == column.board_id)
-            .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.branch_name(board, &self.sprints, "task"))
+        self.inner.get_card_branch_name(id)
     }
 
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
-        let card = self
-            .get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))?;
-        let column = self
-            .columns
-            .iter()
-            .find(|c| c.id == card.column_id)
-            .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
-        let board = self
-            .boards
-            .iter()
-            .find(|b| b.id == column.board_id)
-            .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
-        Ok(card.git_checkout_command(board, &self.sprints, "task"))
+        self.inner.get_card_git_checkout(id)
     }
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        let commands: Vec<Box<dyn Command>> = ids
-            .iter()
-            .filter(|id| self.cards.iter().any(|c| c.id == **id))
-            .map(|&card_id| Box::new(ArchiveCard { card_id }) as Box<dyn Command>)
-            .collect();
-        let count = commands.len();
-        if !commands.is_empty() {
-            self.execute_commands_batch(commands)?;
-        }
-        Ok(count)
+        self.inner.bulk_archive_cards(ids)
     }
 
     fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        let valid_ids: Vec<Uuid> = ids
-            .into_iter()
-            .filter(|id| self.cards.iter().any(|c| c.id == *id))
-            .collect();
-        let count = valid_ids.len();
-        if count == 0 {
-            return Ok(0);
-        }
-        let base_position =
-            kanban_domain::card_lifecycle::next_position_in_column(&self.cards, column_id);
-        let commands: Vec<Box<dyn Command>> = valid_ids
-            .into_iter()
-            .enumerate()
-            .map(|(i, card_id)| {
-                Box::new(MoveCard {
-                    card_id,
-                    new_column_id: column_id,
-                    new_position: base_position + i as i32,
-                }) as Box<dyn Command>
-            })
-            .collect();
-        self.execute_commands_batch(commands)?;
-        Ok(count)
+        self.inner.bulk_move_cards(ids, column_id)
     }
 
     fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        let sprint = self
-            .get_sprint(sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", sprint_id))?;
-        let board = self
-            .boards
-            .iter()
-            .find(|b| b.id == sprint.board_id)
-            .ok_or_else(|| KanbanError::not_found("board", sprint.board_id))?;
-        let sprint_name = sprint.get_name(board).map(|s| s.to_string());
-        let sprint_number = sprint.sprint_number;
-        let sprint_status = format!("{:?}", sprint.status);
-        let commands: Vec<Box<dyn Command>> = ids
-            .into_iter()
-            .filter(|id| self.cards.iter().any(|c| c.id == *id))
-            .map(|card_id| {
-                Box::new(AssignCardToSprint {
-                    card_id,
-                    sprint_id,
-                    sprint_number,
-                    sprint_name: sprint_name.clone(),
-                    sprint_status: sprint_status.clone(),
-                }) as Box<dyn Command>
-            })
-            .collect();
-        let count = commands.len();
-        if !commands.is_empty() {
-            self.execute_commands_batch(commands)?;
-        }
-        Ok(count)
+        self.inner.bulk_assign_sprint(ids, sprint_id)
     }
 
     fn carry_over_sprint_cards(
@@ -472,34 +204,8 @@ impl KanbanOperations for TuiContext {
         from_sprint_id: Uuid,
         to_sprint_id: Uuid,
     ) -> KanbanResult<usize> {
-        use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
-
-        let from_sprint = self
-            .get_sprint(from_sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", from_sprint_id))?;
-        if from_sprint.status != kanban_domain::SprintStatus::Completed
-            && from_sprint.status != kanban_domain::SprintStatus::Cancelled
-        {
-            return Err(KanbanError::validation(format!(
-                "Source sprint must be Completed or Cancelled, got {:?}",
-                from_sprint.status
-            )));
-        }
-        let to_sprint = self
-            .get_sprint(to_sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", to_sprint_id))?;
-        if to_sprint.status != kanban_domain::SprintStatus::Planning {
-            return Err(KanbanError::validation(format!(
-                "Target sprint must be Planning, got {:?}",
-                to_sprint.status
-            )));
-        }
-
-        let ids: Vec<Uuid> = get_sprint_uncompleted_cards(from_sprint_id, &self.cards)
-            .iter()
-            .map(|c| c.id)
-            .collect();
-        self.bulk_assign_sprint(ids, to_sprint_id)
+        self.inner
+            .carry_over_sprint_cards(from_sprint_id, to_sprint_id)
     }
 
     fn create_sprint(
@@ -508,147 +214,42 @@ impl KanbanOperations for TuiContext {
         prefix: Option<String>,
         name: Option<String>,
     ) -> KanbanResult<Sprint> {
-        let (sprint_number, name_index, effective_prefix) = {
-            let board = self
-                .boards
-                .iter_mut()
-                .find(|b| b.id == board_id)
-                .ok_or_else(|| KanbanError::not_found("board", board_id))?;
-
-            let effective_prefix = prefix
-                .or_else(|| board.sprint_prefix.clone())
-                .unwrap_or_else(|| "sprint".to_string());
-
-            board.ensure_sprint_counter_initialized(&effective_prefix, &self.sprints);
-            let sprint_number = board.get_next_sprint_number(&effective_prefix);
-            let name_index = name.map(|n| board.add_sprint_name_at_used_index(n));
-
-            (sprint_number, name_index, effective_prefix)
-        };
-
-        let cmd = Box::new(CreateSprint {
-            board_id,
-            sprint_number,
-            name_index,
-            prefix: Some(effective_prefix),
-        });
-        self.execute_command(cmd)?;
-        Ok(self.sprints.last().unwrap().clone())
+        self.inner.create_sprint(board_id, prefix, name)
     }
 
     fn list_sprints(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
-        Ok(self
-            .sprints
-            .iter()
-            .filter(|s| s.board_id == board_id)
-            .cloned()
-            .collect())
+        self.inner.list_sprints(board_id)
     }
 
     fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>> {
-        Ok(self.sprints.iter().find(|s| s.id == id).cloned())
+        self.inner.get_sprint(id)
     }
 
     fn update_sprint(&mut self, id: Uuid, updates: SprintUpdate) -> KanbanResult<Sprint> {
-        let cmd = Box::new(UpdateSprint {
-            sprint_id: id,
-            updates,
-        });
-        self.execute_command(cmd)?;
-        self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+        self.inner.update_sprint(id, updates)
     }
 
     fn activate_sprint(&mut self, id: Uuid, duration_days: Option<i32>) -> KanbanResult<Sprint> {
-        let duration = duration_days.unwrap_or(14) as u32;
-        let cmd = Box::new(ActivateSprint {
-            sprint_id: id,
-            duration_days: duration,
-        });
-        self.execute_command(cmd)?;
-        self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+        self.inner.activate_sprint(id, duration_days)
     }
 
     fn complete_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
-        let cmd = Box::new(CompleteSprint { sprint_id: id });
-        self.execute_command(cmd)?;
-        self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+        self.inner.complete_sprint(id)
     }
 
     fn cancel_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
-        let cmd = Box::new(CancelSprint { sprint_id: id });
-        self.execute_command(cmd)?;
-        self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+        self.inner.cancel_sprint(id)
     }
 
     fn delete_sprint(&mut self, id: Uuid) -> KanbanResult<()> {
-        let cmd = Box::new(DeleteSprint { sprint_id: id });
-        self.execute_command(cmd)
+        self.inner.delete_sprint(id)
     }
 
     fn export_board(&self, board_id: Option<Uuid>) -> KanbanResult<String> {
-        let snapshot = if let Some(id) = board_id {
-            let boards: Vec<_> = self.boards.iter().filter(|b| b.id == id).cloned().collect();
-            let columns: Vec<_> = self
-                .columns
-                .iter()
-                .filter(|c| c.board_id == id)
-                .cloned()
-                .collect();
-            let column_ids: Vec<_> = columns.iter().map(|c| c.id).collect();
-            let cards: Vec<_> = self
-                .cards
-                .iter()
-                .filter(|c| column_ids.contains(&c.column_id))
-                .cloned()
-                .collect();
-            let sprints: Vec<_> = self
-                .sprints
-                .iter()
-                .filter(|s| s.board_id == id)
-                .cloned()
-                .collect();
-            Snapshot {
-                boards,
-                columns,
-                cards,
-                archived_cards: vec![],
-                sprints,
-                graph: self.graph.clone(),
-            }
-        } else {
-            Snapshot {
-                boards: self.boards.clone(),
-                columns: self.columns.clone(),
-                cards: self.cards.clone(),
-                archived_cards: self.archived_cards.clone(),
-                sprints: self.sprints.clone(),
-                graph: self.graph.clone(),
-            }
-        };
-
-        serde_json::to_string_pretty(&snapshot)
-            .map_err(|e| KanbanError::serialization(e.to_string()))
+        self.inner.export_board(board_id)
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        let imported: Snapshot =
-            serde_json::from_str(data).map_err(|e| KanbanError::serialization(e.to_string()))?;
-
-        let board = imported
-            .boards
-            .first()
-            .cloned()
-            .ok_or_else(|| KanbanError::validation("No board in import data"))?;
-
-        self.boards.extend(imported.boards);
-        self.columns.extend(imported.columns);
-        self.cards.extend(imported.cards);
-        self.sprints.extend(imported.sprints);
-
-        Ok(board)
+        self.inner.import_board(data)
     }
 }
