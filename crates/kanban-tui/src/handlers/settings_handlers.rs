@@ -140,6 +140,7 @@ impl App {
                 // User explicitly uncommitted the storage fields → drop the override
                 // so the new storage settings take effect permanently.
                 self.cli_file_override = false;
+                self.cli_file_provided = false;
             } else {
                 // Storage lines were still commented out → keep the CLI-supplied
                 // storage active for this session and skip migration.
@@ -265,6 +266,7 @@ impl App {
                 self.persistence.save_completion_rx = Some(completion_rx);
                 self.spawn_save_worker(save_rx);
                 self.cli_file_override = false;
+                self.cli_file_provided = false;
                 let msg = if file_existed {
                     format!("Loaded from {}", new_storage_location)
                 } else {
