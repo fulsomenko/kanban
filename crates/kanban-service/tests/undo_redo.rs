@@ -1,4 +1,4 @@
-use kanban_domain::commands::{CreateBoard, UpdateBoard};
+use kanban_domain::commands::{CompactColumnPositions, CreateBoard, ImportEntities, UpdateBoard};
 use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, Snapshot};
 use kanban_persistence::NullStore;
 use kanban_service::KanbanContext;
@@ -451,4 +451,75 @@ async fn test_execute_batch_success_is_undoable() {
     assert!(ctx.undo());
     assert_eq!(ctx.boards.len(), 1);
     assert!(!ctx.can_undo());
+}
+
+#[tokio::test]
+async fn test_import_entities_is_undoable() {
+    let mut ctx = make_ctx().await;
+    ctx.create_board("B1".into(), None).unwrap();
+    ctx.clear_history();
+
+    let b2 = kanban_domain::Board::new("B2".to_string(), None);
+    let col = kanban_domain::Column::new(b2.id, "Todo".to_string(), 0);
+    let cmd = ImportEntities {
+        boards: vec![b2],
+        columns: vec![col],
+        cards: vec![],
+        archived_cards: vec![],
+        sprints: vec![],
+        graph: None,
+    };
+    ctx.execute(Box::new(cmd)).unwrap();
+    assert_eq!(ctx.boards.len(), 2);
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.boards.len(), 1);
+    assert_eq!(ctx.boards[0].name, "B1");
+}
+
+#[tokio::test]
+async fn test_compact_column_positions_is_undoable() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col.id, "Card1".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col.id, "Card2".into(), Default::default())
+        .unwrap();
+
+    // Manually set positions to non-sequential values
+    ctx.cards
+        .iter_mut()
+        .find(|c| c.id == c1.id)
+        .unwrap()
+        .position = 0;
+    ctx.cards
+        .iter_mut()
+        .find(|c| c.id == c2.id)
+        .unwrap()
+        .position = 5;
+    ctx.clear_history();
+
+    let cmd = CompactColumnPositions { column_id: col.id };
+    ctx.execute(Box::new(cmd)).unwrap();
+    assert_eq!(
+        ctx.cards.iter().find(|c| c.id == c1.id).unwrap().position,
+        0
+    );
+    assert_eq!(
+        ctx.cards.iter().find(|c| c.id == c2.id).unwrap().position,
+        1
+    );
+
+    assert!(ctx.undo());
+    assert_eq!(
+        ctx.cards.iter().find(|c| c.id == c1.id).unwrap().position,
+        0
+    );
+    assert_eq!(
+        ctx.cards.iter().find(|c| c.id == c2.id).unwrap().position,
+        5
+    );
 }
