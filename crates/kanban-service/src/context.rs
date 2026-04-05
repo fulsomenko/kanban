@@ -12,13 +12,13 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct BulkOperationResult {
+pub struct BatchOperationResult {
     pub succeeded: Vec<Uuid>,
-    pub failed: Vec<BulkOperationFailure>,
+    pub failed: Vec<BatchOperationFailure>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct BulkOperationFailure {
+pub struct BatchOperationFailure {
     pub id: Uuid,
     pub error: String,
 }
@@ -278,7 +278,7 @@ impl KanbanContext {
         Ok(())
     }
 
-    pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
+    pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BatchOperationResult {
         use kanban_domain::commands::ArchiveCards;
         self.capture_before_command();
         let mut succeeded = Vec::new();
@@ -286,17 +286,19 @@ impl KanbanContext {
         for id in ids {
             match self.execute_raw(Box::new(ArchiveCards { ids: vec![id] })) {
                 Ok(()) => succeeded.push(id),
-                Err(e) => failed.push(BulkOperationFailure {
+                Err(e) => failed.push(BatchOperationFailure {
                     id,
                     error: e.to_string(),
                 }),
             }
         }
-        self.dirty = true;
-        BulkOperationResult { succeeded, failed }
+        if !succeeded.is_empty() {
+            self.dirty = true;
+        }
+        BatchOperationResult { succeeded, failed }
     }
 
-    pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BulkOperationResult {
+    pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
         use kanban_domain::commands::MoveCard;
         self.capture_before_command();
         let mut succeeded = Vec::new();
@@ -313,21 +315,23 @@ impl KanbanContext {
                 new_position: position,
             })) {
                 Ok(_) => succeeded.push(id),
-                Err(e) => failed.push(BulkOperationFailure {
+                Err(e) => failed.push(BatchOperationFailure {
                     id,
                     error: e.to_string(),
                 }),
             }
         }
-        self.dirty = true;
-        BulkOperationResult { succeeded, failed }
+        if !succeeded.is_empty() {
+            self.dirty = true;
+        }
+        BatchOperationResult { succeeded, failed }
     }
 
     pub fn assign_cards_to_sprint_detailed(
         &mut self,
         ids: Vec<Uuid>,
         sprint_id: Uuid,
-    ) -> BulkOperationResult {
+    ) -> BatchOperationResult {
         use kanban_domain::commands::AssignCardsToSprint;
         self.capture_before_command();
         let mut succeeded = Vec::new();
@@ -339,15 +343,17 @@ impl KanbanContext {
                 sprint_id,
             })) {
                 Ok(_) => succeeded.push(id),
-                Err(e) => failed.push(BulkOperationFailure {
+                Err(e) => failed.push(BatchOperationFailure {
                     id,
                     error: e.to_string(),
                 }),
             }
         }
 
-        self.dirty = true;
-        BulkOperationResult { succeeded, failed }
+        if !succeeded.is_empty() {
+            self.dirty = true;
+        }
+        BatchOperationResult { succeeded, failed }
     }
 }
 
@@ -866,6 +872,8 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
+        use kanban_domain::commands::ImportEntities;
+
         let imported: DataSnapshot = serde_json::from_str(data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
@@ -875,12 +883,14 @@ impl KanbanOperations for KanbanContext {
             .cloned()
             .ok_or_else(|| KanbanError::validation("No board in import data"))?;
 
-        self.capture_before_command();
-        self.boards.extend(imported.boards);
-        self.columns.extend(imported.columns);
-        self.cards.extend(imported.cards);
-        self.sprints.extend(imported.sprints);
-        self.dirty = true;
+        self.execute(Box::new(ImportEntities {
+            boards: imported.boards,
+            columns: imported.columns,
+            cards: imported.cards,
+            archived_cards: imported.archived_cards,
+            sprints: imported.sprints,
+            graph: Some(imported.graph),
+        }))?;
 
         Ok(board)
     }

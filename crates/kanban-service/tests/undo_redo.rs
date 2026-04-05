@@ -171,7 +171,7 @@ async fn test_operations_update_card_is_undoable() {
 }
 
 #[tokio::test]
-async fn test_bulk_archive_creates_single_undo_entry() {
+async fn test_archive_cards_creates_single_undo_entry() {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None).unwrap();
     let col = ctx.create_column(board.id, "C".into(), None).unwrap();
@@ -221,15 +221,40 @@ async fn test_import_board_is_undoable() {
     let _col = ctx.create_column(board.id, "C".into(), None).unwrap();
     let json = ctx.export_board(Some(board.id)).unwrap();
 
-    // Clear and start fresh
-    ctx.clear_history();
-    let boards_before = ctx.boards.len();
+    // Import into a fresh context to avoid duplicate UUID errors
+    let mut ctx2 = make_ctx().await;
+    ctx2.import_board(&json).unwrap();
+    assert_eq!(ctx2.boards.len(), 1);
+    assert_eq!(ctx2.boards[0].name, "Export");
 
-    ctx.import_board(&json).unwrap();
-    assert_eq!(ctx.boards.len(), boards_before + 1);
+    ctx2.undo();
+    assert_eq!(ctx2.boards.len(), 0);
+}
 
-    ctx.undo();
-    assert_eq!(ctx.boards.len(), boards_before);
+#[tokio::test]
+async fn test_import_board_includes_archived_cards() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("Export".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "Card".into(), Default::default())
+        .unwrap();
+    ctx.archive_card(card.id).unwrap();
+    assert_eq!(ctx.archived_cards.len(), 1);
+
+    let json = ctx.export_board(None).unwrap();
+
+    // Import into a fresh context to avoid duplicate UUID errors
+    let mut ctx2 = make_ctx().await;
+    ctx2.import_board(&json).unwrap();
+    assert_eq!(
+        ctx2.archived_cards.len(),
+        1,
+        "imported archived cards should appear"
+    );
+
+    ctx2.undo();
+    assert_eq!(ctx2.archived_cards.len(), 0);
 }
 
 #[tokio::test]
@@ -475,6 +500,38 @@ async fn test_import_entities_is_undoable() {
     assert!(ctx.undo());
     assert_eq!(ctx.boards.len(), 1);
     assert_eq!(ctx.boards[0].name, "B1");
+}
+
+#[tokio::test]
+async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
+    let mut ctx = make_ctx().await;
+    ctx.mark_clean();
+    let result = ctx.archive_cards_detailed(vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()]);
+    assert!(result.succeeded.is_empty());
+    assert_eq!(result.failed.len(), 2);
+    assert!(!ctx.is_dirty(), "dirty flag should not be set when all ops fail");
+}
+
+#[tokio::test]
+async fn test_detailed_archive_partial_success_is_undoable() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "Card".into(), Default::default())
+        .unwrap();
+    ctx.clear_history();
+    ctx.mark_clean();
+
+    let result = ctx.archive_cards_detailed(vec![card.id, uuid::Uuid::new_v4()]);
+    assert_eq!(result.succeeded.len(), 1);
+    assert_eq!(result.failed.len(), 1);
+    assert!(ctx.is_dirty());
+    assert_eq!(ctx.archived_cards.len(), 1);
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.cards.len(), 1);
+    assert_eq!(ctx.archived_cards.len(), 0);
 }
 
 #[tokio::test]
