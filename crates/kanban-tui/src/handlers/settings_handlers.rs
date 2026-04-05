@@ -87,6 +87,12 @@ impl App {
         if strip_storage {
             updated_dto.storage_backend = None;
             updated_dto.storage_location = None;
+            // Also reset the working config to the original config-file values so
+            // that any absolute path injected by App::new during CLI arg processing
+            // does not survive into the saved file (strip_defaults can't recognise
+            // an absolute path as the default relative "kanban.json").
+            config.storage_backend = self.original_storage_backend.clone();
+            config.storage_location = self.original_storage_location.clone();
         }
 
         updated_dto
