@@ -246,8 +246,8 @@ impl App {
             Ok((save_rx, completion_rx)) => {
                 use crate::state::snapshot::TuiSnapshot;
                 snapshot.apply_to_app(self);
-                self.ctx.state_manager.mark_clean();
-                self.ctx.state_manager.clear_history();
+                self.ctx.inner.mark_clean();
+                self.ctx.inner.clear_history();
 
                 self.selection.active_board_index = if self.ctx.boards.is_empty() {
                     None
