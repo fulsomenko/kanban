@@ -12,7 +12,7 @@ description = "Shared service layer implementing KanbanOperations over a pluggab
 default = ["json-storage", "sqlite-storage"]
 json-storage = ["dep:kanban-persistence-json"]
 sqlite-storage = ["dep:kanban-persistence-sqlite"]
-test-helpers = ["dep:tempfile"]
+test-helpers = []
 
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
@@ -28,9 +28,8 @@ dirs = "5.0"
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
-tempfile = { workspace = true, optional = true }
+tempfile.workspace = true
 
 [dev-dependencies]
 kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
-tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }

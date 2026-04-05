@@ -361,20 +361,23 @@ impl Editable<AppConfig> for AppConfigDto {
 
 #[cfg(unix)]
 fn write_config_file(path: &Path, content: &str) -> std::io::Result<()> {
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?
-        .write_all(content.as_bytes())
+    use std::os::unix::fs::PermissionsExt;
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
+    tmp.as_file()
+        .set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    std::io::Write::write_all(&mut tmp, content.as_bytes())?;
+    tmp.persist(path).map_err(|e| e.error)?;
+    Ok(())
 }
 
 #[cfg(not(unix))]
 fn write_config_file(path: &Path, content: &str) -> std::io::Result<()> {
-    std::fs::write(path, content)
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
+    std::io::Write::write_all(&mut tmp, content.as_bytes())?;
+    tmp.persist(path).map_err(|e| e.error)?;
+    Ok(())
 }
 
 pub fn try_load_from(path: &Path) -> kanban_core::CoreResult<AppConfig> {
@@ -1055,5 +1058,47 @@ mod tests {
             let err = save(&config).unwrap_err();
             assert!(err.to_string().contains("No configuration location"));
         }
+    }
+
+    #[test]
+    fn test_write_config_file_no_corruption_on_overwrite() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "default_card_prefix = \"fix\"\ndefault_sprint_prefix = \"mysprint\"\n",
+        )
+        .unwrap();
+        let config = AppConfig {
+            default_card_prefix: Some("feat".into()),
+            default_sprint_prefix: Some("mysprint".into()),
+            ..Default::default()
+        };
+        save_to(&config, &path).unwrap();
+        let result = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            !result.contains("ix\""),
+            "should not contain fragment from old 'fix' value"
+        );
+        assert!(result.contains("feat"), "should contain new value");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_config_file_no_temp_file_remains() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        let config = AppConfig::default();
+        save_to(&config, &path).unwrap();
+        let all_files: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy() != "config.toml")
+            .collect();
+        assert!(
+            all_files.is_empty(),
+            "no leftover files should remain after successful write, found: {:?}",
+            all_files.iter().map(|e| e.file_name()).collect::<Vec<_>>()
+        );
     }
 }

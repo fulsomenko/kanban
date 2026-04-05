@@ -122,6 +122,29 @@ impl EditFormat {
         }
     }
 
+    /// Inserts a single comment line before the first storage field so that the
+    /// fields remain active (editable) while making their read-only status clear.
+    pub fn annotate_storage_fields(&self, content: &str) -> String {
+        let comment = match self {
+            Self::Json => {
+                "  // Storage is controlled by the CLI file argument — changes are ignored:"
+            }
+            Self::Toml => "# Storage is controlled by the CLI file argument — changes are ignored:",
+        };
+        let mut result: Vec<String> = Vec::new();
+        let mut inserted = false;
+        for line in content.lines() {
+            if !inserted && Self::is_storage_line(line) {
+                result.push(comment.to_string());
+                inserted = true;
+            }
+            result.push(line.to_string());
+        }
+        result.join("\n")
+    }
+
+    /// Prefixes each storage field line with the format's comment marker so that
+    /// it is visible but clearly marked as overridden by a CLI argument.
     pub fn comment_storage_fields(&self, content: &str) -> String {
         let prefix = match self {
             Self::Json => "// ",
@@ -130,12 +153,7 @@ impl EditFormat {
         content
             .lines()
             .map(|line| {
-                let trimmed = line.trim_start();
-                if trimmed.starts_with("\"storage_backend\"")
-                    || trimmed.starts_with("\"storage_location\"")
-                    || trimmed.starts_with("storage_backend")
-                    || trimmed.starts_with("storage_location")
-                {
+                if Self::is_storage_line(line) {
                     format!("{}{}", prefix, line)
                 } else {
                     line.to_string()
@@ -143,6 +161,14 @@ impl EditFormat {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    fn is_storage_line(line: &str) -> bool {
+        let t = line.trim_start();
+        t.starts_with("\"storage_backend\"")
+            || t.starts_with("\"storage_location\"")
+            || t.starts_with("storage_backend")
+            || t.starts_with("storage_location")
     }
 }
 
@@ -184,6 +210,55 @@ mod tests {
     #[test]
     fn test_edit_format_file_extension_toml() {
         assert_eq!(EditFormat::Toml.file_extension(), "toml");
+    }
+
+    #[test]
+    fn test_annotate_storage_fields_json_keeps_lines_active_with_comment_before() {
+        let input = "{\n  \"default_card_prefix\": \"feat\",\n  \"storage_backend\": \"json\",\n  \"storage_location\": \"/tmp/b.json\"\n}";
+        let result = EditFormat::Json.annotate_storage_fields(input);
+        let lines: Vec<&str> = result.lines().collect();
+        let backend_idx = lines
+            .iter()
+            .position(|l| l.trim_start().starts_with("\"storage_backend\""))
+            .expect("storage_backend must be present as an active line");
+        let location_idx = lines
+            .iter()
+            .position(|l| l.trim_start().starts_with("\"storage_location\""))
+            .expect("storage_location must be present as an active line");
+        assert!(
+            lines[..backend_idx]
+                .iter()
+                .any(|l| l.trim_start().starts_with("//")),
+            "a // comment must appear before storage_backend"
+        );
+        assert!(
+            backend_idx < location_idx,
+            "storage_backend must appear before storage_location"
+        );
+    }
+
+    #[test]
+    fn test_annotate_storage_fields_toml_keeps_lines_active_with_comment_before() {
+        let input = "default_card_prefix = \"feat\"\nstorage_backend = \"json\"\nstorage_location = \"/tmp/b.json\"\n";
+        let result = EditFormat::Toml.annotate_storage_fields(input);
+        let lines: Vec<&str> = result.lines().collect();
+        let backend_idx = lines
+            .iter()
+            .position(|l| l.trim_start().starts_with("storage_backend"))
+            .expect("storage_backend must be present as an active line");
+        assert!(
+            lines[..backend_idx]
+                .iter()
+                .any(|l| l.trim_start().starts_with('#')),
+            "a # comment must appear before storage_backend"
+        );
+        let location_present = lines
+            .iter()
+            .any(|l| l.trim_start().starts_with("storage_location"));
+        assert!(
+            location_present,
+            "storage_location must be present as an active line"
+        );
     }
 
     #[test]

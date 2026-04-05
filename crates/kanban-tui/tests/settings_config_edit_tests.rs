@@ -1,6 +1,6 @@
 mod helpers;
 
-use kanban_tui::app::{ExportDialogState, ExportFormat, ExportStep};
+use kanban_tui::app::{ExportDialogState, ExportFormat, ExportStep, MigrationState};
 use kanban_tui::App;
 
 #[test]
@@ -158,6 +158,129 @@ fn test_apply_config_edit_invalid_backend_returns_error() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.contains("storage_backend"), "error: {}", err);
+}
+
+#[test]
+fn test_apply_config_edit_unchanged_storage_not_written_to_config() {
+    // Red: from_config resolves storage_location to an absolute path; when the
+    // user only changes card prefix and saves, that absolute path comes back in
+    // the DTO and is written to config because strip_defaults compares against
+    // the relative default ("kanban.json"), not the absolute.
+    let (mut app, _rx) = App::new(None).unwrap();
+    // Reset to a known fresh-install state so the test is not affected by
+    // any config file that may exist on the developer's machine.
+    app.app_config = kanban_core::AppConfig::default();
+    app.original_storage_backend = None;
+    app.original_storage_location = None;
+    let active_storage = kanban_service::config::resolve_storage_location(&app.app_config);
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    // Simulate what the editor sends back: card prefix changed, storage fields
+    // present and unchanged (as from_config would populate them).
+    let json = format!(
+        r#"{{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"{}"}}"#,
+        active_storage
+    );
+    let result = app.apply_config_edit(&json, &format);
+    assert!(result.is_ok());
+    assert!(
+        app.app_config.storage_location.is_none(),
+        "storage_location must not be written to config when it was not changed by the user"
+    );
+}
+
+#[test]
+fn test_apply_config_edit_with_startup_absolute_path_not_written_to_config() {
+    // Simulates `kanban kanban.json` where the CLI path resolves to the same
+    // location as the default. App::new sets app_config.storage_location to
+    // the absolute canonical path and storage_backend via sync_backend_with_file.
+    // Editing only card prefix must NOT write storage_location to the config file.
+    let (mut app, _rx) = App::new(None).unwrap();
+    // Reset to a known fresh-install state so the test is not affected by
+    // any config file that may exist on the developer's machine.
+    app.app_config = kanban_core::AppConfig::default();
+    app.original_storage_backend = None;
+    app.original_storage_location = None;
+    let active_storage = kanban_service::config::resolve_storage_location(&app.app_config);
+    // Reproduce the startup state: absolute path + detected backend, but
+    // original_storage_* remain None (no prior config on disk).
+    app.app_config.storage_location = Some(active_storage.clone());
+    app.app_config.storage_backend = Some("json".into());
+
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    let json = format!(
+        r#"{{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"{}"}}"#,
+        active_storage
+    );
+    let result = app.apply_config_edit(&json, &format);
+    assert!(result.is_ok());
+    assert!(
+        app.app_config.storage_location.is_none(),
+        "storage_location must not be written to config when startup injected the absolute path"
+    );
+}
+
+#[test]
+fn test_apply_config_edit_with_cli_override_preserves_session_storage_location() {
+    // Red: currently self.app_config = config clears storage_location to None,
+    // then apply_storage_location_change triggers a spurious migration that
+    // eventually overwrites the config with the default path.
+    let (mut app, _rx) = App::new(None).unwrap();
+    let cli_path = "/tmp/cli_supplied.json".to_string();
+    app.cli_file_override = true;
+    app.app_config.storage_location = Some(cli_path.clone());
+    app.app_config.storage_backend = Some("json".into());
+
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml"}"#;
+    let _ = app.apply_config_edit(json, &format);
+
+    assert_eq!(
+        app.app_config.storage_location.as_deref(),
+        Some(cli_path.as_str()),
+        "session storage_location must remain the CLI-supplied path after a non-storage config edit"
+    );
+}
+
+#[test]
+fn test_apply_config_edit_with_cli_override_does_not_trigger_migration() {
+    // Red: currently apply_storage_location_change is called with old=cli_path,
+    // new=cwd/kanban.json (default after storage is cleared), triggering a migration.
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.cli_file_override = true;
+    app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
+    app.app_config.storage_backend = Some("json".into());
+
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml"}"#;
+    let _ = app.apply_config_edit(json, &format);
+
+    assert!(
+        matches!(app.migration_state, MigrationState::Idle),
+        "no migration must be triggered when cli_file_override is active and only non-storage fields changed"
+    );
+}
+
+#[test]
+fn test_apply_config_edit_with_cli_override_unloads_when_storage_explicitly_provided() {
+    // When cli_file_override is active, storage lines are commented out in the
+    // editor. If the user uncomments them (DTO has storage fields), that is an
+    // intentional request to persist those storage settings and drop the override.
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.cli_file_override = true;
+    app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
+    app.app_config.storage_backend = Some("json".into());
+    app.has_data_file = false; // skip migration in this unit test
+
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    // User explicitly uncomments storage fields (both present in DTO)
+    let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"/tmp/new_storage.json"}"#;
+    let result = app.apply_config_edit(json, &format);
+
+    assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+    assert!(
+        !app.cli_file_override,
+        "cli_file_override must be cleared when user explicitly provides storage fields"
+    );
 }
 
 #[test]

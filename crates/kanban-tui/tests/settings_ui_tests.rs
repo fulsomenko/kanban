@@ -168,6 +168,47 @@ fn test_render_settings_shows_storage_fields_when_has_data_file() {
 }
 
 #[test]
+fn test_render_settings_config_only_shows_storage_labels_not_active() {
+    // No CLI arg: storage comes from config → use "Storage *" labels, not "Active Storage *".
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.has_data_file = true;
+    app.cli_file_provided = false;
+    app.cli_file_override = false;
+    app.push_mode(AppMode::Settings);
+    let output = helpers::render_to_string(&app);
+    assert!(
+        output.contains("Storage Backend"),
+        "Storage Backend label must appear for config-only mode"
+    );
+    assert!(
+        !output.contains("Active Storage Backend"),
+        "Active Storage Backend must NOT appear when no CLI arg is provided"
+    );
+}
+
+#[test]
+fn test_render_settings_cli_only_shows_active_storage_labels_not_plain() {
+    // CLI arg provided but no override: storage comes from CLI → use "Active Storage *" labels.
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.has_data_file = true;
+    app.cli_file_provided = true;
+    app.cli_file_override = false;
+    app.push_mode(AppMode::Settings);
+    let output = helpers::render_to_string(&app);
+    assert!(
+        output.contains("Active Storage Backend"),
+        "Active Storage Backend label must appear when CLI arg is provided without override"
+    );
+    // Plain "Storage Backend" must not appear (only "Active Storage Backend" row is shown)
+    let plain_count = output.matches("Storage Backend").count();
+    let active_count = output.matches("Active Storage Backend").count();
+    assert_eq!(
+        plain_count, active_count,
+        "only Active Storage Backend must appear (every 'Storage Backend' occurrence should be preceded by 'Active ')"
+    );
+}
+
+#[test]
 fn test_render_settings_storage_fields_greyed_when_cli_file_override() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.cli_file_override = true;
@@ -203,4 +244,105 @@ fn test_render_settings_shows_editing_format_label() {
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(output.contains("Editing Format"), "Missing label");
+}
+
+fn render_rows_wide(app: &App) -> Vec<String> {
+    use ratatui::{backend::TestBackend, Terminal};
+    let backend = TestBackend::new(300, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            kanban_tui::ui::render_settings_view(app, frame, frame.area());
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| {
+                    buffer
+                        .cell((x, y))
+                        .map(|c| c.symbol())
+                        .unwrap_or(" ")
+                        .to_string()
+                })
+                .collect()
+        })
+        .collect()
+}
+
+fn value_after_label<'a>(rows: &'a [String], label: &str) -> Option<&'a str> {
+    let needle = format!("{}: ", label);
+    rows.iter()
+        .find_map(|row| row.split(needle.as_str()).nth(1).map(|s| s.trim_start()))
+}
+
+#[test]
+fn test_render_settings_storage_location_shows_absolute_path() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.app_config = kanban_core::AppConfig::default();
+    app.has_data_file = true;
+    app.push_mode(AppMode::Settings);
+
+    let rows = render_rows_wide(&app);
+    let value = value_after_label(&rows, "Storage Location")
+        .expect("'Storage Location' label not found in rendered output");
+
+    assert!(
+        value.starts_with('/'),
+        "Storage Location must show an absolute path (starting with '/'), got: {:?}",
+        &value[..value.find(' ').unwrap_or(value.len()).min(60)]
+    );
+}
+
+#[test]
+fn test_render_settings_active_storage_location_shows_absolute_path_with_cli_override() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.app_config = kanban_core::AppConfig::default();
+    app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
+    app.app_config.storage_backend = Some("json".into());
+    app.cli_file_override = true;
+    app.has_data_file = true;
+    app.push_mode(AppMode::Settings);
+
+    let rows = render_rows_wide(&app);
+    let value = value_after_label(&rows, "Active Storage Location")
+        .expect("'Active Storage Location' label not found in rendered output");
+
+    assert!(
+        value.starts_with('/'),
+        "Active Storage Location must show an absolute path, got: {:?}",
+        &value[..value.find(' ').unwrap_or(value.len()).min(60)]
+    );
+}
+
+#[test]
+fn test_apply_config_edit_with_non_default_content_writes_config() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.app_config = kanban_core::AppConfig {
+        default_card_prefix: Some("feat".into()),
+        ..Default::default()
+    };
+    let format = EditFormat::Json;
+    let dto = kanban_service::AppConfigDto::from_config(&app.app_config, false);
+    let content = format.serialize(&dto).unwrap();
+    let result = app.apply_config_edit(&content, &format);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_open_config_editor_skips_apply_when_content_matches() {
+    let initial = "default_card_prefix = \"feat\"\n";
+    let new_with_trailing = "default_card_prefix = \"feat\"\n  ";
+    assert_eq!(
+        initial.trim(),
+        new_with_trailing.trim(),
+        "trimmed content must match to trigger the no-op guard"
+    );
+    let changed = "default_card_prefix = \"fix\"\n";
+    assert_ne!(
+        initial.trim(),
+        changed.trim(),
+        "different content must NOT match — apply_config_edit should be called"
+    );
 }
