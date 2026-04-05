@@ -1,5 +1,5 @@
-use kanban_domain::commands::CreateBoard;
-use kanban_domain::{CardUpdate, KanbanOperations, Snapshot};
+use kanban_domain::commands::{CreateBoard, UpdateBoard};
+use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, Snapshot};
 use kanban_persistence::NullStore;
 use kanban_service::KanbanContext;
 use std::sync::Arc;
@@ -354,4 +354,101 @@ async fn test_assign_cards_to_sprint_renamed_trait_method() {
         ctx.get_card(card.id).unwrap().unwrap().sprint_id,
         Some(sprint.id)
     );
+}
+
+#[tokio::test]
+async fn test_assign_cards_to_sprint_creates_single_undo_entry() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col.id, "Card 1".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col.id, "Card 2".into(), Default::default())
+        .unwrap();
+    let c3 = ctx
+        .create_card(board.id, col.id, "Card 3".into(), Default::default())
+        .unwrap();
+    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
+
+    ctx.clear_history();
+
+    ctx.assign_cards_to_sprint(vec![c1.id, c2.id, c3.id], sprint.id)
+        .unwrap();
+    assert_eq!(
+        ctx.get_card(c1.id).unwrap().unwrap().sprint_id,
+        Some(sprint.id)
+    );
+    assert_eq!(
+        ctx.get_card(c2.id).unwrap().unwrap().sprint_id,
+        Some(sprint.id)
+    );
+    assert_eq!(
+        ctx.get_card(c3.id).unwrap().unwrap().sprint_id,
+        Some(sprint.id)
+    );
+
+    // Single undo should restore all 3 cards
+    assert!(ctx.undo());
+    assert_eq!(ctx.get_card(c1.id).unwrap().unwrap().sprint_id, None);
+    assert_eq!(ctx.get_card(c2.id).unwrap().unwrap().sprint_id, None);
+    assert_eq!(ctx.get_card(c3.id).unwrap().unwrap().sprint_id, None);
+
+    // No more undo entries (it was a single batch)
+    assert!(!ctx.can_undo());
+}
+
+#[tokio::test]
+async fn test_execute_batch_partial_failure_rolls_back() {
+    let mut ctx = make_ctx().await;
+    ctx.create_board("B1".into(), None).unwrap();
+    ctx.clear_history();
+
+    let batch: Vec<Box<dyn kanban_domain::commands::Command>> = vec![
+        Box::new(CreateBoard {
+            name: "B2".into(),
+            card_prefix: None,
+        }),
+        Box::new(UpdateBoard {
+            board_id: uuid::Uuid::nil(),
+            updates: BoardUpdate {
+                name: Some("Nonexistent".into()),
+                ..Default::default()
+            },
+        }),
+    ];
+    let result = ctx.execute_batch(batch);
+    assert!(result.is_err());
+
+    // Rolled back: B2 should not exist
+    assert_eq!(ctx.boards.len(), 1);
+    assert_eq!(ctx.boards[0].name, "B1");
+
+    // Undo stack should be clean
+    assert!(!ctx.can_undo());
+}
+
+#[tokio::test]
+async fn test_execute_batch_success_is_undoable() {
+    let mut ctx = make_ctx().await;
+    ctx.create_board("B1".into(), None).unwrap();
+    ctx.clear_history();
+
+    let batch: Vec<Box<dyn kanban_domain::commands::Command>> = vec![
+        Box::new(CreateBoard {
+            name: "B2".into(),
+            card_prefix: None,
+        }),
+        Box::new(CreateBoard {
+            name: "B3".into(),
+            card_prefix: None,
+        }),
+    ];
+    ctx.execute_batch(batch).unwrap();
+    assert_eq!(ctx.boards.len(), 3);
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.boards.len(), 1);
+    assert!(!ctx.can_undo());
 }
