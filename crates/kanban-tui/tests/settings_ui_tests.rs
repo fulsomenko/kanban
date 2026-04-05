@@ -205,6 +205,73 @@ fn test_render_settings_shows_editing_format_label() {
     assert!(output.contains("Editing Format"), "Missing label");
 }
 
+fn render_rows_wide(app: &App) -> Vec<String> {
+    use ratatui::{backend::TestBackend, Terminal};
+    let backend = TestBackend::new(300, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            kanban_tui::ui::render_settings_view(app, frame, frame.area());
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer.cell((x, y)).map(|c| c.symbol()).unwrap_or(" ").to_string())
+                .collect()
+        })
+        .collect()
+}
+
+fn value_after_label<'a>(rows: &'a [String], label: &str) -> Option<&'a str> {
+    let needle = format!("{}: ", label);
+    rows.iter().find_map(|row| {
+        row.split(needle.as_str())
+            .nth(1)
+            .map(|s| s.trim_start())
+    })
+}
+
+#[test]
+fn test_render_settings_storage_location_shows_absolute_path() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.app_config = kanban_core::AppConfig::default();
+    app.has_data_file = true;
+    app.push_mode(AppMode::Settings);
+
+    let rows = render_rows_wide(&app);
+    let value = value_after_label(&rows, "Storage Location")
+        .expect("'Storage Location' label not found in rendered output");
+
+    assert!(
+        value.starts_with('/'),
+        "Storage Location must show an absolute path (starting with '/'), got: {:?}",
+        &value[..value.find(' ').unwrap_or(value.len()).min(60)]
+    );
+}
+
+#[test]
+fn test_render_settings_active_storage_location_shows_absolute_path_with_cli_override() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.app_config = kanban_core::AppConfig::default();
+    app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
+    app.app_config.storage_backend = Some("json".into());
+    app.cli_file_override = true;
+    app.has_data_file = true;
+    app.push_mode(AppMode::Settings);
+
+    let rows = render_rows_wide(&app);
+    let value = value_after_label(&rows, "Active Storage Location")
+        .expect("'Active Storage Location' label not found in rendered output");
+
+    assert!(
+        value.starts_with('/'),
+        "Active Storage Location must show an absolute path, got: {:?}",
+        &value[..value.find(' ').unwrap_or(value.len()).min(60)]
+    );
+}
+
 #[test]
 fn test_apply_config_edit_with_non_default_content_writes_config() {
     let (mut app, _rx) = App::new(None).unwrap();
