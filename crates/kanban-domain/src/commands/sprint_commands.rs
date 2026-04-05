@@ -37,28 +37,60 @@ impl Command for UpdateSprint {
     }
 }
 
-/// Create a new sprint
+/// Create a new sprint.
+///
+/// Handles sprint counter initialization, number generation, and name assignment
+/// internally. The effective prefix is resolved as:
+///   `explicit_prefix` > `board.sprint_prefix` > `default_sprint_prefix`
+///
+/// If `auto_consume_name` is true and no explicit name is provided, the next
+/// available sprint name from the board's name pool will be consumed.
 pub struct CreateSprint {
     pub board_id: Uuid,
-    pub sprint_number: u32,
-    pub name_index: Option<usize>,
-    pub prefix: Option<String>,
+    pub name: Option<String>,
+    pub default_sprint_prefix: String,
+    /// If set, overrides both board prefix and default prefix.
+    pub explicit_prefix: Option<String>,
+    /// If true and `name` is None, consume next name from the board's name pool.
+    /// Used by TUI; CLI/MCP pass false.
+    #[allow(dead_code)]
+    pub auto_consume_name: bool,
 }
 
 impl Command for CreateSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        // Read sprints snapshot before mutable borrow of board
+        let sprints_snapshot: Vec<_> = context.sprints.clone();
+
+        let board = context.board_mut(self.board_id)?;
+        let effective_prefix = self
+            .explicit_prefix
+            .clone()
+            .or_else(|| board.sprint_prefix.clone())
+            .unwrap_or_else(|| self.default_sprint_prefix.clone());
+
+        board.ensure_sprint_counter_initialized(&effective_prefix, &sprints_snapshot);
+        let sprint_number = board.get_next_sprint_number(&effective_prefix);
+        let name_index = match &self.name {
+            Some(name) if !name.trim().is_empty() => {
+                Some(board.add_sprint_name_at_used_index(name.clone()))
+            }
+            _ if self.auto_consume_name => board.consume_sprint_name(),
+            _ => None,
+        };
+
         let sprint = crate::Sprint::new(
             self.board_id,
-            self.sprint_number,
-            self.name_index,
-            self.prefix.clone(),
+            sprint_number,
+            name_index,
+            Some(effective_prefix),
         );
         context.sprints.push(sprint);
         Ok(())
     }
 
     fn description(&self) -> String {
-        format!("Create sprint {}", self.sprint_number)
+        format!("Create sprint for board {}", self.board_id)
     }
 }
 
