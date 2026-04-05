@@ -14,13 +14,8 @@ async fn test_snapshot_roundtrip_preserves_all_fields() {
     let board_id = ctx.boards[0].id;
     ctx.create_column(board_id, "C".into(), None).unwrap();
     let col_id = ctx.columns[0].id;
-    ctx.create_card(
-        board_id,
-        col_id,
-        "Card".into(),
-        Default::default(),
-    )
-    .unwrap();
+    ctx.create_card(board_id, col_id, "Card".into(), Default::default())
+        .unwrap();
 
     let snap = ctx.snapshot();
     ctx.apply_snapshot(Snapshot::new());
@@ -142,7 +137,10 @@ async fn test_dirty_flag_lifecycle() {
 async fn test_operations_create_board_captures_history() {
     let mut ctx = make_ctx().await;
     ctx.create_board("B".into(), None).unwrap();
-    assert!(ctx.can_undo(), "create_board via KanbanOperations should capture history");
+    assert!(
+        ctx.can_undo(),
+        "create_board via KanbanOperations should capture history"
+    );
 }
 
 #[tokio::test]

@@ -336,11 +336,19 @@ impl KanbanContext {
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
 
-        let sprint_info = self.get_sprint(sprint_id).ok().flatten().and_then(|sprint| {
-            let board = self.boards.iter().find(|b| b.id == sprint.board_id)?;
-            let sprint_name = sprint.get_name(board).map(|s| s.to_string());
-            Some((sprint.sprint_number, sprint_name, format!("{:?}", sprint.status)))
-        });
+        let sprint_info = self
+            .get_sprint(sprint_id)
+            .ok()
+            .flatten()
+            .and_then(|sprint| {
+                let board = self.boards.iter().find(|b| b.id == sprint.board_id)?;
+                let sprint_name = sprint.get_name(board).map(|s| s.to_string());
+                Some((
+                    sprint.sprint_number,
+                    sprint_name,
+                    format!("{:?}", sprint.status),
+                ))
+            });
 
         if let Some((sprint_number, sprint_name, sprint_status)) = sprint_info {
             for id in ids {

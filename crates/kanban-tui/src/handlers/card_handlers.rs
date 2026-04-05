@@ -638,7 +638,10 @@ impl App {
     }
 
     pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
-        kanban_domain::card_lifecycle::compact_column_positions(&mut self.ctx.inner.cards, column_id);
+        kanban_domain::card_lifecycle::compact_column_positions(
+            &mut self.ctx.inner.cards,
+            column_id,
+        );
     }
 
     pub fn select_card_after_deletion(

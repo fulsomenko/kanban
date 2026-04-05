@@ -225,8 +225,7 @@ impl Command for BulkArchiveCards {
             let card = context.cards.remove(pos);
             let original_column_id = card.column_id;
             let original_position = card.position;
-            let archived =
-                crate::ArchivedCard::new(card, original_column_id, original_position);
+            let archived = crate::ArchivedCard::new(card, original_column_id, original_position);
             context.archived_cards.push(archived);
             context.graph.cards.archive_card_edges(*id);
         }
@@ -257,7 +256,11 @@ impl Command for BulkMoveCards {
     }
 
     fn description(&self) -> String {
-        format!("Bulk move {} cards to column {}", self.ids.len(), self.column_id)
+        format!(
+            "Bulk move {} cards to column {}",
+            self.ids.len(),
+            self.column_id
+        )
     }
 }
 

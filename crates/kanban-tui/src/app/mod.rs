@@ -1422,7 +1422,8 @@ impl App {
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
                     let board_id = board.id;
-                    if let Some(board) = self.ctx.inner.boards.iter_mut().find(|b| b.id == board_id) {
+                    if let Some(board) = self.ctx.inner.boards.iter_mut().find(|b| b.id == board_id)
+                    {
                         match field {
                             BoardField::Name => {
                                 if !new_content.trim().is_empty() {
@@ -1868,7 +1869,10 @@ impl App {
             self.ctx.inner.boards.extend(snapshot.boards);
             self.ctx.inner.columns.extend(snapshot.columns);
             self.ctx.inner.cards.extend(snapshot.cards);
-            self.ctx.inner.archived_cards.extend(snapshot.archived_cards);
+            self.ctx
+                .inner
+                .archived_cards
+                .extend(snapshot.archived_cards);
             self.ctx.inner.sprints.extend(snapshot.sprints);
             self.ctx.inner.graph = snapshot.graph;
 
@@ -1891,7 +1895,10 @@ impl App {
         self.ctx.inner.boards.extend(entities.boards);
         self.ctx.inner.columns.extend(entities.columns);
         self.ctx.inner.cards.extend(entities.cards);
-        self.ctx.inner.archived_cards.extend(entities.archived_cards);
+        self.ctx
+            .inner
+            .archived_cards
+            .extend(entities.archived_cards);
         self.ctx.inner.sprints.extend(entities.sprints);
 
         self.selection.board.set(Some(first_new_index));
