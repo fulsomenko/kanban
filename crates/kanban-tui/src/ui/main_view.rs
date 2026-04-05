@@ -22,7 +22,7 @@ pub(super) fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
 
     if is_kanban_view {
         app.view.viewport_height = area.height.saturating_sub(2) as usize;
-        render_tasks_panel(app, frame, area);
+        render_tasks(app, frame, area);
     } else {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
@@ -31,7 +31,7 @@ pub(super) fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
 
         app.view.viewport_height = chunks[1].height.saturating_sub(2) as usize;
         render_projects_panel(app, frame, chunks[0]);
-        render_tasks_panel(app, frame, chunks[1]);
+        render_tasks(app, frame, chunks[1]);
     }
 }
 
@@ -114,10 +114,6 @@ pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
     title
 }
 
-pub(super) fn render_tasks_panel(app: &App, frame: &mut Frame, area: Rect) {
-    render_tasks(app, frame, area);
-}
-
 pub(super) fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(unified_strategy) = app
         .view
@@ -128,5 +124,89 @@ pub(super) fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
         unified_strategy
             .get_render_strategy()
             .render(app, frame, area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_filter_title_suffix_no_filters_returns_none() {
+        let (app, _rx) = App::new(None).unwrap();
+        assert_eq!(build_filter_title_suffix(&app), None);
+    }
+
+    #[test]
+    fn test_build_filter_title_suffix_unassigned_cards_flag() {
+        let (mut app, _rx) = App::new(None).unwrap();
+        app.filter.hide_assigned_cards = true;
+        assert_eq!(
+            build_filter_title_suffix(&app),
+            Some(" - Unassigned Cards".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_filter_title_suffix_sprint_filter_formats_sprint_name() {
+        let (mut app, _rx) = App::new(None).unwrap();
+        let board = kanban_domain::Board::new("Test Board".to_string(), None);
+        let sprint = kanban_domain::Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
+        let sprint_id = sprint.id;
+        app.ctx.sprints.push(sprint);
+        app.ctx.boards.push(board);
+        app.selection.active_board_index = Some(0);
+        app.filter.active_sprint_filters.insert(sprint_id);
+        let suffix = build_filter_title_suffix(&app);
+        assert!(
+            suffix.is_some(),
+            "Expected Some suffix with active sprint filter"
+        );
+        let suffix = suffix.unwrap();
+        assert!(suffix.starts_with(" - "), "Suffix should start with ' - '");
+        assert!(
+            suffix.contains("Sprint"),
+            "Suffix should contain sprint name"
+        );
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_default() {
+        let (app, _rx) = App::new(None).unwrap();
+        assert_eq!(build_tasks_panel_title(&app, false), "Tasks");
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_archived_view() {
+        let (mut app, _rx) = App::new(None).unwrap();
+        app.mode = AppMode::ArchivedCardsView;
+        assert_eq!(build_tasks_panel_title(&app, false), "Archive");
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_cards_focus() {
+        let (mut app, _rx) = App::new(None).unwrap();
+        app.focus.active = Focus::Cards;
+        assert_eq!(build_tasks_panel_title(&app, false), "Tasks [2]");
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_with_filter_suffix() {
+        let (mut app, _rx) = App::new(None).unwrap();
+        app.filter.hide_assigned_cards = true;
+        let title = build_tasks_panel_title(&app, true);
+        assert!(
+            title.ends_with(" - Unassigned Cards"),
+            "Expected title to end with filter suffix, got: {}",
+            title
+        );
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_archived_ignores_filter_suffix() {
+        let (mut app, _rx) = App::new(None).unwrap();
+        app.mode = AppMode::ArchivedCardsView;
+        app.filter.hide_assigned_cards = true;
+        assert_eq!(build_tasks_panel_title(&app, true), "Archive");
     }
 }
