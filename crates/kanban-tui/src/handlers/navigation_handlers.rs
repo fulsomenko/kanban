@@ -306,7 +306,7 @@ impl App {
             .active_board_index
             .or(self.selection.board.get())
         {
-            if let Some(board) = self.ctx.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards().get(board_idx) {
                 if board.task_list_view == TaskListView::GroupedByColumn {
                     // Try to get column boundaries for header-aware pagination
                     if let Some(unified) = self
@@ -359,7 +359,7 @@ impl App {
     pub fn handle_navigation_down(&mut self) {
         match self.focus.active {
             Focus::Boards => {
-                self.selection.board.next(self.ctx.boards.len());
+                self.selection.board.next(self.ctx.boards().len());
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {
@@ -455,7 +455,7 @@ impl App {
 
                     if let Some(board_idx) = self.selection.active_board_index {
                         let (task_list_view, task_sort_field, task_sort_order) = {
-                            if let Some(board) = self.ctx.boards.get(board_idx) {
+                            if let Some(board) = self.ctx.boards().get(board_idx) {
                                 (
                                     board.task_list_view,
                                     board.task_sort_field,
@@ -488,7 +488,7 @@ impl App {
             Focus::Cards => {
                 if let Some(selected_card) = self.get_selected_card_in_context() {
                     let card_id = selected_card.id;
-                    let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
+                    let actual_idx = self.ctx.cards().iter().position(|c| c.id == card_id);
                     self.selection.active_card_index = actual_idx;
                     // Initialize list components with item counts
                     let parents = self.get_current_card_parents();
@@ -533,7 +533,7 @@ impl App {
             .active_board_index
             .or(self.selection.board.get())
         {
-            if let Some(board) = self.ctx.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards().get(board_idx) {
                 return board.task_list_view == TaskListView::ColumnView;
             }
         }
@@ -609,7 +609,7 @@ impl App {
     pub fn handle_jump_to_bottom(&mut self) {
         match self.focus.active {
             Focus::Boards => {
-                self.selection.board.jump_to_last(self.ctx.boards.len());
+                self.selection.board.jump_to_last(self.ctx.boards().len());
                 self.switch_view_strategy(TaskListView::GroupedByColumn);
             }
             Focus::Cards => {

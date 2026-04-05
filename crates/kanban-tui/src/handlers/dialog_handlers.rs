@@ -135,7 +135,7 @@ impl App {
                 let card_id = self
                     .selection
                     .active_card_index
-                    .and_then(|idx| self.ctx.cards.get(idx))
+                    .and_then(|idx| self.ctx.cards().get(idx))
                     .map(|c| c.id)
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
 
@@ -176,7 +176,8 @@ impl App {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.selection.board.get() {
-                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
+                                if let Some(board_id) =
+                                    self.ctx.boards().get(board_idx).map(|b| b.id)
                                 {
                                     let cmd = Box::new(kanban_domain::commands::UpdateBoard {
                                         board_id,
@@ -196,7 +197,7 @@ impl App {
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                    self.ctx.sprints().get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
@@ -216,7 +217,7 @@ impl App {
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                    self.ctx.sprints().get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
@@ -241,7 +242,8 @@ impl App {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.selection.board.get() {
-                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
+                                if let Some(board_id) =
+                                    self.ctx.boards().get(board_idx).map(|b| b.id)
                                 {
                                     let cmd = Box::new(kanban_domain::commands::UpdateBoard {
                                         board_id,
@@ -254,12 +256,13 @@ impl App {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
                                     } else {
                                         tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                        let sprints_ref = self.ctx.sprints().clone();
                                         if let Some(board) =
-                                            self.ctx.inner.boards.get_mut(board_idx)
+                                            self.ctx.boards_mut().get_mut(board_idx)
                                         {
                                             board.ensure_sprint_counter_initialized(
                                                 &prefix_str,
-                                                &self.ctx.inner.sprints,
+                                                &sprints_ref,
                                             );
                                         }
                                     }
@@ -269,7 +272,7 @@ impl App {
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                    self.ctx.sprints().get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
@@ -290,10 +293,11 @@ impl App {
                                 .active_board_index
                                 .or(self.selection.board.get());
                             if let Some(board_idx) = board_idx {
-                                if let Some(board) = self.ctx.inner.boards.get_mut(board_idx) {
+                                let sprints_ref = self.ctx.sprints().clone();
+                                if let Some(board) = self.ctx.boards_mut().get_mut(board_idx) {
                                     board.ensure_sprint_counter_initialized(
                                         &prefix_str,
-                                        &self.ctx.inner.sprints,
+                                        &sprints_ref,
                                     );
                                 }
                             }
@@ -301,7 +305,7 @@ impl App {
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                    self.ctx.sprints().get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = Box::new(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
@@ -388,7 +392,7 @@ impl App {
             }
             KeyCode::Esc => {
                 // Retry later - just go back to previous mode
-                self.ctx.inner.clear_conflict();
+                self.ctx.clear_conflict();
                 self.pop_mode();
             }
             _ => {}

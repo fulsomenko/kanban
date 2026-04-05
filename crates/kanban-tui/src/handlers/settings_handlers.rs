@@ -240,19 +240,19 @@ impl App {
 
         match kanban_service::make_store(&new_backend, &new_storage_location) {
             Ok(new_store) => {
-                self.ctx.inner.replace_store(new_store);
+                self.ctx.replace_store(new_store);
                 let (save_rx, completion_rx) = self.ctx.state_manager.reset_save_channels();
                 use crate::state::snapshot::TuiSnapshot;
                 snapshot.apply_to_app(self);
-                self.ctx.inner.mark_clean();
-                self.ctx.inner.clear_history();
+                self.ctx.mark_clean();
+                self.ctx.clear_history();
 
-                self.selection.active_board_index = if self.ctx.boards.is_empty() {
+                self.selection.active_board_index = if self.ctx.boards().is_empty() {
                     None
                 } else {
                     Some(0)
                 };
-                self.selection.board.set(if self.ctx.boards.is_empty() {
+                self.selection.board.set(if self.ctx.boards().is_empty() {
                     None
                 } else {
                     Some(0)
@@ -362,7 +362,7 @@ impl App {
             | KeyCode::Enter => self.handle_settings_key_nav(key),
             KeyCode::Char('e') => self.open_config_editor(terminal, event_handler),
             KeyCode::Char('x') => {
-                let board_count = self.ctx.boards.len();
+                let board_count = self.ctx.boards().len();
                 if board_count == 0 {
                     self.set_error("No boards to export".to_string());
                     return false;
@@ -513,7 +513,7 @@ impl App {
     }
 
     fn trigger_export(&mut self) -> bool {
-        let board_count = self.ctx.boards.len();
+        let board_count = self.ctx.boards().len();
         if board_count == 0 {
             self.set_error("No boards to export".to_string());
             return false;
@@ -619,14 +619,14 @@ impl App {
 
         let board_exports: Vec<_> = selected_indices
             .iter()
-            .filter_map(|&i| self.ctx.boards.get(i))
+            .filter_map(|&i| self.ctx.boards().get(i))
             .map(|board| {
                 BoardExporter::export_board(
                     board,
-                    &self.ctx.columns,
-                    &self.ctx.cards,
-                    &self.ctx.archived_cards,
-                    &self.ctx.sprints,
+                    self.ctx.columns(),
+                    self.ctx.cards(),
+                    self.ctx.archived_cards(),
+                    self.ctx.sprints(),
                 )
             })
             .collect();

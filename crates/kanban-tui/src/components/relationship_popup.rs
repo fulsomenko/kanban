@@ -85,7 +85,7 @@ fn render_relationship_card_list(app: &App, frame: &mut Frame, area: ratatui::la
             .iter()
             .filter(|card_id| {
                 app.ctx
-                    .cards
+                    .cards()
                     .iter()
                     .find(|c| c.id == **card_id)
                     .map(|c| c.title.to_lowercase().contains(&search_lower))
@@ -97,7 +97,7 @@ fn render_relationship_card_list(app: &App, frame: &mut Frame, area: ratatui::la
 
     let mut lines = vec![];
     for (idx, card_id) in filtered_cards.iter().enumerate() {
-        if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
+        if let Some(card) = app.ctx.cards().iter().find(|c| c.id == *card_id) {
             let is_selected = app.relationship.selection.get() == Some(idx);
             let is_checked = app.relationship.selected.contains(card_id);
 

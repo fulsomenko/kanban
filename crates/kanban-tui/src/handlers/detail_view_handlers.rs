@@ -224,8 +224,8 @@ impl App {
                 }
                 CardFocus::Metadata => {
                     if let Some(card_idx) = self.selection.active_card_index {
-                        let before = self.ctx.inner.snapshot();
-                        if let Some(card) = self.ctx.inner.cards.get_mut(card_idx) {
+                        let before = self.ctx.snapshot();
+                        if let Some(card) = self.ctx.cards_mut().get_mut(card_idx) {
                             let card_id = card.id;
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-card-{}-metadata.json", card_id));
@@ -237,8 +237,8 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit metadata: {}", e);
                             } else {
-                                self.ctx.inner.push_before_snapshot(before);
-                                let snapshot = self.ctx.inner.snapshot();
+                                self.ctx.push_before_snapshot(before);
+                                let snapshot = self.ctx.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
@@ -261,10 +261,10 @@ impl App {
             }
             KeyCode::Char('a') => {
                 if let Some(board_idx) = self.selection.active_board_index {
-                    if let Some(board) = self.ctx.boards.get(board_idx) {
+                    if let Some(board) = self.ctx.boards().get(board_idx) {
                         let sprint_count = self
                             .ctx
-                            .sprints
+                            .sprints()
                             .iter()
                             .filter(|s| s.board_id == board.id)
                             .count();
@@ -375,8 +375,8 @@ impl App {
                 }
                 BoardFocus::Settings => {
                     if let Some(board_idx) = self.selection.board.get() {
-                        let before = self.ctx.inner.snapshot();
-                        if let Some(board) = self.ctx.inner.boards.get_mut(board_idx) {
+                        let before = self.ctx.snapshot();
+                        if let Some(board) = self.ctx.boards_mut().get_mut(board_idx) {
                             let board_id = board.id;
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-board-{}-settings.json", board_id));
@@ -388,8 +388,8 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit board settings: {}", e);
                             } else {
-                                self.ctx.inner.push_before_snapshot(before);
-                                let snapshot = self.ctx.inner.snapshot();
+                                self.ctx.push_before_snapshot(before);
+                                let snapshot = self.ctx.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
@@ -429,10 +429,10 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => match self.focus.board_focus {
                 BoardFocus::Sprints => {
                     if let Some(board_idx) = self.selection.board.get() {
-                        if let Some(board) = self.ctx.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards().get(board_idx) {
                             let sprint_count = self
                                 .ctx
-                                .sprints
+                                .sprints()
                                 .iter()
                                 .filter(|s| s.board_id == board.id)
                                 .count();
@@ -448,10 +448,10 @@ impl App {
                 }
                 BoardFocus::Columns => {
                     if let Some(board_idx) = self.selection.board.get() {
-                        if let Some(board) = self.ctx.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards().get(board_idx) {
                             let column_count = self
                                 .ctx
-                                .columns
+                                .columns()
                                 .iter()
                                 .filter(|col| col.board_id == board.id)
                                 .count();
@@ -496,10 +496,10 @@ impl App {
                             .selection
                             .board
                             .get()
-                            .and_then(|idx| self.ctx.boards.get(idx))
+                            .and_then(|idx| self.ctx.boards().get(idx))
                             .map(|board| {
                                 self.ctx
-                                    .sprints
+                                    .sprints()
                                     .iter()
                                     .filter(|s| s.board_id == board.id)
                                     .count()
@@ -532,10 +532,10 @@ impl App {
                 if self.focus.board_focus == BoardFocus::Sprints {
                     if let Some(sprint_idx) = self.selection.sprint.get() {
                         if let Some(board_idx) = self.selection.board.get() {
-                            if let Some(board) = self.ctx.boards.get(board_idx) {
+                            if let Some(board) = self.ctx.boards().get(board_idx) {
                                 let board_sprints: Vec<_> = self
                                     .ctx
-                                    .sprints
+                                    .sprints()
                                     .iter()
                                     .enumerate()
                                     .filter(|(_, s)| s.board_id == board.id)
@@ -543,7 +543,7 @@ impl App {
                                 if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
                                     self.selection.active_sprint_index = Some(*actual_idx);
                                     self.selection.active_board_index = Some(board_idx);
-                                    if let Some(sprint) = self.ctx.sprints.get(*actual_idx) {
+                                    if let Some(sprint) = self.ctx.sprints().get(*actual_idx) {
                                         self.populate_sprint_task_lists(sprint.id);
                                     }
                                     self.push_mode(AppMode::SprintDetail);
@@ -556,7 +556,7 @@ impl App {
             KeyCode::Char('p') => {
                 if self.focus.board_focus == BoardFocus::Settings {
                     if let Some(board_idx) = self.selection.board.get() {
-                        if let Some(board) = self.ctx.boards.get(board_idx) {
+                        if let Some(board) = self.ctx.boards().get(board_idx) {
                             let current_prefix =
                                 board.sprint_prefix.clone().unwrap_or_else(String::new);
                             self.input.set(current_prefix);
@@ -606,7 +606,7 @@ impl App {
             }
             KeyCode::Char('p') => {
                 if let Some(sprint_idx) = self.selection.active_sprint_index {
-                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints().get(sprint_idx) {
                         let current_prefix = sprint.prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
                         self.open_dialog(DialogMode::SetSprintPrefix);
@@ -615,7 +615,7 @@ impl App {
             }
             KeyCode::Char('C') => {
                 if let Some(sprint_idx) = self.selection.active_sprint_index {
-                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints().get(sprint_idx) {
                         let current_prefix = sprint.card_prefix.clone().unwrap_or_else(String::new);
                         self.input.set(current_prefix);
                         self.open_dialog(DialogMode::SetSprintCardPrefix);
@@ -643,7 +643,7 @@ impl App {
             }
             KeyCode::Char('M') => {
                 if let Some(sprint_idx) = self.selection.active_sprint_index {
-                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints().get(sprint_idx) {
                         use kanban_domain::SprintStatus;
                         if sprint.status == SprintStatus::Completed
                             || sprint.status == SprintStatus::Cancelled
@@ -656,7 +656,7 @@ impl App {
             }
             KeyCode::Char('h') | KeyCode::Left => {
                 if let Some(sprint_idx) = self.selection.active_sprint_index {
-                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints().get(sprint_idx) {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
                             self.sprint_view.panel = SprintTaskPanel::Uncompleted;
                         }
@@ -665,7 +665,7 @@ impl App {
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 if let Some(sprint_idx) = self.selection.active_sprint_index {
-                    if let Some(sprint) = self.ctx.sprints.get(sprint_idx) {
+                    if let Some(sprint) = self.ctx.sprints().get(sprint_idx) {
                         if sprint.status == kanban_domain::SprintStatus::Completed {
                             self.sprint_view.panel = SprintTaskPanel::Completed;
                         }
@@ -687,7 +687,7 @@ impl App {
                     match action {
                         CardListAction::Select(card_id) => {
                             if let Some(card_idx) =
-                                self.ctx.cards.iter().position(|c| c.id == card_id)
+                                self.ctx.cards().iter().position(|c| c.id == card_id)
                             {
                                 self.selection.active_card_index = Some(card_idx);
                                 // Initialize list components with item counts
@@ -705,7 +705,7 @@ impl App {
                         }
                         CardListAction::Edit(card_id) => {
                             if let Some(card_idx) =
-                                self.ctx.cards.iter().position(|c| c.id == card_id)
+                                self.ctx.cards().iter().position(|c| c.id == card_id)
                             {
                                 self.selection.active_card_index = Some(card_idx);
                                 // Initialize list components with item counts
@@ -722,7 +722,7 @@ impl App {
                             }
                         }
                         CardListAction::Complete(card_id) => {
-                            if let Some(card) = self.ctx.cards.iter().find(|c| c.id == card_id) {
+                            if let Some(card) = self.ctx.cards().iter().find(|c| c.id == card_id) {
                                 use kanban_domain::{CardStatus, CardUpdate};
                                 let new_status = if card.status == CardStatus::Done {
                                     CardStatus::Todo
@@ -732,12 +732,12 @@ impl App {
 
                                 let toggle_result =
                                     self.selection.active_board_index.and_then(|idx| {
-                                        self.ctx.boards.get(idx).and_then(|board| {
+                                        self.ctx.boards().get(idx).and_then(|board| {
                                         kanban_domain::card_lifecycle::compute_completion_toggle(
                                             card,
                                             board,
-                                            &self.ctx.columns,
-                                            &self.ctx.cards,
+                                            self.ctx.columns(),
+                                            self.ctx.cards(),
                                         )
                                     })
                                     });
@@ -764,7 +764,7 @@ impl App {
                         }
                         CardListAction::TogglePriority(card_id) => {
                             if let Some(card_idx) =
-                                self.ctx.cards.iter().position(|c| c.id == card_id)
+                                self.ctx.cards().iter().position(|c| c.id == card_id)
                             {
                                 self.selection.active_card_index = Some(card_idx);
                                 let priority_idx = self.get_current_priority_selection_index();
@@ -774,14 +774,14 @@ impl App {
                         }
                         CardListAction::AssignSprint(card_id) => {
                             if let Some(card_idx) =
-                                self.ctx.cards.iter().position(|c| c.id == card_id)
+                                self.ctx.cards().iter().position(|c| c.id == card_id)
                             {
                                 self.selection.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.selection.active_board_index {
-                                    if let Some(board) = self.ctx.boards.get(board_idx) {
+                                    if let Some(board) = self.ctx.boards().get(board_idx) {
                                         let sprint_count = self
                                             .ctx
-                                            .sprints
+                                            .sprints()
                                             .iter()
                                             .filter(|s| s.board_id == board.id)
                                             .count();
@@ -799,14 +799,14 @@ impl App {
                         }
                         CardListAction::ReassignSprint(card_id) => {
                             if let Some(card_idx) =
-                                self.ctx.cards.iter().position(|c| c.id == card_id)
+                                self.ctx.cards().iter().position(|c| c.id == card_id)
                             {
                                 self.selection.active_card_index = Some(card_idx);
                                 if let Some(board_idx) = self.selection.active_board_index {
-                                    if let Some(board) = self.ctx.boards.get(board_idx) {
+                                    if let Some(board) = self.ctx.boards().get(board_idx) {
                                         let sprint_count = self
                                             .ctx
-                                            .sprints
+                                            .sprints()
                                             .iter()
                                             .filter(|s| s.board_id == board.id)
                                             .count();
@@ -847,7 +847,7 @@ impl App {
                         }
                         CardListAction::MoveColumn(card_id, is_right) => {
                             if let Some(card) =
-                                self.ctx.cards.iter().find(|c| c.id == card_id).cloned()
+                                self.ctx.cards().iter().find(|c| c.id == card_id).cloned()
                             {
                                 let direction = if is_right {
                                     kanban_domain::card_lifecycle::MoveDirection::Right
@@ -857,12 +857,12 @@ impl App {
 
                                 let move_result =
                                     self.selection.active_board_index.and_then(|idx| {
-                                        self.ctx.boards.get(idx).and_then(|board| {
+                                        self.ctx.boards().get(idx).and_then(|board| {
                                             kanban_domain::card_lifecycle::compute_card_column_move(
                                                 &card,
                                                 board,
-                                                &self.ctx.columns,
-                                                &self.ctx.cards,
+                                                self.ctx.columns(),
+                                                self.ctx.cards(),
                                                 direction,
                                             )
                                         })
@@ -953,26 +953,26 @@ impl App {
 
     pub(crate) fn handle_manage_parents(&mut self) {
         if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.ctx.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards().get(card_idx) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
                 // Get the board for this card's column
                 let board_id = self
                     .ctx
-                    .columns
+                    .columns()
                     .iter()
                     .find(|c| c.id == card_column_id)
                     .map(|c| c.board_id);
 
                 if let Some(board_id) = board_id {
                     // Get all descendants to exclude (to prevent cycles)
-                    let descendants = self.ctx.graph.cards.descendants(card_id);
+                    let descendants = self.ctx.graph().cards.descendants(card_id);
 
                     // Get cards from current board, excluding self and descendants
                     let column_ids: std::collections::HashSet<_> = self
                         .ctx
-                        .columns
+                        .columns()
                         .iter()
                         .filter(|c| c.board_id == board_id)
                         .map(|c| c.id)
@@ -980,7 +980,7 @@ impl App {
 
                     let eligible_cards: Vec<_> = self
                         .ctx
-                        .cards
+                        .cards()
                         .iter()
                         .filter(|c| column_ids.contains(&c.column_id))
                         .filter(|c| c.id != card_id)
@@ -989,8 +989,13 @@ impl App {
                         .collect();
 
                     // Get current parents (for checkbox display)
-                    let current_parents: std::collections::HashSet<_> =
-                        self.ctx.graph.cards.parents(card_id).into_iter().collect();
+                    let current_parents: std::collections::HashSet<_> = self
+                        .ctx
+                        .graph()
+                        .cards
+                        .parents(card_id)
+                        .into_iter()
+                        .collect();
 
                     // Set up dialog state
                     self.relationship.card_ids = eligible_cards;
@@ -1006,26 +1011,26 @@ impl App {
 
     pub(crate) fn handle_manage_children(&mut self) {
         if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.ctx.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards().get(card_idx) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
                 // Get the board for this card's column
                 let board_id = self
                     .ctx
-                    .columns
+                    .columns()
                     .iter()
                     .find(|c| c.id == card_column_id)
                     .map(|c| c.board_id);
 
                 if let Some(board_id) = board_id {
                     // Get all ancestors to exclude (to prevent cycles)
-                    let ancestors = self.ctx.graph.cards.ancestors(card_id);
+                    let ancestors = self.ctx.graph().cards.ancestors(card_id);
 
                     // Get cards from current board, excluding self and ancestors
                     let column_ids: std::collections::HashSet<_> = self
                         .ctx
-                        .columns
+                        .columns()
                         .iter()
                         .filter(|c| c.board_id == board_id)
                         .map(|c| c.id)
@@ -1033,7 +1038,7 @@ impl App {
 
                     let eligible_cards: Vec<_> = self
                         .ctx
-                        .cards
+                        .cards()
                         .iter()
                         .filter(|c| column_ids.contains(&c.column_id))
                         .filter(|c| c.id != card_id)
@@ -1042,8 +1047,13 @@ impl App {
                         .collect();
 
                     // Get current children (for checkbox display)
-                    let current_children: std::collections::HashSet<_> =
-                        self.ctx.graph.cards.children(card_id).into_iter().collect();
+                    let current_children: std::collections::HashSet<_> = self
+                        .ctx
+                        .graph()
+                        .cards
+                        .children(card_id)
+                        .into_iter()
+                        .collect();
 
                     // Set up dialog state
                     self.relationship.card_ids = eligible_cards;
@@ -1059,8 +1069,8 @@ impl App {
 
     pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
         if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.ctx.cards.get(card_idx) {
-                return self.ctx.graph.cards.parents(card.id);
+            if let Some(card) = self.ctx.cards().get(card_idx) {
+                return self.ctx.graph().cards.parents(card.id);
             }
         }
         Vec::new()
@@ -1068,8 +1078,8 @@ impl App {
 
     pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
         if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.ctx.cards.get(card_idx) {
-                return self.ctx.graph.cards.children(card.id);
+            if let Some(card) = self.ctx.cards().get(card_idx) {
+                return self.ctx.graph().cards.children(card.id);
             }
         }
         Vec::new()
@@ -1079,7 +1089,7 @@ impl App {
         let parents = self.get_current_card_parents();
         if let Some(selected_idx) = self.relationship.parents_list.selection.get() {
             if let Some(&parent_id) = parents.get(selected_idx) {
-                if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parent_id) {
+                if let Some(parent_idx) = self.ctx.cards().iter().position(|c| c.id == parent_id) {
                     // Push current card to history
                     self.selection
                         .card_navigation_history
@@ -1102,7 +1112,7 @@ impl App {
         }
         // If no valid selection, navigate to first parent if available
         if !parents.is_empty() {
-            if let Some(parent_idx) = self.ctx.cards.iter().position(|c| c.id == parents[0]) {
+            if let Some(parent_idx) = self.ctx.cards().iter().position(|c| c.id == parents[0]) {
                 self.selection
                     .card_navigation_history
                     .push(current_card_idx);
@@ -1125,7 +1135,7 @@ impl App {
         let children = self.get_current_card_children();
         if let Some(selected_idx) = self.relationship.children_list.selection.get() {
             if let Some(&child_id) = children.get(selected_idx) {
-                if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == child_id) {
+                if let Some(child_idx) = self.ctx.cards().iter().position(|c| c.id == child_id) {
                     // Push current card to history
                     self.selection
                         .card_navigation_history
@@ -1148,7 +1158,7 @@ impl App {
         }
         // If no valid selection, navigate to first child if available
         if !children.is_empty() {
-            if let Some(child_idx) = self.ctx.cards.iter().position(|c| c.id == children[0]) {
+            if let Some(child_idx) = self.ctx.cards().iter().position(|c| c.id == children[0]) {
                 self.selection
                     .card_navigation_history
                     .push(current_card_idx);
@@ -1180,18 +1190,18 @@ impl App {
         let mut update_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
 
         for card_id in &ids {
-            let card = match self.ctx.cards.iter().find(|c| c.id == *card_id) {
+            let card = match self.ctx.cards().iter().find(|c| c.id == *card_id) {
                 Some(c) => c.clone(),
                 None => continue,
             };
 
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                self.ctx.boards.get(idx).and_then(|board| {
+                self.ctx.boards().get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
                         &card,
                         board,
-                        &self.ctx.columns,
-                        &self.ctx.cards,
+                        self.ctx.columns(),
+                        self.ctx.cards(),
                     )
                 })
             });

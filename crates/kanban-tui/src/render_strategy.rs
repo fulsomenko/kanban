@@ -67,7 +67,7 @@ impl RenderStrategy for SinglePanelRenderer {
         let mut lines = vec![];
 
         if let Some(idx) = board_idx {
-            if let Some(board) = app.ctx.boards.get(idx) {
+            if let Some(board) = app.ctx.boards().get(idx) {
                 let active_task_list = app.view.strategy.get_active_task_list();
 
                 if self.show_column_headers {
@@ -186,7 +186,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         let line = render_card_list_item(CardListItemConfig {
                                             card,
                                             board,
-                                            sprints: &app.ctx.sprints,
+                                            sprints: app.ctx.sprints(),
                                             is_selected,
                                             is_focused: app.focus.active
                                                 == crate::app::Focus::Cards,
@@ -213,10 +213,10 @@ impl RenderStrategy for SinglePanelRenderer {
                                 "Task",
                             ));
                         }
-                    } else if let Some(board) = app.ctx.boards.get(board_idx.unwrap()) {
+                    } else if let Some(board) = app.ctx.boards().get(board_idx.unwrap()) {
                         let mut board_columns: Vec<_> = app
                             .ctx
-                            .columns
+                            .columns()
                             .iter()
                             .filter(|col| col.board_id == board.id)
                             .collect();
@@ -279,7 +279,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
-                                        sprints: &app.ctx.sprints,
+                                        sprints: app.ctx.sprints(),
                                         is_selected: task_list.get_selected_index()
                                             == Some(*card_idx),
                                         is_focused: app.focus.active == crate::app::Focus::Cards,
@@ -341,7 +341,7 @@ impl RenderStrategy for MultiPanelRenderer {
             .or(app.selection.board.get());
 
         if let Some(idx) = board_idx {
-            if let Some(board) = app.ctx.boards.get(idx) {
+            if let Some(board) = app.ctx.boards().get(idx) {
                 let task_lists = app.view.strategy.get_all_task_lists();
 
                 if task_lists.is_empty() {
@@ -428,7 +428,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                     let line = render_card_list_item(CardListItemConfig {
                                         card,
                                         board,
-                                        sprints: &app.ctx.sprints,
+                                        sprints: app.ctx.sprints(),
                                         is_selected,
                                         is_focused: app.focus.active == crate::app::Focus::Cards
                                             && is_focused_column,
@@ -458,7 +458,7 @@ impl RenderStrategy for MultiPanelRenderer {
                     let column_name =
                         if let crate::card_list::CardListId::Column(column_id) = task_list.id {
                             app.ctx
-                                .columns
+                                .columns()
                                 .iter()
                                 .find(|c| c.id == column_id)
                                 .map(|c| c.name.clone())

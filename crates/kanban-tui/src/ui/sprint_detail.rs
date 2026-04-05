@@ -12,9 +12,9 @@ use ratatui::{
 
 pub(super) fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(sprint_idx) = app.selection.active_sprint_index {
-        if let Some(sprint) = app.ctx.sprints.get(sprint_idx) {
+        if let Some(sprint) = app.ctx.sprints().get(sprint_idx) {
             if let Some(board_idx) = app.selection.active_board_index {
-                if let Some(board) = app.ctx.boards.get(board_idx) {
+                if let Some(board) = app.ctx.boards().get(board_idx) {
                     let is_completed = sprint.status == SprintStatus::Completed;
 
                     if is_completed {
@@ -101,7 +101,7 @@ fn sprint_card_assignment_lines(
 ) -> Vec<Line<'static>> {
     let card_count = app
         .ctx
-        .cards
+        .cards()
         .iter()
         .filter(|c| c.sprint_id == Some(sprint.id))
         .count();
@@ -230,7 +230,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
-                if let Some(card) = app.ctx.cards.iter().find(|c| c.id == *card_id) {
+                if let Some(card) = app.ctx.cards().iter().find(|c| c.id == *card_id) {
                     let is_selected = selected_idx == Some(*card_idx) && is_focused;
                     let animation_type = app
                         .animation
@@ -240,7 +240,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
                     let line = render_card_list_item(CardListItemConfig {
                         card,
                         board,
-                        sprints: &app.ctx.sprints,
+                        sprints: app.ctx.sprints(),
                         is_selected,
                         is_focused,
                         is_multi_selected: false,
@@ -260,7 +260,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
         ));
     }
 
-    let points = calculate_task_panel_points(task_list, &app.ctx.cards);
+    let points = calculate_task_panel_points(task_list, app.ctx.cards());
 
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
