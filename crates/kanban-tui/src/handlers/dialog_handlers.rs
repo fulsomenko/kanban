@@ -256,15 +256,6 @@ impl App {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
                                     } else {
                                         tracing::info!("Set sprint prefix to: {}", prefix_str);
-                                        let sprints_ref = self.ctx.sprints().clone();
-                                        if let Some(board) =
-                                            self.ctx.boards_mut().get_mut(board_idx)
-                                        {
-                                            board.ensure_sprint_counter_initialized(
-                                                &prefix_str,
-                                                &sprints_ref,
-                                            );
-                                        }
                                     }
                                 }
                             }
@@ -286,19 +277,6 @@ impl App {
                                     } else {
                                         tracing::info!("Set sprint prefix to: {}", prefix_str);
                                     }
-                                }
-                            }
-                            let board_idx = self
-                                .selection
-                                .active_board_index
-                                .or(self.selection.board.get());
-                            if let Some(board_idx) = board_idx {
-                                let sprints_ref = self.ctx.sprints().clone();
-                                if let Some(board) = self.ctx.boards_mut().get_mut(board_idx) {
-                                    board.ensure_sprint_counter_initialized(
-                                        &prefix_str,
-                                        &sprints_ref,
-                                    );
                                 }
                             }
                         }

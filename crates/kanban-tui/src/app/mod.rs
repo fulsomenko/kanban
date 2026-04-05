@@ -1414,33 +1414,38 @@ impl App {
                     }
                 };
 
-                let before = self.ctx.snapshot();
+                let board_id = board.id;
                 if let Some(new_content) =
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
-                    let board_id = board.id;
-                    if let Some(board) = self.ctx.boards_mut().iter_mut().find(|b| b.id == board_id)
-                    {
-                        match field {
-                            BoardField::Name => {
-                                if !new_content.trim().is_empty() {
-                                    board.update_name(new_content.trim().to_string());
-                                    self.ctx.push_before_snapshot(before);
-                                    let snapshot = self.ctx.snapshot();
-                                    self.ctx.state_manager.queue_snapshot(snapshot);
-                                }
+                    let updates = match field {
+                        BoardField::Name => {
+                            if new_content.trim().is_empty() {
+                                None
+                            } else {
+                                Some(kanban_domain::BoardUpdate {
+                                    name: Some(new_content.trim().to_string()),
+                                    ..Default::default()
+                                })
                             }
-                            BoardField::Description => {
-                                let desc = if new_content.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(new_content)
-                                };
-                                board.update_description(desc);
-                                self.ctx.push_before_snapshot(before);
-                                let snapshot = self.ctx.snapshot();
-                                self.ctx.state_manager.queue_snapshot(snapshot);
-                            }
+                        }
+                        BoardField::Description => {
+                            let desc = if new_content.trim().is_empty() {
+                                kanban_domain::FieldUpdate::Clear
+                            } else {
+                                kanban_domain::FieldUpdate::Set(new_content)
+                            };
+                            Some(kanban_domain::BoardUpdate {
+                                description: desc,
+                                ..Default::default()
+                            })
+                        }
+                    };
+                    if let Some(updates) = updates {
+                        let cmd =
+                            Box::new(kanban_domain::commands::UpdateBoard { board_id, updates });
+                        if let Err(e) = self.ctx.execute_command(cmd) {
+                            tracing::error!("Failed to update board: {}", e);
                         }
                     }
                 }
@@ -1471,32 +1476,38 @@ impl App {
                     }
                 };
 
-                let before = self.ctx.snapshot();
+                let card_id = card.id;
                 if let Some(new_content) =
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
-                    let card_id = card.id;
-                    if let Some(card) = self.ctx.cards_mut().iter_mut().find(|c| c.id == card_id) {
-                        match field {
-                            CardField::Title => {
-                                if !new_content.trim().is_empty() {
-                                    card.update_title(new_content.trim().to_string());
-                                    self.ctx.push_before_snapshot(before);
-                                    let snapshot = self.ctx.snapshot();
-                                    self.ctx.state_manager.queue_snapshot(snapshot);
-                                }
+                    let updates = match field {
+                        CardField::Title => {
+                            if new_content.trim().is_empty() {
+                                None
+                            } else {
+                                Some(kanban_domain::CardUpdate {
+                                    title: Some(new_content.trim().to_string()),
+                                    ..Default::default()
+                                })
                             }
-                            CardField::Description => {
-                                let desc = if new_content.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(new_content)
-                                };
-                                card.update_description(desc);
-                                self.ctx.push_before_snapshot(before);
-                                let snapshot = self.ctx.snapshot();
-                                self.ctx.state_manager.queue_snapshot(snapshot);
-                            }
+                        }
+                        CardField::Description => {
+                            let desc = if new_content.trim().is_empty() {
+                                kanban_domain::FieldUpdate::Clear
+                            } else {
+                                kanban_domain::FieldUpdate::Set(new_content)
+                            };
+                            Some(kanban_domain::CardUpdate {
+                                description: desc,
+                                ..Default::default()
+                            })
+                        }
+                    };
+                    if let Some(updates) = updates {
+                        let cmd =
+                            Box::new(kanban_domain::commands::UpdateCard { card_id, updates });
+                        if let Err(e) = self.ctx.execute_command(cmd) {
+                            tracing::error!("Failed to update card: {}", e);
                         }
                     }
                 }
@@ -1858,54 +1869,47 @@ impl App {
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         let content = std::fs::read_to_string(filename)?;
 
-        // Capture snapshot before import for undo history
-        self.ctx.capture_before_command();
+        let first_new_index = self.ctx.boards().len();
 
         // Try V2 format first (preserves graph)
         if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
-            let first_new_index = self.ctx.boards().len();
-
-            self.ctx.boards_mut().extend(snapshot.boards);
-            self.ctx.columns_mut().extend(snapshot.columns);
-            self.ctx.cards_mut().extend(snapshot.cards);
-            self.ctx
-                .archived_cards_mut()
-                .extend(snapshot.archived_cards);
-            self.ctx.sprints_mut().extend(snapshot.sprints);
-            *self.ctx.graph_mut() = snapshot.graph;
+            let cmd = Box::new(kanban_domain::commands::ImportEntities {
+                boards: snapshot.boards,
+                columns: snapshot.columns,
+                cards: snapshot.cards,
+                archived_cards: snapshot.archived_cards,
+                sprints: snapshot.sprints,
+                graph: Some(snapshot.graph),
+            });
+            if let Err(e) = self.ctx.execute_command(cmd) {
+                tracing::error!("Failed to import V2 board: {}", e);
+                return Ok(());
+            }
 
             self.selection.board.set(Some(first_new_index));
             self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
-
-            // Queue snapshot for persistence
-            self.ctx.mark_dirty();
-            let save_snapshot = self.ctx.snapshot();
-            self.ctx.state_manager.queue_snapshot(save_snapshot);
-
             return Ok(());
         }
 
         // Fall back to V1 format (no graph)
-        let first_new_index = self.ctx.boards().len();
         let import = BoardImporter::import_from_json(&content)?;
         let entities = BoardImporter::extract_entities(import);
 
-        self.ctx.boards_mut().extend(entities.boards);
-        self.ctx.columns_mut().extend(entities.columns);
-        self.ctx.cards_mut().extend(entities.cards);
-        self.ctx
-            .archived_cards_mut()
-            .extend(entities.archived_cards);
-        self.ctx.sprints_mut().extend(entities.sprints);
+        let cmd = Box::new(kanban_domain::commands::ImportEntities {
+            boards: entities.boards,
+            columns: entities.columns,
+            cards: entities.cards,
+            archived_cards: entities.archived_cards,
+            sprints: entities.sprints,
+            graph: None,
+        });
+        if let Err(e) = self.ctx.execute_command(cmd) {
+            tracing::error!("Failed to import V1 board: {}", e);
+            return Ok(());
+        }
 
         self.selection.board.set(Some(first_new_index));
-
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
-
-        // Queue snapshot for persistence
-        self.ctx.mark_dirty();
-        let save_snapshot = self.ctx.snapshot();
-        self.ctx.state_manager.queue_snapshot(save_snapshot);
 
         Ok(())
     }
@@ -1934,16 +1938,9 @@ impl App {
     }
 
     fn migrate_sprint_logs(&mut self) {
-        let sprints = self.ctx.sprints().clone();
-        let boards = self.ctx.boards().clone();
-        let count = kanban_domain::card_lifecycle::migrate_sprint_logs(
-            self.ctx.cards_mut(),
-            &sprints,
-            &boards,
-        );
-
-        if count > 0 {
-            tracing::info!("Migrated sprint logs for {} cards", count);
+        let cmd = Box::new(kanban_domain::commands::MigrateSprintLogs);
+        if let Err(e) = self.ctx.execute_command(cmd) {
+            tracing::error!("Failed to migrate sprint logs: {}", e);
         }
     }
 

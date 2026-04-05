@@ -1,8 +1,10 @@
 use crate::app::{
     App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
 };
+use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
+use kanban_core::Editable;
 use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -224,22 +226,37 @@ impl App {
                 }
                 CardFocus::Metadata => {
                     if let Some(card_idx) = self.selection.active_card_index {
-                        let before = self.ctx.snapshot();
-                        if let Some(card) = self.ctx.cards_mut().get_mut(card_idx) {
+                        if let Some(card) = self.ctx.cards().get(card_idx) {
                             let card_id = card.id;
+                            let dto = CardMetadataDto::from_entity(card);
+                            let json = serde_json::to_string_pretty(&dto)
+                                .unwrap_or_else(|_| "{}".to_string());
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-card-{}-metadata.json", card_id));
-                            if let Err(e) = App::edit_entity_json_impl::<CardMetadataDto, _>(
-                                card,
-                                terminal,
-                                event_handler,
-                                temp_file,
-                            ) {
-                                tracing::error!("Failed to edit metadata: {}", e);
-                            } else {
-                                self.ctx.push_before_snapshot(before);
-                                let snapshot = self.ctx.snapshot();
-                                self.ctx.state_manager.queue_snapshot(snapshot);
+                            match edit_in_external_editor(terminal, event_handler, temp_file, &json)
+                            {
+                                Ok(Some(new_content)) => {
+                                    match serde_json::from_str::<CardMetadataDto>(&new_content) {
+                                        Ok(new_dto) => {
+                                            let cmd = Box::new(
+                                                kanban_domain::commands::ApplyCardMetadata {
+                                                    card_id,
+                                                    dto: new_dto,
+                                                },
+                                            );
+                                            if let Err(e) = self.ctx.execute_command(cmd) {
+                                                tracing::error!("Failed to apply metadata: {}", e);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to parse metadata JSON: {}", e);
+                                        }
+                                    }
+                                }
+                                Ok(None) => {}
+                                Err(e) => {
+                                    tracing::error!("Failed to edit metadata: {}", e);
+                                }
                             }
                             should_restart = true;
                         }
@@ -375,22 +392,43 @@ impl App {
                 }
                 BoardFocus::Settings => {
                     if let Some(board_idx) = self.selection.board.get() {
-                        let before = self.ctx.snapshot();
-                        if let Some(board) = self.ctx.boards_mut().get_mut(board_idx) {
+                        if let Some(board) = self.ctx.boards().get(board_idx) {
                             let board_id = board.id;
+                            let dto = BoardSettingsDto::from_entity(board);
+                            let json = serde_json::to_string_pretty(&dto)
+                                .unwrap_or_else(|_| "{}".to_string());
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-board-{}-settings.json", board_id));
-                            if let Err(e) = App::edit_entity_json_impl::<BoardSettingsDto, _>(
-                                board,
-                                terminal,
-                                event_handler,
-                                temp_file,
-                            ) {
-                                tracing::error!("Failed to edit board settings: {}", e);
-                            } else {
-                                self.ctx.push_before_snapshot(before);
-                                let snapshot = self.ctx.snapshot();
-                                self.ctx.state_manager.queue_snapshot(snapshot);
+                            match edit_in_external_editor(terminal, event_handler, temp_file, &json)
+                            {
+                                Ok(Some(new_content)) => {
+                                    match serde_json::from_str::<BoardSettingsDto>(&new_content) {
+                                        Ok(new_dto) => {
+                                            let cmd = Box::new(
+                                                kanban_domain::commands::ApplyBoardSettings {
+                                                    board_id,
+                                                    dto: new_dto,
+                                                },
+                                            );
+                                            if let Err(e) = self.ctx.execute_command(cmd) {
+                                                tracing::error!(
+                                                    "Failed to apply board settings: {}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::error!(
+                                                "Failed to parse board settings JSON: {}",
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                                Ok(None) => {}
+                                Err(e) => {
+                                    tracing::error!("Failed to edit board settings: {}", e);
+                                }
                             }
                             should_restart = true;
                         }
