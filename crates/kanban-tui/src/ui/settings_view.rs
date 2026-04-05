@@ -8,12 +8,6 @@ use ratatui::{
 };
 
 pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
-    use crate::app::SettingsFocus;
-    use crate::components::detail_view::{
-        metadata_line_selectable, metadata_line_styled, FieldSectionConfig,
-    };
-    use crate::theme::colors::SELECTED_BG;
-
     let columns = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -24,13 +18,20 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
         .split(columns[0]);
 
-    let config_focused = app.focus.settings_focus == SettingsFocus::Configuration;
-    let config_file_focused = app.focus.settings_focus == SettingsFocus::ConfigFile;
-    let storage_focused = app.focus.settings_focus == SettingsFocus::Storage;
-
     let config_location = kanban_service::config::effective_configuration_location(&app.app_config);
 
-    // Left top: Configuration
+    render_settings_configuration(app, frame, left_sections[0], &config_location);
+    render_settings_config_file(app, frame, left_sections[1], &config_location);
+    render_settings_storage(app, frame, columns[1]);
+}
+
+fn render_settings_configuration(app: &App, frame: &mut Frame, area: Rect, config_location: &str) {
+    use crate::app::SettingsFocus;
+    use crate::components::detail_view::{
+        metadata_line_selectable, metadata_line_styled, FieldSectionConfig,
+    };
+
+    let config_focused = app.focus.settings_focus == SettingsFocus::Configuration;
     let config_section = FieldSectionConfig::new(" Configuration ")
         .with_focus_indicator(" Configuration [1] ")
         .focused(config_focused);
@@ -45,7 +46,7 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         ),
         metadata_line_selectable(
             "Configuration Location",
-            &config_location,
+            config_location,
             is_config_selected(1),
         ),
         metadata_line_selectable(
@@ -100,9 +101,14 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         }
     }
     let config_paragraph = Paragraph::new(config_lines).block(config_block);
-    frame.render_widget(config_paragraph, left_sections[0]);
+    frame.render_widget(config_paragraph, area);
+}
 
-    // Left bottom: Config File
+fn render_settings_config_file(app: &App, frame: &mut Frame, area: Rect, config_location: &str) {
+    use crate::app::SettingsFocus;
+    use crate::components::detail_view::{metadata_line_selectable, FieldSectionConfig};
+
+    let config_file_focused = app.focus.settings_focus == SettingsFocus::ConfigFile;
     let config_file_section = FieldSectionConfig::new(" Config File ")
         .with_focus_indicator(" Config File [2] ")
         .focused(config_file_focused);
@@ -112,10 +118,10 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
     let config_path_display = if config_location.is_empty() {
         "(unknown)".to_string()
     } else {
-        config_location.clone()
+        config_location.to_string()
     };
     let config_exists =
-        !config_location.is_empty() && std::path::Path::new(&config_location).exists();
+        !config_location.is_empty() && std::path::Path::new(config_location).exists();
     let status = if config_exists { "Loaded" } else { "Not found" };
     let config_format = app.app_config.effective_configuration_format();
     let config_file_lines = vec![
@@ -124,9 +130,15 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         metadata_line_selectable("Configuration Format", config_format, is_cf_selected(2)),
     ];
     let config_file_paragraph = Paragraph::new(config_file_lines).block(config_file_block);
-    frame.render_widget(config_file_paragraph, left_sections[1]);
+    frame.render_widget(config_file_paragraph, area);
+}
 
-    // Right: Storage
+fn render_settings_storage(app: &App, frame: &mut Frame, area: Rect) {
+    use crate::app::SettingsFocus;
+    use crate::components::detail_view::{metadata_line_selectable, FieldSectionConfig};
+    use crate::theme::colors::SELECTED_BG;
+
+    let storage_focused = app.focus.settings_focus == SettingsFocus::Storage;
     let storage_section = FieldSectionConfig::new(" Storage ")
         .with_focus_indicator(" Storage [3] ")
         .focused(storage_focused);
@@ -162,5 +174,5 @@ pub fn render_settings_view(app: &App, frame: &mut Frame, area: Rect) {
         ]),
     ];
     let storage_paragraph = Paragraph::new(storage_lines).block(storage_block);
-    frame.render_widget(storage_paragraph, columns[1]);
+    frame.render_widget(storage_paragraph, area);
 }
