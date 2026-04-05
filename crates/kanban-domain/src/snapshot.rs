@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 /// Contains the complete state of boards, columns, cards, sprints,
 /// archived cards, and the dependency graph. All fields use `#[serde(default)]`
 /// to support partial snapshots and backward compatibility with older formats.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Snapshot {
     /// All boards in the workspace.
     #[serde(default)]
@@ -128,6 +128,13 @@ mod tests {
         assert_eq!(restored.boards.len(), 1);
         assert_eq!(restored.boards[0].name, "Test Board");
         assert!(restored.columns.is_empty());
+    }
+
+    #[test]
+    fn test_snapshot_partial_eq() {
+        let snap1 = Snapshot::new();
+        let snap2 = Snapshot::new();
+        assert_eq!(snap1, snap2);
     }
 
     #[test]

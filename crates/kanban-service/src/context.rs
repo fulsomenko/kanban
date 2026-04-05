@@ -2,7 +2,8 @@ use kanban_core::AppConfig;
 use kanban_domain::commands::{Command, CommandContext};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Sprint, SprintUpdate,
+    ColumnUpdate, DependencyGraph, FieldUpdate, HistoryManager, KanbanOperations, Snapshot, Sprint,
+    SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot};
@@ -47,6 +48,8 @@ pub struct KanbanContext {
     pub graph: DependencyGraph,
     app_config: AppConfig,
     store: Arc<dyn PersistenceStore + Send + Sync>,
+    history: HistoryManager,
+    dirty: bool,
 }
 
 impl KanbanContext {
@@ -71,6 +74,8 @@ impl KanbanContext {
             graph: data.graph,
             app_config: config,
             store,
+            history: HistoryManager::new(),
+            dirty: false,
         })
     }
 
@@ -80,7 +85,7 @@ impl KanbanContext {
         Self::load(store, AppConfig::default()).await
     }
 
-    fn empty(store: Arc<dyn PersistenceStore + Send + Sync>, config: AppConfig) -> Self {
+    pub fn empty(store: Arc<dyn PersistenceStore + Send + Sync>, config: AppConfig) -> Self {
         Self {
             boards: Vec::new(),
             columns: Vec::new(),
@@ -90,6 +95,8 @@ impl KanbanContext {
             graph: DependencyGraph::new(),
             app_config: config,
             store,
+            history: HistoryManager::new(),
+            dirty: false,
         }
     }
 
@@ -109,6 +116,103 @@ impl KanbanContext {
         command.execute(&mut ctx)
     }
 
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            boards: self.boards.clone(),
+            columns: self.columns.clone(),
+            cards: self.cards.clone(),
+            archived_cards: self.archived_cards.clone(),
+            sprints: self.sprints.clone(),
+            graph: self.graph.clone(),
+        }
+    }
+
+    pub fn apply_snapshot(&mut self, snapshot: Snapshot) {
+        self.boards = snapshot.boards;
+        self.columns = snapshot.columns;
+        self.cards = snapshot.cards;
+        self.archived_cards = snapshot.archived_cards;
+        self.sprints = snapshot.sprints;
+        self.graph = snapshot.graph;
+    }
+
+    pub fn execute_with_history(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
+        self.history.capture_before_command(self.snapshot());
+        self.execute(command)?;
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn execute_batch_with_history(
+        &mut self,
+        commands: Vec<Box<dyn Command>>,
+    ) -> KanbanResult<()> {
+        self.history.capture_before_command(self.snapshot());
+        for command in commands {
+            self.execute(command)?;
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn undo(&mut self) -> bool {
+        if !self.history.can_undo() {
+            return false;
+        }
+        self.history.suppress();
+        let current = self.snapshot();
+        self.history.push_redo(current);
+        if let Some(snapshot) = self.history.pop_undo() {
+            self.apply_snapshot(snapshot);
+            self.dirty = true;
+        }
+        self.history.unsuppress();
+        true
+    }
+
+    pub fn redo(&mut self) -> bool {
+        if !self.history.can_redo() {
+            return false;
+        }
+        self.history.suppress();
+        let current = self.snapshot();
+        self.history.push_undo(current);
+        if let Some(snapshot) = self.history.pop_redo() {
+            self.apply_snapshot(snapshot);
+            self.dirty = true;
+        }
+        self.history.unsuppress();
+        true
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.history.can_undo()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.history.can_redo()
+    }
+
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
+    }
+
+    pub fn store(&self) -> &Arc<dyn PersistenceStore + Send + Sync> {
+        &self.store
+    }
+
     pub async fn reload(&mut self) -> KanbanResult<()> {
         if !self.store.exists().await {
             return Ok(());
@@ -116,25 +220,20 @@ impl KanbanContext {
         let (snapshot, _metadata) = self.store.load().await?;
         let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        self.boards = data.boards;
-        self.columns = data.columns;
-        self.cards = data.cards;
-        self.sprints = data.sprints;
-        self.archived_cards = data.archived_cards;
-        self.graph = data.graph;
+        self.apply_snapshot(Snapshot {
+            boards: data.boards,
+            columns: data.columns,
+            cards: data.cards,
+            archived_cards: data.archived_cards,
+            sprints: data.sprints,
+            graph: data.graph,
+        });
+        self.history.clear();
         Ok(())
     }
 
     pub async fn save(&self) -> KanbanResult<()> {
-        let snapshot = DataSnapshot {
-            boards: self.boards.clone(),
-            columns: self.columns.clone(),
-            cards: self.cards.clone(),
-            archived_cards: self.archived_cards.clone(),
-            sprints: self.sprints.clone(),
-            graph: self.graph.clone(),
-        };
-
+        let snapshot = self.snapshot();
         let bytes = serde_json::to_vec_pretty(&snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
