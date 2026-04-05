@@ -136,13 +136,7 @@ impl EditFormat {
         let mut result: Vec<String> = Vec::new();
         let mut inserted = false;
         for line in content.lines() {
-            let trimmed = line.trim_start();
-            if !inserted
-                && (trimmed.starts_with("\"storage_backend\"")
-                    || trimmed.starts_with("\"storage_location\"")
-                    || trimmed.starts_with("storage_backend")
-                    || trimmed.starts_with("storage_location"))
-            {
+            if !inserted && Self::is_storage_line(line) {
                 result.push(comment.to_string());
                 inserted = true;
             }
@@ -151,6 +145,8 @@ impl EditFormat {
         result.join("\n")
     }
 
+    /// Prefixes each storage field line with the format's comment marker so that
+    /// it is visible but clearly marked as overridden by a CLI argument.
     pub fn comment_storage_fields(&self, content: &str) -> String {
         let prefix = match self {
             Self::Json => "// ",
@@ -159,12 +155,7 @@ impl EditFormat {
         content
             .lines()
             .map(|line| {
-                let trimmed = line.trim_start();
-                if trimmed.starts_with("\"storage_backend\"")
-                    || trimmed.starts_with("\"storage_location\"")
-                    || trimmed.starts_with("storage_backend")
-                    || trimmed.starts_with("storage_location")
-                {
+                if Self::is_storage_line(line) {
                     format!("{}{}", prefix, line)
                 } else {
                     line.to_string()
@@ -172,6 +163,14 @@ impl EditFormat {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    fn is_storage_line(line: &str) -> bool {
+        let t = line.trim_start();
+        t.starts_with("\"storage_backend\"")
+            || t.starts_with("\"storage_location\"")
+            || t.starts_with("storage_backend")
+            || t.starts_with("storage_location")
     }
 }
 
