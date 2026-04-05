@@ -1,16 +1,10 @@
 pub mod snapshot;
 
-use crate::app::App;
-use kanban_domain::KanbanResult;
 use kanban_domain::Snapshot;
-use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
-use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub use snapshot::TuiSnapshot;
-
-type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
 const SAVE_QUEUE_CAPACITY: usize = 100;
 
 /// Manages state mutations and persistence with immediate auto-saving
@@ -33,10 +27,6 @@ const SAVE_QUEUE_CAPACITY: usize = 100;
 /// ctx.execute_commands_batch(commands)?;
 /// ```
 pub struct StateManager {
-    store: Option<DynStore>,
-    command_queue: VecDeque<String>,
-    instance_id: uuid::Uuid,
-    conflict_pending: bool,
     needs_refresh: bool,
     save_tx: Option<mpsc::Sender<Snapshot>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
@@ -54,38 +44,13 @@ impl StateManager {
     ///
     #[allow(clippy::type_complexity)]
     pub fn new(
-        backend: &str,
-        save_file: Option<String>,
-    ) -> kanban_domain::KanbanResult<(
-        Self,
-        Option<mpsc::Receiver<Snapshot>>,
-        Option<mpsc::UnboundedReceiver<()>>,
-    )> {
-        let store: Option<DynStore> = if let Some(ref path) = save_file {
-            let (store, _id) = Self::create_store(backend, path)?;
-            Some(store)
-        } else {
-            None
-        };
-
-        Ok(Self::with_store(store))
-    }
-
-    /// Create a state manager with a pre-built store
-    #[allow(clippy::type_complexity)]
-    pub fn with_store(
-        store: Option<DynStore>,
+        has_persistence: bool,
     ) -> (
         Self,
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
-        let instance_id = store
-            .as_ref()
-            .map(|s| s.instance_id())
-            .unwrap_or_else(uuid::Uuid::new_v4);
-
-        let (save_tx, save_rx) = if store.is_some() {
+        let (save_tx, save_rx) = if has_persistence {
             let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
             (Some(tx), Some(rx))
         } else {
@@ -95,10 +60,6 @@ impl StateManager {
         let (save_completion_tx, save_completion_rx) = mpsc::unbounded_channel();
 
         let manager = Self {
-            store,
-            command_queue: VecDeque::new(),
-            instance_id,
-            conflict_pending: false,
             needs_refresh: false,
             save_tx,
             save_completion_tx: Some(save_completion_tx),
@@ -109,40 +70,6 @@ impl StateManager {
         (manager, save_rx, Some(save_completion_rx))
     }
 
-    fn create_store(
-        backend: &str,
-        path: &str,
-    ) -> kanban_domain::KanbanResult<(DynStore, uuid::Uuid)> {
-        let store = kanban_service::make_store(backend, path)?;
-        let id = store.instance_id();
-        Ok((store, id))
-    }
-
-    /// Get the instance ID for this manager
-    pub fn instance_id(&self) -> uuid::Uuid {
-        self.instance_id
-    }
-
-    /// Get the store reference
-    pub fn store(&self) -> Option<&DynStore> {
-        self.store.as_ref()
-    }
-
-    /// Check if there's a pending conflict
-    pub fn has_conflict(&self) -> bool {
-        self.conflict_pending
-    }
-
-    /// Clear the conflict flag (called after user resolves conflict)
-    pub fn clear_conflict(&mut self) {
-        self.conflict_pending = false;
-    }
-
-    /// Clear the store reference (called when import fails to prevent accidental saves)
-    pub fn clear_store(&mut self) {
-        self.store = None;
-    }
-
     /// Check if view needs to be refreshed
     pub fn needs_refresh(&self) -> bool {
         self.needs_refresh
@@ -151,48 +78,6 @@ impl StateManager {
     /// Clear the refresh flag (called after view is refreshed)
     pub fn clear_refresh(&mut self) {
         self.needs_refresh = false;
-    }
-
-    /// Force overwrite external changes (user chose to keep their changes)
-    pub async fn force_overwrite(&mut self, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.conflict_pending = false;
-
-        if let Some(ref store) = self.store {
-            let data = kanban_persistence::snapshot_to_json_bytes(snapshot)?;
-            let persistence_snapshot = StoreSnapshot {
-                data,
-                metadata: PersistenceMetadata::new(self.instance_id),
-            };
-
-            store.save(persistence_snapshot).await?;
-            self.command_queue.clear();
-
-            tracing::info!("Force overwrote external changes");
-        }
-
-        Ok(())
-    }
-
-    /// Reload from disk (user chose to discard their changes)
-    pub async fn reload_from_disk(&mut self, app: &mut App) -> KanbanResult<()> {
-        self.conflict_pending = false;
-
-        if let Some(ref store) = self.store {
-            let (snapshot, _metadata) = store.load().await?;
-
-            // Deserialize and apply loaded data to app
-            let data: Snapshot = kanban_persistence::snapshot_from_json_bytes(&snapshot.data)?;
-
-            data.apply_to_app(app);
-
-            app.ctx.inner.mark_clean();
-            app.ctx.inner.clear_history();
-            self.command_queue.clear();
-
-            tracing::info!("Reloaded state from disk - undo history cleared");
-        }
-
-        Ok(())
     }
 
     /// Close the save channel to signal the worker to finish processing and exit
@@ -293,20 +178,15 @@ impl StateManager {
         tracing::debug!("File watcher set on StateManager");
     }
 
-    /// Replace the persistence store after a backend migration.
+    /// Reset save channels after a backend migration.
     ///
     /// Drops the old save channel (causing the old save worker to exit),
-    /// creates a new store and channels. Returns receivers so the caller
-    /// can spawn a new save worker.
+    /// creates new channels. Returns receivers so the caller can spawn a new save worker.
+    /// The store itself lives on KanbanContext.
     #[allow(clippy::type_complexity)]
-    pub fn replace_store(
+    pub fn reset_save_channels(
         &mut self,
-        backend: &str,
-        path: &str,
-    ) -> KanbanResult<(mpsc::Receiver<Snapshot>, mpsc::UnboundedReceiver<()>)> {
-        let (store, instance_id) = Self::create_store(backend, path)?;
-        self.store = Some(store);
-        self.instance_id = instance_id;
+    ) -> (mpsc::Receiver<Snapshot>, mpsc::UnboundedReceiver<()>) {
         self.file_watcher = None;
         self.pending_saves = 0;
 
@@ -316,8 +196,7 @@ impl StateManager {
         let (completion_tx, completion_rx) = mpsc::unbounded_channel();
         self.save_completion_tx = Some(completion_tx);
 
-        tracing::info!("Store replaced with new backend at: {}", path);
-        Ok((rx, completion_rx))
+        (rx, completion_rx)
     }
 }
 
@@ -326,41 +205,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_state_manager_creation() {
-        let (manager, _rx, _completion_rx) = StateManager::new("json", None).unwrap();
+    fn test_state_manager_creation_no_persistence() {
+        let (manager, save_rx, _completion_rx) = StateManager::new(false);
         assert!(!manager.has_pending_saves());
+        assert!(save_rx.is_none());
     }
 
     #[test]
-    fn test_replace_store_swaps_backend() {
-        let dir = tempfile::tempdir().unwrap();
-        let initial_path = dir.path().join("test.json");
-        std::fs::write(&initial_path, "{}").unwrap();
-        let (mut manager, _rx, _crx) =
-            StateManager::new("json", Some(initial_path.to_str().unwrap().to_string())).unwrap();
-
-        let new_path = dir.path().join("test2.json");
-        std::fs::write(&new_path, "{}").unwrap();
-        let result = manager.replace_store("json", new_path.to_str().unwrap());
-        assert!(result.is_ok());
-
-        let store = manager.store().unwrap();
-        assert_eq!(store.path(), new_path.as_path());
+    fn test_state_manager_creation_with_persistence() {
+        let (manager, save_rx, _completion_rx) = StateManager::new(true);
+        assert!(!manager.has_pending_saves());
+        assert!(save_rx.is_some());
+        assert!(manager.has_save_channel());
     }
 
     #[test]
-    fn test_replace_store_resets_state() {
-        let dir = tempfile::tempdir().unwrap();
-        let path1 = dir.path().join("a.json");
-        std::fs::write(&path1, "{}").unwrap();
-        let (mut manager, _rx, _crx) =
-            StateManager::new("json", Some(path1.to_str().unwrap().to_string())).unwrap();
-
-        let path2 = dir.path().join("b.json");
-        std::fs::write(&path2, "{}").unwrap();
-        let (_rx, _crx) = manager
-            .replace_store("json", path2.to_str().unwrap())
-            .unwrap();
+    fn test_reset_save_channels() {
+        let (mut manager, _rx, _crx) = StateManager::new(true);
+        let (_rx, _crx) = manager.reset_save_channels();
         assert!(!manager.has_pending_saves());
         assert!(manager.has_save_channel());
     }

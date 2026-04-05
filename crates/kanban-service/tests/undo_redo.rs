@@ -231,6 +231,18 @@ async fn test_import_board_is_undoable() {
 }
 
 #[tokio::test]
+async fn test_conflict_flag_lifecycle() {
+    let mut ctx = make_ctx().await;
+    assert!(!ctx.has_conflict());
+
+    ctx.set_conflict();
+    assert!(ctx.has_conflict());
+
+    ctx.clear_conflict();
+    assert!(!ctx.has_conflict());
+}
+
+#[tokio::test]
 async fn test_reload_preserves_history() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");

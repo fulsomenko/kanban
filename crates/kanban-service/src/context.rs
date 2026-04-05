@@ -50,6 +50,7 @@ pub struct KanbanContext {
     store: Arc<dyn PersistenceStore + Send + Sync>,
     history: HistoryManager,
     dirty: bool,
+    conflict_pending: bool,
 }
 
 impl KanbanContext {
@@ -76,6 +77,7 @@ impl KanbanContext {
             store,
             history: HistoryManager::new(),
             dirty: false,
+            conflict_pending: false,
         })
     }
 
@@ -97,6 +99,7 @@ impl KanbanContext {
             store,
             history: HistoryManager::new(),
             dirty: false,
+            conflict_pending: false,
         }
     }
 
@@ -220,6 +223,22 @@ impl KanbanContext {
 
     pub fn mark_clean(&mut self) {
         self.dirty = false;
+    }
+
+    pub fn has_conflict(&self) -> bool {
+        self.conflict_pending
+    }
+
+    pub fn set_conflict(&mut self) {
+        self.conflict_pending = true;
+    }
+
+    pub fn clear_conflict(&mut self) {
+        self.conflict_pending = false;
+    }
+
+    pub fn replace_store(&mut self, store: Arc<dyn PersistenceStore + Send + Sync>) {
+        self.store = store;
     }
 
     pub fn store(&self) -> &Arc<dyn PersistenceStore + Send + Sync> {

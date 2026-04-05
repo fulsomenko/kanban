@@ -48,7 +48,7 @@ impl TuiContext {
             kanban_core::AppConfig::default(),
         );
 
-        let (state_manager, save_rx, completion_rx) = StateManager::with_store(store);
+        let (state_manager, save_rx, completion_rx) = StateManager::new(store.is_some());
 
         let ctx = Self {
             inner,

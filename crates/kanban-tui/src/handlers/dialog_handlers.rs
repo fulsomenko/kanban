@@ -386,7 +386,7 @@ impl App {
             }
             KeyCode::Esc => {
                 // Retry later - just go back to previous mode
-                self.ctx.state_manager.clear_conflict();
+                self.ctx.inner.clear_conflict();
                 self.pop_mode();
             }
             _ => {}

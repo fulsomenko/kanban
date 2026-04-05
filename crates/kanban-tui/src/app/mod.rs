@@ -260,8 +260,9 @@ impl App {
         use kanban_domain::KanbanError;
         use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
 
-        if let Some(store) = self.ctx.state_manager.store().cloned() {
-            let instance_id = self.ctx.state_manager.instance_id();
+        if self.persistence.save_file.is_some() {
+            let store = self.ctx.inner.store().clone();
+            let instance_id = store.instance_id();
             let file_watcher = self.persistence.file_watcher.clone();
             let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
 
@@ -1549,7 +1550,8 @@ impl App {
 
     #[doc(hidden)]
     pub async fn load_initial_state(&mut self) {
-        if let Some(store) = self.ctx.state_manager.store().cloned() {
+        if self.persistence.save_file.is_some() {
+            let store = self.ctx.inner.store().clone();
             if store.exists().await {
                 match store.load().await {
                     Ok((snapshot, _metadata)) => {
@@ -1563,14 +1565,12 @@ impl App {
                             Err(e) => {
                                 tracing::error!("Failed to deserialize store data: {}", e);
                                 self.persistence.save_file = None;
-                                self.ctx.state_manager.clear_store();
                             }
                         }
                     }
                     Err(e) => {
                         tracing::error!("Failed to load from store: {}", e);
                         self.persistence.save_file = None;
-                        self.ctx.state_manager.clear_store();
                     }
                 }
             }
@@ -1657,8 +1657,8 @@ impl App {
                                         if let Some(ref watcher) = self.persistence.file_watcher {
                                             watcher.pause();
                                         }
-                                        let snapshot = kanban_domain::Snapshot::from_app(self);
-                                        if let Err(e) = self.ctx.state_manager.force_overwrite(&snapshot).await {
+                                        self.ctx.inner.clear_conflict();
+                                        if let Err(e) = self.ctx.inner.save().await {
                                             tracing::error!("Failed to force overwrite: {}", e);
                                         }
                                         // Resume file watcher after save completes
@@ -1669,13 +1669,14 @@ impl App {
                                     Some('t') => {
                                         self.pending_key = None;
                                         // Reload from disk
-                                        if let Some(store) = self.ctx.state_manager.store() {
+                                        {
+                                            let store = self.ctx.inner.store().clone();
                                             match store.load().await {
                                                 Ok((snapshot, _metadata)) => {
                                                     match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                                                         Ok(data) => {
                                                             data.apply_to_app(self);
-                                                            self.ctx.state_manager.clear_conflict();
+                                                            self.ctx.inner.clear_conflict();
                                                             self.refresh_view();
                                                             tracing::info!("Reloaded state from disk");
                                                         }
@@ -1794,11 +1795,12 @@ impl App {
                         }
                     } => {
                         // Check if this is our own write by comparing instance IDs
-                        if let Some(store) = self.ctx.state_manager.store() {
+                        {
+                            let store = self.ctx.inner.store().clone();
                             match store.load().await {
                                 Ok((_snapshot, metadata)) => {
                                     // Compare instance IDs
-                                    if metadata.instance_id == self.ctx.state_manager.instance_id() {
+                                    if metadata.instance_id == store.instance_id() {
                                         tracing::debug!(
                                             "File change from own instance ({}), ignoring",
                                             metadata.instance_id
@@ -1905,25 +1907,24 @@ impl App {
     }
 
     async fn auto_reload_from_external_change(&mut self) {
-        if let Some(store) = self.ctx.state_manager.store() {
-            match store.load().await {
-                Ok((snapshot, _metadata)) => {
-                    match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
-                        Ok(data) => {
-                            data.apply_to_app(self);
-                            self.ctx.inner.mark_clean();
-                            self.ctx.state_manager.clear_conflict();
-                            self.refresh_view();
-                            tracing::info!("Auto-reloaded state from external file change");
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to deserialize reloaded state: {}", e);
-                        }
+        let store = self.ctx.inner.store().clone();
+        match store.load().await {
+            Ok((snapshot, _metadata)) => {
+                match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
+                    Ok(data) => {
+                        data.apply_to_app(self);
+                        self.ctx.inner.mark_clean();
+                        self.ctx.inner.clear_conflict();
+                        self.refresh_view();
+                        tracing::info!("Auto-reloaded state from external file change");
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to deserialize reloaded state: {}", e);
                     }
                 }
-                Err(e) => {
-                    tracing::error!("Failed to reload from disk: {}", e);
-                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to reload from disk: {}", e);
             }
         }
     }
