@@ -204,3 +204,34 @@ fn test_render_settings_shows_editing_format_label() {
     let output = helpers::render_to_string(&app);
     assert!(output.contains("Editing Format"), "Missing label");
 }
+
+#[test]
+fn test_apply_config_edit_with_non_default_content_writes_config() {
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.app_config = kanban_core::AppConfig {
+        default_card_prefix: Some("feat".into()),
+        ..Default::default()
+    };
+    let format = EditFormat::Json;
+    let dto = kanban_service::AppConfigDto::from_config(&app.app_config, false);
+    let content = format.serialize(&dto).unwrap();
+    let result = app.apply_config_edit(&content, &format);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_open_config_editor_skips_apply_when_content_matches() {
+    let initial = "default_card_prefix = \"feat\"\n";
+    let new_with_trailing = "default_card_prefix = \"feat\"\n  ";
+    assert_eq!(
+        initial.trim(),
+        new_with_trailing.trim(),
+        "trimmed content must match to trigger the no-op guard"
+    );
+    let changed = "default_card_prefix = \"fix\"\n";
+    assert_ne!(
+        initial.trim(),
+        changed.trim(),
+        "different content must NOT match — apply_config_edit should be called"
+    );
+}

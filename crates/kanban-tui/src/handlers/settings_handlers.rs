@@ -267,8 +267,10 @@ impl App {
         let temp_file = std::env::temp_dir().join(format!("kanban_config_edit.{}", ext));
         match edit_in_external_editor(terminal, event_handler, temp_file, &current_content) {
             Ok(Some(new_content)) => {
-                if let Err(e) = self.apply_config_edit(&new_content, &format) {
-                    self.set_error(e);
+                if new_content.trim() != current_content.trim() {
+                    if let Err(e) = self.apply_config_edit(&new_content, &format) {
+                        self.set_error(e);
+                    }
                 }
             }
             Ok(None) => {}
