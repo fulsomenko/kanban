@@ -1418,6 +1418,7 @@ impl App {
                     }
                 };
 
+                let before = self.ctx.inner.snapshot();
                 if let Some(new_content) =
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
@@ -1428,7 +1429,7 @@ impl App {
                             BoardField::Name => {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
-                                    self.ctx.inner.mark_dirty();
+                                    self.ctx.inner.record_undo_snapshot(before);
                                     let snapshot = self.ctx.inner.snapshot();
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
@@ -1440,7 +1441,7 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
-                                self.ctx.inner.mark_dirty();
+                                self.ctx.inner.record_undo_snapshot(before);
                                 let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
@@ -1474,6 +1475,7 @@ impl App {
                     }
                 };
 
+                let before = self.ctx.inner.snapshot();
                 if let Some(new_content) =
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
@@ -1483,7 +1485,7 @@ impl App {
                             CardField::Title => {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
-                                    self.ctx.inner.mark_dirty();
+                                    self.ctx.inner.record_undo_snapshot(before);
                                     let snapshot = self.ctx.inner.snapshot();
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
@@ -1495,7 +1497,7 @@ impl App {
                                     Some(new_content)
                                 };
                                 card.update_description(desc);
-                                self.ctx.inner.mark_dirty();
+                                self.ctx.inner.record_undo_snapshot(before);
                                 let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }

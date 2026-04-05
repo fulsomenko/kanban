@@ -224,6 +224,7 @@ impl App {
                 }
                 CardFocus::Metadata => {
                     if let Some(card_idx) = self.selection.active_card_index {
+                        let before = self.ctx.inner.snapshot();
                         if let Some(card) = self.ctx.inner.cards.get_mut(card_idx) {
                             let card_id = card.id;
                             let temp_file = std::env::temp_dir()
@@ -236,7 +237,7 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit metadata: {}", e);
                             } else {
-                                self.ctx.inner.mark_dirty();
+                                self.ctx.inner.record_undo_snapshot(before);
                                 let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
@@ -374,6 +375,7 @@ impl App {
                 }
                 BoardFocus::Settings => {
                     if let Some(board_idx) = self.selection.board.get() {
+                        let before = self.ctx.inner.snapshot();
                         if let Some(board) = self.ctx.inner.boards.get_mut(board_idx) {
                             let board_id = board.id;
                             let temp_file = std::env::temp_dir()
@@ -386,7 +388,7 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit board settings: {}", e);
                             } else {
-                                self.ctx.inner.mark_dirty();
+                                self.ctx.inner.record_undo_snapshot(before);
                                 let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
