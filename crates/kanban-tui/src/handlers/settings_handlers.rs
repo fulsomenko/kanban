@@ -61,29 +61,37 @@ impl App {
             .deserialize(new_content)
             .map_err(|e| format!("Failed to parse config: {}", e))?;
 
+        // When cli_file_override is active the storage lines are commented out in
+        // the editor. If the user deliberately uncomments them, the DTO will carry
+        // storage fields — treat that as an explicit request to persist those
+        // settings and drop the CLI override.
+        let user_unlocked_storage = self.cli_file_override
+            && (updated_dto.storage_backend.is_some() || updated_dto.storage_location.is_some());
+
         // Strip storage fields from the DTO unless the user explicitly changed the
         // storage path to a different file:
-        // - CLI-supplied storage is always session-only.
+        // - CLI-supplied storage is always session-only (unless the user unlocks it).
         // - In the normal case, from_config puts the resolved absolute path into the
         //   DTO; if the user only changed non-storage fields, that same path comes
         //   back and must not be written to config (strip_defaults compares against
         //   the relative default, not the absolute, so it would survive stripping).
-        let strip_storage = self.cli_file_override || {
-            match updated_dto.storage_location.as_deref() {
-                None => false,
-                Some(loc) => {
-                    let p = std::path::Path::new(loc);
-                    let dto_resolved = if p.is_absolute() {
-                        loc.to_string()
-                    } else {
-                        std::env::current_dir()
-                            .map(|cwd| cwd.join(p).display().to_string())
-                            .unwrap_or_else(|_| loc.to_string())
-                    };
-                    dto_resolved == old_storage_location
+        let strip_storage = !user_unlocked_storage
+            && (self.cli_file_override || {
+                match updated_dto.storage_location.as_deref() {
+                    None => false,
+                    Some(loc) => {
+                        let p = std::path::Path::new(loc);
+                        let dto_resolved = if p.is_absolute() {
+                            loc.to_string()
+                        } else {
+                            std::env::current_dir()
+                                .map(|cwd| cwd.join(p).display().to_string())
+                                .unwrap_or_else(|_| loc.to_string())
+                        };
+                        dto_resolved == old_storage_location
+                    }
                 }
-            }
-        };
+            });
         if strip_storage {
             updated_dto.storage_backend = None;
             updated_dto.storage_location = None;
@@ -128,11 +136,17 @@ impl App {
         self.app_config = config;
 
         if self.cli_file_override {
-            // Restore the CLI-supplied storage into app_config so the session
-            // continues to use that file, and skip migration (storage hasn't changed).
-            self.app_config.storage_backend = old_config.storage_backend.clone();
-            self.app_config.storage_location = old_config.storage_location.clone();
-            return Ok(true);
+            if user_unlocked_storage {
+                // User explicitly uncommitted the storage fields → drop the override
+                // so the new storage settings take effect permanently.
+                self.cli_file_override = false;
+            } else {
+                // Storage lines were still commented out → keep the CLI-supplied
+                // storage active for this session and skip migration.
+                self.app_config.storage_backend = old_config.storage_backend.clone();
+                self.app_config.storage_location = old_config.storage_location.clone();
+                return Ok(true);
+            }
         }
 
         self.apply_storage_location_change(old_config, &old_storage_location);
