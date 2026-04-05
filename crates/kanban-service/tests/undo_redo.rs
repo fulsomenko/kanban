@@ -188,7 +188,7 @@ async fn test_bulk_archive_creates_single_undo_entry() {
     // Clear history from setup operations
     ctx.clear_history();
 
-    ctx.bulk_archive_cards(vec![c1.id, c2.id, c3.id]).unwrap();
+    ctx.archive_cards(vec![c1.id, c2.id, c3.id]).unwrap();
     assert_eq!(ctx.cards.len(), 0);
     assert_eq!(ctx.archived_cards.len(), 3);
 
@@ -281,4 +281,72 @@ async fn test_push_before_snapshot_enables_undo() {
 
     ctx.undo();
     assert_eq!(ctx.boards[0].name, "Original");
+}
+
+#[tokio::test]
+async fn test_null_store_context_loads_empty() {
+    let ctx = make_ctx().await;
+    assert!(ctx.boards.is_empty());
+    assert!(ctx.columns.is_empty());
+    assert!(ctx.cards.is_empty());
+}
+
+#[tokio::test]
+async fn test_archive_cards_single_undo_entry() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col.id, "Card 1".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col.id, "Card 2".into(), Default::default())
+        .unwrap();
+    ctx.clear_history();
+
+    ctx.archive_cards(vec![c1.id, c2.id]).unwrap();
+    assert_eq!(ctx.cards.len(), 0);
+    assert_eq!(ctx.archived_cards.len(), 2);
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.cards.len(), 2);
+    assert_eq!(ctx.archived_cards.len(), 0);
+    assert!(!ctx.can_undo());
+}
+
+#[tokio::test]
+async fn test_move_cards_single_undo_entry() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col1 = ctx.create_column(board.id, "From".into(), None).unwrap();
+    let col2 = ctx.create_column(board.id, "To".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col1.id, "Card 1".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col1.id, "Card 2".into(), Default::default())
+        .unwrap();
+    ctx.clear_history();
+
+    ctx.move_cards(vec![c1.id, c2.id], col2.id).unwrap();
+    assert!(ctx.cards.iter().all(|c| c.column_id == col2.id));
+
+    assert!(ctx.undo());
+    assert!(ctx.cards.iter().all(|c| c.column_id == col1.id));
+    assert!(!ctx.can_undo());
+}
+
+#[tokio::test]
+async fn test_assign_cards_to_sprint_renamed_trait_method() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "Card".into(), Default::default())
+        .unwrap();
+    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
+
+    let count = ctx.assign_cards_to_sprint(vec![card.id], sprint.id).unwrap();
+    assert_eq!(count, 1);
+    assert_eq!(ctx.get_card(card.id).unwrap().unwrap().sprint_id, Some(sprint.id));
 }

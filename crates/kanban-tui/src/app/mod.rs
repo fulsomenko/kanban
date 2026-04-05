@@ -1012,7 +1012,7 @@ impl App {
         if had_archives {
             let mut archive_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
             for card_id in archive_cards {
-                let cmd = Box::new(kanban_domain::commands::ArchiveCard { card_id })
+                let cmd = Box::new(kanban_domain::commands::ArchiveCards { ids: vec![card_id] })
                     as Box<dyn kanban_domain::commands::Command>;
                 archive_commands.push(cmd);
             }

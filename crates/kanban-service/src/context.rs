@@ -272,13 +272,13 @@ impl KanbanContext {
         Ok(())
     }
 
-    pub fn bulk_archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
-        use kanban_domain::commands::ArchiveCard;
+    pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
+        use kanban_domain::commands::ArchiveCards;
         self.capture_before_command();
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
-            match self.execute_raw(Box::new(ArchiveCard { card_id: id })) {
+            match self.execute_raw(Box::new(ArchiveCards { ids: vec![id] })) {
                 Ok(()) => succeeded.push(id),
                 Err(e) => failed.push(BulkOperationFailure {
                     id,
@@ -290,11 +290,7 @@ impl KanbanContext {
         BulkOperationResult { succeeded, failed }
     }
 
-    pub fn bulk_move_cards_detailed(
-        &mut self,
-        ids: Vec<Uuid>,
-        column_id: Uuid,
-    ) -> BulkOperationResult {
+    pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BulkOperationResult {
         use kanban_domain::commands::MoveCard;
         self.capture_before_command();
         let mut succeeded = Vec::new();
@@ -321,7 +317,7 @@ impl KanbanContext {
         BulkOperationResult { succeeded, failed }
     }
 
-    pub fn bulk_assign_sprint_detailed(
+    pub fn assign_cards_to_sprint_detailed(
         &mut self,
         ids: Vec<Uuid>,
         sprint_id: Uuid,
@@ -580,9 +576,8 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        use kanban_domain::commands::ArchiveCard;
-        let cmd = ArchiveCard { card_id: id };
-        self.execute(Box::new(cmd))
+        self.archive_cards(vec![id])?;
+        Ok(())
     }
 
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card> {
@@ -702,23 +697,23 @@ impl KanbanOperations for KanbanContext {
         ))
     }
 
-    fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        use kanban_domain::commands::BulkArchiveCards;
+    fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
+        use kanban_domain::commands::ArchiveCards;
         let count = ids.len();
-        let cmd = BulkArchiveCards { ids };
+        let cmd = ArchiveCards { ids };
         self.execute(Box::new(cmd))?;
         Ok(count)
     }
 
-    fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        use kanban_domain::commands::BulkMoveCards;
+    fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
+        use kanban_domain::commands::MoveCards;
         let count = ids.len();
-        let cmd = BulkMoveCards { ids, column_id };
+        let cmd = MoveCards { ids, column_id };
         self.execute(Box::new(cmd))?;
         Ok(count)
     }
 
-    fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
+    fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         let mut count = 0;
         for id in ids {
             if self.assign_card_to_sprint(id, sprint_id).is_ok() {
@@ -760,7 +755,7 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .map(|c| c.id)
             .collect();
-        self.bulk_assign_sprint(ids, to_sprint_id)
+        self.assign_cards_to_sprint(ids, to_sprint_id)
     }
 
     fn create_sprint(

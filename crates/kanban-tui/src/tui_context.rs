@@ -187,16 +187,16 @@ impl KanbanOperations for TuiContext {
         self.inner.get_card_git_checkout(id)
     }
 
-    fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        self.inner.bulk_archive_cards(ids)
+    fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
+        self.inner.archive_cards(ids)
     }
 
-    fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_move_cards(ids, column_id)
+    fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
+        self.inner.move_cards(ids, column_id)
     }
 
-    fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_assign_sprint(ids, sprint_id)
+    fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
+        self.inner.assign_cards_to_sprint(ids, sprint_id)
     }
 
     fn carry_over_sprint_cards(

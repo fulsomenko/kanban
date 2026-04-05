@@ -154,7 +154,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             output::output_success(serde_json::json!({"command": cmd}));
         }
         CardAction::BulkArchive { ids } => {
-            let result = ctx.bulk_archive_cards_detailed(ids);
+            let result = ctx.archive_cards_detailed(ids);
             ctx.save().await?;
             output::output_success(serde_json::json!({
                 "succeeded_count": result.succeeded.len(),
@@ -164,7 +164,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             }));
         }
         CardAction::BulkMove { ids, column_id } => {
-            let result = ctx.bulk_move_cards_detailed(ids, column_id);
+            let result = ctx.move_cards_detailed(ids, column_id);
             ctx.save().await?;
             output::output_success(serde_json::json!({
                 "succeeded_count": result.succeeded.len(),
@@ -174,7 +174,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             }));
         }
         CardAction::BulkAssignSprint { ids, sprint_id } => {
-            let result = ctx.bulk_assign_sprint_detailed(ids, sprint_id);
+            let result = ctx.assign_cards_to_sprint_detailed(ids, sprint_id);
             ctx.save().await?;
             output::output_success(serde_json::json!({
                 "succeeded_count": result.succeeded.len(),

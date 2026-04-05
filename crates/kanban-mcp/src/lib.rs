@@ -890,34 +890,34 @@ impl KanbanMcpServer {
     // Bulk Operations
 
     #[tool(description = "Archive multiple cards at once")]
-    async fn tool_bulk_archive_cards(
+    async fn tool_archive_cards(
         &self,
         Parameters(req): Parameters<BulkArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
-        let count = mutating_op!(self.ctx, bulk_archive_cards, ids)?;
+        let count = mutating_op!(self.ctx, archive_cards, ids)?;
         to_call_tool_result_json(serde_json::json!({"archived_count": count}))
     }
 
     #[tool(description = "Move multiple cards to a column")]
-    async fn tool_bulk_move_cards(
+    async fn tool_move_cards(
         &self,
         Parameters(req): Parameters<BulkMoveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let column_id = parse_uuid(&req.column_id)?;
-        let count = mutating_op!(self.ctx, bulk_move_cards, ids, column_id)?;
+        let count = mutating_op!(self.ctx, move_cards, ids, column_id)?;
         to_call_tool_result_json(serde_json::json!({"moved_count": count}))
     }
 
     #[tool(description = "Assign multiple cards to a sprint")]
-    async fn tool_bulk_assign_sprint(
+    async fn tool_assign_cards_to_sprint(
         &self,
         Parameters(req): Parameters<BulkAssignSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let sprint_id = parse_uuid(&req.sprint_id)?;
-        let count = mutating_op!(self.ctx, bulk_assign_sprint, ids, sprint_id)?;
+        let count = mutating_op!(self.ctx, assign_cards_to_sprint, ids, sprint_id)?;
         to_call_tool_result_json(serde_json::json!({"assigned_count": count}))
     }
 

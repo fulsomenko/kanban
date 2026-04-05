@@ -106,32 +106,6 @@ impl Command for MoveCard {
     }
 }
 
-/// Archive a card (move to archived_cards)
-pub struct ArchiveCard {
-    pub card_id: Uuid,
-}
-
-impl Command for ArchiveCard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let pos = context
-            .cards
-            .iter()
-            .position(|c| c.id == self.card_id)
-            .ok_or_else(|| KanbanError::not_found("card", self.card_id))?;
-        let card = context.cards.remove(pos);
-        let original_column_id = card.column_id;
-        let original_position = card.position;
-        let archived = crate::ArchivedCard::new(card, original_column_id, original_position);
-        context.archived_cards.push(archived);
-        context.graph.cards.archive_card_edges(self.card_id);
-        Ok(())
-    }
-
-    fn description(&self) -> String {
-        format!("Archive card {}", self.card_id)
-    }
-}
-
 /// Restore an archived card
 pub struct RestoreCard {
     pub card_id: Uuid,
@@ -209,19 +183,21 @@ impl Command for AssignCardToSprint {
     }
 }
 
-/// Archive multiple cards in a single command (single undo entry)
-pub struct BulkArchiveCards {
+/// Archive one or more cards in a single command (single undo entry)
+pub struct ArchiveCards {
     pub ids: Vec<Uuid>,
 }
 
-impl Command for BulkArchiveCards {
+impl Command for ArchiveCards {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        // Validate all IDs exist before mutating
         for id in &self.ids {
-            let pos = context
-                .cards
-                .iter()
-                .position(|c| c.id == *id)
-                .ok_or_else(|| KanbanError::not_found("card", *id))?;
+            if !context.cards.iter().any(|c| c.id == *id) {
+                return Err(KanbanError::not_found("card", *id));
+            }
+        }
+        for id in &self.ids {
+            let pos = context.cards.iter().position(|c| c.id == *id).unwrap();
             let card = context.cards.remove(pos);
             let original_column_id = card.column_id;
             let original_position = card.position;
@@ -233,20 +209,26 @@ impl Command for BulkArchiveCards {
     }
 
     fn description(&self) -> String {
-        format!("Bulk archive {} cards", self.ids.len())
+        format!("Archive {} card(s)", self.ids.len())
     }
 }
 
-/// Move multiple cards to a target column in a single command
-pub struct BulkMoveCards {
+/// Move one or more cards to a target column in a single command
+pub struct MoveCards {
     pub ids: Vec<Uuid>,
     pub column_id: Uuid,
 }
 
-impl Command for BulkMoveCards {
+impl Command for MoveCards {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         if !context.columns.iter().any(|c| c.id == self.column_id) {
             return Err(KanbanError::not_found("column", self.column_id));
+        }
+        // Validate all card IDs exist before mutating
+        for id in &self.ids {
+            if !context.cards.iter().any(|c| c.id == *id) {
+                return Err(KanbanError::not_found("card", *id));
+            }
         }
         for (i, id) in self.ids.iter().enumerate() {
             let card = context.card_mut(*id)?;
@@ -257,7 +239,7 @@ impl Command for BulkMoveCards {
 
     fn description(&self) -> String {
         format!(
-            "Bulk move {} cards to column {}",
+            "Move {} card(s) to column {}",
             self.ids.len(),
             self.column_id
         )
@@ -349,14 +331,59 @@ mod tests {
     }
 
     #[test]
-    fn test_archive_card_not_found_returns_error() {
+    fn test_archive_cards_not_found_returns_error() {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
-        let cmd = ArchiveCard {
-            card_id: Uuid::new_v4(),
+        let cmd = ArchiveCards {
+            ids: vec![Uuid::new_v4()],
         };
         let result = cmd.execute(&mut context);
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_archive_cards_invalid_id_does_not_mutate() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
+        let valid_id = card.id;
+        context.cards.push(card);
+
+        let cmd = ArchiveCards {
+            ids: vec![valid_id, Uuid::new_v4()],
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.is_err());
+        // Valid card must NOT have been archived — validate-before-mutate
+        assert_eq!(context.cards.len(), 1);
+        assert_eq!(context.archived_cards.len(), 0);
+    }
+
+    #[test]
+    fn test_move_cards_invalid_id_does_not_mutate() {
+        let mut tc = TestContext::new();
+        let mut context = tc.as_command_context();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let column = crate::Column::new(board.id, "Col".to_string(), 0);
+        let column_id = column.id;
+        let card = crate::Card::new(&mut board, column_id, "Card".to_string(), 0, "TST");
+        let original_column = card.column_id;
+        let valid_id = card.id;
+        context.columns.push(column);
+        let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
+        let target_id = col2.id;
+        context.columns.push(col2);
+        context.cards.push(card);
+
+        let cmd = MoveCards {
+            ids: vec![valid_id, Uuid::new_v4()],
+            column_id: target_id,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.is_err());
+        // Valid card must NOT have been moved — validate-before-mutate
+        assert_eq!(context.cards[0].column_id, original_column);
     }
 
     #[test]

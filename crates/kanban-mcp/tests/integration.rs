@@ -239,7 +239,7 @@ async fn bulk_archive() {
         .create_card(board.id, col.id, "Card 2".into(), Default::default())
         .unwrap();
 
-    let count = ctx.bulk_archive_cards(vec![c1.id, c2.id]).unwrap();
+    let count = ctx.archive_cards(vec![c1.id, c2.id]).unwrap();
     assert_eq!(count, 2);
 }
 
@@ -256,7 +256,7 @@ async fn bulk_move() {
         .create_card(board.id, col1.id, "Card 2".into(), Default::default())
         .unwrap();
 
-    let count = ctx.bulk_move_cards(vec![c1.id, c2.id], col2.id).unwrap();
+    let count = ctx.move_cards(vec![c1.id, c2.id], col2.id).unwrap();
     assert_eq!(count, 2);
 }
 
