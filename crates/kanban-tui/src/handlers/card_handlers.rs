@@ -2,7 +2,7 @@ use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
 use kanban_domain::commands::{CreateCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard};
-use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, Column, SortOrder, Sprint};
+use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, KanbanOperations, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -344,11 +344,13 @@ impl App {
 
                 let column = match column {
                     Some(col) => col,
-                    None => {
-                        let new_column = Column::new(bid, "Todo".to_string(), 0);
-                        self.ctx.inner.columns.push(new_column.clone());
-                        new_column
-                    }
+                    None => match self.ctx.create_column(bid, "Todo".to_string(), Some(0)) {
+                        Ok(col) => col,
+                        Err(e) => {
+                            tracing::error!("Failed to create column: {}", e);
+                            return;
+                        }
+                    },
                 };
 
                 let position = kanban_domain::card_lifecycle::next_position_in_column(

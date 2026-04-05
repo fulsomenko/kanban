@@ -1,8 +1,6 @@
 use crate::app::App;
 use crossterm::event::KeyCode;
-use kanban_domain::{
-    dependencies::CardGraphExt, FieldUpdate, KanbanOperations, SortField, SortOrder, Sprint,
-};
+use kanban_domain::{FieldUpdate, KanbanOperations, SortField, SortOrder, Sprint};
 
 const PRIORITY_COUNT: usize = 4;
 
@@ -261,10 +259,6 @@ impl App {
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to unassign card from sprint: {}", e);
                             } else {
-                                // Clear sprint log via direct mutation (domain operation)
-                                if let Some(card) = self.ctx.inner.cards.get_mut(card_idx) {
-                                    card.end_current_sprint_log();
-                                }
                                 tracing::info!("Unassigned card from sprint");
                             }
                         } else if let Some(board_idx) = self.selection.active_board_index {
@@ -639,51 +633,32 @@ impl App {
 
                                 if self.relationship.selected.contains(&selected_card_id) {
                                     // Remove relationship
-                                    let result = if is_parent_mode {
-                                        // Current card is child, selected card is parent
-                                        self.ctx
-                                            .inner
-                                            .graph
-                                            .cards
-                                            .remove_parent(current_card_id, selected_card_id)
+                                    let (child_id, parent_id) = if is_parent_mode {
+                                        (current_card_id, selected_card_id)
                                     } else {
-                                        // Current card is parent, selected card is child
-                                        self.ctx
-                                            .inner
-                                            .graph
-                                            .cards
-                                            .remove_parent(selected_card_id, current_card_id)
+                                        (selected_card_id, current_card_id)
                                     };
-
-                                    if result.is_ok() {
+                                    let cmd =
+                                        Box::new(kanban_domain::commands::RemoveParentCommand {
+                                            child_id,
+                                            parent_id,
+                                        });
+                                    if self.execute_command(cmd).is_ok() {
                                         self.relationship.selected.remove(&selected_card_id);
-                                        self.ctx.inner.mark_dirty();
-                                        let snapshot = self.ctx.inner.snapshot();
-                                        self.ctx.state_manager.queue_snapshot(snapshot);
                                     }
                                 } else {
                                     // Add relationship
-                                    let result = if is_parent_mode {
-                                        // Current card is child, selected card is parent
-                                        self.ctx
-                                            .inner
-                                            .graph
-                                            .cards
-                                            .set_parent(current_card_id, selected_card_id)
+                                    let (child_id, parent_id) = if is_parent_mode {
+                                        (current_card_id, selected_card_id)
                                     } else {
-                                        // Current card is parent, selected card is child
-                                        self.ctx
-                                            .inner
-                                            .graph
-                                            .cards
-                                            .set_parent(selected_card_id, current_card_id)
+                                        (selected_card_id, current_card_id)
                                     };
-
-                                    if result.is_ok() {
+                                    let cmd = Box::new(kanban_domain::commands::SetParentCommand {
+                                        child_id,
+                                        parent_id,
+                                    });
+                                    if self.execute_command(cmd).is_ok() {
                                         self.relationship.selected.insert(selected_card_id);
-                                        self.ctx.inner.mark_dirty();
-                                        let snapshot = self.ctx.inner.snapshot();
-                                        self.ctx.state_manager.queue_snapshot(snapshot);
                                     }
                                 }
                             }
