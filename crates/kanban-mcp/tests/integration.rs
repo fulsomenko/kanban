@@ -444,7 +444,7 @@ async fn test_mcp_redo_restores_undone_board() {
 
 #[tokio::test]
 async fn test_mcp_undo_on_empty_returns_false() {
-    let (ctx, _tmp) = setup().await;
+    let (mut ctx, _tmp) = setup().await;
     assert!(!ctx.can_undo());
-    // undo() can't be called on immutable - just verify can_undo
+    assert!(!ctx.undo());
 }
