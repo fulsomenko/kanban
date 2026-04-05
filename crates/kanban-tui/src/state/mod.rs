@@ -14,8 +14,6 @@ pub use kanban_domain::commands;
 pub use snapshot::TuiSnapshot;
 
 type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
-type SaveChannel = (mpsc::Sender<Snapshot>, mpsc::Receiver<Snapshot>);
-
 const SAVE_QUEUE_CAPACITY: usize = 100;
 
 /// Manages state mutations and persistence with immediate auto-saving
@@ -69,21 +67,32 @@ impl StateManager {
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     )> {
-        // Use bounded channel to prevent unbounded memory growth.
-        // If queue is full, save_if_needed() will log a warning instead of blocking.
-        let (store, instance_id, save_channel): (
-            Option<DynStore>,
-            uuid::Uuid,
-            Option<SaveChannel>,
-        ) = if let Some(ref path) = save_file {
-            let (store, id) = Self::create_store(backend, path)?;
-            let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
-            (Some(store), id, Some((tx, rx)))
+        let store: Option<DynStore> = if let Some(ref path) = save_file {
+            let (store, _id) = Self::create_store(backend, path)?;
+            Some(store)
         } else {
-            (None, uuid::Uuid::new_v4(), None)
+            None
         };
 
-        let (save_tx, save_rx) = if let Some((tx, rx)) = save_channel {
+        Ok(Self::with_store(store))
+    }
+
+    /// Create a state manager with a pre-built store
+    #[allow(clippy::type_complexity)]
+    pub fn with_store(
+        store: Option<DynStore>,
+    ) -> (
+        Self,
+        Option<mpsc::Receiver<Snapshot>>,
+        Option<mpsc::UnboundedReceiver<()>>,
+    ) {
+        let instance_id = store
+            .as_ref()
+            .map(|s| s.instance_id())
+            .unwrap_or_else(uuid::Uuid::new_v4);
+
+        let (save_tx, save_rx) = if store.is_some() {
+            let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
             (Some(tx), Some(rx))
         } else {
             (None, None)
@@ -105,7 +114,7 @@ impl StateManager {
             history: HistoryManager::new(),
         };
 
-        Ok((manager, save_rx, Some(save_completion_rx)))
+        (manager, save_rx, Some(save_completion_rx))
     }
 
     fn create_store(
@@ -160,12 +169,12 @@ impl StateManager {
     pub fn execute(&mut self, app: &mut App, command: Box<dyn Command>) -> KanbanResult<()> {
         // Execute command
         self.execute_with_context(
-            &mut app.ctx.boards,
-            &mut app.ctx.columns,
-            &mut app.ctx.cards,
-            &mut app.ctx.sprints,
-            &mut app.ctx.archived_cards,
-            &mut app.ctx.graph,
+            &mut app.ctx.inner.boards,
+            &mut app.ctx.inner.columns,
+            &mut app.ctx.inner.cards,
+            &mut app.ctx.inner.sprints,
+            &mut app.ctx.inner.archived_cards,
+            &mut app.ctx.inner.graph,
             command,
         )?;
 
