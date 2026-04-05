@@ -261,6 +261,29 @@ fn test_apply_config_edit_with_cli_override_does_not_trigger_migration() {
 }
 
 #[test]
+fn test_apply_config_edit_with_cli_override_unloads_when_storage_explicitly_provided() {
+    // When cli_file_override is active, storage lines are commented out in the
+    // editor. If the user uncomments them (DTO has storage fields), that is an
+    // intentional request to persist those storage settings and drop the override.
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.cli_file_override = true;
+    app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
+    app.app_config.storage_backend = Some("json".into());
+    app.has_data_file = false; // skip migration in this unit test
+
+    let format = kanban_tui::edit_format::EditFormat::Json;
+    // User explicitly uncomments storage fields (both present in DTO)
+    let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"/tmp/new_storage.json"}"#;
+    let result = app.apply_config_edit(json, &format);
+
+    assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+    assert!(
+        !app.cli_file_override,
+        "cli_file_override must be cleared when user explicitly provides storage fields"
+    );
+}
+
+#[test]
 fn test_apply_config_edit_syncs_prefixes() {
     let (mut app, _rx) = App::new(None).unwrap();
     let format = kanban_tui::edit_format::EditFormat::Json;
