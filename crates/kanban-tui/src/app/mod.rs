@@ -1766,8 +1766,9 @@ impl App {
                         // Save operation completed - update dirty flag
                         tracing::debug!("Save completion signal received");
                         self.ctx.state_manager.save_completed();
-                        // Reset force quit flag if all saves are now complete
+                        // Reset force quit flag and dirty flag if all saves are now complete
                         if !self.ctx.state_manager.has_pending_saves() {
+                            self.ctx.inner.mark_clean();
                             self.quit_with_pending = false;
                         }
                     }
