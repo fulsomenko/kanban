@@ -21,23 +21,11 @@ pub trait TuiSnapshot {
 
 impl TuiSnapshot for Snapshot {
     fn from_app(app: &App) -> Self {
-        Self {
-            boards: app.ctx.boards.clone(),
-            columns: app.ctx.columns.clone(),
-            cards: app.ctx.cards.clone(),
-            archived_cards: app.ctx.archived_cards.clone(),
-            sprints: app.ctx.sprints.clone(),
-            graph: app.ctx.graph.clone(),
-        }
+        app.ctx.inner.snapshot()
     }
 
     fn apply_to_app(&self, app: &mut App) {
-        app.ctx.boards = self.boards.clone();
-        app.ctx.columns = self.columns.clone();
-        app.ctx.cards = self.cards.clone();
-        app.ctx.archived_cards = self.archived_cards.clone();
-        app.ctx.sprints = self.sprints.clone();
-        app.ctx.graph = self.graph.clone();
+        app.ctx.inner.apply_snapshot(self.clone());
 
         // Sync sort field/order from active board to preserve user's selection after reload
         if let Some(board_idx) = app.selection.active_board_index {
