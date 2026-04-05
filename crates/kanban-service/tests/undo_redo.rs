@@ -258,7 +258,7 @@ async fn test_reload_preserves_history() {
 }
 
 #[tokio::test]
-async fn test_record_undo_snapshot_enables_undo() {
+async fn test_push_before_snapshot_enables_undo() {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("Original".into(), None).unwrap();
     ctx.clear_history();
@@ -269,7 +269,7 @@ async fn test_record_undo_snapshot_enables_undo() {
         .find(|b| b.id == board.id)
         .unwrap()
         .update_name("Mutated".into());
-    ctx.record_undo_snapshot(before);
+    ctx.push_before_snapshot(before);
 
     assert_eq!(ctx.boards[0].name, "Mutated");
     assert!(ctx.is_dirty());

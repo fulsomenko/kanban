@@ -1429,7 +1429,7 @@ impl App {
                             BoardField::Name => {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
-                                    self.ctx.inner.record_undo_snapshot(before);
+                                    self.ctx.inner.push_before_snapshot(before);
                                     let snapshot = self.ctx.inner.snapshot();
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
@@ -1441,7 +1441,7 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
-                                self.ctx.inner.record_undo_snapshot(before);
+                                self.ctx.inner.push_before_snapshot(before);
                                 let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
@@ -1485,7 +1485,7 @@ impl App {
                             CardField::Title => {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
-                                    self.ctx.inner.record_undo_snapshot(before);
+                                    self.ctx.inner.push_before_snapshot(before);
                                     let snapshot = self.ctx.inner.snapshot();
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
@@ -1497,7 +1497,7 @@ impl App {
                                     Some(new_content)
                                 };
                                 card.update_description(desc);
-                                self.ctx.inner.record_undo_snapshot(before);
+                                self.ctx.inner.push_before_snapshot(before);
                                 let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }

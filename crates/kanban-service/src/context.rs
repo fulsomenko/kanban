@@ -152,15 +152,12 @@ impl KanbanContext {
         self.history.capture_before_command(self.snapshot());
     }
 
-    pub fn record_undo_snapshot(&mut self, before: Snapshot) {
+    pub fn push_before_snapshot(&mut self, before: Snapshot) {
         self.history.capture_before_command(before);
         self.dirty = true;
     }
 
-    pub fn execute_batch(
-        &mut self,
-        commands: Vec<Box<dyn Command>>,
-    ) -> KanbanResult<()> {
+    pub fn execute_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
         self.capture_before_command();
         for command in commands {
             self.execute_raw(command)?;

@@ -237,7 +237,7 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit metadata: {}", e);
                             } else {
-                                self.ctx.inner.record_undo_snapshot(before);
+                                self.ctx.inner.push_before_snapshot(before);
                                 let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
@@ -388,7 +388,7 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit board settings: {}", e);
                             } else {
-                                self.ctx.inner.record_undo_snapshot(before);
+                                self.ctx.inner.push_before_snapshot(before);
                                 let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
