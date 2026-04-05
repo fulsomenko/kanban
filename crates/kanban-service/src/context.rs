@@ -160,7 +160,13 @@ impl KanbanContext {
     pub fn execute_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
         self.capture_before_command();
         for command in commands {
-            self.execute_raw(command)?;
+            if let Err(e) = self.execute_raw(command) {
+                // Rollback: restore before-snapshot
+                if let Some(before) = self.history.pop_undo() {
+                    self.apply_snapshot(before);
+                }
+                return Err(e);
+            }
         }
         self.dirty = true;
         Ok(())
@@ -322,47 +328,21 @@ impl KanbanContext {
         ids: Vec<Uuid>,
         sprint_id: Uuid,
     ) -> BulkOperationResult {
-        use kanban_domain::commands::AssignCardToSprint;
+        use kanban_domain::commands::AssignCardsToSprint;
         self.capture_before_command();
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
 
-        let sprint_info = self
-            .get_sprint(sprint_id)
-            .ok()
-            .flatten()
-            .and_then(|sprint| {
-                let board = self.boards.iter().find(|b| b.id == sprint.board_id)?;
-                let sprint_name = sprint.get_name(board).map(|s| s.to_string());
-                Some((
-                    sprint.sprint_number,
-                    sprint_name,
-                    format!("{:?}", sprint.status),
-                ))
-            });
-
-        if let Some((sprint_number, sprint_name, sprint_status)) = sprint_info {
-            for id in ids {
-                match self.execute_raw(Box::new(AssignCardToSprint {
-                    card_id: id,
-                    sprint_id,
-                    sprint_number,
-                    sprint_name: sprint_name.clone(),
-                    sprint_status: sprint_status.clone(),
-                })) {
-                    Ok(_) => succeeded.push(id),
-                    Err(e) => failed.push(BulkOperationFailure {
-                        id,
-                        error: e.to_string(),
-                    }),
-                }
-            }
-        } else {
-            for id in ids {
-                failed.push(BulkOperationFailure {
+        for id in ids {
+            match self.execute_raw(Box::new(AssignCardsToSprint {
+                ids: vec![id],
+                sprint_id,
+            })) {
+                Ok(_) => succeeded.push(id),
+                Err(e) => failed.push(BulkOperationFailure {
                     id,
-                    error: format!("Sprint {} not found", sprint_id),
-                });
+                    error: e.to_string(),
+                }),
             }
         }
 
@@ -714,12 +694,10 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        let mut count = 0;
-        for id in ids {
-            if self.assign_card_to_sprint(id, sprint_id).is_ok() {
-                count += 1;
-            }
-        }
+        use kanban_domain::commands::AssignCardsToSprint;
+        let count = ids.len();
+        let cmd = AssignCardsToSprint { ids, sprint_id };
+        self.execute(Box::new(cmd))?;
         Ok(count)
     }
 
