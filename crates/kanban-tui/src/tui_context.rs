@@ -155,11 +155,20 @@ impl TuiContext {
     pub fn inner_mut(&mut self) -> &mut KanbanContext {
         &mut self.inner
     }
+
+    fn with_snapshot<T>(&mut self, result: KanbanResult<T>) -> KanbanResult<T> {
+        if result.is_ok() {
+            let snapshot = self.inner.snapshot();
+            self.state_manager.queue_snapshot(snapshot);
+        }
+        result
+    }
 }
 
 impl KanbanOperations for TuiContext {
     fn create_board(&mut self, name: String, card_prefix: Option<String>) -> KanbanResult<Board> {
-        self.inner.create_board(name, card_prefix)
+        let r = self.inner.create_board(name, card_prefix);
+        self.with_snapshot(r)
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
@@ -171,11 +180,13 @@ impl KanbanOperations for TuiContext {
     }
 
     fn update_board(&mut self, id: Uuid, updates: BoardUpdate) -> KanbanResult<Board> {
-        self.inner.update_board(id, updates)
+        let r = self.inner.update_board(id, updates);
+        self.with_snapshot(r)
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.delete_board(id)
+        let r = self.inner.delete_board(id);
+        self.with_snapshot(r)
     }
 
     fn create_column(
@@ -184,7 +195,8 @@ impl KanbanOperations for TuiContext {
         name: String,
         position: Option<i32>,
     ) -> KanbanResult<Column> {
-        self.inner.create_column(board_id, name, position)
+        let r = self.inner.create_column(board_id, name, position);
+        self.with_snapshot(r)
     }
 
     fn list_columns(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
@@ -196,15 +208,18 @@ impl KanbanOperations for TuiContext {
     }
 
     fn update_column(&mut self, id: Uuid, updates: ColumnUpdate) -> KanbanResult<Column> {
-        self.inner.update_column(id, updates)
+        let r = self.inner.update_column(id, updates);
+        self.with_snapshot(r)
     }
 
     fn delete_column(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.delete_column(id)
+        let r = self.inner.delete_column(id);
+        self.with_snapshot(r)
     }
 
     fn reorder_column(&mut self, id: Uuid, new_position: i32) -> KanbanResult<Column> {
-        self.inner.reorder_column(id, new_position)
+        let r = self.inner.reorder_column(id, new_position);
+        self.with_snapshot(r)
     }
 
     fn create_card(
@@ -214,7 +229,8 @@ impl KanbanOperations for TuiContext {
         title: String,
         options: CreateCardOptions,
     ) -> KanbanResult<Card> {
-        self.inner.create_card(board_id, column_id, title, options)
+        let r = self.inner.create_card(board_id, column_id, title, options);
+        self.with_snapshot(r)
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
@@ -230,7 +246,8 @@ impl KanbanOperations for TuiContext {
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
-        self.inner.update_card(id, updates)
+        let r = self.inner.update_card(id, updates);
+        self.with_snapshot(r)
     }
 
     fn move_card(
@@ -239,19 +256,23 @@ impl KanbanOperations for TuiContext {
         column_id: Uuid,
         position: Option<i32>,
     ) -> KanbanResult<Card> {
-        self.inner.move_card(id, column_id, position)
+        let r = self.inner.move_card(id, column_id, position);
+        self.with_snapshot(r)
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.archive_card(id)
+        let r = self.inner.archive_card(id);
+        self.with_snapshot(r)
     }
 
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card> {
-        self.inner.restore_card(id, column_id)
+        let r = self.inner.restore_card(id, column_id);
+        self.with_snapshot(r)
     }
 
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.delete_card(id)
+        let r = self.inner.delete_card(id);
+        self.with_snapshot(r)
     }
 
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
@@ -259,11 +280,13 @@ impl KanbanOperations for TuiContext {
     }
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
-        self.inner.assign_card_to_sprint(card_id, sprint_id)
+        let r = self.inner.assign_card_to_sprint(card_id, sprint_id);
+        self.with_snapshot(r)
     }
 
     fn unassign_card_from_sprint(&mut self, card_id: Uuid) -> KanbanResult<Card> {
-        self.inner.unassign_card_from_sprint(card_id)
+        let r = self.inner.unassign_card_from_sprint(card_id);
+        self.with_snapshot(r)
     }
 
     fn get_card_branch_name(&self, id: Uuid) -> KanbanResult<String> {
@@ -275,15 +298,18 @@ impl KanbanOperations for TuiContext {
     }
 
     fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        self.inner.archive_cards(ids)
+        let r = self.inner.archive_cards(ids);
+        self.with_snapshot(r)
     }
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        self.inner.move_cards(ids, column_id)
+        let r = self.inner.move_cards(ids, column_id);
+        self.with_snapshot(r)
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        self.inner.assign_cards_to_sprint(ids, sprint_id)
+        let r = self.inner.assign_cards_to_sprint(ids, sprint_id);
+        self.with_snapshot(r)
     }
 
     fn carry_over_sprint_cards(
@@ -291,8 +317,10 @@ impl KanbanOperations for TuiContext {
         from_sprint_id: Uuid,
         to_sprint_id: Uuid,
     ) -> KanbanResult<usize> {
-        self.inner
-            .carry_over_sprint_cards(from_sprint_id, to_sprint_id)
+        let r = self
+            .inner
+            .carry_over_sprint_cards(from_sprint_id, to_sprint_id);
+        self.with_snapshot(r)
     }
 
     fn create_sprint(
@@ -301,7 +329,8 @@ impl KanbanOperations for TuiContext {
         prefix: Option<String>,
         name: Option<String>,
     ) -> KanbanResult<Sprint> {
-        self.inner.create_sprint(board_id, prefix, name)
+        let r = self.inner.create_sprint(board_id, prefix, name);
+        self.with_snapshot(r)
     }
 
     fn list_sprints(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
@@ -313,23 +342,28 @@ impl KanbanOperations for TuiContext {
     }
 
     fn update_sprint(&mut self, id: Uuid, updates: SprintUpdate) -> KanbanResult<Sprint> {
-        self.inner.update_sprint(id, updates)
+        let r = self.inner.update_sprint(id, updates);
+        self.with_snapshot(r)
     }
 
     fn activate_sprint(&mut self, id: Uuid, duration_days: Option<i32>) -> KanbanResult<Sprint> {
-        self.inner.activate_sprint(id, duration_days)
+        let r = self.inner.activate_sprint(id, duration_days);
+        self.with_snapshot(r)
     }
 
     fn complete_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
-        self.inner.complete_sprint(id)
+        let r = self.inner.complete_sprint(id);
+        self.with_snapshot(r)
     }
 
     fn cancel_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
-        self.inner.cancel_sprint(id)
+        let r = self.inner.cancel_sprint(id);
+        self.with_snapshot(r)
     }
 
     fn delete_sprint(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.inner.delete_sprint(id)
+        let r = self.inner.delete_sprint(id);
+        self.with_snapshot(r)
     }
 
     fn export_board(&self, board_id: Option<Uuid>) -> KanbanResult<String> {
@@ -337,6 +371,7 @@ impl KanbanOperations for TuiContext {
     }
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
-        self.inner.import_board(data)
+        let r = self.inner.import_board(data);
+        self.with_snapshot(r)
     }
 }
