@@ -57,9 +57,17 @@ impl App {
             config.storage_location = self.original_storage_location.clone();
         }
 
-        let updated_dto: AppConfigDto = format
+        let mut updated_dto: AppConfigDto = format
             .deserialize(new_content)
             .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+        // CLI-supplied storage is always session-only — strip it from the DTO so it
+        // can never be written to the config file, even if the user uncomments the
+        // storage fields in the editor.
+        if self.cli_file_override {
+            updated_dto.storage_backend = None;
+            updated_dto.storage_location = None;
+        }
 
         updated_dto
             .validate_and_apply(&mut config)
@@ -92,6 +100,15 @@ impl App {
         }
 
         self.app_config = config;
+
+        if self.cli_file_override {
+            // Restore the CLI-supplied storage into app_config so the session
+            // continues to use that file, and skip migration (storage hasn't changed).
+            self.app_config.storage_backend = old_config.storage_backend.clone();
+            self.app_config.storage_location = old_config.storage_location.clone();
+            return Ok(true);
+        }
+
         self.apply_storage_location_change(old_config, &old_storage_location);
         Ok(true)
     }
