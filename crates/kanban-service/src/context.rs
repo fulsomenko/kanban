@@ -146,9 +146,7 @@ impl KanbanContext {
         self.graph = snapshot.graph;
     }
 
-    /// Capture the current snapshot as a before-state for undo history.
-    /// Use this before direct mutations that bypass `execute`.
-    pub fn capture_before_command(&mut self) {
+    fn capture_before_command(&mut self) {
         self.history.capture_before_command(self.snapshot());
     }
 
@@ -158,13 +156,12 @@ impl KanbanContext {
     }
 
     pub fn execute_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
+        let before = self.snapshot();
         self.capture_before_command();
         for command in commands {
             if let Err(e) = self.execute_raw(command) {
-                // Rollback: restore before-snapshot
-                if let Some(before) = self.history.pop_undo() {
-                    self.apply_snapshot(before);
-                }
+                self.apply_snapshot(before);
+                let _ = self.history.pop_undo();
                 return Err(e);
             }
         }
@@ -284,8 +281,13 @@ impl KanbanContext {
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
+            let before_count = self.archived_cards.len();
             match self.execute_raw(Box::new(ArchiveCards { ids: vec![id] })) {
-                Ok(()) => succeeded.push(id),
+                Ok(()) if self.archived_cards.len() > before_count => succeeded.push(id),
+                Ok(()) => failed.push(BatchOperationFailure {
+                    id,
+                    error: KanbanError::not_found("card", id).to_string(),
+                }),
                 Err(e) => failed.push(BatchOperationFailure {
                     id,
                     error: e.to_string(),
@@ -685,26 +687,23 @@ impl KanbanOperations for KanbanContext {
 
     fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
         use kanban_domain::commands::ArchiveCards;
-        let count = ids.len();
-        let cmd = ArchiveCards { ids };
-        self.execute(Box::new(cmd))?;
-        Ok(count)
+        let before = self.archived_cards.len();
+        self.execute(Box::new(ArchiveCards { ids }))?;
+        Ok(self.archived_cards.len() - before)
     }
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::MoveCards;
-        let count = ids.len();
-        let cmd = MoveCards { ids, column_id };
-        self.execute(Box::new(cmd))?;
-        Ok(count)
+        let valid_count = ids.iter().filter(|&&id| self.cards.iter().any(|c| c.id == id)).count();
+        self.execute(Box::new(MoveCards { ids, column_id }))?;
+        Ok(valid_count)
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::AssignCardsToSprint;
-        let count = ids.len();
-        let cmd = AssignCardsToSprint { ids, sprint_id };
-        self.execute(Box::new(cmd))?;
-        Ok(count)
+        let valid_count = ids.iter().filter(|&&id| self.cards.iter().any(|c| c.id == id)).count();
+        self.execute(Box::new(AssignCardsToSprint { ids, sprint_id }))?;
+        Ok(valid_count)
     }
 
     fn carry_over_sprint_cards(
