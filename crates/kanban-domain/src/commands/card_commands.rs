@@ -191,15 +191,8 @@ pub struct ArchiveCards {
 
 impl Command for ArchiveCards {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        use std::collections::HashSet;
-        let id_set: HashSet<Uuid> = self.ids.iter().copied().collect();
-        // Validate all IDs exist before mutating
-        for id in &id_set {
-            if !context.cards.iter().any(|c| c.id == *id) {
-                return Err(KanbanError::not_found("card", *id));
-            }
-        }
-        for id in &self.ids {
+        let valid_ids = context.filter_valid_card_ids(&self.ids, "ArchiveCards");
+        for id in &valid_ids {
             let pos = context.cards.iter().position(|c| c.id == *id).unwrap();
             let card = context.cards.remove(pos);
             let original_column_id = card.column_id;
@@ -229,19 +222,14 @@ impl Command for MoveCards {
         if !context.columns.iter().any(|c| c.id == self.column_id) {
             return Err(KanbanError::not_found("column", self.column_id));
         }
-        let id_set: HashSet<Uuid> = self.ids.iter().copied().collect();
-        // Validate all card IDs exist before mutating
-        for id in &id_set {
-            if !context.cards.iter().any(|c| c.id == *id) {
-                return Err(KanbanError::not_found("card", *id));
-            }
-        }
+        let valid_ids = context.filter_valid_card_ids(&self.ids, "MoveCards");
+        let id_set: HashSet<Uuid> = valid_ids.iter().copied().collect();
         let base = context
             .cards
             .iter()
             .filter(|c| c.column_id == self.column_id && !id_set.contains(&c.id))
             .count();
-        for (i, id) in self.ids.iter().enumerate() {
+        for (i, id) in valid_ids.iter().enumerate() {
             let card = context.card_mut(*id)?;
             card.move_to_column(self.column_id, (base + i) as i32);
         }
@@ -279,19 +267,8 @@ impl Command for AssignCardsToSprint {
         let sprint_name = sprint.get_name(board).map(|s| s.to_string());
         let sprint_status = format!("{:?}", sprint.status);
 
-        // Validate all card IDs exist before mutating
-        {
-            use std::collections::HashSet;
-            let id_set: HashSet<Uuid> = self.ids.iter().copied().collect();
-            for id in &id_set {
-                if !context.cards.iter().any(|c| c.id == *id) {
-                    return Err(KanbanError::not_found("card", *id));
-                }
-            }
-        }
-
-        // Mutate
-        for id in &self.ids {
+        let valid_ids = context.filter_valid_card_ids(&self.ids, "AssignCardsToSprint");
+        for id in &valid_ids {
             let card = context.card_mut(*id)?;
             if let Some(old_sprint_id) = card.sprint_id {
                 if old_sprint_id != self.sprint_id {
@@ -375,7 +352,11 @@ pub struct MigrateSprintLogs;
 
 impl Command for MigrateSprintLogs {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        crate::card_lifecycle::migrate_sprint_logs(context.cards, context.sprints, context.boards);
+        let count =
+            crate::card_lifecycle::migrate_sprint_logs(context.cards, context.sprints, context.boards);
+        if count > 0 {
+            tracing::info!("Migrated sprint logs for {} card(s)", count);
+        }
         Ok(())
     }
 
@@ -455,18 +436,19 @@ mod tests {
     }
 
     #[test]
-    fn test_archive_cards_not_found_returns_error() {
+    fn test_archive_cards_all_invalid_ids_skipped_returns_ok() {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
         let cmd = ArchiveCards {
             ids: vec![Uuid::new_v4()],
         };
         let result = cmd.execute(&mut context);
-        assert!(result.unwrap_err().is_not_found());
+        assert!(result.is_ok());
+        assert_eq!(context.archived_cards.len(), 0);
     }
 
     #[test]
-    fn test_archive_cards_invalid_id_does_not_mutate() {
+    fn test_archive_cards_invalid_ids_skipped_valid_ids_archived() {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
@@ -478,21 +460,20 @@ mod tests {
             ids: vec![valid_id, Uuid::new_v4()],
         };
         let result = cmd.execute(&mut context);
-        assert!(result.is_err());
-        // Valid card must NOT have been archived — validate-before-mutate
-        assert_eq!(context.cards.len(), 1);
-        assert_eq!(context.archived_cards.len(), 0);
+        assert!(result.is_ok());
+        // Valid card IS archived; invalid ID is skipped
+        assert_eq!(context.cards.len(), 0);
+        assert_eq!(context.archived_cards.len(), 1);
     }
 
     #[test]
-    fn test_move_cards_invalid_id_does_not_mutate() {
+    fn test_move_cards_invalid_ids_skipped_valid_ids_moved() {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let column = crate::Column::new(board.id, "Col".to_string(), 0);
         let column_id = column.id;
         let card = crate::Card::new(&mut board, column_id, "Card".to_string(), 0, "TST");
-        let original_column = card.column_id;
         let valid_id = card.id;
         context.columns.push(column);
         let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
@@ -505,9 +486,9 @@ mod tests {
             column_id: target_id,
         };
         let result = cmd.execute(&mut context);
-        assert!(result.is_err());
-        // Valid card must NOT have been moved — validate-before-mutate
-        assert_eq!(context.cards[0].column_id, original_column);
+        assert!(result.is_ok());
+        // Valid card IS moved; invalid ID is skipped
+        assert_eq!(context.cards[0].column_id, target_id);
     }
 
     #[test]
@@ -555,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_cards_to_sprint_validates_before_mutating() {
+    fn test_assign_cards_to_sprint_invalid_ids_skipped_valid_ids_assigned() {
         let mut tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
@@ -572,9 +553,9 @@ mod tests {
             sprint_id,
         };
         let result = cmd.execute(&mut context);
-        assert!(result.is_err());
-        // Valid card must NOT have been assigned — validate-before-mutate
-        assert_eq!(context.cards[0].sprint_id, None);
+        assert!(result.is_ok());
+        // Valid card IS assigned; invalid ID is skipped
+        assert_eq!(context.cards[0].sprint_id, Some(sprint_id));
     }
 
     #[test]

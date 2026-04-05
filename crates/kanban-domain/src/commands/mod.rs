@@ -62,6 +62,17 @@ impl<'a> CommandContext<'a> {
             .find(|s| s.id == id)
             .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
+
+    pub fn filter_valid_card_ids(&self, ids: &[Uuid], command_name: &str) -> Vec<Uuid> {
+        let (valid, rejected): (Vec<_>, Vec<_>) = ids
+            .iter()
+            .copied()
+            .partition(|&id| self.cards.iter().any(|c| c.id == id));
+        for id in &rejected {
+            tracing::warn!("{}: card {} not found, skipping", command_name, id);
+        }
+        valid
+    }
 }
 
 #[cfg(test)]
