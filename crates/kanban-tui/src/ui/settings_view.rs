@@ -89,6 +89,17 @@ fn render_settings_configuration(app: &App, frame: &mut Frame, area: Rect, confi
                 &active_storage_location,
                 is_config_selected(8),
             ));
+        } else if app.cli_file_provided {
+            config_lines.push(metadata_line_selectable(
+                "Active Storage Backend",
+                app.app_config.effective_storage_backend(),
+                is_config_selected(7),
+            ));
+            config_lines.push(metadata_line_selectable(
+                "Active Storage Location",
+                &active_storage_location,
+                is_config_selected(8),
+            ));
         } else {
             config_lines.push(metadata_line_selectable(
                 "Storage Backend",
