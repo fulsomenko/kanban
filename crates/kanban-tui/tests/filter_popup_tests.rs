@@ -60,8 +60,8 @@ fn test_render_filter_popup_with_sprint_shows_sprint_name() {
     let (mut app, _rx) = App::new(None).unwrap();
     let board = Board::new("Test Board".to_string(), None);
     let sprint = Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
-    app.ctx.sprints_mut().push(sprint);
-    app.ctx.boards_mut().push(board);
+    app.ctx.inner_mut().sprints.push(sprint);
+    app.ctx.inner_mut().boards.push(board);
     app.selection.active_board_index = Some(0);
     app.push_mode(AppMode::Dialog(DialogMode::FilterOptions));
     app.filter.dialog_state = Some(FilterDialogState::new(CardFilters::default()));

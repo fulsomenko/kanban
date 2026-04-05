@@ -14,9 +14,9 @@ fn test_export_single_board() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
 
-    app.ctx.boards_mut().push(board.clone());
-    app.ctx.columns_mut().push(column.clone());
-    app.ctx.cards_mut().push(card.clone());
+    app.ctx.inner_mut().boards.push(board.clone());
+    app.ctx.inner_mut().columns.push(column.clone());
+    app.ctx.inner_mut().cards.push(card.clone());
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
@@ -49,12 +49,12 @@ fn test_export_all_boards() {
     let column2 = Column::new(board2.id, "Todo".to_string(), 0);
     let card2 = Card::new(&mut board2, column2.id, "Task 2".to_string(), 0, "task");
 
-    app.ctx.boards_mut().push(board1);
-    app.ctx.boards_mut().push(board2);
-    app.ctx.columns_mut().push(column1);
-    app.ctx.columns_mut().push(column2);
-    app.ctx.cards_mut().push(card1);
-    app.ctx.cards_mut().push(card2);
+    app.ctx.inner_mut().boards.push(board1);
+    app.ctx.inner_mut().boards.push(board2);
+    app.ctx.inner_mut().columns.push(column1);
+    app.ctx.inner_mut().columns.push(column2);
+    app.ctx.inner_mut().cards.push(card1);
+    app.ctx.inner_mut().cards.push(card2);
     app.input.set(file_path.to_str().unwrap().to_string());
 
     app.export_all_boards_with_filename().unwrap();
@@ -164,8 +164,8 @@ fn test_auto_save() {
 
     let board = Board::new("Auto Save Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    app.ctx.boards_mut().push(board);
-    app.ctx.columns_mut().push(column);
+    app.ctx.inner_mut().boards.push(board);
+    app.ctx.inner_mut().columns.push(column);
 
     app.auto_save().unwrap();
 
@@ -250,10 +250,10 @@ fn test_export_import_sprint_and_card_prefixes() {
     let mut sprint = Sprint::new(board.id, 1, None, None);
     sprint.update_card_prefix(Some("hotfix".to_string()));
 
-    app.ctx.boards_mut().push(board.clone());
-    app.ctx.columns_mut().push(column);
-    app.ctx.cards_mut().push(card);
-    app.ctx.sprints_mut().push(sprint.clone());
+    app.ctx.inner_mut().boards.push(board.clone());
+    app.ctx.inner_mut().columns.push(column);
+    app.ctx.inner_mut().cards.push(card);
+    app.ctx.inner_mut().sprints.push(sprint.clone());
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 

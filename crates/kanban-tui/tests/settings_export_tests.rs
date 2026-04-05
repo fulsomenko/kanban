@@ -120,7 +120,8 @@ fn test_render_export_boards_select_step_shows_board_names() {
 
     let (mut app, _rx) = App::new(None).unwrap();
     app.ctx
-        .boards_mut()
+        .inner_mut()
+        .boards
         .push(kanban_domain::Board::new("MyTestBoard".into(), None));
     app.export_dialog = Some(ExportDialogState::new(1));
     app.push_mode(AppMode::Settings);
@@ -154,7 +155,8 @@ fn test_render_export_boards_options_step_shows_filename() {
 
     let (mut app, _rx) = App::new(None).unwrap();
     app.ctx
-        .boards_mut()
+        .inner_mut()
+        .boards
         .push(kanban_domain::Board::new("Board1".into(), None));
     let mut dialog = ExportDialogState::new(1);
     dialog.step = ExportStep::ExportOptions;
@@ -197,8 +199,8 @@ fn test_export_boards_json_creates_file() {
 
     let board = kanban_domain::Board::new("ExportTest".into(), None);
     let col = kanban_domain::Column::new(board.id, "Todo".into(), 0);
-    app.ctx.boards_mut().push(board);
-    app.ctx.columns_mut().push(col);
+    app.ctx.inner_mut().boards.push(board);
+    app.ctx.inner_mut().columns.push(col);
 
     app.export_dialog = Some(ExportDialogState::new(1));
     app.push_mode(AppMode::Dialog(DialogMode::ExportBoards));

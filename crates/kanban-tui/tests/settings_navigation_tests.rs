@@ -147,7 +147,8 @@ fn test_settings_enter_on_export_triggers_dialog() {
 
     let mut app = helpers::setup_settings_app();
     app.ctx
-        .boards_mut()
+        .inner_mut()
+        .boards
         .push(kanban_domain::Board::new("B1".into(), None));
     app.focus.settings_focus = SettingsFocus::Storage;
     app.selection.settings_storage.set(Some(3));

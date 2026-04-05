@@ -153,8 +153,8 @@ mod tests {
         let board = kanban_domain::Board::new("Test Board".to_string(), None);
         let sprint = kanban_domain::Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
         let sprint_id = sprint.id;
-        app.ctx.sprints_mut().push(sprint);
-        app.ctx.boards_mut().push(board);
+        app.ctx.inner_mut().sprints.push(sprint);
+        app.ctx.inner_mut().boards.push(board);
         app.selection.active_board_index = Some(0);
         app.filter.active_sprint_filters.insert(sprint_id);
         let suffix = build_filter_title_suffix(&app);
