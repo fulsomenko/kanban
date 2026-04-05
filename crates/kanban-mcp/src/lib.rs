@@ -1075,6 +1075,36 @@ impl KanbanMcpServer {
         let board = mutating_op!(self.ctx, import_board, &data)?;
         to_call_tool_result(&board)
     }
+
+    #[tool(description = "Undo the last operation")]
+    async fn tool_undo(&self) -> Result<CallToolResult, McpError> {
+        let mut guard = self.ctx.lock().await;
+        if guard.undo() {
+            guard.save().await.map_err(kanban_err_to_mcp)?;
+            Ok(CallToolResult::success(vec![Content::text(
+                "Undo successful",
+            )]))
+        } else {
+            Ok(CallToolResult::success(vec![Content::text(
+                "Nothing to undo",
+            )]))
+        }
+    }
+
+    #[tool(description = "Redo the last undone operation")]
+    async fn tool_redo(&self) -> Result<CallToolResult, McpError> {
+        let mut guard = self.ctx.lock().await;
+        if guard.redo() {
+            guard.save().await.map_err(kanban_err_to_mcp)?;
+            Ok(CallToolResult::success(vec![Content::text(
+                "Redo successful",
+            )]))
+        } else {
+            Ok(CallToolResult::success(vec![Content::text(
+                "Nothing to redo",
+            )]))
+        }
+    }
 }
 
 // ============================================================================

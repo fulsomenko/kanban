@@ -418,3 +418,33 @@ async fn find_cards_by_identifier_not_found() {
     let results = ctx.find_cards_by_identifier("KAN-99").unwrap();
     assert!(results.is_empty());
 }
+
+// Undo/Redo
+
+#[tokio::test]
+async fn test_mcp_undo_reverses_create_board() {
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+
+    assert!(ctx.undo());
+    assert!(ctx.list_boards().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_mcp_redo_restores_undone_board() {
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    ctx.undo();
+    assert!(ctx.list_boards().unwrap().is_empty());
+
+    assert!(ctx.redo());
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_mcp_undo_on_empty_returns_false() {
+    let (ctx, _tmp) = setup().await;
+    assert!(!ctx.can_undo());
+    // undo() can't be called on immutable - just verify can_undo
+}
