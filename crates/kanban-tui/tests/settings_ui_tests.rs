@@ -259,7 +259,13 @@ fn render_rows_wide(app: &App) -> Vec<String> {
     (0..buffer.area.height)
         .map(|y| {
             (0..buffer.area.width)
-                .map(|x| buffer.cell((x, y)).map(|c| c.symbol()).unwrap_or(" ").to_string())
+                .map(|x| {
+                    buffer
+                        .cell((x, y))
+                        .map(|c| c.symbol())
+                        .unwrap_or(" ")
+                        .to_string()
+                })
                 .collect()
         })
         .collect()
@@ -267,11 +273,8 @@ fn render_rows_wide(app: &App) -> Vec<String> {
 
 fn value_after_label<'a>(rows: &'a [String], label: &str) -> Option<&'a str> {
     let needle = format!("{}: ", label);
-    rows.iter().find_map(|row| {
-        row.split(needle.as_str())
-            .nth(1)
-            .map(|s| s.trim_start())
-    })
+    rows.iter()
+        .find_map(|row| row.split(needle.as_str()).nth(1).map(|s| s.trim_start()))
 }
 
 #[test]

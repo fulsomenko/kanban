@@ -129,9 +129,7 @@ impl EditFormat {
             Self::Json => {
                 "  // Storage is controlled by the CLI file argument — changes are ignored:"
             }
-            Self::Toml => {
-                "# Storage is controlled by the CLI file argument — changes are ignored:"
-            }
+            Self::Toml => "# Storage is controlled by the CLI file argument — changes are ignored:",
         };
         let mut result: Vec<String> = Vec::new();
         let mut inserted = false;
@@ -228,7 +226,9 @@ mod tests {
             .position(|l| l.trim_start().starts_with("\"storage_location\""))
             .expect("storage_location must be present as an active line");
         assert!(
-            lines[..backend_idx].iter().any(|l| l.trim_start().starts_with("//")),
+            lines[..backend_idx]
+                .iter()
+                .any(|l| l.trim_start().starts_with("//")),
             "a // comment must appear before storage_backend"
         );
         assert!(
@@ -247,13 +247,18 @@ mod tests {
             .position(|l| l.trim_start().starts_with("storage_backend"))
             .expect("storage_backend must be present as an active line");
         assert!(
-            lines[..backend_idx].iter().any(|l| l.trim_start().starts_with('#')),
+            lines[..backend_idx]
+                .iter()
+                .any(|l| l.trim_start().starts_with('#')),
             "a # comment must appear before storage_backend"
         );
         let location_present = lines
             .iter()
             .any(|l| l.trim_start().starts_with("storage_location"));
-        assert!(location_present, "storage_location must be present as an active line");
+        assert!(
+            location_present,
+            "storage_location must be present as an active line"
+        );
     }
 
     #[test]
