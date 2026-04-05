@@ -2,6 +2,7 @@ use super::{Command, CommandContext};
 use crate::dependencies::card_graph::CardGraphExt;
 use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult};
 use chrono::Utc;
+use kanban_core::Editable;
 use uuid::Uuid;
 
 /// Update card properties (title, description, priority, status, etc.)
@@ -321,6 +322,54 @@ impl Command for UnassignCardFromSprint {
     }
 }
 
+/// Apply card metadata from a DTO (used by JSON editor).
+pub struct ApplyCardMetadata {
+    pub card_id: Uuid,
+    pub dto: crate::editable::CardMetadataDto,
+}
+
+impl Command for ApplyCardMetadata {
+    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        let card = context.card_mut(self.card_id)?;
+        self.dto.clone().apply_to(card);
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        format!("Apply card metadata for {}", self.card_id)
+    }
+}
+
+/// Compact card positions in a column to be sequential (0, 1, 2, ...).
+pub struct CompactColumnPositions {
+    pub column_id: Uuid,
+}
+
+impl Command for CompactColumnPositions {
+    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        crate::card_lifecycle::compact_column_positions(context.cards, self.column_id);
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        format!("Compact positions in column {}", self.column_id)
+    }
+}
+
+/// Backfill sprint_logs for cards that have a sprint_id but empty logs.
+pub struct MigrateSprintLogs;
+
+impl Command for MigrateSprintLogs {
+    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        crate::card_lifecycle::migrate_sprint_logs(context.cards, context.sprints, context.boards);
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        "Migrate sprint logs".to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::test_helpers::TestContext;
@@ -523,5 +572,28 @@ mod tests {
         };
         let result = cmd.execute(&mut context);
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_compact_column_positions_makes_sequential() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let column_id = col.id;
+        let mut card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0, "TST");
+        card1.position = 0;
+        let mut card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 5, "TST");
+        card2.position = 5;
+        tc.boards.push(board);
+        tc.columns.push(col);
+        tc.cards.push(card1);
+        tc.cards.push(card2);
+
+        let cmd = CompactColumnPositions { column_id };
+        let mut context = tc.as_command_context();
+        cmd.execute(&mut context).unwrap();
+
+        assert_eq!(context.cards[0].position, 0);
+        assert_eq!(context.cards[1].position, 1);
     }
 }
