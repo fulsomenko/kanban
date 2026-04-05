@@ -7,7 +7,7 @@ use kanban_domain::{
 use kanban_service::KanbanContext;
 use uuid::Uuid;
 
-pub use kanban_service::BulkOperationResult;
+pub use kanban_service::BatchOperationResult;
 
 pub struct CliContext {
     inner: KanbanContext,
@@ -32,11 +32,11 @@ impl CliContext {
         self.inner.save().await
     }
 
-    pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
+    pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BatchOperationResult {
         self.inner.archive_cards_detailed(ids)
     }
 
-    pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BulkOperationResult {
+    pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
         self.inner.move_cards_detailed(ids, column_id)
     }
 
@@ -44,7 +44,7 @@ impl CliContext {
         &mut self,
         ids: Vec<Uuid>,
         sprint_id: Uuid,
-    ) -> BulkOperationResult {
+    ) -> BatchOperationResult {
         self.inner.assign_cards_to_sprint_detailed(ids, sprint_id)
     }
 }

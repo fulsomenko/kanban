@@ -225,10 +225,10 @@ async fn card_assign_unassign_sprint() {
     assert_eq!(unassigned.sprint_id, None);
 }
 
-// Bulk operations
+// Multi-card operations
 
 #[tokio::test]
-async fn bulk_archive() {
+async fn archive_cards() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -244,7 +244,7 @@ async fn bulk_archive() {
 }
 
 #[tokio::test]
-async fn bulk_move() {
+async fn move_cards() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col1 = ctx.create_column(board.id, "From".into(), None).unwrap();
@@ -271,7 +271,10 @@ async fn export_import_roundtrip() {
     let json = ctx.export_board(Some(board.id)).unwrap();
     assert!(json.contains("Export Board"));
 
-    ctx.import_board(&json).unwrap();
+    // Import into a fresh context to avoid duplicate UUID errors
+    let (mut ctx2, _tmp2) = setup().await;
+    let imported = ctx2.import_board(&json).unwrap();
+    assert_eq!(imported.name, "Export Board");
 }
 
 // Persistence round-trips

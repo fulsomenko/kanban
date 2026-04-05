@@ -197,7 +197,7 @@ impl KanbanOperations for McpContext {
     }
 
     // ========================================================================
-    // Bulk Card Operations
+    // Multi-card operations
     // ========================================================================
 
     fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {

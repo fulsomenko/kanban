@@ -380,16 +380,16 @@ pub struct GetCardGitCheckoutRequest {
     pub card_id: String,
 }
 
-// Bulk Operations
+// Multi-card operations
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkArchiveCardsRequest {
+pub struct ArchiveCardsRequest {
     #[schemars(description = "Comma-separated card IDs to archive")]
     pub ids: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkMoveCardsRequest {
+pub struct MoveCardsRequest {
     #[schemars(description = "Comma-separated card IDs to move")]
     pub ids: String,
     #[schemars(description = "ID of the destination column")]
@@ -397,7 +397,7 @@ pub struct BulkMoveCardsRequest {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkAssignSprintRequest {
+pub struct AssignCardsToSprintRequest {
     #[schemars(description = "Comma-separated card IDs")]
     pub ids: String,
     #[schemars(description = "ID of the sprint to assign to")]
@@ -887,12 +887,12 @@ impl KanbanMcpServer {
         to_call_tool_result_json(serde_json::json!({"command": command}))
     }
 
-    // Bulk Operations
+    // Multi-card operations
 
     #[tool(description = "Archive multiple cards at once")]
     async fn tool_archive_cards(
         &self,
-        Parameters(req): Parameters<BulkArchiveCardsRequest>,
+        Parameters(req): Parameters<ArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let count = mutating_op!(self.ctx, archive_cards, ids)?;
@@ -902,7 +902,7 @@ impl KanbanMcpServer {
     #[tool(description = "Move multiple cards to a column")]
     async fn tool_move_cards(
         &self,
-        Parameters(req): Parameters<BulkMoveCardsRequest>,
+        Parameters(req): Parameters<MoveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let column_id = parse_uuid(&req.column_id)?;
@@ -913,7 +913,7 @@ impl KanbanMcpServer {
     #[tool(description = "Assign multiple cards to a sprint")]
     async fn tool_assign_cards_to_sprint(
         &self,
-        Parameters(req): Parameters<BulkAssignSprintRequest>,
+        Parameters(req): Parameters<AssignCardsToSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let sprint_id = parse_uuid(&req.sprint_id)?;

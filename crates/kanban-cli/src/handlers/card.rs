@@ -153,7 +153,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             let cmd = ctx.get_card_git_checkout(uuid)?;
             output::output_success(serde_json::json!({"command": cmd}));
         }
-        CardAction::BulkArchive { ids } => {
+        CardAction::ArchiveCards { ids } => {
             let result = ctx.archive_cards_detailed(ids);
             ctx.save().await?;
             output::output_success(serde_json::json!({
@@ -163,7 +163,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 "failed": result.failed
             }));
         }
-        CardAction::BulkMove { ids, column_id } => {
+        CardAction::MoveCards { ids, column_id } => {
             let result = ctx.move_cards_detailed(ids, column_id);
             ctx.save().await?;
             output::output_success(serde_json::json!({
@@ -173,7 +173,7 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 "failed": result.failed
             }));
         }
-        CardAction::BulkAssignSprint { ids, sprint_id } => {
+        CardAction::AssignCardsToSprint { ids, sprint_id } => {
             let result = ctx.assign_cards_to_sprint_detailed(ids, sprint_id);
             ctx.save().await?;
             output::output_success(serde_json::json!({

@@ -1023,7 +1023,7 @@ mod card_tests {
     }
 
     #[test]
-    fn test_card_bulk_archive() {
+    fn test_card_archive_cards() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
         let (board_id, column_id) = setup_board_and_column(&file);
@@ -1074,7 +1074,7 @@ mod card_tests {
             .args([
                 file.to_str().unwrap(),
                 "card",
-                "bulk-archive",
+                "archive-cards",
                 "--ids",
                 &format!("{},{}", card1_id, card2_id),
             ])
@@ -1091,7 +1091,7 @@ mod card_tests {
     }
 
     #[test]
-    fn test_card_bulk_move() {
+    fn test_card_move_cards() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
         let (board_id, column_id) = setup_board_and_column(&file);
@@ -1161,7 +1161,7 @@ mod card_tests {
             .args([
                 file.to_str().unwrap(),
                 "card",
-                "bulk-move",
+                "move-cards",
                 "--ids",
                 &format!("{},{}", card1_id, card2_id),
                 "--column-id",
