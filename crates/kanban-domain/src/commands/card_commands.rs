@@ -246,6 +246,62 @@ impl Command for MoveCards {
     }
 }
 
+/// Assign one or more cards to a sprint in a single command (single undo entry)
+pub struct AssignCardsToSprint {
+    pub ids: Vec<Uuid>,
+    pub sprint_id: Uuid,
+}
+
+impl Command for AssignCardsToSprint {
+    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        let sprint = context
+            .sprints
+            .iter()
+            .find(|s| s.id == self.sprint_id)
+            .ok_or_else(|| KanbanError::not_found("sprint", self.sprint_id))?;
+        let board = context
+            .boards
+            .iter()
+            .find(|b| b.id == sprint.board_id)
+            .ok_or_else(|| KanbanError::not_found("board", sprint.board_id))?;
+        let sprint_number = sprint.sprint_number;
+        let sprint_name = sprint.get_name(board).map(|s| s.to_string());
+        let sprint_status = format!("{:?}", sprint.status);
+
+        // Validate all card IDs exist before mutating
+        for id in &self.ids {
+            if !context.cards.iter().any(|c| c.id == *id) {
+                return Err(KanbanError::not_found("card", *id));
+            }
+        }
+
+        // Mutate
+        for id in &self.ids {
+            let card = context.card_mut(*id)?;
+            if let Some(old_sprint_id) = card.sprint_id {
+                if old_sprint_id != self.sprint_id {
+                    card.end_current_sprint_log();
+                }
+            }
+            card.assign_to_sprint(
+                self.sprint_id,
+                sprint_number,
+                sprint_name.clone(),
+                sprint_status.clone(),
+            );
+        }
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        format!(
+            "Assign {} card(s) to sprint {}",
+            self.ids.len(),
+            self.sprint_id
+        )
+    }
+}
+
 /// Unassign card from current sprint
 pub struct UnassignCardFromSprint {
     pub card_id: Uuid,
@@ -269,6 +325,11 @@ impl Command for UnassignCardFromSprint {
 mod tests {
     use super::super::test_helpers::TestContext;
     use super::*;
+
+    fn context_push_board_and_card(tc: &mut TestContext, board: crate::Board, card: crate::Card) {
+        tc.boards.push(board);
+        tc.cards.push(card);
+    }
 
     #[test]
     fn test_update_card_not_found_returns_error() {
@@ -412,6 +473,45 @@ mod tests {
         };
         let result = cmd.execute(&mut context);
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_assign_cards_to_sprint_validates_sprint_exists() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
+        context_push_board_and_card(&mut tc, board, card);
+        let mut context = tc.as_command_context();
+
+        let cmd = AssignCardsToSprint {
+            ids: vec![context.cards[0].id],
+            sprint_id: Uuid::new_v4(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_assign_cards_to_sprint_validates_before_mutating() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
+        let valid_id = card.id;
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
+        let sprint_id = sprint.id;
+        tc.boards.push(board);
+        tc.cards.push(card);
+        tc.sprints.push(sprint);
+        let mut context = tc.as_command_context();
+
+        let cmd = AssignCardsToSprint {
+            ids: vec![valid_id, Uuid::new_v4()],
+            sprint_id,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.is_err());
+        // Valid card must NOT have been assigned — validate-before-mutate
+        assert_eq!(context.cards[0].sprint_id, None);
     }
 
     #[test]
