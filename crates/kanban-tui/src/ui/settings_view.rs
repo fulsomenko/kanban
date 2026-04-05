@@ -93,12 +93,12 @@ fn render_settings_configuration(app: &App, frame: &mut Frame, area: Rect, confi
             config_lines.push(metadata_line_selectable(
                 "Active Storage Backend",
                 app.app_config.effective_storage_backend(),
-                is_config_selected(7),
+                is_config_selected(5),
             ));
             config_lines.push(metadata_line_selectable(
                 "Active Storage Location",
                 &active_storage_location,
-                is_config_selected(8),
+                is_config_selected(6),
             ));
         } else {
             config_lines.push(metadata_line_selectable(
