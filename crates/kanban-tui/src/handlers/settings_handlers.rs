@@ -61,10 +61,30 @@ impl App {
             .deserialize(new_content)
             .map_err(|e| format!("Failed to parse config: {}", e))?;
 
-        // CLI-supplied storage is always session-only — strip it from the DTO so it
-        // can never be written to the config file, even if the user uncomments the
-        // storage fields in the editor.
-        if self.cli_file_override {
+        // Strip storage fields from the DTO unless the user explicitly changed the
+        // storage path to a different file:
+        // - CLI-supplied storage is always session-only.
+        // - In the normal case, from_config puts the resolved absolute path into the
+        //   DTO; if the user only changed non-storage fields, that same path comes
+        //   back and must not be written to config (strip_defaults compares against
+        //   the relative default, not the absolute, so it would survive stripping).
+        let strip_storage = self.cli_file_override || {
+            match updated_dto.storage_location.as_deref() {
+                None => false,
+                Some(loc) => {
+                    let p = std::path::Path::new(loc);
+                    let dto_resolved = if p.is_absolute() {
+                        loc.to_string()
+                    } else {
+                        std::env::current_dir()
+                            .map(|cwd| cwd.join(p).display().to_string())
+                            .unwrap_or_else(|_| loc.to_string())
+                    };
+                    dto_resolved == old_storage_location
+                }
+            }
+        };
+        if strip_storage {
             updated_dto.storage_backend = None;
             updated_dto.storage_location = None;
         }
