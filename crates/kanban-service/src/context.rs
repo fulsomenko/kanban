@@ -744,38 +744,19 @@ impl KanbanOperations for KanbanContext {
     ) -> KanbanResult<Sprint> {
         use kanban_domain::commands::CreateSprint;
 
-        self.capture_before_command();
-
-        let (sprint_number, name_index, effective_prefix) = {
-            let board = self
-                .boards
-                .iter_mut()
-                .find(|b| b.id == board_id)
-                .ok_or_else(|| KanbanError::not_found("board", board_id))?;
-
-            let effective_prefix = prefix
-                .or_else(|| board.sprint_prefix.clone())
-                .unwrap_or_else(|| {
-                    self.app_config
-                        .effective_default_sprint_prefix()
-                        .to_string()
-                });
-
-            board.ensure_sprint_counter_initialized(&effective_prefix, &self.sprints);
-            let sprint_number = board.get_next_sprint_number(&effective_prefix);
-            let name_index = name.map(|n| board.add_sprint_name_at_used_index(n));
-
-            (sprint_number, name_index, effective_prefix)
-        };
+        let default_sprint_prefix = self
+            .app_config
+            .effective_default_sprint_prefix()
+            .to_string();
 
         let cmd = CreateSprint {
             board_id,
-            sprint_number,
-            name_index,
-            prefix: Some(effective_prefix),
+            name,
+            default_sprint_prefix,
+            explicit_prefix: prefix,
+            auto_consume_name: false,
         };
-        self.execute_raw(Box::new(cmd))?;
-        self.dirty = true;
+        self.execute(Box::new(cmd))?;
         self.sprints.last().cloned().ok_or_else(|| {
             KanbanError::Internal("Sprint creation succeeded but sprint not found".into())
         })
