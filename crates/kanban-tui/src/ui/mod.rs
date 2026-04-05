@@ -47,6 +47,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         // Phase 2: Render dialog overlay if active
         if let AppMode::Dialog(ref dialog) = app.mode {
             match dialog {
+                // Standard dialogs
                 DialogMode::CreateBoard => dialogs::render_create_board_popup(app, frame),
                 DialogMode::CreateCard => dialogs::render_create_card_popup(app, frame),
                 DialogMode::CreateSprint => dialogs::render_create_sprint_popup(app, frame),
@@ -73,12 +74,15 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 DialogMode::SelectTaskListView => {
                     dialogs::render_select_task_list_view_popup(app, frame)
                 }
-                DialogMode::FilterOptions => {
-                    crate::components::render_filter_options_popup(app, frame)
-                }
                 DialogMode::AssignCardToSprint => dialogs::render_assign_sprint_popup(app, frame),
                 DialogMode::AssignMultipleCardsToSprint => {
                     dialogs::render_assign_multiple_cards_popup(app, frame)
+                }
+                DialogMode::CarryOverSprint => dialogs::render_carry_over_sprint_popup(app, frame),
+                DialogMode::ExportBoards => dialogs::render_export_boards_popup(app, frame),
+                // Component-based popups
+                DialogMode::FilterOptions => {
+                    crate::components::render_filter_options_popup(app, frame)
                 }
                 DialogMode::ConflictResolution => {
                     crate::components::render_conflict_resolution_popup(app, frame)
@@ -86,15 +90,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 DialogMode::ExternalChangeDetected => {
                     crate::components::render_external_change_detected_popup(app, frame)
                 }
-                DialogMode::ConfirmSprintPrefixCollision => {}
                 DialogMode::ManageParents => {
                     crate::components::render_manage_parents_popup(app, frame)
                 }
                 DialogMode::ManageChildren => {
                     crate::components::render_manage_children_popup(app, frame)
                 }
-                DialogMode::CarryOverSprint => dialogs::render_carry_over_sprint_popup(app, frame),
-                DialogMode::ExportBoards => dialogs::render_export_boards_popup(app, frame),
+                DialogMode::ConfirmSprintPrefixCollision => {}
             }
         }
     } else {
