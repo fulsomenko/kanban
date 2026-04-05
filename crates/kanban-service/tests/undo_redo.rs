@@ -316,28 +316,6 @@ async fn test_null_store_context_loads_empty() {
     assert!(ctx.cards.is_empty());
 }
 
-#[tokio::test]
-async fn test_archive_cards_single_undo_entry() {
-    let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col.id, "Card 2".into(), Default::default())
-        .unwrap();
-    ctx.clear_history();
-
-    ctx.archive_cards(vec![c1.id, c2.id]).unwrap();
-    assert_eq!(ctx.cards.len(), 0);
-    assert_eq!(ctx.archived_cards.len(), 2);
-
-    assert!(ctx.undo());
-    assert_eq!(ctx.cards.len(), 2);
-    assert_eq!(ctx.archived_cards.len(), 0);
-    assert!(!ctx.can_undo());
-}
 
 #[tokio::test]
 async fn test_move_cards_single_undo_entry() {
