@@ -346,7 +346,12 @@ async fn test_assign_cards_to_sprint_renamed_trait_method() {
         .unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
 
-    let count = ctx.assign_cards_to_sprint(vec![card.id], sprint.id).unwrap();
+    let count = ctx
+        .assign_cards_to_sprint(vec![card.id], sprint.id)
+        .unwrap();
     assert_eq!(count, 1);
-    assert_eq!(ctx.get_card(card.id).unwrap().unwrap().sprint_id, Some(sprint.id));
+    assert_eq!(
+        ctx.get_card(card.id).unwrap().unwrap().sprint_id,
+        Some(sprint.id)
+    );
 }
