@@ -1,16 +1,13 @@
 pub mod snapshot;
 
 use crate::app::App;
-use kanban_domain::commands::Command;
-use kanban_domain::commands::CommandContext;
 use kanban_domain::KanbanResult;
-use kanban_domain::{ArchivedCard, Board, Card, Column, HistoryManager, Snapshot, Sprint};
+use kanban_domain::Snapshot;
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-pub use kanban_domain::commands;
 pub use snapshot::TuiSnapshot;
 
 type DynStore = Arc<dyn PersistenceStore + Send + Sync>;
@@ -32,14 +29,12 @@ const SAVE_QUEUE_CAPACITY: usize = 100;
 ///
 /// # Example
 /// ```ignore
-/// // Execute command - automatically saves afterward
-/// state_manager.execute(app, command)?;
-/// state_manager.save(&snapshot).await?;
+/// // Execute command via TuiContext, then queue snapshot
+/// ctx.execute_commands_batch(commands)?;
 /// ```
 pub struct StateManager {
     store: Option<DynStore>,
     command_queue: VecDeque<String>,
-    dirty: bool,
     instance_id: uuid::Uuid,
     conflict_pending: bool,
     needs_refresh: bool,
@@ -47,7 +42,6 @@ pub struct StateManager {
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
     file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
-    history: HistoryManager,
 }
 
 impl StateManager {
@@ -103,7 +97,6 @@ impl StateManager {
         let manager = Self {
             store,
             command_queue: VecDeque::new(),
-            dirty: false,
             instance_id,
             conflict_pending: false,
             needs_refresh: false,
@@ -111,7 +104,6 @@ impl StateManager {
             save_completion_tx: Some(save_completion_tx),
             pending_saves: 0,
             file_watcher: None,
-            history: HistoryManager::new(),
         };
 
         (manager, save_rx, Some(save_completion_rx))
@@ -124,107 +116,6 @@ impl StateManager {
         let store = kanban_service::make_store(backend, path)?;
         let id = store.instance_id();
         Ok((store, id))
-    }
-
-    /// Execute a command and mark state as dirty
-    /// Takes individual mutable references to avoid borrow checker issues when called from App methods
-    #[allow(clippy::too_many_arguments)]
-    pub fn execute_with_context(
-        &mut self,
-        boards: &mut Vec<Board>,
-        columns: &mut Vec<Column>,
-        cards: &mut Vec<Card>,
-        sprints: &mut Vec<Sprint>,
-        archived_cards: &mut Vec<ArchivedCard>,
-        graph: &mut kanban_domain::DependencyGraph,
-        command: Box<dyn Command>,
-    ) -> KanbanResult<()> {
-        let description = command.description();
-        tracing::debug!("Executing: {}", description);
-
-        // Create context from data
-        let mut context = CommandContext {
-            boards,
-            columns,
-            cards,
-            sprints,
-            archived_cards,
-            graph,
-        };
-
-        // Execute business logic
-        command.execute(&mut context)?;
-
-        // Mark dirty and queue command
-        self.dirty = true;
-        self.needs_refresh = true;
-        self.command_queue.push_back(description);
-
-        Ok(())
-    }
-
-    /// Execute a command and mark state as dirty (app-based convenience method)
-    ///
-    /// After execution, queues a snapshot for async saving if a save channel is configured.
-    pub fn execute(&mut self, app: &mut App, command: Box<dyn Command>) -> KanbanResult<()> {
-        // Execute command
-        self.execute_with_context(
-            &mut app.ctx.inner.boards,
-            &mut app.ctx.inner.columns,
-            &mut app.ctx.inner.cards,
-            &mut app.ctx.inner.sprints,
-            &mut app.ctx.inner.archived_cards,
-            &mut app.ctx.inner.graph,
-            command,
-        )?;
-
-        // Queue snapshot for async save if channel is available
-        if let Some(ref tx) = self.save_tx {
-            let snapshot = Snapshot::from_app(app);
-            tracing::debug!("Queueing snapshot for async save");
-            // Use try_send (non-blocking) since we're in a synchronous context
-            // Backpressure is handled by queue_snapshot method
-            match tx.try_send(snapshot) {
-                Ok(_) => {
-                    self.pending_saves += 1;
-                    tracing::debug!(
-                        "Snapshot queued successfully (pending: {})",
-                        self.pending_saves
-                    );
-                }
-                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!(
-                        "Save queue is full ({} pending), skipping this save. \
-                        This may indicate the disk is slow or the save worker is overloaded.",
-                        self.pending_saves
-                    );
-                }
-                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    tracing::error!("Failed to queue save: channel closed");
-                }
-            }
-        } else {
-            tracing::debug!("No save channel available - skipping save");
-        }
-
-        Ok(())
-    }
-
-    /// Execute multiple commands in a batch
-    pub fn execute_batch(
-        &mut self,
-        app: &mut App,
-        commands: Vec<Box<dyn Command>>,
-    ) -> KanbanResult<()> {
-        for command in commands {
-            self.execute(app, command)?;
-        }
-        Ok(())
-    }
-
-    /// Check if state is dirty
-    pub fn is_dirty(&self) -> bool {
-        self.dirty
     }
 
     /// Get the instance ID for this manager
@@ -262,12 +153,6 @@ impl StateManager {
         self.needs_refresh = false;
     }
 
-    /// Mark state as dirty and needing refresh (for direct mutations that bypass execute_command)
-    pub fn mark_dirty(&mut self) {
-        self.dirty = true;
-        self.needs_refresh = true;
-    }
-
     /// Force overwrite external changes (user chose to keep their changes)
     pub async fn force_overwrite(&mut self, snapshot: &Snapshot) -> KanbanResult<()> {
         self.conflict_pending = false;
@@ -280,7 +165,6 @@ impl StateManager {
             };
 
             store.save(persistence_snapshot).await?;
-            self.dirty = false;
             self.command_queue.clear();
 
             tracing::info!("Force overwrote external changes");
@@ -301,21 +185,14 @@ impl StateManager {
 
             data.apply_to_app(app);
 
-            self.dirty = false;
+            app.ctx.inner.mark_clean();
+            app.ctx.inner.clear_history();
             self.command_queue.clear();
-            self.history.clear();
 
             tracing::info!("Reloaded state from disk - undo history cleared");
         }
 
         Ok(())
-    }
-
-    /// Mark state as clean, clearing dirty flag and command queue
-    /// Used after successful external reload to prevent re-save
-    pub fn mark_clean(&mut self) {
-        self.dirty = false;
-        self.command_queue.clear();
     }
 
     /// Close the save channel to signal the worker to finish processing and exit
@@ -401,43 +278,12 @@ impl StateManager {
                 self.pending_saves + 1,
                 self.pending_saves
             );
-
-            // If no more pending saves, clear the dirty flag
-            if self.pending_saves == 0 {
-                self.dirty = false;
-                tracing::debug!("All saves complete - clearing dirty flag");
-            }
         }
     }
 
     /// Get the save completion sender for the worker to use
     pub fn save_completion_tx(&self) -> Option<&mpsc::UnboundedSender<()>> {
         self.save_completion_tx.as_ref()
-    }
-
-    /// Capture snapshot before command execution (for undo history)
-    pub fn capture_before_command(&mut self, snapshot: Snapshot) {
-        self.history.capture_before_command(snapshot);
-    }
-
-    /// Check if undo is available
-    pub fn can_undo(&self) -> bool {
-        self.history.can_undo()
-    }
-
-    /// Check if redo is available
-    pub fn can_redo(&self) -> bool {
-        self.history.can_redo()
-    }
-
-    /// Access to history manager for undo/redo operations
-    pub fn history_mut(&mut self) -> &mut HistoryManager {
-        &mut self.history
-    }
-
-    /// Clear undo/redo history (called after initial file load)
-    pub fn clear_history(&mut self) {
-        self.history.clear();
     }
 
     /// Set the file watcher for coordinating pause/resume with saves
@@ -462,7 +308,6 @@ impl StateManager {
         self.store = Some(store);
         self.instance_id = instance_id;
         self.file_watcher = None;
-        self.dirty = false;
         self.pending_saves = 0;
 
         let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
@@ -483,7 +328,7 @@ mod tests {
     #[test]
     fn test_state_manager_creation() {
         let (manager, _rx, _completion_rx) = StateManager::new("json", None).unwrap();
-        assert!(!manager.is_dirty());
+        assert!(!manager.has_pending_saves());
     }
 
     #[test]
@@ -510,38 +355,13 @@ mod tests {
         std::fs::write(&path1, "{}").unwrap();
         let (mut manager, _rx, _crx) =
             StateManager::new("json", Some(path1.to_str().unwrap().to_string())).unwrap();
-        manager.mark_dirty();
-        assert!(manager.is_dirty());
 
         let path2 = dir.path().join("b.json");
         std::fs::write(&path2, "{}").unwrap();
         let (_rx, _crx) = manager
             .replace_store("json", path2.to_str().unwrap())
             .unwrap();
-        assert!(!manager.is_dirty());
         assert!(!manager.has_pending_saves());
         assert!(manager.has_save_channel());
-    }
-
-    #[test]
-    fn test_dirty_flag_after_execute() {
-        let (mut manager, _rx, _completion_rx) = StateManager::new("json", None).unwrap();
-
-        struct DummyCommand;
-        impl Command for DummyCommand {
-            fn execute(&self, _context: &mut CommandContext) -> KanbanResult<()> {
-                Ok(())
-            }
-
-            fn description(&self) -> String {
-                "dummy".to_string()
-            }
-        }
-
-        let command = Box::new(DummyCommand);
-        let (mut app, _app_rx) = App::new(None).unwrap();
-        manager.execute(&mut app, command).unwrap();
-
-        assert!(manager.is_dirty());
     }
 }
