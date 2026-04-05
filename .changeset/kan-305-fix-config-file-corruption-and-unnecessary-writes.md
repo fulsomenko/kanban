@@ -2,6 +2,22 @@
 bump: patch
 ---
 
+- fix(tui): clear cli_file_provided after migration so storage shows under Storage fields
+- fix(tui): use correct selection indices for Active Storage rows in cli-only mode
+- feat(tui): use Active Storage labels when storage source is CLI arg, Storage labels when config
+- test(tui): add red-green tests for absolute path in Storage Location settings UI
+- fix(tui): show resolved absolute path for Storage Location in settings UI
+- fix(tui): unload cli_file_override when user explicitly provides storage in editor
+- test(tui): add test for cli override unload when storage fields uncommented
+- refactor(tui): extract is_storage_line helper; revert annotate editor change
+- fix(tui): use annotate_storage_fields in editor when CLI file override is active
+- fix(tui): add annotate_storage_fields to show storage as active lines with comment
+- fix(tui): don't inject absolute storage path when CLI arg matches config default
+- fix(tui): reset config storage to original values when DTO storage is unchanged
+- test(tui): add tests for startup-injected absolute storage path not written to config
+- fix(tui): strip unchanged storage from DTO to prevent spurious config writes
+- test(tui): add test for unchanged storage not written to config
+- fix(tui): CLI-supplied storage path is always session-only
 - test(service): fix vacuous temp-file leak assertion in config write test
 - fix(tui): skip config save when editor exits without changes
 - fix(service): atomic write for config file to prevent corruption
