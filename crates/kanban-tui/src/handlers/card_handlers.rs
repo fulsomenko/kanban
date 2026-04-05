@@ -346,7 +346,7 @@ impl App {
                     Some(col) => col,
                     None => {
                         let new_column = Column::new(bid, "Todo".to_string(), 0);
-                        self.ctx.columns.push(new_column.clone());
+                        self.ctx.inner.columns.push(new_column.clone());
                         new_column
                     }
                 };
@@ -638,7 +638,7 @@ impl App {
     }
 
     pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
-        kanban_domain::card_lifecycle::compact_column_positions(&mut self.ctx.cards, column_id);
+        kanban_domain::card_lifecycle::compact_column_positions(&mut self.ctx.inner.cards, column_id);
     }
 
     pub fn select_card_after_deletion(

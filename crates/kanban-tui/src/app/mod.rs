@@ -1461,13 +1461,13 @@ impl App {
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
                     let board_id = board.id;
-                    if let Some(board) = self.ctx.boards.iter_mut().find(|b| b.id == board_id) {
+                    if let Some(board) = self.ctx.inner.boards.iter_mut().find(|b| b.id == board_id) {
                         match field {
                             BoardField::Name => {
                                 if !new_content.trim().is_empty() {
                                     board.update_name(new_content.trim().to_string());
-                                    self.ctx.state_manager.mark_dirty();
-                                    let snapshot = kanban_domain::Snapshot::from_app(self);
+                                    self.ctx.inner.mark_dirty();
+                                    let snapshot = self.ctx.inner.snapshot();
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
@@ -1478,8 +1478,8 @@ impl App {
                                     Some(new_content)
                                 };
                                 board.update_description(desc);
-                                self.ctx.state_manager.mark_dirty();
-                                let snapshot = kanban_domain::Snapshot::from_app(self);
+                                self.ctx.inner.mark_dirty();
+                                let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
@@ -1516,13 +1516,13 @@ impl App {
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
                     let card_id = card.id;
-                    if let Some(card) = self.ctx.cards.iter_mut().find(|c| c.id == card_id) {
+                    if let Some(card) = self.ctx.inner.cards.iter_mut().find(|c| c.id == card_id) {
                         match field {
                             CardField::Title => {
                                 if !new_content.trim().is_empty() {
                                     card.update_title(new_content.trim().to_string());
-                                    self.ctx.state_manager.mark_dirty();
-                                    let snapshot = kanban_domain::Snapshot::from_app(self);
+                                    self.ctx.inner.mark_dirty();
+                                    let snapshot = self.ctx.inner.snapshot();
                                     self.ctx.state_manager.queue_snapshot(snapshot);
                                 }
                             }
@@ -1533,8 +1533,8 @@ impl App {
                                     Some(new_content)
                                 };
                                 card.update_description(desc);
-                                self.ctx.state_manager.mark_dirty();
-                                let snapshot = kanban_domain::Snapshot::from_app(self);
+                                self.ctx.inner.mark_dirty();
+                                let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                         }
@@ -1898,49 +1898,51 @@ impl App {
         let content = std::fs::read_to_string(filename)?;
 
         // Capture snapshot before import for undo history
-        let before_snapshot = kanban_domain::Snapshot::from_app(self);
+        let before_snapshot = self.ctx.inner.snapshot();
         self.ctx
             .state_manager
             .capture_before_command(before_snapshot);
 
         // Try V2 format first (preserves graph)
         if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
-            let first_new_index = self.ctx.boards.len();
+            let first_new_index = self.ctx.inner.boards.len();
 
-            self.ctx.boards.extend(snapshot.boards);
-            self.ctx.columns.extend(snapshot.columns);
-            self.ctx.cards.extend(snapshot.cards);
-            self.ctx.archived_cards.extend(snapshot.archived_cards);
-            self.ctx.sprints.extend(snapshot.sprints);
-            self.ctx.graph = snapshot.graph;
+            self.ctx.inner.boards.extend(snapshot.boards);
+            self.ctx.inner.columns.extend(snapshot.columns);
+            self.ctx.inner.cards.extend(snapshot.cards);
+            self.ctx.inner.archived_cards.extend(snapshot.archived_cards);
+            self.ctx.inner.sprints.extend(snapshot.sprints);
+            self.ctx.inner.graph = snapshot.graph;
 
             self.selection.board.set(Some(first_new_index));
             self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
             // Queue snapshot for persistence
-            let save_snapshot = kanban_domain::Snapshot::from_app(self);
+            self.ctx.inner.mark_dirty();
+            let save_snapshot = self.ctx.inner.snapshot();
             self.ctx.state_manager.queue_snapshot(save_snapshot);
 
             return Ok(());
         }
 
         // Fall back to V1 format (no graph)
-        let first_new_index = self.ctx.boards.len();
+        let first_new_index = self.ctx.inner.boards.len();
         let import = BoardImporter::import_from_json(&content)?;
         let entities = BoardImporter::extract_entities(import);
 
-        self.ctx.boards.extend(entities.boards);
-        self.ctx.columns.extend(entities.columns);
-        self.ctx.cards.extend(entities.cards);
-        self.ctx.archived_cards.extend(entities.archived_cards);
-        self.ctx.sprints.extend(entities.sprints);
+        self.ctx.inner.boards.extend(entities.boards);
+        self.ctx.inner.columns.extend(entities.columns);
+        self.ctx.inner.cards.extend(entities.cards);
+        self.ctx.inner.archived_cards.extend(entities.archived_cards);
+        self.ctx.inner.sprints.extend(entities.sprints);
 
         self.selection.board.set(Some(first_new_index));
 
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
         // Queue snapshot for persistence
-        let save_snapshot = kanban_domain::Snapshot::from_app(self);
+        self.ctx.inner.mark_dirty();
+        let save_snapshot = self.ctx.inner.snapshot();
         self.ctx.state_manager.queue_snapshot(save_snapshot);
 
         Ok(())
@@ -1972,9 +1974,9 @@ impl App {
 
     fn migrate_sprint_logs(&mut self) {
         let count = kanban_domain::card_lifecycle::migrate_sprint_logs(
-            &mut self.ctx.cards,
-            &self.ctx.sprints,
-            &self.ctx.boards,
+            &mut self.ctx.inner.cards,
+            &self.ctx.inner.sprints,
+            &self.ctx.inner.boards,
         );
 
         if count > 0 {

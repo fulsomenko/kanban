@@ -178,7 +178,7 @@ impl App {
             .or(self.selection.board.get());
         if let Some(board_idx) = board_idx {
             let (sprint_number, name_index, board_id, effective_sprint_prefix) = {
-                if let Some(board) = self.ctx.boards.get_mut(board_idx) {
+                if let Some(board) = self.ctx.inner.boards.get_mut(board_idx) {
                     let effective_sprint_prefix = board
                         .sprint_prefix
                         .as_deref()
@@ -187,7 +187,7 @@ impl App {
                     // Ensure the counter for this prefix is initialized based on existing sprints
                     board.ensure_sprint_counter_initialized(
                         &effective_sprint_prefix,
-                        &self.ctx.sprints,
+                        &self.ctx.inner.sprints,
                     );
                     let sprint_number = board.get_next_sprint_number(&effective_sprint_prefix);
                     let input_text = self.input.as_str().trim();

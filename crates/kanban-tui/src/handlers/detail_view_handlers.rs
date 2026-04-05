@@ -2,9 +2,8 @@ use crate::app::{
     App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
 };
 use crate::events::EventHandler;
-use crate::state::TuiSnapshot;
 use crossterm::event::KeyCode;
-use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto, Snapshot};
+use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -225,7 +224,7 @@ impl App {
                 }
                 CardFocus::Metadata => {
                     if let Some(card_idx) = self.selection.active_card_index {
-                        if let Some(card) = self.ctx.cards.get_mut(card_idx) {
+                        if let Some(card) = self.ctx.inner.cards.get_mut(card_idx) {
                             let card_id = card.id;
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-card-{}-metadata.json", card_id));
@@ -237,8 +236,8 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit metadata: {}", e);
                             } else {
-                                self.ctx.state_manager.mark_dirty();
-                                let snapshot = Snapshot::from_app(self);
+                                self.ctx.inner.mark_dirty();
+                                let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
@@ -375,7 +374,7 @@ impl App {
                 }
                 BoardFocus::Settings => {
                     if let Some(board_idx) = self.selection.board.get() {
-                        if let Some(board) = self.ctx.boards.get_mut(board_idx) {
+                        if let Some(board) = self.ctx.inner.boards.get_mut(board_idx) {
                             let board_id = board.id;
                             let temp_file = std::env::temp_dir()
                                 .join(format!("kanban-board-{}-settings.json", board_id));
@@ -387,8 +386,8 @@ impl App {
                             ) {
                                 tracing::error!("Failed to edit board settings: {}", e);
                             } else {
-                                self.ctx.state_manager.mark_dirty();
-                                let snapshot = Snapshot::from_app(self);
+                                self.ctx.inner.mark_dirty();
+                                let snapshot = self.ctx.inner.snapshot();
                                 self.ctx.state_manager.queue_snapshot(snapshot);
                             }
                             should_restart = true;
