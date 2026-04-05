@@ -209,6 +209,58 @@ impl Command for AssignCardToSprint {
     }
 }
 
+/// Archive multiple cards in a single command (single undo entry)
+pub struct BulkArchiveCards {
+    pub ids: Vec<Uuid>,
+}
+
+impl Command for BulkArchiveCards {
+    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        for id in &self.ids {
+            let pos = context
+                .cards
+                .iter()
+                .position(|c| c.id == *id)
+                .ok_or_else(|| KanbanError::not_found("card", *id))?;
+            let card = context.cards.remove(pos);
+            let original_column_id = card.column_id;
+            let original_position = card.position;
+            let archived =
+                crate::ArchivedCard::new(card, original_column_id, original_position);
+            context.archived_cards.push(archived);
+            context.graph.cards.archive_card_edges(*id);
+        }
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        format!("Bulk archive {} cards", self.ids.len())
+    }
+}
+
+/// Move multiple cards to a target column in a single command
+pub struct BulkMoveCards {
+    pub ids: Vec<Uuid>,
+    pub column_id: Uuid,
+}
+
+impl Command for BulkMoveCards {
+    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        if !context.columns.iter().any(|c| c.id == self.column_id) {
+            return Err(KanbanError::not_found("column", self.column_id));
+        }
+        for (i, id) in self.ids.iter().enumerate() {
+            let card = context.card_mut(*id)?;
+            card.move_to_column(self.column_id, i as i32);
+        }
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        format!("Bulk move {} cards to column {}", self.ids.len(), self.column_id)
+    }
+}
+
 /// Unassign card from current sprint
 pub struct UnassignCardFromSprint {
     pub card_id: Uuid,

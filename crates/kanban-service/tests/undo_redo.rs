@@ -1,5 +1,5 @@
 use kanban_domain::commands::CreateBoard;
-use kanban_domain::{KanbanOperations, Snapshot};
+use kanban_domain::{CardUpdate, KanbanOperations, Snapshot};
 use kanban_service::KanbanContext;
 
 async fn make_ctx() -> KanbanContext {
@@ -97,7 +97,7 @@ async fn test_new_action_after_undo_clears_redo() {
 }
 
 #[tokio::test]
-async fn test_reload_clears_history() {
+async fn test_reload_no_longer_clears_history() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
     let store = kanban_service::make_store("json", path.to_str().unwrap()).unwrap();
@@ -118,7 +118,8 @@ async fn test_reload_clears_history() {
     assert!(ctx.can_undo());
 
     ctx.reload().await.unwrap();
-    assert!(!ctx.can_undo());
+    // reload no longer clears history — callers that want it call clear_history() explicitly
+    assert!(ctx.can_undo());
 }
 
 #[tokio::test]
@@ -135,4 +136,113 @@ async fn test_dirty_flag_lifecycle() {
 
     ctx.mark_clean();
     assert!(!ctx.is_dirty());
+}
+
+#[tokio::test]
+async fn test_operations_create_board_captures_history() {
+    let mut ctx = make_ctx().await;
+    ctx.create_board("B".into(), None).unwrap();
+    assert!(ctx.can_undo(), "create_board via KanbanOperations should capture history");
+}
+
+#[tokio::test]
+async fn test_operations_update_card_is_undoable() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "Original".into(), Default::default())
+        .unwrap();
+
+    ctx.update_card(
+        card.id,
+        CardUpdate {
+            title: Some("Updated".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(ctx.get_card(card.id).unwrap().unwrap().title, "Updated");
+
+    ctx.undo();
+    assert_eq!(ctx.get_card(card.id).unwrap().unwrap().title, "Original");
+}
+
+#[tokio::test]
+async fn test_bulk_archive_creates_single_undo_entry() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col.id, "Card 1".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col.id, "Card 2".into(), Default::default())
+        .unwrap();
+    let c3 = ctx
+        .create_card(board.id, col.id, "Card 3".into(), Default::default())
+        .unwrap();
+
+    // Clear history from setup operations
+    ctx.clear_history();
+
+    ctx.bulk_archive_cards(vec![c1.id, c2.id, c3.id]).unwrap();
+    assert_eq!(ctx.cards.len(), 0);
+    assert_eq!(ctx.archived_cards.len(), 3);
+
+    // Single undo should restore all 3 cards
+    assert!(ctx.undo());
+    assert_eq!(ctx.cards.len(), 3);
+    assert_eq!(ctx.archived_cards.len(), 0);
+
+    // No more undo entries (it was a single batch)
+    assert!(!ctx.can_undo());
+}
+
+#[tokio::test]
+async fn test_create_sprint_undo_restores_board_counters() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    ctx.clear_history();
+
+    let _sprint = ctx.create_sprint(board.id, None, None).unwrap();
+    assert_eq!(ctx.sprints.len(), 1);
+
+    ctx.undo();
+    assert_eq!(ctx.sprints.len(), 0);
+}
+
+#[tokio::test]
+async fn test_import_board_is_undoable() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("Export".into(), None).unwrap();
+    let _col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let json = ctx.export_board(Some(board.id)).unwrap();
+
+    // Clear and start fresh
+    ctx.clear_history();
+    let boards_before = ctx.boards.len();
+
+    ctx.import_board(&json).unwrap();
+    assert_eq!(ctx.boards.len(), boards_before + 1);
+
+    ctx.undo();
+    assert_eq!(ctx.boards.len(), boards_before);
+}
+
+#[tokio::test]
+async fn test_reload_preserves_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("board.json");
+    let store = kanban_service::make_store("json", path.to_str().unwrap()).unwrap();
+    let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
+
+    ctx.create_board("B".into(), None).unwrap();
+    ctx.save().await.unwrap();
+
+    ctx.create_board("B2".into(), None).unwrap();
+    assert!(ctx.can_undo());
+
+    ctx.reload().await.unwrap();
+    assert!(ctx.can_undo(), "reload should preserve history");
 }

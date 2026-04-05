@@ -104,7 +104,7 @@ impl KanbanContext {
         &self.app_config
     }
 
-    pub fn execute(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
+    fn execute_raw(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
         let mut ctx = CommandContext {
             boards: &mut self.boards,
             columns: &mut self.columns,
@@ -114,6 +114,13 @@ impl KanbanContext {
             graph: &mut self.graph,
         };
         command.execute(&mut ctx)
+    }
+
+    pub fn execute(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
+        self.capture_before_command();
+        self.execute_raw(command)?;
+        self.dirty = true;
+        Ok(())
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -144,7 +151,7 @@ impl KanbanContext {
 
     pub fn execute_with_history(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
         self.capture_before_command();
-        self.execute(command)?;
+        self.execute_raw(command)?;
         self.dirty = true;
         Ok(())
     }
@@ -155,7 +162,7 @@ impl KanbanContext {
     ) -> KanbanResult<()> {
         self.capture_before_command();
         for command in commands {
-            self.execute(command)?;
+            self.execute_raw(command)?;
         }
         self.dirty = true;
         Ok(())
@@ -234,7 +241,6 @@ impl KanbanContext {
             sprints: data.sprints,
             graph: data.graph,
         });
-        self.history.clear();
         Ok(())
     }
 
@@ -253,10 +259,12 @@ impl KanbanContext {
     }
 
     pub fn bulk_archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
+        use kanban_domain::commands::ArchiveCard;
+        self.capture_before_command();
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
-            match self.archive_card(id) {
+            match self.execute_raw(Box::new(ArchiveCard { card_id: id })) {
                 Ok(()) => succeeded.push(id),
                 Err(e) => failed.push(BulkOperationFailure {
                     id,
@@ -264,6 +272,7 @@ impl KanbanContext {
                 }),
             }
         }
+        self.dirty = true;
         BulkOperationResult { succeeded, failed }
     }
 
@@ -272,10 +281,21 @@ impl KanbanContext {
         ids: Vec<Uuid>,
         column_id: Uuid,
     ) -> BulkOperationResult {
+        use kanban_domain::commands::MoveCard;
+        self.capture_before_command();
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
-            match self.move_card(id, column_id, None) {
+            let position = self
+                .cards
+                .iter()
+                .filter(|c| c.column_id == column_id)
+                .count() as i32;
+            match self.execute_raw(Box::new(MoveCard {
+                card_id: id,
+                new_column_id: column_id,
+                new_position: position,
+            })) {
                 Ok(_) => succeeded.push(id),
                 Err(e) => failed.push(BulkOperationFailure {
                     id,
@@ -283,6 +303,7 @@ impl KanbanContext {
                 }),
             }
         }
+        self.dirty = true;
         BulkOperationResult { succeeded, failed }
     }
 
@@ -291,17 +312,43 @@ impl KanbanContext {
         ids: Vec<Uuid>,
         sprint_id: Uuid,
     ) -> BulkOperationResult {
+        use kanban_domain::commands::AssignCardToSprint;
+        self.capture_before_command();
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
-        for id in ids {
-            match self.assign_card_to_sprint(id, sprint_id) {
-                Ok(_) => succeeded.push(id),
-                Err(e) => failed.push(BulkOperationFailure {
+
+        let sprint_info = self.get_sprint(sprint_id).ok().flatten().and_then(|sprint| {
+            let board = self.boards.iter().find(|b| b.id == sprint.board_id)?;
+            let sprint_name = sprint.get_name(board).map(|s| s.to_string());
+            Some((sprint.sprint_number, sprint_name, format!("{:?}", sprint.status)))
+        });
+
+        if let Some((sprint_number, sprint_name, sprint_status)) = sprint_info {
+            for id in ids {
+                match self.execute_raw(Box::new(AssignCardToSprint {
+                    card_id: id,
+                    sprint_id,
+                    sprint_number,
+                    sprint_name: sprint_name.clone(),
+                    sprint_status: sprint_status.clone(),
+                })) {
+                    Ok(_) => succeeded.push(id),
+                    Err(e) => failed.push(BulkOperationFailure {
+                        id,
+                        error: e.to_string(),
+                    }),
+                }
+            }
+        } else {
+            for id in ids {
+                failed.push(BulkOperationFailure {
                     id,
-                    error: e.to_string(),
-                }),
+                    error: format!("Sprint {} not found", sprint_id),
+                });
             }
         }
+
+        self.dirty = true;
         BulkOperationResult { succeeded, failed }
     }
 }
@@ -634,22 +681,18 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        let mut count = 0;
-        for id in ids {
-            if self.archive_card(id).is_ok() {
-                count += 1;
-            }
-        }
+        use kanban_domain::commands::BulkArchiveCards;
+        let count = ids.len();
+        let cmd = BulkArchiveCards { ids };
+        self.execute(Box::new(cmd))?;
         Ok(count)
     }
 
     fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        let mut count = 0;
-        for id in ids {
-            if self.move_card(id, column_id, None).is_ok() {
-                count += 1;
-            }
-        }
+        use kanban_domain::commands::BulkMoveCards;
+        let count = ids.len();
+        let cmd = BulkMoveCards { ids, column_id };
+        self.execute(Box::new(cmd))?;
         Ok(count)
     }
 
@@ -706,6 +749,8 @@ impl KanbanOperations for KanbanContext {
     ) -> KanbanResult<Sprint> {
         use kanban_domain::commands::CreateSprint;
 
+        self.capture_before_command();
+
         let (sprint_number, name_index, effective_prefix) = {
             let board = self
                 .boards
@@ -734,7 +779,8 @@ impl KanbanOperations for KanbanContext {
             name_index,
             prefix: Some(effective_prefix),
         };
-        self.execute(Box::new(cmd))?;
+        self.execute_raw(Box::new(cmd))?;
+        self.dirty = true;
         self.sprints.last().cloned().ok_or_else(|| {
             KanbanError::Internal("Sprint creation succeeded but sprint not found".into())
         })
@@ -853,10 +899,12 @@ impl KanbanOperations for KanbanContext {
             .cloned()
             .ok_or_else(|| KanbanError::validation("No board in import data"))?;
 
+        self.capture_before_command();
         self.boards.extend(imported.boards);
         self.columns.extend(imported.columns);
         self.cards.extend(imported.cards);
         self.sprints.extend(imported.sprints);
+        self.dirty = true;
 
         Ok(board)
     }
