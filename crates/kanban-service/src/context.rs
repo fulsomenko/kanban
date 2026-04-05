@@ -147,19 +147,17 @@ impl KanbanContext {
     }
 
     /// Capture the current snapshot as a before-state for undo history.
-    /// Use this before direct mutations that bypass `execute_with_history`.
+    /// Use this before direct mutations that bypass `execute`.
     pub fn capture_before_command(&mut self) {
         self.history.capture_before_command(self.snapshot());
     }
 
-    pub fn execute_with_history(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
-        self.capture_before_command();
-        self.execute_raw(command)?;
+    pub fn record_undo_snapshot(&mut self, before: Snapshot) {
+        self.history.capture_before_command(before);
         self.dirty = true;
-        Ok(())
     }
 
-    pub fn execute_batch_with_history(
+    pub fn execute_batch(
         &mut self,
         commands: Vec<Box<dyn Command>>,
     ) -> KanbanResult<()> {

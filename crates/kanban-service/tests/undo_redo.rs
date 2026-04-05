@@ -26,13 +26,13 @@ async fn test_snapshot_roundtrip_preserves_all_fields() {
 }
 
 #[tokio::test]
-async fn test_execute_with_history_enables_undo() {
+async fn test_execute_enables_undo() {
     let mut ctx = make_ctx().await;
     let cmd = Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
     });
-    ctx.execute_with_history(cmd).unwrap();
+    ctx.execute(cmd).unwrap();
     assert!(ctx.can_undo());
 }
 
@@ -43,7 +43,7 @@ async fn test_undo_restores_previous_state() {
         name: "B".into(),
         card_prefix: None,
     });
-    ctx.execute_with_history(cmd).unwrap();
+    ctx.execute(cmd).unwrap();
     assert_eq!(ctx.boards.len(), 1);
 
     assert!(ctx.undo());
@@ -57,7 +57,7 @@ async fn test_redo_restores_undone_state() {
         name: "B".into(),
         card_prefix: None,
     });
-    ctx.execute_with_history(cmd).unwrap();
+    ctx.execute(cmd).unwrap();
     ctx.undo();
     assert!(ctx.boards.is_empty());
 
@@ -75,7 +75,7 @@ async fn test_undo_on_empty_returns_false() {
 #[tokio::test]
 async fn test_new_action_after_undo_clears_redo() {
     let mut ctx = make_ctx().await;
-    ctx.execute_with_history(Box::new(CreateBoard {
+    ctx.execute(Box::new(CreateBoard {
         name: "A".into(),
         card_prefix: None,
     }))
@@ -83,7 +83,7 @@ async fn test_new_action_after_undo_clears_redo() {
     ctx.undo();
     assert!(ctx.can_redo());
 
-    ctx.execute_with_history(Box::new(CreateBoard {
+    ctx.execute(Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
     }))
@@ -98,14 +98,14 @@ async fn test_reload_no_longer_clears_history() {
     let store = kanban_service::make_store("json", path.to_str().unwrap()).unwrap();
     let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
 
-    ctx.execute_with_history(Box::new(CreateBoard {
+    ctx.execute(Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
     }))
     .unwrap();
     ctx.save().await.unwrap();
 
-    ctx.execute_with_history(Box::new(CreateBoard {
+    ctx.execute(Box::new(CreateBoard {
         name: "B2".into(),
         card_prefix: None,
     }))
@@ -122,7 +122,7 @@ async fn test_dirty_flag_lifecycle() {
     let mut ctx = make_ctx().await;
     assert!(!ctx.is_dirty());
 
-    ctx.execute_with_history(Box::new(CreateBoard {
+    ctx.execute(Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
     }))
@@ -255,4 +255,26 @@ async fn test_reload_preserves_history() {
 
     ctx.reload().await.unwrap();
     assert!(ctx.can_undo(), "reload should preserve history");
+}
+
+#[tokio::test]
+async fn test_record_undo_snapshot_enables_undo() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("Original".into(), None).unwrap();
+    ctx.clear_history();
+
+    let before = ctx.snapshot();
+    ctx.boards
+        .iter_mut()
+        .find(|b| b.id == board.id)
+        .unwrap()
+        .update_name("Mutated".into());
+    ctx.record_undo_snapshot(before);
+
+    assert_eq!(ctx.boards[0].name, "Mutated");
+    assert!(ctx.is_dirty());
+    assert!(ctx.can_undo());
+
+    ctx.undo();
+    assert_eq!(ctx.boards[0].name, "Original");
 }
