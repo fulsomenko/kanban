@@ -137,6 +137,56 @@ pub struct ImportEntities {
 
 impl Command for ImportEntities {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        use std::collections::HashSet;
+
+        let existing_board_ids: HashSet<Uuid> = context.boards.iter().map(|b| b.id).collect();
+        let existing_column_ids: HashSet<Uuid> = context.columns.iter().map(|c| c.id).collect();
+        let existing_card_ids: HashSet<Uuid> = context.cards.iter().map(|c| c.id).collect();
+        let existing_sprint_ids: HashSet<Uuid> = context.sprints.iter().map(|s| s.id).collect();
+        let existing_archived_ids: HashSet<Uuid> =
+            context.archived_cards.iter().map(|ac| ac.card.id).collect();
+
+        for b in &self.boards {
+            if existing_board_ids.contains(&b.id) {
+                return Err(crate::KanbanError::validation(format!(
+                    "Duplicate board ID: {}",
+                    b.id
+                )));
+            }
+        }
+        for c in &self.columns {
+            if existing_column_ids.contains(&c.id) {
+                return Err(crate::KanbanError::validation(format!(
+                    "Duplicate column ID: {}",
+                    c.id
+                )));
+            }
+        }
+        for c in &self.cards {
+            if existing_card_ids.contains(&c.id) {
+                return Err(crate::KanbanError::validation(format!(
+                    "Duplicate card ID: {}",
+                    c.id
+                )));
+            }
+        }
+        for ac in &self.archived_cards {
+            if existing_archived_ids.contains(&ac.card.id) {
+                return Err(crate::KanbanError::validation(format!(
+                    "Duplicate archived card ID: {}",
+                    ac.card.id
+                )));
+            }
+        }
+        for s in &self.sprints {
+            if existing_sprint_ids.contains(&s.id) {
+                return Err(crate::KanbanError::validation(format!(
+                    "Duplicate sprint ID: {}",
+                    s.id
+                )));
+            }
+        }
+
         context.boards.extend(self.boards.clone());
         context.columns.extend(self.columns.clone());
         context.cards.extend(self.cards.clone());
@@ -193,6 +243,59 @@ mod tests {
         };
         let result = cmd.execute(&mut context);
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_import_entities_with_duplicate_board_id_returns_error() {
+        let mut tc = TestContext::new();
+        let b1 = Board::new("B1".to_string(), None);
+        let dup_id = b1.id;
+        tc.boards.push(b1);
+
+        let mut dup = Board::new("Dup".to_string(), None);
+        dup.id = dup_id;
+
+        let cmd = ImportEntities {
+            boards: vec![dup],
+            columns: vec![],
+            cards: vec![],
+            archived_cards: vec![],
+            sprints: vec![],
+            graph: None,
+        };
+        let mut context = tc.as_command_context();
+        let result = cmd.execute(&mut context);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_validation());
+    }
+
+    #[test]
+    fn test_import_entities_with_duplicate_card_id_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0, "TST");
+        let dup_card_id = card.id;
+        tc.boards.push(board.clone());
+        tc.columns.push(col);
+        tc.cards.push(card);
+
+        let mut dup_card =
+            crate::Card::new(&mut board, Uuid::new_v4(), "Dup".to_string(), 0, "TST");
+        dup_card.id = dup_card_id;
+
+        let cmd = ImportEntities {
+            boards: vec![],
+            columns: vec![],
+            cards: vec![dup_card],
+            archived_cards: vec![],
+            sprints: vec![],
+            graph: None,
+        };
+        let mut context = tc.as_command_context();
+        let result = cmd.execute(&mut context);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_validation());
     }
 
     #[test]

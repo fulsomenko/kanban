@@ -59,8 +59,12 @@ pub struct CreateSprint {
 
 impl Command for CreateSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        // Read sprints snapshot before mutable borrow of board
-        let sprints_snapshot: Vec<_> = context.sprints.clone();
+        let sprints_snapshot: Vec<_> = context
+            .sprints
+            .iter()
+            .filter(|s| s.board_id == self.board_id)
+            .cloned()
+            .collect();
 
         let board = context.board_mut(self.board_id)?;
         let effective_prefix = self

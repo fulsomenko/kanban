@@ -191,8 +191,10 @@ pub struct ArchiveCards {
 
 impl Command for ArchiveCards {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        use std::collections::HashSet;
+        let id_set: HashSet<Uuid> = self.ids.iter().copied().collect();
         // Validate all IDs exist before mutating
-        for id in &self.ids {
+        for id in &id_set {
             if !context.cards.iter().any(|c| c.id == *id) {
                 return Err(KanbanError::not_found("card", *id));
             }
@@ -222,18 +224,26 @@ pub struct MoveCards {
 
 impl Command for MoveCards {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        use std::collections::HashSet;
+
         if !context.columns.iter().any(|c| c.id == self.column_id) {
             return Err(KanbanError::not_found("column", self.column_id));
         }
+        let id_set: HashSet<Uuid> = self.ids.iter().copied().collect();
         // Validate all card IDs exist before mutating
-        for id in &self.ids {
+        for id in &id_set {
             if !context.cards.iter().any(|c| c.id == *id) {
                 return Err(KanbanError::not_found("card", *id));
             }
         }
+        let base = context
+            .cards
+            .iter()
+            .filter(|c| c.column_id == self.column_id && !id_set.contains(&c.id))
+            .count();
         for (i, id) in self.ids.iter().enumerate() {
             let card = context.card_mut(*id)?;
-            card.move_to_column(self.column_id, i as i32);
+            card.move_to_column(self.column_id, (base + i) as i32);
         }
         Ok(())
     }
@@ -270,9 +280,13 @@ impl Command for AssignCardsToSprint {
         let sprint_status = format!("{:?}", sprint.status);
 
         // Validate all card IDs exist before mutating
-        for id in &self.ids {
-            if !context.cards.iter().any(|c| c.id == *id) {
-                return Err(KanbanError::not_found("card", *id));
+        {
+            use std::collections::HashSet;
+            let id_set: HashSet<Uuid> = self.ids.iter().copied().collect();
+            for id in &id_set {
+                if !context.cards.iter().any(|c| c.id == *id) {
+                    return Err(KanbanError::not_found("card", *id));
+                }
             }
         }
 
@@ -572,6 +586,77 @@ mod tests {
         };
         let result = cmd.execute(&mut context);
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_move_cards_with_existing_cards_appends_after_last_position() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let col1 = crate::Column::new(board.id, "From".to_string(), 0);
+        let col2 = crate::Column::new(board.id, "To".to_string(), 1);
+        let col1_id = col1.id;
+        let col2_id = col2.id;
+
+        let existing1 = crate::Card::new(&mut board, col2_id, "Existing1".to_string(), 0, "TST");
+        let existing2 = crate::Card::new(&mut board, col2_id, "Existing2".to_string(), 1, "TST");
+        let move1 = crate::Card::new(&mut board, col1_id, "Move1".to_string(), 0, "TST");
+        let move2 = crate::Card::new(&mut board, col1_id, "Move2".to_string(), 1, "TST");
+        let move1_id = move1.id;
+        let move2_id = move2.id;
+
+        tc.boards.push(board);
+        tc.columns.push(col1);
+        tc.columns.push(col2);
+        tc.cards.push(existing1);
+        tc.cards.push(existing2);
+        tc.cards.push(move1);
+        tc.cards.push(move2);
+
+        let cmd = MoveCards {
+            ids: vec![move1_id, move2_id],
+            column_id: col2_id,
+        };
+        let mut context = tc.as_command_context();
+        cmd.execute(&mut context).unwrap();
+
+        let m1 = context.cards.iter().find(|c| c.id == move1_id).unwrap();
+        let m2 = context.cards.iter().find(|c| c.id == move2_id).unwrap();
+        assert_eq!(m1.position, 2, "first moved card should be at position 2");
+        assert_eq!(m2.position, 3, "second moved card should be at position 3");
+    }
+
+    #[test]
+    fn test_move_cards_within_same_column_reindexes() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let col_id = col.id;
+
+        let card1 = crate::Card::new(&mut board, col_id, "C1".to_string(), 0, "TST");
+        let card2 = crate::Card::new(&mut board, col_id, "C2".to_string(), 1, "TST");
+        let card3 = crate::Card::new(&mut board, col_id, "C3".to_string(), 2, "TST");
+        let c1_id = card1.id;
+        let c3_id = card3.id;
+
+        tc.boards.push(board);
+        tc.columns.push(col);
+        tc.cards.push(card1);
+        tc.cards.push(card2);
+        tc.cards.push(card3);
+
+        // Move cards 1 and 3 within the same column — card2 stays
+        let cmd = MoveCards {
+            ids: vec![c1_id, c3_id],
+            column_id: col_id,
+        };
+        let mut context = tc.as_command_context();
+        cmd.execute(&mut context).unwrap();
+
+        // card2 is the only non-moved card in the column, so base = 1
+        let c1 = context.cards.iter().find(|c| c.id == c1_id).unwrap();
+        let c3 = context.cards.iter().find(|c| c.id == c3_id).unwrap();
+        assert_eq!(c1.position, 1, "first moved card should be at base(1) + 0");
+        assert_eq!(c3.position, 2, "second moved card should be at base(1) + 1");
     }
 
     #[test]
