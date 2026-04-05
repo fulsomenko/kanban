@@ -14,9 +14,9 @@ fn test_export_single_board() {
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
 
-    app.ctx.boards.push(board.clone());
-    app.ctx.columns.push(column.clone());
-    app.ctx.cards.push(card.clone());
+    app.ctx.inner.boards.push(board.clone());
+    app.ctx.inner.columns.push(column.clone());
+    app.ctx.inner.cards.push(card.clone());
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
@@ -49,12 +49,12 @@ fn test_export_all_boards() {
     let column2 = Column::new(board2.id, "Todo".to_string(), 0);
     let card2 = Card::new(&mut board2, column2.id, "Task 2".to_string(), 0, "task");
 
-    app.ctx.boards.push(board1);
-    app.ctx.boards.push(board2);
-    app.ctx.columns.push(column1);
-    app.ctx.columns.push(column2);
-    app.ctx.cards.push(card1);
-    app.ctx.cards.push(card2);
+    app.ctx.inner.boards.push(board1);
+    app.ctx.inner.boards.push(board2);
+    app.ctx.inner.columns.push(column1);
+    app.ctx.inner.columns.push(column2);
+    app.ctx.inner.cards.push(card1);
+    app.ctx.inner.cards.push(card2);
     app.input.set(file_path.to_str().unwrap().to_string());
 
     app.export_all_boards_with_filename().unwrap();
@@ -164,8 +164,8 @@ fn test_auto_save() {
 
     let board = Board::new("Auto Save Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    app.ctx.boards.push(board);
-    app.ctx.columns.push(column);
+    app.ctx.inner.boards.push(board);
+    app.ctx.inner.columns.push(column);
 
     app.auto_save().unwrap();
 
@@ -250,10 +250,10 @@ fn test_export_import_sprint_and_card_prefixes() {
     let mut sprint = Sprint::new(board.id, 1, None, None);
     sprint.update_card_prefix(Some("hotfix".to_string()));
 
-    app.ctx.boards.push(board.clone());
-    app.ctx.columns.push(column);
-    app.ctx.cards.push(card);
-    app.ctx.sprints.push(sprint.clone());
+    app.ctx.inner.boards.push(board.clone());
+    app.ctx.inner.columns.push(column);
+    app.ctx.inner.cards.push(card);
+    app.ctx.inner.sprints.push(sprint.clone());
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
