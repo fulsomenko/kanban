@@ -37,8 +37,8 @@ async fn test_file_arg_new_file_defaults_to_json() {
 async fn test_migrate_json_to_sqlite_creates_file() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = helpers::setup_app_with_json_file(dir.path()).await;
-    assert_eq!(app.ctx.boards.len(), 1);
-    assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
+    assert_eq!(app.ctx.boards().len(), 1);
+    assert_eq!(app.ctx.boards()[0].name, "OriginalBoard");
 
     let old_config = app.app_config.clone();
     let old_storage_location = app.app_config.effective_storage_location();
@@ -48,8 +48,8 @@ async fn test_migrate_json_to_sqlite_creates_file() {
     app.apply_storage_location_change(old_config, &old_storage_location);
     app.await_migration().await;
     assert!(sqlite_path.exists(), "SQLite file should be created");
-    assert_eq!(app.ctx.boards.len(), 1);
-    assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
+    assert_eq!(app.ctx.boards().len(), 1);
+    assert_eq!(app.ctx.boards()[0].name, "OriginalBoard");
     assert_eq!(
         app.persistence.save_file.as_deref(),
         Some(sqlite_path.to_str().unwrap())
@@ -60,7 +60,7 @@ async fn test_migrate_json_to_sqlite_creates_file() {
 async fn test_switch_to_existing_sqlite_reloads_data() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = helpers::setup_app_with_json_file(dir.path()).await;
-    assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
+    assert_eq!(app.ctx.boards()[0].name, "OriginalBoard");
 
     let sqlite_path =
         helpers::create_test_sqlite_file(dir.path(), "other.db", &["SqliteBoard"]).await;
@@ -71,8 +71,8 @@ async fn test_switch_to_existing_sqlite_reloads_data() {
 
     app.apply_storage_location_change(old_config, &old_storage_location);
     app.await_migration().await;
-    assert_eq!(app.ctx.boards.len(), 1);
-    assert_eq!(app.ctx.boards[0].name, "SqliteBoard");
+    assert_eq!(app.ctx.boards().len(), 1);
+    assert_eq!(app.ctx.boards()[0].name, "SqliteBoard");
     assert_eq!(
         app.persistence.save_file.as_deref(),
         Some(sqlite_path.as_str())
@@ -83,7 +83,7 @@ async fn test_switch_to_existing_sqlite_reloads_data() {
 async fn test_switch_to_existing_json_reloads_data() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = helpers::setup_app_with_json_file(dir.path()).await;
-    assert_eq!(app.ctx.boards[0].name, "OriginalBoard");
+    assert_eq!(app.ctx.boards()[0].name, "OriginalBoard");
 
     let second_json =
         helpers::create_test_json_file(dir.path(), "other.json", &["SecondBoard"]).await;
@@ -94,8 +94,8 @@ async fn test_switch_to_existing_json_reloads_data() {
 
     app.apply_storage_location_change(old_config, &old_storage_location);
     app.await_migration().await;
-    assert_eq!(app.ctx.boards.len(), 1);
-    assert_eq!(app.ctx.boards[0].name, "SecondBoard");
+    assert_eq!(app.ctx.boards().len(), 1);
+    assert_eq!(app.ctx.boards()[0].name, "SecondBoard");
     assert_eq!(
         app.persistence.save_file.as_deref(),
         Some(second_json.as_str())
