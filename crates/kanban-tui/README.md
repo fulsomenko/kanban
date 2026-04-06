@@ -1,196 +1,321 @@
 # kanban-tui
 
-Terminal user interface for the kanban project management tool. A keyboard-driven, vim-inspired interface for managing your projects.
+Terminal UI for the kanban workspace, built with [ratatui](https://ratatui.rs) and crossterm. Depends on `kanban-service` for all state management and persistence.
 
-## Installation
+## Module Structure
 
-### From crates.io
-
-```bash
-cargo install kanban-cli
-kanban
+```
+src/
+├── app/            # Application state, AppMode, event dispatch
+├── components/     # Reusable UI widgets (panels, lists, popups)
+├── handlers/       # Keyboard event handlers per mode
+├── keybindings/    # Keybinding definitions and context registry
+├── ui/             # Ratatui rendering for each view
+└── lib.rs          # Public API: run()
 ```
 
-### From Source
+## Application State
 
-```bash
-git clone https://github.com/fulsomenko/kanban
-cd kanban
-cargo install --path crates/kanban-cli
+### `App`
+
+The root application state struct:
+
+```rust
+pub struct App {
+    pub mode: AppMode,
+    pub mode_stack: Vec<AppMode>,
+    pub focus: FocusState,
+    // boards, columns, cards, sprints, ... all via KanbanContext
+}
 ```
 
-## Quick Start
+### `AppMode`
 
-```bash
-kanban                    # Launch the app
-kanban myboard.json       # Load a board from file
+```rust
+pub enum AppMode {
+    Normal,
+    CardDetail,
+    BoardDetail,
+    SprintDetail,
+    Search,
+    ArchivedCardsView,
+    Settings,
+    Help(Box<AppMode>),     // wraps the previous mode for help overlay
+    Dialog(DialogMode),
+}
 ```
 
-**First time?**
-1. Press `n` to create a new board
-2. Press `Enter` to activate it
-3. Add cards with `n` and organize them
-4. Press `?` to see all available shortcuts
+### `DialogMode`
 
-## Keyboard Shortcuts
+All 26 dialog variants:
 
-> **Tip:** Press `?` at any time to view context-aware help.
+| Variant | Description |
+|---------|-------------|
+| `CreateBoard` | Text input: new board name |
+| `CreateCard` | Text input: new card title |
+| `CreateSprint` | Text input: new sprint name |
+| `CreateColumn` | Text input: new column name |
+| `RenameBoard` | Text input: rename board |
+| `RenameColumn` | Text input: rename column |
+| `ExportBoard` | Text input: export file path |
+| `ExportAll` | Text input: export all boards path |
+| `ExportBoards` | Selection: choose boards to export |
+| `ImportBoard` | Selection: choose file to import |
+| `SetCardPoints` | Text input: story points |
+| `SetCardPriority` | Selection: priority level |
+| `SetMultipleCardsPriority` | Selection: priority (bulk) |
+| `SetBranchPrefix` | Text input: branch prefix |
+| `SetSprintPrefix` | Text input: sprint prefix |
+| `SetSprintCardPrefix` | Text input: sprint card prefix |
+| `OrderCards` | Selection: sort field |
+| `AssignCardToSprint` | Selection: sprint |
+| `AssignMultipleCardsToSprint` | Selection: sprint (bulk) |
+| `SelectTaskListView` | Selection: view mode |
+| `DeleteColumnConfirm` | Confirm: delete column |
+| `ConfirmSprintPrefixCollision` | Confirm: prefix conflict |
+| `FilterOptions` | Checkboxes: filter options |
+| `ConflictResolution` | Confirm: keep local or reload |
+| `ExternalChangeDetected` | Confirm: external file change |
+| `ManageParents` | Selection: set parent cards |
+| `ManageChildren` | Selection: set child cards |
+| `CarryOverSprint` | Selection: target sprint for carry-over |
 
-### Navigation
+---
+
+## Focus System
+
+```rust
+pub struct FocusState {
+    pub active: Focus,         // Which top-level panel is active
+    pub card_focus: CardFocus, // Which panel in CardDetail is active
+    pub board_focus: BoardFocus, // Which panel in BoardDetail is active
+    pub settings_focus: SettingsFocus,
+}
+
+pub enum Focus {
+    Boards,
+    Cards,
+}
+
+pub enum CardFocus {
+    Title,
+    Metadata,
+    Description,
+    Parents,
+    Children,
+}
+
+pub enum BoardFocus {
+    Name,
+    Description,
+    Settings,
+    Sprints,
+    Columns,
+}
+```
+
+Focus is switched via number keys (`1`–`5`) or `h`/`l`.
+
+---
+
+## View Strategies
+
+Three card list view modes, toggled with `V`:
+
+| Mode | Description |
+|------|-------------|
+| **Flat** | All cards in a single flat list with metadata columns |
+| **Grouped by Column** | Cards grouped under column headers |
+| **Kanban Board** | Classic multi-column side-by-side layout |
+
+The active mode is persisted per-session and defaults to Flat.
+
+---
+
+## Event Loop
+
+```
+crossterm event
+       │
+       ▼
+  App::handle_key(KeyEvent)
+       │
+       ├─ dispatch to handler for current AppMode
+       │    e.g. handle_normal_mode / handle_card_detail_key / handle_dialog / ...
+       │
+       ├─ state mutation (App fields + KanbanContext)
+       │
+       └─ mark dirty → auto-save via KanbanContext::save()
+
+  ratatui render tick
+       │
+       └─ ui::draw(frame, &app)
+            └─ render each panel based on app.mode and app.focus
+```
+
+---
+
+## Key Bindings
+
+### Normal Mode — Boards Panel
 
 | Key | Action |
 |-----|--------|
-| `j` / `↓` | Navigate down |
-| `k` / `↑` | Navigate up |
-| `h` / `←` | Previous column |
-| `l` / `→` | Next column |
-| `1` | Switch to Boards panel |
-| `2` | Switch to Tasks panel |
-| `q` | Quit application |
-
-### Board Management
-
-| Key | Action |
-|-----|--------|
-| `n` | Create new board |
+| `j`/`↓` | Navigate down |
+| `k`/`↑` | Navigate up |
+| `gg` / `G` | Jump to top / bottom |
+| `Enter`/`Space` | Open board detail |
+| `n` | New board |
 | `r` | Rename board |
-| `e` | Edit board settings |
-| `Enter` | View board detail |
+| `e` | Edit board |
+| `x` / `X` | Export board / Export all |
+| `i` | Import board |
+| `u` / `U` | Undo / Redo |
+| `S` | Settings |
+| `1`/`2` | Focus panels |
+| `q` | Quit |
+| `?` | Help |
 
-### Card Management
-
-| Key | Action |
-|-----|--------|
-| `n` | Create new card |
-| `e` | Edit card details |
-| `r` | Rename card |
-| `d` | Archive card |
-| `D` | View archived cards |
-| `c` | Toggle completion (Todo ↔ Done) |
-| `p` | Change priority |
-| `H` / `L` | Move card left/right between columns |
-| `m` | Move card to specific column |
-| `Enter` | View card detail |
-
-### Multi-Select & Bulk Operations
+### Normal Mode — Cards Panel
 
 | Key | Action |
 |-----|--------|
-| `v` | Toggle selection mode (vim-style visual select) |
-| `j` / `k` | Auto-select cards while navigating in selection mode |
-| `Ctrl+a` | Select all cards in current view |
-| `Esc` | Clear selections and exit selection mode |
-| `P` | Set priority on all selected cards |
-| `H` / `L` | Move all selected cards left/right |
-| `c` | Toggle completion on all selected cards |
-| `d` | Archive all selected cards |
-| `V` | Toggle view mode (Flat/Grouped/Kanban) |
+| `j`/`↓`, `k`/`↑` | Navigate down/up |
+| `gg` / `G` | Jump to top/bottom |
+| `{` / `}` | Half-page up/down |
+| `h`/`l` | Previous/next column |
+| `H`/`L` | Move card left/right |
+| `Enter`/`Space` | Open card detail |
+| `n` | New card |
+| `e` | Edit card |
+| `c` | Toggle done |
+| `p` | Set priority |
+| `d` | Archive card(s) |
+| `D` | Archived cards view |
+| `v` | Toggle card selection |
+| `Ctrl+a` | Select all visible |
+| `Esc` | Clear selection |
+| `P` | Set priority (bulk) |
+| `a` | Assign to sprint |
+| `o` / `O` | Sort / toggle sort order |
+| `t` / `T` | Filter sprint / filter options |
+| `/` | Search |
+| `s` | Manage child cards |
+| `V` | Toggle view mode |
+| `u` / `U` | Undo / Redo |
+| `q` | Quit |
+| `?` | Help |
 
-### Search & Filter
-
-| Key | Action |
-|-----|--------|
-| `/` | Search cards |
-| `f` | Filter by status, priority, or sprint |
-| `Esc` | Clear search/filter |
-
-### Sprint Management
-
-| Key | Action |
-|-----|--------|
-| `s` | Open sprint management |
-| `a` | Assign card to sprint |
-| `t` | Toggle sprint filter |
-
-### Undo / Redo
-
-| Key | Action |
-|-----|--------|
-| `u` | Undo last action |
-| `U` | Redo last undone action |
-
-### Sorting
+### Card Detail View
 
 | Key | Action |
 |-----|--------|
-| `o` | Sort by field (Points, Priority, Date, Status, Position) |
-| `O` | Toggle sort order (Ascending/Descending) |
+| `1`–`5` | Focus panel (Title/Metadata/Description/Parents/Children) |
+| `e` | Edit current panel |
+| `r` / `R` | Manage parents / children |
+| `y` | Copy git branch name |
+| `Y` | Copy git checkout command |
+| `a` | Assign to sprint |
+| `d` | Delete card |
+| `u` / `U` | Undo / Redo |
+| `q`/`Esc` | Back |
+| `?` | Help |
 
-### Clipboard & Git Integration
-
-| Key | Action |
-|-----|--------|
-| `y` | Copy branch name to clipboard |
-| `Y` | Copy full git checkout command |
-
-### Import/Export
-
-| Key | Action |
-|-----|--------|
-| `x` | Export current board to JSON |
-| `X` | Export all boards |
-| `i` | Import board from JSON |
-
-### Detail View
+### Board Detail View
 
 | Key | Action |
 |-----|--------|
-| `j` / `k` | Navigate between sections (and within parent/child lists) |
-| `1` / `2` / `3` | Switch tabs (Title/Metadata/Description) |
-| `e` | Edit in external editor |
-| `Esc` | Return to previous view |
+| `1`–`5` | Focus panel (Name/Description/Settings/Sprints/Columns) |
+| `e` | Edit current panel |
+| `p` | Set branch prefix |
+| `n` | New sprint (Sprints) / New column (Columns) |
+| `r` | Rename column (Columns) |
+| `d` | Delete column (Columns) |
+| `J`/`K` | Reorder column up/down |
+| `Enter`/`Space` | Open sprint detail (Sprints) |
+| `u` / `U` | Undo / Redo |
+| `q`/`Esc` | Back |
 
-## Features
+### Sprint Detail View
 
-### Multiple View Modes
+| Key | Action |
+|-----|--------|
+| `h`/`l` | Switch panels |
+| `j`/`k` | Navigate |
+| `a` | Activate sprint |
+| `c` | Complete sprint |
+| `p` / `C` | Set sprint/card prefix |
+| `o` / `O` | Sort / toggle order |
+| `v` | Select |
+| `u` / `U` | Undo / Redo |
+| `q`/`Esc` | Back |
 
-Switch between views with `V`:
-- **Flat List**: All cards in a simple list
-- **Grouped by Column**: Cards organized under columns
-- **Kanban Board**: Classic columnar layout
+### Archived Cards View
 
-### Search
+| Key | Action |
+|-----|--------|
+| `j`/`k` | Navigate |
+| `gg`/`G` | Jump to top/bottom |
+| `{`/`}` | Half-page up/down |
+| `r` | Restore card(s) |
+| `x` | Delete permanently |
+| `v` | Select |
+| `V` | Toggle view mode |
+| `u` / `U` | Undo / Redo |
+| `q`/`Esc` | Back |
 
-Press `/` to search:
-- Searches card titles and descriptions
-- Results highlighted in green
-- Real-time, non-blocking search
+---
 
-### Filtering
+## External Editor Integration
 
-Press `f` to filter by:
-- Status: Todo, In Progress, Blocked, Done
-- Priority: Low, Medium, High, Critical
-- Sprint assignment
+Descriptions are edited in an external editor:
 
-Filters are composable (all conditions combined).
+1. Detect editor: `$EDITOR` → `nvim` → `vim` → `nano` → `vi`
+2. Write current description to a temp file
+3. Spawn editor as a subprocess; wait for it to exit
+4. Read modified content from the temp file
+5. Update card description in `KanbanContext`
 
-### External Editor Integration
+---
 
-Edit long-form text (descriptions, notes) in your preferred editor:
-1. Respects `$EDITOR` environment variable
-2. Auto-detects: nvim → vim → nano → vi
-3. Full markdown support
+## Clipboard
 
-### Clipboard Support
+- `y` in card detail or card list: copies the git branch name (`KAN-42/fix-login-bug`)
+- `Y` in card detail: copies the full `git checkout -b KAN-42/fix-login-bug` command
 
-Copy branch names formatted for git:
-- `y` → `feature-1/card-title`
-- `Y` → `git checkout -b feature-1/card-title`
+On Linux, clipboard content requires a clipboard manager to persist after the app exits (Wayland: `wl-clip-persist`; X11: usually built into the DE).
 
-### Card Animations
+---
 
-Smooth 150ms animations for:
-- Card archival
-- Card restoration
-- Permanent deletion
+## Markdown Renderer
 
-### Story Points
+Card descriptions are rendered with basic markdown formatting in the description panel: `**bold**`, `*italic*`, `` `code` ``, `- lists`, `# headings`.
 
-Assign 1-5 point estimates with color-coded display:
-- Visual indicators for sprint planning
-- Point totals per column/sprint
+---
 
-## License
+## Components
 
-Apache 2.0 - See [LICENSE.md](../../LICENSE.md) for details
+| Component | Description |
+|-----------|-------------|
+| `panel` | Generic bordered panel with title and focus indicator |
+| `list` | Scrollable list with selection highlight |
+| `card_list_item` | Single card row with priority/status/points indicators |
+| `detail_view` | Multi-panel layout for Card/Board/Sprint detail views |
+| `help_popup` | Context-sensitive keybinding overlay |
+| `conflict_popup` | Conflict resolution dialog |
+| `relationship_popup` | Parent/child card selection |
+| `filter_popup` | Filter options checklist |
+| `footer` | Bottom bar with context hints |
+| `banner` | Top status bar with board name and mode |
+
+---
+
+## Dependencies
+
+| Crate | Purpose |
+|-------|---------|
+| `kanban-service` | `KanbanContext` and all domain operations |
+| `ratatui` | Terminal rendering |
+| `crossterm` | Terminal input/output |
+| `tokio` | Async runtime |
+| `arboard` | Clipboard access |
