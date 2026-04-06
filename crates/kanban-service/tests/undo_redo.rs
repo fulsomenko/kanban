@@ -569,6 +569,14 @@ async fn test_import_entities_is_undoable() {
 }
 
 #[tokio::test]
+async fn test_archive_card_not_found_returns_error() {
+    let mut ctx = make_ctx().await;
+    let result = ctx.archive_card(uuid::Uuid::new_v4());
+    assert!(result.is_err());
+    assert!(result.unwrap_err().is_not_found());
+}
+
+#[tokio::test]
 async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
