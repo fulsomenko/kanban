@@ -620,7 +620,10 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        self.archive_cards(vec![id])?;
+        let count = self.archive_cards(vec![id])?;
+        if count == 0 {
+            return Err(KanbanError::not_found("card", id));
+        }
         Ok(())
     }
 
