@@ -1690,6 +1690,7 @@ impl App {
                                                     match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                                                         Ok(data) => {
                                                             data.apply_to_app(self);
+                                                            self.ctx.clear_history();
                                                             self.ctx.clear_conflict();
                                                             self.refresh_view();
                                                             tracing::info!("Reloaded state from disk");
@@ -1920,6 +1921,7 @@ impl App {
                 match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                     Ok(data) => {
                         data.apply_to_app(self);
+                        self.ctx.clear_history();
                         self.ctx.mark_clean();
                         self.ctx.clear_conflict();
                         self.refresh_view();
