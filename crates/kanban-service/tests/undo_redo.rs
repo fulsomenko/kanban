@@ -645,6 +645,160 @@ async fn test_detailed_archive_partial_success_is_undoable() {
 }
 
 #[tokio::test]
+async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col_a = ctx.create_column(board.id, "A".into(), None).unwrap();
+    let col_b = ctx.create_column(board.id, "B".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col_a.id, "Card 1".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col_a.id, "Card 2".into(), Default::default())
+        .unwrap();
+    ctx.clear_history();
+    ctx.mark_clean();
+
+    let result = ctx.move_cards_detailed(vec![c1.id, c2.id], col_b.id);
+    assert_eq!(result.succeeded.len(), 2);
+    assert!(result.failed.is_empty());
+    assert!(ctx.is_dirty());
+    assert!(ctx.cards().iter().all(|c| c.column_id == col_b.id));
+
+    assert!(ctx.undo());
+    assert!(ctx.cards().iter().all(|c| c.column_id == col_a.id));
+    assert!(
+        !ctx.can_undo(),
+        "should be a single undo entry for the whole batch"
+    );
+}
+
+#[tokio::test]
+async fn test_move_cards_detailed_all_fail_does_not_set_dirty() {
+    let mut ctx = make_ctx().await;
+    ctx.mark_clean();
+    let result = ctx.move_cards_detailed(
+        vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
+        uuid::Uuid::new_v4(),
+    );
+    assert!(result.succeeded.is_empty());
+    assert_eq!(result.failed.len(), 2);
+    assert!(
+        !ctx.is_dirty(),
+        "dirty flag should not be set when all ops fail"
+    );
+    assert!(
+        !ctx.can_undo(),
+        "undo stack should be clean when all ops fail"
+    );
+}
+
+#[tokio::test]
+async fn test_move_cards_detailed_partial_success_is_undoable() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col_a = ctx.create_column(board.id, "A".into(), None).unwrap();
+    let col_b = ctx.create_column(board.id, "B".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col_a.id, "Card".into(), Default::default())
+        .unwrap();
+    ctx.clear_history();
+    ctx.mark_clean();
+
+    let result = ctx.move_cards_detailed(vec![card.id, uuid::Uuid::new_v4()], col_b.id);
+    assert_eq!(result.succeeded.len(), 1);
+    assert_eq!(result.failed.len(), 1);
+    assert!(ctx.is_dirty());
+    assert_eq!(ctx.cards().first().unwrap().column_id, col_b.id);
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.cards().first().unwrap().column_id, col_a.id);
+}
+
+#[tokio::test]
+async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entry() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col.id, "Card 1".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col.id, "Card 2".into(), Default::default())
+        .unwrap();
+    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
+    ctx.clear_history();
+    ctx.mark_clean();
+
+    let result = ctx.assign_cards_to_sprint_detailed(vec![c1.id, c2.id], sprint.id);
+    assert_eq!(result.succeeded.len(), 2);
+    assert!(result.failed.is_empty());
+    assert!(ctx.is_dirty());
+    assert_eq!(
+        ctx.get_card(c1.id).unwrap().unwrap().sprint_id,
+        Some(sprint.id)
+    );
+    assert_eq!(
+        ctx.get_card(c2.id).unwrap().unwrap().sprint_id,
+        Some(sprint.id)
+    );
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.get_card(c1.id).unwrap().unwrap().sprint_id, None);
+    assert_eq!(ctx.get_card(c2.id).unwrap().unwrap().sprint_id, None);
+    assert!(
+        !ctx.can_undo(),
+        "should be a single undo entry for the whole batch"
+    );
+}
+
+#[tokio::test]
+async fn test_assign_cards_to_sprint_detailed_all_fail_does_not_set_dirty() {
+    let mut ctx = make_ctx().await;
+    ctx.mark_clean();
+    let result = ctx.assign_cards_to_sprint_detailed(
+        vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
+        uuid::Uuid::new_v4(),
+    );
+    assert!(result.succeeded.is_empty());
+    assert_eq!(result.failed.len(), 2);
+    assert!(
+        !ctx.is_dirty(),
+        "dirty flag should not be set when all ops fail"
+    );
+    assert!(
+        !ctx.can_undo(),
+        "undo stack should be clean when all ops fail"
+    );
+}
+
+#[tokio::test]
+async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "Card".into(), Default::default())
+        .unwrap();
+    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
+    ctx.clear_history();
+    ctx.mark_clean();
+
+    let result =
+        ctx.assign_cards_to_sprint_detailed(vec![card.id, uuid::Uuid::new_v4()], sprint.id);
+    assert_eq!(result.succeeded.len(), 1);
+    assert_eq!(result.failed.len(), 1);
+    assert!(ctx.is_dirty());
+    assert_eq!(
+        ctx.get_card(card.id).unwrap().unwrap().sprint_id,
+        Some(sprint.id)
+    );
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.get_card(card.id).unwrap().unwrap().sprint_id, None);
+}
+
+#[tokio::test]
 async fn test_compact_column_positions_is_undoable() {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
