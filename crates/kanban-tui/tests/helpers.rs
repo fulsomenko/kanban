@@ -82,7 +82,6 @@ pub fn setup_app_with_export_dialog(board_count: usize) -> App {
     app.push_mode(AppMode::Settings);
     for i in 0..board_count {
         app.ctx
-            .inner_mut()
             .create_board(format!("Board{}", i + 1), None)
             .unwrap();
     }

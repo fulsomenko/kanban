@@ -161,7 +161,7 @@ impl TuiContext {
         self.inner.graph()
     }
 
-    #[doc(hidden)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn inner_mut(&mut self) -> &mut KanbanContext {
         &mut self.inner
     }

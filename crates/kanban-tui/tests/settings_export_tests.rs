@@ -121,7 +121,6 @@ fn test_render_export_boards_select_step_shows_board_names() {
 
     let (mut app, _rx) = App::new(None).unwrap();
     app.ctx
-        .inner_mut()
         .create_board("MyTestBoard".into(), None)
         .unwrap();
     app.export_dialog = Some(ExportDialogState::new(1));
@@ -156,7 +155,6 @@ fn test_render_export_boards_options_step_shows_filename() {
 
     let (mut app, _rx) = App::new(None).unwrap();
     app.ctx
-        .inner_mut()
         .create_board("Board1".into(), None)
         .unwrap();
     let mut dialog = ExportDialogState::new(1);
@@ -200,11 +198,9 @@ fn test_export_boards_json_creates_file() {
 
     let board = app
         .ctx
-        .inner_mut()
         .create_board("ExportTest".into(), None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .create_column(board.id, "Todo".into(), None)
         .unwrap();
 

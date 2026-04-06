@@ -60,11 +60,9 @@ fn test_render_filter_popup_with_sprint_shows_sprint_name() {
     use kanban_domain::KanbanOperations;
     let board = app
         .ctx
-        .inner_mut()
         .create_board("Test Board".to_string(), None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .create_sprint(board.id, None, Some("Sprint".to_string()))
         .unwrap();
     app.selection.active_board_index = Some(0);

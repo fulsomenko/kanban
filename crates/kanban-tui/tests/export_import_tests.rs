@@ -12,16 +12,13 @@ fn test_export_single_board() {
 
     let board = app
         .ctx
-        .inner_mut()
         .create_board("Test Board".to_string(), None)
         .unwrap();
     let column = app
         .ctx
-        .inner_mut()
         .create_column(board.id, "Todo".to_string(), None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .create_card(
             board.id,
             column.id,
@@ -55,16 +52,13 @@ fn test_export_all_boards() {
 
     let board1 = app
         .ctx
-        .inner_mut()
         .create_board("Board 1".to_string(), None)
         .unwrap();
     let column1 = app
         .ctx
-        .inner_mut()
         .create_column(board1.id, "Todo".to_string(), None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .create_card(
             board1.id,
             column1.id,
@@ -75,16 +69,13 @@ fn test_export_all_boards() {
 
     let board2 = app
         .ctx
-        .inner_mut()
         .create_board("Board 2".to_string(), None)
         .unwrap();
     let column2 = app
         .ctx
-        .inner_mut()
         .create_column(board2.id, "Todo".to_string(), None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .create_card(
             board2.id,
             column2.id,
@@ -202,11 +193,9 @@ fn test_auto_save() {
 
     let board = app
         .ctx
-        .inner_mut()
         .create_board("Auto Save Board".to_string(), None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .create_column(board.id, "Todo".to_string(), None)
         .unwrap();
 
@@ -285,11 +274,9 @@ fn test_export_import_sprint_and_card_prefixes() {
     use kanban_domain::{BoardUpdate, FieldUpdate, SprintUpdate};
     let board = app
         .ctx
-        .inner_mut()
         .create_board("Prefix Board".to_string(), None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .update_board(
             board.id,
             BoardUpdate {
@@ -302,11 +289,9 @@ fn test_export_import_sprint_and_card_prefixes() {
 
     let column = app
         .ctx
-        .inner_mut()
         .create_column(board.id, "Todo".to_string(), None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .create_card(
             board.id,
             column.id,
@@ -318,11 +303,9 @@ fn test_export_import_sprint_and_card_prefixes() {
     // Create sprint with card_prefix override
     let sprint = app
         .ctx
-        .inner_mut()
         .create_sprint(board.id, None, None)
         .unwrap();
     app.ctx
-        .inner_mut()
         .update_sprint(
             sprint.id,
             SprintUpdate {
