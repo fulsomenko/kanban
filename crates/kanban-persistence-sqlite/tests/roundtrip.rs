@@ -1,7 +1,7 @@
+use kanban_domain::Snapshot;
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 use kanban_persistence_sqlite::SqliteStore;
 use kanban_service::test_helpers::helpers::fully_populated_snapshot;
-use kanban_service::DataSnapshot;
 use tempfile::TempDir;
 
 #[tokio::test]
@@ -21,7 +21,7 @@ async fn full_roundtrip_preserves_all_fields() {
         .unwrap();
 
     let (loaded_snap, _) = store.load().await.unwrap();
-    let loaded: DataSnapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
+    let loaded: Snapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
 
     assert_eq!(original, loaded);
 }

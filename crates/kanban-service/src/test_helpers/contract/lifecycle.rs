@@ -1,11 +1,12 @@
 use super::super::helpers::fully_populated_snapshot;
 use super::super::StoreFactory;
-use crate::{DataSnapshot, KanbanContext};
+use crate::KanbanContext;
 use kanban_core::{Edge, EdgeDirection};
 use kanban_domain::board::{SortField, SortOrder};
 use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::sprint::SprintStatus;
 use kanban_domain::task_list_view::TaskListView;
+use kanban_domain::Snapshot;
 use kanban_domain::{
     BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
     KanbanOperations,
@@ -395,7 +396,7 @@ pub async fn test_full_roundtrip_preserves_all_fields(factory: &StoreFactory) {
         .unwrap();
 
     let (loaded_snap, _) = store.load().await.unwrap();
-    let loaded: DataSnapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
+    let loaded: Snapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
 
     assert_eq!(original, loaded);
 }

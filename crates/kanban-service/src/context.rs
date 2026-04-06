@@ -7,7 +7,7 @@ use kanban_domain::{
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -21,22 +21,6 @@ pub struct BatchOperationResult {
 pub struct BatchOperationFailure {
     pub id: Uuid,
     pub error: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DataSnapshot {
-    #[serde(default)]
-    pub boards: Vec<Board>,
-    #[serde(default)]
-    pub columns: Vec<Column>,
-    #[serde(default)]
-    pub cards: Vec<Card>,
-    #[serde(default)]
-    pub archived_cards: Vec<ArchivedCard>,
-    #[serde(default)]
-    pub sprints: Vec<Sprint>,
-    #[serde(default)]
-    pub graph: DependencyGraph,
 }
 
 pub struct KanbanContext {
@@ -63,7 +47,7 @@ impl KanbanContext {
         }
 
         let (snapshot, _metadata) = store.load().await?;
-        let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
+        let data: Snapshot = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         Ok(Self {
@@ -296,16 +280,9 @@ impl KanbanContext {
             return Ok(());
         }
         let (snapshot, _metadata) = self.store.load().await?;
-        let data: DataSnapshot = serde_json::from_slice(&snapshot.data)
+        let data: Snapshot = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        self.apply_snapshot(Snapshot {
-            boards: data.boards,
-            columns: data.columns,
-            cards: data.cards,
-            archived_cards: data.archived_cards,
-            sprints: data.sprints,
-            graph: data.graph,
-        });
+        self.apply_snapshot(data);
         Ok(())
     }
 
@@ -948,7 +925,7 @@ impl KanbanOperations for KanbanContext {
                 .filter(|s| s.board_id == id)
                 .cloned()
                 .collect();
-            DataSnapshot {
+            Snapshot {
                 boards,
                 columns,
                 cards,
@@ -957,7 +934,7 @@ impl KanbanOperations for KanbanContext {
                 graph: self.graph.clone(),
             }
         } else {
-            DataSnapshot {
+            Snapshot {
                 boards: self.boards.clone(),
                 columns: self.columns.clone(),
                 cards: self.cards.clone(),
@@ -974,7 +951,7 @@ impl KanbanOperations for KanbanContext {
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
         use kanban_domain::commands::ImportEntities;
 
-        let imported: DataSnapshot = serde_json::from_str(data)
+        let imported: Snapshot = serde_json::from_str(data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         let board = imported
