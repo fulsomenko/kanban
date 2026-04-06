@@ -62,7 +62,11 @@ pub async fn test_sprint_log_with_name_roundtrip(factory: &StoreFactory) {
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
 
-    let b = ctx.boards.iter_mut().find(|b| b.id == board.id).unwrap();
+    let b = ctx
+        .boards_mut()
+        .iter_mut()
+        .find(|b| b.id == board.id)
+        .unwrap();
     b.sprint_names = vec!["Alpha".into(), "Beta".into()];
 
     let sprint = ctx

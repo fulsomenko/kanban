@@ -85,7 +85,11 @@ pub async fn test_board_sprint_names_roundtrip(factory: &StoreFactory) {
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
 
-    let b = ctx.boards.iter_mut().find(|b| b.id == board.id).unwrap();
+    let b = ctx
+        .boards_mut()
+        .iter_mut()
+        .find(|b| b.id == board.id)
+        .unwrap();
     b.sprint_names = vec!["Alpha".into(), "Beta".into(), "Gamma".into()];
     b.sprint_name_used_count = 1;
 
@@ -109,7 +113,11 @@ pub async fn test_board_prefix_counters_roundtrip(factory: &StoreFactory) {
         .create_board("Board".into(), Some("PFX".into()))
         .unwrap();
 
-    let b = ctx.boards.iter_mut().find(|b| b.id == board.id).unwrap();
+    let b = ctx
+        .boards_mut()
+        .iter_mut()
+        .find(|b| b.id == board.id)
+        .unwrap();
     b.prefix_counters.insert("PFX".into(), 10);
     b.prefix_counters.insert("OTHER".into(), 5);
     b.sprint_counters.insert("SP".into(), 3);
@@ -135,7 +143,11 @@ pub async fn test_board_next_sprint_number_roundtrip(factory: &StoreFactory) {
 
     let board = ctx.create_board("Board".into(), None).unwrap();
 
-    let b = ctx.boards.iter_mut().find(|b| b.id == board.id).unwrap();
+    let b = ctx
+        .boards_mut()
+        .iter_mut()
+        .find(|b| b.id == board.id)
+        .unwrap();
     b.next_sprint_number = 42;
 
     ctx.save().await.unwrap();

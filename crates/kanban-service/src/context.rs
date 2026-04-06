@@ -40,12 +40,12 @@ pub struct DataSnapshot {
 }
 
 pub struct KanbanContext {
-    pub boards: Vec<Board>,
-    pub columns: Vec<Column>,
-    pub cards: Vec<Card>,
-    pub sprints: Vec<Sprint>,
-    pub archived_cards: Vec<ArchivedCard>,
-    pub graph: DependencyGraph,
+    boards: Vec<Board>,
+    columns: Vec<Column>,
+    cards: Vec<Card>,
+    sprints: Vec<Sprint>,
+    archived_cards: Vec<ArchivedCard>,
+    graph: DependencyGraph,
     app_config: AppConfig,
     store: Arc<dyn PersistenceStore + Send + Sync>,
     history: HistoryManager,
@@ -107,6 +107,60 @@ impl KanbanContext {
         &self.app_config
     }
 
+    pub fn boards(&self) -> &[Board] {
+        &self.boards
+    }
+
+    pub fn columns(&self) -> &[Column] {
+        &self.columns
+    }
+
+    pub fn cards(&self) -> &[Card] {
+        &self.cards
+    }
+
+    pub fn sprints(&self) -> &[Sprint] {
+        &self.sprints
+    }
+
+    pub fn archived_cards(&self) -> &[ArchivedCard] {
+        &self.archived_cards
+    }
+
+    pub fn graph(&self) -> &DependencyGraph {
+        &self.graph
+    }
+
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn boards_mut(&mut self) -> &mut Vec<Board> {
+        &mut self.boards
+    }
+
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn columns_mut(&mut self) -> &mut Vec<Column> {
+        &mut self.columns
+    }
+
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn cards_mut(&mut self) -> &mut Vec<Card> {
+        &mut self.cards
+    }
+
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn sprints_mut(&mut self) -> &mut Vec<Sprint> {
+        &mut self.sprints
+    }
+
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn archived_cards_mut(&mut self) -> &mut Vec<ArchivedCard> {
+        &mut self.archived_cards
+    }
+
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn graph_mut(&mut self) -> &mut DependencyGraph {
+        &mut self.graph
+    }
+
     fn execute_raw(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
         let mut ctx = CommandContext {
             boards: &mut self.boards,
@@ -150,18 +204,13 @@ impl KanbanContext {
         self.history.capture_before_command(self.snapshot());
     }
 
-    pub fn push_before_snapshot(&mut self, before: Snapshot) {
-        self.history.capture_before_command(before);
-        self.dirty = true;
-    }
-
     pub fn execute_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
-        let before = self.snapshot();
         self.capture_before_command();
         for command in commands {
             if let Err(e) = self.execute_raw(command) {
-                self.apply_snapshot(before);
-                let _ = self.history.pop_undo();
+                if let Some(before) = self.history.pop_undo() {
+                    self.apply_snapshot(before);
+                }
                 return Err(e);
             }
         }
@@ -170,33 +219,31 @@ impl KanbanContext {
     }
 
     pub fn undo(&mut self) -> bool {
-        if !self.history.can_undo() {
-            return false;
-        }
-        self.history.suppress();
-        let current = self.snapshot();
-        self.history.push_redo(current);
         if let Some(snapshot) = self.history.pop_undo() {
+            self.history.suppress();
+            let current = self.snapshot();
+            self.history.push_redo(current);
             self.apply_snapshot(snapshot);
             self.dirty = true;
+            self.history.unsuppress();
+            true
+        } else {
+            false
         }
-        self.history.unsuppress();
-        true
     }
 
     pub fn redo(&mut self) -> bool {
-        if !self.history.can_redo() {
-            return false;
-        }
-        self.history.suppress();
-        let current = self.snapshot();
-        self.history.push_undo(current);
         if let Some(snapshot) = self.history.pop_redo() {
+            self.history.suppress();
+            let current = self.snapshot();
+            self.history.push_undo(current);
             self.apply_snapshot(snapshot);
             self.dirty = true;
+            self.history.unsuppress();
+            true
+        } else {
+            false
         }
-        self.history.unsuppress();
-        true
     }
 
     pub fn can_undo(&self) -> bool {
@@ -209,6 +256,14 @@ impl KanbanContext {
 
     pub fn clear_history(&mut self) {
         self.history.clear();
+    }
+
+    pub fn undo_depth(&self) -> usize {
+        self.history.undo_depth()
+    }
+
+    pub fn redo_depth(&self) -> usize {
+        self.history.redo_depth()
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -334,19 +389,44 @@ impl KanbanContext {
         ids: Vec<Uuid>,
         sprint_id: Uuid,
     ) -> BatchOperationResult {
-        use kanban_domain::commands::AssignCardsToSprint;
+        use kanban_domain::commands::AssignCardToSprint;
         self.capture_before_command();
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
 
-        for id in ids {
-            match self.execute_raw(Box::new(AssignCardsToSprint {
-                ids: vec![id],
+        let sprint_info = self.sprints.iter().find(|s| s.id == sprint_id).map(|s| {
+            let sprint_name = self
+                .boards
+                .iter()
+                .find(|b| b.id == s.board_id)
+                .and_then(|b| s.get_name(b).map(|n| n.to_string()));
+            (s.sprint_number, sprint_name, format!("{:?}", s.status))
+        });
+
+        let (sprint_number, sprint_name, sprint_status) = match sprint_info {
+            Some(info) => info,
+            None => {
+                for id in ids {
+                    failed.push(BatchOperationFailure {
+                        id,
+                        error: KanbanError::not_found("sprint", sprint_id).to_string(),
+                    });
+                }
+                return BatchOperationResult { succeeded, failed };
+            }
+        };
+
+        for card_id in ids {
+            match self.execute_raw(Box::new(AssignCardToSprint {
+                card_id,
                 sprint_id,
+                sprint_number,
+                sprint_name: sprint_name.clone(),
+                sprint_status: sprint_status.clone(),
             })) {
-                Ok(_) => succeeded.push(id),
+                Ok(_) => succeeded.push(card_id),
                 Err(e) => failed.push(BatchOperationFailure {
-                    id,
+                    id: card_id,
                     error: e.to_string(),
                 }),
             }
@@ -694,22 +774,34 @@ impl KanbanOperations for KanbanContext {
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::MoveCards;
-        let valid_count = ids
+        let before = self
+            .cards
             .iter()
-            .filter(|&&id| self.cards.iter().any(|c| c.id == id))
+            .filter(|c| c.column_id == column_id)
             .count();
         self.execute(Box::new(MoveCards { ids, column_id }))?;
-        Ok(valid_count)
+        let after = self
+            .cards
+            .iter()
+            .filter(|c| c.column_id == column_id)
+            .count();
+        Ok(after - before)
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::AssignCardsToSprint;
-        let valid_count = ids
+        let before = self
+            .cards
             .iter()
-            .filter(|&&id| self.cards.iter().any(|c| c.id == id))
+            .filter(|c| c.sprint_id == Some(sprint_id))
             .count();
         self.execute(Box::new(AssignCardsToSprint { ids, sprint_id }))?;
-        Ok(valid_count)
+        let after = self
+            .cards
+            .iter()
+            .filter(|c| c.sprint_id == Some(sprint_id))
+            .count();
+        Ok(after - before)
     }
 
     fn carry_over_sprint_cards(
