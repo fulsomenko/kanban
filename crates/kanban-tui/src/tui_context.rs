@@ -57,7 +57,7 @@ impl TuiContext {
     }
 
     pub fn execute_commands_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
-        self.inner.execute_batch(commands)?;
+        self.inner.execute(commands)?;
         let snapshot = self.inner.snapshot();
         self.save_coordinator.queue_snapshot(snapshot);
         Ok(())

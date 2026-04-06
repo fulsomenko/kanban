@@ -1,4 +1,4 @@
-use kanban_domain::commands::{CompactColumnPositions, CreateBoard, ImportEntities, UpdateBoard};
+use kanban_domain::commands::{Command, CompactColumnPositions, CreateBoard, ImportEntities, UpdateBoard};
 use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, Snapshot};
 use kanban_persistence::NullStore;
 use kanban_service::KanbanContext;
@@ -32,22 +32,22 @@ async fn test_snapshot_roundtrip_preserves_all_fields() {
 #[tokio::test]
 async fn test_execute_enables_undo() {
     let mut ctx = make_ctx().await;
-    let cmd = Box::new(CreateBoard {
+    let cmd: Box<dyn Command> = Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
     });
-    ctx.execute(cmd).unwrap();
+    ctx.execute(vec![cmd]).unwrap();
     assert!(ctx.can_undo());
 }
 
 #[tokio::test]
 async fn test_undo_restores_previous_state() {
     let mut ctx = make_ctx().await;
-    let cmd = Box::new(CreateBoard {
+    let cmd: Box<dyn Command> = Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
     });
-    ctx.execute(cmd).unwrap();
+    ctx.execute(vec![cmd]).unwrap();
     assert_eq!(ctx.boards().len(), 1);
 
     assert!(ctx.undo());
@@ -57,11 +57,11 @@ async fn test_undo_restores_previous_state() {
 #[tokio::test]
 async fn test_redo_restores_undone_state() {
     let mut ctx = make_ctx().await;
-    let cmd = Box::new(CreateBoard {
+    let cmd: Box<dyn Command> = Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
     });
-    ctx.execute(cmd).unwrap();
+    ctx.execute(vec![cmd]).unwrap();
     ctx.undo();
     assert!(ctx.boards().is_empty());
 
@@ -79,18 +79,18 @@ async fn test_undo_on_empty_returns_false() {
 #[tokio::test]
 async fn test_new_action_after_undo_clears_redo() {
     let mut ctx = make_ctx().await;
-    ctx.execute(Box::new(CreateBoard {
+    ctx.execute(vec![Box::new(CreateBoard {
         name: "A".into(),
         card_prefix: None,
-    }))
+    }) as Box<dyn Command>])
     .unwrap();
     ctx.undo();
     assert!(ctx.can_redo());
 
-    ctx.execute(Box::new(CreateBoard {
+    ctx.execute(vec![Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
-    }))
+    }) as Box<dyn Command>])
     .unwrap();
     assert!(!ctx.can_redo());
 }
@@ -102,17 +102,17 @@ async fn test_reload_no_longer_clears_history() {
     let store = kanban_service::make_store("json", path.to_str().unwrap()).unwrap();
     let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
 
-    ctx.execute(Box::new(CreateBoard {
+    ctx.execute(vec![Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
-    }))
+    }) as Box<dyn Command>])
     .unwrap();
     ctx.save().await.unwrap();
 
-    ctx.execute(Box::new(CreateBoard {
+    ctx.execute(vec![Box::new(CreateBoard {
         name: "B2".into(),
         card_prefix: None,
-    }))
+    }) as Box<dyn Command>])
     .unwrap();
     assert!(ctx.can_undo());
 
@@ -126,10 +126,10 @@ async fn test_dirty_flag_lifecycle() {
     let mut ctx = make_ctx().await;
     assert!(!ctx.is_dirty());
 
-    ctx.execute(Box::new(CreateBoard {
+    ctx.execute(vec![Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
-    }))
+    }) as Box<dyn Command>])
     .unwrap();
     assert!(ctx.is_dirty());
 
@@ -289,17 +289,17 @@ async fn test_reload_preserves_history() {
 #[tokio::test]
 async fn test_undo_pops_before_pushing_to_redo() {
     let mut ctx = make_ctx().await;
-    ctx.execute(Box::new(CreateBoard {
+    ctx.execute(vec![Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
-    }))
+    }) as Box<dyn Command>])
     .unwrap();
     ctx.clear_history();
 
-    ctx.execute(Box::new(CreateBoard {
+    ctx.execute(vec![Box::new(CreateBoard {
         name: "B2".into(),
         card_prefix: None,
-    }))
+    }) as Box<dyn Command>])
     .unwrap();
 
     assert!(ctx.undo());
@@ -310,10 +310,10 @@ async fn test_undo_pops_before_pushing_to_redo() {
 #[tokio::test]
 async fn test_redo_pops_before_pushing_to_undo() {
     let mut ctx = make_ctx().await;
-    ctx.execute(Box::new(CreateBoard {
+    ctx.execute(vec![Box::new(CreateBoard {
         name: "B".into(),
         card_prefix: None,
-    }))
+    }) as Box<dyn Command>])
     .unwrap();
     ctx.undo();
 
@@ -349,7 +349,7 @@ async fn test_execute_batch_partial_failure_rollback_leaves_clean_undo_stack() {
             },
         }),
     ];
-    assert!(ctx.execute_batch(batch).is_err());
+    assert!(ctx.execute(batch).is_err());
     assert_eq!(ctx.boards().len(), 1);
     assert!(!ctx.can_undo(), "undo stack should be empty after rollback");
 }
@@ -507,7 +507,7 @@ async fn test_execute_batch_partial_failure_rolls_back() {
             },
         }),
     ];
-    let result = ctx.execute_batch(batch);
+    let result = ctx.execute(batch);
     assert!(result.is_err());
 
     // Rolled back: B2 should not exist
@@ -534,7 +534,7 @@ async fn test_execute_batch_success_is_undoable() {
             card_prefix: None,
         }),
     ];
-    ctx.execute_batch(batch).unwrap();
+    ctx.execute(batch).unwrap();
     assert_eq!(ctx.boards().len(), 3);
 
     assert!(ctx.undo());
@@ -550,15 +550,15 @@ async fn test_import_entities_is_undoable() {
 
     let b2 = kanban_domain::Board::new("B2".to_string(), None);
     let col = kanban_domain::Column::new(b2.id, "Todo".to_string(), 0);
-    let cmd = ImportEntities {
+    let cmd: Box<dyn Command> = Box::new(ImportEntities {
         boards: vec![b2],
         columns: vec![col],
         cards: vec![],
         archived_cards: vec![],
         sprints: vec![],
         graph: None,
-    };
-    ctx.execute(Box::new(cmd)).unwrap();
+    });
+    ctx.execute(vec![cmd]).unwrap();
     assert_eq!(ctx.boards().len(), 2);
 
     assert!(ctx.undo());
@@ -576,6 +576,10 @@ async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
     assert!(
         !ctx.is_dirty(),
         "dirty flag should not be set when all ops fail"
+    );
+    assert!(
+        !ctx.can_undo(),
+        "undo stack should be clean when all ops fail"
     );
 }
 
@@ -632,8 +636,8 @@ async fn test_compact_column_positions_is_undoable() {
     .unwrap();
     ctx.clear_history();
 
-    let cmd = CompactColumnPositions { column_id: col.id };
-    ctx.execute(Box::new(cmd)).unwrap();
+    let cmd: Box<dyn Command> = Box::new(CompactColumnPositions { column_id: col.id });
+    ctx.execute(vec![cmd]).unwrap();
     assert_eq!(
         ctx.cards().iter().find(|c| c.id == c1.id).unwrap().position,
         0
