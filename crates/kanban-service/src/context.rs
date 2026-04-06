@@ -177,12 +177,8 @@ impl KanbanContext {
         self.graph = snapshot.graph;
     }
 
-    fn capture_before_command(&mut self) {
-        self.history.capture_before_command(self.snapshot());
-    }
-
     pub fn execute(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
-        self.capture_before_command();
+        self.history.capture_before_command(self.snapshot());
         for command in commands {
             if let Err(e) = self.execute_raw(command) {
                 if let Some(before) = self.history.pop_undo() {
@@ -342,32 +338,47 @@ impl KanbanContext {
     }
 
     pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
-        use kanban_domain::commands::MoveCard;
-        self.capture_before_command();
-        let mut succeeded = Vec::new();
+        use kanban_domain::commands::MoveCards;
+        let card_ids: std::collections::HashSet<Uuid> = self.cards.iter().map(|c| c.id).collect();
+        let mut to_move = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
-            let position = self
-                .cards
-                .iter()
-                .filter(|c| c.column_id == column_id)
-                .count() as i32;
-            match self.execute_raw(Box::new(MoveCard {
-                card_id: id,
-                new_column_id: column_id,
-                new_position: position,
-            })) {
-                Ok(_) => succeeded.push(id),
-                Err(e) => failed.push(BatchOperationFailure {
+            if card_ids.contains(&id) {
+                to_move.push(id);
+            } else {
+                failed.push(BatchOperationFailure {
                     id,
-                    error: e.to_string(),
-                }),
+                    error: KanbanError::not_found("card", id).to_string(),
+                });
             }
         }
-        if !succeeded.is_empty() {
-            self.dirty = true;
+        if to_move.is_empty() {
+            return BatchOperationResult {
+                succeeded: vec![],
+                failed,
+            };
         }
-        BatchOperationResult { succeeded, failed }
+        let succeeded = to_move.clone();
+        match self.execute(vec![
+            Box::new(MoveCards {
+                ids: to_move,
+                column_id,
+            }) as Box<dyn Command>
+        ]) {
+            Ok(()) => BatchOperationResult { succeeded, failed },
+            Err(e) => {
+                let err = e.to_string();
+                let mut all_failed = failed;
+                all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                    id,
+                    error: err.clone(),
+                }));
+                BatchOperationResult {
+                    succeeded: vec![],
+                    failed: all_failed,
+                }
+            }
+        }
     }
 
     pub fn assign_cards_to_sprint_detailed(
@@ -375,53 +386,59 @@ impl KanbanContext {
         ids: Vec<Uuid>,
         sprint_id: Uuid,
     ) -> BatchOperationResult {
-        use kanban_domain::commands::AssignCardToSprint;
-        self.capture_before_command();
-        let mut succeeded = Vec::new();
-        let mut failed = Vec::new();
-
-        let sprint_info = self.sprints.iter().find(|s| s.id == sprint_id).map(|s| {
-            let sprint_name = self
-                .boards
-                .iter()
-                .find(|b| b.id == s.board_id)
-                .and_then(|b| s.get_name(b).map(|n| n.to_string()));
-            (s.sprint_number, sprint_name, format!("{:?}", s.status))
-        });
-
-        let (sprint_number, sprint_name, sprint_status) = match sprint_info {
-            Some(info) => info,
-            None => {
-                for id in ids {
-                    failed.push(BatchOperationFailure {
+        use kanban_domain::commands::AssignCardsToSprint;
+        if !self.sprints.iter().any(|s| s.id == sprint_id) {
+            return BatchOperationResult {
+                succeeded: vec![],
+                failed: ids
+                    .into_iter()
+                    .map(|id| BatchOperationFailure {
                         id,
                         error: KanbanError::not_found("sprint", sprint_id).to_string(),
-                    });
-                }
-                return BatchOperationResult { succeeded, failed };
+                    })
+                    .collect(),
+            };
+        }
+        let card_ids: std::collections::HashSet<Uuid> = self.cards.iter().map(|c| c.id).collect();
+        let mut to_assign = Vec::new();
+        let mut failed = Vec::new();
+        for id in ids {
+            if card_ids.contains(&id) {
+                to_assign.push(id);
+            } else {
+                failed.push(BatchOperationFailure {
+                    id,
+                    error: KanbanError::not_found("card", id).to_string(),
+                });
             }
-        };
-
-        for card_id in ids {
-            match self.execute_raw(Box::new(AssignCardToSprint {
-                card_id,
+        }
+        if to_assign.is_empty() {
+            return BatchOperationResult {
+                succeeded: vec![],
+                failed,
+            };
+        }
+        let succeeded = to_assign.clone();
+        match self.execute(vec![
+            Box::new(AssignCardsToSprint {
+                ids: to_assign,
                 sprint_id,
-                sprint_number,
-                sprint_name: sprint_name.clone(),
-                sprint_status: sprint_status.clone(),
-            })) {
-                Ok(_) => succeeded.push(card_id),
-                Err(e) => failed.push(BatchOperationFailure {
-                    id: card_id,
-                    error: e.to_string(),
-                }),
+            }) as Box<dyn Command>
+        ]) {
+            Ok(()) => BatchOperationResult { succeeded, failed },
+            Err(e) => {
+                let err = e.to_string();
+                let mut all_failed = failed;
+                all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                    id,
+                    error: err.clone(),
+                }));
+                BatchOperationResult {
+                    succeeded: vec![],
+                    failed: all_failed,
+                }
             }
         }
-
-        if !succeeded.is_empty() {
-            self.dirty = true;
-        }
-        BatchOperationResult { succeeded, failed }
     }
 }
 
@@ -682,22 +699,10 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
-        use kanban_domain::commands::AssignCardToSprint;
-        let sprint = self
-            .get_sprint(sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", sprint_id))?;
-        let board = self
-            .boards
-            .iter()
-            .find(|b| b.id == sprint.board_id)
-            .ok_or_else(|| KanbanError::not_found("board", sprint.board_id))?;
-        let sprint_name = sprint.get_name(board).map(|s| s.to_string());
-        let cmd = AssignCardToSprint {
-            card_id,
+        use kanban_domain::commands::AssignCardsToSprint;
+        let cmd = AssignCardsToSprint {
+            ids: vec![card_id],
             sprint_id,
-            sprint_number: sprint.sprint_number,
-            sprint_name,
-            sprint_status: format!("{:?}", sprint.status),
         };
         self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
         self.get_card(card_id)?
