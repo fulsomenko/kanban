@@ -1,89 +1,112 @@
 # kanban-persistence-sqlite
 
-SQLite storage backend for the kanban project management tool. Implements `StoreFactory` from `kanban-persistence`.
+SQLite storage backend for the kanban workspace. Implements `StoreFactory` and `PersistenceStore` from `kanban-persistence`.
 
-## Installation
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite" }
-```
-
-## Overview
-
-Provides `SqliteStore` (implements `PersistenceStore`) and `SqliteStoreFactory` (implements `StoreFactory`) for persisting kanban data in a SQLite database. The database file is auto-created on first use.
-
-## Matching Patterns
-
-- `*.sqlite`
-- `*.sqlite3`
-- `*.db`
-
-## API Reference
-
-### `SqliteStoreFactory`
+## `SqliteStore`
 
 ```rust
-use kanban_persistence_sqlite::SqliteStoreFactory;
+pub struct SqliteStore {
+    path: String,
+    instance_id: String,
+    // connection pool (lazily initialized)
+}
 
-let factory = SqliteStoreFactory;
-assert!(factory.matches_locator("board.sqlite"));
-assert!(factory.matches_locator("project.sqlite3"));
-assert!(factory.matches_locator("board.db"));
-assert!(!factory.matches_locator("board.json"));
+impl SqliteStore {
+    pub fn new(path: &str) -> Self;
+    pub fn with_instance_id(path: &str, instance_id: &str) -> Self;
+}
 ```
 
-### `SqliteStore`
+The connection pool is initialized lazily on the first operation. The database file is created automatically on first use.
 
-```rust
-use kanban_persistence_sqlite::SqliteStore;
-use kanban_persistence::PersistenceStore;
+---
 
-let store = SqliteStore::new("board.sqlite");
-let (snapshot, metadata) = store.load().await?;
-store.save(snapshot).await?;
-```
+## Connection Pool Configuration
 
-## Schema Overview
+| Setting | Value |
+|---------|-------|
+| Max connections | 2 |
+| Journal mode | WAL (Write-Ahead Logging) |
+| Foreign keys | Enforced (`PRAGMA foreign_keys = ON`) |
 
-The database uses 14 tables (schema version 1):
+---
+
+## Schema
+
+The schema consists of 14 tables:
 
 | Table | Description |
 |-------|-------------|
-| `metadata` | Singleton row: instance_id, saved_at, schema_version |
-| `boards` | Board definitions with sort and prefix settings |
-| `board_sprint_names` | Position-indexed sprint names per board |
-| `board_prefix_counters` | Card number counters per prefix |
-| `board_sprint_counters` | Sprint counters per prefix |
-| `columns` | Columns with board FK, position, WIP limit |
-| `sprints` | Sprint lifecycle with status, dates, prefix |
-| `sprint_logs` | Historical sprint records (no FK for persistence after deletion) |
-| `cards` | Cards with column FK, sprint FK, full metadata |
-| `archived_cards` | Archived card metadata with original position |
-| `card_edges` | Dependency graph edges (bulk-replace strategy) |
+| `metadata` | Store metadata (version, instance_id, save_count) |
+| `boards` | Board records |
+| `board_card_counters` | Per-prefix card number counters |
+| `board_sprint_names` | Sprint name pool per board |
+| `columns` | Column records |
+| `cards` | Active card records |
+| `card_sprint_logs` | Sprint assignment history per card |
+| `archived_cards` | Archived card records |
+| `sprints` | Sprint records |
+| `dependency_edges` | Card dependency graph edges |
+| `tags` | Tag definitions (reserved for future use) |
+| `card_tags` | Card–tag associations (reserved for future use) |
+| `schema_version` | Schema migration tracking |
 
-## Configuration
+All foreign key relationships are enforced. `boards` → `columns` → `cards` cascade on delete.
 
-- **WAL mode**: Enabled for concurrent read/write performance
-- **Foreign keys**: Enforced (`PRAGMA foreign_keys = ON`)
-- **Connection pool**: Max 2 connections
-- **Auto-create**: Database file created on first access if it doesn't exist
+---
+
+## Save Flow
+
+1. Begin a write transaction
+2. Upsert all tables (boards, columns, cards, archived_cards, sprints, sprint_logs, dependency_edges, metadata)
+3. Delete rows no longer present in the snapshot
+4. Commit
+
+All operations occur within a single transaction; a failure at any point rolls back completely.
+
+---
+
+## Load Flow
+
+1. Begin a read transaction
+2. Read all tables in join order
+3. Reconstruct `kanban_domain::Snapshot` from relational rows
+4. Return snapshot + metadata
+
+---
 
 ## Schema Versioning
 
-The `metadata` table tracks `schema_version` (currently `1`). Future schema changes will use numbered migrations applied on startup.
+The `schema_version` table records the current schema version (`v1`). A migration skeleton is in place for future schema upgrades.
+
+---
+
+## `SqliteStoreFactory`
+
+```rust
+pub struct SqliteStoreFactory;
+
+impl StoreFactory for SqliteStoreFactory {
+    fn name(&self) -> &str { "sqlite" }
+    fn supported_patterns(&self) -> &[&str] { &["*.sqlite", "*.sqlite3", "*.db"] }
+    fn matches(&self, locator: &str) -> bool { /* extension check + magic bytes */ }
+    fn create(&self, locator: &str) -> Result<...>;
+}
+```
+
+`matches` checks:
+1. File extension is `.sqlite`, `.sqlite3`, or `.db` → true
+2. First 16 bytes of an existing file equal the SQLite magic (`SQLite format 3\0`) → true
+3. Otherwise → false
+
+---
 
 ## Dependencies
 
-- `kanban-persistence` — `PersistenceStore` and `StoreFactory` traits
-- `kanban-domain` — Domain models
-- `sqlx` — SQLite driver with async support
-- `tokio` — Async runtime
-- `uuid` — ID generation
-- `serde`, `serde_json` — Serialization for snapshot conversion
-
-## License
-
-Apache 2.0 — See [LICENSE.md](../../LICENSE.md) for details
+| Crate | Purpose |
+|-------|---------|
+| `kanban-persistence` | `PersistenceStore`, `StoreFactory` traits |
+| `kanban-domain` | `Snapshot` type |
+| `sqlx` | Async SQLite with connection pooling |
+| `tokio` | Async runtime |
+| `serde_json` | JSON serialization for complex column types |
