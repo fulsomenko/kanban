@@ -451,3 +451,19 @@ async fn test_mcp_undo_on_empty_returns_false() {
     assert!(!ctx.can_undo());
     assert!(!ctx.undo());
 }
+
+#[tokio::test]
+async fn test_mcp_reload_preserves_undo_history() {
+    // MCP reload is a pre-mutation freshness check, not a response to an external
+    // change. History remains valid across reloads so tool_undo can span multiple
+    // prior tool calls.
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    assert!(ctx.can_undo(), "should have undo entry after create");
+    ctx.save().await.unwrap();
+    ctx.reload().await.unwrap();
+    assert!(
+        ctx.can_undo(),
+        "reload should NOT clear history — undo must span multiple tool calls"
+    );
+}
