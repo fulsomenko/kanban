@@ -1010,13 +1010,10 @@ impl App {
 
         // Execute batch archive commands
         if had_archives {
-            let mut archive_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
-            for card_id in archive_cards {
-                let cmd = Box::new(kanban_domain::commands::ArchiveCards { ids: vec![card_id] })
-                    as Box<dyn kanban_domain::commands::Command>;
-                archive_commands.push(cmd);
-            }
-            if let Err(e) = self.execute_commands_batch(archive_commands) {
+            if let Err(e) = self.execute_commands_batch(vec![
+                Box::new(kanban_domain::commands::ArchiveCards { ids: archive_cards })
+                    as Box<dyn kanban_domain::commands::Command>,
+            ]) {
                 tracing::error!("Failed to archive cards: {}", e);
             } else if let (Some(column_id), Some(position)) =
                 (last_archive_column, last_archive_position)
@@ -1876,6 +1873,7 @@ impl App {
                 graph: Some(snapshot.graph),
             });
             if let Err(e) = self.ctx.execute_command(cmd) {
+                self.set_error(e.to_string());
                 tracing::error!("Failed to import V2 board: {}", e);
                 return Ok(());
             }
@@ -1898,6 +1896,7 @@ impl App {
             graph: None,
         });
         if let Err(e) = self.ctx.execute_command(cmd) {
+            self.set_error(e.to_string());
             tracing::error!("Failed to import V1 board: {}", e);
             return Ok(());
         }
