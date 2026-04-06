@@ -24,6 +24,7 @@ impl App {
                     if let Some(filename) = self.dialog_input.import_files.get(idx).cloned() {
                         if let Err(e) = self.import_board_from_file(&filename) {
                             tracing::error!("Failed to import board: {}", e);
+                            self.set_error(format!("Failed to import board: {}", e));
                         }
                     }
                 }
@@ -67,6 +68,7 @@ impl App {
                             });
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to update card priority: {}", e);
+                                self.set_error(format!("Failed to update card priority: {}", e));
                             }
                         }
                     }
@@ -119,6 +121,7 @@ impl App {
                     if !commands.is_empty() {
                         if let Err(e) = self.execute_commands_batch(commands) {
                             tracing::error!("Failed to update cards priority: {}", e);
+                            self.set_error(format!("Failed to update cards priority: {}", e));
                         } else {
                             tracing::info!(
                                 "Set priority to {:?} for {} cards",
@@ -194,6 +197,7 @@ impl App {
                             });
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set board task sort: {}", e);
+                                self.set_error(format!("Failed to set board task sort: {}", e));
                             }
                         }
                     }
@@ -248,16 +252,25 @@ impl App {
 
                         if selection_idx == 0 {
                             // Unassign from sprint
-                            let cmd = Box::new(kanban_domain::commands::UpdateCard {
+                            let unassign_cmd =
+                                Box::new(kanban_domain::commands::UnassignCardFromSprint {
+                                    card_id,
+                                });
+                            let clear_prefix_cmd = Box::new(kanban_domain::commands::UpdateCard {
                                 card_id,
                                 updates: kanban_domain::CardUpdate {
-                                    sprint_id: FieldUpdate::Clear,
                                     assigned_prefix: FieldUpdate::Clear,
                                     ..Default::default()
                                 },
                             });
-                            if let Err(e) = self.execute_command(cmd) {
+                            if let Err(e) =
+                                self.execute_commands_batch(vec![unassign_cmd, clear_prefix_cmd])
+                            {
                                 tracing::error!("Failed to unassign card from sprint: {}", e);
+                                self.set_error(format!(
+                                    "Failed to unassign card from sprint: {}",
+                                    e
+                                ));
                             } else {
                                 tracing::info!("Unassigned card from sprint");
                             }
@@ -320,6 +333,10 @@ impl App {
                                     // Execute all commands as a batch
                                     if let Err(e) = self.execute_commands_batch(commands) {
                                         tracing::error!("Failed to assign card to sprint: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to assign card to sprint: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!(
                                             "Assigned card to sprint with id: {}",
@@ -378,6 +395,7 @@ impl App {
 
                         if let Err(e) = self.execute_commands_batch(unassign_commands) {
                             tracing::error!("Failed to unassign cards from sprint: {}", e);
+                            self.set_error(format!("Failed to unassign cards from sprint: {}", e));
                         } else {
                             tracing::info!(
                                 "Unassigned {} cards from sprint",
@@ -442,6 +460,10 @@ impl App {
                                 // Execute all commands as a batch (single pause/resume cycle)
                                 if let Err(e) = self.execute_commands_batch(commands) {
                                     tracing::error!("Failed to assign cards to sprint: {}", e);
+                                    self.set_error(format!(
+                                        "Failed to assign cards to sprint: {}",
+                                        e
+                                    ));
                                 }
 
                                 tracing::info!(
