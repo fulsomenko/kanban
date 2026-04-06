@@ -264,7 +264,7 @@ impl App {
             let store = self.ctx.store().clone();
             let instance_id = store.instance_id();
             let file_watcher = self.persistence.file_watcher.clone();
-            let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
+            let save_completion_tx = self.ctx.save_coordinator.save_completion_tx().cloned();
 
             tracing::info!("Spawning save worker to process snapshots");
             let handle = tokio::spawn(async move {
@@ -530,7 +530,7 @@ impl App {
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
             // Check for pending saves before quitting
-            if self.ctx.state_manager.has_pending_saves() && !self.quit_with_pending {
+            if self.ctx.save_coordinator.has_pending_saves() && !self.quit_with_pending {
                 // First quit attempt with pending saves - show warning
                 self.set_error(
                     "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
@@ -1261,7 +1261,7 @@ impl App {
                         .map(|dc| dc.card.clone())
                         .collect()
                 } else {
-                    self.ctx.cards().clone()
+                    self.ctx.cards().to_vec()
                 };
 
                 let ctx = ViewRefreshContext {
@@ -1283,7 +1283,9 @@ impl App {
     pub fn undo(&mut self) -> KanbanResult<()> {
         if self.ctx.undo() {
             self.refresh_view();
-            self.ctx.state_manager.queue_snapshot(self.ctx.snapshot());
+            self.ctx
+                .save_coordinator
+                .queue_snapshot(self.ctx.snapshot());
         } else {
             self.set_error("Nothing to undo".to_string());
         }
@@ -1294,7 +1296,9 @@ impl App {
     pub fn redo(&mut self) -> KanbanResult<()> {
         if self.ctx.redo() {
             self.refresh_view();
-            self.ctx.state_manager.queue_snapshot(self.ctx.snapshot());
+            self.ctx
+                .save_coordinator
+                .queue_snapshot(self.ctx.snapshot());
         } else {
             self.set_error("Nothing to redo".to_string());
         }
@@ -1622,7 +1626,7 @@ impl App {
             self.persistence.file_watcher = Some(watcher.clone());
             // Also set it on the state manager (wrapped in Arc) so queue_snapshot can pause it
             let watcher_arc = std::sync::Arc::new(watcher);
-            self.ctx.state_manager.set_file_watcher(watcher_arc);
+            self.ctx.save_coordinator.set_file_watcher(watcher_arc);
         }
 
         // Spawn async save worker if save channel is configured
@@ -1725,11 +1729,6 @@ impl App {
                                     }
                                 }
 
-                                // Auto-refresh view if state manager indicates it's needed
-                                if self.ctx.state_manager.needs_refresh() {
-                                    self.refresh_view();
-                                    self.ctx.state_manager.clear_refresh();
-                                }
                             }
                         }
                     }
@@ -1772,9 +1771,9 @@ impl App {
                     } => {
                         // Save operation completed - update dirty flag
                         tracing::debug!("Save completion signal received");
-                        self.ctx.state_manager.save_completed();
+                        self.ctx.save_coordinator.save_completed();
                         // Reset force quit flag and dirty flag if all saves are now complete
-                        if !self.ctx.state_manager.has_pending_saves() {
+                        if !self.ctx.save_coordinator.has_pending_saves() {
                             self.ctx.mark_clean();
                             self.quit_with_pending = false;
                         }
@@ -1854,7 +1853,7 @@ impl App {
         }
 
         // Graceful shutdown: ensure all queued saves complete before exit
-        self.ctx.state_manager.close_save_channel(); // Close save_tx channel to signal worker to finish
+        self.ctx.save_coordinator.close_save_channel(); // Close save_tx channel to signal worker to finish
 
         // Wait for save worker to finish processing all queued saves
         if let Some(handle) = self.persistence.save_worker_handle.take() {

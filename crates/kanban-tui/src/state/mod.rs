@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 pub use snapshot::TuiSnapshot;
 const SAVE_QUEUE_CAPACITY: usize = 100;
 
-/// Manages state mutations and persistence with immediate auto-saving
+/// Coordinates persistence with immediate auto-saving
 ///
 /// # Save Behavior
 ///
@@ -26,19 +26,18 @@ const SAVE_QUEUE_CAPACITY: usize = 100;
 /// // Execute command via TuiContext, then queue snapshot
 /// ctx.execute_commands_batch(commands)?;
 /// ```
-pub struct StateManager {
-    needs_refresh: bool,
+pub struct SaveCoordinator {
     save_tx: Option<mpsc::Sender<Snapshot>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
     file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
 }
 
-impl StateManager {
-    /// Create a new state manager with optional persistence store
+impl SaveCoordinator {
+    /// Create a new save coordinator with optional persistence store
     ///
     /// Returns a tuple of:
-    /// - StateManager instance
+    /// - SaveCoordinator instance
     /// - Optional receiver for async save processing (snapshots to save)
     /// - Optional receiver for save completion notifications
     ///
@@ -59,25 +58,14 @@ impl StateManager {
 
         let (save_completion_tx, save_completion_rx) = mpsc::unbounded_channel();
 
-        let manager = Self {
-            needs_refresh: false,
+        let coordinator = Self {
             save_tx,
             save_completion_tx: Some(save_completion_tx),
             pending_saves: 0,
             file_watcher: None,
         };
 
-        (manager, save_rx, Some(save_completion_rx))
-    }
-
-    /// Check if view needs to be refreshed
-    pub fn needs_refresh(&self) -> bool {
-        self.needs_refresh
-    }
-
-    /// Clear the refresh flag (called after view is refreshed)
-    pub fn clear_refresh(&mut self) {
-        self.needs_refresh = false;
+        (coordinator, save_rx, Some(save_completion_rx))
     }
 
     /// Close the save channel to signal the worker to finish processing and exit
@@ -175,7 +163,7 @@ impl StateManager {
     /// Called after the file watcher is initialized in App::run()
     pub fn set_file_watcher(&mut self, watcher: Arc<kanban_persistence::FileWatcher>) {
         self.file_watcher = Some(watcher);
-        tracing::debug!("File watcher set on StateManager");
+        tracing::debug!("File watcher set on SaveCoordinator");
     }
 
     /// Reset save channels after a backend migration.
@@ -205,25 +193,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_state_manager_creation_no_persistence() {
-        let (manager, save_rx, _completion_rx) = StateManager::new(false);
-        assert!(!manager.has_pending_saves());
+    fn test_save_coordinator_creation_no_persistence() {
+        let (coordinator, save_rx, _completion_rx) = SaveCoordinator::new(false);
+        assert!(!coordinator.has_pending_saves());
         assert!(save_rx.is_none());
     }
 
     #[test]
-    fn test_state_manager_creation_with_persistence() {
-        let (manager, save_rx, _completion_rx) = StateManager::new(true);
-        assert!(!manager.has_pending_saves());
+    fn test_save_coordinator_creation_with_persistence() {
+        let (coordinator, save_rx, _completion_rx) = SaveCoordinator::new(true);
+        assert!(!coordinator.has_pending_saves());
         assert!(save_rx.is_some());
-        assert!(manager.has_save_channel());
+        assert!(coordinator.has_save_channel());
     }
 
     #[test]
     fn test_reset_save_channels() {
-        let (mut manager, _rx, _crx) = StateManager::new(true);
-        let (_rx, _crx) = manager.reset_save_channels();
-        assert!(!manager.has_pending_saves());
-        assert!(manager.has_save_channel());
+        let (mut coordinator, _rx, _crx) = SaveCoordinator::new(true);
+        let (_rx, _crx) = coordinator.reset_save_channels();
+        assert!(!coordinator.has_pending_saves());
+        assert!(coordinator.has_save_channel());
     }
 }

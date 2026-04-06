@@ -1,4 +1,4 @@
-use crate::state::StateManager;
+use crate::state::SaveCoordinator;
 use kanban_domain::commands::Command;
 use kanban_domain::DependencyGraph;
 use kanban_domain::KanbanResult;
@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 pub struct TuiContext {
     inner: KanbanContext,
-    pub state_manager: StateManager,
+    pub save_coordinator: SaveCoordinator,
 }
 
 impl TuiContext {
@@ -42,11 +42,11 @@ impl TuiContext {
             kanban_core::AppConfig::default(),
         );
 
-        let (state_manager, save_rx, completion_rx) = StateManager::new(store.is_some());
+        let (save_coordinator, save_rx, completion_rx) = SaveCoordinator::new(store.is_some());
 
         let ctx = Self {
             inner,
-            state_manager,
+            save_coordinator,
         };
 
         Ok((ctx, save_rx, completion_rx))
@@ -59,7 +59,7 @@ impl TuiContext {
     pub fn execute_commands_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
         self.inner.execute_batch(commands)?;
         let snapshot = self.inner.snapshot();
-        self.state_manager.queue_snapshot(snapshot);
+        self.save_coordinator.queue_snapshot(snapshot);
         Ok(())
     }
 
@@ -127,28 +127,28 @@ impl TuiContext {
 
     // --- Delegation: field accessors ---
 
-    pub fn boards(&self) -> &Vec<Board> {
-        &self.inner.boards
+    pub fn boards(&self) -> &[Board] {
+        self.inner.boards()
     }
 
-    pub fn columns(&self) -> &Vec<Column> {
-        &self.inner.columns
+    pub fn columns(&self) -> &[Column] {
+        self.inner.columns()
     }
 
-    pub fn cards(&self) -> &Vec<Card> {
-        &self.inner.cards
+    pub fn cards(&self) -> &[Card] {
+        self.inner.cards()
     }
 
-    pub fn sprints(&self) -> &Vec<Sprint> {
-        &self.inner.sprints
+    pub fn sprints(&self) -> &[Sprint] {
+        self.inner.sprints()
     }
 
-    pub fn archived_cards(&self) -> &Vec<ArchivedCard> {
-        &self.inner.archived_cards
+    pub fn archived_cards(&self) -> &[ArchivedCard] {
+        self.inner.archived_cards()
     }
 
     pub fn graph(&self) -> &DependencyGraph {
-        &self.inner.graph
+        self.inner.graph()
     }
 
     #[doc(hidden)]
@@ -159,7 +159,7 @@ impl TuiContext {
     fn with_snapshot<T>(&mut self, result: KanbanResult<T>) -> KanbanResult<T> {
         if result.is_ok() {
             let snapshot = self.inner.snapshot();
-            self.state_manager.queue_snapshot(snapshot);
+            self.save_coordinator.queue_snapshot(snapshot);
         }
         result
     }

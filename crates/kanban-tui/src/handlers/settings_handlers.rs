@@ -241,7 +241,7 @@ impl App {
         match kanban_service::make_store(&new_backend, &new_storage_location) {
             Ok(new_store) => {
                 self.ctx.replace_store(new_store);
-                let (save_rx, completion_rx) = self.ctx.state_manager.reset_save_channels();
+                let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
                 use crate::state::snapshot::TuiSnapshot;
                 snapshot.apply_to_app(self);
                 self.ctx.mark_clean();
