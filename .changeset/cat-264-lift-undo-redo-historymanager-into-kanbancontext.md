@@ -1,9 +1,10 @@
 ---
-bump: patch
+bump: minor
 ---
 
 History-aware execute, StateManager slimming, and TuiContext encapsulation
 
+- Unify `execute()` and `execute_batch()` into a single `execute(Vec<Box<dyn Command>>)` — fixes spurious undo-on-failure bug and provides one uniform API with atomic rollback semantics
 - Make `execute()` capture undo history by default — all `KanbanOperations` consumers get undo/redo for free
 - Add native batch commands (`ArchiveCards`, `MoveCards`, `AssignCardsToSprint`) with single undo entry
 - Extract `clear_history()` from `reload()` — callers decide whether to clear
