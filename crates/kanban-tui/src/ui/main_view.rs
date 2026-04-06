@@ -11,7 +11,7 @@ use ratatui::{
 
 pub(super) fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
     let is_kanban_view = if let Some(idx) = app.selection.active_board_index {
-        if let Some(board) = app.ctx.boards.get(idx) {
+        if let Some(board) = app.ctx.boards().get(idx) {
             board.task_list_view == kanban_domain::TaskListView::ColumnView
         } else {
             false
@@ -38,13 +38,13 @@ pub(super) fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
 pub(super) fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     let mut lines = vec![];
 
-    if app.ctx.boards.is_empty() {
+    if app.ctx.boards().is_empty() {
         lines.push(Line::from(Span::styled(
             "No projects yet. Press 'n' to create one!",
             label_text(),
         )));
     } else {
-        for (idx, board) in app.ctx.boards.iter().enumerate() {
+        for (idx, board) in app.ctx.boards().iter().enumerate() {
             let config = ListItemConfig::new()
                 .selected(app.selection.board.get() == Some(idx))
                 .focused(app.focus.active == Focus::Boards)
@@ -75,10 +75,10 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
             .active_board_index
             .or(app.selection.board.get())
         {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards().get(board_idx) {
                 let mut sprint_names: Vec<String> = app
                     .ctx
-                    .sprints
+                    .sprints()
                     .iter()
                     .filter(|s| app.filter.active_sprint_filters.contains(&s.id))
                     .map(|s| s.formatted_name(board, "sprint"))
@@ -149,12 +149,19 @@ mod tests {
 
     #[test]
     fn test_build_filter_title_suffix_sprint_filter_formats_sprint_name() {
+        use kanban_domain::KanbanOperations;
         let (mut app, _rx) = App::new(None).unwrap();
-        let board = kanban_domain::Board::new("Test Board".to_string(), None);
-        let sprint = kanban_domain::Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
+        let board = app
+            .ctx
+            .inner_mut()
+            .create_board("Test Board".to_string(), None)
+            .unwrap();
+        let sprint = app
+            .ctx
+            .inner_mut()
+            .create_sprint(board.id, None, Some("Sprint".to_string()))
+            .unwrap();
         let sprint_id = sprint.id;
-        app.ctx.sprints.push(sprint);
-        app.ctx.boards.push(board);
         app.selection.active_board_index = Some(0);
         app.filter.active_sprint_filters.insert(sprint_id);
         let suffix = build_filter_title_suffix(&app);

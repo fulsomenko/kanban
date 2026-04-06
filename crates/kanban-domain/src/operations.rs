@@ -64,10 +64,10 @@ pub trait KanbanOperations {
     fn get_card_branch_name(&self, id: Uuid) -> KanbanResult<String>;
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String>;
 
-    // Bulk card operations
-    fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize>;
-    fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize>;
-    fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize>;
+    // Multi-card operations
+    fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize>;
+    fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize>;
+    fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize>;
     fn carry_over_sprint_cards(
         &mut self,
         from_sprint_id: Uuid,

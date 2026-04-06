@@ -30,6 +30,9 @@ arboard = { version = "3.4", features = ["wayland-data-control"] }
 pulldown-cmark = "0.13"
 toml = "0.8"
 
+[features]
+test-helpers = []
+
 [dev-dependencies]
 kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
 kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.3" }

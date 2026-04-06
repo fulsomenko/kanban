@@ -25,6 +25,26 @@ impl McpContext {
         self.inner.reload().await
     }
 
+    pub fn clear_history(&mut self) {
+        self.inner.clear_history();
+    }
+
+    pub fn undo(&mut self) -> bool {
+        self.inner.undo()
+    }
+
+    pub fn redo(&mut self) -> bool {
+        self.inner.redo()
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.inner.can_undo()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.inner.can_redo()
+    }
+
     pub async fn save(&self) -> KanbanResult<()> {
         self.inner.save().await
     }
@@ -181,19 +201,19 @@ impl KanbanOperations for McpContext {
     }
 
     // ========================================================================
-    // Bulk Card Operations
+    // Multi-card operations
     // ========================================================================
 
-    fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        self.inner.bulk_archive_cards(ids)
+    fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
+        self.inner.archive_cards(ids)
     }
 
-    fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_move_cards(ids, column_id)
+    fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
+        self.inner.move_cards(ids, column_id)
     }
 
-    fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_assign_sprint(ids, sprint_id)
+    fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
+        self.inner.assign_cards_to_sprint(ids, sprint_id)
     }
 
     fn carry_over_sprint_cards(

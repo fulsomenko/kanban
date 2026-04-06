@@ -193,9 +193,9 @@ impl SelectionDialog for CarryOverSprintDialog {
 
     fn options_count(&self, app: &App) -> usize {
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards().get(board_idx) {
                 app.ctx
-                    .sprints
+                    .sprints()
                     .iter()
                     .filter(|s| s.board_id == board.id && s.status == SprintStatus::Planning)
                     .count()
@@ -241,10 +241,10 @@ impl SelectionDialog for CarryOverSprintDialog {
         let mut lines = vec![];
 
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
+            if let Some(board) = app.ctx.boards().get(board_idx) {
                 let planning_sprints: Vec<_> = app
                     .ctx
-                    .sprints
+                    .sprints()
                     .iter()
                     .filter(|s| s.board_id == board.id && s.status == SprintStatus::Planning)
                     .collect();
@@ -288,8 +288,8 @@ impl SelectionDialog for SprintAssignDialog {
 
     fn options_count(&self, app: &App) -> usize {
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
-                let sprint_count = Sprint::assignable(&app.ctx.sprints, board.id).len();
+            if let Some(board) = app.ctx.boards().get(board_idx) {
+                let sprint_count = Sprint::assignable(app.ctx.sprints(), board.id).len();
                 sprint_count + 1 // +1 for None option
             } else {
                 1
@@ -331,11 +331,11 @@ impl SelectionDialog for SprintAssignDialog {
         let mut lines = vec![];
 
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
-                let board_sprints = Sprint::assignable(&app.ctx.sprints, board.id);
+            if let Some(board) = app.ctx.boards().get(board_idx) {
+                let board_sprints = Sprint::assignable(app.ctx.sprints(), board.id);
 
                 let current_sprint_id = if let Some(card_idx) = app.selection.active_card_index {
-                    app.ctx.cards.get(card_idx).and_then(|c| c.sprint_id)
+                    app.ctx.cards().get(card_idx).and_then(|c| c.sprint_id)
                 } else {
                     None
                 };

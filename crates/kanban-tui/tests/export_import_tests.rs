@@ -1,4 +1,4 @@
-use kanban_domain::{Board, Card, Column, Sprint};
+use kanban_domain::KanbanOperations;
 use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
@@ -10,13 +10,22 @@ fn test_export_single_board() {
 
     let (mut app, _rx) = App::new(None).unwrap();
 
-    let mut board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
-
-    app.ctx.boards.push(board.clone());
-    app.ctx.columns.push(column.clone());
-    app.ctx.cards.push(card.clone());
+    let board = app
+        .ctx
+        .create_board("Test Board".to_string(), None)
+        .unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
+    app.ctx
+        .create_card(
+            board.id,
+            column.id,
+            "Test Task".to_string(),
+            Default::default(),
+        )
+        .unwrap();
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
@@ -41,20 +50,34 @@ fn test_export_all_boards() {
 
     let (mut app, _rx) = App::new(None).unwrap();
 
-    let mut board1 = Board::new("Board 1".to_string(), None);
-    let column1 = Column::new(board1.id, "Todo".to_string(), 0);
-    let card1 = Card::new(&mut board1, column1.id, "Task 1".to_string(), 0, "task");
+    let board1 = app.ctx.create_board("Board 1".to_string(), None).unwrap();
+    let column1 = app
+        .ctx
+        .create_column(board1.id, "Todo".to_string(), None)
+        .unwrap();
+    app.ctx
+        .create_card(
+            board1.id,
+            column1.id,
+            "Task 1".to_string(),
+            Default::default(),
+        )
+        .unwrap();
 
-    let mut board2 = Board::new("Board 2".to_string(), None);
-    let column2 = Column::new(board2.id, "Todo".to_string(), 0);
-    let card2 = Card::new(&mut board2, column2.id, "Task 2".to_string(), 0, "task");
+    let board2 = app.ctx.create_board("Board 2".to_string(), None).unwrap();
+    let column2 = app
+        .ctx
+        .create_column(board2.id, "Todo".to_string(), None)
+        .unwrap();
+    app.ctx
+        .create_card(
+            board2.id,
+            column2.id,
+            "Task 2".to_string(),
+            Default::default(),
+        )
+        .unwrap();
 
-    app.ctx.boards.push(board1);
-    app.ctx.boards.push(board2);
-    app.ctx.columns.push(column1);
-    app.ctx.columns.push(column2);
-    app.ctx.cards.push(card1);
-    app.ctx.cards.push(card2);
     app.input.set(file_path.to_str().unwrap().to_string());
 
     app.export_all_boards_with_filename().unwrap();
@@ -134,11 +157,11 @@ fn test_import_valid_format() {
     app.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 
-    assert_eq!(app.ctx.boards.len(), 1);
-    assert_eq!(app.ctx.boards[0].name, "Imported Board");
-    assert_eq!(app.ctx.columns.len(), 1);
-    assert_eq!(app.ctx.cards.len(), 1);
-    assert_eq!(app.ctx.cards[0].title, "Imported Task");
+    assert_eq!(app.ctx.boards().len(), 1);
+    assert_eq!(app.ctx.boards()[0].name, "Imported Board");
+    assert_eq!(app.ctx.columns().len(), 1);
+    assert_eq!(app.ctx.cards().len(), 1);
+    assert_eq!(app.ctx.cards()[0].title, "Imported Task");
 }
 
 #[test]
@@ -162,10 +185,13 @@ fn test_auto_save() {
 
     let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
 
-    let board = Board::new("Auto Save Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
-    app.ctx.boards.push(board);
-    app.ctx.columns.push(column);
+    let board = app
+        .ctx
+        .create_board("Auto Save Board".to_string(), None)
+        .unwrap();
+    app.ctx
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
 
     app.auto_save().unwrap();
 
@@ -226,10 +252,10 @@ async fn test_async_load_initial_state_sqlite() {
     let (mut app, _rx) = App::new(Some(db_path.to_str().unwrap().to_string())).unwrap();
     app.load_initial_state().await;
 
-    assert_eq!(app.ctx.boards.len(), 1);
-    assert_eq!(app.ctx.boards[0].name, "SQLite Board");
-    assert_eq!(app.ctx.columns.len(), 1);
-    assert_eq!(app.ctx.columns[0].name, "Backlog");
+    assert_eq!(app.ctx.boards().len(), 1);
+    assert_eq!(app.ctx.boards()[0].name, "SQLite Board");
+    assert_eq!(app.ctx.columns().len(), 1);
+    assert_eq!(app.ctx.columns()[0].name, "Backlog");
 }
 
 #[test]
@@ -239,21 +265,47 @@ fn test_export_import_sprint_and_card_prefixes() {
 
     // Create board with both sprint_prefix and card_prefix
     let (mut app, _rx) = App::new(None).unwrap();
-    let mut board = Board::new("Prefix Board".to_string(), None);
-    board.update_sprint_prefix(Some("sprint".to_string()));
-    board.update_card_prefix(Some("task".to_string()));
+    use kanban_domain::{BoardUpdate, FieldUpdate, SprintUpdate};
+    let board = app
+        .ctx
+        .create_board("Prefix Board".to_string(), None)
+        .unwrap();
+    app.ctx
+        .update_board(
+            board.id,
+            BoardUpdate {
+                sprint_prefix: FieldUpdate::Set("sprint".to_string()),
+                card_prefix: FieldUpdate::Set("task".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
-    let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Card".to_string(), 0, "task");
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
+    app.ctx
+        .create_card(
+            board.id,
+            column.id,
+            "Test Card".to_string(),
+            Default::default(),
+        )
+        .unwrap();
 
     // Create sprint with card_prefix override
-    let mut sprint = Sprint::new(board.id, 1, None, None);
-    sprint.update_card_prefix(Some("hotfix".to_string()));
+    let sprint = app.ctx.create_sprint(board.id, None, None).unwrap();
+    app.ctx
+        .update_sprint(
+            sprint.id,
+            SprintUpdate {
+                card_prefix: FieldUpdate::Set("hotfix".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
-    app.ctx.boards.push(board.clone());
-    app.ctx.columns.push(column);
-    app.ctx.cards.push(card);
-    app.ctx.sprints.push(sprint.clone());
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
@@ -273,11 +325,17 @@ fn test_export_import_sprint_and_card_prefixes() {
         .unwrap();
 
     // Verify prefixes preserved after import
-    assert_eq!(app2.ctx.boards.len(), 1);
-    assert_eq!(app2.ctx.boards[0].sprint_prefix, Some("sprint".to_string()));
-    assert_eq!(app2.ctx.boards[0].card_prefix, Some("task".to_string()));
-    assert_eq!(app2.ctx.sprints.len(), 1);
-    assert_eq!(app2.ctx.sprints[0].card_prefix, Some("hotfix".to_string()));
+    assert_eq!(app2.ctx.boards().len(), 1);
+    assert_eq!(
+        app2.ctx.boards()[0].sprint_prefix,
+        Some("sprint".to_string())
+    );
+    assert_eq!(app2.ctx.boards()[0].card_prefix, Some("task".to_string()));
+    assert_eq!(app2.ctx.sprints().len(), 1);
+    assert_eq!(
+        app2.ctx.sprints()[0].card_prefix,
+        Some("hotfix".to_string())
+    );
 }
 
 #[test]
@@ -347,14 +405,14 @@ fn test_backward_compat_old_export_format() {
         .unwrap();
 
     // Verify board imported and old branch_prefix is mapped to sprint_prefix
-    assert_eq!(app.ctx.boards.len(), 1);
-    assert_eq!(app.ctx.boards[0].name, "Old Board");
-    assert_eq!(app.ctx.boards[0].sprint_prefix, Some("FEAT".to_string()));
+    assert_eq!(app.ctx.boards().len(), 1);
+    assert_eq!(app.ctx.boards()[0].name, "Old Board");
+    assert_eq!(app.ctx.boards()[0].sprint_prefix, Some("FEAT".to_string()));
     // card_prefix should be None since old format didn't have it
-    assert_eq!(app.ctx.boards[0].card_prefix, None);
+    assert_eq!(app.ctx.boards()[0].card_prefix, None);
 
     // Verify cards still work
-    assert_eq!(app.ctx.cards.len(), 1);
-    assert_eq!(app.ctx.cards[0].title, "Old Card");
-    assert_eq!(app.ctx.cards[0].card_prefix, None);
+    assert_eq!(app.ctx.cards().len(), 1);
+    assert_eq!(app.ctx.cards()[0].title, "Old Card");
+    assert_eq!(app.ctx.cards()[0].card_prefix, None);
 }

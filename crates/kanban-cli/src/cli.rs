@@ -229,19 +229,22 @@ pub enum CardAction {
         id: String,
     },
     /// Archive multiple cards
-    BulkArchive {
+    #[command(name = "archive-cards")]
+    ArchiveCards {
         #[arg(long, value_delimiter = ',')]
         ids: Vec<Uuid>,
     },
     /// Move multiple cards to a column
-    BulkMove {
+    #[command(name = "move-cards")]
+    MoveCards {
         #[arg(long, value_delimiter = ',')]
         ids: Vec<Uuid>,
         #[arg(long)]
         column_id: Uuid,
     },
     /// Assign multiple cards to a sprint
-    BulkAssignSprint {
+    #[command(name = "assign-cards-to-sprint")]
+    AssignCardsToSprint {
         #[arg(long, value_delimiter = ',')]
         ids: Vec<Uuid>,
         #[arg(long)]

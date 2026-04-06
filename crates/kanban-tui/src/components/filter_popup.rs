@@ -82,10 +82,10 @@ fn render_filter_sprints_section(
     )));
 
     if let Some(board_idx) = app.selection.active_board_index {
-        if let Some(board) = app.ctx.boards.get(board_idx) {
+        if let Some(board) = app.ctx.boards().get(board_idx) {
             let board_sprints: Vec<_> = app
                 .ctx
-                .sprints
+                .sprints()
                 .iter()
                 .filter(|s| s.board_id == board.id)
                 .collect();

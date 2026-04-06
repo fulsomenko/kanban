@@ -32,7 +32,7 @@ pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card_a.id,
         target: card_b.id,
         edge_type: CardEdgeType::Blocks,
@@ -47,7 +47,7 @@ pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    let edges = ctx.graph.cards.edges();
+    let edges = ctx.graph().cards.edges();
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
     assert_eq!(e.source, card_a.id);
@@ -76,7 +76,7 @@ pub async fn test_relates_to_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card_a.id,
         target: card_b.id,
         edge_type: CardEdgeType::RelatesTo,
@@ -91,7 +91,7 @@ pub async fn test_relates_to_edge_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    let edges = ctx.graph.cards.edges();
+    let edges = ctx.graph().cards.edges();
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
     assert_eq!(e.edge_type, CardEdgeType::RelatesTo);
@@ -127,7 +127,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: parent.id,
         target: child.id,
         edge_type: CardEdgeType::ParentOf,
@@ -142,7 +142,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    let edges = ctx.graph.cards.edges();
+    let edges = ctx.graph().cards.edges();
     assert_eq!(edges.len(), 1);
     assert_eq!(edges[0].edge_type, CardEdgeType::ParentOf);
 }
@@ -165,7 +165,7 @@ pub async fn test_archived_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card_a.id,
         target: card_b.id,
         edge_type: CardEdgeType::Blocks,
@@ -180,7 +180,7 @@ pub async fn test_archived_edge_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    let edges = ctx.graph.cards.edges();
+    let edges = ctx.graph().cards.edges();
     assert_eq!(edges.len(), 1);
     assert!(edges[0].archived_at.is_some());
     assert!((edges[0].weight.unwrap() - 2.5).abs() < f32::EPSILON);
@@ -207,7 +207,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card_a.id,
         target: card_b.id,
         edge_type: CardEdgeType::Blocks,
@@ -216,7 +216,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
         created_at: now,
         archived_at: None,
     });
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card_b.id,
         target: card_c.id,
         edge_type: CardEdgeType::ParentOf,
@@ -225,7 +225,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
         created_at: now,
         archived_at: None,
     });
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card_a.id,
         target: card_c.id,
         edge_type: CardEdgeType::RelatesTo,
@@ -240,7 +240,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    assert_eq!(ctx.graph.cards.edges().len(), 3);
+    assert_eq!(ctx.graph().cards.edges().len(), 3);
 }
 
 pub async fn test_empty_graph_roundtrip(factory: &StoreFactory) {
@@ -256,5 +256,5 @@ pub async fn test_empty_graph_roundtrip(factory: &StoreFactory) {
     let ctx = KanbanContext::load_with_defaults(factory(&path))
         .await
         .unwrap();
-    assert!(ctx.graph.cards.edges().is_empty());
+    assert!(ctx.graph().cards.edges().is_empty());
 }

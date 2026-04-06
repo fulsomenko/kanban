@@ -380,16 +380,16 @@ pub struct GetCardGitCheckoutRequest {
     pub card_id: String,
 }
 
-// Bulk Operations
+// Multi-card operations
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkArchiveCardsRequest {
+pub struct ArchiveCardsRequest {
     #[schemars(description = "Comma-separated card IDs to archive")]
     pub ids: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkMoveCardsRequest {
+pub struct MoveCardsRequest {
     #[schemars(description = "Comma-separated card IDs to move")]
     pub ids: String,
     #[schemars(description = "ID of the destination column")]
@@ -397,7 +397,7 @@ pub struct BulkMoveCardsRequest {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkAssignSprintRequest {
+pub struct AssignCardsToSprintRequest {
     #[schemars(description = "Comma-separated card IDs")]
     pub ids: String,
     #[schemars(description = "ID of the sprint to assign to")]
@@ -887,37 +887,37 @@ impl KanbanMcpServer {
         to_call_tool_result_json(serde_json::json!({"command": command}))
     }
 
-    // Bulk Operations
+    // Multi-card operations
 
     #[tool(description = "Archive multiple cards at once")]
-    async fn tool_bulk_archive_cards(
+    async fn tool_archive_cards(
         &self,
-        Parameters(req): Parameters<BulkArchiveCardsRequest>,
+        Parameters(req): Parameters<ArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
-        let count = mutating_op!(self.ctx, bulk_archive_cards, ids)?;
+        let count = mutating_op!(self.ctx, archive_cards, ids)?;
         to_call_tool_result_json(serde_json::json!({"archived_count": count}))
     }
 
     #[tool(description = "Move multiple cards to a column")]
-    async fn tool_bulk_move_cards(
+    async fn tool_move_cards(
         &self,
-        Parameters(req): Parameters<BulkMoveCardsRequest>,
+        Parameters(req): Parameters<MoveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let column_id = parse_uuid(&req.column_id)?;
-        let count = mutating_op!(self.ctx, bulk_move_cards, ids, column_id)?;
+        let count = mutating_op!(self.ctx, move_cards, ids, column_id)?;
         to_call_tool_result_json(serde_json::json!({"moved_count": count}))
     }
 
     #[tool(description = "Assign multiple cards to a sprint")]
-    async fn tool_bulk_assign_sprint(
+    async fn tool_assign_cards_to_sprint(
         &self,
-        Parameters(req): Parameters<BulkAssignSprintRequest>,
+        Parameters(req): Parameters<AssignCardsToSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let sprint_id = parse_uuid(&req.sprint_id)?;
-        let count = mutating_op!(self.ctx, bulk_assign_sprint, ids, sprint_id)?;
+        let count = mutating_op!(self.ctx, assign_cards_to_sprint, ids, sprint_id)?;
         to_call_tool_result_json(serde_json::json!({"assigned_count": count}))
     }
 
@@ -1074,6 +1074,36 @@ impl KanbanMcpServer {
         let data = req.data;
         let board = mutating_op!(self.ctx, import_board, &data)?;
         to_call_tool_result(&board)
+    }
+
+    #[tool(description = "Undo the last operation")]
+    async fn tool_undo(&self) -> Result<CallToolResult, McpError> {
+        let mut guard = self.ctx.lock().await;
+        if guard.undo() {
+            guard.save().await.map_err(kanban_err_to_mcp)?;
+            Ok(CallToolResult::success(vec![Content::text(
+                "Undo successful",
+            )]))
+        } else {
+            Ok(CallToolResult::success(vec![Content::text(
+                "Nothing to undo",
+            )]))
+        }
+    }
+
+    #[tool(description = "Redo the last undone operation")]
+    async fn tool_redo(&self) -> Result<CallToolResult, McpError> {
+        let mut guard = self.ctx.lock().await;
+        if guard.redo() {
+            guard.save().await.map_err(kanban_err_to_mcp)?;
+            Ok(CallToolResult::success(vec![Content::text(
+                "Redo successful",
+            )]))
+        } else {
+            Ok(CallToolResult::success(vec![Content::text(
+                "Nothing to redo",
+            )]))
+        }
     }
 }
 

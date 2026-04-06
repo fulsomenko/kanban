@@ -55,13 +55,16 @@ fn test_render_filter_options_popup_shows_tags_section() {
 #[test]
 fn test_render_filter_popup_with_sprint_shows_sprint_name() {
     use kanban_domain::CardFilters;
-    use kanban_domain::{Board, Sprint};
     use kanban_tui::filters::FilterDialogState;
     let (mut app, _rx) = App::new(None).unwrap();
-    let board = Board::new("Test Board".to_string(), None);
-    let sprint = Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
-    app.ctx.sprints.push(sprint);
-    app.ctx.boards.push(board);
+    use kanban_domain::KanbanOperations;
+    let board = app
+        .ctx
+        .create_board("Test Board".to_string(), None)
+        .unwrap();
+    app.ctx
+        .create_sprint(board.id, None, Some("Sprint".to_string()))
+        .unwrap();
     app.selection.active_board_index = Some(0);
     app.push_mode(AppMode::Dialog(DialogMode::FilterOptions));
     app.filter.dialog_state = Some(FilterDialogState::new(CardFilters::default()));

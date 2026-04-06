@@ -28,7 +28,7 @@ pub(crate) fn render_export_boards_popup(app: &App, frame: &mut Frame) {
 
             let items: Vec<Line> = app
                 .ctx
-                .boards
+                .boards()
                 .iter()
                 .enumerate()
                 .map(|(i, board)| {

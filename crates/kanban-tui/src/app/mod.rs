@@ -260,10 +260,11 @@ impl App {
         use kanban_domain::KanbanError;
         use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
 
-        if let Some(store) = self.ctx.state_manager.store().cloned() {
-            let instance_id = self.ctx.state_manager.instance_id();
+        if self.persistence.save_file.is_some() {
+            let store = self.ctx.store().clone();
+            let instance_id = store.instance_id();
             let file_watcher = self.persistence.file_watcher.clone();
-            let save_completion_tx = self.ctx.state_manager.save_completion_tx().cloned();
+            let save_completion_tx = self.ctx.save_coordinator.save_completion_tx().cloned();
 
             tracing::info!("Spawning save worker to process snapshots");
             let handle = tokio::spawn(async move {
@@ -529,7 +530,7 @@ impl App {
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
             // Check for pending saves before quitting
-            if self.ctx.state_manager.has_pending_saves() && !self.quit_with_pending {
+            if self.ctx.save_coordinator.has_pending_saves() && !self.quit_with_pending {
                 // First quit attempt with pending saves - show warning
                 self.set_error(
                     "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
@@ -987,8 +988,8 @@ impl App {
             self.animation.animating.remove(&card_id);
             match animation_type {
                 AnimationType::Archiving => {
-                    if let Some(card_pos) = self.ctx.cards.iter().position(|c| c.id == card_id) {
-                        let card = self.ctx.cards[card_pos].clone();
+                    if let Some(card_pos) = self.ctx.cards().iter().position(|c| c.id == card_id) {
+                        let card = self.ctx.cards()[card_pos].clone();
                         last_archive_column = Some(card.column_id);
                         last_archive_position = Some(card.position);
                         archive_cards.push(card_id);
@@ -1009,13 +1010,12 @@ impl App {
 
         // Execute batch archive commands
         if had_archives {
-            let mut archive_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
-            for card_id in archive_cards {
-                let cmd = Box::new(kanban_domain::commands::ArchiveCard { card_id })
-                    as Box<dyn kanban_domain::commands::Command>;
-                archive_commands.push(cmd);
-            }
-            if let Err(e) = self.execute_commands_batch(archive_commands) {
+            if let Err(e) =
+                self.execute_commands_batch(vec![Box::new(kanban_domain::commands::ArchiveCards {
+                    ids: archive_cards,
+                })
+                    as Box<dyn kanban_domain::commands::Command>])
+            {
                 tracing::error!("Failed to archive cards: {}", e);
             } else if let (Some(column_id), Some(position)) =
                 (last_archive_column, last_archive_position)
@@ -1052,7 +1052,7 @@ impl App {
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
         if let Some(archived_card) = self
             .ctx
-            .archived_cards
+            .archived_cards()
             .iter()
             .find(|dc| dc.card.id == card_id)
             .cloned()
@@ -1062,7 +1062,7 @@ impl App {
     }
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
-        let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
+        let board_filter = BoardFilter::new(board_id, self.ctx.columns());
         let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
             Some(SprintFilter::in_sprints(
                 self.filter.active_sprint_filters.iter().copied(),
@@ -1072,7 +1072,7 @@ impl App {
         };
 
         self.ctx
-            .cards
+            .cards()
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
@@ -1092,8 +1092,8 @@ impl App {
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<&Card> {
-        let board = self.ctx.boards.iter().find(|b| b.id == board_id).unwrap();
-        let board_filter = BoardFilter::new(board_id, &self.ctx.columns);
+        let board = self.ctx.boards().iter().find(|b| b.id == board_id).unwrap();
+        let board_filter = BoardFilter::new(board_id, self.ctx.columns());
         let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
             Some(SprintFilter::in_sprints(
                 self.filter.active_sprint_filters.iter().copied(),
@@ -1104,7 +1104,7 @@ impl App {
 
         let mut cards: Vec<&Card> = self
             .ctx
-            .cards
+            .cards()
             .iter()
             .filter(|c| {
                 if !board_filter.matches(c) {
@@ -1135,12 +1135,12 @@ impl App {
                 if self.mode == AppMode::ArchivedCardsView {
                     return self
                         .ctx
-                        .archived_cards
+                        .archived_cards()
                         .iter()
                         .find(|dc| dc.card.id == card_id)
                         .map(|dc| &dc.card);
                 } else {
-                    return self.ctx.cards.iter().find(|c| c.id == card_id);
+                    return self.ctx.cards().iter().find(|c| c.id == card_id);
                 }
             }
         }
@@ -1163,17 +1163,17 @@ impl App {
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<&Card> {
         if self.mode == AppMode::ArchivedCardsView {
             self.ctx
-                .archived_cards
+                .archived_cards()
                 .iter()
                 .find(|dc| dc.card.id == card_id)
                 .map(|dc| &dc.card)
         } else {
-            self.ctx.cards.iter().find(|c| c.id == card_id)
+            self.ctx.cards().iter().find(|c| c.id == card_id)
         }
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
-        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &self.ctx.cards);
+        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, self.ctx.cards());
 
         self.sprint_view
             .uncompleted_cards
@@ -1194,13 +1194,13 @@ impl App {
     pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
         let sorted_uncompleted_ids = sort_card_ids(
             &self.sprint_view.uncompleted_cards.cards,
-            &self.ctx.cards,
+            self.ctx.cards(),
             sort_field,
             sort_order,
         );
         let sorted_completed_ids = sort_card_ids(
             &self.sprint_view.completed_cards.cards,
-            &self.ctx.cards,
+            self.ctx.cards(),
             sort_field,
             sort_order,
         );
@@ -1245,7 +1245,7 @@ impl App {
             .active_board_index
             .or(self.selection.board.get());
         if let Some(idx) = board_idx {
-            if let Some(board) = self.ctx.boards.get(idx) {
+            if let Some(board) = self.ctx.boards().get(idx) {
                 let search_query = if self.filter.search.is_active {
                     Some(self.filter.search.query())
                 } else {
@@ -1255,19 +1255,19 @@ impl App {
                 // When in DeletedCardsView, convert deleted cards to Card objects for display
                 let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
                     self.ctx
-                        .archived_cards
+                        .archived_cards()
                         .iter()
                         .map(|dc| dc.card.clone())
                         .collect()
                 } else {
-                    self.ctx.cards.clone()
+                    self.ctx.cards().to_vec()
                 };
 
                 let ctx = ViewRefreshContext {
                     board,
                     all_cards: &cards_for_display,
-                    all_columns: &self.ctx.columns,
-                    all_sprints: &self.ctx.sprints,
+                    all_columns: self.ctx.columns(),
+                    all_sprints: self.ctx.sprints(),
                     active_sprint_filters: self.filter.active_sprint_filters.clone(),
                     hide_assigned_cards: self.filter.hide_assigned_cards,
                     search_query,
@@ -1280,67 +1280,21 @@ impl App {
 
     /// Undo the last action
     pub fn undo(&mut self) -> KanbanResult<()> {
-        if !self.ctx.state_manager.can_undo() {
-            self.set_error("Nothing to undo".to_string());
-            return Ok(());
-        }
-
-        // Suppress history capture during restore
-        self.ctx.state_manager.history_mut().suppress();
-
-        // Save current state to redo stack
-        let current_snapshot = kanban_domain::Snapshot::from_app(self);
-        self.ctx
-            .state_manager
-            .history_mut()
-            .push_redo(current_snapshot);
-
-        // Restore previous state from undo stack
-        if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_undo() {
-            snapshot.apply_to_app(self);
+        if self.ctx.undo() {
             self.refresh_view();
-
-            // Queue snapshot for persistence
-            let save_snapshot = kanban_domain::Snapshot::from_app(self);
-            self.ctx.state_manager.queue_snapshot(save_snapshot);
+        } else {
+            self.set_error("Nothing to undo".to_string());
         }
-
-        // Re-enable history capture
-        self.ctx.state_manager.history_mut().unsuppress();
-
         Ok(())
     }
 
     /// Redo the last undone action
     pub fn redo(&mut self) -> KanbanResult<()> {
-        if !self.ctx.state_manager.can_redo() {
-            self.set_error("Nothing to redo".to_string());
-            return Ok(());
-        }
-
-        // Suppress history capture during restore
-        self.ctx.state_manager.history_mut().suppress();
-
-        // Save current state to undo stack
-        let current_snapshot = kanban_domain::Snapshot::from_app(self);
-        self.ctx
-            .state_manager
-            .history_mut()
-            .push_undo(current_snapshot);
-
-        // Restore next state from redo stack
-        if let Some(snapshot) = self.ctx.state_manager.history_mut().pop_redo() {
-            snapshot.apply_to_app(self);
+        if self.ctx.redo() {
             self.refresh_view();
-
-            // Queue snapshot for persistence
-            let save_snapshot = kanban_domain::Snapshot::from_app(self);
-            self.ctx.state_manager.queue_snapshot(save_snapshot);
+        } else {
+            self.set_error("Nothing to redo".to_string());
         }
-
-        // Re-enable history capture
-        self.ctx.state_manager.history_mut().unsuppress();
-
         Ok(())
     }
 
@@ -1367,13 +1321,13 @@ impl App {
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
         if let Some(board_idx) = self.selection.board.get() {
-            if let Some(board) = self.ctx.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards().get(board_idx) {
                 let board_export = BoardExporter::export_board(
                     board,
-                    &self.ctx.columns,
-                    &self.ctx.cards,
-                    &self.ctx.archived_cards,
-                    &self.ctx.sprints,
+                    self.ctx.columns(),
+                    self.ctx.cards(),
+                    self.ctx.archived_cards(),
+                    self.ctx.sprints(),
                 );
 
                 let export = AllBoardsExport {
@@ -1388,11 +1342,11 @@ impl App {
 
     pub fn export_all_boards_with_filename(&self) -> io::Result<()> {
         let export = BoardExporter::export_all_boards(
-            &self.ctx.boards,
-            &self.ctx.columns,
-            &self.ctx.cards,
-            &self.ctx.archived_cards,
-            &self.ctx.sprints,
+            self.ctx.boards(),
+            self.ctx.columns(),
+            self.ctx.cards(),
+            self.ctx.archived_cards(),
+            self.ctx.sprints(),
         );
         BoardExporter::export_to_file(&export, self.input.as_str())?;
         Ok(())
@@ -1401,11 +1355,11 @@ impl App {
     pub fn auto_save(&self) -> io::Result<()> {
         if let Some(ref filename) = self.persistence.save_file {
             let export = BoardExporter::export_all_boards(
-                &self.ctx.boards,
-                &self.ctx.columns,
-                &self.ctx.cards,
-                &self.ctx.archived_cards,
-                &self.ctx.sprints,
+                self.ctx.boards(),
+                self.ctx.columns(),
+                self.ctx.cards(),
+                self.ctx.archived_cards(),
+                self.ctx.sprints(),
             );
             BoardExporter::export_to_file(&export, filename)?;
         }
@@ -1413,7 +1367,7 @@ impl App {
     }
 
     fn check_ended_sprints(&self) {
-        let ended_sprints: Vec<_> = self.ctx.sprints.iter().filter(|s| s.is_ended()).collect();
+        let ended_sprints: Vec<_> = self.ctx.sprints().iter().filter(|s| s.is_ended()).collect();
 
         if !ended_sprints.is_empty() {
             tracing::warn!(
@@ -1421,7 +1375,7 @@ impl App {
                 ended_sprints.len()
             );
             for sprint in &ended_sprints {
-                if let Some(board) = self.ctx.boards.iter().find(|b| b.id == sprint.board_id) {
+                if let Some(board) = self.ctx.boards().iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
                         sprint.formatted_name(board, "sprint"),
@@ -1442,7 +1396,7 @@ impl App {
         field: BoardField,
     ) -> io::Result<()> {
         if let Some(board_idx) = self.selection.board.get() {
-            if let Some(board) = self.ctx.boards.get(board_idx) {
+            if let Some(board) = self.ctx.boards().get(board_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     BoardField::Name => {
@@ -1457,31 +1411,38 @@ impl App {
                     }
                 };
 
+                let board_id = board.id;
                 if let Some(new_content) =
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
-                    let board_id = board.id;
-                    if let Some(board) = self.ctx.boards.iter_mut().find(|b| b.id == board_id) {
-                        match field {
-                            BoardField::Name => {
-                                if !new_content.trim().is_empty() {
-                                    board.update_name(new_content.trim().to_string());
-                                    self.ctx.state_manager.mark_dirty();
-                                    let snapshot = kanban_domain::Snapshot::from_app(self);
-                                    self.ctx.state_manager.queue_snapshot(snapshot);
-                                }
+                    let updates = match field {
+                        BoardField::Name => {
+                            if new_content.trim().is_empty() {
+                                None
+                            } else {
+                                Some(kanban_domain::BoardUpdate {
+                                    name: Some(new_content.trim().to_string()),
+                                    ..Default::default()
+                                })
                             }
-                            BoardField::Description => {
-                                let desc = if new_content.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(new_content)
-                                };
-                                board.update_description(desc);
-                                self.ctx.state_manager.mark_dirty();
-                                let snapshot = kanban_domain::Snapshot::from_app(self);
-                                self.ctx.state_manager.queue_snapshot(snapshot);
-                            }
+                        }
+                        BoardField::Description => {
+                            let desc = if new_content.trim().is_empty() {
+                                kanban_domain::FieldUpdate::Clear
+                            } else {
+                                kanban_domain::FieldUpdate::Set(new_content)
+                            };
+                            Some(kanban_domain::BoardUpdate {
+                                description: desc,
+                                ..Default::default()
+                            })
+                        }
+                    };
+                    if let Some(updates) = updates {
+                        let cmd =
+                            Box::new(kanban_domain::commands::UpdateBoard { board_id, updates });
+                        if let Err(e) = self.ctx.execute_command(cmd) {
+                            tracing::error!("Failed to update board: {}", e);
                         }
                     }
                 }
@@ -1497,7 +1458,7 @@ impl App {
         field: CardField,
     ) -> io::Result<()> {
         if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.ctx.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards().get(card_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     CardField::Title => {
@@ -1512,31 +1473,38 @@ impl App {
                     }
                 };
 
+                let card_id = card.id;
                 if let Some(new_content) =
                     edit_in_external_editor(terminal, event_handler, temp_file, &current_content)?
                 {
-                    let card_id = card.id;
-                    if let Some(card) = self.ctx.cards.iter_mut().find(|c| c.id == card_id) {
-                        match field {
-                            CardField::Title => {
-                                if !new_content.trim().is_empty() {
-                                    card.update_title(new_content.trim().to_string());
-                                    self.ctx.state_manager.mark_dirty();
-                                    let snapshot = kanban_domain::Snapshot::from_app(self);
-                                    self.ctx.state_manager.queue_snapshot(snapshot);
-                                }
+                    let updates = match field {
+                        CardField::Title => {
+                            if new_content.trim().is_empty() {
+                                None
+                            } else {
+                                Some(kanban_domain::CardUpdate {
+                                    title: Some(new_content.trim().to_string()),
+                                    ..Default::default()
+                                })
                             }
-                            CardField::Description => {
-                                let desc = if new_content.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(new_content)
-                                };
-                                card.update_description(desc);
-                                self.ctx.state_manager.mark_dirty();
-                                let snapshot = kanban_domain::Snapshot::from_app(self);
-                                self.ctx.state_manager.queue_snapshot(snapshot);
-                            }
+                        }
+                        CardField::Description => {
+                            let desc = if new_content.trim().is_empty() {
+                                kanban_domain::FieldUpdate::Clear
+                            } else {
+                                kanban_domain::FieldUpdate::Set(new_content)
+                            };
+                            Some(kanban_domain::CardUpdate {
+                                description: desc,
+                                ..Default::default()
+                            })
+                        }
+                    };
+                    if let Some(updates) = updates {
+                        let cmd =
+                            Box::new(kanban_domain::commands::UpdateCard { card_id, updates });
+                        if let Err(e) = self.ctx.execute_command(cmd) {
+                            tracing::error!("Failed to update card: {}", e);
                         }
                     }
                 }
@@ -1589,29 +1557,27 @@ impl App {
 
     #[doc(hidden)]
     pub async fn load_initial_state(&mut self) {
-        if let Some(store) = self.ctx.state_manager.store().cloned() {
+        if self.persistence.save_file.is_some() {
+            let store = self.ctx.store().clone();
             if store.exists().await {
                 match store.load().await {
                     Ok((snapshot, _metadata)) => {
                         match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                             Ok(data) => {
                                 data.apply_to_app(self);
-                                self.ctx.state_manager.mark_clean();
-                                // Clear undo/redo history after initial file load (not an undoable action)
-                                self.ctx.state_manager.clear_history();
+                                self.ctx.mark_clean();
+                                self.ctx.clear_history();
                                 tracing::info!("Loaded initial state from store");
                             }
                             Err(e) => {
                                 tracing::error!("Failed to deserialize store data: {}", e);
                                 self.persistence.save_file = None;
-                                self.ctx.state_manager.clear_store();
                             }
                         }
                     }
                     Err(e) => {
                         tracing::error!("Failed to load from store: {}", e);
                         self.persistence.save_file = None;
-                        self.ctx.state_manager.clear_store();
                     }
                 }
             }
@@ -1653,7 +1619,7 @@ impl App {
             self.persistence.file_watcher = Some(watcher.clone());
             // Also set it on the state manager (wrapped in Arc) so queue_snapshot can pause it
             let watcher_arc = std::sync::Arc::new(watcher);
-            self.ctx.state_manager.set_file_watcher(watcher_arc);
+            self.ctx.save_coordinator.set_file_watcher(watcher_arc);
         }
 
         // Spawn async save worker if save channel is configured
@@ -1698,8 +1664,8 @@ impl App {
                                         if let Some(ref watcher) = self.persistence.file_watcher {
                                             watcher.pause();
                                         }
-                                        let snapshot = kanban_domain::Snapshot::from_app(self);
-                                        if let Err(e) = self.ctx.state_manager.force_overwrite(&snapshot).await {
+                                        self.ctx.clear_conflict();
+                                        if let Err(e) = self.ctx.save().await {
                                             tracing::error!("Failed to force overwrite: {}", e);
                                         }
                                         // Resume file watcher after save completes
@@ -1710,13 +1676,15 @@ impl App {
                                     Some('t') => {
                                         self.pending_key = None;
                                         // Reload from disk
-                                        if let Some(store) = self.ctx.state_manager.store() {
+                                        {
+                                            let store = self.ctx.store().clone();
                                             match store.load().await {
                                                 Ok((snapshot, _metadata)) => {
                                                     match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                                                         Ok(data) => {
                                                             data.apply_to_app(self);
-                                                            self.ctx.state_manager.clear_conflict();
+                                                            self.ctx.clear_history();
+                                                            self.ctx.clear_conflict();
                                                             self.refresh_view();
                                                             tracing::info!("Reloaded state from disk");
                                                         }
@@ -1755,11 +1723,6 @@ impl App {
                                     }
                                 }
 
-                                // Auto-refresh view if state manager indicates it's needed
-                                if self.ctx.state_manager.needs_refresh() {
-                                    self.refresh_view();
-                                    self.ctx.state_manager.clear_refresh();
-                                }
                             }
                         }
                     }
@@ -1802,9 +1765,10 @@ impl App {
                     } => {
                         // Save operation completed - update dirty flag
                         tracing::debug!("Save completion signal received");
-                        self.ctx.state_manager.save_completed();
-                        // Reset force quit flag if all saves are now complete
-                        if !self.ctx.state_manager.has_pending_saves() {
+                        self.ctx.save_coordinator.save_completed();
+                        // Reset force quit flag and dirty flag if all saves are now complete
+                        if !self.ctx.save_coordinator.has_pending_saves() {
+                            self.ctx.mark_clean();
                             self.quit_with_pending = false;
                         }
                     }
@@ -1835,11 +1799,12 @@ impl App {
                         }
                     } => {
                         // Check if this is our own write by comparing instance IDs
-                        if let Some(store) = self.ctx.state_manager.store() {
+                        {
+                            let store = self.ctx.store().clone();
                             match store.load().await {
                                 Ok((_snapshot, metadata)) => {
                                     // Compare instance IDs
-                                    if metadata.instance_id == self.ctx.state_manager.instance_id() {
+                                    if metadata.instance_id == store.instance_id() {
                                         tracing::debug!(
                                             "File change from own instance ({}), ignoring",
                                             metadata.instance_id
@@ -1856,7 +1821,7 @@ impl App {
                         }
 
                         // External file change detected - handle smart reload
-                        if !self.ctx.state_manager.is_dirty() {
+                        if !self.ctx.is_dirty() {
                             // No local changes, auto-reload silently
                             tracing::info!("External change detected, auto-reloading");
                             self.auto_reload_from_external_change().await;
@@ -1882,7 +1847,7 @@ impl App {
         }
 
         // Graceful shutdown: ensure all queued saves complete before exit
-        self.ctx.state_manager.close_save_channel(); // Close save_tx channel to signal worker to finish
+        self.ctx.save_coordinator.close_save_channel(); // Close save_tx channel to signal worker to finish
 
         // Wait for save worker to finish processing all queued saves
         if let Some(handle) = self.persistence.save_worker_handle.take() {
@@ -1897,88 +1862,81 @@ impl App {
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         let content = std::fs::read_to_string(filename)?;
 
-        // Capture snapshot before import for undo history
-        let before_snapshot = kanban_domain::Snapshot::from_app(self);
-        self.ctx
-            .state_manager
-            .capture_before_command(before_snapshot);
+        let first_new_index = self.ctx.boards().len();
 
         // Try V2 format first (preserves graph)
         if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
-            let first_new_index = self.ctx.boards.len();
-
-            self.ctx.boards.extend(snapshot.boards);
-            self.ctx.columns.extend(snapshot.columns);
-            self.ctx.cards.extend(snapshot.cards);
-            self.ctx.archived_cards.extend(snapshot.archived_cards);
-            self.ctx.sprints.extend(snapshot.sprints);
-            self.ctx.graph = snapshot.graph;
+            let cmd = Box::new(kanban_domain::commands::ImportEntities {
+                boards: snapshot.boards,
+                columns: snapshot.columns,
+                cards: snapshot.cards,
+                archived_cards: snapshot.archived_cards,
+                sprints: snapshot.sprints,
+                graph: Some(snapshot.graph),
+            });
+            if let Err(e) = self.ctx.execute_command(cmd) {
+                self.set_error(e.to_string());
+                tracing::error!("Failed to import V2 board: {}", e);
+                return Ok(());
+            }
 
             self.selection.board.set(Some(first_new_index));
             self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
-
-            // Queue snapshot for persistence
-            let save_snapshot = kanban_domain::Snapshot::from_app(self);
-            self.ctx.state_manager.queue_snapshot(save_snapshot);
-
             return Ok(());
         }
 
         // Fall back to V1 format (no graph)
-        let first_new_index = self.ctx.boards.len();
         let import = BoardImporter::import_from_json(&content)?;
         let entities = BoardImporter::extract_entities(import);
 
-        self.ctx.boards.extend(entities.boards);
-        self.ctx.columns.extend(entities.columns);
-        self.ctx.cards.extend(entities.cards);
-        self.ctx.archived_cards.extend(entities.archived_cards);
-        self.ctx.sprints.extend(entities.sprints);
+        let cmd = Box::new(kanban_domain::commands::ImportEntities {
+            boards: entities.boards,
+            columns: entities.columns,
+            cards: entities.cards,
+            archived_cards: entities.archived_cards,
+            sprints: entities.sprints,
+            graph: None,
+        });
+        if let Err(e) = self.ctx.execute_command(cmd) {
+            self.set_error(e.to_string());
+            tracing::error!("Failed to import V1 board: {}", e);
+            return Ok(());
+        }
 
         self.selection.board.set(Some(first_new_index));
-
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
-
-        // Queue snapshot for persistence
-        let save_snapshot = kanban_domain::Snapshot::from_app(self);
-        self.ctx.state_manager.queue_snapshot(save_snapshot);
 
         Ok(())
     }
 
     async fn auto_reload_from_external_change(&mut self) {
-        if let Some(store) = self.ctx.state_manager.store() {
-            match store.load().await {
-                Ok((snapshot, _metadata)) => {
-                    match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
-                        Ok(data) => {
-                            data.apply_to_app(self);
-                            self.ctx.state_manager.mark_clean();
-                            self.ctx.state_manager.clear_conflict();
-                            self.refresh_view();
-                            tracing::info!("Auto-reloaded state from external file change");
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to deserialize reloaded state: {}", e);
-                        }
+        let store = self.ctx.store().clone();
+        match store.load().await {
+            Ok((snapshot, _metadata)) => {
+                match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
+                    Ok(data) => {
+                        data.apply_to_app(self);
+                        self.ctx.clear_history();
+                        self.ctx.mark_clean();
+                        self.ctx.clear_conflict();
+                        self.refresh_view();
+                        tracing::info!("Auto-reloaded state from external file change");
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to deserialize reloaded state: {}", e);
                     }
                 }
-                Err(e) => {
-                    tracing::error!("Failed to reload from disk: {}", e);
-                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to reload from disk: {}", e);
             }
         }
     }
 
     fn migrate_sprint_logs(&mut self) {
-        let count = kanban_domain::card_lifecycle::migrate_sprint_logs(
-            &mut self.ctx.cards,
-            &self.ctx.sprints,
-            &self.ctx.boards,
-        );
-
-        if count > 0 {
-            tracing::info!("Migrated sprint logs for {} cards", count);
+        let cmd = Box::new(kanban_domain::commands::MigrateSprintLogs);
+        if let Err(e) = self.ctx.execute_command(cmd) {
+            tracing::error!("Failed to migrate sprint logs: {}", e);
         }
     }
 
@@ -1989,12 +1947,12 @@ impl App {
     {
         if let Some(card_idx) = self.selection.active_card_index {
             if let Some(board_idx) = self.selection.active_board_index {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
-                    if let Some(card) = self.ctx.cards.get(card_idx) {
+                if let Some(board) = self.ctx.boards().get(board_idx) {
+                    if let Some(card) = self.ctx.cards().get(card_idx) {
                         let output = get_output(
                             card,
                             board,
-                            &self.ctx.sprints,
+                            self.ctx.sprints(),
                             self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&output) {
@@ -2022,7 +1980,7 @@ impl App {
 
     pub fn get_current_priority_selection_index(&self) -> usize {
         if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.ctx.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards().get(card_idx) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
                     CardPriority::Low => 0,
@@ -2037,11 +1995,11 @@ impl App {
 
     pub fn get_current_sprint_selection_index(&self) -> usize {
         if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.ctx.cards.get(card_idx) {
+            if let Some(card) = self.ctx.cards().get(card_idx) {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.selection.active_board_index {
-                        if let Some(board) = self.ctx.boards.get(board_idx) {
-                            let board_sprints = Sprint::assignable(&self.ctx.sprints, board.id);
+                        if let Some(board) = self.ctx.boards().get(board_idx) {
+                            let board_sprints = Sprint::assignable(self.ctx.sprints(), board.id);
                             for (idx, sprint) in board_sprints.iter().enumerate() {
                                 if sprint.id == card_sprint_id {
                                     return idx + 1;

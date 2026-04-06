@@ -1,12 +1,12 @@
-use crate::DataSnapshot;
 use chrono::Utc;
 use kanban_core::{Edge, EdgeDirection};
 use kanban_domain::card::{Card, CardPriority, CardStatus};
 use kanban_domain::sprint::{Sprint, SprintStatus};
+use kanban_domain::Snapshot;
 use kanban_domain::{ArchivedCard, Board, CardEdgeType, Column, DependencyGraph, SprintLog};
 use uuid::Uuid;
 
-pub fn fully_populated_snapshot() -> DataSnapshot {
+pub fn fully_populated_snapshot() -> Snapshot {
     let board_id = Uuid::new_v4();
     let col_id = Uuid::new_v4();
     let sprint_id = Uuid::new_v4();
@@ -139,7 +139,7 @@ pub fn fully_populated_snapshot() -> DataSnapshot {
         archived_at: Some(now),
     });
 
-    DataSnapshot {
+    Snapshot {
         boards: vec![board],
         columns: vec![column],
         cards: vec![card],

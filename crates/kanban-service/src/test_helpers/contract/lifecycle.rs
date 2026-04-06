@@ -1,11 +1,12 @@
 use super::super::helpers::fully_populated_snapshot;
 use super::super::StoreFactory;
-use crate::{DataSnapshot, KanbanContext};
+use crate::KanbanContext;
 use kanban_core::{Edge, EdgeDirection};
 use kanban_domain::board::{SortField, SortOrder};
 use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::sprint::SprintStatus;
 use kanban_domain::task_list_view::TaskListView;
+use kanban_domain::Snapshot;
 use kanban_domain::{
     BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
     KanbanOperations,
@@ -174,7 +175,11 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     let board = ctx
         .create_board("Full Board".into(), Some("FB".into()))
         .unwrap();
-    let b = ctx.boards.iter_mut().find(|b| b.id == board.id).unwrap();
+    let b = ctx
+        .boards_mut()
+        .iter_mut()
+        .find(|b| b.id == board.id)
+        .unwrap();
     b.sprint_names = vec!["Alpha".into(), "Beta".into()];
     b.sprint_name_used_count = 1;
     b.prefix_counters.insert("FB".into(), 10);
@@ -287,7 +292,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     ctx.archive_card(card4.id).unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card1.id,
         target: card2.id,
         edge_type: CardEdgeType::Blocks,
@@ -296,7 +301,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
         created_at: now,
         archived_at: None,
     });
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card1.id,
         target: card3.id,
         edge_type: CardEdgeType::RelatesTo,
@@ -305,7 +310,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
         created_at: now,
         archived_at: Some(now),
     });
-    ctx.graph.cards.add_edge(Edge {
+    ctx.graph_mut().cards.add_edge(Edge {
         source: card2.id,
         target: card3.id,
         edge_type: CardEdgeType::ParentOf,
@@ -371,7 +376,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     assert_eq!(archived[0].card.points, Some(5));
     assert_eq!(archived[0].original_column_id, col_todo.id);
 
-    let edges = loaded.graph.cards.edges();
+    let edges = loaded.graph().cards.edges();
     assert_eq!(edges.len(), 3, "expected 3 edges, got {:?}", edges);
 }
 
@@ -391,7 +396,7 @@ pub async fn test_full_roundtrip_preserves_all_fields(factory: &StoreFactory) {
         .unwrap();
 
     let (loaded_snap, _) = store.load().await.unwrap();
-    let loaded: DataSnapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
+    let loaded: Snapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
 
     assert_eq!(original, loaded);
 }

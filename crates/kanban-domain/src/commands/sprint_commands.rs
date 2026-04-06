@@ -37,28 +37,63 @@ impl Command for UpdateSprint {
     }
 }
 
-/// Create a new sprint
+/// Create a new sprint.
+///
+/// Handles sprint counter initialization, number generation, and name assignment
+/// internally. The effective prefix is resolved as:
+///   `explicit_prefix` > `board.sprint_prefix` > `default_sprint_prefix`
+///
+/// If `auto_consume_name` is true and no explicit name is provided, the next
+/// available sprint name from the board's name pool will be consumed.
 pub struct CreateSprint {
     pub board_id: Uuid,
-    pub sprint_number: u32,
-    pub name_index: Option<usize>,
-    pub prefix: Option<String>,
+    pub name: Option<String>,
+    pub default_sprint_prefix: String,
+    /// If set, overrides both board prefix and default prefix.
+    pub explicit_prefix: Option<String>,
+    /// If true and `name` is None, consume next name from the board's name pool.
+    /// Used by TUI; CLI/MCP pass false.
+    pub auto_consume_name: bool,
 }
 
 impl Command for CreateSprint {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        let sprints_snapshot: Vec<_> = context
+            .sprints
+            .iter()
+            .filter(|s| s.board_id == self.board_id)
+            .cloned()
+            .collect();
+
+        let board = context.board_mut(self.board_id)?;
+        let effective_prefix = self
+            .explicit_prefix
+            .clone()
+            .or_else(|| board.sprint_prefix.clone())
+            .unwrap_or_else(|| self.default_sprint_prefix.clone());
+
+        board.ensure_sprint_counter_initialized(&effective_prefix, &sprints_snapshot);
+        let sprint_number = board.get_next_sprint_number(&effective_prefix);
+        let name_index = match &self.name {
+            Some(name) if !name.trim().is_empty() => {
+                Some(board.add_sprint_name_at_used_index(name.clone()))
+            }
+            _ if self.auto_consume_name => board.consume_sprint_name(),
+            _ => None,
+        };
+
         let sprint = crate::Sprint::new(
             self.board_id,
-            self.sprint_number,
-            self.name_index,
-            self.prefix.clone(),
+            sprint_number,
+            name_index,
+            Some(effective_prefix),
         );
         context.sprints.push(sprint);
         Ok(())
     }
 
     fn description(&self) -> String {
-        format!("Create sprint {}", self.sprint_number)
+        format!("Create sprint for board {}", self.board_id)
     }
 }
 
@@ -214,5 +249,33 @@ mod tests {
         };
         let result = cmd.execute(&mut context);
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_create_sprint_auto_consume_name_uses_name_pool() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), None);
+        board.sprint_names = vec!["Alpha".to_string(), "Beta".to_string()];
+        let board_id = board.id;
+        tc.boards.push(board);
+        let mut context = tc.as_command_context();
+
+        let cmd = CreateSprint {
+            board_id,
+            name: None,
+            default_sprint_prefix: "Sprint".to_string(),
+            explicit_prefix: None,
+            auto_consume_name: true,
+        };
+        cmd.execute(&mut context).unwrap();
+
+        assert_eq!(context.sprints.len(), 1);
+        let sprint = &context.sprints[0];
+        let board = &context.boards[0];
+        assert_eq!(
+            sprint.get_name(board),
+            Some("Alpha"),
+            "auto_consume_name should consume the first available sprint name"
+        );
     }
 }

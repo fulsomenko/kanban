@@ -7,7 +7,7 @@ use kanban_domain::{
 use kanban_service::KanbanContext;
 use uuid::Uuid;
 
-pub use kanban_service::BulkOperationResult;
+pub use kanban_service::BatchOperationResult;
 
 pub struct CliContext {
     inner: KanbanContext,
@@ -32,24 +32,20 @@ impl CliContext {
         self.inner.save().await
     }
 
-    pub fn bulk_archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
-        self.inner.bulk_archive_cards_detailed(ids)
+    pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BatchOperationResult {
+        self.inner.archive_cards_detailed(ids)
     }
 
-    pub fn bulk_move_cards_detailed(
-        &mut self,
-        ids: Vec<Uuid>,
-        column_id: Uuid,
-    ) -> BulkOperationResult {
-        self.inner.bulk_move_cards_detailed(ids, column_id)
+    pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
+        self.inner.move_cards_detailed(ids, column_id)
     }
 
-    pub fn bulk_assign_sprint_detailed(
+    pub fn assign_cards_to_sprint_detailed(
         &mut self,
         ids: Vec<Uuid>,
         sprint_id: Uuid,
-    ) -> BulkOperationResult {
-        self.inner.bulk_assign_sprint_detailed(ids, sprint_id)
+    ) -> BatchOperationResult {
+        self.inner.assign_cards_to_sprint_detailed(ids, sprint_id)
     }
 }
 
@@ -170,16 +166,16 @@ impl KanbanOperations for CliContext {
         self.inner.get_card_git_checkout(id)
     }
 
-    fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        self.inner.bulk_archive_cards(ids)
+    fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
+        self.inner.archive_cards(ids)
     }
 
-    fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_move_cards(ids, column_id)
+    fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
+        self.inner.move_cards(ids, column_id)
     }
 
-    fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_assign_sprint(ids, sprint_id)
+    fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
+        self.inner.assign_cards_to_sprint(ids, sprint_id)
     }
 
     fn carry_over_sprint_cards(

@@ -225,10 +225,10 @@ async fn card_assign_unassign_sprint() {
     assert_eq!(unassigned.sprint_id, None);
 }
 
-// Bulk operations
+// Multi-card operations
 
 #[tokio::test]
-async fn bulk_archive() {
+async fn archive_cards() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -239,12 +239,12 @@ async fn bulk_archive() {
         .create_card(board.id, col.id, "Card 2".into(), Default::default())
         .unwrap();
 
-    let count = ctx.bulk_archive_cards(vec![c1.id, c2.id]).unwrap();
+    let count = ctx.archive_cards(vec![c1.id, c2.id]).unwrap();
     assert_eq!(count, 2);
 }
 
 #[tokio::test]
-async fn bulk_move() {
+async fn move_cards() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col1 = ctx.create_column(board.id, "From".into(), None).unwrap();
@@ -256,7 +256,7 @@ async fn bulk_move() {
         .create_card(board.id, col1.id, "Card 2".into(), Default::default())
         .unwrap();
 
-    let count = ctx.bulk_move_cards(vec![c1.id, c2.id], col2.id).unwrap();
+    let count = ctx.move_cards(vec![c1.id, c2.id], col2.id).unwrap();
     assert_eq!(count, 2);
 }
 
@@ -271,7 +271,10 @@ async fn export_import_roundtrip() {
     let json = ctx.export_board(Some(board.id)).unwrap();
     assert!(json.contains("Export Board"));
 
-    ctx.import_board(&json).unwrap();
+    // Import into a fresh context to avoid duplicate UUID errors
+    let (mut ctx2, _tmp2) = setup().await;
+    let imported = ctx2.import_board(&json).unwrap();
+    assert_eq!(imported.name, "Export Board");
 }
 
 // Persistence round-trips
@@ -417,4 +420,50 @@ async fn find_cards_by_identifier_not_found() {
 
     let results = ctx.find_cards_by_identifier("KAN-99").unwrap();
     assert!(results.is_empty());
+}
+
+// Undo/Redo
+
+#[tokio::test]
+async fn test_mcp_undo_reverses_create_board() {
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+
+    assert!(ctx.undo());
+    assert!(ctx.list_boards().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_mcp_redo_restores_undone_board() {
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    ctx.undo();
+    assert!(ctx.list_boards().unwrap().is_empty());
+
+    assert!(ctx.redo());
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_mcp_undo_on_empty_returns_false() {
+    let (mut ctx, _tmp) = setup().await;
+    assert!(!ctx.can_undo());
+    assert!(!ctx.undo());
+}
+
+#[tokio::test]
+async fn test_mcp_reload_preserves_undo_history() {
+    // MCP reload is a pre-mutation freshness check, not a response to an external
+    // change. History remains valid across reloads so tool_undo can span multiple
+    // prior tool calls.
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    assert!(ctx.can_undo(), "should have undo entry after create");
+    ctx.save().await.unwrap();
+    ctx.reload().await.unwrap();
+    assert!(
+        ctx.can_undo(),
+        "reload should NOT clear history — undo must span multiple tool calls"
+    );
 }

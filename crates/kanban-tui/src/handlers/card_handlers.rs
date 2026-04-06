@@ -2,7 +2,7 @@ use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
 use kanban_domain::commands::{CreateCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard};
-use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, Column, SortOrder, Sprint};
+use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, KanbanOperations, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -88,12 +88,12 @@ impl App {
             self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
         } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.selection.active_board_index {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
-                    let sprint_count = Sprint::assignable(&self.ctx.sprints, board.id).len();
+                if let Some(board) = self.ctx.boards().get(board_idx) {
+                    let sprint_count = Sprint::assignable(self.ctx.sprints(), board.id).len();
                     if sprint_count > 0 {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
                             let card_id = selected_card.id;
-                            let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
+                            let actual_idx = self.ctx.cards().iter().position(|c| c.id == card_id);
                             self.selection.active_card_index = actual_idx;
                         }
                         let selection_idx = self.get_current_sprint_selection_index();
@@ -125,7 +125,7 @@ impl App {
                 self.filter.current_sort_order = Some(new_order);
 
                 if let Some(board_idx) = self.selection.active_board_index {
-                    if let Some(board) = self.ctx.boards.get(board_idx) {
+                    if let Some(board) = self.ctx.boards().get(board_idx) {
                         if let Some(field) = self.filter.current_sort_field {
                             let cmd = Box::new(SetBoardTaskSort {
                                 board_id: board.id,
@@ -135,6 +135,7 @@ impl App {
 
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set board task sort: {}", e);
+                                self.set_error(format!("Failed to set board task sort: {}", e));
                                 return;
                             }
                         }
@@ -164,7 +165,7 @@ impl App {
     pub fn handle_toggle_sprint_filter(&mut self) {
         if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
             if let Some(board_idx) = self.selection.active_board_index {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
+                if let Some(board) = self.ctx.boards().get(board_idx) {
                     if let Some(active_sprint_id) = board.active_sprint_id {
                         if self
                             .filter
@@ -197,13 +198,14 @@ impl App {
         if self.focus.active == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
                 let card_id = selected_card.id;
-                let actual_idx = self.ctx.cards.iter().position(|c| c.id == card_id);
+                let actual_idx = self.ctx.cards().iter().position(|c| c.id == card_id);
                 self.selection.active_card_index = actual_idx;
 
                 if let Err(e) =
                     self.edit_card_field(terminal, event_handler, CardField::Description)
                 {
                     tracing::error!("Failed to edit card description: {}", e);
+                    self.set_error(format!("Failed to edit card description: {}", e));
                 }
                 should_restart = true;
             }
@@ -221,12 +223,12 @@ impl App {
             };
 
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                self.ctx.boards.get(idx).and_then(|board| {
+                self.ctx.boards().get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
                         card,
                         board,
-                        &self.ctx.columns,
-                        &self.ctx.cards,
+                        self.ctx.columns(),
+                        self.ctx.cards(),
                     )
                 })
             });
@@ -245,6 +247,7 @@ impl App {
             let cmd = Box::new(UpdateCard { card_id, updates });
             if let Err(e) = self.execute_command(cmd) {
                 tracing::error!("Failed to toggle card completion: {}", e);
+                self.set_error(format!("Failed to toggle card completion: {}", e));
                 return;
             }
 
@@ -261,7 +264,7 @@ impl App {
         let mut update_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
 
         for card_id in card_ids {
-            let card = match self.ctx.cards.iter().find(|c| c.id == card_id) {
+            let card = match self.ctx.cards().iter().find(|c| c.id == card_id) {
                 Some(c) => c.clone(),
                 None => continue,
             };
@@ -273,12 +276,12 @@ impl App {
             };
 
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                self.ctx.boards.get(idx).and_then(|board| {
+                self.ctx.boards().get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
                         &card,
                         board,
-                        &self.ctx.columns,
-                        &self.ctx.cards,
+                        self.ctx.columns(),
+                        self.ctx.cards(),
                     )
                 })
             });
@@ -303,6 +306,7 @@ impl App {
         if !update_commands.is_empty() {
             if let Err(e) = self.execute_commands_batch(update_commands) {
                 tracing::error!("Failed to toggle card completion: {}", e);
+                self.set_error(format!("Failed to toggle card completion: {}", e));
                 return;
             }
         }
@@ -319,14 +323,14 @@ impl App {
     pub fn create_card(&mut self) {
         if let Some(idx) = self.selection.active_board_index {
             let focused_col_id = self.get_focused_column_id();
-            let board_id = self.ctx.boards.get(idx).map(|b| b.id);
+            let board_id = self.ctx.boards().get(idx).map(|b| b.id);
 
             if let Some(bid) = board_id {
                 let target_column_id = if let Some(focused_col_id) = focused_col_id {
                     Some(focused_col_id)
                 } else {
                     self.ctx
-                        .columns
+                        .columns()
                         .iter()
                         .find(|col| col.board_id == bid)
                         .map(|col| col.id)
@@ -334,7 +338,7 @@ impl App {
 
                 let column = if let Some(col_id) = target_column_id {
                     self.ctx
-                        .columns
+                        .columns()
                         .iter()
                         .find(|col| col.id == col_id)
                         .cloned()
@@ -344,27 +348,30 @@ impl App {
 
                 let column = match column {
                     Some(col) => col,
-                    None => {
-                        let new_column = Column::new(bid, "Todo".to_string(), 0);
-                        self.ctx.columns.push(new_column.clone());
-                        new_column
-                    }
+                    None => match self.ctx.create_column(bid, "Todo".to_string(), Some(0)) {
+                        Ok(col) => col,
+                        Err(e) => {
+                            tracing::error!("Failed to create column: {}", e);
+                            self.set_error(format!("Failed to create column: {}", e));
+                            return;
+                        }
+                    },
                 };
 
                 let position = kanban_domain::card_lifecycle::next_position_in_column(
-                    &self.ctx.cards,
+                    self.ctx.cards(),
                     column.id,
                 );
 
                 let mark_as_complete = self
                     .ctx
-                    .boards
+                    .boards()
                     .get(idx)
                     .map(|board| {
                         kanban_domain::card_lifecycle::should_auto_complete_new_card(
                             column.id,
                             board,
-                            &self.ctx.columns,
+                            self.ctx.columns(),
                         )
                     })
                     .unwrap_or(false);
@@ -379,13 +386,14 @@ impl App {
 
                 if let Err(e) = self.execute_command(create_cmd) {
                     tracing::error!("Failed to create card: {}", e);
+                    self.set_error(format!("Failed to create card: {}", e));
                     return;
                 }
 
                 if mark_as_complete {
                     if let Some(card) = self
                         .ctx
-                        .cards
+                        .cards()
                         .iter()
                         .rev()
                         .find(|c| c.column_id == column.id)
@@ -401,6 +409,7 @@ impl App {
 
                         if let Err(e) = self.execute_command(update_cmd) {
                             tracing::error!("Failed to update card status: {}", e);
+                            self.set_error(format!("Failed to update card status: {}", e));
                         }
                     }
                 }
@@ -409,7 +418,7 @@ impl App {
                 // Select the most recently created card
                 if let Some(card) = self
                     .ctx
-                    .cards
+                    .cards()
                     .iter()
                     .rev()
                     .find(|c| c.column_id == column.id)
@@ -442,7 +451,7 @@ impl App {
             let board = self
                 .selection
                 .active_board_index
-                .and_then(|idx| self.ctx.boards.get(idx));
+                .and_then(|idx| self.ctx.boards().get(idx));
             let board = match board {
                 Some(b) => b,
                 None => return,
@@ -451,8 +460,8 @@ impl App {
             let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
                 card,
                 board,
-                &self.ctx.columns,
-                &self.ctx.cards,
+                self.ctx.columns(),
+                self.ctx.cards(),
                 direction,
             );
 
@@ -486,6 +495,7 @@ impl App {
                     kanban_domain::card_lifecycle::MoveDirection::Right => "right",
                 };
                 tracing::error!("Failed to move card {}: {}", dir, e);
+                self.set_error(format!("Failed to move card {}: {}", dir, e));
                 return;
             }
 
@@ -503,10 +513,10 @@ impl App {
                             let num_cols = self
                                 .selection
                                 .active_board_index
-                                .and_then(|idx| self.ctx.boards.get(idx))
+                                .and_then(|idx| self.ctx.boards().get(idx))
                                 .map(|b| {
                                     self.ctx
-                                        .columns
+                                        .columns()
                                         .iter()
                                         .filter(|c| c.board_id == b.id)
                                         .count()
@@ -531,7 +541,7 @@ impl App {
         let board = self
             .selection
             .active_board_index
-            .and_then(|idx| self.ctx.boards.get(idx));
+            .and_then(|idx| self.ctx.boards().get(idx));
         let board = match board {
             Some(b) => b,
             None => return,
@@ -543,7 +553,7 @@ impl App {
         let mut moved_count = 0;
 
         for card_id in &card_ids {
-            let card = match self.ctx.cards.iter().find(|c| c.id == *card_id) {
+            let card = match self.ctx.cards().iter().find(|c| c.id == *card_id) {
                 Some(c) => c,
                 None => continue,
             };
@@ -551,8 +561,8 @@ impl App {
             let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
                 card,
                 board,
-                &self.ctx.columns,
-                &self.ctx.cards,
+                self.ctx.columns(),
+                self.ctx.cards(),
                 direction,
             );
 
@@ -587,6 +597,7 @@ impl App {
                     kanban_domain::card_lifecycle::MoveDirection::Right => "right",
                 };
                 tracing::error!("Failed to move cards {}: {}", dir, e);
+                self.set_error(format!("Failed to move cards {}: {}", dir, e));
                 return;
             }
         }
@@ -626,7 +637,7 @@ impl App {
         use kanban_domain::AnimationType;
         use std::time::Instant;
 
-        if self.ctx.cards.iter().any(|c| c.id == card_id) {
+        if self.ctx.cards().iter().any(|c| c.id == card_id) {
             self.animation.animating.insert(
                 card_id,
                 CardAnimation {
@@ -638,7 +649,11 @@ impl App {
     }
 
     pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
-        kanban_domain::card_lifecycle::compact_column_positions(&mut self.ctx.cards, column_id);
+        let cmd = Box::new(kanban_domain::commands::CompactColumnPositions { column_id });
+        if let Err(e) = self.ctx.execute_command(cmd) {
+            tracing::error!("Failed to compact column positions: {}", e);
+            self.set_error(format!("Failed to compact column positions: {}", e));
+        }
     }
 
     pub fn select_card_after_deletion(
@@ -649,14 +664,14 @@ impl App {
         // Try to find a card in the same column at or after the deleted position
         if let Some(next_card) = self
             .ctx
-            .cards
+            .cards()
             .iter()
             .find(|c| c.column_id == deleted_column_id && c.position >= deleted_position)
         {
             self.select_card_by_id(next_card.id);
         } else if let Some(prev_card) = self
             .ctx
-            .cards
+            .cards()
             .iter()
             .rev()
             .find(|c| c.column_id == deleted_column_id)
@@ -695,7 +710,7 @@ impl App {
 
         if self
             .ctx
-            .archived_cards
+            .archived_cards()
             .iter()
             .any(|dc| dc.card.id == card_id)
         {
@@ -718,7 +733,7 @@ impl App {
         let board_id = self
             .selection
             .active_board_index
-            .and_then(|idx| self.ctx.boards.get(idx))
+            .and_then(|idx| self.ctx.boards().get(idx))
             .map(|b| b.id);
 
         let target_column_id = board_id
@@ -726,7 +741,7 @@ impl App {
                 kanban_domain::card_lifecycle::resolve_restore_column(
                     original_column_id,
                     bid,
-                    &self.ctx.columns,
+                    self.ctx.columns(),
                 )
             })
             .unwrap_or(original_column_id);
@@ -739,6 +754,7 @@ impl App {
 
         if let Err(e) = self.execute_command(cmd) {
             tracing::error!("Failed to restore card: {}", e);
+            self.set_error(format!("Failed to restore card: {}", e));
             return;
         }
 
@@ -773,7 +789,7 @@ impl App {
 
         if self
             .ctx
-            .archived_cards
+            .archived_cards()
             .iter()
             .any(|dc| dc.card.id == card_id)
         {
@@ -830,7 +846,7 @@ impl App {
 
         // Get the board ID for filtering
         let board_id = match self.selection.active_board_index {
-            Some(idx) => match self.ctx.boards.get(idx) {
+            Some(idx) => match self.ctx.boards().get(idx) {
                 Some(board) => board.id,
                 None => return,
             },
@@ -838,12 +854,12 @@ impl App {
         };
 
         // Get ancestors to exclude (would create cycle)
-        let ancestors = self.ctx.graph.cards.ancestors(card_id);
+        let ancestors = self.ctx.graph().cards.ancestors(card_id);
 
         // Get cards from current board, excluding self and ancestors
         let column_ids: std::collections::HashSet<_> = self
             .ctx
-            .columns
+            .columns()
             .iter()
             .filter(|c| c.board_id == board_id)
             .map(|c| c.id)
@@ -851,7 +867,7 @@ impl App {
 
         let eligible_cards: Vec<_> = self
             .ctx
-            .cards
+            .cards()
             .iter()
             .filter(|c| column_ids.contains(&c.column_id))
             .filter(|c| c.id != card_id)
@@ -860,11 +876,16 @@ impl App {
             .collect();
 
         // Get current children (for checkbox display)
-        let current_children: std::collections::HashSet<_> =
-            self.ctx.graph.cards.children(card_id).into_iter().collect();
+        let current_children: std::collections::HashSet<_> = self
+            .ctx
+            .graph()
+            .cards
+            .children(card_id)
+            .into_iter()
+            .collect();
 
         // Store the card index so the popup knows which card we're managing
-        self.selection.active_card_index = self.ctx.cards.iter().position(|c| c.id == card_id);
+        self.selection.active_card_index = self.ctx.cards().iter().position(|c| c.id == card_id);
 
         // Set up dialog state
         self.relationship.card_ids = eligible_cards;
