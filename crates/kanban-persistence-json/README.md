@@ -1,120 +1,101 @@
 # kanban-persistence-json
 
-JSON file storage backend for the kanban project management tool. Implements `StoreFactory` from `kanban-persistence`.
+JSON file storage backend for the kanban workspace. Implements `StoreFactory` and `PersistenceStore` from `kanban-persistence`.
 
-## Installation
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-kanban-persistence-json = { path = "../kanban-persistence-json" }
-```
-
-## Overview
-
-Provides `JsonFileStore` (implements `PersistenceStore`) and `JsonStoreFactory` (implements `StoreFactory`) for persisting kanban data as JSON files. This is the default backend and acts as a catch-all for any file path that doesn't match a more specific backend.
-
-## Matching Patterns
-
-- `*.json` — explicit JSON extension
-- Any file path without `://` — catch-all fallback for unknown extensions
-
-## API Reference
-
-### `JsonStoreFactory`
+## `JsonFileStore`
 
 ```rust
-use kanban_persistence_json::JsonStoreFactory;
+pub struct JsonFileStore {
+    path: String,
+    instance_id: String,
+}
 
-let factory = JsonStoreFactory;
-assert!(factory.matches_locator("board.json"));
-assert!(factory.matches_locator("myboard"));        // catch-all
-assert!(!factory.matches_locator("http://example")); // URI excluded
+impl JsonFileStore {
+    pub fn new(path: &str) -> Self;
+    pub fn with_instance_id(path: &str, instance_id: &str) -> Self;
+}
 ```
 
-### `JsonFileStore`
+`instance_id` is a random UUID generated per process; used for conflict detection.
 
-```rust
-use kanban_persistence_json::JsonFileStore;
-use kanban_persistence::PersistenceStore;
+---
 
-let store = JsonFileStore::new("board.json");
-let (snapshot, metadata) = store.load().await?;
-store.save(snapshot).await?;
-```
-
-## Format Specification
-
-### V2 Format (Current)
+## V2 Envelope Format
 
 ```json
 {
   "version": 2,
   "metadata": {
-    "instance_id": "uuid-here",
-    "saved_at": "2024-01-15T10:30:00Z"
+    "saved_at": "2024-06-15T10:30:00Z",
+    "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+    "save_count": 42
   },
-  "data": {
-    "boards": [],
-    "columns": [],
-    "cards": [],
-    "sprints": [],
-    "archived_cards": []
-  }
+  "data": { /* kanban_domain::Snapshot */ }
 }
 ```
 
-### V1 Format (Deprecated)
+V1 format was a bare `Snapshot` JSON object with no envelope.
 
-Legacy format without version field or metadata:
+---
 
-```json
-{
-  "boards": [],
-  "columns": [],
-  "cards": [],
-  "sprints": []
-}
-```
+## Save Flow
 
-## Migration
+1. Check for conflict: compare file metadata (size + mtime) against the last-seen value
+2. Update `PersistenceMetadata` (increment `save_count`, set `saved_at`)
+3. Wrap snapshot in the V2 envelope
+4. Write to a temporary file (`.tmp` suffix) in the same directory
+5. Atomic rename: `temp → final path`
 
-### Automatic V1→V2 Migration
+The atomic rename means a crash at any point leaves either the old file or the new file intact — never a partial write.
 
-On first load of a V1 file:
+**Debounced saving**: a 500ms minimum interval is enforced between saves to avoid thrashing on rapid successive mutations.
 
-1. **Detection**: Checks for `version` field presence
-2. **Backup**: Original V1 file copied to `.v1.backup`
-3. **Transform**: Data wrapped with V2 metadata envelope
-4. **Write**: Migrated file written atomically
-5. **Logging**: Migration progress logged for visibility
+---
 
-### Manual Migration
+## Load Flow
+
+1. Read the file
+2. Detect format version: V2 envelopes begin with `{"version":2`; anything else is treated as V1
+3. **V1 migration**: rename existing file to `<path>.v1.backup`, parse as bare `Snapshot`, re-save as V2
+4. Parse the V2 envelope, extract and return `data` as `StoreSnapshot`
+
+---
+
+## Conflict Detection
+
+`FileMetadata` captures the file's size and modification time at last load/save. On the next save, the current file metadata is compared:
+
+- If they match → no external write occurred; proceed
+- If they differ → another instance wrote the file; return `PersistenceError::Conflict`
+
+---
+
+## `JsonStoreFactory`
 
 ```rust
-use kanban_persistence_json::migration::{Migrator, FormatVersion};
+pub struct JsonStoreFactory;
 
-let version = Migrator::detect_version("board.json").await?;
-if version == FormatVersion::V1 {
-    Migrator::migrate(FormatVersion::V1, FormatVersion::V2, "board.json").await?;
+impl StoreFactory for JsonStoreFactory {
+    fn name(&self) -> &str { "json" }
+    fn supported_patterns(&self) -> &[&str] { &["*.json"] }
+    fn matches(&self, locator: &str) -> bool { /* see below */ }
+    fn create(&self, locator: &str) -> Result<...>;
 }
 ```
 
-## Performance Characteristics
+`matches` logic:
+1. If the locator ends with `.json` → true
+2. If the locator starts with `sqlite://` or ends with `.sqlite`/`.sqlite3`/`.db` → false
+3. Otherwise → **true** (catch-all fallback for plain file paths)
 
-- **Debounced Saving**: 500ms minimum interval between disk writes
-- **Atomic Writes**: Crash-safe pattern (write to temp file, then atomic rename)
-- **Steady-state**: ~2 saves/second maximum under rapid edits
+---
 
 ## Dependencies
 
-- `kanban-persistence` — `PersistenceStore` and `StoreFactory` traits
-- `kanban-domain` — Domain models
-- `serde`, `serde_json` — JSON serialization
-- `tokio` — Async runtime
-- `uuid` — ID generation
-
-## License
-
-Apache 2.0 — See [LICENSE.md](../../LICENSE.md) for details
+| Crate | Purpose |
+|-------|---------|
+| `kanban-persistence` | `PersistenceStore`, `StoreFactory` traits |
+| `kanban-domain` | `Snapshot` type |
+| `serde_json` | JSON parsing |
+| `tokio` | Async I/O |
+| `tempfile` | Temp file for atomic writes |
