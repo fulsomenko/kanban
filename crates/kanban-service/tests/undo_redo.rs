@@ -1,4 +1,6 @@
-use kanban_domain::commands::{Command, CompactColumnPositions, CreateBoard, ImportEntities, UpdateBoard};
+use kanban_domain::commands::{
+    Command, CompactColumnPositions, CreateBoard, ImportEntities, UpdateBoard,
+};
 use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, Snapshot};
 use kanban_persistence::NullStore;
 use kanban_service::KanbanContext;
@@ -83,7 +85,7 @@ async fn test_new_action_after_undo_clears_redo() {
         name: "A".into(),
         card_prefix: None,
     }) as Box<dyn Command>])
-    .unwrap();
+        .unwrap();
     ctx.undo();
     assert!(ctx.can_redo());
 
@@ -91,7 +93,7 @@ async fn test_new_action_after_undo_clears_redo() {
         name: "B".into(),
         card_prefix: None,
     }) as Box<dyn Command>])
-    .unwrap();
+        .unwrap();
     assert!(!ctx.can_redo());
 }
 
@@ -106,14 +108,14 @@ async fn test_reload_no_longer_clears_history() {
         name: "B".into(),
         card_prefix: None,
     }) as Box<dyn Command>])
-    .unwrap();
+        .unwrap();
     ctx.save().await.unwrap();
 
     ctx.execute(vec![Box::new(CreateBoard {
         name: "B2".into(),
         card_prefix: None,
     }) as Box<dyn Command>])
-    .unwrap();
+        .unwrap();
     assert!(ctx.can_undo());
 
     ctx.reload().await.unwrap();
@@ -130,7 +132,7 @@ async fn test_dirty_flag_lifecycle() {
         name: "B".into(),
         card_prefix: None,
     }) as Box<dyn Command>])
-    .unwrap();
+        .unwrap();
     assert!(ctx.is_dirty());
 
     ctx.mark_clean();
@@ -293,14 +295,14 @@ async fn test_undo_pops_before_pushing_to_redo() {
         name: "B".into(),
         card_prefix: None,
     }) as Box<dyn Command>])
-    .unwrap();
+        .unwrap();
     ctx.clear_history();
 
     ctx.execute(vec![Box::new(CreateBoard {
         name: "B2".into(),
         card_prefix: None,
     }) as Box<dyn Command>])
-    .unwrap();
+        .unwrap();
 
     assert!(ctx.undo());
     assert_eq!(ctx.redo_depth(), 1);
@@ -314,7 +316,7 @@ async fn test_redo_pops_before_pushing_to_undo() {
         name: "B".into(),
         card_prefix: None,
     }) as Box<dyn Command>])
-    .unwrap();
+        .unwrap();
     ctx.undo();
 
     assert!(ctx.redo());

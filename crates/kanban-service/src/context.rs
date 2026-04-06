@@ -778,7 +778,9 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .filter(|c| c.column_id == column_id)
             .count();
-        self.execute(vec![Box::new(MoveCards { ids, column_id }) as Box<dyn Command>])?;
+        self.execute(vec![
+            Box::new(MoveCards { ids, column_id }) as Box<dyn Command>
+        ])?;
         let after = self
             .cards
             .iter()
@@ -794,7 +796,9 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .filter(|c| c.sprint_id == Some(sprint_id))
             .count();
-        self.execute(vec![Box::new(AssignCardsToSprint { ids, sprint_id }) as Box<dyn Command>])?;
+        self.execute(vec![
+            Box::new(AssignCardsToSprint { ids, sprint_id }) as Box<dyn Command>
+        ])?;
         let after = self
             .cards
             .iter()
