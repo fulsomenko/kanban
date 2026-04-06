@@ -213,6 +213,8 @@ fn test_render_settings_storage_fields_greyed_when_cli_file_override() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.cli_file_override = true;
     app.app_config.storage_backend = Some("json".into());
+    // original_storage_backend must be set so grayed rows are shown
+    app.original_storage_backend = Some("json".into());
     app.push_mode(AppMode::Settings);
     let cells = helpers::render_to_string_with_colors(&app);
     let dark_gray_text: String = cells
@@ -313,6 +315,39 @@ fn test_render_settings_active_storage_location_shows_absolute_path_with_cli_ove
         value.starts_with('/'),
         "Active Storage Location must show an absolute path, got: {:?}",
         &value[..value.find(' ').unwrap_or(value.len()).min(60)]
+    );
+}
+
+#[test]
+fn test_render_settings_cli_override_without_config_storage_hides_config_storage_rows() {
+    // When CLI overrides the file but config defines no storage, the grayed-out
+    // "Storage Backend" / "Storage Location" rows must NOT appear — only the
+    // "Active Storage *" rows should be shown.
+    let (mut app, _rx) = App::new(None).unwrap();
+    app.cli_file_provided = true;
+    app.cli_file_override = true;
+    app.original_storage_backend = None;
+    app.original_storage_location = None;
+    app.app_config.storage_location = Some("/tmp/cli_override.json".into());
+    app.has_data_file = true;
+    app.push_mode(AppMode::Settings);
+
+    let output = helpers::render_to_string(&app);
+
+    assert!(
+        output.contains("Active Storage Backend"),
+        "Active Storage Backend must appear when CLI override is active"
+    );
+    assert!(
+        output.contains("Active Storage Location"),
+        "Active Storage Location must appear when CLI override is active"
+    );
+    // Every occurrence of "Storage Backend" must be part of "Active Storage Backend"
+    let plain_count = output.matches("Storage Backend").count();
+    let active_count = output.matches("Active Storage Backend").count();
+    assert_eq!(
+        plain_count, active_count,
+        "Plain 'Storage Backend' rows must not appear when config has no storage configured"
     );
 }
 
