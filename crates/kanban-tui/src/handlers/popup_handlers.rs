@@ -280,10 +280,7 @@ impl App {
                                     Sprint::assignable(self.ctx.sprints(), board_id);
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                     let sprint_id = sprint.id;
-                                    let sprint_number = sprint.sprint_number;
-                                    let sprint_status = format!("{:?}", sprint.status);
 
-                                    // Get effective prefix and sprint info before calling execute_command
                                     let effective_prefix = {
                                         if let Some(board) = self.ctx.boards().get(board_idx) {
                                             sprint.effective_prefix(board, "task").to_string()
@@ -292,32 +289,18 @@ impl App {
                                         }
                                     };
 
-                                    let sprint_name = {
-                                        if let Some(board) = self.ctx.boards().get(board_idx) {
-                                            sprint.get_name(board).map(|s| s.to_string())
-                                        } else {
-                                            None
-                                        }
-                                    };
-
-                                    // Build batch of commands
                                     let mut commands: Vec<
                                         Box<dyn kanban_domain::commands::Command>,
                                     > = Vec::new();
 
-                                    // First, assign to sprint
                                     let assign_cmd =
-                                        Box::new(kanban_domain::commands::AssignCardToSprint {
-                                            card_id,
+                                        Box::new(kanban_domain::commands::AssignCardsToSprint {
+                                            ids: vec![card_id],
                                             sprint_id,
-                                            sprint_number,
-                                            sprint_name,
-                                            sprint_status,
                                         })
                                             as Box<dyn kanban_domain::commands::Command>;
                                     commands.push(assign_cmd);
 
-                                    // Then, update the assigned prefix
                                     let update_cmd = Box::new(kanban_domain::commands::UpdateCard {
                                         card_id,
                                         updates: kanban_domain::CardUpdate {
@@ -330,7 +313,6 @@ impl App {
                                         as Box<dyn kanban_domain::commands::Command>;
                                     commands.push(update_cmd);
 
-                                    // Execute all commands as a batch
                                     if let Err(e) = self.execute_commands_batch(commands) {
                                         tracing::error!("Failed to assign card to sprint: {}", e);
                                         self.set_error(format!(
@@ -407,10 +389,7 @@ impl App {
                             let board_sprints = Sprint::assignable(self.ctx.sprints(), board_id);
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;
-                                let sprint_number = sprint.sprint_number;
-                                let sprint_status = format!("{:?}", sprint.status);
 
-                                // Get effective prefix and sprint info before the loop
                                 let effective_prefix = {
                                     if let Some(board) = self.ctx.boards().get(board_idx) {
                                         sprint.effective_prefix(board, "task").to_string()
@@ -419,31 +398,18 @@ impl App {
                                     }
                                 };
 
-                                let sprint_name = {
-                                    if let Some(board) = self.ctx.boards().get(board_idx) {
-                                        sprint.get_name(board).map(|s| s.to_string())
-                                    } else {
-                                        None
-                                    }
-                                };
-
-                                // Build batch of commands for all cards
                                 let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
                                     Vec::new();
-                                for card_id in &card_ids {
-                                    // First, assign to sprint
-                                    let assign_cmd =
-                                        Box::new(kanban_domain::commands::AssignCardToSprint {
-                                            card_id: *card_id,
-                                            sprint_id,
-                                            sprint_number,
-                                            sprint_name: sprint_name.clone(),
-                                            sprint_status: sprint_status.clone(),
-                                        })
-                                            as Box<dyn kanban_domain::commands::Command>;
-                                    commands.push(assign_cmd);
 
-                                    // Then, update the assigned prefix
+                                commands.push(
+                                    Box::new(kanban_domain::commands::AssignCardsToSprint {
+                                        ids: card_ids.clone(),
+                                        sprint_id,
+                                    })
+                                        as Box<dyn kanban_domain::commands::Command>,
+                                );
+
+                                for card_id in &card_ids {
                                     let update_cmd = Box::new(kanban_domain::commands::UpdateCard {
                                         card_id: *card_id,
                                         updates: kanban_domain::CardUpdate {
@@ -457,7 +423,6 @@ impl App {
                                     commands.push(update_cmd);
                                 }
 
-                                // Execute all commands as a batch (single pause/resume cycle)
                                 if let Err(e) = self.execute_commands_batch(commands) {
                                     tracing::error!("Failed to assign cards to sprint: {}", e);
                                     self.set_error(format!(

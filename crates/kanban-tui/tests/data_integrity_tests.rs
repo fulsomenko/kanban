@@ -253,31 +253,9 @@ fn test_delete_sprint_unassigns_cards() {
     };
 
     {
-        let cmd = AssignCardToSprint {
-            card_id: card_a,
+        let cmd = AssignCardsToSprint {
+            ids: vec![card_a, card_b],
             sprint_id,
-            sprint_number: 1,
-            sprint_name: Some("Sprint 1".to_string()),
-            sprint_status: "Active".to_string(),
-        };
-        let mut ctx = CommandContext {
-            boards: &mut boards,
-            columns: &mut columns,
-            cards: &mut cards,
-            sprints: &mut sprints,
-            archived_cards: &mut archived_cards,
-            graph: &mut graph,
-        };
-        cmd.execute(&mut ctx).unwrap();
-    }
-
-    {
-        let cmd = AssignCardToSprint {
-            card_id: card_b,
-            sprint_id,
-            sprint_number: 1,
-            sprint_name: Some("Sprint 1".to_string()),
-            sprint_status: "Active".to_string(),
         };
         let mut ctx = CommandContext {
             boards: &mut boards,
