@@ -81,3 +81,19 @@ async fn test_load_initial_state_with_no_file_leaves_selection_none() -> KanbanR
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn test_load_initial_state_does_not_clobber_existing_board_selection() -> KanbanResult<()> {
+    let dir = tempfile::tempdir()?;
+    let path = helpers::create_test_json_file(dir.path(), "test.json", &["Alpha", "Beta"]).await;
+    let (mut app, _rx) = kanban_tui::App::new(Some(path))?;
+    app.selection.board.set(Some(1));
+    app.load_initial_state().await;
+
+    assert_eq!(
+        app.selection.board.get(),
+        Some(1),
+        "pre-existing board selection should not be overwritten by load_initial_state"
+    );
+    Ok(())
+}
