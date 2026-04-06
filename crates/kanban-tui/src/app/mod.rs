@@ -1584,6 +1584,10 @@ impl App {
         }
         self.migrate_sprint_logs();
         self.check_ended_sprints();
+        if self.selection.board.get().is_none() && !self.ctx.boards().is_empty() {
+            self.selection.board.set(Some(0));
+            self.refresh_view();
+        }
     }
 
     pub async fn run(
