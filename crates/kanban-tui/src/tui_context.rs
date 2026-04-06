@@ -66,11 +66,21 @@ impl TuiContext {
     // --- Delegation: state methods ---
 
     pub fn undo(&mut self) -> bool {
-        self.inner.undo()
+        let result = self.inner.undo();
+        if result {
+            let snapshot = self.inner.snapshot();
+            self.save_coordinator.queue_snapshot(snapshot);
+        }
+        result
     }
 
     pub fn redo(&mut self) -> bool {
-        self.inner.redo()
+        let result = self.inner.redo();
+        if result {
+            let snapshot = self.inner.snapshot();
+            self.save_coordinator.queue_snapshot(snapshot);
+        }
+        result
     }
 
     pub fn can_undo(&self) -> bool {

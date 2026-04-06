@@ -1283,9 +1283,6 @@ impl App {
     pub fn undo(&mut self) -> KanbanResult<()> {
         if self.ctx.undo() {
             self.refresh_view();
-            self.ctx
-                .save_coordinator
-                .queue_snapshot(self.ctx.snapshot());
         } else {
             self.set_error("Nothing to undo".to_string());
         }
@@ -1296,9 +1293,6 @@ impl App {
     pub fn redo(&mut self) -> KanbanResult<()> {
         if self.ctx.redo() {
             self.refresh_view();
-            self.ctx
-                .save_coordinator
-                .queue_snapshot(self.ctx.snapshot());
         } else {
             self.set_error("Nothing to redo".to_string());
         }
