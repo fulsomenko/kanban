@@ -69,8 +69,8 @@ fn render_settings_configuration(app: &App, frame: &mut Frame, area: Rect, confi
         let active_storage_location =
             kanban_service::config::resolve_storage_location(&app.app_config);
         if app.cli_file_override {
-            let storage_configured = app.original_storage_backend.is_some()
-                || app.original_storage_location.is_some();
+            let storage_configured =
+                app.original_storage_backend.is_some() || app.original_storage_location.is_some();
             if storage_configured {
                 config_lines.push(metadata_line_styled(
                     "Storage Backend",
