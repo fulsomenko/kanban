@@ -238,6 +238,28 @@ cargo tarpaulin        # Code coverage
 4. **TUI Components**: Build UI in `kanban-tui`
 5. **Integration**: Wire up in `kanban-cli`
 
+## Commit Message Convention
+
+Use conventional commits with the crate name as scope, dropping the `kanban-` prefix:
+
+```
+<type>(<crate>): <description>
+```
+
+**Types:** `feat`, `fix`, `test`, `refactor`, `chore`, `docs`
+
+**Scope:** crate name without the `kanban-` prefix — e.g. `tui`, `domain`, `service`, `persistence`, `cli`, `mcp`, `core`
+
+**Examples:**
+```
+feat(tui): preselect first board and refresh card view on startup
+fix(service): handle empty board list on context init
+test(tui): preselect first board and refresh card view on startup
+refactor(domain): extract card sorting into pure function
+```
+
+Split commits by type — tests and implementation go in separate commits.
+
 ## Guidelines
 
 - **No comments** unless documenting public APIs or complex algorithms
