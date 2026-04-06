@@ -5,18 +5,18 @@ use tempfile::TempDir;
 fn make_ctx_with_persistence() -> (
     TuiContext,
     tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>,
+    TempDir,
 ) {
     let dir = TempDir::new().unwrap();
-    // leak dir so the temp file lives for the test
-    let path = dir.keep().join("test.json");
+    let path = dir.path().join("test.json");
     let (ctx, save_rx, _) =
         TuiContext::new("json", Some(path.to_str().unwrap().to_string())).unwrap();
-    (ctx, save_rx.unwrap())
+    (ctx, save_rx.unwrap(), dir)
 }
 
 #[test]
 fn test_undo_queues_snapshot_to_save_coordinator() {
-    let (mut ctx, mut save_rx) = make_ctx_with_persistence();
+    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
 
     ctx.create_board("Board".into(), None).unwrap();
     // drain the post-create snapshot
@@ -34,7 +34,7 @@ fn test_undo_queues_snapshot_to_save_coordinator() {
 
 #[test]
 fn test_redo_queues_snapshot_to_save_coordinator() {
-    let (mut ctx, mut save_rx) = make_ctx_with_persistence();
+    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
 
     ctx.create_board("Board".into(), None).unwrap();
     assert!(ctx.undo());
@@ -54,7 +54,7 @@ fn test_redo_queues_snapshot_to_save_coordinator() {
 
 #[test]
 fn test_undo_when_nothing_to_undo_does_not_queue_snapshot() {
-    let (mut ctx, mut save_rx) = make_ctx_with_persistence();
+    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
 
     assert!(!ctx.undo());
     assert!(
