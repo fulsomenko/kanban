@@ -76,6 +76,7 @@ impl App {
 
         if let Err(e) = self.execute_command(create_board_cmd) {
             tracing::error!("Failed to create board: {}", e);
+            self.set_error(format!("Failed to create board: {}", e));
             return;
         }
 
@@ -102,6 +103,7 @@ impl App {
         // Execute all column creation commands as a batch (single pause/resume cycle)
         if let Err(e) = self.execute_commands_batch(column_commands) {
             tracing::error!("Failed to create default columns: {}", e);
+            self.set_error(format!("Failed to create default columns: {}", e));
             return;
         }
 
@@ -132,6 +134,7 @@ impl App {
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to rename board: {}", e);
+                    self.set_error(format!("Failed to rename board: {}", e));
                     return;
                 }
 

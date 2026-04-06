@@ -109,6 +109,7 @@ impl App {
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
+                                self.set_error(format!("Failed to move column: {}", e));
                                 return;
                             }
 
@@ -166,6 +167,7 @@ impl App {
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
+                                self.set_error(format!("Failed to move column: {}", e));
                                 return;
                             }
 
@@ -230,6 +232,7 @@ impl App {
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to create column: {}", e);
+                    self.set_error(format!("Failed to create column: {}", e));
                     return;
                 }
 
@@ -289,6 +292,7 @@ impl App {
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to rename column: {}", e);
+                    self.set_error(format!("Failed to rename column: {}", e));
                     return;
                 }
 
@@ -369,6 +373,7 @@ impl App {
 
                         if let Err(e) = self.execute_commands_batch(move_commands) {
                             tracing::error!("Failed to move cards: {}", e);
+                            self.set_error(format!("Failed to move cards: {}", e));
                             return;
                         }
 
@@ -379,6 +384,7 @@ impl App {
                 let cmd = Box::new(DeleteColumn { column_id });
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to delete column: {}", e);
+                    self.set_error(format!("Failed to delete column: {}", e));
                     return;
                 }
 
@@ -521,6 +527,7 @@ impl App {
 
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set task list view: {}", e);
+                                self.set_error(format!("Failed to set task list view: {}", e));
                                 self.pop_mode();
                                 self.dialog_input.task_list_view_selection.clear();
                                 return;

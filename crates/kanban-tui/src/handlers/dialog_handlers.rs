@@ -81,6 +81,7 @@ impl App {
             DialogAction::Confirm => {
                 if let Err(e) = self.export_board_with_filename() {
                     tracing::error!("Failed to export board: {}", e);
+                    self.set_error(format!("Failed to export board: {}", e));
                 }
                 self.pop_mode();
                 self.input.clear();
@@ -98,6 +99,7 @@ impl App {
             DialogAction::Confirm => {
                 if let Err(e) = self.export_all_boards_with_filename() {
                     tracing::error!("Failed to export all boards: {}", e);
+                    self.set_error(format!("Failed to export all boards: {}", e));
                 }
                 self.pop_mode();
                 self.input.clear();
@@ -149,6 +151,7 @@ impl App {
                     });
                     if let Err(e) = self.execute_command(cmd) {
                         tracing::error!("Failed to set card points: {}", e);
+                        self.set_error(format!("Failed to set card points: {}", e));
                     } else {
                         tracing::info!("Set points to: {:?}", points);
                     }
@@ -188,6 +191,10 @@ impl App {
                                     });
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to clear sprint prefix: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to clear sprint prefix: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Cleared sprint prefix");
                                     }
@@ -208,6 +215,10 @@ impl App {
                                     });
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to clear sprint prefix: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to clear sprint prefix: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Cleared sprint prefix");
                                     }
@@ -231,6 +242,10 @@ impl App {
                                             "Failed to clear sprint card prefix override: {}",
                                             e
                                         );
+                                        self.set_error(format!(
+                                            "Failed to clear sprint card prefix override: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Cleared sprint card prefix override");
                                     }
@@ -254,6 +269,10 @@ impl App {
                                     });
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to set sprint prefix: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Set sprint prefix to: {}", prefix_str);
                                     }
@@ -274,6 +293,10 @@ impl App {
                                     });
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to set sprint prefix: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Set sprint prefix to: {}", prefix_str);
                                     }
@@ -297,6 +320,10 @@ impl App {
                                             "Failed to set sprint card prefix override: {}",
                                             e
                                         );
+                                        self.set_error(format!(
+                                            "Failed to set sprint card prefix override: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!(
                                             "Set sprint card prefix override to: {}",

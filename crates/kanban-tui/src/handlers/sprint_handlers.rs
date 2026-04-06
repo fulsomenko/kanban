@@ -60,6 +60,7 @@ impl App {
 
                         if let Err(e) = self.execute_commands_batch(vec![activate_cmd, board_cmd]) {
                             tracing::error!("Failed to activate sprint: {}", e);
+                            self.set_error(format!("Failed to activate sprint: {}", e));
                             return;
                         }
 
@@ -119,6 +120,7 @@ impl App {
 
                 if let Err(e) = self.execute_commands_batch(vec![complete_cmd, board_cmd]) {
                     tracing::error!("Failed to complete sprint: {}", e);
+                    self.set_error(format!("Failed to complete sprint: {}", e));
                     return;
                 }
 
@@ -206,6 +208,7 @@ impl App {
 
             if let Err(e) = self.execute_command(cmd) {
                 tracing::error!("Failed to create sprint: {}", e);
+                self.set_error(format!("Failed to create sprint: {}", e));
                 return;
             }
 

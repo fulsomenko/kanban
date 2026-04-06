@@ -213,6 +213,7 @@ impl App {
                     if let Err(e) = self.edit_card_field(terminal, event_handler, CardField::Title)
                     {
                         tracing::error!("Failed to edit title: {}", e);
+                        self.set_error(format!("Failed to edit title: {}", e));
                     }
                     should_restart = true;
                 }
@@ -221,6 +222,7 @@ impl App {
                         self.edit_card_field(terminal, event_handler, CardField::Description)
                     {
                         tracing::error!("Failed to edit description: {}", e);
+                        self.set_error(format!("Failed to edit description: {}", e));
                     }
                     should_restart = true;
                 }
@@ -246,16 +248,25 @@ impl App {
                                             );
                                             if let Err(e) = self.ctx.execute_command(cmd) {
                                                 tracing::error!("Failed to apply metadata: {}", e);
+                                                self.set_error(format!(
+                                                    "Failed to apply metadata: {}",
+                                                    e
+                                                ));
                                             }
                                         }
                                         Err(e) => {
                                             tracing::error!("Failed to parse metadata JSON: {}", e);
+                                            self.set_error(format!(
+                                                "Failed to parse metadata JSON: {}",
+                                                e
+                                            ));
                                         }
                                     }
                                 }
                                 Ok(None) => {}
                                 Err(e) => {
                                     tracing::error!("Failed to edit metadata: {}", e);
+                                    self.set_error(format!("Failed to edit metadata: {}", e));
                                 }
                             }
                             should_restart = true;
@@ -379,6 +390,7 @@ impl App {
                     if let Err(e) = self.edit_board_field(terminal, event_handler, BoardField::Name)
                     {
                         tracing::error!("Failed to edit board name: {}", e);
+                        self.set_error(format!("Failed to edit board name: {}", e));
                     }
                     should_restart = true;
                 }
@@ -387,6 +399,7 @@ impl App {
                         self.edit_board_field(terminal, event_handler, BoardField::Description)
                     {
                         tracing::error!("Failed to edit board description: {}", e);
+                        self.set_error(format!("Failed to edit board description: {}", e));
                     }
                     should_restart = true;
                 }
@@ -415,6 +428,10 @@ impl App {
                                                     "Failed to apply board settings: {}",
                                                     e
                                                 );
+                                                self.set_error(format!(
+                                                    "Failed to apply board settings: {}",
+                                                    e
+                                                ));
                                             }
                                         }
                                         Err(e) => {
@@ -422,12 +439,17 @@ impl App {
                                                 "Failed to parse board settings JSON: {}",
                                                 e
                                             );
+                                            self.set_error(format!(
+                                                "Failed to parse board settings JSON: {}",
+                                                e
+                                            ));
                                         }
                                     }
                                 }
                                 Ok(None) => {}
                                 Err(e) => {
                                     tracing::error!("Failed to edit board settings: {}", e);
+                                    self.set_error(format!("Failed to edit board settings: {}", e));
                                 }
                             }
                             should_restart = true;
@@ -797,6 +819,10 @@ impl App {
                                 });
                                 if let Err(e) = self.execute_command(cmd) {
                                     tracing::error!("Failed to toggle card completion: {}", e);
+                                    self.set_error(format!(
+                                        "Failed to toggle card completion: {}",
+                                        e
+                                    ));
                                 }
                             }
                         }
@@ -914,6 +940,7 @@ impl App {
                                     });
                                     if let Err(e) = self.execute_command(move_cmd) {
                                         tracing::error!("Failed to move card: {}", e);
+                                        self.set_error(format!("Failed to move card: {}", e));
                                         return;
                                     }
 
@@ -928,6 +955,10 @@ impl App {
                                             });
                                         if let Err(e) = self.execute_command(status_cmd) {
                                             tracing::error!("Failed to update card status: {}", e);
+                                            self.set_error(format!(
+                                                "Failed to update card status: {}",
+                                                e
+                                            ));
                                         }
                                     }
                                 }
@@ -1272,6 +1303,7 @@ impl App {
         if !update_commands.is_empty() {
             if let Err(e) = self.execute_commands_batch(update_commands) {
                 tracing::error!("Failed to toggle card completion: {}", e);
+                self.set_error(format!("Failed to toggle card completion: {}", e));
                 return;
             }
         }

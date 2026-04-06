@@ -135,6 +135,7 @@ impl App {
 
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set board task sort: {}", e);
+                                self.set_error(format!("Failed to set board task sort: {}", e));
                                 return;
                             }
                         }
@@ -204,6 +205,7 @@ impl App {
                     self.edit_card_field(terminal, event_handler, CardField::Description)
                 {
                     tracing::error!("Failed to edit card description: {}", e);
+                    self.set_error(format!("Failed to edit card description: {}", e));
                 }
                 should_restart = true;
             }
@@ -245,6 +247,7 @@ impl App {
             let cmd = Box::new(UpdateCard { card_id, updates });
             if let Err(e) = self.execute_command(cmd) {
                 tracing::error!("Failed to toggle card completion: {}", e);
+                self.set_error(format!("Failed to toggle card completion: {}", e));
                 return;
             }
 
@@ -303,6 +306,7 @@ impl App {
         if !update_commands.is_empty() {
             if let Err(e) = self.execute_commands_batch(update_commands) {
                 tracing::error!("Failed to toggle card completion: {}", e);
+                self.set_error(format!("Failed to toggle card completion: {}", e));
                 return;
             }
         }
@@ -348,6 +352,7 @@ impl App {
                         Ok(col) => col,
                         Err(e) => {
                             tracing::error!("Failed to create column: {}", e);
+                            self.set_error(format!("Failed to create column: {}", e));
                             return;
                         }
                     },
@@ -381,6 +386,7 @@ impl App {
 
                 if let Err(e) = self.execute_command(create_cmd) {
                     tracing::error!("Failed to create card: {}", e);
+                    self.set_error(format!("Failed to create card: {}", e));
                     return;
                 }
 
@@ -403,6 +409,7 @@ impl App {
 
                         if let Err(e) = self.execute_command(update_cmd) {
                             tracing::error!("Failed to update card status: {}", e);
+                            self.set_error(format!("Failed to update card status: {}", e));
                         }
                     }
                 }
@@ -488,6 +495,7 @@ impl App {
                     kanban_domain::card_lifecycle::MoveDirection::Right => "right",
                 };
                 tracing::error!("Failed to move card {}: {}", dir, e);
+                self.set_error(format!("Failed to move card {}: {}", dir, e));
                 return;
             }
 
@@ -589,6 +597,7 @@ impl App {
                     kanban_domain::card_lifecycle::MoveDirection::Right => "right",
                 };
                 tracing::error!("Failed to move cards {}: {}", dir, e);
+                self.set_error(format!("Failed to move cards {}: {}", dir, e));
                 return;
             }
         }
@@ -643,6 +652,7 @@ impl App {
         let cmd = Box::new(kanban_domain::commands::CompactColumnPositions { column_id });
         if let Err(e) = self.ctx.execute_command(cmd) {
             tracing::error!("Failed to compact column positions: {}", e);
+            self.set_error(format!("Failed to compact column positions: {}", e));
         }
     }
 
@@ -744,6 +754,7 @@ impl App {
 
         if let Err(e) = self.execute_command(cmd) {
             tracing::error!("Failed to restore card: {}", e);
+            self.set_error(format!("Failed to restore card: {}", e));
             return;
         }
 
