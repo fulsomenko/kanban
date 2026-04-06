@@ -401,13 +401,13 @@ impl App {
                                 let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
                                     Vec::new();
 
-                                commands.push(
-                                    Box::new(kanban_domain::commands::AssignCardsToSprint {
+                                commands.push(Box::new(
+                                    kanban_domain::commands::AssignCardsToSprint {
                                         ids: card_ids.clone(),
                                         sprint_id,
-                                    })
-                                        as Box<dyn kanban_domain::commands::Command>,
-                                );
+                                    },
+                                )
+                                    as Box<dyn kanban_domain::commands::Command>);
 
                                 for card_id in &card_ids {
                                     let update_cmd = Box::new(kanban_domain::commands::UpdateCard {

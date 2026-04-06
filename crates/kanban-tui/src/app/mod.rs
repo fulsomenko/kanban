@@ -1010,10 +1010,12 @@ impl App {
 
         // Execute batch archive commands
         if had_archives {
-            if let Err(e) = self.execute_commands_batch(vec![
-                Box::new(kanban_domain::commands::ArchiveCards { ids: archive_cards })
-                    as Box<dyn kanban_domain::commands::Command>,
-            ]) {
+            if let Err(e) =
+                self.execute_commands_batch(vec![Box::new(kanban_domain::commands::ArchiveCards {
+                    ids: archive_cards,
+                })
+                    as Box<dyn kanban_domain::commands::Command>])
+            {
                 tracing::error!("Failed to archive cards: {}", e);
             } else if let (Some(column_id), Some(position)) =
                 (last_archive_column, last_archive_position)

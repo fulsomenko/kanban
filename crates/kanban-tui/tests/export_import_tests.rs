@@ -50,10 +50,7 @@ fn test_export_all_boards() {
 
     let (mut app, _rx) = App::new(None).unwrap();
 
-    let board1 = app
-        .ctx
-        .create_board("Board 1".to_string(), None)
-        .unwrap();
+    let board1 = app.ctx.create_board("Board 1".to_string(), None).unwrap();
     let column1 = app
         .ctx
         .create_column(board1.id, "Todo".to_string(), None)
@@ -67,10 +64,7 @@ fn test_export_all_boards() {
         )
         .unwrap();
 
-    let board2 = app
-        .ctx
-        .create_board("Board 2".to_string(), None)
-        .unwrap();
+    let board2 = app.ctx.create_board("Board 2".to_string(), None).unwrap();
     let column2 = app
         .ctx
         .create_column(board2.id, "Todo".to_string(), None)
@@ -301,10 +295,7 @@ fn test_export_import_sprint_and_card_prefixes() {
         .unwrap();
 
     // Create sprint with card_prefix override
-    let sprint = app
-        .ctx
-        .create_sprint(board.id, None, None)
-        .unwrap();
+    let sprint = app.ctx.create_sprint(board.id, None, None).unwrap();
     app.ctx
         .update_sprint(
             sprint.id,

@@ -359,12 +359,11 @@ impl KanbanContext {
             };
         }
         let succeeded = to_move.clone();
-        match self.execute(vec![
-            Box::new(MoveCards {
-                ids: to_move,
-                column_id,
-            }) as Box<dyn Command>
-        ]) {
+        match self.execute(vec![Box::new(MoveCards {
+            ids: to_move,
+            column_id,
+        }) as Box<dyn Command>])
+        {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
@@ -419,12 +418,11 @@ impl KanbanContext {
             };
         }
         let succeeded = to_assign.clone();
-        match self.execute(vec![
-            Box::new(AssignCardsToSprint {
-                ids: to_assign,
-                sprint_id,
-            }) as Box<dyn Command>
-        ]) {
+        match self.execute(vec![Box::new(AssignCardsToSprint {
+            ids: to_assign,
+            sprint_id,
+        }) as Box<dyn Command>])
+        {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
