@@ -1,5 +1,6 @@
 mod helpers;
 
+use kanban_domain::KanbanOperations;
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::{AppMode, DialogMode};
 use kanban_tui::app::{ExportDialogState, ExportFormat, ExportStep};
@@ -121,8 +122,8 @@ fn test_render_export_boards_select_step_shows_board_names() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.ctx
         .inner_mut()
-        .boards
-        .push(kanban_domain::Board::new("MyTestBoard".into(), None));
+        .create_board("MyTestBoard".into(), None)
+        .unwrap();
     app.export_dialog = Some(ExportDialogState::new(1));
     app.push_mode(AppMode::Settings);
     app.push_mode(AppMode::Dialog(DialogMode::ExportBoards));
@@ -156,8 +157,8 @@ fn test_render_export_boards_options_step_shows_filename() {
     let (mut app, _rx) = App::new(None).unwrap();
     app.ctx
         .inner_mut()
-        .boards
-        .push(kanban_domain::Board::new("Board1".into(), None));
+        .create_board("Board1".into(), None)
+        .unwrap();
     let mut dialog = ExportDialogState::new(1);
     dialog.step = ExportStep::ExportOptions;
     dialog.board_selections[0] = true;
@@ -197,10 +198,15 @@ fn test_export_boards_json_creates_file() {
     app.focus.active = Focus::Boards;
     app.push_mode(AppMode::Settings);
 
-    let board = kanban_domain::Board::new("ExportTest".into(), None);
-    let col = kanban_domain::Column::new(board.id, "Todo".into(), 0);
-    app.ctx.inner_mut().boards.push(board);
-    app.ctx.inner_mut().columns.push(col);
+    let board = app
+        .ctx
+        .inner_mut()
+        .create_board("ExportTest".into(), None)
+        .unwrap();
+    app.ctx
+        .inner_mut()
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
 
     app.export_dialog = Some(ExportDialogState::new(1));
     app.push_mode(AppMode::Dialog(DialogMode::ExportBoards));

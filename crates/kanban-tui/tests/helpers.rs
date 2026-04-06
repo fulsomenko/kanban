@@ -76,14 +76,15 @@ pub fn setup_settings_app() -> App {
 }
 
 pub fn setup_app_with_export_dialog(board_count: usize) -> App {
+    use kanban_domain::KanbanOperations;
     let (mut app, _rx) = App::new(None).unwrap();
     app.focus.active = Focus::Boards;
     app.push_mode(AppMode::Settings);
     for i in 0..board_count {
         app.ctx
             .inner_mut()
-            .boards
-            .push(kanban_domain::Board::new(format!("Board{}", i + 1), None));
+            .create_board(format!("Board{}", i + 1), None)
+            .unwrap();
     }
     app.export_dialog = Some(ExportDialogState::new(board_count));
     app.push_mode(AppMode::Dialog(DialogMode::ExportBoards));

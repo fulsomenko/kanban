@@ -146,10 +146,8 @@ fn test_settings_enter_on_export_triggers_dialog() {
     use crossterm::event::KeyCode;
 
     let mut app = helpers::setup_settings_app();
-    app.ctx
-        .inner_mut()
-        .boards
-        .push(kanban_domain::Board::new("B1".into(), None));
+    use kanban_domain::KanbanOperations;
+    app.ctx.inner_mut().create_board("B1".into(), None).unwrap();
     app.focus.settings_focus = SettingsFocus::Storage;
     app.selection.settings_storage.set(Some(3));
 

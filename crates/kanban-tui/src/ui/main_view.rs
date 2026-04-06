@@ -149,12 +149,19 @@ mod tests {
 
     #[test]
     fn test_build_filter_title_suffix_sprint_filter_formats_sprint_name() {
+        use kanban_domain::KanbanOperations;
         let (mut app, _rx) = App::new(None).unwrap();
-        let board = kanban_domain::Board::new("Test Board".to_string(), None);
-        let sprint = kanban_domain::Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
+        let board = app
+            .ctx
+            .inner_mut()
+            .create_board("Test Board".to_string(), None)
+            .unwrap();
+        let sprint = app
+            .ctx
+            .inner_mut()
+            .create_sprint(board.id, None, Some("Sprint".to_string()))
+            .unwrap();
         let sprint_id = sprint.id;
-        app.ctx.inner_mut().sprints.push(sprint);
-        app.ctx.inner_mut().boards.push(board);
         app.selection.active_board_index = Some(0);
         app.filter.active_sprint_filters.insert(sprint_id);
         let suffix = build_filter_title_suffix(&app);

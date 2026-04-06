@@ -1,4 +1,4 @@
-use kanban_domain::{Board, Card, Column, Sprint};
+use kanban_domain::KanbanOperations;
 use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
@@ -10,13 +10,25 @@ fn test_export_single_board() {
 
     let (mut app, _rx) = App::new(None).unwrap();
 
-    let mut board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
-
-    app.ctx.inner_mut().boards.push(board.clone());
-    app.ctx.inner_mut().columns.push(column.clone());
-    app.ctx.inner_mut().cards.push(card.clone());
+    let board = app
+        .ctx
+        .inner_mut()
+        .create_board("Test Board".to_string(), None)
+        .unwrap();
+    let column = app
+        .ctx
+        .inner_mut()
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
+    app.ctx
+        .inner_mut()
+        .create_card(
+            board.id,
+            column.id,
+            "Test Task".to_string(),
+            Default::default(),
+        )
+        .unwrap();
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
@@ -41,20 +53,46 @@ fn test_export_all_boards() {
 
     let (mut app, _rx) = App::new(None).unwrap();
 
-    let mut board1 = Board::new("Board 1".to_string(), None);
-    let column1 = Column::new(board1.id, "Todo".to_string(), 0);
-    let card1 = Card::new(&mut board1, column1.id, "Task 1".to_string(), 0, "task");
+    let board1 = app
+        .ctx
+        .inner_mut()
+        .create_board("Board 1".to_string(), None)
+        .unwrap();
+    let column1 = app
+        .ctx
+        .inner_mut()
+        .create_column(board1.id, "Todo".to_string(), None)
+        .unwrap();
+    app.ctx
+        .inner_mut()
+        .create_card(
+            board1.id,
+            column1.id,
+            "Task 1".to_string(),
+            Default::default(),
+        )
+        .unwrap();
 
-    let mut board2 = Board::new("Board 2".to_string(), None);
-    let column2 = Column::new(board2.id, "Todo".to_string(), 0);
-    let card2 = Card::new(&mut board2, column2.id, "Task 2".to_string(), 0, "task");
+    let board2 = app
+        .ctx
+        .inner_mut()
+        .create_board("Board 2".to_string(), None)
+        .unwrap();
+    let column2 = app
+        .ctx
+        .inner_mut()
+        .create_column(board2.id, "Todo".to_string(), None)
+        .unwrap();
+    app.ctx
+        .inner_mut()
+        .create_card(
+            board2.id,
+            column2.id,
+            "Task 2".to_string(),
+            Default::default(),
+        )
+        .unwrap();
 
-    app.ctx.inner_mut().boards.push(board1);
-    app.ctx.inner_mut().boards.push(board2);
-    app.ctx.inner_mut().columns.push(column1);
-    app.ctx.inner_mut().columns.push(column2);
-    app.ctx.inner_mut().cards.push(card1);
-    app.ctx.inner_mut().cards.push(card2);
     app.input.set(file_path.to_str().unwrap().to_string());
 
     app.export_all_boards_with_filename().unwrap();
@@ -162,10 +200,15 @@ fn test_auto_save() {
 
     let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
 
-    let board = Board::new("Auto Save Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
-    app.ctx.inner_mut().boards.push(board);
-    app.ctx.inner_mut().columns.push(column);
+    let board = app
+        .ctx
+        .inner_mut()
+        .create_board("Auto Save Board".to_string(), None)
+        .unwrap();
+    app.ctx
+        .inner_mut()
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
 
     app.auto_save().unwrap();
 
@@ -239,21 +282,56 @@ fn test_export_import_sprint_and_card_prefixes() {
 
     // Create board with both sprint_prefix and card_prefix
     let (mut app, _rx) = App::new(None).unwrap();
-    let mut board = Board::new("Prefix Board".to_string(), None);
-    board.update_sprint_prefix(Some("sprint".to_string()));
-    board.update_card_prefix(Some("task".to_string()));
+    use kanban_domain::{BoardUpdate, FieldUpdate, SprintUpdate};
+    let board = app
+        .ctx
+        .inner_mut()
+        .create_board("Prefix Board".to_string(), None)
+        .unwrap();
+    app.ctx
+        .inner_mut()
+        .update_board(
+            board.id,
+            BoardUpdate {
+                sprint_prefix: FieldUpdate::Set("sprint".to_string()),
+                card_prefix: FieldUpdate::Set("task".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
-    let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Card".to_string(), 0, "task");
+    let column = app
+        .ctx
+        .inner_mut()
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
+    app.ctx
+        .inner_mut()
+        .create_card(
+            board.id,
+            column.id,
+            "Test Card".to_string(),
+            Default::default(),
+        )
+        .unwrap();
 
     // Create sprint with card_prefix override
-    let mut sprint = Sprint::new(board.id, 1, None, None);
-    sprint.update_card_prefix(Some("hotfix".to_string()));
+    let sprint = app
+        .ctx
+        .inner_mut()
+        .create_sprint(board.id, None, None)
+        .unwrap();
+    app.ctx
+        .inner_mut()
+        .update_sprint(
+            sprint.id,
+            SprintUpdate {
+                card_prefix: FieldUpdate::Set("hotfix".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
-    app.ctx.inner_mut().boards.push(board.clone());
-    app.ctx.inner_mut().columns.push(column);
-    app.ctx.inner_mut().cards.push(card);
-    app.ctx.inner_mut().sprints.push(sprint.clone());
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
 
