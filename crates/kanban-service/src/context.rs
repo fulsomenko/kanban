@@ -302,33 +302,43 @@ impl KanbanContext {
 
     pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BatchOperationResult {
         use kanban_domain::commands::ArchiveCards;
-        // Capture a single undo entry for the whole batch before any mutations.
-        // execute_raw(ArchiveCards{ids: vec![id]}) never returns Err — ArchiveCards uses
-        // filter_valid_card_ids which warns and skips unknown IDs rather than failing.
-        self.capture_before_command();
-        let mut succeeded = Vec::new();
+        let card_ids: std::collections::HashSet<Uuid> = self.cards.iter().map(|c| c.id).collect();
+        let mut to_archive = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
-            let before_count = self.archived_cards.len();
-            match self.execute_raw(Box::new(ArchiveCards { ids: vec![id] })) {
-                Ok(()) if self.archived_cards.len() > before_count => succeeded.push(id),
-                Ok(()) => failed.push(BatchOperationFailure {
+            if card_ids.contains(&id) {
+                to_archive.push(id);
+            } else {
+                failed.push(BatchOperationFailure {
                     id,
                     error: KanbanError::not_found("card", id).to_string(),
-                }),
-                Err(e) => failed.push(BatchOperationFailure {
-                    id,
-                    error: e.to_string(),
-                }),
+                });
             }
         }
-        if succeeded.is_empty() {
-            // Nothing changed — pop the phantom undo entry so the stack stays clean.
-            self.history.pop_undo();
-        } else {
-            self.dirty = true;
+        if to_archive.is_empty() {
+            return BatchOperationResult {
+                succeeded: vec![],
+                failed,
+            };
         }
-        BatchOperationResult { succeeded, failed }
+        let succeeded = to_archive.clone();
+        match self.execute(vec![
+            Box::new(ArchiveCards { ids: to_archive }) as Box<dyn Command>
+        ]) {
+            Ok(()) => BatchOperationResult { succeeded, failed },
+            Err(e) => {
+                let err = e.to_string();
+                let mut all_failed = failed;
+                all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                    id,
+                    error: err.clone(),
+                }));
+                BatchOperationResult {
+                    succeeded: vec![],
+                    failed: all_failed,
+                }
+            }
+        }
     }
 
     pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
