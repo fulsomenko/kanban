@@ -153,37 +153,6 @@ impl Command for DeleteCard {
     }
 }
 
-/// Assign card to a sprint with logging
-pub struct AssignCardToSprint {
-    pub card_id: Uuid,
-    pub sprint_id: Uuid,
-    pub sprint_number: u32,
-    pub sprint_name: Option<String>,
-    pub sprint_status: String,
-}
-
-impl Command for AssignCardToSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let card = context.card_mut(self.card_id)?;
-        if let Some(old_sprint_id) = card.sprint_id {
-            if old_sprint_id != self.sprint_id {
-                card.end_current_sprint_log();
-            }
-        }
-        card.assign_to_sprint(
-            self.sprint_id,
-            self.sprint_number,
-            self.sprint_name.clone(),
-            self.sprint_status.clone(),
-        );
-        Ok(())
-    }
-
-    fn description(&self) -> String {
-        format!("Assign card {} to sprint {}", self.card_id, self.sprint_id)
-    }
-}
-
 /// Archive one or more cards in a single command (single undo entry)
 pub struct ArchiveCards {
     pub ids: Vec<Uuid>,
@@ -508,21 +477,6 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_card_to_sprint_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
-        let cmd = AssignCardToSprint {
-            card_id: Uuid::new_v4(),
-            sprint_id: Uuid::new_v4(),
-            sprint_number: 1,
-            sprint_name: None,
-            sprint_status: "Active".to_string(),
-        };
-        let result = cmd.execute(&mut context);
-        assert!(result.unwrap_err().is_not_found());
-    }
-
-    #[test]
     fn test_assign_cards_to_sprint_validates_sprint_exists() {
         let mut tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
@@ -641,6 +595,33 @@ mod tests {
         let c3 = context.cards.iter().find(|c| c.id == c3_id).unwrap();
         assert_eq!(c1.position, 1, "first moved card should be at base(1) + 0");
         assert_eq!(c3.position, 2, "second moved card should be at base(1) + 1");
+    }
+
+    #[test]
+    fn test_migrate_sprint_logs_backfills_cards_missing_sprint_log() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("Alpha".to_string()));
+        let sprint_id = sprint.id;
+        let mut card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0, "TST");
+        // Card has sprint_id set but no sprint logs
+        card.sprint_id = Some(sprint_id);
+        assert!(card.sprint_logs.is_empty());
+        tc.boards.push(board);
+        tc.sprints.push(sprint);
+        tc.cards.push(card);
+
+        let cmd = MigrateSprintLogs;
+        let mut context = tc.as_command_context();
+        cmd.execute(&mut context).unwrap();
+
+        assert_eq!(
+            context.cards[0].sprint_logs.len(),
+            1,
+            "sprint log should be backfilled for card with sprint_id but empty logs"
+        );
+        assert_eq!(context.cards[0].sprint_logs[0].sprint_number, 1);
     }
 
     #[test]
