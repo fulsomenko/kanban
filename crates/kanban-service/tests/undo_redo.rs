@@ -577,6 +577,35 @@ async fn test_archive_card_not_found_returns_error() {
 }
 
 #[tokio::test]
+async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col.id, "Card 1".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col.id, "Card 2".into(), Default::default())
+        .unwrap();
+    ctx.clear_history();
+    ctx.mark_clean();
+
+    let result = ctx.archive_cards_detailed(vec![c1.id, c2.id]);
+    assert_eq!(result.succeeded.len(), 2);
+    assert!(result.failed.is_empty());
+    assert!(ctx.is_dirty());
+    assert_eq!(ctx.archived_cards().len(), 2);
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.cards().len(), 2);
+    assert_eq!(ctx.archived_cards().len(), 0);
+    assert!(
+        !ctx.can_undo(),
+        "should be a single undo entry for the whole batch"
+    );
+}
+
+#[tokio::test]
 async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
