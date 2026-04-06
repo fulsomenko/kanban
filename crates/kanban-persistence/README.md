@@ -1,137 +1,159 @@
 # kanban-persistence
 
-Persistence trait layer for the kanban project management tool. Defines the storage abstractions, factory registry, and shared types used by all storage backends.
+Persistence trait layer for the kanban workspace. **Contains no I/O code.** Defines the interfaces implemented by `kanban-persistence-json` and `kanban-persistence-sqlite`, plus shared serialization types used across all persistence crates.
 
-## Installation
+## Traits
 
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-kanban-persistence = { path = "../kanban-persistence" }
-```
-
-## Overview
-
-This crate is the **abstraction layer** between `kanban-service` and concrete storage backends (`kanban-persistence-json`, `kanban-persistence-sqlite`). It contains no backend-specific logic — only traits, shared types, and the registry that routes a locator string to the correct backend.
-
-## API Reference
-
-### `PersistenceStore` trait
-
-Core async trait implemented by every storage backend:
+### `PersistenceStore`
 
 ```rust
 #[async_trait]
 pub trait PersistenceStore: Send + Sync {
-    async fn save(&self, snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata>;
-    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)>;
-    fn exists(&self) -> bool;
-    fn path(&self) -> &Path;
-    fn instance_id(&self) -> Uuid;
+    async fn load(&self) -> Result<(StoreSnapshot, PersistenceMetadata), PersistenceError>;
+    async fn save(&self, snapshot: StoreSnapshot, metadata: PersistenceMetadata) -> Result<(), PersistenceError>;
+    async fn exists(&self) -> bool;
+    fn locator(&self) -> &str;
+    fn instance_id(&self) -> &str;
 }
 ```
 
-### `StoreFactory` trait
+- `load` returns a `StoreSnapshot` (raw bytes) and `PersistenceMetadata` (timestamps, version, instance ID).
+- `save` is expected to be atomic: implementations must guarantee that a crash during save cannot leave the file in a partially-written state.
+- `exists` returns `false` if the backing store has never been written.
+- `locator` returns the file path or connection string.
 
-Backend registration interface. Each backend provides a factory that declares which locator patterns it supports:
+### `StoreFactory`
 
 ```rust
 pub trait StoreFactory: Send + Sync {
     fn name(&self) -> &str;
     fn supported_patterns(&self) -> &[&str];
-    fn matches_locator(&self, locator: &str) -> bool;
-    fn matches_content(&self, header: &[u8]) -> bool { false }
-    fn create(&self, locator: &str) -> Result<Arc<dyn PersistenceStore>>;
+    fn matches(&self, locator: &str) -> bool;
+    fn create(&self, locator: &str) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError>;
 }
 ```
+
+Backend plugins implement `StoreFactory` and register themselves with `StoreRegistry`. The JSON backend is the catch-all fallback; the SQLite backend matches on file extension.
 
 ### `StoreRegistry`
 
-Manages factory registrations and routes locator strings to the matching backend:
+The registry holds a prioritized list of `StoreFactory` implementations.
 
 ```rust
-let mut registry = StoreRegistry::new();
-registry.register(Box::new(SqliteStoreFactory));
-registry.register(Box::new(JsonStoreFactory));
-
-let store = registry.create_store("board.sqlite")?;
-```
-
-Factories are tried in registration order. The first factory whose `matches()` returns `true` wins.
-
-### Shared Types
-
-- `StoreSnapshot` — Contains `data: Vec<u8>` and `metadata: PersistenceMetadata`
-- `PersistenceMetadata` — Contains `instance_id: Uuid` and `saved_at: DateTime<Utc>`
-- `PersistenceEvent` — Events for file watching and change notification
-- `FormatVersion`, `MigrationStrategy` — Version detection and migration abstractions
-- `ConflictResolver` — Multi-instance conflict resolution
-
-## Architecture
-
-```mermaid
-flowchart TD
-    SVC[kanban-service<br/>KanbanContext] --> PER[kanban-persistence<br/>traits + registry]
-    SVC -.-> JSON[kanban-persistence-json]
-    SVC -.-> SQL[kanban-persistence-sqlite]
-    JSON --> PER
-    SQL --> PER
-    PER --> DOM[kanban-domain]
-    DOM --> CORE[kanban-core]
-```
-
-### Command Pattern Flow
-
-1. **Event Handler** collects data and creates Command
-2. **Command** is executed via `KanbanContext::execute()`
-3. **CommandContext** applies mutation to in-memory vecs
-4. **Save**: `KanbanContext::save()` serializes state and calls `PersistenceStore::save()`
-5. Backend writes to its storage format (JSON file, SQLite database, etc.)
-
-## Progressive Auto-Save
-
-- **Dirty Flag Tracking**: Changes are marked and queued for persistence
-- **Debounced Saving**: Configurable minimum interval between writes to prevent excessive I/O
-- **Command Audit Log**: All commands are tracked for audit trails
-
-## Multi-Instance Support
-
-- **Instance IDs**: Each application instance has a unique ID for coordination
-- **Last-Write-Wins**: Concurrent modifications resolved by latest timestamp
-- **File Watching**: Detects external changes for reload prompts
-- **Conflict Resolution**: Pluggable strategies via `ConflictResolver` trait
-
-## Error Handling
-
-All public APIs return `PersistenceResult<T>`:
-
-```rust
-match store.load().await {
-    Ok((snapshot, metadata)) => { /* handle loaded data */ }
-    Err(e) => { /* serialization error, missing file, version error, etc. */ }
+impl StoreRegistry {
+    pub fn new() -> Self;
+    pub fn register(&mut self, factory: Box<dyn StoreFactory>);
+    pub fn detect_backend(&self, locator: &str) -> Option<&str>;
+    pub fn create_store(
+        &self,
+        backend: &str,
+        locator: &str,
+    ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError>;
 }
 ```
 
-## Available Backends
+- `detect_backend` iterates factories in registration order and returns the name of the first factory whose `matches(locator)` returns true.
+- `create_store` finds the factory by name and calls `factory.create(locator)`.
 
-| Backend | Crate | Patterns | Description |
-|---------|-------|----------|-------------|
-| JSON | `kanban-persistence-json` | `*.json`, any non-URI path | V2 format, atomic writes, V1 migration |
-| SQLite | `kanban-persistence-sqlite` | `*.sqlite`, `*.sqlite3`, `*.db` | WAL mode, relational schema, connection pooling |
+### `ChangeDetector` trait
+
+Provides file-watching capability for detecting external changes.
+
+```rust
+pub trait ChangeDetector: Send + Sync {
+    fn has_changed(&self) -> bool;
+    fn reset(&mut self);
+}
+```
+
+### `Serializer<T>` trait
+
+```rust
+pub trait Serializer<T>: Send + Sync {
+    fn serialize(&self, value: &T) -> Result<Vec<u8>, PersistenceError>;
+    fn deserialize(&self, data: &[u8]) -> Result<T, PersistenceError>;
+}
+```
+
+### `MigrationStrategy` trait
+
+```rust
+pub trait MigrationStrategy: Send + Sync {
+    fn can_migrate(&self, from_version: FormatVersion) -> bool;
+    fn migrate(&self, data: &[u8]) -> Result<Vec<u8>, PersistenceError>;
+}
+```
+
+---
+
+## Shared Types
+
+### `StoreSnapshot`
+
+```rust
+pub struct StoreSnapshot {
+    pub data: Vec<u8>,    // Serialized snapshot (JSON bytes of kanban_domain::Snapshot)
+    pub version: FormatVersion,
+}
+```
+
+### `PersistenceMetadata`
+
+```rust
+pub struct PersistenceMetadata {
+    pub version: FormatVersion,
+    pub saved_at: DateTime<Utc>,
+    pub instance_id: String,
+    pub save_count: u64,
+}
+```
+
+### `FormatVersion`
+
+```rust
+pub enum FormatVersion {
+    V1,
+    V2,
+}
+```
+
+### `ConflictResolver`
+
+Conflict resolution semantics: when `save` is called with a stale `instance_id`, the store may return `PersistenceError::Conflict`. The caller (typically `KanbanContext`) surfaces this to the user.
+
+### `PersistenceError`
+
+```rust
+pub enum PersistenceError {
+    Io(std::io::Error),
+    Serialization(String),
+    Conflict { path: String },
+    Database(String),
+    NotFound(String),
+    Migration(String),
+}
+```
+
+---
+
+## Helper Functions
+
+```rust
+pub fn snapshot_to_json_bytes(snapshot: &kanban_domain::Snapshot) -> Result<Vec<u8>, KanbanError>;
+pub fn snapshot_from_json_bytes(data: &[u8]) -> Result<kanban_domain::Snapshot, KanbanError>;
+```
+
+Used by both backends and the service layer to serialize/deserialize the domain `Snapshot`.
+
+---
 
 ## Dependencies
 
-- `kanban-core` — Foundation types and traits
-- `kanban-domain` — Domain models
-- `serde`, `serde_json` — Serialization
-- `tokio` — Async runtime
-- `uuid` — ID generation
-- `chrono` — Timestamps
-- `async-trait` — Async trait support
-- `thiserror` — Error handling
-- `notify` — File watching
-
-## License
-
-Apache 2.0 — See [LICENSE.md](../../LICENSE.md) for details
+| Crate | Purpose |
+|-------|---------|
+| `kanban-core` | `KanbanError`, `KanbanResult` |
+| `kanban-domain` | `Snapshot` type |
+| `serde` + `serde_json` | Serialization |
+| `async-trait` | Async trait methods |
+| `chrono` | Timestamps in metadata |
+| `thiserror` | Error derivation |
