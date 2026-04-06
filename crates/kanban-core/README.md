@@ -1,197 +1,174 @@
 # kanban-core
 
-Foundation crate providing core abstractions, error handling, and result types for the kanban workspace.
+Foundation crate for the kanban workspace. Provides shared types, error handling, configuration, state primitives, and the dependency graph used by all other crates.
 
-## Installation
+## Modules
 
-Add to your `Cargo.toml`:
+### Error Types
 
-```toml
-[dependencies]
-kanban-core = { path = "../kanban-core" }
-```
-
-## API Reference
-
-### Result Type
+#### `CoreError`
 
 ```rust
-pub type KanbanResult<T> = Result<T, KanbanError>;
+pub enum CoreError {
+    Validation(String),  // Input validation failure
+    Config(String),      // Configuration error
+}
+
+pub type CoreResult<T> = Result<T, CoreError>;
 ```
 
-Standard result type used throughout the workspace for consistent error handling.
+### `AppConfig`
 
-### Errors
+Application configuration loaded from a TOML or JSON config file.
 
-`KanbanError` enum with variants:
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `configuration_format` | `Option<String>` | `"toml"` | Config file format (`"json"` or `"toml"`) |
+| `configuration_location` | `Option<String>` | system default | Path to the config file |
+| `default_card_prefix` | `Option<String>` | `"task"` | Default card identifier prefix (e.g. `"KAN"` → `KAN-1`) |
+| `default_sprint_prefix` | `Option<String>` | `"sprint"` | Default sprint identifier prefix |
+| `editing_format` | `Option<String>` | `"json"` | Format used for external editor (`"json"` or `"toml"`) |
+| `storage_backend` | `Option<String>` | `"json"` | Storage backend (`"json"` or `"sqlite"`) |
+| `storage_location` | `Option<String>` | `"kanban.json"` / `"kanban.sqlite"` | Path to the data file |
 
-- `Connection(String)` - Connection/network errors
-- `NotFound(String)` - Resource not found
-- `Validation(String)` - Input validation failures
-- `Io(std::io::Error)` - File system and I/O errors
-- `Serialization(String)` - JSON/serde errors
-- `Internal(String)` - Unexpected internal errors
-- `ConflictDetected { path, source }` - File modified by another instance
-- `CycleDetected` - Adding an edge would create a circular dependency
-- `SelfReference` - Self-referencing edge not allowed
-- `EdgeNotFound` - Graph edge not found
-
-### Configuration
-
-`AppConfig` - Cross-platform application configuration:
+**Effective-value getters** (return the value or its default):
 
 ```rust
-pub struct AppConfig {
-    pub default_sprint_prefix: Option<String>,
-    pub default_card_prefix: Option<String>,
-}
+config.effective_default_card_prefix()   // → "task"
+config.effective_default_sprint_prefix() // → "sprint"
+config.effective_storage_backend()       // → "json"
+config.effective_editing_format()        // → "json"
+config.effective_configuration_format()  // → "toml"
+config.effective_storage_location()      // → "kanban.json"
+```
 
-impl AppConfig {
-    pub async fn load() -> KanbanResult<Self>
-    pub fn config_path() -> PathBuf
+**Validation**: `config.validate_values()` returns `CoreError::Validation` if any field is out of range.
+
+**Branch prefix validation**: `validate_branch_prefix(prefix: &str) -> bool` — non-empty, alphanumeric + hyphens/underscores, no leading or trailing hyphens.
+
+### `PaginatedList<T>`
+
+Serialized pagination envelope used by CLI and MCP list responses.
+
+```rust
+pub struct PaginatedList<T> {
+    pub items: Vec<T>,
+    pub total: usize,
+    pub page: usize,
+    pub page_size: usize,
+    pub total_pages: usize,
 }
 ```
 
-Loads from platform-specific paths:
-- macOS/Linux: `~/.config/kanban/config.toml`
-- Windows: `%APPDATA%\kanban\config.toml`
+- `PaginatedList::paginate(items, page, page_size)` — slices `items` and returns the envelope. Returns `CoreError::Validation` if `page_size > MAX_PAGE_SIZE` (1000) or `page_size == 0`.
+- `resolve_page_params(page: Option<u32>, page_size: Option<u32>) -> CoreResult<(usize, usize)>` — applies defaults (`page=1`, `page_size=50`) and validates.
+- Constants: `DEFAULT_PAGE = 1`, `DEFAULT_PAGE_SIZE = 50`, `MAX_PAGE_SIZE = 1000`.
 
-### Logging
+### `Page` / `PageInfo`
 
-`Loggable` trait for entities to maintain audit logs:
+TUI viewport pagination — manages which items are visible in a terminal viewport given a scroll offset. **Never serialized.**
+
+```rust
+pub struct PageInfo {
+    pub visible_indices: Vec<usize>,
+    pub first_visible: usize,
+    pub last_visible: usize,
+    pub items_per_page: usize,
+    pub show_above_indicator: bool,
+    pub items_above: usize,
+    pub show_below_indicator: bool,
+    pub items_below: usize,
+    pub current_page: usize,
+    pub total_pages: usize,
+}
+```
+
+`Page` computes a `PageInfo` for a given item count, viewport height, and scroll offset.
+
+### `InputState`
+
+UTF-8–aware text input with cursor management. Used for all text entry dialogs in the TUI.
+
+```rust
+pub struct InputState {
+    pub value: String,       // Current text
+    pub cursor_pos: usize,   // Byte offset of cursor
+}
+```
+
+Methods: `insert_char`, `delete_char_before`, `delete_char_after`, `move_left`, `move_right`, `jump_to_start`, `jump_to_end`, `clear`.
+
+The cursor tracks byte offsets that always fall on UTF-8 character boundaries.
+
+### `SelectionState`
+
+Cursor navigation for a fixed-size list.
+
+```rust
+pub struct SelectionState {
+    pub selected: usize,
+    pub total: usize,
+}
+```
+
+Methods: `next()`, `prev()`, `clamp()` — wraps around at boundaries.
+
+### `Editable<T>` trait
+
+```rust
+pub trait Editable<T> {
+    fn to_editable(&self) -> T;
+    fn from_editable(value: T) -> Self;
+}
+```
+
+Implemented by domain types to support round-trip serialization through an external editor.
+
+### `Graph<E>` / `GraphNode` / `Edge<E>` / `EdgeDirection`
+
+Generic directed acyclic graph with cycle detection. Used by `kanban-domain` for card dependency tracking.
+
+```rust
+pub struct Graph<E> {
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<Edge<E>>,
+}
+
+pub struct GraphNode {
+    pub id: Uuid,
+}
+
+pub struct Edge<E> {
+    pub from: Uuid,
+    pub to: Uuid,
+    pub edge_type: E,
+}
+
+pub enum EdgeDirection {
+    Outgoing,   // Edges starting from a node
+    Incoming,   // Edges pointing to a node
+}
+```
+
+`Graph::add_edge` returns `CoreError` if adding the edge would create a cycle or a self-reference.
+
+### `LogEntry` / `Loggable` trait
+
+Structured logging support for domain events.
 
 ```rust
 pub trait Loggable {
-    fn add_log(&mut self, entry: LogEntry);
-    fn get_logs(&self) -> &[LogEntry];
-}
-
-pub struct LogEntry {
-    pub timestamp: DateTime<Utc>,
-    pub message: String,
+    fn log_entries(&self) -> Vec<LogEntry>;
 }
 ```
 
-### Traits
-
-**Editable Pattern** - Safe entity modification via DTOs:
-
-```rust
-pub trait Editable<T>: Sized {
-    fn from_entity(entity: &T) -> Self;
-    fn apply_to(self, entity: &mut T) -> KanbanResult<()>;
-}
-```
-
-Consuming crates implement `Editable<Card>`, `Editable<Board>`, etc. to provide type-safe updates with validation.
-
-**Repository Pattern** - Generic async data access:
-
-```rust
-pub trait Repository<T, Id>: Send + Sync {
-    async fn find_by_id(&self, id: Id) -> KanbanResult<T>;
-    async fn find_all(&self) -> KanbanResult<Vec<T>>;
-    async fn save(&mut self, entity: T) -> KanbanResult<()>;
-    async fn delete(&mut self, id: Id) -> KanbanResult<()>;
-}
-```
-
-**Service Pattern** - Business logic abstraction:
-
-```rust
-pub trait Service<T, Id>: Send + Sync {
-    async fn get(&self, id: Id) -> KanbanResult<T>;
-    async fn list(&self) -> KanbanResult<Vec<T>>;
-    async fn create(&mut self, entity: T) -> KanbanResult<Id>;
-    async fn update(&mut self, entity: T) -> KanbanResult<()>;
-    async fn delete(&mut self, id: Id) -> KanbanResult<()>;
-}
-```
-
-### Graph
-
-Generic directed graph (`Graph<E>`) for modeling relationships between entities. Used by `kanban-domain` for card dependencies. Edge types implement the `Edge` trait, which declares whether cycles are allowed — the graph enforces DAG constraints automatically for acyclic edge types.
-
-### State Primitives
-
-UI-agnostic building blocks used by the TUI and available to any consumer:
-
-- **`InputState`** — Text input buffer with cursor tracking and multi-byte UTF-8 support
-- **`SelectionState`** — Single-item selection for navigable lists (next/prev, jump to first/last, clamp to bounds)
-- **`Page` / `PageInfo`** — Viewport pagination that calculates visible items, scroll offset, and above/below counts
-
-## Architecture
-
-Foundation layer with no workspace dependencies. All other crates depend on `kanban-core` for shared abstractions and error types.
-
-`kanban-core` is the foundation crate with no workspace dependencies — all other crates depend on it. See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for the full workspace dependency graph.
-
-## Examples
-
-### Error Handling
-
-```rust
-use kanban_core::{KanbanError, KanbanResult};
-
-fn validate_name(name: &str) -> KanbanResult<()> {
-    if name.is_empty() {
-        return Err(KanbanError::Validation("Name cannot be empty".into()));
-    }
-    Ok(())
-}
-
-async fn fetch_data() -> KanbanResult<Vec<u8>> {
-    std::fs::read("data.json")
-        .map_err(|e| KanbanError::Io(e))
-}
-```
-
-### Configuration
-
-```rust
-use kanban_core::AppConfig;
-
-let config = AppConfig::load().await?;
-let prefix = config.default_card_prefix.unwrap_or("task".into());
-```
-
-### Implementing Editable
-
-```rust
-use kanban_core::Editable;
-
-struct CardUpdate {
-    title: String,
-    priority: CardPriority,
-}
-
-impl Editable<Card> for CardUpdate {
-    fn from_entity(card: &Card) -> Self {
-        Self {
-            title: card.title.clone(),
-            priority: card.priority,
-        }
-    }
-
-    fn apply_to(self, card: &mut Card) -> KanbanResult<()> {
-        card.title = self.title;
-        card.priority = self.priority;
-        Ok(())
-    }
-}
-```
+---
 
 ## Dependencies
 
-- `thiserror` - Ergonomic error handling macros
-- `anyhow` - Context-aware error handling
-- `serde`, `serde_json` - Serialization framework
-- `uuid` - UUID generation for IDs
-- `chrono` - Date and time types
-- `async-trait` - Async trait method support
-- `toml` - Configuration file parsing
-- `dirs` - Cross-platform directory paths
-
-## License
-
-Apache 2.0 - See [LICENSE.md](../../LICENSE.md) for details
+| Crate | Purpose |
+|-------|---------|
+| `serde` + `serde_json` | Serialization |
+| `uuid` | `Uuid` type |
+| `thiserror` | Error derivation |
+| `chrono` | Timestamps |
