@@ -139,7 +139,7 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 - Import/export boards as JSON
 
 ### Storage & Sync
-- JSON (default) and SQLite backends — switch by file extension
+- JSON and SQLite storage backends
 - Atomic writes (temp file → rename) prevent corruption
 - Live file watching: auto-reload when another instance writes
 - Conflict detection with user prompt when local edits clash
