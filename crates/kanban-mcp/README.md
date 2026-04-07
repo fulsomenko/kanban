@@ -100,14 +100,14 @@ kanban-mcp /path/to/kanban.sqlite
 | Tool | Description | Required params | Optional params |
 |------|-------------|-----------------|-----------------|
 | `tool_create_card` | Create a new card in a column | `board_id: UUID`, `column_id: UUID`, `title: String` | `description`, `priority` (low/medium/high/critical), `points: u8`, `due_date` (YYYY-MM-DD or RFC 3339) |
-| `tool_list_cards` | List cards with filters. Returns `CardSummary` (no description). | — | `board_id`, `column_id`, `sprint_id`, `status`, `page: u32`, `page_size: u32` |
+| `tool_list_cards` | List cards with filters. Returns `CardSummary` (title, status, priority, points — use tool_get_card for full detail). | — | `board_id`, `column_id`, `sprint_id`, `status`, `page: u32`, `page_size: u32` |
 | `tool_get_card` | Get card by UUID or identifier (e.g. `KAN-5`). Returns list if ambiguous. | `card_id: String` | — |
 | `tool_update_card` | Update card properties | `card_id: String` | `title`, `description`, `priority`, `status` (todo/in_progress/blocked/done), `points: u8`, `due_date`, `clear_due_date: bool` |
 | `tool_move_card` | Move card to a different column | `card_id: String`, `column_id: UUID` | `position: i32` |
 | `tool_archive_card` | Archive a card (restorable) | `card_id: String` | — |
 | `tool_restore_card` | Restore an archived card | `card_id: String` | `column_id: UUID` |
 | `tool_delete_card` | Delete a card permanently | `card_id: String` | — |
-| `tool_list_archived_cards` | List archived cards (no description) | — | `page: u32`, `page_size: u32` |
+| `tool_list_archived_cards` | Returns ArchivedCardSummary (title, archived_at, original column — use tool_get_card for full detail) | — | `page: u32`, `page_size: u32` |
 
 ### Card Identifiers
 
@@ -176,7 +176,7 @@ Undo/redo state is maintained in memory across tool calls within a single server
 
 | Error type | MCP error code |
 |------------|---------------|
-| Not found, validation, cycle detected, bad input | `INVALID_PARAMS` |
+| Domain errors (not found, validation, cycle, bad input) | `INVALID_PARAMS` |
 | I/O, serialization, internal errors | `INTERNAL_ERROR` |
 
 Domain errors (not found, validation) map to `INVALID_PARAMS`; all other errors map to `INTERNAL_ERROR`.

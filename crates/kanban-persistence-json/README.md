@@ -34,7 +34,7 @@ impl JsonFileStore {
 }
 ```
 
-V1 format was a bare `Snapshot` JSON object with no envelope.
+V1 format was a bare `Snapshot` JSON object (flat, no wrapper).
 
 ---
 
@@ -46,7 +46,7 @@ V1 format was a bare `Snapshot` JSON object with no envelope.
 4. Write to a temporary file (`.tmp` suffix) in the same directory
 5. Atomic rename: `temp → final path`
 
-The atomic rename means a crash at any point leaves either the old file or the new file intact — never a partial write.
+The atomic rename means a crash at any point leaves either the old file or the new file intact — always a complete, consistent file on disk.
 
 **Debounced saving**: a 500ms minimum interval is enforced between saves to avoid thrashing on rapid successive mutations.
 
@@ -65,7 +65,7 @@ The atomic rename means a crash at any point leaves either the old file or the n
 
 `FileMetadata` captures the file's size and modification time at last load/save. On the next save, the current file metadata is compared:
 
-- If they match → no external write occurred; proceed
+- If they match → file unchanged since last save — safe to write
 - If they differ → another instance wrote the file; return `PersistenceError::Conflict`
 
 ---

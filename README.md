@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/kanban-cli.svg)](https://crates.io/crates/kanban-cli)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
 
-**The terminal kanban that gets out of your way.**
+**Keyboard-first kanban for the terminal.**
 
 ![Kanban Demo](demo/demo.gif)
 
@@ -13,86 +13,11 @@
 
 ## Why Kanban?
 
-- **Zero latency** — keyboard-driven, no clicks, no menus, no mouse
-- **No account, no cloud, no browser** — your data is a file on your disk
+- **Zero latency** — pure keyboard flow — hjkl, never reach for the mouse
+- **Your data is a file on your disk** — private, offline, always yours
 - **Git-native** — generate branch names and `git checkout` commands from any card
 - **LLM-native** — full MCP server (40 tools) works with Claude Code, Cursor, and any MCP client
 - **Offline-first** — works anywhere; JSON and SQLite backends, atomic writes, live conflict detection
-
----
-
-## Features
-
-### Boards & Cards
-- Multiple boards, each with custom columns and WIP limits
-- Rich cards: title, description, priority (Low/Medium/High/Critical), status (Todo/InProgress/Blocked/Done), story points (1–5), due dates
-- Card numbering with configurable prefix (e.g. `KAN-42`)
-- Card dependencies: parent/child relationships with cycle detection
-- Archive and restore cards
-
-### Sprint Planning
-- Full sprint lifecycle: Planning → Active → Completed / Cancelled
-- Carry uncompleted cards to the next sprint with one key
-- Per-sprint card prefix overrides
-- Sprint logs track assignment history per card
-
-### Views & Navigation
-- **3 view modes**: Flat list / Grouped by column / Kanban board — toggle with `V`
-- Real-time `/` search
-- Sort by priority, points, due date, status, or position
-- Filter by sprint, status, or search result
-- Multi-select for bulk archive / move / sprint-assign
-
-### Productivity
-- Full undo/redo (`u`/`U`, up to 100 levels)
-- External editor for descriptions (respects `$EDITOR`)
-- Clipboard: `y` copies git branch name, `Y` copies `git checkout` command
-- Import/export boards as JSON
-
-### Storage & Sync
-- JSON (default) and SQLite backends — switch by file extension
-- Atomic writes (temp file → rename) prevent corruption
-- Live file watching: auto-reload when another instance writes
-- Conflict detection with user prompt when local edits clash
-- V1 → V2 JSON migration with `.v1.backup` safety copy
-
-### Interfaces
-- **TUI** — full keyboard-driven terminal UI
-- **CLI** — scriptable; all operations, JSON output, pagination
-- **MCP server** — 40 tools for LLM integration
-
----
-
-## Installation
-
-### From crates.io
-```bash
-cargo install kanban-cli
-```
-
-### From source
-```bash
-git clone https://github.com/fulsomenko/kanban
-cd kanban
-cargo install --path crates/kanban-cli
-```
-
-### Using Nix
-```bash
-nix run github:fulsomenko/kanban
-```
-
-### Arch Linux (AUR)
-```bash
-yay -S kanban
-```
-
-### Linux Clipboard Support
-
-For `y`/`Y` clipboard operations to persist after the app exits, you need a clipboard manager:
-
-- **Wayland**: `wl-clip-persist`, `cliphist`, `clipman`, or your DE's built-in manager
-- **X11**: Most desktop environments include one by default
 
 ---
 
@@ -152,11 +77,85 @@ All commands output JSON. Use `kanban --help` for full reference.
 
 ---
 
+## Installation
+
+### From crates.io
+```bash
+cargo install kanban-cli
+```
+
+### From source
+```bash
+git clone https://github.com/fulsomenko/kanban
+cd kanban
+cargo install --path crates/kanban-cli
+```
+
+### Using Nix
+```bash
+nix run github:fulsomenko/kanban
+```
+
+### Arch Linux (AUR)
+```bash
+yay -S kanban
+```
+
+### Linux Clipboard Support
+
+For `y`/`Y` clipboard operations to persist after the app exits, you need a clipboard manager:
+
+- **Wayland**: `wl-clip-persist`, `cliphist`, `clipman`, or your DE's built-in manager
+- **X11**: Most desktop environments include one by default
+
+---
+
+## Features
+
+### Boards & Cards
+- Multiple boards, each with custom columns and WIP limits
+- Rich cards: title, description, priority (Low/Medium/High/Critical), status (Todo/InProgress/Blocked/Done), story points, due dates
+- Card numbering with configurable prefix (e.g. `KAN-42`)
+- Card dependencies: parent/child relationships with cycle detection
+- Archive and restore cards
+
+### Sprint Planning
+- Full sprint lifecycle: Planning → Active → Completed / Cancelled
+- Carry uncompleted cards to the next sprint with one key
+- Per-sprint card prefix overrides
+- Sprint logs track assignment history per card
+
+### Views & Navigation
+- **3 view modes**: Flat list / Grouped by column / Kanban board — toggle with `V`
+- Real-time `/` search
+- Sort by priority, points, status, or position
+- Filter by sprint, status, or search result
+- Multi-select for bulk archive / move / sprint-assign
+
+### Productivity
+- Undo/redo (`u`/`U`, up to 100 levels)
+- External editor for descriptions (respects `$EDITOR`)
+- Clipboard: `y` copies git branch name, `Y` copies `git checkout` command
+- Import/export boards as JSON
+
+### Storage & Sync
+- JSON and SQLite storage backends
+- Atomic writes (temp file → rename) prevent corruption
+- Live file watching: auto-reload when another instance writes
+- Conflict detection with user prompt when local edits clash
+
+### Interfaces
+- **TUI** — full keyboard-driven terminal UI
+- **CLI** — scriptable; all operations, JSON output, pagination
+- **MCP server** — 40 tools for LLM integration
+
+---
+
 ## Key Bindings
 
 Press `?` in the app to see bindings for the current context.
 
-### Normal Mode — Boards Panel
+### Boards Panel
 
 | Key | Action |
 |-----|--------|
@@ -178,7 +177,7 @@ Press `?` in the app to see bindings for the current context.
 | `q` | Quit |
 | `?` | Help |
 
-### Normal Mode — Cards Panel
+### Cards Panel
 
 | Key | Action |
 |-----|--------|
@@ -282,7 +281,7 @@ Press `?` in the app to see bindings for the current context.
 crates/
 ├── kanban-core               → Shared types, error handling, config, reusable state primitives
 ├── kanban-domain             → Domain models, business logic, filtering & sorting
-├── kanban-persistence        → Persistence trait layer (no I/O)
+├── kanban-persistence        → Persistence trait layer — pure trait definitions, all I/O lives in backend crates
 ├── kanban-persistence-json   → JSON file storage backend
 ├── kanban-persistence-sqlite → SQLite storage backend
 ├── kanban-service            → KanbanContext, persistence orchestration, undo/redo
@@ -326,9 +325,9 @@ graph LR
 
 - **V2 envelope format**: `{ "version": 2, "metadata": {...}, "data": {...} }`
 - **Automatic V1→V2 migration**: original file renamed to `.v1.backup` on first load
-- **Atomic writes**: write to temp file, then rename — no partial writes on crash
+- **Atomic writes**: crash-safe — every write is atomic (temp file → rename)
 - **Debounced saving**: 500ms minimum interval between saves
-- File selected by any path that doesn't match a SQLite extension
+- Default for any plain file path
 
 ### SQLite Backend
 
@@ -341,7 +340,7 @@ graph LR
 ### Multi-Instance Support
 
 - **File watching**: detects changes written by other TUI or MCP instances
-- **Auto-reload**: applies external changes automatically when no local edits exist
+- **Auto-reload**: applies external changes automatically when the local state is clean
 - **Conflict prompt**: when local edits clash with an external write, you choose to reload or keep
 
 ---

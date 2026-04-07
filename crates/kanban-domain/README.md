@@ -1,6 +1,6 @@
 # kanban-domain
 
-Pure domain models and business logic. No I/O, no async, no infrastructure dependencies. Depends only on `kanban-core`.
+Pure domain logic — zero I/O, zero async, zero infrastructure dependencies. Depends only on `kanban-core`.
 
 ## Models
 
@@ -16,7 +16,7 @@ Top-level container for columns, cards, and sprints.
 | `card_prefix` | `Option<String>` | Default prefix for card identifiers (e.g. `"KAN"` → `KAN-1`) |
 | `sprint_prefix` | `Option<String>` | Default prefix for sprint names |
 | `sprint_names` | `Vec<String>` | Pool of sprint name tokens (consumed in order) |
-| `card_counters` | `HashMap<String, u32>` | Per-prefix card number counter |
+| `prefix_counters` | `HashMap<String, u32>` | Per-prefix card number counter |
 | `created_at` | `DateTime<Utc>` | Creation timestamp |
 | `updated_at` | `DateTime<Utc>` | Last modification timestamp |
 
@@ -57,11 +57,11 @@ A swim lane within a board.
 | `board_id` | `Uuid` | Parent board |
 | `name` | `String` | Display name |
 | `position` | `i32` | Display order (lower = left) |
-| `wip_limit` | `Option<i32>` | Advisory WIP limit — displayed but not enforced |
+| `wip_limit` | `Option<i32>` | Advisory WIP limit — shown in the UI as a guide |
 | `created_at` | `DateTime<Utc>` | Creation timestamp |
 | `updated_at` | `DateTime<Utc>` | Last modification timestamp |
 
-WIP limits are **advisory**: the UI shows a warning but does not block card creation.
+WIP limits are **advisory**: the UI surfaces it as a visual cue; card creation always succeeds.
 
 **Partial update**: `ColumnUpdate { name, position, wip_limit: FieldUpdate<i32> }`
 
@@ -137,7 +137,7 @@ sprint.is_ended() -> bool
 // True if Active and end_date is in the past.
 
 Sprint::assignable(sprints: &[Sprint], board_id: Uuid) -> Vec<&Sprint>
-// Returns sprints that are not Completed or Cancelled.
+// Returns sprints in Planning or Active state.
 ```
 
 ---
@@ -288,10 +288,10 @@ KanbanError::is_conflict_detected(&self) -> bool
 
 ## Business Rules
 
-- **Card numbering**: per-prefix counter stored in `Board::card_counters`; monotonically increasing, never reused
+- **Card numbering**: per-prefix counter stored in `Board::prefix_counters`; monotonically increasing, permanently unique per prefix
 - **Sprint assignment deduplication**: assigning a card to a sprint it already belongs to is a no-op
-- **Completion column**: the rightmost column is used when toggling a card to Done if no column with `status == Done` exists
-- **WIP limits**: advisory only; no enforcement in domain logic
+- **Completion column**: the rightmost column is used when toggling a card to Done (falls back to the rightmost column)
+- **WIP limits**: advisory only — enforcement is the UI's responsibility
 - **Sprint assignability**: only `Planning` and `Active` sprints can be assigned to cards
 
 ---

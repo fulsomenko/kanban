@@ -1,6 +1,6 @@
 # kanban-persistence
 
-Persistence trait layer for the kanban workspace. **Contains no I/O code.** Defines the interfaces implemented by `kanban-persistence-json` and `kanban-persistence-sqlite`, plus shared serialization types used across all persistence crates.
+Persistence trait layer for the kanban workspace. **Pure trait definitions — all I/O lives in the backend crates.** Defines the interfaces implemented by `kanban-persistence-json` and `kanban-persistence-sqlite`, plus shared serialization types used across all persistence crates.
 
 ## Traits
 
@@ -18,8 +18,8 @@ pub trait PersistenceStore: Send + Sync {
 ```
 
 - `load` returns a `StoreSnapshot` (raw bytes) and `PersistenceMetadata` (timestamps, version, instance ID).
-- `save` is expected to be atomic: implementations must guarantee that a crash during save cannot leave the file in a partially-written state.
-- `exists` returns `false` if the backing store has never been written.
+- `save` is expected to be atomic: implementations must guarantee a complete write or nothing — atomic by contract.
+- `exists` returns `true` if the backing store has been written at least once.
 - `locator` returns the file path or connection string.
 
 ### `StoreFactory`

@@ -44,7 +44,7 @@ config.effective_storage_location()      // → "kanban.json"
 
 **Validation**: `config.validate_values()` returns `CoreError::Validation` if any field is out of range.
 
-**Branch prefix validation**: `validate_branch_prefix(prefix: &str) -> bool` — non-empty, alphanumeric + hyphens/underscores, no leading or trailing hyphens.
+**Branch prefix validation**: `validate_branch_prefix(prefix: &str) -> bool` — non-empty, alphanumeric + hyphens/underscores, must start and end with an alphanumeric character.
 
 ### `PaginatedList<T>`
 
@@ -60,13 +60,13 @@ pub struct PaginatedList<T> {
 }
 ```
 
-- `PaginatedList::paginate(items, page, page_size)` — slices `items` and returns the envelope. Returns `CoreError::Validation` if `page_size > MAX_PAGE_SIZE` (1000) or `page_size == 0`.
+- `PaginatedList::paginate(items, page, page_size)` — slices `items` and returns the envelope. Returns `CoreError::Validation` if `page_size > MAX_PAGE_SIZE` (500) or `page_size == 0`.
 - `resolve_page_params(page: Option<u32>, page_size: Option<u32>) -> CoreResult<(usize, usize)>` — applies defaults (`page=1`, `page_size=50`) and validates.
-- Constants: `DEFAULT_PAGE = 1`, `DEFAULT_PAGE_SIZE = 50`, `MAX_PAGE_SIZE = 1000`.
+- Constants: `DEFAULT_PAGE = 1`, `DEFAULT_PAGE_SIZE = 50`, `MAX_PAGE_SIZE = 500`.
 
 ### `Page` / `PageInfo`
 
-TUI viewport pagination — manages which items are visible in a terminal viewport given a scroll offset. **Never serialized.**
+TUI viewport pagination — manages which items are visible in a terminal viewport given a scroll offset. **Pure in-memory state — lives only in the TUI process.**
 
 ```rust
 pub struct PageInfo {
