@@ -114,7 +114,7 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 
 ### Boards & Cards
 - Multiple boards, each with custom columns and WIP limits
-- Rich cards: title, description, priority (Low/Medium/High/Critical), status (Todo/InProgress/Blocked/Done), story points (1–5), due dates
+- Rich cards: title, description, priority (Low/Medium/High/Critical), status (Todo/InProgress/Blocked/Done), story points, due dates
 - Card numbering with configurable prefix (e.g. `KAN-42`)
 - Card dependencies: parent/child relationships with cycle detection
 - Archive and restore cards
