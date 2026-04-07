@@ -22,7 +22,7 @@ stdenv.mkDerivation {
     mkdir -p $out/demo
     cp index.html.out $out/index.html
     cp styles.css $out/
-    cp ${demoSrc}/demo.svg $out/demo/demo.svg
+    cp ${demoSrc}/demo.gif $out/demo/demo.gif
   '';
 
   meta = {
