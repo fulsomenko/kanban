@@ -16,7 +16,7 @@ Top-level container for columns, cards, and sprints.
 | `card_prefix` | `Option<String>` | Default prefix for card identifiers (e.g. `"KAN"` → `KAN-1`) |
 | `sprint_prefix` | `Option<String>` | Default prefix for sprint names |
 | `sprint_names` | `Vec<String>` | Pool of sprint name tokens (consumed in order) |
-| `card_counters` | `HashMap<String, u32>` | Per-prefix card number counter |
+| `prefix_counters` | `HashMap<String, u32>` | Per-prefix card number counter |
 | `created_at` | `DateTime<Utc>` | Creation timestamp |
 | `updated_at` | `DateTime<Utc>` | Last modification timestamp |
 
@@ -288,7 +288,7 @@ KanbanError::is_conflict_detected(&self) -> bool
 
 ## Business Rules
 
-- **Card numbering**: per-prefix counter stored in `Board::card_counters`; monotonically increasing, permanently unique per prefix
+- **Card numbering**: per-prefix counter stored in `Board::prefix_counters`; monotonically increasing, permanently unique per prefix
 - **Sprint assignment deduplication**: assigning a card to a sprint it already belongs to is a no-op
 - **Completion column**: the rightmost column is used when toggling a card to Done (falls back to the rightmost column)
 - **WIP limits**: advisory only — enforcement is the UI's responsibility
