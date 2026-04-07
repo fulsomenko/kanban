@@ -12,7 +12,6 @@ pkgs.mkShell {
 
   shellHook = ''
     export EDITOR="${demoDir}/nvim-editor.sh"
-    export PS1="> "
     echo "Kanban Demo Environment"
     echo "📹 VHS: $(vhs --version)"
     echo "✎ Editor: nvim via ${demoDir}/nvim-editor.sh"
