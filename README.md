@@ -143,7 +143,6 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 - Atomic writes (temp file → rename) prevent corruption
 - Live file watching: auto-reload when another instance writes
 - Conflict detection with user prompt when local edits clash
-- V1 → V2 JSON migration with `.v1.backup` safety copy
 
 ### Interfaces
 - **TUI** — full keyboard-driven terminal UI
