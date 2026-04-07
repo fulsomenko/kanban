@@ -5,6 +5,7 @@
 
 let
   cargoVersion = (lib.importTOML ../Cargo.toml).workspace.package.version;
+  demoSrc = ../demo;
 in
 stdenv.mkDerivation {
   pname = "kanban-web";
@@ -18,9 +19,10 @@ stdenv.mkDerivation {
   '';
 
   installPhase = ''
-    mkdir -p $out
+    mkdir -p $out/demo
     cp index.html.out $out/index.html
     cp styles.css $out/
+    cp ${demoSrc}/demo.svg $out/demo/demo.svg
   '';
 
   meta = {
