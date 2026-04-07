@@ -8,7 +8,7 @@ in
 pkgs.mkShell {
   name = "kanban-demo-shell";
 
-  buildInputs = [ vhs pkgs.neovim ];
+  buildInputs = [ vhs pkgs.ttyd pkgs.neovim ];
 
   shellHook = ''
     export EDITOR="${demoDir}/nvim-editor.sh"
