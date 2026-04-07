@@ -1,334 +1,307 @@
 # kanban-domain
 
-Domain models and business logic for the kanban project management tool. Pure domain layer with no infrastructure dependencies.
+Pure domain models and business logic. No I/O, no async, no infrastructure dependencies. Depends only on `kanban-core`.
 
-## Installation
+## Models
 
-Add to your `Cargo.toml`:
+### `Board`
 
-```toml
-[dependencies]
-kanban-domain = { path = "../kanban-domain" }
-```
+Top-level container for columns, cards, and sprints.
 
-## API Reference
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `Uuid` | Unique identifier |
+| `name` | `String` | Display name |
+| `description` | `Option<String>` | Optional description |
+| `card_prefix` | `Option<String>` | Default prefix for card identifiers (e.g. `"KAN"` → `KAN-1`) |
+| `sprint_prefix` | `Option<String>` | Default prefix for sprint names |
+| `sprint_names` | `Vec<String>` | Pool of sprint name tokens (consumed in order) |
+| `card_counters` | `HashMap<String, u32>` | Per-prefix card number counter |
+| `created_at` | `DateTime<Utc>` | Creation timestamp |
+| `updated_at` | `DateTime<Utc>` | Last modification timestamp |
 
-### Core Entities
-
-**Board** - Top-level kanban board
-
-```rust
-pub struct Board {
-    pub id: BoardId,
-    pub name: String,
-    pub description: Option<String>,
-    pub sprint_prefix: Option<String>,
-    pub card_prefix: Option<String>,
-    pub sprint_duration_days: Option<u32>,
-    pub task_sort_field: SortField,
-    pub task_sort_order: SortOrder,
-    // ...more fields
-}
-
-pub enum SortField { Points, Priority, CreatedAt, UpdatedAt, Status, Position, Default }
-pub enum SortOrder { Ascending, Descending }
-```
-
-**Card** - Task with lifecycle and metadata
+**Key methods**:
 
 ```rust
-pub struct Card {
-    pub id: CardId,
-    pub column_id: ColumnId,
-    pub title: String,
-    pub description: Option<String>,
-    pub priority: CardPriority,
-    pub status: CardStatus,
-    pub points: Option<u8>,      // 1-5 scale
-    pub card_number: u32,        // Auto-assigned from board prefix counter
-    pub assigned_prefix: Option<String>,
-    pub due_date: Option<DateTime<Utc>>,
-    pub sprint_id: Option<SprintId>,
-    // ...more fields
-}
+board.get_next_card_number(prefix: &str) -> u32
+// Atomically increments and returns the next card number for the given prefix.
 
-pub enum CardStatus { Todo, InProgress, Blocked, Done }
-pub enum CardPriority { Low, Medium, High, Critical }
+board.resolve_completion_column(columns: &[Column]) -> Option<&Column>
+// Returns the rightmost column, used as the "done" column when toggling completion.
+
+board.consume_sprint_name() -> Option<String>
+// Pops and returns the next sprint name from sprint_names, if any.
 ```
 
-**Sprint** - Sprint lifecycle management
+**Partial update**:
 
 ```rust
-pub struct Sprint {
-    pub id: SprintId,
-    pub board_id: BoardId,
-    pub sprint_number: u32,
-    pub name_index: usize,
-    pub prefix: Option<String>,
-    pub card_prefix: Option<String>,
-    pub status: SprintStatus,
-    pub start_date: Option<DateTime<Utc>>,
-    pub end_date: Option<DateTime<Utc>>,
-    // ...timestamps
-}
-
-pub enum SprintStatus { Planning, Active, Completed, Cancelled }
-```
-
-**Column** - Board organization
-
-```rust
-pub struct Column {
-    pub id: ColumnId,
-    pub board_id: BoardId,
-    pub name: String,
-    pub position: u32,
-    pub wip_limit: Option<u32>,
-    // ...timestamps
+pub struct BoardUpdate {
+    pub name: Option<String>,
+    pub description: FieldUpdate<String>,
+    pub sprint_prefix: FieldUpdate<String>,
+    pub card_prefix: FieldUpdate<String>,
+    // ... additional fields
 }
 ```
 
-**Supporting Types**
+---
+
+### `Column`
+
+A swim lane within a board.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `Uuid` | Unique identifier |
+| `board_id` | `Uuid` | Parent board |
+| `name` | `String` | Display name |
+| `position` | `i32` | Display order (lower = left) |
+| `wip_limit` | `Option<i32>` | Advisory WIP limit — displayed but not enforced |
+| `created_at` | `DateTime<Utc>` | Creation timestamp |
+| `updated_at` | `DateTime<Utc>` | Last modification timestamp |
+
+WIP limits are **advisory**: the UI shows a warning but does not block card creation.
+
+**Partial update**: `ColumnUpdate { name, position, wip_limit: FieldUpdate<i32> }`
+
+---
+
+### `Card`
+
+The primary work item.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `Uuid` | Unique identifier |
+| `column_id` | `Uuid` | Parent column |
+| `title` | `String` | Card title |
+| `description` | `Option<String>` | Long-form description (markdown supported) |
+| `priority` | `CardPriority` | `Low` / `Medium` / `High` / `Critical` |
+| `status` | `CardStatus` | `Todo` / `InProgress` / `Blocked` / `Done` |
+| `position` | `i32` | Display order within the column |
+| `due_date` | `Option<DateTime<Utc>>` | Optional due date |
+| `points` | `Option<u8>` | Story points (1–5) |
+| `card_number` | `u32` | Sequential number within the prefix namespace |
+| `sprint_id` | `Option<Uuid>` | Assigned sprint, if any |
+| `assigned_prefix` | `Option<String>` | Prefix used when the card was created (e.g. `"KAN"`) |
+| `card_prefix` | `Option<String>` | Optional per-card prefix override |
+| `completed_at` | `Option<DateTime<Utc>>` | Set when status transitions to `Done`, cleared otherwise |
+| `sprint_logs` | `Vec<SprintLog>` | History of sprint assignments |
+| `created_at` | `DateTime<Utc>` | Creation timestamp |
+| `updated_at` | `DateTime<Utc>` | Last modification timestamp |
+
+**Status transitions**: `card.update_status(status)` — automatically sets `completed_at = Some(now)` when transitioning to `Done`, and clears it when transitioning away from `Done`.
+
+**Branch name generation**: derived from `assigned_prefix` + `card_number` + slugified title (lowercase, hyphens replace whitespace and punctuation, truncated for length).
+
+**Partial update**: `CardUpdate { title, description, priority, status, position, column_id, points, due_date, sprint_id, assigned_prefix, card_prefix }` — all fields are `Option<T>` or `FieldUpdate<T>`.
+
+---
+
+### `Sprint`
+
+A time-boxed work period.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `Uuid` | Unique identifier |
+| `board_id` | `Uuid` | Parent board |
+| `sprint_number` | `u32` | Sequential sprint number within the board |
+| `name_index` | `Option<usize>` | Index into `board.sprint_names` for the human-readable name |
+| `prefix` | `Option<String>` | Sprint prefix override (falls back to board prefix) |
+| `card_prefix` | `Option<String>` | Card prefix override for this sprint |
+| `status` | `SprintStatus` | `Planning` / `Active` / `Completed` / `Cancelled` |
+| `start_date` | `Option<DateTime<Utc>>` | Set when activated |
+| `end_date` | `Option<DateTime<Utc>>` | Set when activated (= start + duration) |
+| `created_at` | `DateTime<Utc>` | Creation timestamp |
+| `updated_at` | `DateTime<Utc>` | Last modification timestamp |
+
+**Status lifecycle**:
+
+```
+Planning ──activate()──► Active ──complete()──► Completed
+                               └──cancel()───► Cancelled
+```
+
+**Key methods**:
 
 ```rust
-pub struct ArchivedCard {
-    pub card: Card,
-    pub archived_at: DateTime<Utc>,
-    pub original_column_id: ColumnId,
-    pub original_position: u32,
+sprint.activate(duration_days: u32)
+// Sets status to Active, records start_date = now, end_date = now + duration.
+
+sprint.formatted_name(board: &Board, default_prefix: &str) -> String
+// e.g. "KAN-3/bugfix-week" or "KAN-3"
+
+sprint.is_ended() -> bool
+// True if Active and end_date is in the past.
+
+Sprint::assignable(sprints: &[Sprint], board_id: Uuid) -> Vec<&Sprint>
+// Returns sprints that are not Completed or Cancelled.
+```
+
+---
+
+### `SprintLog`
+
+Records a single sprint assignment event for a card.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sprint_id` | `Uuid` | Sprint that was assigned |
+| `assigned_at` | `DateTime<Utc>` | When the assignment occurred |
+| `unassigned_at` | `Option<DateTime<Utc>>` | When the assignment ended, if applicable |
+
+A card accumulates one `SprintLog` entry per unique sprint assignment. Re-assigning to the same sprint is a no-op (deduplication by `sprint_id`).
+
+---
+
+### `ArchivedCard`
+
+A card that has been moved out of active columns.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `Uuid` | Unique identifier |
+| `original_column_id` | `Uuid` | Column the card was in before archiving |
+| `original_position` | `i32` | Position before archiving |
+| `card` | `Card` | Full card snapshot |
+| `archived_at` | `DateTime<Utc>` | When the card was archived |
+
+Restoring an archived card places it back in `original_column_id` at `original_position` (or a specified column if provided).
+
+---
+
+### `FieldUpdate<T>`
+
+Three-state enum for partial updates to optional fields.
+
+```rust
+pub enum FieldUpdate<T> {
+    NoChange,   // Leave the field as-is
+    Set(T),     // Set the field to this value
+    Clear,      // Set the field to None
 }
 
-pub struct SprintLog {
-    pub sprint_id: SprintId,
-    pub sprint_number: u32,
-    pub sprint_name: Option<String>,
-    pub started_at: DateTime<Utc>,
-    pub ended_at: Option<DateTime<Utc>>,
-    pub status: SprintStatus,
+// Apply to a mutable target:
+update.apply_to(&mut self.due_date);
+```
+
+Used throughout all `*Update` structs to distinguish "not provided" from "explicitly set to None".
+
+---
+
+### `DependencyGraph`
+
+DAG of card relationships stored alongside the board snapshot.
+
+```rust
+pub struct DependencyGraph {
+    pub edges: Vec<CardEdge>,
 }
 
-pub struct Tag {
-    pub id: TagId,
-    pub name: String,
-    pub color: String,
+pub struct CardEdge {
+    pub from: Uuid,
+    pub to: Uuid,
+    pub edge_type: EdgeType,
 }
 
-pub enum TaskListView { Flat, GroupedByColumn, ColumnView }
-
-// DTOs for safe entity modification
-pub struct BoardSettingsDto {
-    pub sprint_prefix: Option<String>,
-    pub card_prefix: Option<String>,
-    pub sprint_duration_days: Option<u32>,
-    pub sprint_names: Vec<String>,
-}
-
-pub struct CardMetadataDto {
-    pub priority: CardPriority,
-    pub status: CardStatus,
-    pub points: Option<u8>,
-    pub due_date: Option<DateTime<Utc>>,
+pub enum EdgeType {
+    Parent,   // `from` is a parent of `to`
+    Child,    // `from` is a child of `to`
+    Blocks,   // `from` blocks `to`
 }
 ```
 
-### Card Dependencies
+Cycle detection is enforced on every `add_edge` call. Self-references are rejected.
 
-Directed graph system for card relationships:
+---
+
+### `HistoryManager`
+
+Undo/redo stack for `KanbanContext`.
 
 ```rust
-pub enum CardEdgeType {
-    ParentOf,    // Hierarchical parent-child grouping
-    Blocks,      // Blocking dependency (acyclic)
-    RelatesTo,   // Informational link (allows cycles)
+pub struct HistoryManager { /* private */ }
+```
+
+| Method | Description |
+|--------|-------------|
+| `capture_before_command(snapshot)` | Push snapshot onto undo stack |
+| `pop_undo()` | Pop and return the most recent undo snapshot |
+| `push_redo(snapshot)` | Push snapshot onto redo stack |
+| `suppress()` | Temporarily disable capture (used during undo/redo) |
+| `clear()` | Clear both stacks (called on external reload) |
+
+Both stacks are capped at **100 entries**. The oldest entries are dropped when the cap is exceeded.
+
+---
+
+## Error Types
+
+### `KanbanError`
+
+```rust
+pub enum KanbanError {
+    Domain(DomainError),
+    Io(std::io::Error),
+    Serialization(String),
+    ConflictDetected { path: String, source: Option<Box<dyn Error + Send + Sync>> },
+    Database(String),
+    Internal(String),
 }
+```
 
-pub trait DependencyGraph {
-    fn add_edge(&mut self, ...) -> KanbanResult<()>;
-    fn remove_edge(&mut self, ...);
-    fn get_parents(&self, card_id: CardId) -> Vec<CardId>;
-    fn get_children(&self, card_id: CardId) -> Vec<CardId>;
-    fn remove_card_edges(&mut self, card_id: CardId);
-    fn archive_card_edges(&mut self, card_id: CardId);
+### `DomainError`
+
+```rust
+pub enum DomainError {
+    NotFound { entity: &'static str, id: Uuid },
+    Validation(String),
+    Dependency(DependencyError),
 }
 ```
 
-- `ParentOf` and `Blocks` enforce DAG constraints (cycle detection)
-- Edges referencing a deleted or archived card are automatically cleaned up
-- Integrated into board persistence (import/export)
-
-### Sorting & Filtering
-
-**SortBy** — Enum dispatch for card sorting:
+### `DependencyError`
 
 ```rust
-pub enum SortBy {
-    Points, Priority, CreatedAt, UpdatedAt, Status, Position, CardNumber
+pub enum DependencyError {
+    CycleDetected,
+    SelfReference,
+    EdgeNotFound,
 }
 ```
 
-**CardFilter** trait + concrete filters:
+**Helper constructors** on `KanbanError`:
 
 ```rust
-pub trait CardFilter {
-    fn matches(&self, card: &Card) -> bool;
-}
-// Implementations: BoardFilter, ColumnFilter, SprintFilter, UnassignedOnlyFilter
+KanbanError::not_found(entity, id)
+KanbanError::validation(msg)
+KanbanError::serialization(msg)
+KanbanError::is_not_found(&self) -> bool
+KanbanError::is_validation(&self) -> bool
+KanbanError::is_cycle_detected(&self) -> bool
+KanbanError::is_conflict_detected(&self) -> bool
 ```
 
-### Query Builder
+---
 
-Fluent API composing filter + sort + search:
+## Business Rules
 
-```rust
-let cards = CardQueryBuilder::new(&all_cards)
-    .filter_by_column(column_id)
-    .filter_by_sprint(sprint_id)
-    .search("bug fix")
-    .sort(SortBy::Priority)
-    .sort_order(SortOrder::Descending)
-    .execute();
-```
+- **Card numbering**: per-prefix counter stored in `Board::card_counters`; monotonically increasing, never reused
+- **Sprint assignment deduplication**: assigning a card to a sprint it already belongs to is a no-op
+- **Completion column**: the rightmost column is used when toggling a card to Done if no column with `status == Done` exists
+- **WIP limits**: advisory only; no enforcement in domain logic
+- **Sprint assignability**: only `Planning` and `Active` sprints can be assigned to cards
 
-### History & Snapshots
-
-```rust
-pub struct HistoryManager { /* undo/redo stacks */ }
-pub struct Snapshot { /* point-in-time state of all kanban data */ }
-```
-
-`HistoryManager` maintains undo and redo stacks of `Snapshot` values. Each snapshot captures the full board state and can be serialized to/from JSON bytes.
-
-### Export / Import
-
-```rust
-pub struct BoardExporter;
-pub struct BoardImporter;
-```
-
-`BoardExporter` produces single-board or all-boards JSON exports. `BoardImporter` reads JSON with automatic V1/V2 format detection and migration.
-
-## Architecture
-
-Pure domain layer depending only on `kanban-core`. Implements rich domain models with encapsulated business logic:
-
-`kanban-domain` depends only on `kanban-core` and has no infrastructure dependencies. See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for the full workspace dependency graph.
-
-### Key Design Patterns
-
-**Prefix Hierarchy** - Git branch naming with fallback chain:
-- Card's assigned prefix → Sprint's card prefix → Board's card prefix → Default ("task")
-- Enables per-card, per-sprint, or board-wide branch naming strategies
-
-**Counter System** - Per-prefix independent numbering:
-- Board maintains separate counters for each card prefix
-- Board maintains separate counters for each sprint prefix
-- Enables naming schemes like: `feature-1`, `bugfix-1`, `hotfix-1` all starting at 1
-- Auto-migration for legacy single-counter boards
-
-**Sprint History** - Audit trail of card movements:
-- Each card maintains `SprintLog` entries when assigned to sprints
-- Tracks: when assigned, which sprint, when ended
-- Enables sprint velocity and card journey analysis
-
-**Entity Update Safety** - DTO pattern via `Editable` trait:
-- DTOs provide type-safe, validated updates
-- Case-insensitive enum parsing (Priority::High, priority::high both valid)
-- Two-way conversion between domain entities and DTOs
-
-## Examples
-
-### Branch Name Generation
-
-```rust
-use kanban_domain::{Board, Card, Sprint};
-
-let mut board = Board::new("My Project", None);
-board.update_card_prefix(Some("task".into()));
-
-let mut card = Card::new(&mut board, column_id, "Fix bug", 0, "task");
-card.set_assigned_prefix(Some("urgent".into()));
-
-// Card prefix wins in hierarchy
-let branch = card.branch_name(&board, &sprints, "task");
-// Result: "urgent-1/fix-bug"
-```
-
-### Per-Prefix Card Numbering
-
-```rust
-use kanban_domain::Board;
-
-let mut board = Board::new("My Project", None);
-
-// Feature cards start at 1
-let feature1 = board.get_next_card_number("feature");  // 1
-let feature2 = board.get_next_card_number("feature");  // 2
-
-// Bugfix cards are independent sequence
-let bugfix1 = board.get_next_card_number("bugfix");    // 1
-let bugfix2 = board.get_next_card_number("bugfix");    // 2
-```
-
-### Sprint Lifecycle
-
-```rust
-use kanban_domain::{Sprint, SprintStatus};
-
-let mut sprint = Sprint::new(board_id, 1, None, None);
-assert_eq!(sprint.status, SprintStatus::Planning);
-
-// Start sprint (sets start_date and end_date)
-sprint.activate(14);  // 14-day sprint
-assert_eq!(sprint.status, SprintStatus::Active);
-
-// Complete sprint
-sprint.complete();
-assert_eq!(sprint.status, SprintStatus::Completed);
-```
-
-### Card Sprint Assignment
-
-```rust
-use kanban_domain::Card;
-
-let mut card = Card::new(&mut board, column_id, "Implement UI", 0, "task");
-
-// Assign to sprint (creates SprintLog entry)
-card.assign_to_sprint(sprint_id, 1, None, "Active");
-
-// Get sprint history
-let logs = card.get_sprint_history();
-assert_eq!(logs.len(), 1);
-assert_eq!(logs[0].sprint_number, 1);
-```
-
-### Updating Card Metadata
-
-```rust
-use kanban_domain::{CardMetadataDto, CardPriority, CardStatus};
-use kanban_core::Editable;
-
-let update = CardMetadataDto {
-    priority: CardPriority::High,
-    status: CardStatus::InProgress,
-    points: Some(5),
-    due_date: None,
-};
-
-// Apply to card with validation
-update.apply_to(&mut card)?;
-assert_eq!(card.priority, CardPriority::High);
-assert_eq!(card.points, Some(5));
-```
+---
 
 ## Dependencies
 
-- `kanban-core` - Foundation types and traits
-- `serde`, `serde_json` - Serialization for JSON persistence
-- `uuid` - ID generation and UUID types
-- `chrono` - Date/time handling
-- `async-trait` - Async trait support for future extensions
-
-## License
-
-Apache 2.0 - See [LICENSE.md](../../LICENSE.md) for details
+| Crate | Purpose |
+|-------|---------|
+| `kanban-core` | Error types, config, graph |
+| `serde` + `serde_json` | Serialization |
+| `uuid` | `Uuid` type |
+| `chrono` | Timestamps |
+| `thiserror` | Error derivation |
