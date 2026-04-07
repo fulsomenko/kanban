@@ -9,7 +9,7 @@ Set Height 800
 Set Theme "Catppuccin Mocha"
 Set Shell "bash"
 Set Padding 10
-Set Framerate 24
+Set Framerate 16
 Set TypingSpeed 75ms
 
 # Beat 1: Start app, select Kanban board (kanban view) (0-4s)
