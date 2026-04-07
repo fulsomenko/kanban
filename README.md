@@ -324,7 +324,6 @@ graph LR
 ### JSON Backend (default)
 
 - **V2 envelope format**: `{ "version": 2, "metadata": {...}, "data": {...} }`
-- **Automatic V1→V2 migration**: original file renamed to `.v1.backup` on first load
 - **Atomic writes**: crash-safe — every write is atomic (temp file → rename)
 - **Debounced saving**: 500ms minimum interval between saves
 - Default for any plain file path
