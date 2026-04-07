@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/kanban-cli.svg)](https://crates.io/crates/kanban-cli)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
 
-**The terminal kanban that gets out of your way.**
+**Keyboard-first kanban for the terminal.**
 
 ![Kanban Demo](demo/demo.gif)
 
@@ -128,7 +128,7 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 ### Views & Navigation
 - **3 view modes**: Flat list / Grouped by column / Kanban board — toggle with `V`
 - Real-time `/` search
-- Sort by priority, points, due date, status, or position
+- Sort by priority, points, status, or position
 - Filter by sprint, status, or search result
 - Multi-select for bulk archive / move / sprint-assign
 
