@@ -133,7 +133,7 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 - Multi-select for bulk archive / move / sprint-assign
 
 ### Productivity
-- Full undo/redo (`u`/`U`, up to 100 levels)
+- Undo/redo (`u`/`U`, up to 100 levels)
 - External editor for descriptions (respects `$EDITOR`)
 - Clipboard: `y` copies git branch name, `Y` copies `git checkout` command
 - Import/export boards as JSON
