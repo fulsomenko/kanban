@@ -155,7 +155,7 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 
 Press `?` in the app to see bindings for the current context.
 
-### Normal Mode — Boards Panel
+### Boards Panel
 
 | Key | Action |
 |-----|--------|
@@ -177,7 +177,7 @@ Press `?` in the app to see bindings for the current context.
 | `q` | Quit |
 | `?` | Help |
 
-### Normal Mode — Cards Panel
+### Cards Panel
 
 | Key | Action |
 |-----|--------|
