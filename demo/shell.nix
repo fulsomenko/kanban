@@ -1,17 +1,14 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs }:
 
 let
   demoDir = builtins.toString ./.;
+  vhs = pkgs.callPackage ./vhs.nix {};
 in
 
 pkgs.mkShell {
   name = "kanban-demo-shell";
 
-  buildInputs = with pkgs; [
-    vhs
-    cargo
-    neovim
-  ];
+  buildInputs = [ vhs pkgs.neovim ];
 
   shellHook = ''
     export EDITOR="${demoDir}/nvim-editor.sh"
@@ -21,6 +18,6 @@ pkgs.mkShell {
     echo ""
     echo "To build and record the demo:"
     echo "  1. cargo build --release"
-    echo "  2. nix-shell demo/shell.nix --run 'bash demo/record.sh'"
+    echo "  2. nix develop .#demo --command bash demo/record.sh"
   '';
 }
