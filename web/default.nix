@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  ffmpeg,
 }:
 
 let
@@ -13,16 +14,19 @@ stdenv.mkDerivation {
 
   src = lib.cleanSource ./.;
 
+  nativeBuildInputs = [ ffmpeg ];
+
   buildPhase = ''
     substitute index.html index.html.out \
       --replace-fail "@VERSION@" "${cargoVersion}"
+    ffmpeg -i ${demoSrc}/demo.gif -c:v libvpx-vp9 -b:v 0 -crf 33 -an demo.webm
   '';
 
   installPhase = ''
     mkdir -p $out/demo
     cp index.html.out $out/index.html
     cp styles.css $out/
-    cp ${demoSrc}/demo.gif $out/demo/demo.gif
+    cp demo.webm $out/demo/demo.webm
   '';
 
   meta = {
