@@ -60,6 +60,8 @@
           inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease;
         };
 
+        devShells.demo = import ./demo/shell.nix { inherit pkgs; };
+
         packages = let
           kanban = pkgs.callPackage ./default.nix { gitRev = self.rev or null; };
           kanban-cli = pkgs.callPackage ./default.nix { gitRev = self.rev or null; withTui = false; };
