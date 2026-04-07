@@ -84,7 +84,7 @@ This VHS tape defines the exact sequence of keystrokes and timing. Edit this fil
 
 ### Nix Dev Shell
 
-The demo uses the flake's `demo` dev shell, which pulls VHS and neovim from nixpkgs-unstable:
+The demo uses the flake's `demo` dev shell, which provides VHS (agentstation fork), ttyd, and neovim:
 
 ```bash
 nix develop .#demo --command bash demo/record.sh
@@ -136,9 +136,10 @@ The vim commands need proper timing:
 ```
 demo/
 ├── README.md              # This file
-├── demo.tape              # VHS recording script (30 seconds)
-├── record.sh              # Run this to generate demo.gif
-├── shell.nix              # Nix shell (used by flake .#demo dev shell)
+├── demo.tape              # VHS recording script
+├── record.sh              # Run this to generate demo.gif and demo.svg
+├── shell.nix              # Demo dev shell (requires pkgs from flake — use nix develop .#demo)
+├── vhs.nix                # Nix derivation for agentstation/vhs fork (SVG support, ttyd runtime dep)
 ├── nvim-editor.sh         # Wrapper for nvim in demo
 └── fixtures/
     └── demo.json          # Clean board fixture (auto-reset after recording)
