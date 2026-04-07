@@ -17,7 +17,7 @@ This will:
 
 ### View the Demo
 
-Open `demo.gif` in any image viewer or browser, or `demo.svg` in a browser for the animated terminal version.
+Open `demo.gif` in any image viewer or browser.
 
 ## Understanding the Demo
 
@@ -92,6 +92,7 @@ nix develop .#demo --command bash demo/record.sh
 
 The `record.sh` script handles:
 - Directory navigation (cd into fixtures)
+- Clean prompt via `PROMPT_COMMAND`
 - VHS recording
 - Output placement (`demo.gif` and `demo.svg` to `demo/`)
 - Fixture reset
@@ -139,7 +140,7 @@ demo/
 ├── demo.tape              # VHS recording script
 ├── record.sh              # Run this to generate demo.gif and demo.svg
 ├── shell.nix              # Demo dev shell (requires pkgs from flake — use nix develop .#demo)
-├── vhs.nix                # Nix derivation for agentstation/vhs fork (SVG support, ttyd runtime dep)
+├── vhs.nix                # Nix derivation for agentstation/vhs fork (adds SVG output, requires ttyd)
 ├── nvim-editor.sh         # Wrapper for nvim in demo
 └── fixtures/
     └── demo.json          # Clean board fixture (auto-reset after recording)
@@ -150,7 +151,7 @@ demo/
 - **Modify the narrative**: Edit `demo.tape` to show different features
 - **Test interactively**: Run `kanban demo/fixtures/demo.json` manually
 - **Adjust timing**: If interactions feel rushed, increase `Sleep` values
-- **Version the outputs**: Commit `demo.gif` and `demo.svg` when the demo is finalized
+- **Version the outputs**: Commit `demo.gif` when the demo is finalized
 
 ---
 
