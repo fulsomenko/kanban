@@ -44,7 +44,7 @@ config.effective_storage_location()      // → "kanban.json"
 
 **Validation**: `config.validate_values()` returns `CoreError::Validation` if any field is out of range.
 
-**Branch prefix validation**: `validate_branch_prefix(prefix: &str) -> bool` — non-empty, alphanumeric + hyphens/underscores, no leading or trailing hyphens.
+**Branch prefix validation**: `validate_branch_prefix(prefix: &str) -> bool` — non-empty, alphanumeric + hyphens/underscores, must start and end with an alphanumeric character.
 
 ### `PaginatedList<T>`
 
@@ -66,7 +66,7 @@ pub struct PaginatedList<T> {
 
 ### `Page` / `PageInfo`
 
-TUI viewport pagination — manages which items are visible in a terminal viewport given a scroll offset. **Never serialized.**
+TUI viewport pagination — manages which items are visible in a terminal viewport given a scroll offset. **Pure in-memory state — lives only in the TUI process.**
 
 ```rust
 pub struct PageInfo {
