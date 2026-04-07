@@ -13,8 +13,8 @@
 
 ## Why Kanban?
 
-- **Zero latency** — keyboard-driven, no clicks, no menus, no mouse
-- **No account, no cloud, no browser** — your data is a file on your disk
+- **Zero latency** — pure keyboard flow — hjkl, never reach for the mouse
+- **Your data is a file on your disk** — private, offline, always yours
 - **Git-native** — generate branch names and `git checkout` commands from any card
 - **LLM-native** — full MCP server (40 tools) works with Claude Code, Cursor, and any MCP client
 - **Offline-first** — works anywhere; JSON and SQLite backends, atomic writes, live conflict detection
@@ -282,7 +282,7 @@ Press `?` in the app to see bindings for the current context.
 crates/
 ├── kanban-core               → Shared types, error handling, config, reusable state primitives
 ├── kanban-domain             → Domain models, business logic, filtering & sorting
-├── kanban-persistence        → Persistence trait layer (no I/O)
+├── kanban-persistence        → Persistence trait layer — pure trait definitions, all I/O lives in backend crates
 ├── kanban-persistence-json   → JSON file storage backend
 ├── kanban-persistence-sqlite → SQLite storage backend
 ├── kanban-service            → KanbanContext, persistence orchestration, undo/redo
@@ -326,9 +326,9 @@ graph LR
 
 - **V2 envelope format**: `{ "version": 2, "metadata": {...}, "data": {...} }`
 - **Automatic V1→V2 migration**: original file renamed to `.v1.backup` on first load
-- **Atomic writes**: write to temp file, then rename — no partial writes on crash
+- **Atomic writes**: crash-safe — every write is atomic (temp file → rename)
 - **Debounced saving**: 500ms minimum interval between saves
-- File selected by any path that doesn't match a SQLite extension
+- Default for any plain file path
 
 ### SQLite Backend
 
@@ -341,7 +341,7 @@ graph LR
 ### Multi-Instance Support
 
 - **File watching**: detects changes written by other TUI or MCP instances
-- **Auto-reload**: applies external changes automatically when no local edits exist
+- **Auto-reload**: applies external changes automatically when the local state is clean
 - **Conflict prompt**: when local edits clash with an external write, you choose to reload or keep
 
 ---
