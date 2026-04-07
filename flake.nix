@@ -54,14 +54,17 @@
           runtimeInputs = with pkgs; [rustToolchain cargo coreutils gnugrep gnused];
           text = builtins.readFile ./scripts/validate-release.sh;
         };
+
+        kanban = pkgs.callPackage ./default.nix { gitRev = self.rev or null; };
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
           inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease;
         };
 
+        devShells.demo = import ./demo/shell.nix { inherit pkgs kanban; };
+
         packages = let
-          kanban = pkgs.callPackage ./default.nix { gitRev = self.rev or null; };
           kanban-cli = pkgs.callPackage ./default.nix { gitRev = self.rev or null; withTui = false; };
         in {
           default = kanban;
@@ -78,4 +81,3 @@
       }
     );
 }
-

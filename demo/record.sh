@@ -6,7 +6,7 @@ DEMO="$(cd "$(dirname "$0")" && pwd)"
 # cd into fixtures so "kanban demo.json" works (not "kanban demo/fixtures/demo.json")
 cd "$DEMO/fixtures"
 
-nix-shell ../shell.nix --run "vhs ../demo.tape"
+PROMPT_COMMAND='PS1="> "' vhs ../demo.tape
 
 # Move demo.gif to demo directory
 mv demo.gif "$DEMO/demo.gif"

@@ -1,10 +1,12 @@
 {
   lib,
   stdenv,
+  ffmpeg,
 }:
 
 let
   cargoVersion = (lib.importTOML ../Cargo.toml).workspace.package.version;
+  demoSrc = ../demo;
 in
 stdenv.mkDerivation {
   pname = "kanban-web";
@@ -12,15 +14,19 @@ stdenv.mkDerivation {
 
   src = lib.cleanSource ./.;
 
+  nativeBuildInputs = [ ffmpeg ];
+
   buildPhase = ''
     substitute index.html index.html.out \
       --replace-fail "@VERSION@" "${cargoVersion}"
+    ffmpeg -i ${demoSrc}/demo.gif -c:v libvpx-vp9 -b:v 0 -crf 33 -an demo.webm
   '';
 
   installPhase = ''
-    mkdir -p $out
+    mkdir -p $out/demo
     cp index.html.out $out/index.html
     cp styles.css $out/
+    cp demo.webm $out/demo/demo.webm
   '';
 
   meta = {

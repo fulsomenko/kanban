@@ -7,11 +7,11 @@ This directory contains the hero demo for the kanban TUI application. It showcas
 ### Run the Demo Recording
 
 ```bash
-nix-shell demo/shell.nix --run "bash demo/record.sh"
+nix develop .#demo --command bash demo/record.sh
 ```
 
 This will:
-1. Record a 30-second demo using VHS
+1. Record a demo using VHS
 2. Generate `demo.gif` in the `demo/` directory
 3. Reset `demo/fixtures/demo.json` to its clean state
 
@@ -82,18 +82,19 @@ This VHS tape defines the exact sequence of keystrokes and timing. Edit this fil
 
 ## Environment Setup
 
-### Nix Shell
+### Nix Dev Shell
 
-The demo uses a dedicated nix shell with VHS and required dependencies:
+The demo uses the flake's `demo` dev shell, which provides VHS and neovim:
 
 ```bash
-nix-shell demo/shell.nix --run "bash demo/record.sh"
+nix develop .#demo --command bash demo/record.sh
 ```
 
 The `record.sh` script handles:
 - Directory navigation (cd into fixtures)
+- Clean prompt via `PROMPT_COMMAND`
 - VHS recording
-- Output placement (demo.gif to demo/)
+- Output placement (`demo.gif` to `demo/`)
 - Fixture reset
 
 ### nvim Editor Integration
@@ -110,10 +111,10 @@ This wrapper script ensures nvim starts with minimal config (`-u NONE --noplugin
 
 ### "nvim: no such file or directory"
 
-The VHS process can't find nvim. Ensure you're running within the nix shell:
+The VHS process can't find nvim. Ensure you're running within the flake dev shell:
 
 ```bash
-nix-shell demo/shell.nix --run "bash demo/record.sh"
+nix develop .#demo --command bash demo/record.sh
 ```
 
 ### Demo creates a board instead of a card
@@ -136,9 +137,9 @@ The vim commands need proper timing:
 ```
 demo/
 ├── README.md              # This file
-├── demo.tape              # VHS recording script (30 seconds)
+├── demo.tape              # VHS recording script
 ├── record.sh              # Run this to generate demo.gif
-├── shell.nix              # Environment with vhs + neovim
+├── shell.nix              # Demo dev shell (requires pkgs from flake — use nix develop .#demo)
 ├── nvim-editor.sh         # Wrapper for nvim in demo
 └── fixtures/
     └── demo.json          # Clean board fixture (auto-reset after recording)
@@ -149,7 +150,7 @@ demo/
 - **Modify the narrative**: Edit `demo.tape` to show different features
 - **Test interactively**: Run `kanban demo/fixtures/demo.json` manually
 - **Adjust timing**: If interactions feel rushed, increase `Sleep` values
-- **Version the gif**: Commit `demo.gif` when the demo is finalized
+- **Version the outputs**: Commit `demo.gif` when the demo is finalized
 
 ---
 

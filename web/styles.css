@@ -176,19 +176,34 @@ a:hover {
   border-bottom: 1px solid var(--color-border);
 }
 
+.hero-brand {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  letter-spacing: 0.15em;
+  text-transform: lowercase;
+  margin-bottom: var(--spacing-3xl);
+}
+
 .hero-title {
-  font-size: clamp(2.5rem, 8vw, 4rem);
-  margin-bottom: var(--spacing-2xl);
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  margin-bottom: var(--spacing-3xl);
+  line-height: 1.15;
 }
 
 .hero-tagline {
   font-size: var(--font-size-lg);
   color: var(--color-text-muted);
-  max-width: 600px;
+  max-width: 560px;
   margin: 0 auto var(--spacing-4xl);
   line-height: 1.8;
 }
 
+.hero-cta {
+  max-width: 360px;
+  margin: 0 auto var(--spacing-3xl);
+  text-align: left;
+}
 
 .hero-links {
   display: flex;
@@ -205,6 +220,63 @@ a:hover {
   .hero-links {
     gap: var(--spacing-xl);
   }
+}
+
+/* ============================================================================
+   Demo Section
+   ============================================================================ */
+
+.demo {
+  padding: var(--spacing-5xl) 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.demo-terminal {
+  max-width: 860px;
+  width: 100%;
+  border: 1px solid var(--color-border);
+}
+
+/* ============================================================================
+   Why Section
+   ============================================================================ */
+
+.why {
+  padding: var(--spacing-5xl) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.why-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xl);
+}
+
+.why-list li {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  padding-left: var(--spacing-3xl);
+  position: relative;
+}
+
+.why-list li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+}
+
+.why-list code {
+  font-family: var(--font-mono);
+  background-color: var(--color-bg-panel);
+  color: var(--color-accent);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.9em;
 }
 
 /* ============================================================================
