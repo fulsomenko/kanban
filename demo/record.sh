@@ -8,7 +8,7 @@ cd "$DEMO/fixtures"
 
 PROMPT_COMMAND='PS1="> "' vhs ../demo.tape
 
-# Move outputs to demo directory
+# Move demo.gif to demo directory
 mv demo.gif "$DEMO/demo.gif"
 
 # Reset demo.json fixture to clean state

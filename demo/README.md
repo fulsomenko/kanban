@@ -12,7 +12,7 @@ nix develop .#demo --command bash demo/record.sh
 
 This will:
 1. Record a demo using VHS
-2. Generate `demo.gif` and `demo.svg` in the `demo/` directory
+2. Generate `demo.gif` in the `demo/` directory
 3. Reset `demo/fixtures/demo.json` to its clean state
 
 ### View the Demo
