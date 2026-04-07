@@ -7,17 +7,17 @@ This directory contains the hero demo for the kanban TUI application. It showcas
 ### Run the Demo Recording
 
 ```bash
-nix-shell demo/shell.nix --run "bash demo/record.sh"
+nix develop .#demo --command bash demo/record.sh
 ```
 
 This will:
-1. Record a 30-second demo using VHS
-2. Generate `demo.gif` in the `demo/` directory
+1. Record a demo using VHS
+2. Generate `demo.gif` and `demo.svg` in the `demo/` directory
 3. Reset `demo/fixtures/demo.json` to its clean state
 
 ### View the Demo
 
-Open `demo.gif` in any image viewer or browser.
+Open `demo.gif` in any image viewer or browser, or `demo.svg` in a browser for the animated terminal version.
 
 ## Understanding the Demo
 
@@ -82,18 +82,18 @@ This VHS tape defines the exact sequence of keystrokes and timing. Edit this fil
 
 ## Environment Setup
 
-### Nix Shell
+### Nix Dev Shell
 
-The demo uses a dedicated nix shell with VHS and required dependencies:
+The demo uses the flake's `demo` dev shell, which pulls VHS and neovim from nixpkgs-unstable:
 
 ```bash
-nix-shell demo/shell.nix --run "bash demo/record.sh"
+nix develop .#demo --command bash demo/record.sh
 ```
 
 The `record.sh` script handles:
 - Directory navigation (cd into fixtures)
 - VHS recording
-- Output placement (demo.gif to demo/)
+- Output placement (`demo.gif` and `demo.svg` to `demo/`)
 - Fixture reset
 
 ### nvim Editor Integration
@@ -110,10 +110,10 @@ This wrapper script ensures nvim starts with minimal config (`-u NONE --noplugin
 
 ### "nvim: no such file or directory"
 
-The VHS process can't find nvim. Ensure you're running within the nix shell:
+The VHS process can't find nvim. Ensure you're running within the flake dev shell:
 
 ```bash
-nix-shell demo/shell.nix --run "bash demo/record.sh"
+nix develop .#demo --command bash demo/record.sh
 ```
 
 ### Demo creates a board instead of a card
@@ -138,7 +138,7 @@ demo/
 ├── README.md              # This file
 ├── demo.tape              # VHS recording script (30 seconds)
 ├── record.sh              # Run this to generate demo.gif
-├── shell.nix              # Environment with vhs + neovim
+├── shell.nix              # Nix shell (used by flake .#demo dev shell)
 ├── nvim-editor.sh         # Wrapper for nvim in demo
 └── fixtures/
     └── demo.json          # Clean board fixture (auto-reset after recording)
@@ -149,7 +149,7 @@ demo/
 - **Modify the narrative**: Edit `demo.tape` to show different features
 - **Test interactively**: Run `kanban demo/fixtures/demo.json` manually
 - **Adjust timing**: If interactions feel rushed, increase `Sleep` values
-- **Version the gif**: Commit `demo.gif` when the demo is finalized
+- **Version the outputs**: Commit `demo.gif` and `demo.svg` when the demo is finalized
 
 ---
 
