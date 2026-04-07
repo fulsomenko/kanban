@@ -2,13 +2,12 @@
 
 let
   demoDir = builtins.toString ./.;
-  vhs = pkgs.callPackage ./vhs.nix {};
 in
 
 pkgs.mkShell {
   name = "kanban-demo-shell";
 
-  buildInputs = [ vhs pkgs.ttyd pkgs.neovim ];
+  buildInputs = [ pkgs.vhs pkgs.neovim ];
 
   shellHook = ''
     export EDITOR="${demoDir}/nvim-editor.sh"

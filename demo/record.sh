@@ -10,10 +10,9 @@ PROMPT_COMMAND='PS1="> "' vhs ../demo.tape
 
 # Move outputs to demo directory
 mv demo.gif "$DEMO/demo.gif"
-mv demo.svg "$DEMO/demo.svg"
 
 # Reset demo.json fixture to clean state
 git checkout demo.json 2>/dev/null || true
 
-echo "Done: $DEMO/demo.gif $DEMO/demo.svg"
+echo "Done: $DEMO/demo.gif"
 echo "Reset demo.json to clean state"
