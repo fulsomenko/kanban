@@ -51,19 +51,8 @@ All commands output JSON. Use `kanban --help` for full reference.
 
 ### MCP Server
 
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "kanban": {
-      "command": "kanban-mcp",
-      "args": ["/path/to/kanban.json"]
-    }
-  }
-}
-```
+**Claude Code**
 
-**Claude Code** (`.mcp.json` in project root):
 ```json
 {
   "mcpServers": {
