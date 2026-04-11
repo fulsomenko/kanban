@@ -17,7 +17,12 @@ impl McpContext {
         data_file: &str,
         mut config: AppConfig,
     ) -> KanbanResult<Self> {
-        store_manager.sync_backend_with_file(data_file, &mut config);
+        if store_manager.sync_backend_with_file(data_file, &mut config) {
+            tracing::warn!(
+                "Storage backend auto-corrected to '{}' based on file content.",
+                config.effective_storage_backend()
+            );
+        }
         let backend = config.effective_storage_backend().to_string();
         Ok(Self {
             inner: KanbanContext::load(store_manager.make_store(&backend, data_file)?, config)
