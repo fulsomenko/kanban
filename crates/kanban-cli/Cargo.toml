@@ -10,6 +10,10 @@ description = "Command-line interface for the kanban project management tool"
 keywords = ["kanban", "cli", "terminal", "project-management", "productivity"]
 categories = ["command-line-utilities"]
 
+[lib]
+name = "kanban_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "kanban"
 path = "src/main.rs"
@@ -21,6 +25,9 @@ tui = ["dep:kanban-tui"]
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
+kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.3" }
 kanban-service = { path = "../kanban-service", version = "^0.3" }
 kanban-tui = { path = "../kanban-tui", version = "^0.3", optional = true }
 clap.workspace = true
@@ -35,10 +42,6 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
-kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
-kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.3" }
-kanban-service = { path = "../kanban-service", version = "^0.3", features = ["json-storage", "sqlite-storage"] }
 tempfile.workspace = true
 assert_cmd.workspace = true
 predicates.workspace = true

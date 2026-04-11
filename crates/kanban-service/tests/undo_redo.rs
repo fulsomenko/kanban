@@ -101,7 +101,9 @@ async fn test_new_action_after_undo_clears_redo() {
 async fn test_reload_no_longer_clears_history() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
-    let store = kanban_service::make_store("json", path.to_str().unwrap()).unwrap();
+    let store = Arc::new(kanban_persistence_json::JsonFileStore::new(
+        path.to_str().unwrap(),
+    )) as Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>;
     let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
 
     ctx.execute(vec![Box::new(CreateBoard {
@@ -275,7 +277,9 @@ async fn test_conflict_flag_lifecycle() {
 async fn test_reload_preserves_history() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
-    let store = kanban_service::make_store("json", path.to_str().unwrap()).unwrap();
+    let store = Arc::new(kanban_persistence_json::JsonFileStore::new(
+        path.to_str().unwrap(),
+    )) as Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>;
     let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
 
     ctx.create_board("B".into(), None).unwrap();

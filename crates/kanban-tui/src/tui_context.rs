@@ -21,20 +21,12 @@ pub struct TuiContext {
 impl TuiContext {
     #[allow(clippy::type_complexity)]
     pub fn new(
-        backend: &str,
-        save_file: Option<String>,
+        store: Option<Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>>,
     ) -> KanbanResult<(
         Self,
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     )> {
-        let store: Option<Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>> =
-            if let Some(ref path) = save_file {
-                Some(kanban_service::make_store(backend, path)?)
-            } else {
-                None
-            };
-
         let inner = KanbanContext::empty(
             store
                 .clone()

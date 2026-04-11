@@ -7,11 +7,9 @@
 
 use kanban_persistence::StoreRegistry;
 use kanban_persistence_json::JsonStoreFactory;
+use kanban_persistence_sqlite::SqliteStoreFactory;
 use kanban_service::StoreManager;
 use std::sync::Arc;
-
-#[cfg(feature = "sqlite-storage")]
-use kanban_persistence_sqlite::SqliteStoreFactory;
 
 #[test]
 fn test_store_manager_make_store_returns_expected_path() {
@@ -38,7 +36,6 @@ fn test_store_manager_unknown_backend_is_rejected() {
     }
 }
 
-#[cfg(feature = "sqlite-storage")]
 #[test]
 fn test_store_manager_preserves_registration_order() {
     // SQLite registered first — it must win content-sniffing when both match.

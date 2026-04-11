@@ -4,7 +4,7 @@ use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
 };
-use kanban_service::KanbanContext;
+use kanban_service::{KanbanContext, StoreManager};
 use uuid::Uuid;
 
 pub use kanban_service::BatchOperationResult;
@@ -14,8 +14,12 @@ pub struct CliContext {
 }
 
 impl CliContext {
-    pub async fn load(file_path: &str, mut config: AppConfig) -> KanbanResult<Self> {
-        if kanban_service::sync_backend_with_file(file_path, &mut config) {
+    pub async fn load(
+        store_manager: &StoreManager,
+        file_path: &str,
+        mut config: AppConfig,
+    ) -> KanbanResult<Self> {
+        if store_manager.sync_backend_with_file(file_path, &mut config) {
             eprintln!(
                 "Warning: storage backend auto-corrected from config value to '{}' based on file content.",
                 config.effective_storage_backend()
@@ -23,7 +27,7 @@ impl CliContext {
         }
         let backend = config.effective_storage_backend().to_string();
         Ok(Self {
-            inner: KanbanContext::load(kanban_service::make_store(&backend, file_path)?, config)
+            inner: KanbanContext::load(store_manager.make_store(&backend, file_path)?, config)
                 .await?,
         })
     }

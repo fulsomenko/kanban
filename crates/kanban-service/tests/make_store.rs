@@ -1,9 +1,17 @@
 use kanban_core::AppConfig;
-use kanban_service::{make_store, make_store_with_config};
+use kanban_persistence::StoreRegistry;
+use kanban_service::StoreManager;
+
+fn manager() -> StoreManager {
+    let mut registry = StoreRegistry::new();
+    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
+    registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+    StoreManager::new(registry)
+}
 
 #[test]
 fn test_make_store_json_backend() {
-    let store = make_store("json", "/tmp/test_board.json").unwrap();
+    let store = manager().make_store("json", "/tmp/test_board.json").unwrap();
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
@@ -11,7 +19,7 @@ fn test_make_store_json_backend() {
 async fn test_make_store_json_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test_board");
-    let store = make_store("json", path.to_str().unwrap()).unwrap();
+    let store = manager().make_store("json", path.to_str().unwrap()).unwrap();
 
     let data = serde_json::json!({
         "boards": [],
@@ -32,16 +40,17 @@ async fn test_make_store_json_roundtrip() {
     assert!(loaded_data["boards"].is_array());
 }
 
-#[cfg(feature = "sqlite-storage")]
 #[test]
 fn test_make_store_sqlite_backend() {
-    let store = make_store("sqlite", "/tmp/test_board.sqlite").unwrap();
+    let store = manager()
+        .make_store("sqlite", "/tmp/test_board.sqlite")
+        .unwrap();
     assert!(store.path().to_str().unwrap().ends_with(".sqlite"));
 }
 
 #[test]
 fn test_make_store_unknown_backend_returns_error() {
-    let result = make_store("txt", "/tmp/test_board.txt");
+    let result = manager().make_store("txt", "/tmp/test_board.txt");
     match result {
         Ok(_) => panic!("Expected error for unknown backend"),
         Err(err) => {
@@ -63,24 +72,25 @@ fn test_make_store_with_config_explicit_path_wins() {
         storage_backend: Some("sqlite".into()),
         ..Default::default()
     };
-    let store = make_store_with_config(Some(&path_str), &config).unwrap();
+    let store = manager()
+        .make_store_with_config(Some(&path_str), &config)
+        .unwrap();
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
 #[test]
 fn test_make_store_with_config_none_uses_json_default() {
     let config = AppConfig::default();
-    let store = make_store_with_config(None, &config).unwrap();
+    let store = manager().make_store_with_config(None, &config).unwrap();
     assert!(store.path().to_str().unwrap().ends_with("kanban.json"));
 }
 
-#[cfg(feature = "sqlite-storage")]
 #[test]
 fn test_make_store_with_config_none_uses_sqlite_when_configured() {
     let config = AppConfig {
         storage_backend: Some("sqlite".into()),
         ..Default::default()
     };
-    let store = make_store_with_config(None, &config).unwrap();
+    let store = manager().make_store_with_config(None, &config).unwrap();
     assert!(store.path().to_str().unwrap().ends_with("kanban.sqlite"));
 }

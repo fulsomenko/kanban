@@ -58,12 +58,26 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
+use kanban_persistence::StoreRegistry;
+use kanban_service::StoreManager;
 
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
+use std::sync::Arc;
 use std::time::Instant;
 
+/// Builds a `StoreManager` that mirrors the default CLI registry: SQLite
+/// first (so content-sniffing prefers it) and JSON second as a catch-all
+/// fallback. Used by the `App::new` test convenience and nothing else.
+fn default_store_manager() -> StoreManager {
+    let mut registry = StoreRegistry::new();
+    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
+    registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+    StoreManager::new(registry)
+}
+
 pub struct App {
+    pub store_manager: Arc<StoreManager>,
     pub should_quit: bool,
     pub quit_with_pending: bool, // Force quit even if saves are pending (second 'q' press)
     pub mode: AppMode,
@@ -166,7 +180,21 @@ pub enum BoardField {
 }
 
 impl App {
+    /// Test-only convenience wrapper that builds a default `StoreManager`
+    /// (JSON + SQLite) and delegates to [`App::new_with_store`]. Real
+    /// embedders should call `new_with_store` directly and pass their own
+    /// `StoreManager` so backend registration stays under their control.
     pub fn new(
+        save_file: Option<String>,
+    ) -> kanban_domain::KanbanResult<(
+        Self,
+        Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
+    )> {
+        Self::new_with_store(default_store_manager(), save_file)
+    }
+
+    pub fn new_with_store(
+        store_manager: StoreManager,
         save_file: Option<String>,
     ) -> kanban_domain::KanbanResult<(
         Self,
@@ -192,7 +220,7 @@ impl App {
             // File arg is the source of truth — ignore config's storage_backend
             app_config.storage_backend = None;
         }
-        if kanban_service::sync_backend_with_file(
+        if store_manager.sync_backend_with_file(
             &app_config.effective_storage_location(),
             &mut app_config,
         ) {
@@ -212,9 +240,11 @@ impl App {
             app_config.storage_location = None;
         }
         let backend = app_config.effective_storage_backend().to_string();
-        let (ctx, save_rx, save_completion_rx) =
-            TuiContext::new(&backend, Some(effective_file.clone()))?;
+        let store = store_manager.make_store(&backend, &effective_file)?;
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(Some(store))?;
+        let store_manager = Arc::new(store_manager);
         let app = Self {
+            store_manager,
             should_quit: false,
             quit_with_pending: false,
             mode: AppMode::Normal,

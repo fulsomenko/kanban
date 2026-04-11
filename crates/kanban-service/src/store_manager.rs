@@ -147,15 +147,3 @@ impl StoreManager {
     }
 }
 
-impl StoreManager {
-    /// Convenience constructor mirroring the old `default_registry()` behaviour:
-    /// SQLite first (priority for sniffing), JSON last as catch-all fallback.
-    /// Only compiled when both backends are available in this build.
-    #[cfg(all(feature = "json-storage", feature = "sqlite-storage"))]
-    pub fn with_default_backends() -> Self {
-        let mut registry = StoreRegistry::new();
-        registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
-        registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
-        Self::new(registry)
-    }
-}
