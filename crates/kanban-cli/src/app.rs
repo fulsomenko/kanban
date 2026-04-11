@@ -78,11 +78,13 @@ impl CliApp {
                 .with_file(true)
                 .with_line_number(true)
                 .with_ansi(false)
-                .init();
+                .try_init()
+                .ok();
         } else {
             tracing_subscriber::fmt()
                 .with_max_level(tracing::Level::WARN)
-                .init();
+                .try_init()
+                .ok();
         }
 
         let cli = Cli::parse();
