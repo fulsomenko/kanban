@@ -81,6 +81,10 @@ impl StoreManager {
 
     /// Exports a board selection to a new SQLite file.
     ///
+    /// **Requires:** the `"sqlite"` backend must be registered in this manager's
+    /// registry. If it is not, this method will return an error at the
+    /// `make_store` call.
+    ///
     /// **Note:** The dependency graph is not part of the `AllBoardsExport` format
     /// and will not be present in the exported file. This is by design — the export
     /// format is board-centric, not a full snapshot. Use `migrate_store` instead
