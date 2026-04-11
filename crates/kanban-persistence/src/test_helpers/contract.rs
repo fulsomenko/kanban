@@ -131,7 +131,7 @@ pub async fn test_save_with_stale_metadata_returns_conflict(factory: &StoreFacto
     }
 }
 
-pub async fn test_instance_id_is_stable_across_handles_to_same_locator(factory: &StoreFactory) {
+pub async fn test_instance_id_is_idempotent_within_handle(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
     let store = factory(&path);
@@ -139,7 +139,7 @@ pub async fn test_instance_id_is_stable_across_handles_to_same_locator(factory: 
     let id2 = store.instance_id();
     assert_eq!(
         id1, id2,
-        "instance_id must be stable across repeated calls on the same handle"
+        "instance_id must return the same value on repeated calls within the same handle"
     );
 }
 

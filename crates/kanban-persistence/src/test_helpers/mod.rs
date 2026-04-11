@@ -48,8 +48,8 @@ macro_rules! store_contract_tests {
             .await;
         }
         #[tokio::test]
-        async fn test_instance_id_is_stable_across_handles_to_same_locator() {
-            $crate::test_helpers::contract::test_instance_id_is_stable_across_handles_to_same_locator(
+        async fn test_instance_id_is_idempotent_within_handle() {
+            $crate::test_helpers::contract::test_instance_id_is_idempotent_within_handle(
                 &$factory_fn(),
             )
             .await;
