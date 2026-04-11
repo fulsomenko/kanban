@@ -18,6 +18,7 @@ use uuid::Uuid;
 /// the same locator. Mirrors what real file-backed stores get from the OS.
 type SharedDisk = Arc<AsyncMutex<Option<StoreSnapshot>>>;
 
+// Safe across parallel tests: each test uses a unique `TempDir` path, so entries never collide.
 fn disk_for(path: &Path) -> SharedDisk {
     static DISKS: OnceLock<Mutex<HashMap<PathBuf, SharedDisk>>> = OnceLock::new();
     let mut guard = DISKS
