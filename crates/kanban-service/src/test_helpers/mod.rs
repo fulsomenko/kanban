@@ -1,14 +1,10 @@
 pub mod contract;
 pub mod helpers;
 
-use kanban_persistence::PersistenceStore;
-use std::path::Path;
-use std::sync::Arc;
-
-pub type StoreFactory = Box<dyn Fn(&Path) -> Arc<dyn PersistenceStore + Send + Sync> + Send + Sync>;
+pub use kanban_persistence::test_helpers::StoreFactory;
 
 #[macro_export]
-macro_rules! contract_tests {
+macro_rules! context_contract_tests {
     ($factory_fn:expr) => {
         // Board tests
         #[tokio::test]

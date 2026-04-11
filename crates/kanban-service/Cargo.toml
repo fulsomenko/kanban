@@ -12,7 +12,7 @@ description = "Shared service layer implementing KanbanOperations over a pluggab
 default = ["json-storage", "sqlite-storage"]
 json-storage = ["dep:kanban-persistence-json"]
 sqlite-storage = ["dep:kanban-persistence-sqlite"]
-test-helpers = []
+test-helpers = ["kanban-persistence/test-helpers"]
 
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }

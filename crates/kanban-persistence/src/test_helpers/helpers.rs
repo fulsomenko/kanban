@@ -1,0 +1,150 @@
+use chrono::Utc;
+use kanban_core::{Edge, EdgeDirection};
+use kanban_domain::card::{Card, CardPriority, CardStatus};
+use kanban_domain::sprint::{Sprint, SprintStatus};
+use kanban_domain::Snapshot;
+use kanban_domain::{ArchivedCard, Board, CardEdgeType, Column, DependencyGraph, SprintLog};
+use uuid::Uuid;
+
+pub fn fully_populated_snapshot() -> Snapshot {
+    let board_id = Uuid::new_v4();
+    let col_id = Uuid::new_v4();
+    let sprint_id = Uuid::new_v4();
+    let card_id = Uuid::new_v4();
+    let archived_card_inner_id = Uuid::new_v4();
+    let now = Utc::now();
+
+    let board = Board {
+        id: board_id,
+        name: "Full Board".into(),
+        description: Some("Board desc".into()),
+        sprint_prefix: Some("sprint".into()),
+        card_prefix: Some("FB".into()),
+        task_sort_field: kanban_domain::board::SortField::Priority,
+        task_sort_order: kanban_domain::board::SortOrder::Descending,
+        sprint_duration_days: Some(14),
+        sprint_names: vec!["Alpha".into(), "Beta".into()],
+        sprint_name_used_count: 1,
+        next_sprint_number: 3,
+        active_sprint_id: Some(sprint_id),
+        task_list_view: kanban_domain::task_list_view::TaskListView::GroupedByColumn,
+        prefix_counters: {
+            let mut m = std::collections::HashMap::new();
+            m.insert("FB".into(), 4u32);
+            m
+        },
+        sprint_counters: {
+            let mut m = std::collections::HashMap::new();
+            m.insert("sprint".into(), 3u32);
+            m
+        },
+        completion_column_id: Some(col_id),
+        created_at: now,
+        updated_at: now,
+    };
+
+    let column = Column {
+        id: col_id,
+        board_id,
+        name: "Full Col".into(),
+        position: 0,
+        wip_limit: Some(5),
+        created_at: now,
+        updated_at: now,
+    };
+
+    let sprint = Sprint {
+        id: sprint_id,
+        board_id,
+        sprint_number: 2,
+        name_index: Some(0),
+        prefix: Some("sprint".into()),
+        card_prefix: Some("TASK".into()),
+        status: SprintStatus::Active,
+        start_date: Some(now),
+        end_date: Some(now),
+        created_at: now,
+        updated_at: now,
+    };
+
+    let card = Card {
+        id: card_id,
+        column_id: col_id,
+        title: "Full Card".into(),
+        description: Some("desc".into()),
+        priority: CardPriority::High,
+        status: CardStatus::InProgress,
+        position: 0,
+        due_date: Some(now),
+        points: Some(3),
+        card_number: 1,
+        sprint_id: Some(sprint_id),
+        assigned_prefix: Some("FB".into()),
+        card_prefix: Some("TASK".into()),
+        created_at: now,
+        updated_at: now,
+        completed_at: None,
+        sprint_logs: vec![SprintLog {
+            sprint_id,
+            sprint_number: 2,
+            sprint_name: Some("Alpha".into()),
+            started_at: now,
+            ended_at: None,
+            status: "Active".into(),
+        }],
+    };
+
+    let archived_card = ArchivedCard {
+        card: Card {
+            id: archived_card_inner_id,
+            column_id: col_id,
+            title: "Archived Card".into(),
+            description: Some("archived desc".into()),
+            priority: CardPriority::Critical,
+            status: CardStatus::Done,
+            position: 1,
+            due_date: Some(now),
+            points: Some(5),
+            card_number: 2,
+            sprint_id: Some(sprint_id),
+            assigned_prefix: Some("FB".into()),
+            card_prefix: None,
+            created_at: now,
+            updated_at: now,
+            completed_at: Some(now),
+            sprint_logs: vec![],
+        },
+        archived_at: now,
+        original_column_id: col_id,
+        original_position: 1,
+    };
+
+    let mut graph = DependencyGraph::new();
+    graph.cards.add_edge(Edge {
+        source: card_id,
+        target: archived_card_inner_id,
+        edge_type: CardEdgeType::Blocks,
+        direction: EdgeDirection::Directed,
+        weight: Some(1.5),
+        created_at: now,
+        archived_at: None,
+    });
+    graph.cards.add_edge(Edge {
+        source: card_id,
+        target: archived_card_inner_id,
+        edge_type: CardEdgeType::RelatesTo,
+        direction: EdgeDirection::Bidirectional,
+        weight: None,
+        created_at: now,
+        archived_at: Some(now),
+    });
+
+    Snapshot {
+        boards: vec![board],
+        columns: vec![column],
+        cards: vec![card],
+        archived_cards: vec![archived_card],
+        sprints: vec![sprint],
+        graph,
+    }
+}
