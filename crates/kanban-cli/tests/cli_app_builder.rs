@@ -43,7 +43,21 @@ fn test_cli_app_register_backend_adds_custom_factory() {
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
-#[cfg(feature = "tui")]
+#[test]
+fn test_cli_app_with_config_stores_override() {
+    use kanban_core::AppConfig;
+    // with_config must not disturb the registry built by with_defaults.
+    let app = CliApp::with_defaults().with_config(AppConfig {
+        storage_backend: Some("sqlite".into()),
+        ..Default::default()
+    });
+    let store = app
+        .registry()
+        .create_store("json", "/tmp/kan260_cli_with_config.json")
+        .expect("with_defaults backends must survive a with_config call");
+    assert!(store.path().to_str().unwrap().ends_with(".json"));
+}
+
 #[test]
 fn test_cli_app_with_defaults_registers_sqlite_before_json() {
     // SQLite registered first — content-sniffing must prefer it when both match.
