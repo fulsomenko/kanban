@@ -2,9 +2,19 @@ use kanban_domain::commands::{
     Command, CompactColumnPositions, CreateBoard, ImportEntities, UpdateBoard,
 };
 use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, Snapshot};
-use kanban_persistence::NullStore;
-use kanban_service::KanbanContext;
+use kanban_persistence::{NullStore, StoreRegistry};
+use kanban_service::{KanbanContext, StoreManager};
 use std::sync::Arc;
+
+fn make_json_store(
+    path: &std::path::Path,
+) -> Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> {
+    let mut registry = StoreRegistry::new();
+    registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+    StoreManager::new(registry)
+        .make_store("json", path.to_str().unwrap())
+        .unwrap()
+}
 
 async fn make_ctx() -> KanbanContext {
     KanbanContext::empty(
@@ -101,9 +111,7 @@ async fn test_new_action_after_undo_clears_redo() {
 async fn test_reload_no_longer_clears_history() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
-    let store = Arc::new(kanban_persistence_json::JsonFileStore::new(
-        path.to_str().unwrap(),
-    )) as Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>;
+    let store = make_json_store(&path);
     let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
 
     ctx.execute(vec![Box::new(CreateBoard {
@@ -277,9 +285,7 @@ async fn test_conflict_flag_lifecycle() {
 async fn test_reload_preserves_history() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
-    let store = Arc::new(kanban_persistence_json::JsonFileStore::new(
-        path.to_str().unwrap(),
-    )) as Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>;
+    let store = make_json_store(&path);
     let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
 
     ctx.create_board("B".into(), None).unwrap();
