@@ -5,6 +5,7 @@
 //! confirm that the resulting registry can build stores for exactly the
 //! factories that were registered.
 
+use kanban_core::AppConfig;
 use kanban_mcp::McpServer;
 use kanban_persistence_json::JsonStoreFactory;
 
@@ -41,6 +42,22 @@ fn test_mcp_server_register_backend_adds_custom_factory() {
         .create_store("json", "/tmp/kan260_mcp_register.json")
         .expect("registered factory must be dispatchable");
     assert!(store.path().to_str().unwrap().ends_with(".json"));
+}
+
+#[tokio::test]
+async fn test_mcp_server_with_config_build_uses_override() {
+    let dir = tempfile::tempdir().unwrap();
+    let json_path = dir.path().join("test.json");
+    let config = AppConfig {
+        storage_location: Some(json_path.to_string_lossy().to_string()),
+        storage_backend: Some("json".into()),
+        ..Default::default()
+    };
+    McpServer::with_defaults()
+        .with_config(config)
+        .build()
+        .await
+        .expect("build must succeed with a valid json config override");
 }
 
 #[test]
