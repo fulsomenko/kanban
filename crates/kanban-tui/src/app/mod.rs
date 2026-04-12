@@ -216,10 +216,9 @@ impl App {
             // File arg is the source of truth — ignore config's storage_backend
             app_config.storage_backend = None;
         }
-        if store_manager.sync_backend_with_file(
-            &app_config.effective_storage_location(),
-            &mut app_config,
-        ) {
+        if store_manager
+            .sync_backend_with_file(&app_config.effective_storage_location(), &mut app_config)
+        {
             tracing::warn!(
                 "Storage backend auto-corrected to '{}' based on file content",
                 app_config.effective_storage_backend()

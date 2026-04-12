@@ -243,7 +243,10 @@ impl App {
             kanban_service::config::resolve_storage_location(&self.app_config);
         let new_backend = self.app_config.effective_storage_backend().to_string();
 
-        match self.store_manager.make_store(&new_backend, &new_storage_location) {
+        match self
+            .store_manager
+            .make_store(&new_backend, &new_storage_location)
+        {
             Ok(new_store) => {
                 self.ctx.replace_store(new_store);
                 let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();

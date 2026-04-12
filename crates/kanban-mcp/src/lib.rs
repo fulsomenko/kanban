@@ -4,7 +4,6 @@ pub mod server;
 pub use server::McpServer;
 
 use context::McpContext;
-use kanban_service::StoreManager;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
     format_ambiguous_matches, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
@@ -12,6 +11,7 @@ use kanban_domain::{
     SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
+use kanban_service::StoreManager;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{

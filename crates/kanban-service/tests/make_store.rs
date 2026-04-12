@@ -11,7 +11,9 @@ fn manager() -> StoreManager {
 
 #[test]
 fn test_make_store_json_backend() {
-    let store = manager().make_store("json", "/tmp/test_board.json").unwrap();
+    let store = manager()
+        .make_store("json", "/tmp/test_board.json")
+        .unwrap();
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
@@ -19,7 +21,9 @@ fn test_make_store_json_backend() {
 async fn test_make_store_json_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test_board");
-    let store = manager().make_store("json", path.to_str().unwrap()).unwrap();
+    let store = manager()
+        .make_store("json", path.to_str().unwrap())
+        .unwrap();
 
     let data = serde_json::json!({
         "boards": [],

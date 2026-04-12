@@ -2,9 +2,7 @@ use kanban_domain::{KanbanError, KanbanResult};
 use std::path::{Path, PathBuf};
 
 pub fn validate_path(path: &Path) -> KanbanResult<PathBuf> {
-    let cwd = std::env::current_dir().map_err(|e| {
-        KanbanError::from(std::io::Error::other(e))
-    })?;
+    let cwd = std::env::current_dir().map_err(|e| KanbanError::from(std::io::Error::other(e)))?;
     if path.is_absolute() {
         Ok(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
     } else {

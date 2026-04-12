@@ -41,7 +41,10 @@ async fn test_validate_and_load_valid_json_returns_snapshot() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_json(dir.path(), "board.json", &["Board1"]);
 
-    let snapshot = manager().validate_and_load_store("json", &path).await.unwrap();
+    let snapshot = manager()
+        .validate_and_load_store("json", &path)
+        .await
+        .unwrap();
     assert_eq!(snapshot.boards.len(), 1);
 }
 
@@ -97,7 +100,10 @@ async fn test_validate_and_load_preserves_board_data() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_json(dir.path(), "board.json", &["MyBoard"]);
 
-    let snapshot = manager().validate_and_load_store("json", &path).await.unwrap();
+    let snapshot = manager()
+        .validate_and_load_store("json", &path)
+        .await
+        .unwrap();
     assert_eq!(snapshot.boards.len(), 1);
     assert_eq!(snapshot.boards[0].name, "MyBoard");
 }
@@ -180,7 +186,10 @@ async fn test_validate_and_load_valid_sqlite_returns_snapshot() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_sqlite(dir.path(), "board.sqlite", &["Board1"]).await;
 
-    let snapshot = manager().validate_and_load_store("sqlite", &path).await.unwrap();
+    let snapshot = manager()
+        .validate_and_load_store("sqlite", &path)
+        .await
+        .unwrap();
     assert_eq!(snapshot.boards.len(), 1);
 }
 
@@ -189,7 +198,10 @@ async fn test_validate_and_load_sqlite_preserves_board_data() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_sqlite(dir.path(), "board.sqlite", &["SQLiteBoard"]).await;
 
-    let snapshot = manager().validate_and_load_store("sqlite", &path).await.unwrap();
+    let snapshot = manager()
+        .validate_and_load_store("sqlite", &path)
+        .await
+        .unwrap();
     assert_eq!(snapshot.boards.len(), 1);
     assert_eq!(snapshot.boards[0].name, "SQLiteBoard");
 }

@@ -18,10 +18,8 @@ macro_rules! store_contract_tests {
         }
         #[tokio::test]
         async fn test_roundtrip_fully_populated_snapshot() {
-            $crate::test_helpers::contract::test_roundtrip_fully_populated_snapshot(
-                &$factory_fn(),
-            )
-            .await;
+            $crate::test_helpers::contract::test_roundtrip_fully_populated_snapshot(&$factory_fn())
+                .await;
         }
         #[tokio::test]
         async fn test_save_then_exists_returns_true() {
