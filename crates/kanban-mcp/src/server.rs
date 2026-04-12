@@ -9,10 +9,10 @@ use anyhow::{Context, Result};
 use kanban_core::AppConfig;
 use kanban_domain::KanbanResult;
 use kanban_persistence::{StoreFactory, StoreRegistry};
-use kanban_service::StoreManager;
+use kanban_service::{validate_path, StoreManager};
 use rmcp::transport::stdio;
 use rmcp::ServiceExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 pub struct McpServer {
@@ -76,14 +76,19 @@ impl McpServer {
     /// Consumes this builder and returns a ready-to-serve `KanbanMcpServer`.
     pub async fn build(self) -> KanbanResult<KanbanMcpServer> {
         let config = self.config.unwrap_or_else(kanban_service::config::load);
+        let store_manager = StoreManager::new(self.registry);
+        if !store_manager.has_backends() {
+            return Err(kanban_domain::KanbanError::validation(
+                "No storage backends registered. \
+                 Use McpServer::with_defaults() or call register_backend() before build().",
+            ));
+        }
         let data_file_path = match self.data_file {
             Some(path) => PathBuf::from(path),
             None => PathBuf::from(config.effective_storage_location()),
         };
-        let validated = validate_path(&data_file_path)
-            .map_err(|e| kanban_domain::KanbanError::validation(e.to_string()))?;
+        let validated = validate_path(&data_file_path)?;
         let data_file = validated.to_string_lossy().to_string();
-        let store_manager = StoreManager::new(self.registry);
         KanbanMcpServer::new(&store_manager, &data_file, config).await
     }
 
@@ -108,20 +113,3 @@ impl McpServer {
     }
 }
 
-fn validate_path(path: &Path) -> Result<PathBuf> {
-    let cwd = std::env::current_dir().context("Failed to get current directory")?;
-    if path.is_absolute() {
-        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        Ok(canonical)
-    } else {
-        let resolved = cwd.join(path);
-        let canonical = resolved.canonicalize().unwrap_or(resolved.clone());
-        if !canonical.starts_with(&cwd) {
-            anyhow::bail!(
-                "Path traversal not allowed: '{}' resolves outside current directory",
-                path.display()
-            );
-        }
-        Ok(canonical)
-    }
-}
