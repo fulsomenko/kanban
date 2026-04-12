@@ -10,11 +10,10 @@ use kanban_persistence_json::JsonStoreFactory;
 
 #[test]
 fn test_cli_app_default_has_no_backends() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.json").to_string_lossy().to_string();
     let app = CliApp::default();
-    match app
-        .registry()
-        .create_store("json", "/tmp/kan260_cli_default.json")
-    {
+    match app.registry().create_store("json", &path) {
         Ok(_) => panic!("CliApp::default must not register any backends"),
         Err(err) => assert!(
             err.to_string().contains("json") || err.to_string().contains("Unsupported"),
@@ -25,20 +24,24 @@ fn test_cli_app_default_has_no_backends() {
 
 #[test]
 fn test_cli_app_with_defaults_creates_json_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.json").to_string_lossy().to_string();
     let app = CliApp::with_defaults();
     let store = app
         .registry()
-        .create_store("json", "/tmp/kan260_cli_with_defaults.json")
+        .create_store("json", &path)
         .expect("with_defaults must register the JSON backend");
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
 #[test]
 fn test_cli_app_register_backend_adds_custom_factory() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.json").to_string_lossy().to_string();
     let app = CliApp::default().register_backend(Box::new(JsonStoreFactory));
     let store = app
         .registry()
-        .create_store("json", "/tmp/kan260_cli_register.json")
+        .create_store("json", &path)
         .expect("registered factory must be dispatchable");
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
@@ -46,6 +49,8 @@ fn test_cli_app_register_backend_adds_custom_factory() {
 #[test]
 fn test_cli_app_with_config_stores_override() {
     use kanban_core::AppConfig;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.json").to_string_lossy().to_string();
     // with_config must not disturb the registry built by with_defaults.
     let app = CliApp::with_defaults().with_config(AppConfig {
         storage_backend: Some("sqlite".into()),
@@ -53,7 +58,7 @@ fn test_cli_app_with_config_stores_override() {
     });
     let store = app
         .registry()
-        .create_store("json", "/tmp/kan260_cli_with_config.json")
+        .create_store("json", &path)
         .expect("with_defaults backends must survive a with_config call");
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
