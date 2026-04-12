@@ -1,7 +1,8 @@
 use crate::config;
 use crate::AppConfig;
 use kanban_domain::KanbanError;
-use kanban_persistence::{PersistenceStore, StoreRegistry};
+use kanban_persistence::{PersistenceStore, StoreRegistry, StoreSnapshot};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 /// Owns the `StoreRegistry` and exposes the high-level operations that used
@@ -156,9 +157,81 @@ impl StoreManager {
             .into());
         }
         let source = self.make_store(from_backend, from_path)?;
-        let (snapshot, _) = source.load().await?;
+        let (mut snapshot, _) = source.load().await?;
+        repair_snapshot_fks(&mut snapshot)?;
         let target = self.make_store(to_backend, to_path)?;
-        target.save(snapshot).await?;
+        if let Err(e) = target.save(snapshot).await {
+            let _ = std::fs::remove_file(to_path);
+            let _ = std::fs::remove_file(format!("{}-wal", to_path));
+            let _ = std::fs::remove_file(format!("{}-shm", to_path));
+            return Err(e.into());
+        }
         Ok(())
+    }
+}
+
+fn repair_snapshot_fks(snapshot: &mut StoreSnapshot) -> Result<(), KanbanError> {
+    let mut data: serde_json::Value =
+        serde_json::from_slice(&snapshot.data).map_err(|e| {
+            KanbanError::validation(format!("Failed to parse snapshot for FK repair: {e}"))
+        })?;
+
+    let valid_columns: HashSet<String> = data["columns"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|c| c["id"].as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let valid_sprints: HashSet<String> = data["sprints"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|s| s["id"].as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let fallback_column: Option<String> = data["columns"]
+        .as_array()
+        .and_then(|arr| {
+            arr.iter()
+                .min_by_key(|c| c["position"].as_i64().unwrap_or(i64::MAX))
+                .and_then(|c| c["id"].as_str())
+                .map(String::from)
+        });
+
+    if let Some(cards) = data["cards"].as_array_mut() {
+        for card in cards.iter_mut() {
+            fix_card_fks(card, &valid_columns, &valid_sprints, fallback_column.as_deref());
+        }
+    }
+
+    if let Some(archived) = data["archived_cards"].as_array_mut() {
+        for entry in archived.iter_mut() {
+            if let Some(card) = entry.get_mut("card") {
+                fix_card_fks(card, &valid_columns, &valid_sprints, fallback_column.as_deref());
+            }
+        }
+    }
+
+    snapshot.data = serde_json::to_vec(&data).map_err(|e| {
+        KanbanError::validation(format!("Failed to serialize repaired snapshot: {e}"))
+    })?;
+
+    Ok(())
+}
+
+fn fix_card_fks(
+    card: &mut serde_json::Value,
+    valid_columns: &HashSet<String>,
+    valid_sprints: &HashSet<String>,
+    fallback_column: Option<&str>,
+) {
+    if let Some(sprint_id) = card["sprint_id"].as_str() {
+        if !valid_sprints.contains(sprint_id) {
+            card["sprint_id"] = serde_json::Value::Null;
+        }
+    }
+    if let Some(col_id) = card["column_id"].as_str() {
+        if !valid_columns.contains(col_id) {
+            if let Some(fb) = fallback_column {
+                card["column_id"] = serde_json::Value::String(fb.to_string());
+            }
+        }
     }
 }
