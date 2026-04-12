@@ -40,6 +40,10 @@ impl StoreRegistry {
         self.factories.is_empty()
     }
 
+    pub fn backend_names(&self) -> Vec<&str> {
+        self.factories.iter().map(|f| f.name()).collect()
+    }
+
     pub fn detect_backend(&self, locator: &str) -> Option<&str> {
         let path = std::path::Path::new(locator);
         if path.exists() {
