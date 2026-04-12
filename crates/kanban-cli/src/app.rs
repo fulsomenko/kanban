@@ -64,25 +64,30 @@ impl CliApp {
     /// Executes the CLI: parses args, loads config, and dispatches to the
     /// requested command (or launches the TUI if no subcommand was given).
     pub async fn run(self) -> anyhow::Result<()> {
+        use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
         if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
             let log_file = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&log_path)?;
-
-            tracing_subscriber::fmt()
-                .with_writer(log_file)
-                .with_max_level(tracing::Level::DEBUG)
-                .with_target(true)
-                .with_thread_ids(true)
-                .with_file(true)
-                .with_line_number(true)
-                .with_ansi(false)
+            tracing_subscriber::registry()
+                .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")))
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .with_writer(log_file)
+                        .with_ansi(false)
+                        .with_target(true)
+                        .with_thread_ids(true)
+                        .with_file(true)
+                        .with_line_number(true),
+                )
                 .try_init()
                 .ok();
         } else {
-            tracing_subscriber::fmt()
-                .with_max_level(tracing::Level::WARN)
+            tracing_subscriber::registry()
+                .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")))
+                .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
                 .try_init()
                 .ok();
         }
@@ -93,11 +98,27 @@ impl CliApp {
             .unwrap_or_else(kanban_service::config::load);
         let store_manager = StoreManager::new(self.registry);
 
+        if !store_manager.has_backends() {
+            anyhow::bail!(
+                "No storage backends registered. \
+                 Use CliApp::with_defaults() or call register_backend() before run()."
+            );
+        }
+
+        let validated_file: Option<String> = match cli.file {
+            Some(ref p) => Some(
+                kanban_service::validate_path(std::path::Path::new(p))?
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+            None => None,
+        };
+
         match cli.command {
             None => {
                 #[cfg(feature = "tui")]
                 {
-                    let (mut app, save_rx) = App::new_with_store(store_manager, cli.file)?;
+                    let (mut app, save_rx) = App::new_with_store(store_manager, validated_file)?;
                     app.run(save_rx).await?;
                 }
                 #[cfg(not(feature = "tui"))]
@@ -120,7 +141,7 @@ impl CliApp {
                 handlers::migrate::handle(&store_manager, args).await?;
             }
             Some(cmd) => {
-                let file_path = match cli.file {
+                let file_path = match validated_file {
                     Some(f) => f,
                     None => {
                         let store = store_manager.make_store_with_config(None, &config)?;
