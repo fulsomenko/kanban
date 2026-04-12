@@ -116,10 +116,10 @@ impl StoreManager {
             data,
             metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
         };
-        let store = self.make_store("sqlite", filename).map_err(|_| {
-            KanbanError::validation(
-                "export_to_sqlite requires the 'sqlite' backend to be registered in this StoreManager"
-            )
+        let store = self.make_store("sqlite", filename).map_err(|e| {
+            KanbanError::validation(format!(
+                "export_to_sqlite requires the 'sqlite' backend to be registered in this StoreManager: {e}"
+            ))
         })?;
         store.save(store_snapshot).await?;
         Ok(())
@@ -158,4 +158,3 @@ impl StoreManager {
         Ok(())
     }
 }
-
