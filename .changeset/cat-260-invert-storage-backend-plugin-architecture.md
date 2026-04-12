@@ -1,0 +1,24 @@
+---
+bump: patch
+---
+
+- refactor(cli): extract run_with_args from run to enable injection of CLI args in tests
+- fix(service): include root cause in export_to_sqlite error when sqlite backend is absent
+- feat(cli,mcp): add json/sqlite forwarding features; gate with_defaults on cfg
+- fix(cli): early-return Completions before no-backends guard
+- refactor(tui): drop direct backend deps, use kanban_service::default_registry()
+- refactor(mcp): drop direct backend deps, use kanban_service::default_registry()
+- refactor(cli): drop direct backend deps, use kanban_service::default_registry()
+- feat(service): add json/sqlite optional features and default_registry()
+- fix(mcp): add empty-registry guard, use shared validate_path, remove local fn
+- fix(cli): add empty-registry guard, validate file path, align tracing with env-filter
+- refactor(service): extract shared validate_path from kanban-mcp
+- refactor(service): add StoreManager::has_backends
+- refactor(persistence): add StoreRegistry::is_empty
+- refactor(cli): restrict internal module visibility to pub(crate)
+- fix(service): improve export_to_sqlite error for unregistered sqlite backend
+- fix(cli,mcp): use try_init to prevent double-init panic
+- docs(service): document export_to_sqlite registry requirement
+- fix(mcp): warn on backend auto-correction in McpContext
+- refactor(cli,mcp): invert storage backend ownership via builders
+- feat(service): introduce StoreManager with injectable StoreRegistry
