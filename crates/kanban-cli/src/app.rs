@@ -35,12 +35,10 @@ impl CliApp {
     /// SQLite is registered first so content-sniffing prefers it; JSON is
     /// registered as the catch-all fallback.
     pub fn with_defaults() -> Self {
-        let mut app = Self::default();
-        app.registry
-            .register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
-        app.registry
-            .register(Box::new(kanban_persistence_json::JsonStoreFactory));
-        app
+        Self {
+            registry: kanban_service::default_registry(),
+            config: None,
+        }
     }
 
     /// Registers an additional backend factory. Order matters for content
