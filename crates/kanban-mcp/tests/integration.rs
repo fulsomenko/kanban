@@ -1,17 +1,13 @@
 use kanban_core::AppConfig;
 use kanban_domain::KanbanOperations;
 use kanban_mcp::context::McpContext;
-use kanban_persistence::StoreRegistry;
 use kanban_persistence_json::JsonFileStore;
 use kanban_service::{KanbanContext, StoreManager};
 use std::sync::Arc;
 use tempfile::TempDir;
 
 fn default_store_manager() -> StoreManager {
-    let mut registry = StoreRegistry::new();
-    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
-    registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
-    StoreManager::new(registry)
+    StoreManager::new(kanban_service::default_registry())
 }
 
 async fn setup() -> (McpContext, TempDir) {
