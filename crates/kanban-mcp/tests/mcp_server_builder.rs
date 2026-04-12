@@ -63,6 +63,38 @@ async fn test_mcp_server_with_config_build_uses_override() {
         .expect("build must succeed with a valid json config override");
 }
 
+#[tokio::test]
+async fn test_mcp_server_default_build_returns_no_backends_error() {
+    match McpServer::default().build().await {
+        Ok(_) => panic!("build with no backends must return Err"),
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("No storage backends") || msg.contains("register_backend"),
+                "expected no-backends error, got: {msg}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_mcp_server_build_no_data_file_uses_config_location() {
+    let dir = tempfile::tempdir().unwrap();
+    let json_path = dir.path().join("test.json");
+    let config = AppConfig {
+        storage_location: Some(json_path.to_string_lossy().to_string()),
+        storage_backend: Some("json".into()),
+        ..Default::default()
+    };
+    // No .with_data_file() — must fall through to config.effective_storage_location().
+    McpServer::default()
+        .register_backend(Box::new(JsonStoreFactory))
+        .with_config(config)
+        .build()
+        .await
+        .expect("build must succeed when config provides storage_location");
+}
+
 #[test]
 fn test_mcp_server_with_defaults_registers_sqlite_before_json() {
     let server = McpServer::with_defaults();
