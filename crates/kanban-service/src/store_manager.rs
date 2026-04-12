@@ -28,6 +28,10 @@ impl StoreManager {
         !self.registry.is_empty()
     }
 
+    pub fn backend_names(&self) -> Vec<&str> {
+        self.registry.backend_names()
+    }
+
     pub fn detect_backend(&self, locator: &str) -> Option<String> {
         self.registry.detect_backend(locator).map(String::from)
     }
