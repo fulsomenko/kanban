@@ -106,8 +106,25 @@ kanban sprint carry-over --from <ID> --to <ID>
 ```bash
 kanban export [--board-id <ID>] [--output <FILE>]
 kanban import <FILE>
-kanban migrate <SOURCE> <TARGET>   # e.g. kanban.json kanban.sqlite
+kanban migrate <SOURCE> <BACKEND> [-o <OUTPUT>] [--source-backend <BACKEND>]
 kanban completions <bash|zsh|fish|powershell>
+```
+
+**`migrate`** moves all data from one storage backend to another:
+- `SOURCE` — path to the source file
+- `BACKEND` — target backend: `json` or `sqlite`
+- `-o, --output` — output path (default: source filename with the new backend's extension)
+- `--source-backend` — override auto-detection of the source format
+
+```bash
+# JSON → SQLite
+kanban migrate kanban.json sqlite
+
+# SQLite → JSON with explicit output path
+kanban migrate kanban.sqlite json -o backup.json
+
+# Source format cannot be detected from extension
+kanban migrate data.bin json --source-backend sqlite
 ```
 
 ---
