@@ -7,7 +7,6 @@
 use crate::KanbanMcpServer;
 use anyhow::{Context, Result};
 use kanban_core::AppConfig;
-use kanban_domain::KanbanResult;
 use kanban_persistence::{StoreFactory, StoreRegistry};
 use kanban_service::{validate_path, StoreManager};
 use rmcp::transport::stdio;
@@ -37,6 +36,7 @@ impl McpServer {
     /// Returns an `McpServer` pre-configured with both built-in backends.
     /// SQLite is registered first so content-sniffing prefers it; JSON is
     /// registered as the catch-all fallback.
+    #[cfg(any(feature = "json", feature = "sqlite"))]
     pub fn with_defaults() -> Self {
         Self {
             registry: kanban_service::default_registry(),
@@ -71,14 +71,14 @@ impl McpServer {
     }
 
     /// Consumes this builder and returns a ready-to-serve `KanbanMcpServer`.
-    pub async fn build(self) -> KanbanResult<KanbanMcpServer> {
+    pub async fn build(self) -> Result<KanbanMcpServer> {
         let config = self.config.unwrap_or_else(kanban_service::config::load);
         let store_manager = StoreManager::new(self.registry);
         if !store_manager.has_backends() {
-            return Err(kanban_domain::KanbanError::validation(
+            anyhow::bail!(
                 "No storage backends registered. \
-                 Use McpServer::with_defaults() or call register_backend() before build().",
-            ));
+                 Use McpServer::with_defaults() or call register_backend() before build()."
+            );
         }
         let data_file_path = match self.data_file {
             Some(path) => PathBuf::from(path),
@@ -86,7 +86,9 @@ impl McpServer {
         };
         let validated = validate_path(&data_file_path)?;
         let data_file = validated.to_string_lossy().to_string();
-        KanbanMcpServer::new(&store_manager, &data_file, config).await
+        KanbanMcpServer::new(&store_manager, &data_file, config)
+            .await
+            .context("Failed to initialize KanbanMcpServer")
     }
 
     /// Initializes tracing, constructs the server, and serves it over stdio
@@ -98,10 +100,7 @@ impl McpServer {
             .try_init()
             .ok();
 
-        let server = self
-            .build()
-            .await
-            .context("Failed to build Kanban MCP server")?;
+        let server = self.build().await?;
         tracing::info!("Starting Kanban MCP server");
         let service = server.serve(stdio()).await?;
         tracing::info!("Kanban MCP server started successfully");

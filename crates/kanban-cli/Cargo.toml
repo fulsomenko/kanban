@@ -19,8 +19,10 @@ name = "kanban"
 path = "src/main.rs"
 
 [features]
-default = ["tui"]
+default = ["tui", "json", "sqlite"]
 tui = ["dep:kanban-tui"]
+json = ["kanban-service/json"]
+sqlite = ["kanban-service/sqlite"]
 
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
