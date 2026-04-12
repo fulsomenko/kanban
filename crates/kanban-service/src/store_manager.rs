@@ -24,6 +24,10 @@ impl StoreManager {
         &self.registry
     }
 
+    pub fn has_backends(&self) -> bool {
+        !self.registry.is_empty()
+    }
+
     pub fn detect_backend(&self, locator: &str) -> Option<String> {
         self.registry.detect_backend(locator).map(String::from)
     }
