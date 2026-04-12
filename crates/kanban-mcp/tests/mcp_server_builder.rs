@@ -11,11 +11,10 @@ use kanban_persistence_json::JsonStoreFactory;
 
 #[test]
 fn test_mcp_server_default_has_no_backends() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.json").to_string_lossy().to_string();
     let server = McpServer::default();
-    match server
-        .registry()
-        .create_store("json", "/tmp/kan260_mcp_default.json")
-    {
+    match server.registry().create_store("json", &path) {
         Ok(_) => panic!("McpServer::default must not register any backends"),
         Err(err) => assert!(
             err.to_string().contains("json") || err.to_string().contains("Unsupported"),
@@ -26,20 +25,24 @@ fn test_mcp_server_default_has_no_backends() {
 
 #[test]
 fn test_mcp_server_with_defaults_creates_json_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.json").to_string_lossy().to_string();
     let server = McpServer::with_defaults();
     let store = server
         .registry()
-        .create_store("json", "/tmp/kan260_mcp_with_defaults.json")
+        .create_store("json", &path)
         .expect("with_defaults must register the JSON backend");
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
 #[test]
 fn test_mcp_server_register_backend_adds_custom_factory() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.json").to_string_lossy().to_string();
     let server = McpServer::default().register_backend(Box::new(JsonStoreFactory));
     let store = server
         .registry()
-        .create_store("json", "/tmp/kan260_mcp_register.json")
+        .create_store("json", &path)
         .expect("registered factory must be dispatchable");
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
