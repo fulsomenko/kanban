@@ -1,4 +1,4 @@
-use kanban_persistence::StoreRegistry;
+use kanban_persistence::{PersistenceStore, StoreRegistry};
 use kanban_service::StoreManager;
 
 fn manager() -> StoreManager {
@@ -8,18 +8,29 @@ fn manager() -> StoreManager {
     StoreManager::new(registry)
 }
 
-fn create_test_json(dir: &std::path::Path, name: &str) -> String {
+fn now() -> &'static str {
+    "2024-01-01T00:00:00Z"
+}
+
+fn write_json(dir: &std::path::Path, name: &str, data: serde_json::Value) -> String {
     let path = dir.join(name);
-    let data = serde_json::json!({
-        "boards": [],
-        "columns": [],
-        "cards": [],
-        "archived_cards": [],
-        "sprints": [],
-        "graph": { "cards": { "edges": [] } }
-    });
     std::fs::write(&path, serde_json::to_string_pretty(&data).unwrap()).unwrap();
     path.to_str().unwrap().to_string()
+}
+
+fn create_test_json(dir: &std::path::Path, name: &str) -> String {
+    write_json(
+        dir,
+        name,
+        serde_json::json!({
+            "boards": [],
+            "columns": [],
+            "cards": [],
+            "archived_cards": [],
+            "sprints": [],
+            "graph": { "cards": { "edges": [] } }
+        }),
+    )
 }
 
 #[tokio::test]
@@ -74,4 +85,132 @@ async fn test_migrate_store_fails_if_source_missing() {
         .await
         .unwrap_err();
     assert!(err.to_string().contains("not found"));
+}
+
+#[tokio::test]
+async fn test_migrate_store_repairs_dangling_sprint_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let board_id = uuid::Uuid::new_v4().to_string();
+    let col_id = uuid::Uuid::new_v4().to_string();
+    let card_id = uuid::Uuid::new_v4().to_string();
+    let ghost_sprint_id = uuid::Uuid::new_v4().to_string();
+
+    let from = write_json(
+        dir.path(),
+        "source.json",
+        serde_json::json!({
+            "boards": [{ "id": board_id, "name": "B",
+                "task_sort_field": "Default", "task_sort_order": "Ascending",
+                "sprint_name_used_count": 0, "next_sprint_number": 1,
+                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                "created_at": now(), "updated_at": now() }],
+            "columns": [{ "id": col_id, "board_id": board_id, "name": "TODO",
+                "position": 0, "created_at": now(), "updated_at": now() }],
+            "sprints": [],
+            "cards": [{ "id": card_id, "column_id": col_id, "title": "Orphaned",
+                "priority": "Medium", "status": "Todo", "position": 0, "card_number": 1,
+                "sprint_id": ghost_sprint_id,
+                "sprint_logs": [], "created_at": now(), "updated_at": now() }],
+            "archived_cards": [],
+            "graph": { "cards": { "edges": [] } }
+        }),
+    );
+    let to = dir.path().join("out.sqlite");
+
+    manager()
+        .migrate_store("json", &from, "sqlite", to.to_str().unwrap())
+        .await
+        .unwrap();
+
+    let store = kanban_persistence_sqlite::SqliteStore::new(&to);
+    let (snap, _) = store.load().await.unwrap();
+    let data: serde_json::Value = serde_json::from_slice(&snap.data).unwrap();
+    let card = &data["cards"][0];
+    assert_eq!(card["id"], card_id, "card should be present");
+    assert!(
+        card["sprint_id"].is_null(),
+        "dangling sprint_id should be nulled out, got: {}",
+        card["sprint_id"]
+    );
+}
+
+#[tokio::test]
+async fn test_migrate_store_repairs_orphaned_column_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let board_id = uuid::Uuid::new_v4().to_string();
+    let valid_col_id = uuid::Uuid::new_v4().to_string();
+    let ghost_col_id = uuid::Uuid::new_v4().to_string();
+    let card_id = uuid::Uuid::new_v4().to_string();
+
+    let from = write_json(
+        dir.path(),
+        "source.json",
+        serde_json::json!({
+            "boards": [{ "id": board_id, "name": "B",
+                "task_sort_field": "Default", "task_sort_order": "Ascending",
+                "sprint_name_used_count": 0, "next_sprint_number": 1,
+                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                "created_at": now(), "updated_at": now() }],
+            "columns": [{ "id": valid_col_id, "board_id": board_id, "name": "TODO",
+                "position": 0, "created_at": now(), "updated_at": now() }],
+            "sprints": [],
+            "cards": [{ "id": card_id, "column_id": ghost_col_id, "title": "Orphaned",
+                "priority": "Medium", "status": "Todo", "position": 0, "card_number": 1,
+                "sprint_logs": [], "created_at": now(), "updated_at": now() }],
+            "archived_cards": [],
+            "graph": { "cards": { "edges": [] } }
+        }),
+    );
+    let to = dir.path().join("out.sqlite");
+
+    manager()
+        .migrate_store("json", &from, "sqlite", to.to_str().unwrap())
+        .await
+        .unwrap();
+
+    let store = kanban_persistence_sqlite::SqliteStore::new(&to);
+    let (snap, _) = store.load().await.unwrap();
+    let data: serde_json::Value = serde_json::from_slice(&snap.data).unwrap();
+    let card = &data["cards"][0];
+    assert_eq!(card["id"], card_id, "card should be present");
+    assert_eq!(
+        card["column_id"], valid_col_id,
+        "orphaned card should be moved to the first valid column"
+    );
+}
+
+#[tokio::test]
+async fn test_migrate_store_cleans_up_destination_on_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let ghost_col_id = uuid::Uuid::new_v4().to_string();
+    let card_id = uuid::Uuid::new_v4().to_string();
+
+    // Write JSON that is valid JSON but would produce a non-repairable save error
+    // by having a card whose column_id references nothing and there are NO valid columns
+    // (so the repair fallback has nothing to fall back to — save will fail)
+    let from = write_json(
+        dir.path(),
+        "source.json",
+        serde_json::json!({
+            "boards": [],
+            "columns": [],
+            "sprints": [],
+            "cards": [{ "id": card_id, "column_id": ghost_col_id, "title": "T",
+                "priority": "Medium", "status": "Todo", "position": 0, "card_number": 1,
+                "sprint_logs": [], "created_at": now(), "updated_at": now() }],
+            "archived_cards": [],
+            "graph": { "cards": { "edges": [] } }
+        }),
+    );
+    let to = dir.path().join("out.sqlite");
+
+    let result = manager()
+        .migrate_store("json", &from, "sqlite", to.to_str().unwrap())
+        .await;
+
+    assert!(result.is_err(), "migration should fail");
+    assert!(
+        !to.exists(),
+        "destination file should be cleaned up after failure"
+    );
 }
