@@ -36,6 +36,10 @@ impl StoreRegistry {
         self.factories.push(factory);
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.factories.is_empty()
+    }
+
     pub fn detect_backend(&self, locator: &str) -> Option<&str> {
         let path = std::path::Path::new(locator);
         if path.exists() {
