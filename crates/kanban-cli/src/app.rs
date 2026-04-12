@@ -34,6 +34,7 @@ impl CliApp {
     /// Returns a `CliApp` pre-configured with both built-in backends.
     /// SQLite is registered first so content-sniffing prefers it; JSON is
     /// registered as the catch-all fallback.
+    #[cfg(any(feature = "json", feature = "sqlite"))]
     pub fn with_defaults() -> Self {
         Self {
             registry: kanban_service::default_registry(),
@@ -90,7 +91,14 @@ impl CliApp {
                 .ok();
         }
 
-        let cli = Cli::parse();
+        let Cli { command, file } = Cli::parse();
+
+        // Completions needs no store — dispatch immediately.
+        if let Some(Commands::Completions { shell }) = command {
+            clap_complete::generate(shell, &mut Cli::command(), "kanban", &mut std::io::stdout());
+            return Ok(());
+        }
+
         let config = self
             .config
             .unwrap_or_else(kanban_service::config::load);
@@ -103,7 +111,7 @@ impl CliApp {
             );
         }
 
-        let validated_file: Option<String> = match cli.file {
+        let validated_file: Option<String> = match file {
             Some(ref p) => Some(
                 kanban_service::validate_path(std::path::Path::new(p))?
                     .to_string_lossy()
@@ -112,7 +120,7 @@ impl CliApp {
             None => None,
         };
 
-        match cli.command {
+        match command {
             None => {
                 #[cfg(feature = "tui")]
                 {
@@ -121,20 +129,13 @@ impl CliApp {
                 }
                 #[cfg(not(feature = "tui"))]
                 {
-                    let _ = store_manager;
+                    drop(store_manager);
                     anyhow::bail!(
                         "TUI not available in this build. Run `kanban --help` for available subcommands."
                     );
                 }
             }
-            Some(Commands::Completions { shell }) => {
-                clap_complete::generate(
-                    shell,
-                    &mut Cli::command(),
-                    "kanban",
-                    &mut std::io::stdout(),
-                );
-            }
+            Some(Commands::Completions { .. }) => unreachable!(),
             Some(Commands::Migrate(args)) => {
                 handlers::migrate::handle(&store_manager, args).await?;
             }
