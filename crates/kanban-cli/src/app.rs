@@ -63,6 +63,17 @@ impl CliApp {
     /// Executes the CLI: parses args, loads config, and dispatches to the
     /// requested command (or launches the TUI if no subcommand was given).
     pub async fn run(self) -> anyhow::Result<()> {
+        self.run_with_args(std::env::args_os()).await
+    }
+
+    /// Like [`run`], but accepts an explicit argument list instead of reading
+    /// from `std::env::args_os()`. Useful for testing without spawning a
+    /// subprocess.
+    pub async fn run_with_args<I, T>(self, args: I) -> anyhow::Result<()>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
         use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
         if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
@@ -85,13 +96,14 @@ impl CliApp {
                 .ok();
         } else {
             tracing_subscriber::registry()
+                // "warn" default: CLI runs in a terminal; info-level library chatter is unwanted.
                 .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")))
                 .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
                 .try_init()
                 .ok();
         }
 
-        let Cli { command, file } = Cli::parse();
+        let Cli { command, file } = Cli::try_parse_from(args)?;
 
         // Completions needs no store — dispatch immediately.
         if let Some(Commands::Completions { shell }) = command {
@@ -99,9 +111,7 @@ impl CliApp {
             return Ok(());
         }
 
-        let config = self
-            .config
-            .unwrap_or_else(kanban_service::config::load);
+        let config = self.config.unwrap_or_else(kanban_service::config::load);
         let store_manager = StoreManager::new(self.registry);
 
         if !store_manager.has_backends() {
