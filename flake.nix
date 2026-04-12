@@ -55,7 +55,7 @@
           text = builtins.readFile ./scripts/validate-release.sh;
         };
 
-        kanban = pkgs.callPackage ./default.nix { gitRev = self.rev or null; };
+        kanban = pkgs.callPackage ./default.nix { src = self; gitRev = self.rev or null; };
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
@@ -65,11 +65,11 @@
         devShells.demo = import ./demo/shell.nix { inherit pkgs kanban; };
 
         packages = let
-          kanban-cli = pkgs.callPackage ./default.nix { gitRev = self.rev or null; withTui = false; };
+          kanban-cli = pkgs.callPackage ./default.nix { src = self; gitRev = self.rev or null; withTui = false; };
         in {
           default = kanban;
           kanban-cli = kanban-cli;
-          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {};
+          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix { src = self; };
           kanban-web = pkgs.callPackage ./web/default.nix {};
           mcp-server-git = servers.packages.${system}.mcp-server-git;
           aggregate-changelog = aggregateChangelog;

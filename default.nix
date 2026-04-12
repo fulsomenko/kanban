@@ -2,6 +2,7 @@
   lib,
   pkgs,
   rustPlatform,
+  src,
   gitRev ? null,
   withTui ? true,
 }:
@@ -13,7 +14,7 @@ rustPlatform.buildRustPackage {
   pname = "kanban";
   inherit (cargoToml.workspace.package) version;
 
-  src = lib.cleanSource ./.;
+  inherit src;
 
   cargoLock.lockFile = ./Cargo.lock;
 
