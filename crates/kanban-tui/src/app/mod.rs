@@ -58,7 +58,6 @@ use kanban_domain::{
     sort::{get_sorter_for_field, OrderedSorter},
     sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
-use kanban_persistence::StoreRegistry;
 use kanban_service::StoreManager;
 
 use ratatui::{backend::CrosstermBackend, Terminal};
@@ -70,10 +69,7 @@ use std::time::Instant;
 /// first (so content-sniffing prefers it) and JSON second as a catch-all
 /// fallback. Used by the `App::new` test convenience and nothing else.
 fn default_store_manager() -> StoreManager {
-    let mut registry = StoreRegistry::new();
-    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
-    registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
-    StoreManager::new(registry)
+    StoreManager::new(kanban_service::default_registry())
 }
 
 pub struct App {
