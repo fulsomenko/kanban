@@ -95,6 +95,7 @@ impl McpServer {
     /// until the transport closes.
     pub async fn run(self) -> Result<()> {
         tracing_subscriber::registry()
+            // "info" default: MCP server runs headlessly; startup/lifecycle events aid operators.
             .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
             .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
             .try_init()
@@ -108,4 +109,3 @@ impl McpServer {
         Ok(())
     }
 }
-
