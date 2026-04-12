@@ -18,7 +18,14 @@ use uuid::Uuid;
 /// the same locator. Mirrors what real file-backed stores get from the OS.
 type SharedDisk = Arc<AsyncMutex<Option<StoreSnapshot>>>;
 
-// Safe across parallel tests: each test uses a unique `TempDir` path, so entries never collide.
+/// Returns the shared `SharedDisk` for `path`, inserting a fresh one on first access.
+///
+/// **Design note — why a global `OnceLock<Mutex<HashMap>>`:**
+/// Entries are keyed on unique `TempDir` paths so they never collide across
+/// parallel tests. They are intentionally never removed: the map lives for the
+/// duration of the process, mirroring how an OS inode persists on disk until
+/// the file is explicitly deleted. Tests that need isolation simply use a new
+/// `TempDir`, which gives them a distinct key.
 fn disk_for(path: &Path) -> SharedDisk {
     static DISKS: OnceLock<Mutex<HashMap<PathBuf, SharedDisk>>> = OnceLock::new();
     let mut guard = DISKS
@@ -106,3 +113,29 @@ fn memory_factory() -> StoreFactory {
 }
 
 kanban_persistence::store_contract_tests!(memory_factory);
+
+#[tokio::test]
+async fn test_memory_store_same_path_shares_disk() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("shared.mem");
+
+    let store_a = MemoryStore::new(&path);
+    let store_b = MemoryStore::new(&path);
+
+    let data = b"hello world".to_vec();
+    let snapshot = StoreSnapshot {
+        data: data.clone(),
+        metadata: PersistenceMetadata::new(store_a.instance_id),
+    };
+    store_a.save(snapshot).await.unwrap();
+
+    assert!(
+        store_b.exists().await,
+        "store_b must see data saved by store_a"
+    );
+    let (loaded, _) = store_b.load().await.unwrap();
+    assert_eq!(
+        loaded.data, data,
+        "store_b must read the bytes store_a wrote"
+    );
+}
