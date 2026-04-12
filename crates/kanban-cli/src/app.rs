@@ -31,13 +31,19 @@ impl Default for CliApp {
 }
 
 impl CliApp {
-    /// Returns a `CliApp` pre-configured with both built-in backends.
+    /// Returns a `CliApp` pre-configured with all backends compiled in.
     /// SQLite is registered first so content-sniffing prefers it; JSON is
-    /// registered as the catch-all fallback.
-    #[cfg(any(feature = "json", feature = "sqlite"))]
+    /// registered as the catch-all fallback. When no backend features are
+    /// active the registry is empty (same as [`Default`]).
     pub fn with_defaults() -> Self {
+        #[allow(unused_mut)]
+        let mut registry = kanban_persistence::StoreRegistry::new();
+        #[cfg(feature = "sqlite")]
+        registry.register(Box::new(kanban_service::SqliteStoreFactory));
+        #[cfg(feature = "json")]
+        registry.register(Box::new(kanban_service::JsonStoreFactory));
         Self {
-            registry: kanban_service::default_registry(),
+            registry,
             config: None,
         }
     }
