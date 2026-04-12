@@ -17,7 +17,9 @@ fn test_store_manager_make_store_returns_expected_path() {
     registry.register(Box::new(JsonStoreFactory));
     let manager = StoreManager::new(registry);
 
-    let store = manager.make_store("json", "/tmp/kan260_injection.json").unwrap();
+    let store = manager
+        .make_store("json", "/tmp/kan260_injection.json")
+        .unwrap();
     assert_eq!(store.path().to_str().unwrap(), "/tmp/kan260_injection.json");
 }
 
@@ -57,6 +59,38 @@ fn test_store_manager_preserves_registration_order() {
         detected, "sqlite",
         "SQLite must be preferred over JSON when both are registered"
     );
+}
+
+#[test]
+fn test_store_manager_has_backends_returns_false_when_empty() {
+    let manager = StoreManager::new(StoreRegistry::new());
+    assert!(
+        !manager.has_backends(),
+        "empty registry must report no backends"
+    );
+}
+
+#[test]
+fn test_store_manager_has_backends_returns_true_after_registration() {
+    let mut registry = StoreRegistry::new();
+    registry.register(Box::new(JsonStoreFactory));
+    let manager = StoreManager::new(registry);
+    assert!(
+        manager.has_backends(),
+        "registry with one factory must report has_backends"
+    );
+}
+
+#[test]
+fn test_store_manager_has_backends_reflects_registration_count() {
+    let empty_manager = StoreManager::new(StoreRegistry::new());
+    assert!(!empty_manager.has_backends());
+
+    let mut registry = StoreRegistry::new();
+    registry.register(Box::new(JsonStoreFactory));
+    registry.register(Box::new(SqliteStoreFactory));
+    let full_manager = StoreManager::new(registry);
+    assert!(full_manager.has_backends());
 }
 
 #[test]
