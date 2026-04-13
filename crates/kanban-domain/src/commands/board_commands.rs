@@ -1,6 +1,7 @@
 use super::{Command, CommandContext};
 use crate::KanbanResult;
-use crate::{ArchivedCard, Board, BoardUpdate, Card, Column, DependencyGraph, Sprint};
+use crate::{ArchivedCard, Board, BoardUpdate, Card, Column, DependencyGraph, KanbanError, Sprint};
+use crate::field_update::FieldUpdate;
 use kanban_core::Editable;
 use uuid::Uuid;
 
@@ -30,6 +31,19 @@ pub struct UpdateBoard {
 
 impl Command for UpdateBoard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        if !matches!(self.updates.card_prefix, FieldUpdate::NoChange) {
+            let card_counter = context
+                .boards
+                .iter()
+                .find(|b| b.id == self.board_id)
+                .ok_or_else(|| KanbanError::not_found("board", self.board_id))?
+                .card_counter;
+            if card_counter > 1 {
+                return Err(KanbanError::validation(
+                    "board card_prefix cannot be changed after cards have been created",
+                ));
+            }
+        }
         let board = context.board_mut(self.board_id)?;
         board.update(self.updates.clone());
         Ok(())
@@ -274,14 +288,14 @@ mod tests {
         let mut tc = TestContext::new();
         let mut board = Board::new("B".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0);
         let dup_card_id = card.id;
         tc.boards.push(board.clone());
         tc.columns.push(col);
         tc.cards.push(card);
 
         let mut dup_card =
-            crate::Card::new(&mut board, Uuid::new_v4(), "Dup".to_string(), 0, "TST");
+            crate::Card::new(&mut board, Uuid::new_v4(), "Dup".to_string(), 0);
         dup_card.id = dup_card_id;
 
         let cmd = ImportEntities {
@@ -307,7 +321,7 @@ mod tests {
         let b2 = Board::new("B2".to_string(), None);
         let col = crate::Column::new(b2.id, "Todo".to_string(), 0);
         let mut b2_clone = b2.clone();
-        let card = crate::Card::new(&mut b2_clone, col.id, "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut b2_clone, col.id, "Card".to_string(), 0);
 
         let cmd = ImportEntities {
             boards: vec![b2],
@@ -326,5 +340,72 @@ mod tests {
         assert_eq!(context.boards[1].name, "B2");
         assert_eq!(context.columns.len(), 1);
         assert_eq!(context.cards.len(), 1);
+    }
+
+    #[test]
+    fn test_update_board_card_prefix_allowed_before_first_card_succeeds() {
+        let mut tc = TestContext::new();
+        let board = Board::new("B".to_string(), Some("OLD".to_string()));
+        let board_id = board.id;
+        tc.boards.push(board);
+        let mut context = tc.as_command_context();
+
+        let cmd = UpdateBoard {
+            board_id,
+            updates: BoardUpdate {
+                card_prefix: FieldUpdate::Set("NEW".to_string()),
+                ..Default::default()
+            },
+        };
+        assert!(cmd.execute(&mut context).is_ok());
+        assert_eq!(
+            context.boards[0].card_prefix,
+            Some("NEW".to_string())
+        );
+    }
+
+    #[test]
+    fn test_update_board_card_prefix_locked_after_first_card_returns_validation_error() {
+        let mut tc = TestContext::new();
+        let mut board = Board::new("B".to_string(), Some("OLD".to_string()));
+        let board_id = board.id;
+        let col = Column::new(board_id, "Col".to_string(), 0);
+        let _card = Card::new(&mut board, col.id, "C".to_string(), 0);
+        // card_counter is now 2 (incremented past initial 1)
+        tc.boards.push(board);
+        tc.columns.push(col);
+        let mut context = tc.as_command_context();
+
+        let cmd = UpdateBoard {
+            board_id,
+            updates: BoardUpdate {
+                card_prefix: FieldUpdate::Set("NEW".to_string()),
+                ..Default::default()
+            },
+        };
+        let err = cmd.execute(&mut context).unwrap_err();
+        assert!(err.is_validation());
+    }
+
+    #[test]
+    fn test_update_board_clear_card_prefix_locked_after_first_card_returns_validation_error() {
+        let mut tc = TestContext::new();
+        let mut board = Board::new("B".to_string(), Some("OLD".to_string()));
+        let board_id = board.id;
+        let col = Column::new(board_id, "Col".to_string(), 0);
+        let _card = Card::new(&mut board, col.id, "C".to_string(), 0);
+        tc.boards.push(board);
+        tc.columns.push(col);
+        let mut context = tc.as_command_context();
+
+        let cmd = UpdateBoard {
+            board_id,
+            updates: BoardUpdate {
+                card_prefix: FieldUpdate::Clear,
+                ..Default::default()
+            },
+        };
+        let err = cmd.execute(&mut context).unwrap_err();
+        assert!(err.is_validation());
     }
 }
