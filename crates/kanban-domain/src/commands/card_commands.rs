@@ -716,6 +716,32 @@ mod tests {
     }
 
     #[test]
+    fn test_restore_card_exceeding_wip_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        col.wip_limit = Some(1);
+        let col_id = col.id;
+        let existing = crate::Card::new(&mut board, col_id, "Existing".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 1, "TST");
+        let card_id = card.id;
+        let archived = crate::ArchivedCard::new(card, col_id, 0);
+        tc.boards.push(board);
+        tc.columns.push(col);
+        tc.cards.push(existing);
+        tc.archived_cards.push(archived);
+        let mut context = tc.as_command_context();
+
+        let cmd = RestoreCard {
+            card_id,
+            column_id: col_id,
+            position: 1,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
     fn test_restore_card_not_found_returns_error() {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
