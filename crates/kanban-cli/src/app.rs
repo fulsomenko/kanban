@@ -63,18 +63,17 @@ impl CliApp {
     ///
     /// ```no_run
     /// use kanban_cli::CliApp;
-    /// use kanban_persistence::StoreFactory;
+    /// use kanban_persistence::{PersistenceError, PersistenceStore, StoreFactory};
+    /// use std::sync::Arc;
     ///
     /// // A backend factory provided by a third-party crate.
     /// struct MyBackendFactory;
     /// impl StoreFactory for MyBackendFactory {
     ///     fn name(&self) -> &str { "my-backend" }
-    ///     fn supported_patterns(&self) -> &[&str] { &["*.mydb"] }
-    ///     fn matches(&self, locator: &str) -> bool { locator.ends_with(".mydb") }
     ///     fn create(
     ///         &self,
     ///         locator: &str,
-    ///     ) -> std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> {
+    ///     ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
     ///         unimplemented!()
     ///     }
     /// }

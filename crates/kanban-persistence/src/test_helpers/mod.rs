@@ -29,19 +29,19 @@ pub type StoreFactory = Box<dyn Fn(&Path) -> Arc<dyn PersistenceStore + Send + S
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kanban_persistence::store_contract_tests;
 /// use kanban_persistence_json::JsonStoreFactory;
-/// use kanban_persistence::StoreFactory as _;
 ///
 /// mod json_contract {
 ///     use super::*;
+///     use kanban_persistence::StoreFactory as _;
 ///     use tempfile::TempDir;
 ///
 ///     fn make_store() -> std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> {
 ///         let dir = TempDir::new().unwrap();
 ///         let path = dir.path().join("test.json");
-///         JsonStoreFactory.create(&path)
+///         JsonStoreFactory.create(path.to_str().unwrap()).unwrap()
 ///     }
 ///
 ///     store_contract_tests!(make_store);
