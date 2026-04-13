@@ -1,5 +1,7 @@
 use kanban_domain::KanbanOperations;
+use kanban_persistence_json::JsonFileStore;
 use kanban_tui::tui_context::TuiContext;
+use std::sync::Arc;
 use tempfile::TempDir;
 
 fn make_ctx_with_persistence() -> (
@@ -9,8 +11,8 @@ fn make_ctx_with_persistence() -> (
 ) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.json");
-    let (ctx, save_rx, _) =
-        TuiContext::new("json", Some(path.to_str().unwrap().to_string())).unwrap();
+    let store = Arc::new(JsonFileStore::new(&path));
+    let (ctx, save_rx, _) = TuiContext::new(Some(store)).unwrap();
     (ctx, save_rx.unwrap(), dir)
 }
 

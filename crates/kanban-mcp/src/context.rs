@@ -4,7 +4,7 @@ use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
 };
-use kanban_service::KanbanContext;
+use kanban_service::{KanbanContext, StoreManager};
 use uuid::Uuid;
 
 pub struct McpContext {
@@ -12,11 +12,20 @@ pub struct McpContext {
 }
 
 impl McpContext {
-    pub async fn new(data_file: &str, mut config: AppConfig) -> KanbanResult<Self> {
-        kanban_service::sync_backend_with_file(data_file, &mut config);
+    pub async fn new(
+        store_manager: &StoreManager,
+        data_file: &str,
+        mut config: AppConfig,
+    ) -> KanbanResult<Self> {
+        if store_manager.sync_backend_with_file(data_file, &mut config) {
+            tracing::warn!(
+                "Storage backend auto-corrected to '{}' based on file content.",
+                config.effective_storage_backend()
+            );
+        }
         let backend = config.effective_storage_backend().to_string();
         Ok(Self {
-            inner: KanbanContext::load(kanban_service::make_store(&backend, data_file)?, config)
+            inner: KanbanContext::load(store_manager.make_store(&backend, data_file)?, config)
                 .await?,
         })
     }

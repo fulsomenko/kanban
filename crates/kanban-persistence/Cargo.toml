@@ -10,6 +10,9 @@ description = "Persistence traits and shared types for the kanban project manage
 keywords = ["kanban", "persistence", "storage", "file-watching"]
 categories = ["command-line-utilities", "development-tools"]
 
+[features]
+test-helpers = ["dep:tempfile"]
+
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
@@ -34,6 +37,15 @@ notify.workspace = true
 # Logging
 tracing.workspace = true
 
+# Optional: test-helpers feature pulls this in
+tempfile = { workspace = true, optional = true }
+
 [dev-dependencies]
 mockall.workspace = true
 tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[[test]]
+name = "store_contract_smoke"
+path = "tests/store_contract_smoke.rs"
+required-features = ["test-helpers"]

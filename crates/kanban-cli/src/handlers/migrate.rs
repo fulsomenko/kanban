@@ -1,4 +1,5 @@
 use crate::cli::MigrateArgs;
+use kanban_service::StoreManager;
 
 fn default_output_path(source: &str, backend: &str) -> String {
     let path = std::path::Path::new(source);
@@ -16,15 +17,19 @@ fn default_output_path(source: &str, backend: &str) -> String {
     }
 }
 
-pub async fn handle(args: MigrateArgs) -> anyhow::Result<()> {
+pub async fn handle(store_manager: &StoreManager, args: MigrateArgs) -> anyhow::Result<()> {
     let source_backend = args.source_backend.unwrap_or_else(|| {
-        kanban_service::detect_backend(&args.source).unwrap_or_else(|| "json".to_string())
+        store_manager
+            .detect_backend(&args.source)
+            .unwrap_or_else(|| "json".to_string())
     });
     let output = args
         .output
         .unwrap_or_else(|| default_output_path(&args.source, &args.backend));
     println!("Migrating {} to {}", args.source, output);
-    kanban_service::migrate_store(&source_backend, &args.source, &args.backend, &output).await?;
+    store_manager
+        .migrate_store(&source_backend, &args.source, &args.backend, &output)
+        .await?;
     println!("Migration completed successfully");
     Ok(())
 }

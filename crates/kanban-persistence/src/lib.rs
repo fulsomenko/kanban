@@ -4,6 +4,8 @@ pub mod null_store;
 pub mod registry;
 pub mod serialization;
 pub mod snapshot_serde;
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;
 pub mod traits;
 pub mod watch;
 

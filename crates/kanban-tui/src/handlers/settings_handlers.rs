@@ -164,7 +164,10 @@ impl App {
         let new_storage_location =
             kanban_service::config::resolve_storage_location(&self.app_config);
 
-        if kanban_service::sync_backend_with_file(&new_storage_location, &mut self.app_config) {
+        if self
+            .store_manager
+            .sync_backend_with_file(&new_storage_location, &mut self.app_config)
+        {
             self.set_success(format!(
                 "storage_backend changed to '{}' to match file at '{}'",
                 self.app_config.effective_storage_backend(),
@@ -185,24 +188,26 @@ impl App {
 
         let new_storage_clone = new_storage_location.clone();
         let new_backend_clone = new_backend.clone();
+        let store_manager = self.store_manager.clone();
         tokio::spawn(async move {
             let file_existed = std::path::Path::new(&new_storage_clone).exists();
             let result: Result<(kanban_domain::Snapshot, bool), String> = async {
                 if !file_existed && old_path_exists {
-                    kanban_service::migrate_store(
-                        &old_backend,
-                        &old_storage_location_owned,
-                        &new_backend_clone,
-                        &new_storage_clone,
-                    )
-                    .await
-                    .map_err(|e| format!("Migration failed: {}", e))?;
+                    store_manager
+                        .migrate_store(
+                            &old_backend,
+                            &old_storage_location_owned,
+                            &new_backend_clone,
+                            &new_storage_clone,
+                        )
+                        .await
+                        .map_err(|e| format!("Migration failed: {}", e))?;
                 }
 
-                let snapshot =
-                    kanban_service::validate_and_load_store(&new_backend_clone, &new_storage_clone)
-                        .await
-                        .map_err(|e| format!("Invalid storage file: {}", e))?;
+                let snapshot = store_manager
+                    .validate_and_load_store(&new_backend_clone, &new_storage_clone)
+                    .await
+                    .map_err(|e| format!("Invalid storage file: {}", e))?;
                 Ok((snapshot, file_existed))
             }
             .await;
@@ -238,7 +243,10 @@ impl App {
             kanban_service::config::resolve_storage_location(&self.app_config);
         let new_backend = self.app_config.effective_storage_backend().to_string();
 
-        match kanban_service::make_store(&new_backend, &new_storage_location) {
+        match self
+            .store_manager
+            .make_store(&new_backend, &new_storage_location)
+        {
             Ok(new_store) => {
                 self.ctx.replace_store(new_store);
                 let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
@@ -643,9 +651,11 @@ impl App {
             crate::app::ExportFormat::Sqlite => {
                 let filename_clone = filename.clone();
                 let export_clone = export.clone();
+                let store_manager = self.store_manager.clone();
                 let (tx, rx) = tokio::sync::oneshot::channel();
                 tokio::spawn(async move {
-                    let result = kanban_service::export_to_sqlite(export_clone, &filename_clone)
+                    let result = store_manager
+                        .export_to_sqlite(export_clone, &filename_clone)
                         .await
                         .map(|_| filename_clone)
                         .map_err(|e| format!("Export failed: {}", e));

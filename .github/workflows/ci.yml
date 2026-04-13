@@ -80,7 +80,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Check no-tui build
-        run: nix develop --command cargo check --package kanban-cli --no-default-features
+        run: nix develop --command cargo check --package kanban-cli --no-default-features --features json,sqlite
 
   changeset:
     name: Validate Changeset

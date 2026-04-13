@@ -1,9 +1,15 @@
+use kanban_persistence::test_helpers::StoreFactory;
 use kanban_persistence_json::JsonFileStore;
-use kanban_service::test_helpers::StoreFactory;
 use std::sync::Arc;
 
 fn json_factory() -> StoreFactory {
     Box::new(|path| Arc::new(JsonFileStore::new(path)))
 }
 
-kanban_service::contract_tests!(json_factory);
+mod tier1 {
+    kanban_persistence::store_contract_tests!(super::json_factory);
+}
+
+mod tier2 {
+    kanban_service::context_contract_tests!(super::json_factory);
+}

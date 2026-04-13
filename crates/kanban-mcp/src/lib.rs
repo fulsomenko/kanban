@@ -1,4 +1,7 @@
 pub mod context;
+pub mod server;
+
+pub use server::McpServer;
 
 use context::McpContext;
 use kanban_core::{resolve_page_params, PaginatedList};
@@ -8,6 +11,7 @@ use kanban_domain::{
     SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
+use kanban_service::StoreManager;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
@@ -509,9 +513,15 @@ pub struct KanbanMcpServer {
 }
 
 impl KanbanMcpServer {
-    pub async fn new(data_file: &str, config: kanban_core::AppConfig) -> KanbanResult<Self> {
+    pub async fn new(
+        store_manager: &StoreManager,
+        data_file: &str,
+        config: kanban_core::AppConfig,
+    ) -> KanbanResult<Self> {
         Ok(Self {
-            ctx: Arc::new(Mutex::new(McpContext::new(data_file, config).await?)),
+            ctx: Arc::new(Mutex::new(
+                McpContext::new(store_manager, data_file, config).await?,
+            )),
             tool_router: Self::tool_router(),
         })
     }
