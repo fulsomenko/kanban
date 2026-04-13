@@ -97,7 +97,7 @@ mod tests {
     use crate::Board;
 
     fn create_test_card(board: &mut Board, column_id: Uuid) -> Card {
-        Card::new(board, column_id, "Test Card".to_string(), 0, "task")
+        Card::new(board, column_id, "Test Card".to_string(), 0)
     }
 
     #[test]

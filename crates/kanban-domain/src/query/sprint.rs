@@ -101,7 +101,7 @@ mod tests {
     }
 
     fn create_test_card(board: &mut Board, column: &Column, title: &str) -> Card {
-        Card::new(board, column.id, title.to_string(), 0, "task")
+        Card::new(board, column.id, title.to_string(), 0)
     }
 
     #[test]

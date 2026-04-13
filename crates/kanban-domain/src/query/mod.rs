@@ -133,7 +133,7 @@ mod tests {
     }
 
     fn create_test_card(board: &mut Board, column: &Column, title: &str, position: i32) -> Card {
-        Card::new(board, column.id, title.to_string(), position, "task")
+        Card::new(board, column.id, title.to_string(), position)
     }
 
     #[test]

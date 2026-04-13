@@ -124,7 +124,7 @@ mod tests {
         let mut board = crate::Board::new("B".to_string(), None);
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0, "task");
+        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
         tc.columns.push(col);
         tc.cards.push(card);
         let ctx = tc.as_command_context();
@@ -138,7 +138,7 @@ mod tests {
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(2);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0, "task");
+        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
         tc.columns.push(col);
         tc.cards.push(card);
         let ctx = tc.as_command_context();
@@ -152,7 +152,7 @@ mod tests {
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0, "task");
+        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
         tc.columns.push(col);
         tc.cards.push(card);
         let ctx = tc.as_command_context();
@@ -167,7 +167,7 @@ mod tests {
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0, "task");
+        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
         let card_id = card.id;
         tc.columns.push(col);
         tc.cards.push(card);

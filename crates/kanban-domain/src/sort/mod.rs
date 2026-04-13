@@ -106,8 +106,8 @@ mod tests {
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
-        let card1 = Card::new(&mut board_mut, column.id, "First".to_string(), 0, "task");
-        let card2 = Card::new(&mut board_mut, column.id, "Second".to_string(), 1, "task");
+        let card1 = Card::new(&mut board_mut, column.id, "First".to_string(), 0);
+        let card2 = Card::new(&mut board_mut, column.id, "Second".to_string(), 1);
 
         (board, column, card1, card2)
     }
@@ -159,9 +159,9 @@ mod tests {
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
-        let card1 = Card::new(&mut board_mut, column.id, "Third".to_string(), 20, "task");
-        let card2 = Card::new(&mut board_mut, column.id, "First".to_string(), 5, "task");
-        let card3 = Card::new(&mut board_mut, column.id, "Second".to_string(), 10, "task");
+        let card1 = Card::new(&mut board_mut, column.id, "Third".to_string(), 20);
+        let card2 = Card::new(&mut board_mut, column.id, "First".to_string(), 5);
+        let card3 = Card::new(&mut board_mut, column.id, "Second".to_string(), 10);
 
         assert_eq!(SortBy::Position.compare(&card2, &card3), Ordering::Less); // 5 < 10
         assert_eq!(SortBy::Position.compare(&card3, &card1), Ordering::Less); // 10 < 20
@@ -175,8 +175,8 @@ mod tests {
         let column = Column::new(board.id, "Todo".to_string(), 0);
         let mut board_mut = board.clone();
 
-        let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 10, "task");
-        let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 5, "task");
+        let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 10);
+        let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 5);
 
         assert_eq!(sorter.compare(&card2, &card1), Ordering::Less);
     }
