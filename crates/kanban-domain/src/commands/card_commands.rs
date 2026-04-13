@@ -34,24 +34,7 @@ pub struct CreateCard {
 
 impl Command for CreateCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let column = context
-            .columns
-            .iter()
-            .find(|c| c.id == self.column_id)
-            .ok_or_else(|| KanbanError::not_found("column", self.column_id))?;
-        if let Some(limit) = column.wip_limit {
-            let current = context
-                .cards
-                .iter()
-                .filter(|c| c.column_id == self.column_id)
-                .count();
-            if current >= limit as usize {
-                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
-                    self.column_id,
-                    limit as u32,
-                )));
-            }
-        }
+        context.check_wip_limit(self.column_id, 1, &[])?;
         let board = context.board_mut(self.board_id)?;
         let prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
         let card = crate::Card::new(
@@ -109,25 +92,7 @@ pub struct MoveCard {
 
 impl Command for MoveCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let wip_limit = context
-            .columns
-            .iter()
-            .find(|c| c.id == self.new_column_id)
-            .ok_or_else(|| KanbanError::not_found("column", self.new_column_id))?
-            .wip_limit;
-        if let Some(limit) = wip_limit {
-            let current = context
-                .cards
-                .iter()
-                .filter(|c| c.column_id == self.new_column_id && c.id != self.card_id)
-                .count();
-            if current >= limit as usize {
-                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
-                    self.new_column_id,
-                    limit as u32,
-                )));
-            }
-        }
+        context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
         let card = context.card_mut(self.card_id)?;
         card.move_to_column(self.new_column_id, self.new_position);
         Ok(())
@@ -150,25 +115,7 @@ pub struct RestoreCard {
 
 impl Command for RestoreCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let wip_limit = context
-            .columns
-            .iter()
-            .find(|c| c.id == self.column_id)
-            .ok_or_else(|| KanbanError::not_found("column", self.column_id))?
-            .wip_limit;
-        if let Some(limit) = wip_limit {
-            let current = context
-                .cards
-                .iter()
-                .filter(|c| c.column_id == self.column_id)
-                .count();
-            if current >= limit as usize {
-                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
-                    self.column_id,
-                    limit as u32,
-                )));
-            }
-        }
+        context.check_wip_limit(self.column_id, 1, &[])?;
         let pos = context
             .archived_cards
             .iter()
@@ -241,27 +188,14 @@ impl Command for MoveCards {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         use std::collections::HashSet;
 
-        let wip_limit = context
-            .columns
-            .iter()
-            .find(|c| c.id == self.column_id)
-            .ok_or_else(|| KanbanError::not_found("column", self.column_id))?
-            .wip_limit;
         let valid_ids = context.filter_valid_card_ids(&self.ids, "MoveCards");
+        context.check_wip_limit(self.column_id, valid_ids.len(), &valid_ids)?;
         let id_set: HashSet<Uuid> = valid_ids.iter().copied().collect();
         let base = context
             .cards
             .iter()
             .filter(|c| c.column_id == self.column_id && !id_set.contains(&c.id))
             .count();
-        if let Some(limit) = wip_limit {
-            if base + valid_ids.len() > limit as usize {
-                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
-                    self.column_id,
-                    limit as u32,
-                )));
-            }
-        }
         for (i, id) in valid_ids.iter().enumerate() {
             let card = context.card_mut(*id)?;
             card.move_to_column(self.column_id, (base + i) as i32);
