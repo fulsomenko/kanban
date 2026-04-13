@@ -209,6 +209,13 @@ mod tests {
     }
 
     #[test]
+    fn test_is_wip_limit_exceeded_returns_true() {
+        let id = Uuid::new_v4();
+        let err = KanbanError::Domain(DomainError::wip_limit_exceeded(id, 3));
+        assert!(err.is_wip_limit_exceeded());
+    }
+
+    #[test]
     fn test_not_found_display_includes_entity_and_id() {
         let id = Uuid::new_v4();
         let err = KanbanError::not_found("card", id);
