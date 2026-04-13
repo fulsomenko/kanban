@@ -171,40 +171,55 @@ impl StoreManager {
 }
 
 fn repair_snapshot_fks(snapshot: &mut StoreSnapshot) -> Result<(), KanbanError> {
-    let mut data: serde_json::Value =
-        serde_json::from_slice(&snapshot.data).map_err(|e| {
-            KanbanError::validation(format!("Failed to parse snapshot for FK repair: {e}"))
-        })?;
+    let mut data: serde_json::Value = serde_json::from_slice(&snapshot.data).map_err(|e| {
+        KanbanError::validation(format!("Failed to parse snapshot for FK repair: {e}"))
+    })?;
 
     let valid_columns: HashSet<String> = data["columns"]
         .as_array()
-        .map(|arr| arr.iter().filter_map(|c| c["id"].as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|c| c["id"].as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let valid_sprints: HashSet<String> = data["sprints"]
         .as_array()
-        .map(|arr| arr.iter().filter_map(|s| s["id"].as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| s["id"].as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
-    let fallback_column: Option<String> = data["columns"]
-        .as_array()
-        .and_then(|arr| {
-            arr.iter()
-                .min_by_key(|c| c["position"].as_i64().unwrap_or(i64::MAX))
-                .and_then(|c| c["id"].as_str())
-                .map(String::from)
-        });
+    let fallback_column: Option<String> = data["columns"].as_array().and_then(|arr| {
+        arr.iter()
+            .min_by_key(|c| c["position"].as_i64().unwrap_or(i64::MAX))
+            .and_then(|c| c["id"].as_str())
+            .map(String::from)
+    });
 
     if let Some(cards) = data["cards"].as_array_mut() {
         for card in cards.iter_mut() {
-            fix_card_fks(card, &valid_columns, &valid_sprints, fallback_column.as_deref());
+            fix_card_fks(
+                card,
+                &valid_columns,
+                &valid_sprints,
+                fallback_column.as_deref(),
+            );
         }
     }
 
     if let Some(archived) = data["archived_cards"].as_array_mut() {
         for entry in archived.iter_mut() {
             if let Some(card) = entry.get_mut("card") {
-                fix_card_fks(card, &valid_columns, &valid_sprints, fallback_column.as_deref());
+                fix_card_fks(
+                    card,
+                    &valid_columns,
+                    &valid_sprints,
+                    fallback_column.as_deref(),
+                );
             }
         }
     }
