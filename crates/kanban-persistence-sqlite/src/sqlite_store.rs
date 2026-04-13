@@ -13,7 +13,7 @@ use crate::helpers::{db_err, parse_datetime, parse_uuid, ser_err, SnapshotData, 
 use crate::upserts;
 
 const SCHEMA: &str = include_str!("schema.sql");
-const CURRENT_SCHEMA_VERSION: i32 = 1;
+const CURRENT_SCHEMA_VERSION: i32 = 2;
 
 pub struct SqliteStore {
     path: PathBuf,
@@ -97,6 +97,7 @@ impl SqliteStore {
             "SELECT id, name, description, sprint_prefix, card_prefix, task_sort_field,
                     task_sort_order, sprint_duration_days, sprint_name_used_count,
                     next_sprint_number, active_sprint_id, task_list_view,
+                    COALESCE(card_counter, 1) as card_counter,
                     completion_column_id, created_at, updated_at FROM boards",
         )
         .fetch_all(&mut *tx)
@@ -115,23 +116,6 @@ impl SqliteStore {
             let board_id: String = row.try_get("board_id").map_err(db_err)?;
             let name: String = row.try_get("name").map_err(db_err)?;
             sprint_names_map.entry(board_id).or_default().push(name);
-        }
-
-        let prefix_counter_rows =
-            sqlx::query("SELECT board_id, prefix, counter FROM board_prefix_counters")
-                .fetch_all(&mut *tx)
-                .await
-                .map_err(db_err)?;
-
-        let mut prefix_counters_map: HashMap<String, HashMap<String, u32>> = HashMap::new();
-        for row in &prefix_counter_rows {
-            let board_id: String = row.try_get("board_id").map_err(db_err)?;
-            let prefix: String = row.try_get("prefix").map_err(db_err)?;
-            let counter: i32 = row.try_get("counter").map_err(db_err)?;
-            prefix_counters_map
-                .entry(board_id)
-                .or_default()
-                .insert(prefix, counter as u32);
         }
 
         let sprint_counter_rows =
@@ -154,10 +138,11 @@ impl SqliteStore {
         let mut boards = Vec::with_capacity(board_rows.len());
         for row in &board_rows {
             let id_str: String = row.try_get("id").map_err(db_err)?;
+            let card_counter: i32 = row.try_get("card_counter").map_err(db_err)?;
             boards.push(build_board(
                 row,
                 sprint_names_map.remove(&id_str).unwrap_or_default(),
-                prefix_counters_map.remove(&id_str).unwrap_or_default(),
+                card_counter as u32,
                 sprint_counters_map.remove(&id_str).unwrap_or_default(),
             )?);
         }
@@ -185,7 +170,7 @@ impl SqliteStore {
 
         let card_rows = sqlx::query(
             "SELECT id, column_id, title, description, priority, status, position, due_date,
-                    points, card_number, sprint_id, assigned_prefix, card_prefix, created_at,
+                    points, card_number, sprint_id, created_at,
                     updated_at, completed_at FROM cards
              ORDER BY position ASC, created_at ASC",
         )
@@ -337,11 +322,19 @@ impl SqliteStore {
 }
 
 async fn migrate(pool: &Pool<Sqlite>) -> PersistenceResult<()> {
-    let version: i32 = sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .unwrap_or(0);
+    // Fetch the stored schema version, if the metadata row exists.
+    // None means the database was just created and is already at the current schema.
+    let stored_version: Option<i32> =
+        sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
+
+    let version = match stored_version {
+        // Row not yet present → brand-new database, already at current schema
+        None => return Ok(()),
+        Some(v) => v,
+    };
 
     if version > CURRENT_SCHEMA_VERSION {
         return Err(PersistenceError::Database(format!(
@@ -350,7 +343,80 @@ async fn migrate(pool: &Pool<Sqlite>) -> PersistenceResult<()> {
     }
 
     // Version 0 → 1: initial schema (handled by CREATE IF NOT EXISTS above)
-    // Future: if version < 2 { ALTER TABLE ... ; update schema_version }
+
+    if version < 2 {
+        // Add card_counter column to boards if it doesn't already exist
+        // (new databases already have it from schema.sql; existing v1 databases do not)
+        let _ = sqlx::query("ALTER TABLE boards ADD COLUMN card_counter INTEGER NOT NULL DEFAULT 1")
+            .execute(pool)
+            .await;
+
+        // Populate card_counter from board_prefix_counters for boards that have a card_prefix
+        let boards: Vec<(String, Option<String>)> =
+            sqlx::query_as("SELECT id, card_prefix FROM boards")
+                .fetch_all(pool)
+                .await
+                .map_err(db_err)?;
+
+        for (board_id, card_prefix) in &boards {
+            // Try to get the counter from board_prefix_counters matching card_prefix
+            let counter: Option<i32> = if let Some(prefix) = card_prefix {
+                sqlx::query_scalar(
+                    "SELECT counter FROM board_prefix_counters WHERE board_id = ? AND prefix = ?",
+                )
+                .bind(board_id)
+                .bind(prefix)
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?
+            } else {
+                None
+            };
+
+            // Fall back to deriving from max card_number of cards in this board's columns
+            let card_counter: i32 = if let Some(c) = counter {
+                c
+            } else {
+                let max: Option<i32> = sqlx::query_scalar(
+                    "SELECT COALESCE(MAX(c.card_number) + 1, 1) FROM cards c \
+                     JOIN columns col ON c.column_id = col.id WHERE col.board_id = ?",
+                )
+                .bind(board_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?
+                .flatten();
+                max.unwrap_or(1)
+            };
+
+            sqlx::query("UPDATE boards SET card_counter = ? WHERE id = ?")
+                .bind(card_counter)
+                .bind(board_id)
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
+        }
+
+        // Drop old columns from cards (SQLite 3.35+)
+        let _ = sqlx::query("ALTER TABLE cards DROP COLUMN assigned_prefix")
+            .execute(pool)
+            .await;
+        let _ = sqlx::query("ALTER TABLE cards DROP COLUMN card_prefix")
+            .execute(pool)
+            .await;
+
+        // Drop the now-unused board_prefix_counters table
+        sqlx::query("DROP TABLE IF EXISTS board_prefix_counters")
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
+
+        // Bump schema version
+        sqlx::query("UPDATE metadata SET schema_version = 2 WHERE id = 1")
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
+    }
 
     Ok(())
 }
@@ -449,13 +515,14 @@ impl PersistenceStore for SqliteStore {
         let saved_at_str = snapshot.metadata.saved_at.to_rfc3339();
         sqlx::query(
             "INSERT INTO metadata (id, instance_id, saved_at, schema_version)
-             VALUES (1, ?, ?, 1)
+             VALUES (1, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                 instance_id = excluded.instance_id,
                 saved_at = excluded.saved_at",
         )
         .bind(self.instance_id.to_string())
         .bind(&saved_at_str)
+        .bind(CURRENT_SCHEMA_VERSION)
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
@@ -625,7 +692,7 @@ mod tests {
                 "sprint_name_used_count": 0,
                 "next_sprint_number": 1,
                 "task_list_view": "Flat",
-                "prefix_counters": {},
+                "card_counter": 1,
                 "sprint_counters": {},
                 "created_at": now,
                 "updated_at": now
@@ -703,7 +770,7 @@ mod tests {
                 "id": board_id, "name": "B",
                 "task_sort_field": "Default", "task_sort_order": "Ascending",
                 "sprint_name_used_count": 0, "next_sprint_number": 1,
-                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                "task_list_view": "Flat", "card_counter": 1, "sprint_counters": {},
                 "created_at": now, "updated_at": now
             })],
             columns: vec![serde_json::json!({
@@ -746,7 +813,7 @@ mod tests {
                 "id": board_id, "name": "B",
                 "task_sort_field": "Default", "task_sort_order": "Ascending",
                 "sprint_name_used_count": 0, "next_sprint_number": 1,
-                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                "task_list_view": "Flat", "card_counter": 1, "sprint_counters": {},
                 "created_at": now, "updated_at": now
             })],
             columns: vec![serde_json::json!({
@@ -856,7 +923,7 @@ mod tests {
                 "boards": [{"id": board_id, "name": "B", "task_sort_field": "Default",
                     "task_sort_order": "Ascending", "sprint_name_used_count": 0,
                     "next_sprint_number": 1, "task_list_view": "Flat",
-                    "prefix_counters": {}, "sprint_counters": {},
+                    "card_counter": 1, "sprint_counters": {},
                     "created_at": now, "updated_at": now}],
                 "columns": [{"id": col_id, "board_id": board_id, "name": "C", "position": 0,
                     "created_at": now, "updated_at": now}],
@@ -937,5 +1004,365 @@ mod tests {
             matches!(err, PersistenceError::Serialization(ref msg) if msg.contains("missing required field")),
             "Expected Serialization error with 'missing required field', got: {err:?}"
         );
+    }
+
+    // ── V1 → V2 schema migration tests ───────────────────────────────────────
+
+    /// Open a raw pool on `path` and apply the V1 schema (old column layout).
+    async fn open_v1_pool(path: &std::path::Path) -> Pool<Sqlite> {
+        let opts = SqliteConnectOptions::new()
+            .filename(path)
+            .create_if_missing(true)
+            .foreign_keys(false);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(opts)
+            .await
+            .unwrap();
+
+        sqlx::raw_sql(
+            "CREATE TABLE IF NOT EXISTS metadata (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                instance_id TEXT NOT NULL,
+                saved_at TEXT NOT NULL,
+                schema_version INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS boards (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                sprint_prefix TEXT,
+                card_prefix TEXT,
+                task_sort_field TEXT NOT NULL DEFAULT 'Default',
+                task_sort_order TEXT NOT NULL DEFAULT 'Ascending',
+                sprint_duration_days INTEGER,
+                sprint_name_used_count INTEGER NOT NULL DEFAULT 0,
+                next_sprint_number INTEGER NOT NULL DEFAULT 1,
+                active_sprint_id TEXT,
+                task_list_view TEXT NOT NULL DEFAULT 'Flat',
+                completion_column_id TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS board_prefix_counters (
+                board_id TEXT NOT NULL,
+                prefix TEXT NOT NULL,
+                counter INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (board_id, prefix)
+            );
+            CREATE TABLE IF NOT EXISTS board_sprint_counters (
+                board_id TEXT NOT NULL,
+                prefix TEXT NOT NULL,
+                counter INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (board_id, prefix)
+            );
+            CREATE TABLE IF NOT EXISTS board_sprint_names (
+                board_id TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                PRIMARY KEY (board_id, position)
+            );
+            CREATE TABLE IF NOT EXISTS columns (
+                id TEXT PRIMARY KEY,
+                board_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                wip_limit INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sprints (
+                id TEXT PRIMARY KEY,
+                board_id TEXT NOT NULL,
+                sprint_number INTEGER NOT NULL,
+                name_index INTEGER,
+                prefix TEXT,
+                card_prefix TEXT,
+                status TEXT NOT NULL DEFAULT 'Planning',
+                start_date TEXT,
+                end_date TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS cards (
+                id TEXT PRIMARY KEY,
+                column_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                priority TEXT NOT NULL DEFAULT 'Medium',
+                status TEXT NOT NULL DEFAULT 'Todo',
+                position INTEGER NOT NULL,
+                due_date TEXT,
+                points INTEGER,
+                card_number INTEGER NOT NULL DEFAULT 0,
+                sprint_id TEXT,
+                assigned_prefix TEXT,
+                card_prefix TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS sprint_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_id TEXT NOT NULL,
+                sprint_id TEXT NOT NULL,
+                sprint_number INTEGER NOT NULL,
+                sprint_name TEXT,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                status TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS archived_cards (
+                card_id TEXT PRIMARY KEY,
+                archived_at TEXT NOT NULL,
+                original_column_id TEXT NOT NULL,
+                original_position INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS card_edges (
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                edge_type TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                weight REAL,
+                created_at TEXT NOT NULL,
+                archived_at TEXT,
+                PRIMARY KEY (source_id, target_id, edge_type)
+            );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        pool
+    }
+
+    #[tokio::test]
+    async fn test_schema_migration_v1_to_v2_populates_card_counter_from_prefix_counters() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("v1.db");
+        let ts = "2024-01-01T00:00:00Z";
+        let board_id = uuid::Uuid::new_v4().to_string();
+        let iid = uuid::Uuid::new_v4().to_string();
+
+        let pool = open_v1_pool(&db_path).await;
+        sqlx::query(
+            "INSERT INTO boards (id, name, card_prefix, created_at, updated_at)
+             VALUES (?, 'B', 'TASK', ?, ?)",
+        )
+        .bind(&board_id)
+        .bind(ts)
+        .bind(ts)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO board_prefix_counters (board_id, prefix, counter) VALUES (?, 'TASK', 7)",
+        )
+        .bind(&board_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+        )
+        .bind(&iid)
+        .bind(ts)
+        .execute(&pool)
+        .await
+        .unwrap();
+        drop(pool);
+
+        // Load through SqliteStore — triggers migration
+        let store = SqliteStore::new(&db_path);
+        store.load().await.unwrap();
+
+        // Verify card_counter was set from prefix_counters
+        let pool2 = store.get_pool().await.unwrap();
+        let counter: i32 =
+            sqlx::query_scalar("SELECT card_counter FROM boards WHERE id = ?")
+                .bind(&board_id)
+                .fetch_one(pool2)
+                .await
+                .unwrap();
+        assert_eq!(counter, 7, "card_counter should equal prefix_counters entry for TASK");
+    }
+
+    #[tokio::test]
+    async fn test_schema_migration_v1_to_v2_populates_card_counter_from_max_card_number() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("v1b.db");
+        let ts = "2024-01-01T00:00:00Z";
+        let board_id = uuid::Uuid::new_v4().to_string();
+        let col_id = uuid::Uuid::new_v4().to_string();
+        let iid = uuid::Uuid::new_v4().to_string();
+
+        let pool = open_v1_pool(&db_path).await;
+        // Board with no prefix_counters entry
+        sqlx::query(
+            "INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, 'B2', ?, ?)",
+        )
+        .bind(&board_id)
+        .bind(ts)
+        .bind(ts)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO columns (id, board_id, name, position, created_at, updated_at)
+             VALUES (?, ?, 'Col', 0, ?, ?)",
+        )
+        .bind(&col_id)
+        .bind(&board_id)
+        .bind(ts)
+        .bind(ts)
+        .execute(&pool)
+        .await
+        .unwrap();
+        for (i, n) in [1i32, 2, 3].iter().enumerate() {
+            sqlx::query(
+                "INSERT INTO cards (id, column_id, title, position, card_number, created_at, updated_at)
+                 VALUES (?, ?, 'C', ?, ?, ?, ?)",
+            )
+            .bind(uuid::Uuid::new_v4().to_string())
+            .bind(&col_id)
+            .bind(i as i32)
+            .bind(n)
+            .bind(ts)
+            .bind(ts)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        sqlx::query(
+            "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+        )
+        .bind(&iid)
+        .bind(ts)
+        .execute(&pool)
+        .await
+        .unwrap();
+        drop(pool);
+
+        let store = SqliteStore::new(&db_path);
+        store.load().await.unwrap();
+
+        let pool2 = store.get_pool().await.unwrap();
+        let counter: i32 =
+            sqlx::query_scalar("SELECT card_counter FROM boards WHERE id = ?")
+                .bind(&board_id)
+                .fetch_one(pool2)
+                .await
+                .unwrap();
+        assert_eq!(counter, 4, "card_counter should be max(card_number)+1 = 4");
+    }
+
+    #[tokio::test]
+    async fn test_schema_migration_v1_to_v2_drops_assigned_prefix_and_card_prefix_columns() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("v1c.db");
+        let ts = "2024-01-01T00:00:00Z";
+        let iid = uuid::Uuid::new_v4().to_string();
+
+        let pool = open_v1_pool(&db_path).await;
+        sqlx::query(
+            "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+        )
+        .bind(&iid)
+        .bind(ts)
+        .execute(&pool)
+        .await
+        .unwrap();
+        drop(pool);
+
+        let store = SqliteStore::new(&db_path);
+        store.load().await.unwrap();
+
+        // After migration, assigned_prefix and card_prefix must not exist on cards
+        let pool2 = store.get_pool().await.unwrap();
+        let assigned_err = sqlx::query("SELECT assigned_prefix FROM cards LIMIT 1")
+            .fetch_optional(pool2)
+            .await;
+        assert!(
+            assigned_err.is_err(),
+            "assigned_prefix column should no longer exist after migration"
+        );
+
+        let card_prefix_err = sqlx::query("SELECT card_prefix FROM cards LIMIT 1")
+            .fetch_optional(pool2)
+            .await;
+        assert!(
+            card_prefix_err.is_err(),
+            "card_prefix column should no longer exist after migration"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_schema_migration_v1_to_v2_drops_board_prefix_counters_table() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("v1d.db");
+        let ts = "2024-01-01T00:00:00Z";
+        let iid = uuid::Uuid::new_v4().to_string();
+
+        let pool = open_v1_pool(&db_path).await;
+        sqlx::query(
+            "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+        )
+        .bind(&iid)
+        .bind(ts)
+        .execute(&pool)
+        .await
+        .unwrap();
+        drop(pool);
+
+        let store = SqliteStore::new(&db_path);
+        store.load().await.unwrap();
+
+        let pool2 = store.get_pool().await.unwrap();
+        let table_err = sqlx::query("SELECT 1 FROM board_prefix_counters LIMIT 1")
+            .fetch_optional(pool2)
+            .await;
+        assert!(
+            table_err.is_err(),
+            "board_prefix_counters table should have been dropped by migration"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_card_counter_roundtrip_save_and_load() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("counter.db");
+        let store = SqliteStore::new(&db_path);
+        let ts = "2024-01-01T00:00:00Z";
+        let board_id = uuid::Uuid::new_v4().to_string();
+
+        let data = serde_json::json!({
+            "boards": [{
+                "id": board_id,
+                "name": "Counter Board",
+                "task_sort_field": "Default",
+                "task_sort_order": "Ascending",
+                "sprint_name_used_count": 0,
+                "next_sprint_number": 1,
+                "task_list_view": "Flat",
+                "card_counter": 42,
+                "sprint_counters": {},
+                "created_at": ts,
+                "updated_at": ts
+            }],
+            "columns": [],
+            "cards": [],
+            "archived_cards": [],
+            "sprints": []
+        });
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&data).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+        store.save(snapshot).await.unwrap();
+
+        let (loaded, _) = store.load().await.unwrap();
+        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
+        let counter = loaded_data["boards"][0]["card_counter"].as_u64().unwrap();
+        assert_eq!(counter, 42, "card_counter should round-trip through SQLite");
     }
 }

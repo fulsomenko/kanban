@@ -1,5 +1,5 @@
 -- SQLite schema for kanban persistence
--- Version: 1
+-- Version: 2
 
 -- Metadata table for tracking persistence state and conflict detection
 CREATE TABLE IF NOT EXISTS metadata (
@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS boards (
     next_sprint_number INTEGER NOT NULL DEFAULT 1,
     active_sprint_id TEXT,
     task_list_view TEXT NOT NULL DEFAULT 'Flat',
+    card_counter INTEGER NOT NULL DEFAULT 1,
     completion_column_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -36,15 +37,6 @@ CREATE TABLE IF NOT EXISTS board_sprint_names (
     position INTEGER NOT NULL,
     name TEXT NOT NULL,
     PRIMARY KEY (board_id, position),
-    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
-);
-
--- Board prefix counters
-CREATE TABLE IF NOT EXISTS board_prefix_counters (
-    board_id TEXT NOT NULL,
-    prefix TEXT NOT NULL,
-    counter INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (board_id, prefix),
     FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
 );
 
@@ -98,8 +90,6 @@ CREATE TABLE IF NOT EXISTS cards (
     points INTEGER CHECK (points >= 0 AND points <= 255),
     card_number INTEGER NOT NULL DEFAULT 0,
     sprint_id TEXT,
-    assigned_prefix TEXT,
-    card_prefix TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     completed_at TEXT,
