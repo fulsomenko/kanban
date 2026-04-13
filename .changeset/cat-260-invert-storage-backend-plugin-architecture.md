@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 - refactor(cli): extract run_with_args from run to enable injection of CLI args in tests
