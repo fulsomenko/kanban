@@ -221,6 +221,17 @@ mod tests {
     }
 
     #[test]
+    fn test_redo_stack_is_bounded() {
+        let mut history = HistoryManager::new();
+
+        for _ in 0..MAX_HISTORY_DEPTH + 50 {
+            history.push_redo(create_test_snapshot());
+        }
+
+        assert_eq!(history.redo_depth(), MAX_HISTORY_DEPTH);
+    }
+
+    #[test]
     fn test_depth() {
         let mut history = HistoryManager::new();
 
