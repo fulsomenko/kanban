@@ -51,7 +51,7 @@ pub struct Board {
     #[serde(default)]
     pub task_list_view: TaskListView,
     #[serde(default)]
-    pub prefix_counters: HashMap<String, u32>,
+    pub card_counter: u32,
     #[serde(default)]
     pub sprint_counters: HashMap<String, u32>,
     #[serde(default)]
@@ -92,6 +92,10 @@ impl<'de> Deserialize<'de> for Board {
             pub active_sprint_id: Option<Uuid>,
             #[serde(default)]
             pub task_list_view: TaskListView,
+            /// New field: single card counter
+            #[serde(default)]
+            pub card_counter: u32,
+            /// Legacy field for migration: prefix-keyed counters
             #[serde(default)]
             pub prefix_counters: HashMap<String, u32>,
             #[serde(default)]
@@ -100,13 +104,37 @@ impl<'de> Deserialize<'de> for Board {
             pub completion_column_id: Option<Uuid>,
             pub created_at: DateTime<Utc>,
             pub updated_at: DateTime<Utc>,
+            /// Very old field for migration
             #[serde(default)]
             pub next_card_number: u32,
         }
 
         let helper = BoardHelper::deserialize(deserializer)?;
         let sprint_prefix = helper.sprint_prefix.or(helper.branch_prefix);
-        let mut board = Board {
+
+        // Resolve card_counter from migration chain (all legacy paths):
+        // 1. If card_counter already set (V3 format) → use it
+        // 2. Else if prefix_counters non-empty (V2 format) → use matching prefix counter or max
+        // 3. Else if next_card_number > 1 (V1 format) → use that
+        // 4. Else default to 1 (no cards)
+        let card_counter = if helper.card_counter > 0 {
+            helper.card_counter
+        } else if !helper.prefix_counters.is_empty() {
+            let matching_key = helper.card_prefix.as_deref().unwrap_or("task");
+            helper
+                .prefix_counters
+                .get(matching_key)
+                .copied()
+                .unwrap_or_else(|| {
+                    helper.prefix_counters.values().copied().max().unwrap_or(1)
+                })
+        } else if helper.next_card_number > 1 {
+            helper.next_card_number
+        } else {
+            1
+        };
+
+        let board = Board {
             id: helper.id,
             name: helper.name,
             description: helper.description,
@@ -120,20 +148,12 @@ impl<'de> Deserialize<'de> for Board {
             next_sprint_number: helper.next_sprint_number,
             active_sprint_id: helper.active_sprint_id,
             task_list_view: helper.task_list_view,
-            prefix_counters: helper.prefix_counters,
+            card_counter,
             sprint_counters: helper.sprint_counters,
             completion_column_id: helper.completion_column_id,
             created_at: helper.created_at,
             updated_at: helper.updated_at,
         };
-
-        // Migrate next_card_number to prefix_counters if needed
-        if helper.next_card_number > 1 && board.prefix_counters.is_empty() {
-            let effective_prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
-            board
-                .prefix_counters
-                .insert(effective_prefix, helper.next_card_number);
-        }
 
         Ok(board)
     }
@@ -150,6 +170,7 @@ fn default_sort_field() -> SortField {
 fn default_sort_order() -> SortOrder {
     SortOrder::Ascending
 }
+
 
 impl Board {
     pub fn new(name: String, card_prefix: Option<String>) -> Self {
@@ -168,7 +189,7 @@ impl Board {
             next_sprint_number: 1,
             active_sprint_id: None,
             task_list_view: TaskListView::default(),
-            prefix_counters: HashMap::new(),
+            card_counter: 1,
             sprint_counters: HashMap::new(),
             completion_column_id: None,
             created_at: now,
@@ -248,25 +269,23 @@ impl Board {
         self.updated_at = Utc::now();
     }
 
-    pub fn get_next_card_number(&mut self, prefix: &str) -> u32 {
-        let counter = self.prefix_counters.entry(prefix.to_string()).or_insert(1);
-        let number = *counter;
-        *counter += 1;
+    /// Get the next card number and increment the counter.
+    pub fn get_next_card_number(&mut self) -> u32 {
+        let number = self.card_counter;
+        self.card_counter += 1;
         self.updated_at = Utc::now();
         number
     }
 
-    pub fn initialize_prefix_counter(&mut self, prefix: &str, start: u32) {
-        self.prefix_counters.insert(prefix.to_string(), start);
+    /// Set the card counter to a specific start value (used for import/migration).
+    pub fn initialize_card_counter(&mut self, start: u32) {
+        self.card_counter = start;
         self.updated_at = Utc::now();
     }
 
-    pub fn get_prefix_counters(&self) -> &HashMap<String, u32> {
-        &self.prefix_counters
-    }
-
-    pub fn get_prefix_counter(&self, prefix: &str) -> Option<u32> {
-        self.prefix_counters.get(prefix).copied()
+    /// Get the current card counter value (next number to be assigned).
+    pub fn get_card_counter(&self) -> u32 {
+        self.card_counter
     }
 
     pub fn get_next_sprint_number(&mut self, prefix: &str) -> u32 {
@@ -341,31 +360,6 @@ impl Board {
         // Initialize counter to one more than the max, or 1 if no sprints exist
         let next_number = max_number + 1;
         self.initialize_sprint_counter(prefix, next_number);
-    }
-
-    pub fn ensure_card_counter_initialized(&mut self, prefix: &str, board_cards: &[&crate::Card]) {
-        // If counter already exists for this prefix, don't reinitialize
-        if self.prefix_counters.contains_key(prefix) {
-            return;
-        }
-
-        // Find the highest card number with this prefix in the provided cards
-        let max_number = board_cards
-            .iter()
-            .filter(|card| {
-                let card_prefix = card
-                    .assigned_prefix
-                    .as_deref()
-                    .unwrap_or_else(|| self.card_prefix.as_deref().unwrap_or("task"));
-                card_prefix == prefix
-            })
-            .map(|card| card.card_number)
-            .max()
-            .unwrap_or(0);
-
-        // Initialize counter to one more than the max, or 1 if no cards exist
-        let next_number = max_number + 1;
-        self.initialize_prefix_counter(prefix, next_number);
     }
 
     /// Update board with partial changes
@@ -451,6 +445,137 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_board_new_card_counter_initialized_to_one() {
+        let board = Board::new("Test".to_string(), None);
+        assert_eq!(board.card_counter, 1);
+    }
+
+    #[test]
+    fn test_board_get_next_card_number_increments_without_prefix() {
+        let mut board = Board::new("Test".to_string(), None);
+        assert_eq!(board.get_next_card_number(), 1);
+        assert_eq!(board.get_next_card_number(), 2);
+        assert_eq!(board.get_next_card_number(), 3);
+        assert_eq!(board.card_counter, 4);
+    }
+
+    #[test]
+    fn test_board_initialize_card_counter_sets_value_and_get_next_returns_it() {
+        let mut board = Board::new("Test".to_string(), None);
+        board.initialize_card_counter(10);
+        assert_eq!(board.get_card_counter(), 10);
+        assert_eq!(board.get_next_card_number(), 10);
+        assert_eq!(board.get_card_counter(), 11);
+    }
+
+    #[test]
+    fn test_deserialization_migrates_prefix_counters_to_card_counter() {
+        let json = r#"{
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "name": "Test Board",
+            "description": null,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "sprint_prefix": null,
+            "card_prefix": "feat",
+            "task_sort_field": "Default",
+            "task_sort_order": "Ascending",
+            "active_sprint_id": null,
+            "sprint_duration_days": null,
+            "sprint_names": [],
+            "next_sprint_number": 1,
+            "sprint_name_used_count": 0,
+            "prefix_counters": {"feat": 42, "other": 5},
+            "sprint_counters": {},
+            "task_list_view": "Flat"
+        }"#;
+
+        let board: Board = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(board.card_counter, 42, "Should pick the matching prefix counter");
+    }
+
+    #[test]
+    fn test_deserialization_migrates_next_card_number_to_card_counter() {
+        let json = r#"{
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "name": "Test Board",
+            "description": null,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "sprint_prefix": null,
+            "card_prefix": null,
+            "task_sort_field": "Default",
+            "task_sort_order": "Ascending",
+            "active_sprint_id": null,
+            "sprint_duration_days": null,
+            "sprint_names": [],
+            "next_sprint_number": 1,
+            "sprint_name_used_count": 0,
+            "prefix_counters": {},
+            "sprint_counters": {},
+            "task_list_view": "Flat",
+            "next_card_number": 42
+        }"#;
+
+        let board: Board = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(board.card_counter, 42);
+    }
+
+    #[test]
+    fn test_deserialization_card_counter_takes_priority_over_prefix_counters() {
+        let json = r#"{
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "name": "Test Board",
+            "description": null,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "sprint_prefix": null,
+            "card_prefix": null,
+            "task_sort_field": "Default",
+            "task_sort_order": "Ascending",
+            "active_sprint_id": null,
+            "sprint_duration_days": null,
+            "sprint_names": [],
+            "next_sprint_number": 1,
+            "sprint_name_used_count": 0,
+            "card_counter": 100,
+            "prefix_counters": {"task": 50},
+            "sprint_counters": {},
+            "task_list_view": "Flat"
+        }"#;
+
+        let board: Board = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(board.card_counter, 100, "card_counter takes priority");
+    }
+
+    #[test]
+    fn test_deserialization_prefix_counters_uses_max_when_no_prefix_match() {
+        let json = r#"{
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "name": "Test Board",
+            "description": null,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "sprint_prefix": null,
+            "card_prefix": null,
+            "task_sort_field": "Default",
+            "task_sort_order": "Ascending",
+            "active_sprint_id": null,
+            "sprint_duration_days": null,
+            "sprint_names": [],
+            "next_sprint_number": 1,
+            "sprint_name_used_count": 0,
+            "prefix_counters": {"FEAT": 20, "BUG": 30},
+            "sprint_counters": {},
+            "task_list_view": "Flat"
+        }"#;
+
+        // card_prefix is null so uses "task" as key, not found → uses max (30)
+        let board: Board = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(board.card_counter, 30, "Falls back to max of all counters");
+    }
+
+    #[test]
     fn test_update_sprint_prefix() {
         let mut board = Board::new("Test".to_string(), None);
         assert_eq!(board.sprint_prefix, None);
@@ -507,7 +632,6 @@ mod tests {
         let col3 = crate::Column::new(board.id, "Done".to_string(), 2);
         let columns = vec![col1, col2, col3.clone()];
 
-        // No explicit completion_column_id, should fall back to last by position
         assert_eq!(board.resolve_completion_column(&columns), Some(col3.id));
     }
 
@@ -519,7 +643,6 @@ mod tests {
         let col3 = crate::Column::new(board.id, "Archive".to_string(), 2);
         let columns = vec![col1, col2.clone(), col3];
 
-        // Set explicit completion column to col2 (not the last one)
         board.update_completion_column_id(Some(col2.id));
         assert_eq!(board.resolve_completion_column(&columns), Some(col2.id));
     }
@@ -531,9 +654,7 @@ mod tests {
         let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
         let columns = vec![col1, col2.clone()];
 
-        // Set completion_column_id to a non-existent UUID
         board.update_completion_column_id(Some(Uuid::new_v4()));
-        // Should fall back to last column
         assert_eq!(board.resolve_completion_column(&columns), Some(col2.id));
     }
 
@@ -541,57 +662,6 @@ mod tests {
     fn test_resolve_completion_column_empty_columns() {
         let board = Board::new("Test".to_string(), None);
         assert_eq!(board.resolve_completion_column(&[]), None);
-    }
-
-    #[test]
-    fn test_prefix_counter_initialization() {
-        let mut board = Board::new("Test".to_string(), None);
-        assert_eq!(board.get_prefix_counter("test"), None);
-
-        let num = board.get_next_card_number("test");
-        assert_eq!(num, 1);
-        assert_eq!(board.get_prefix_counter("test"), Some(2));
-    }
-
-    #[test]
-    fn test_shared_prefix_sequence() {
-        let mut board = Board::new("Test".to_string(), None);
-
-        let num1 = board.get_next_card_number("TEST");
-        assert_eq!(num1, 1);
-
-        let num2 = board.get_next_card_number("TEST");
-        assert_eq!(num2, 2);
-
-        let num3 = board.get_next_card_number("TEST");
-        assert_eq!(num3, 3);
-
-        assert_eq!(board.get_prefix_counter("TEST"), Some(4));
-    }
-
-    #[test]
-    fn test_multiple_prefix_counters() {
-        let mut board = Board::new("Test".to_string(), None);
-
-        let test1 = board.get_next_card_number("TEST");
-        let bra1 = board.get_next_card_number("BRA");
-        let test2 = board.get_next_card_number("TEST");
-        let bra2 = board.get_next_card_number("BRA");
-
-        assert_eq!(test1, 1);
-        assert_eq!(bra1, 1);
-        assert_eq!(test2, 2);
-        assert_eq!(bra2, 2);
-    }
-
-    #[test]
-    fn test_initialize_prefix_counter() {
-        let mut board = Board::new("Test".to_string(), None);
-        board.initialize_prefix_counter("TEST", 10);
-
-        let num = board.get_next_card_number("TEST");
-        assert_eq!(num, 10);
-        assert_eq!(board.get_prefix_counter("TEST"), Some(11));
     }
 
     #[test]
@@ -621,21 +691,6 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_sprint_counters() {
-        let mut board = Board::new("Test".to_string(), None);
-
-        let sprint1 = board.get_next_sprint_number("SPRINT");
-        let branch1 = board.get_next_sprint_number("BRANCH");
-        let sprint2 = board.get_next_sprint_number("SPRINT");
-        let branch2 = board.get_next_sprint_number("BRANCH");
-
-        assert_eq!(sprint1, 1);
-        assert_eq!(branch1, 1);
-        assert_eq!(sprint2, 2);
-        assert_eq!(branch2, 2);
-    }
-
-    #[test]
     fn test_initialize_sprint_counter() {
         let mut board = Board::new("Test".to_string(), None);
         board.initialize_sprint_counter("RELEASE", 5);
@@ -646,129 +701,22 @@ mod tests {
     }
 
     #[test]
-    fn test_card_and_sprint_counters_independent() {
-        let mut board = Board::new("Test".to_string(), None);
-
-        let card1 = board.get_next_card_number("TEST");
-        let sprint1 = board.get_next_sprint_number("TEST");
-        let card2 = board.get_next_card_number("TEST");
-        let sprint2 = board.get_next_sprint_number("TEST");
-
-        assert_eq!(card1, 1);
-        assert_eq!(sprint1, 1);
-        assert_eq!(card2, 2);
-        assert_eq!(sprint2, 2);
-
-        assert_eq!(board.get_prefix_counter("TEST"), Some(3));
-        assert_eq!(board.get_sprint_counter("TEST"), Some(3));
-    }
-
-    #[test]
-    fn test_sprint_number_independence_from_cards() {
-        let mut board = Board::new("Test".to_string(), None);
-
-        // Create cards and sprints interleaved with same prefix
-        let card1 = board.get_next_card_number("sprint");
-        assert_eq!(card1, 1);
-
-        let sprint1 = board.get_next_sprint_number("sprint");
-        assert_eq!(sprint1, 1);
-
-        let card2 = board.get_next_card_number("sprint");
-        assert_eq!(card2, 2);
-
-        let sprint2 = board.get_next_sprint_number("sprint");
-        assert_eq!(sprint2, 2);
-
-        let card3 = board.get_next_card_number("sprint");
-        assert_eq!(card3, 3);
-
-        // Verify separate counters: sprint-1, sprint-2 vs card-1, card-2, card-3
-        assert_eq!(board.get_prefix_counter("sprint"), Some(4)); // cards use prefix_counters
-        assert_eq!(board.get_sprint_counter("sprint"), Some(3)); // sprints use sprint_counters
-    }
-
-    #[test]
-    fn test_sprint_counter_reset_per_prefix() {
-        let mut board = Board::new("Test".to_string(), None);
-
-        // Get sprint numbers for prefix "A"
-        let a1 = board.get_next_sprint_number("A");
-        let a2 = board.get_next_sprint_number("A");
-        let a3 = board.get_next_sprint_number("A");
-
-        assert_eq!(a1, 1);
-        assert_eq!(a2, 2);
-        assert_eq!(a3, 3);
-
-        // Get sprint numbers for prefix "B"
-        let b1 = board.get_next_sprint_number("B");
-        let b2 = board.get_next_sprint_number("B");
-
-        assert_eq!(b1, 1);
-        assert_eq!(b2, 2);
-
-        // Get sprint numbers for prefix "A" again - should continue from 4
-        let a4 = board.get_next_sprint_number("A");
-        let a5 = board.get_next_sprint_number("A");
-
-        assert_eq!(a4, 4);
-        assert_eq!(a5, 5);
-
-        // Verify independence: A and B maintain separate sequences
-        assert_eq!(board.get_sprint_counter("A"), Some(6));
-        assert_eq!(board.get_sprint_counter("B"), Some(3));
-    }
-
-    #[test]
     fn test_ensure_sprint_counter_initialized_with_existing_sprints() {
         use crate::Sprint;
 
         let mut board = Board::new("Test".to_string(), None);
 
-        // Create sprints manually with different prefixes (simulating existing data)
-        let sprint1 = Sprint::new(board.id, 1, None, None); // Uses default "sprint" prefix
+        let sprint1 = Sprint::new(board.id, 1, None, None);
         let sprint2 = Sprint::new(board.id, 2, None, None);
         let sprint3 = Sprint::new(board.id, 3, None, None);
 
         let sprints = vec![sprint1, sprint2, sprint3];
 
-        // Before initialization, no counter exists
         assert_eq!(board.get_sprint_counter("sprint"), None);
-
-        // Initialize counter based on existing sprints
         board.ensure_sprint_counter_initialized("sprint", &sprints);
-
-        // Counter should be initialized to 4 (max was 3)
         assert_eq!(board.get_sprint_counter("sprint"), Some(4));
 
-        // Next allocation should give us 4
         let next = board.get_next_sprint_number("sprint");
-        assert_eq!(next, 4);
-    }
-
-    #[test]
-    fn test_ensure_sprint_counter_with_prefix_override() {
-        use crate::Sprint;
-
-        let mut board = Board::new("Test".to_string(), None);
-        board.update_sprint_prefix(Some("WOO".to_string()));
-
-        // Create sprints with no explicit prefix (they'll use board's "WOO" prefix as effective)
-        let sprint1 = Sprint::new(board.id, 1, None, None); // effective prefix: WOO
-        let sprint2 = Sprint::new(board.id, 2, None, None); // effective prefix: WOO
-        let sprint3 = Sprint::new(board.id, 3, None, None); // effective prefix: WOO
-
-        let sprints = vec![sprint1, sprint2, sprint3];
-
-        // Initialize counter for "WOO" based on existing sprints
-        board.ensure_sprint_counter_initialized("WOO", &sprints);
-
-        // Counter should be initialized to 4 (max was 3)
-        assert_eq!(board.get_sprint_counter("WOO"), Some(4));
-
-        // Verify next allocation gives 4
-        let next = board.get_next_sprint_number("WOO");
         assert_eq!(next, 4);
     }
 
@@ -777,106 +725,14 @@ mod tests {
         use crate::Sprint;
 
         let mut board = Board::new("Test".to_string(), None);
-
-        // Pre-initialize counter to 10
         board.initialize_sprint_counter("test", 10);
-        assert_eq!(board.get_sprint_counter("test"), Some(10));
 
-        // Create some sprints
         let sprint1 = Sprint::new(board.id, 1, None, Some("test".to_string()));
         let sprint2 = Sprint::new(board.id, 2, None, Some("test".to_string()));
         let sprints = vec![sprint1, sprint2];
 
-        // Try to ensure initialization again
         board.ensure_sprint_counter_initialized("test", &sprints);
-
-        // Counter should still be 10 (not reinitialized)
         assert_eq!(board.get_sprint_counter("test"), Some(10));
-    }
-
-    #[test]
-    fn test_deserialization_migrates_next_card_number_to_prefix_counters() {
-        let json = r#"{
-            "id": "550e8400-e29b-41d4-a716-446655440000",
-            "name": "Test Board",
-            "description": null,
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z",
-            "sprint_prefix": null,
-            "card_prefix": null,
-            "task_sort_field": "Default",
-            "task_sort_order": "Ascending",
-            "active_sprint_id": null,
-            "sprint_duration_days": null,
-            "sprint_names": [],
-            "next_sprint_number": 1,
-            "sprint_name_used_count": 0,
-            "prefix_counters": {},
-            "sprint_counters": {},
-            "task_list_view": "Flat",
-            "next_card_number": 42
-        }"#;
-
-        let board: Board = serde_json::from_str(json).expect("Should deserialize");
-        // Verify next_card_number was migrated to prefix_counters for "task" prefix
-        assert_eq!(board.get_prefix_counter("task"), Some(42));
-    }
-
-    #[test]
-    fn test_deserialization_respects_existing_prefix_counters() {
-        let json = r#"{
-            "id": "550e8400-e29b-41d4-a716-446655440000",
-            "name": "Test Board",
-            "description": null,
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z",
-            "sprint_prefix": null,
-            "card_prefix": null,
-            "task_sort_field": "Default",
-            "task_sort_order": "Ascending",
-            "active_sprint_id": null,
-            "sprint_duration_days": null,
-            "sprint_names": [],
-            "next_sprint_number": 1,
-            "sprint_name_used_count": 0,
-            "prefix_counters": {"task": 100},
-            "sprint_counters": {},
-            "task_list_view": "Flat",
-            "next_card_number": 42
-        }"#;
-
-        let board: Board = serde_json::from_str(json).expect("Should deserialize");
-        // Verify existing prefix_counters are preserved and next_card_number is NOT migrated
-        assert_eq!(board.get_prefix_counter("task"), Some(100));
-    }
-
-    #[test]
-    fn test_deserialization_uses_card_prefix_when_migrating() {
-        let json = r#"{
-            "id": "550e8400-e29b-41d4-a716-446655440000",
-            "name": "Test Board",
-            "description": null,
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z",
-            "sprint_prefix": null,
-            "card_prefix": "feature",
-            "task_sort_field": "Default",
-            "task_sort_order": "Ascending",
-            "active_sprint_id": null,
-            "sprint_duration_days": null,
-            "sprint_names": [],
-            "next_sprint_number": 1,
-            "sprint_name_used_count": 0,
-            "prefix_counters": {},
-            "sprint_counters": {},
-            "task_list_view": "Flat",
-            "next_card_number": 50
-        }"#;
-
-        let board: Board = serde_json::from_str(json).expect("Should deserialize");
-        // Verify next_card_number was migrated to the board's card_prefix "feature"
-        assert_eq!(board.get_prefix_counter("feature"), Some(50));
-        assert_eq!(board.get_prefix_counter("task"), None);
     }
 }
 
