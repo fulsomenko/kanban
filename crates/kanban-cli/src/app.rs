@@ -55,6 +55,38 @@ impl CliApp {
 
     /// Registers an additional backend factory. Order matters for content
     /// sniffing — factories registered earlier win when multiple match.
+    ///
+    /// # Example — third-party binary with a custom backend
+    ///
+    /// A crate that owns its own `main` can reuse every CLI command while
+    /// injecting a proprietary storage backend:
+    ///
+    /// ```no_run
+    /// use kanban_cli::CliApp;
+    /// use kanban_persistence::StoreFactory;
+    ///
+    /// // A backend factory provided by a third-party crate.
+    /// struct MyBackendFactory;
+    /// impl StoreFactory for MyBackendFactory {
+    ///     fn name(&self) -> &str { "my-backend" }
+    ///     fn supported_patterns(&self) -> &[&str] { &["*.mydb"] }
+    ///     fn matches(&self, locator: &str) -> bool { locator.ends_with(".mydb") }
+    ///     fn create(
+    ///         &self,
+    ///         locator: &str,
+    ///     ) -> std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> {
+    ///         unimplemented!()
+    ///     }
+    /// }
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> anyhow::Result<()> {
+    ///     CliApp::with_defaults()
+    ///         .register_backend(Box::new(MyBackendFactory))
+    ///         .run()
+    ///         .await
+    /// }
+    /// ```
     pub fn register_backend(mut self, factory: Box<dyn StoreFactory>) -> Self {
         self.registry.register(factory);
         self
