@@ -34,6 +34,7 @@ pub struct CreateCard {
 
 impl Command for CreateCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        context.check_wip_limit(self.column_id, 1, &[])?;
         let board = context.board_mut(self.board_id)?;
         let prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
         let card = crate::Card::new(
@@ -91,9 +92,7 @@ pub struct MoveCard {
 
 impl Command for MoveCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if !context.columns.iter().any(|c| c.id == self.new_column_id) {
-            return Err(KanbanError::not_found("column", self.new_column_id));
-        }
+        context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
         let card = context.card_mut(self.card_id)?;
         card.move_to_column(self.new_column_id, self.new_position);
         Ok(())
@@ -116,6 +115,7 @@ pub struct RestoreCard {
 
 impl Command for RestoreCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        context.check_wip_limit(self.column_id, 1, &[])?;
         let pos = context
             .archived_cards
             .iter()
@@ -188,10 +188,8 @@ impl Command for MoveCards {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         use std::collections::HashSet;
 
-        if !context.columns.iter().any(|c| c.id == self.column_id) {
-            return Err(KanbanError::not_found("column", self.column_id));
-        }
         let valid_ids = context.filter_valid_card_ids(&self.ids, "MoveCards");
+        context.check_wip_limit(self.column_id, valid_ids.len(), &valid_ids)?;
         let id_set: HashSet<Uuid> = valid_ids.iter().copied().collect();
         let base = context
             .cards
@@ -461,6 +459,236 @@ mod tests {
         assert!(result.is_ok());
         // Valid card IS moved; invalid ID is skipped
         assert_eq!(context.cards[0].column_id, target_id);
+    }
+
+    #[test]
+    fn test_create_card_exceeding_wip_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
+        column.wip_limit = Some(1);
+        let column_id = column.id;
+        let existing = crate::Card::new(&mut board, column_id, "Existing".to_string(), 0, "TST");
+        tc.boards.push(board);
+        tc.columns.push(column);
+        tc.cards.push(existing);
+        let mut context = tc.as_command_context();
+
+        let cmd = CreateCard {
+            board_id: context.boards[0].id,
+            column_id,
+            title: "New".to_string(),
+            position: 1,
+            options: CreateCardOptions::default(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_create_card_at_wip_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
+        column.wip_limit = Some(2);
+        let column_id = column.id;
+        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0, "TST");
+        let card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 1, "TST");
+        tc.boards.push(board);
+        tc.columns.push(column);
+        tc.cards.push(card1);
+        tc.cards.push(card2);
+        let mut context = tc.as_command_context();
+
+        let cmd = CreateCard {
+            board_id: context.boards[0].id,
+            column_id,
+            title: "New".to_string(),
+            position: 2,
+            options: CreateCardOptions::default(),
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_create_card_below_wip_limit_succeeds() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
+        column.wip_limit = Some(2);
+        let column_id = column.id;
+        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0, "TST");
+        let board_id = board.id;
+        tc.boards.push(board);
+        tc.columns.push(column);
+        tc.cards.push(card1);
+        let mut context = tc.as_command_context();
+
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "New".to_string(),
+            position: 1,
+            options: CreateCardOptions::default(),
+        };
+        assert!(cmd.execute(&mut context).is_ok());
+    }
+
+    #[test]
+    fn test_move_card_exceeding_wip_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let src_col = crate::Column::new(board.id, "Source".to_string(), 0);
+        let mut dst_col = crate::Column::new(board.id, "Dest".to_string(), 1);
+        dst_col.wip_limit = Some(1);
+        let src_id = src_col.id;
+        let dst_id = dst_col.id;
+        let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0, "TST");
+        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0, "TST");
+        let mover_id = mover.id;
+        tc.boards.push(board);
+        tc.columns.push(src_col);
+        tc.columns.push(dst_col);
+        tc.cards.push(existing);
+        tc.cards.push(mover);
+        let mut context = tc.as_command_context();
+
+        let cmd = MoveCard {
+            card_id: mover_id,
+            new_column_id: dst_id,
+            new_position: 1,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_move_cards_exceeding_wip_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let src_col = crate::Column::new(board.id, "Source".to_string(), 0);
+        let mut dst_col = crate::Column::new(board.id, "Dest".to_string(), 1);
+        dst_col.wip_limit = Some(1);
+        let src_id = src_col.id;
+        let dst_id = dst_col.id;
+        let card1 = crate::Card::new(&mut board, src_id, "C1".to_string(), 0, "TST");
+        let card2 = crate::Card::new(&mut board, src_id, "C2".to_string(), 1, "TST");
+        let c1_id = card1.id;
+        let c2_id = card2.id;
+        tc.boards.push(board);
+        tc.columns.push(src_col);
+        tc.columns.push(dst_col);
+        tc.cards.push(card1);
+        tc.cards.push(card2);
+        let mut context = tc.as_command_context();
+
+        let cmd = MoveCards {
+            ids: vec![c1_id, c2_id],
+            column_id: dst_id,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_move_cards_exactly_at_wip_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let src_col = crate::Column::new(board.id, "Source".to_string(), 0);
+        let mut dst_col = crate::Column::new(board.id, "Dest".to_string(), 1);
+        dst_col.wip_limit = Some(1);
+        let src_id = src_col.id;
+        let dst_id = dst_col.id;
+        let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0, "TST");
+        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0, "TST");
+        let mover_id = mover.id;
+        tc.boards.push(board);
+        tc.columns.push(src_col);
+        tc.columns.push(dst_col);
+        tc.cards.push(existing);
+        tc.cards.push(mover);
+        let mut context = tc.as_command_context();
+
+        let cmd = MoveCards {
+            ids: vec![mover_id],
+            column_id: dst_id,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_restore_card_to_deleted_column_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let col_id = col.id;
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0, "TST");
+        let card_id = card.id;
+        let archived = crate::ArchivedCard::new(card, col_id, 0);
+        tc.boards.push(board);
+        // Column intentionally NOT added — it has been deleted
+        tc.archived_cards.push(archived);
+        let mut context = tc.as_command_context();
+
+        let cmd = RestoreCard {
+            card_id,
+            column_id: col_id,
+            position: 0,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_restore_card_to_valid_column_succeeds() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let col_id = col.id;
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0, "TST");
+        let card_id = card.id;
+        let archived = crate::ArchivedCard::new(card, col_id, 0);
+        tc.boards.push(board);
+        tc.columns.push(col);
+        tc.archived_cards.push(archived);
+        let mut context = tc.as_command_context();
+
+        let cmd = RestoreCard {
+            card_id,
+            column_id: col_id,
+            position: 0,
+        };
+        assert!(cmd.execute(&mut context).is_ok());
+        assert_eq!(context.cards.len(), 1);
+        assert_eq!(context.archived_cards.len(), 0);
+    }
+
+    #[test]
+    fn test_restore_card_exceeding_wip_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        col.wip_limit = Some(1);
+        let col_id = col.id;
+        let existing = crate::Card::new(&mut board, col_id, "Existing".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 1, "TST");
+        let card_id = card.id;
+        let archived = crate::ArchivedCard::new(card, col_id, 0);
+        tc.boards.push(board);
+        tc.columns.push(col);
+        tc.cards.push(existing);
+        tc.archived_cards.push(archived);
+        let mut context = tc.as_command_context();
+
+        let cmd = RestoreCard {
+            card_id,
+            column_id: col_id,
+            position: 1,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
     }
 
     #[test]

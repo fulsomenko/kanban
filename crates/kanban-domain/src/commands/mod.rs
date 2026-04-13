@@ -73,6 +73,121 @@ impl<'a> CommandContext<'a> {
         }
         valid
     }
+
+    /// Returns `WipLimitExceeded` if adding `adding` cards to `column_id` would exceed its WIP
+    /// limit. Cards whose IDs appear in `exclude` are not counted toward the current occupancy.
+    /// Returns `not_found` if the column does not exist.
+    pub fn check_wip_limit(
+        &self,
+        column_id: Uuid,
+        adding: usize,
+        exclude: &[Uuid],
+    ) -> KanbanResult<()> {
+        let column = self
+            .columns
+            .iter()
+            .find(|c| c.id == column_id)
+            .ok_or_else(|| KanbanError::not_found("column", column_id))?;
+        if let Some(limit) = column.wip_limit {
+            let current = self
+                .cards
+                .iter()
+                .filter(|c| c.column_id == column_id && !exclude.contains(&c.id))
+                .count();
+            if current + adding > limit as usize {
+                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
+                    column_id,
+                    limit as u32,
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_helpers::TestContext;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_check_wip_limit_column_not_found_returns_error() {
+        let mut tc = TestContext::new();
+        let ctx = tc.as_command_context();
+        let result = ctx.check_wip_limit(Uuid::new_v4(), 1, &[]);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_check_wip_limit_no_limit_always_ok() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), None);
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let col_id = col.id;
+        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0, "task");
+        tc.columns.push(col);
+        tc.cards.push(card);
+        let ctx = tc.as_command_context();
+        assert!(ctx.check_wip_limit(col_id, 1, &[]).is_ok());
+    }
+
+    #[test]
+    fn test_check_wip_limit_below_limit_ok() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), None);
+        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        col.wip_limit = Some(2);
+        let col_id = col.id;
+        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0, "task");
+        tc.columns.push(col);
+        tc.cards.push(card);
+        let ctx = tc.as_command_context();
+        assert!(ctx.check_wip_limit(col_id, 1, &[]).is_ok());
+    }
+
+    #[test]
+    fn test_check_wip_limit_at_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), None);
+        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        col.wip_limit = Some(1);
+        let col_id = col.id;
+        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0, "task");
+        tc.columns.push(col);
+        tc.cards.push(card);
+        let ctx = tc.as_command_context();
+        let result = ctx.check_wip_limit(col_id, 1, &[]);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_check_wip_limit_exclude_reduces_count() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), None);
+        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        col.wip_limit = Some(1);
+        let col_id = col.id;
+        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0, "task");
+        let card_id = card.id;
+        tc.columns.push(col);
+        tc.cards.push(card);
+        let ctx = tc.as_command_context();
+        assert!(ctx.check_wip_limit(col_id, 1, &[card_id]).is_ok());
+    }
+
+    #[test]
+    fn test_check_wip_limit_batch_exceeds_limit_returns_error() {
+        let mut tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), None);
+        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        col.wip_limit = Some(1);
+        let col_id = col.id;
+        tc.boards.push(board);
+        tc.columns.push(col);
+        let ctx = tc.as_command_context();
+        let result = ctx.check_wip_limit(col_id, 2, &[]);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
 }
 
 #[cfg(test)]

@@ -66,6 +66,9 @@ impl HistoryManager {
     /// Push current state to redo stack (before applying undo).
     pub fn push_redo(&mut self, snapshot: Snapshot) {
         self.redo_stack.push_back(snapshot);
+        if self.redo_stack.len() > MAX_HISTORY_DEPTH {
+            self.redo_stack.pop_front();
+        }
     }
 
     /// Push current state to undo stack (before applying redo).
@@ -218,6 +221,17 @@ mod tests {
         }
 
         assert_eq!(history.undo_depth(), MAX_HISTORY_DEPTH);
+    }
+
+    #[test]
+    fn test_redo_stack_is_bounded() {
+        let mut history = HistoryManager::new();
+
+        for _ in 0..MAX_HISTORY_DEPTH + 50 {
+            history.push_redo(create_test_snapshot());
+        }
+
+        assert_eq!(history.redo_depth(), MAX_HISTORY_DEPTH);
     }
 
     #[test]
