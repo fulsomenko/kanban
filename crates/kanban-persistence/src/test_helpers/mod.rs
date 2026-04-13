@@ -9,6 +9,44 @@ use std::sync::Arc;
 
 pub type StoreFactory = Box<dyn Fn(&Path) -> Arc<dyn PersistenceStore + Send + Sync> + Send + Sync>;
 
+/// Expands to 8 `#[tokio::test]` functions that verify the Tier 1
+/// `PersistenceStore` contract for any backend:
+///
+/// 1. Round-trip an empty snapshot
+/// 2. Round-trip a fully-populated snapshot
+/// 3. `exists` returns `true` after the first save
+/// 4. `exists` returns `false` before the first save
+/// 5. Metadata version increments after each save
+/// 6. Saving with stale metadata returns a conflict error
+/// 7. Instance ID is idempotent within a single handle
+/// 8. `path()` matches the locator passed at construction
+///
+/// # Parameters
+///
+/// `$factory_fn` — an expression that produces a `PersistenceStore` handle
+/// bound to a fresh, isolated temporary file. It is evaluated once per test
+/// case, so each test gets its own store.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kanban_persistence::store_contract_tests;
+/// use kanban_persistence_json::JsonStoreFactory;
+/// use kanban_persistence::StoreFactory as _;
+///
+/// mod json_contract {
+///     use super::*;
+///     use tempfile::TempDir;
+///
+///     fn make_store() -> std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> {
+///         let dir = TempDir::new().unwrap();
+///         let path = dir.path().join("test.json");
+///         JsonStoreFactory.create(&path)
+///     }
+///
+///     store_contract_tests!(make_store);
+/// }
+/// ```
 #[macro_export]
 macro_rules! store_contract_tests {
     ($factory_fn:expr) => {
