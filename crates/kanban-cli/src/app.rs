@@ -37,14 +37,7 @@ impl CliApp {
     /// active the registry is empty (same as [`Default`]).
     pub fn with_defaults() -> Self {
         #[cfg(any(feature = "json", feature = "sqlite"))]
-        let registry = {
-            let mut r = kanban_persistence::StoreRegistry::new();
-            #[cfg(feature = "sqlite")]
-            r.register(Box::new(kanban_service::SqliteStoreFactory));
-            #[cfg(feature = "json")]
-            r.register(Box::new(kanban_service::JsonStoreFactory));
-            r
-        };
+        let registry = kanban_service::default_registry();
         #[cfg(not(any(feature = "json", feature = "sqlite")))]
         let registry = kanban_persistence::StoreRegistry::new();
         Self {
