@@ -79,10 +79,11 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
                         .and_then(|v| v.as_str())
                         .unwrap_or("task")
                         .to_string();
-                    board_cards
-                        .entry(board_id.clone())
-                        .or_default()
-                        .push((card_id, card_number, prefix));
+                    board_cards.entry(board_id.clone()).or_default().push((
+                        card_id,
+                        card_number,
+                        prefix,
+                    ));
                 }
             }
         }
@@ -149,9 +150,15 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
     }
 
     // Apply renumbering to archived cards
-    if let Some(archived) = data.get_mut("archived_cards").and_then(|v| v.as_array_mut()) {
+    if let Some(archived) = data
+        .get_mut("archived_cards")
+        .and_then(|v| v.as_array_mut())
+    {
         for archived_card in archived.iter_mut() {
-            if let Some(card) = archived_card.get_mut("card").and_then(|v| v.as_object_mut()) {
+            if let Some(card) = archived_card
+                .get_mut("card")
+                .and_then(|v| v.as_object_mut())
+            {
                 if let Some(card_id) = card.get("id").and_then(|v| v.as_str()).map(str::to_string) {
                     if let Some(&new_number) = renumber_map.get(&card_id) {
                         card.insert("card_number".to_string(), Value::Number(new_number.into()));
@@ -182,9 +189,7 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
                     .and_then(|v| v.as_object())
                     .and_then(|m| m.get(canonical).and_then(|v| v.as_u64()));
 
-                let from_max = board_max_number
-                    .get(&board_id)
-                    .map(|&max| (max + 1) as u64);
+                let from_max = board_max_number.get(&board_id).map(|&max| (max + 1) as u64);
 
                 let card_counter = match (from_prefix_counters, from_max) {
                     (Some(a), Some(b)) => a.max(b),
@@ -235,7 +240,10 @@ fn strip_card_prefix_fields(data: &mut Value, key: &str) {
 fn strip_card_prefix_fields_archived(data: &mut Value, key: &str) {
     if let Some(archived) = data.get_mut(key).and_then(|v| v.as_array_mut()) {
         for archived_card in archived.iter_mut() {
-            if let Some(card) = archived_card.get_mut("card").and_then(|v| v.as_object_mut()) {
+            if let Some(card) = archived_card
+                .get_mut("card")
+                .and_then(|v| v.as_object_mut())
+            {
                 card.remove("assigned_prefix");
                 card.remove("card_prefix");
             }
@@ -433,10 +441,16 @@ mod tests {
         let card2 = cards.iter().find(|c| c["id"] == "card-2").unwrap();
 
         assert_eq!(card1["card_number"], 1, "canonical card keeps its number");
-        assert_eq!(card2["card_number"], 2, "non-canonical card is renumbered above max");
+        assert_eq!(
+            card2["card_number"], 2,
+            "non-canonical card is renumbered above max"
+        );
 
         let board = &migrated["data"]["boards"][0];
-        assert_eq!(board["card_counter"], 3, "card_counter is renumbered_max + 1");
+        assert_eq!(
+            board["card_counter"], 3,
+            "card_counter is renumbered_max + 1"
+        );
     }
 
     #[tokio::test]

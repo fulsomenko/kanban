@@ -119,12 +119,7 @@ impl From<&Card> for CardSummary {
 }
 
 impl Card {
-    pub fn new(
-        board: &mut Board,
-        column_id: ColumnId,
-        title: String,
-        position: i32,
-    ) -> Self {
+    pub fn new(board: &mut Board, column_id: ColumnId, title: String, position: i32) -> Self {
         let now = Utc::now();
         let card_number = board.get_next_card_number();
         Self {

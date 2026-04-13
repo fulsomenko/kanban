@@ -138,7 +138,8 @@ impl CardSearcher for CardIdentifierSearcher {
         if self.query.is_empty() {
             return true;
         }
-        self.get_identifier(card, board, sprints).contains(&self.query)
+        self.get_identifier(card, board, sprints)
+            .contains(&self.query)
     }
 }
 
@@ -620,12 +621,7 @@ mod tests {
         let column = crate::Column::new(board.id, "Todo".to_string(), 0);
         let mut card11 = Card::new(&mut board, column.id, "Eleven".to_string(), 0);
         card11.card_number = 11;
-        let mut card111 = Card::new(
-            &mut board,
-            column.id,
-            "OneHundredEleven".to_string(),
-            0,
-        );
+        let mut card111 = Card::new(&mut board, column.id, "OneHundredEleven".to_string(), 0);
         card111.card_number = 111;
         let boards = vec![board];
         let columns = vec![column];
@@ -680,12 +676,7 @@ mod tests {
     fn test_find_cards_by_identifier_no_prefix_no_match() {
         let mut board = Board::new("Project".to_string(), None);
         let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(
-            &mut board,
-            column.id,
-            "No prefix task".to_string(),
-            0,
-        );
+        let card = Card::new(&mut board, column.id, "No prefix task".to_string(), 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card];
@@ -699,12 +690,7 @@ mod tests {
         let mut board = Board::new("Test".to_string(), None);
         board.card_prefix = Some("KAN".to_string());
         let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(
-            &mut board,
-            column.id,
-            "Unrelated title".to_string(),
-            0,
-        );
+        let card = Card::new(&mut board, column.id, "Unrelated title".to_string(), 0);
 
         // Title doesn't contain "KAN-1", but identifier does
         let searcher = CompositeSearcher::all("KAN-1");

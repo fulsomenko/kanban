@@ -47,9 +47,7 @@ impl Migrator {
                 Self::migrate_v1_to_v2(path).await?;
                 super::v2_to_v3::migrate_v2_to_v3(path).await
             }
-            (FormatVersion::V2, FormatVersion::V3) => {
-                super::v2_to_v3::migrate_v2_to_v3(path).await
-            }
+            (FormatVersion::V2, FormatVersion::V3) => super::v2_to_v3::migrate_v2_to_v3(path).await,
             _ => Err(PersistenceError::Serialization(format!(
                 "Unsupported migration: {:?} -> {:?}",
                 from, to

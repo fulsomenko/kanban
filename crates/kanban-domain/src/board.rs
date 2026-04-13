@@ -125,9 +125,7 @@ impl<'de> Deserialize<'de> for Board {
                 .prefix_counters
                 .get(matching_key)
                 .copied()
-                .unwrap_or_else(|| {
-                    helper.prefix_counters.values().copied().max().unwrap_or(1)
-                })
+                .unwrap_or_else(|| helper.prefix_counters.values().copied().max().unwrap_or(1))
         } else if helper.next_card_number > 1 {
             helper.next_card_number
         } else {
@@ -170,7 +168,6 @@ fn default_sort_field() -> SortField {
 fn default_sort_order() -> SortOrder {
     SortOrder::Ascending
 }
-
 
 impl Board {
     pub fn new(name: String, card_prefix: Option<String>) -> Self {
@@ -491,7 +488,10 @@ mod tests {
         }"#;
 
         let board: Board = serde_json::from_str(json).expect("Should deserialize");
-        assert_eq!(board.card_counter, 42, "Should pick the matching prefix counter");
+        assert_eq!(
+            board.card_counter, 42,
+            "Should pick the matching prefix counter"
+        );
     }
 
     #[test]

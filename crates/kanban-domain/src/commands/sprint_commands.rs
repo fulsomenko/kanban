@@ -24,10 +24,7 @@ impl Command for UpdateSprint {
             let sprint_id = sprint.id;
 
             // Lock check: prefix is locked if any card is assigned to this sprint
-            let has_cards = context
-                .cards
-                .iter()
-                .any(|c| c.sprint_id == Some(sprint_id));
+            let has_cards = context.cards.iter().any(|c| c.sprint_id == Some(sprint_id));
             if has_cards {
                 return Err(KanbanError::validation(
                     "sprint card_prefix cannot be changed after cards have been assigned",
@@ -454,9 +451,6 @@ mod tests {
             },
         };
         assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(
-            context.sprints[0].card_prefix,
-            Some("UNIQUE".to_string())
-        );
+        assert_eq!(context.sprints[0].card_prefix, Some("UNIQUE".to_string()));
     }
 }

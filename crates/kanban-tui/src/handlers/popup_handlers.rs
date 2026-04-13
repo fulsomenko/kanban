@@ -256,9 +256,7 @@ impl App {
                                 Box::new(kanban_domain::commands::UnassignCardFromSprint {
                                     card_id,
                                 });
-                            if let Err(e) =
-                                self.execute_commands_batch(vec![unassign_cmd])
-                            {
+                            if let Err(e) = self.execute_commands_batch(vec![unassign_cmd]) {
                                 tracing::error!("Failed to unassign card from sprint: {}", e);
                                 self.set_error(format!(
                                     "Failed to unassign card from sprint: {}",
@@ -364,12 +362,10 @@ impl App {
                                 let sprint_id = sprint.id;
 
                                 let commands: Vec<Box<dyn kanban_domain::commands::Command>> =
-                                    vec![Box::new(
-                                        kanban_domain::commands::AssignCardsToSprint {
-                                            ids: card_ids.clone(),
-                                            sprint_id,
-                                        },
-                                    )];
+                                    vec![Box::new(kanban_domain::commands::AssignCardsToSprint {
+                                        ids: card_ids.clone(),
+                                        sprint_id,
+                                    })];
 
                                 if let Err(e) = self.execute_commands_batch(commands) {
                                     tracing::error!("Failed to assign cards to sprint: {}", e);

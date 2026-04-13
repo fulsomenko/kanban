@@ -36,12 +36,7 @@ impl Command for CreateCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let board = context.board_mut(self.board_id)?;
-        let card = crate::Card::new(
-            board,
-            self.column_id,
-            self.title.clone(),
-            self.position,
-        );
+        let card = crate::Card::new(board, self.column_id, self.title.clone(), self.position);
         context.cards.push(card);
 
         if self.options.description.is_some()

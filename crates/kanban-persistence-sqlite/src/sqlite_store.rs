@@ -347,9 +347,10 @@ async fn migrate(pool: &Pool<Sqlite>) -> PersistenceResult<()> {
     if version < 2 {
         // Add card_counter column to boards if it doesn't already exist
         // (new databases already have it from schema.sql; existing v1 databases do not)
-        let _ = sqlx::query("ALTER TABLE boards ADD COLUMN card_counter INTEGER NOT NULL DEFAULT 1")
-            .execute(pool)
-            .await;
+        let _ =
+            sqlx::query("ALTER TABLE boards ADD COLUMN card_counter INTEGER NOT NULL DEFAULT 1")
+                .execute(pool)
+                .await;
 
         // Populate card_counter from board_prefix_counters for boards that have a card_prefix
         let boards: Vec<(String, Option<String>)> =
@@ -1178,13 +1179,15 @@ mod tests {
 
         // Verify card_counter was set from prefix_counters
         let pool2 = store.get_pool().await.unwrap();
-        let counter: i32 =
-            sqlx::query_scalar("SELECT card_counter FROM boards WHERE id = ?")
-                .bind(&board_id)
-                .fetch_one(pool2)
-                .await
-                .unwrap();
-        assert_eq!(counter, 7, "card_counter should equal prefix_counters entry for TASK");
+        let counter: i32 = sqlx::query_scalar("SELECT card_counter FROM boards WHERE id = ?")
+            .bind(&board_id)
+            .fetch_one(pool2)
+            .await
+            .unwrap();
+        assert_eq!(
+            counter, 7,
+            "card_counter should equal prefix_counters entry for TASK"
+        );
     }
 
     #[tokio::test]
@@ -1198,15 +1201,13 @@ mod tests {
 
         let pool = open_v1_pool(&db_path).await;
         // Board with no prefix_counters entry
-        sqlx::query(
-            "INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, 'B2', ?, ?)",
-        )
-        .bind(&board_id)
-        .bind(ts)
-        .bind(ts)
-        .execute(&pool)
-        .await
-        .unwrap();
+        sqlx::query("INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, 'B2', ?, ?)")
+            .bind(&board_id)
+            .bind(ts)
+            .bind(ts)
+            .execute(&pool)
+            .await
+            .unwrap();
         sqlx::query(
             "INSERT INTO columns (id, board_id, name, position, created_at, updated_at)
              VALUES (?, ?, 'Col', 0, ?, ?)",
@@ -1247,12 +1248,11 @@ mod tests {
         store.load().await.unwrap();
 
         let pool2 = store.get_pool().await.unwrap();
-        let counter: i32 =
-            sqlx::query_scalar("SELECT card_counter FROM boards WHERE id = ?")
-                .bind(&board_id)
-                .fetch_one(pool2)
-                .await
-                .unwrap();
+        let counter: i32 = sqlx::query_scalar("SELECT card_counter FROM boards WHERE id = ?")
+            .bind(&board_id)
+            .fetch_one(pool2)
+            .await
+            .unwrap();
         assert_eq!(counter, 4, "card_counter should be max(card_number)+1 = 4");
     }
 

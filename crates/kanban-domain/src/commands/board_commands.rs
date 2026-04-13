@@ -1,7 +1,7 @@
 use super::{Command, CommandContext};
+use crate::field_update::FieldUpdate;
 use crate::KanbanResult;
 use crate::{ArchivedCard, Board, BoardUpdate, Card, Column, DependencyGraph, KanbanError, Sprint};
-use crate::field_update::FieldUpdate;
 use kanban_core::Editable;
 use uuid::Uuid;
 
@@ -294,8 +294,7 @@ mod tests {
         tc.columns.push(col);
         tc.cards.push(card);
 
-        let mut dup_card =
-            crate::Card::new(&mut board, Uuid::new_v4(), "Dup".to_string(), 0);
+        let mut dup_card = crate::Card::new(&mut board, Uuid::new_v4(), "Dup".to_string(), 0);
         dup_card.id = dup_card_id;
 
         let cmd = ImportEntities {
@@ -358,10 +357,7 @@ mod tests {
             },
         };
         assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(
-            context.boards[0].card_prefix,
-            Some("NEW".to_string())
-        );
+        assert_eq!(context.boards[0].card_prefix, Some("NEW".to_string()));
     }
 
     #[test]
