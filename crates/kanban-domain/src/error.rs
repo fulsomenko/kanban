@@ -21,6 +21,9 @@ pub enum DomainError {
 
     #[error(transparent)]
     Dependency(#[from] DependencyError),
+
+    #[error("column {column_id} has reached its WIP limit of {limit}")]
+    WipLimitExceeded { column_id: Uuid, limit: u32 },
 }
 
 impl DomainError {
@@ -53,6 +56,9 @@ impl DomainError {
     }
     pub fn tag_not_found(id: Uuid) -> Self {
         Self::NotFound { entity: "tag", id }
+    }
+    pub fn wip_limit_exceeded(column_id: Uuid, limit: u32) -> Self {
+        Self::WipLimitExceeded { column_id, limit }
     }
 }
 
@@ -123,6 +129,13 @@ impl KanbanError {
 
     pub fn is_conflict_detected(&self) -> bool {
         matches!(self, KanbanError::ConflictDetected { .. })
+    }
+
+    pub fn is_wip_limit_exceeded(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::WipLimitExceeded { .. })
+        )
     }
 
     pub fn serialization(msg: impl Into<String>) -> Self {
