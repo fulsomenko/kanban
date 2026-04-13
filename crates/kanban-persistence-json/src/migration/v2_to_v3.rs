@@ -10,8 +10,11 @@ use std::path::Path;
 /// - Removes `assigned_prefix` and `card_prefix` fields from each card.
 /// - Sets `version` to 3.
 ///
-/// Aborts (returns Err) without modifying the file if any card_number appears
-/// in multiple `assigned_prefix` buckets within the same board (collision).
+/// When the same card_number appears under multiple `assigned_prefix` values
+/// within a board (possible when a board prefix was changed after cards were
+/// created), the conflicting cards are renumbered above the current maximum
+/// rather than aborting. Cards whose `assigned_prefix` matches the board's
+/// canonical `card_prefix` always keep their original number.
 pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
     let content = tokio::fs::read_to_string(path).await?;
     let mut envelope: Value = serde_json::from_str(&content)
@@ -34,78 +37,125 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
         }
     }
 
-    // Determine card_counter for each board from active cards
-    let mut board_card_max: HashMap<String, u32> = HashMap::new();
-    for card_source in &["cards", "archived_cards"] {
-        if let Some(cards) = data.get(*card_source).and_then(|v| v.as_array()) {
+    // Collect the canonical prefix for each board (board.card_prefix or "task")
+    let mut board_canonical_prefix: HashMap<String, String> = HashMap::new();
+    if let Some(boards) = data.get("boards").and_then(|v| v.as_array()) {
+        for board in boards {
+            if let Some(board_id) = board.get("id").and_then(|v| v.as_str()) {
+                let prefix = board
+                    .get("card_prefix")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("task")
+                    .to_string();
+                board_canonical_prefix.insert(board_id.to_string(), prefix);
+            }
+        }
+    }
+
+    // Collect all cards (active + archived) for each board:
+    //   board_id → Vec<(card_id, card_number, assigned_prefix)>
+    let mut board_cards: HashMap<String, Vec<(String, u32, String)>> = HashMap::new();
+    for (source, is_archived) in &[("cards", false), ("archived_cards", true)] {
+        if let Some(cards) = data.get(*source).and_then(|v| v.as_array()) {
             for card_val in cards {
-                let card = if *card_source == "archived_cards" {
+                let card = if *is_archived {
                     card_val.get("card").unwrap_or(card_val)
                 } else {
                     card_val
                 };
                 let col_id = card.get("column_id").and_then(|v| v.as_str()).unwrap_or("");
                 if let Some(board_id) = column_to_board.get(col_id) {
+                    let card_id = card
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     let card_number = card
                         .get("card_number")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0) as u32;
-                    let entry = board_card_max.entry(board_id.clone()).or_insert(0);
-                    if card_number > *entry {
-                        *entry = card_number;
+                    let prefix = card
+                        .get("assigned_prefix")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("task")
+                        .to_string();
+                    board_cards
+                        .entry(board_id.clone())
+                        .or_default()
+                        .push((card_id, card_number, prefix));
+                }
+            }
+        }
+    }
+
+    // Detect collisions and build a renumber map for non-canonical cards.
+    // renumber_map: card_id → new_card_number
+    let mut renumber_map: HashMap<String, u32> = HashMap::new();
+    // board_max_number: board_id → highest card_number (including any renumbered cards)
+    let mut board_max_number: HashMap<String, u32> = HashMap::new();
+
+    for (board_id, cards) in &board_cards {
+        let canonical = board_canonical_prefix
+            .get(board_id)
+            .map(|s| s.as_str())
+            .unwrap_or("task");
+
+        let mut running_max: u32 = cards.iter().map(|(_, n, _)| *n).max().unwrap_or(0);
+
+        // Group cards by card_number to find which numbers are contested
+        let mut number_to_entries: HashMap<u32, Vec<(&str, &str)>> = HashMap::new();
+        for (card_id, card_number, prefix) in cards {
+            number_to_entries
+                .entry(*card_number)
+                .or_default()
+                .push((card_id.as_str(), prefix.as_str()));
+        }
+
+        for (_, entries) in &number_to_entries {
+            let prefixes: HashSet<&str> = entries.iter().map(|(_, p)| *p).collect();
+            if prefixes.len() > 1 {
+                // Collision: renumber every card whose prefix differs from canonical
+                for (card_id, prefix) in entries {
+                    if *prefix != canonical {
+                        running_max += 1;
+                        tracing::warn!(
+                            "Migration: renumbering card {} (prefix='{}') to {} \
+                             to resolve collision on board {}",
+                            card_id,
+                            prefix,
+                            running_max,
+                            board_id
+                        );
+                        renumber_map.insert(card_id.to_string(), running_max);
+                    }
+                }
+            }
+        }
+
+        board_max_number.insert(board_id.clone(), running_max);
+    }
+
+    // Apply renumbering to active cards
+    if let Some(cards) = data.get_mut("cards").and_then(|v| v.as_array_mut()) {
+        for card in cards.iter_mut() {
+            if let Some(obj) = card.as_object_mut() {
+                if let Some(card_id) = obj.get("id").and_then(|v| v.as_str()).map(str::to_string) {
+                    if let Some(&new_number) = renumber_map.get(&card_id) {
+                        obj.insert("card_number".to_string(), Value::Number(new_number.into()));
                     }
                 }
             }
         }
     }
 
-    // Collision detection: check that within each board, no card_number appears
-    // in 2+ different assigned_prefix buckets among active cards
-    if let Some(cards) = data.get("cards").and_then(|v| v.as_array()) {
-        // board_id → (assigned_prefix → set of card_numbers)
-        let mut board_prefix_numbers: HashMap<String, HashMap<String, HashSet<u32>>> =
-            HashMap::new();
-        for card in cards {
-            let col_id = card.get("column_id").and_then(|v| v.as_str()).unwrap_or("");
-            if let Some(board_id) = column_to_board.get(col_id) {
-                let prefix = card
-                    .get("assigned_prefix")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("task")
-                    .to_string();
-                let card_number = card
-                    .get("card_number")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
-                board_prefix_numbers
-                    .entry(board_id.clone())
-                    .or_default()
-                    .entry(prefix)
-                    .or_default()
-                    .insert(card_number);
-            }
-        }
-
-        for (board_id, prefix_map) in &board_prefix_numbers {
-            // Collect all (card_number, prefix) pairs and find duplicates
-            let mut number_to_prefixes: HashMap<u32, Vec<&str>> = HashMap::new();
-            for (prefix, numbers) in prefix_map {
-                for &n in numbers {
-                    number_to_prefixes
-                        .entry(n)
-                        .or_default()
-                        .push(prefix.as_str());
-                }
-            }
-            for (number, prefixes) in &number_to_prefixes {
-                if prefixes.len() > 1 {
-                    return Err(PersistenceError::Serialization(format!(
-                        "Migration aborted: card_number {} appears in multiple prefix buckets \
-                         ({}) for board {}. File left unmodified.",
-                        number,
-                        prefixes.join(", "),
-                        board_id
-                    )));
+    // Apply renumbering to archived cards
+    if let Some(archived) = data.get_mut("archived_cards").and_then(|v| v.as_array_mut()) {
+        for archived_card in archived.iter_mut() {
+            if let Some(card) = archived_card.get_mut("card").and_then(|v| v.as_object_mut()) {
+                if let Some(card_id) = card.get("id").and_then(|v| v.as_str()).map(str::to_string) {
+                    if let Some(&new_number) = renumber_map.get(&card_id) {
+                        card.insert("card_number".to_string(), Value::Number(new_number.into()));
+                    }
                 }
             }
         }
@@ -121,34 +171,26 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
                     .unwrap_or("")
                     .to_string();
 
-                // Determine card_counter from prefix_counters or card max
-                let card_counter = {
-                    let from_prefix_counters = board_obj
-                        .get("prefix_counters")
-                        .and_then(|v| v.as_object())
-                        .and_then(|m| {
-                            let card_prefix = board_obj
-                                .get("card_prefix")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("task");
-                            // Use counter for board.card_prefix if available
-                            m.get(card_prefix)
-                                .and_then(|v| v.as_u64())
-                                .or_else(|| {
-                                    // Fall back to max counter
-                                    m.values()
-                                        .filter_map(|v| v.as_u64())
-                                        .max()
-                                })
-                        });
+                let canonical = board_canonical_prefix
+                    .get(&board_id)
+                    .map(|s| s.as_str())
+                    .unwrap_or("task");
 
-                    from_prefix_counters
-                        .or_else(|| {
-                            board_card_max
-                                .get(&board_id)
-                                .map(|&max| (max + 1) as u64)
-                        })
-                        .unwrap_or(1)
+                // card_counter = max(prefix_counters[canonical], board_max + 1, 1)
+                let from_prefix_counters = board_obj
+                    .get("prefix_counters")
+                    .and_then(|v| v.as_object())
+                    .and_then(|m| m.get(canonical).and_then(|v| v.as_u64()));
+
+                let from_max = board_max_number
+                    .get(&board_id)
+                    .map(|&max| (max + 1) as u64);
+
+                let card_counter = match (from_prefix_counters, from_max) {
+                    (Some(a), Some(b)) => a.max(b),
+                    (Some(a), None) => a,
+                    (None, Some(b)) => b,
+                    (None, None) => 1,
                 };
 
                 board_obj.remove("prefix_counters");
@@ -340,18 +382,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_migrate_v2_to_v3_collision_aborts_and_leaves_file_unmodified() {
+    async fn test_migrate_v2_to_v3_collision_renumbers_non_canonical_cards() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.json");
 
         let board_id = "board-1";
         let col_id = "col-1";
+        // board.card_prefix = "TASK" is canonical
+        // card-1 (TASK prefix, number 1) → keeps number 1
+        // card-2 (task prefix, number 1) → non-canonical, renumbered to 2
         let data = json!({
             "boards": [{
                 "id": board_id,
                 "name": "Test",
                 "card_prefix": "TASK",
-                "prefix_counters": { "TASK": 3, "FEAT": 3 },
+                "prefix_counters": { "TASK": 2, "task": 2 },
                 "sprint_counters": {}
             }],
             "columns": [{ "id": col_id, "board_id": board_id }],
@@ -366,21 +411,32 @@ mod tests {
                     "id": "card-2",
                     "column_id": col_id,
                     "card_number": 1,
-                    "assigned_prefix": "FEAT"
+                    "assigned_prefix": "task"
                 }
             ],
             "archived_cards": [],
             "sprints": []
         });
         let envelope = make_v2_envelope(data);
-        let original_content = serde_json::to_string_pretty(&envelope).unwrap();
-        tokio::fs::write(&path, &original_content).await.unwrap();
+        tokio::fs::write(&path, serde_json::to_string_pretty(&envelope).unwrap())
+            .await
+            .unwrap();
 
-        let result = migrate_v2_to_v3(&path).await;
-        assert!(result.is_err(), "collision should abort migration");
+        migrate_v2_to_v3(&path).await.unwrap();
 
-        let after = tokio::fs::read_to_string(&path).await.unwrap();
-        assert_eq!(after, original_content, "file should be unmodified on abort");
+        let migrated: Value =
+            serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
+        assert_eq!(migrated["version"], 3);
+
+        let cards = migrated["data"]["cards"].as_array().unwrap();
+        let card1 = cards.iter().find(|c| c["id"] == "card-1").unwrap();
+        let card2 = cards.iter().find(|c| c["id"] == "card-2").unwrap();
+
+        assert_eq!(card1["card_number"], 1, "canonical card keeps its number");
+        assert_eq!(card2["card_number"], 2, "non-canonical card is renumbered above max");
+
+        let board = &migrated["data"]["boards"][0];
+        assert_eq!(board["card_counter"], 3, "card_counter is renumbered_max + 1");
     }
 
     #[tokio::test]
