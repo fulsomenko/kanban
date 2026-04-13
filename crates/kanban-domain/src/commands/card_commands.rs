@@ -150,8 +150,24 @@ pub struct RestoreCard {
 
 impl Command for RestoreCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if !context.columns.iter().any(|c| c.id == self.column_id) {
-            return Err(KanbanError::not_found("column", self.column_id));
+        let wip_limit = context
+            .columns
+            .iter()
+            .find(|c| c.id == self.column_id)
+            .ok_or_else(|| KanbanError::not_found("column", self.column_id))?
+            .wip_limit;
+        if let Some(limit) = wip_limit {
+            let current = context
+                .cards
+                .iter()
+                .filter(|c| c.column_id == self.column_id)
+                .count();
+            if current >= limit as usize {
+                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
+                    self.column_id,
+                    limit as u32,
+                )));
+            }
         }
         let pos = context
             .archived_cards
