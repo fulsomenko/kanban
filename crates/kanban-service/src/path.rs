@@ -17,3 +17,39 @@ pub fn validate_path(path: &Path) -> KanbanResult<PathBuf> {
         Ok(canonical)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_validate_path_relative_within_cwd_returns_resolved() -> KanbanResult<()> {
+        let dir = TempDir::new().unwrap();
+        let cwd = dir.path();
+        let result = validate_path_with_cwd(Path::new("some/nested/file.json"), cwd)?;
+        assert!(result.starts_with(cwd));
+        assert!(result.ends_with("some/nested/file.json"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_path_absolute_passes_through() -> KanbanResult<()> {
+        let dir = TempDir::new().unwrap();
+        let abs = dir.path().join("file.json");
+        let result = validate_path_with_cwd(&abs, dir.path())?;
+        assert_eq!(result, abs);
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_path_traversal_is_rejected() {
+        let dir = TempDir::new().unwrap();
+        let deep = dir.path().join("a/b/c");
+        std::fs::create_dir_all(&deep).unwrap();
+        let result = validate_path_with_cwd(Path::new("../../secret.json"), &deep);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Path traversal not allowed"), "Got: {err}");
+    }
+}
