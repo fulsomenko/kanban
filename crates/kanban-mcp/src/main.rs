@@ -1,3 +1,8 @@
+#[cfg(not(any(feature = "json", feature = "sqlite")))]
+compile_error!(
+    "kanban-mcp binary requires at least one backend feature: `json` or `sqlite`."
+);
+
 use anyhow::Result;
 use kanban_mcp::McpServer;
 
