@@ -92,7 +92,6 @@ async fn test_v2_format_is_imported_correctly() {
         column.id,
         "Important Task".to_string(),
         0,
-        "task",
     );
 
     // Create snapshot with board, column, and card

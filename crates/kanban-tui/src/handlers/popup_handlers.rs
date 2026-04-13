@@ -1,6 +1,6 @@
 use crate::app::App;
 use crossterm::event::KeyCode;
-use kanban_domain::{FieldUpdate, KanbanOperations, SortField, SortOrder, Sprint};
+use kanban_domain::{KanbanOperations, SortField, SortOrder, Sprint};
 
 const PRIORITY_COUNT: usize = 4;
 
@@ -256,15 +256,8 @@ impl App {
                                 Box::new(kanban_domain::commands::UnassignCardFromSprint {
                                     card_id,
                                 });
-                            let clear_prefix_cmd = Box::new(kanban_domain::commands::UpdateCard {
-                                card_id,
-                                updates: kanban_domain::CardUpdate {
-                                    assigned_prefix: FieldUpdate::Clear,
-                                    ..Default::default()
-                                },
-                            });
                             if let Err(e) =
-                                self.execute_commands_batch(vec![unassign_cmd, clear_prefix_cmd])
+                                self.execute_commands_batch(vec![unassign_cmd])
                             {
                                 tracing::error!("Failed to unassign card from sprint: {}", e);
                                 self.set_error(format!(
@@ -281,14 +274,6 @@ impl App {
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                     let sprint_id = sprint.id;
 
-                                    let effective_prefix = {
-                                        if let Some(board) = self.ctx.boards().get(board_idx) {
-                                            sprint.effective_prefix(board, "task").to_string()
-                                        } else {
-                                            "task".to_string()
-                                        }
-                                    };
-
                                     let mut commands: Vec<
                                         Box<dyn kanban_domain::commands::Command>,
                                     > = Vec::new();
@@ -300,18 +285,6 @@ impl App {
                                         })
                                             as Box<dyn kanban_domain::commands::Command>;
                                     commands.push(assign_cmd);
-
-                                    let update_cmd = Box::new(kanban_domain::commands::UpdateCard {
-                                        card_id,
-                                        updates: kanban_domain::CardUpdate {
-                                            assigned_prefix: FieldUpdate::Set(
-                                                effective_prefix.clone(),
-                                            ),
-                                            ..Default::default()
-                                        },
-                                    })
-                                        as Box<dyn kanban_domain::commands::Command>;
-                                    commands.push(update_cmd);
 
                                     if let Err(e) = self.execute_commands_batch(commands) {
                                         tracing::error!("Failed to assign card to sprint: {}", e);
@@ -390,14 +363,6 @@ impl App {
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;
 
-                                let effective_prefix = {
-                                    if let Some(board) = self.ctx.boards().get(board_idx) {
-                                        sprint.effective_prefix(board, "task").to_string()
-                                    } else {
-                                        "task".to_string()
-                                    }
-                                };
-
                                 let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
                                     Vec::new();
 
@@ -408,20 +373,6 @@ impl App {
                                     },
                                 )
                                     as Box<dyn kanban_domain::commands::Command>);
-
-                                for card_id in &card_ids {
-                                    let update_cmd = Box::new(kanban_domain::commands::UpdateCard {
-                                        card_id: *card_id,
-                                        updates: kanban_domain::CardUpdate {
-                                            assigned_prefix: FieldUpdate::Set(
-                                                effective_prefix.clone(),
-                                            ),
-                                            ..Default::default()
-                                        },
-                                    })
-                                        as Box<dyn kanban_domain::commands::Command>;
-                                    commands.push(update_cmd);
-                                }
 
                                 if let Err(e) = self.execute_commands_batch(commands) {
                                     tracing::error!("Failed to assign cards to sprint: {}", e);

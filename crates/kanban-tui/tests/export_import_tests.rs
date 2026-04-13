@@ -414,5 +414,4 @@ fn test_backward_compat_old_export_format() {
     // Verify cards still work
     assert_eq!(app.ctx.cards().len(), 1);
     assert_eq!(app.ctx.cards()[0].title, "Old Card");
-    assert_eq!(app.ctx.cards()[0].card_prefix, None);
 }

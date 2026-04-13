@@ -26,7 +26,7 @@ async fn test_load_initial_state_with_boards_refreshes_card_view() -> KanbanResu
 
     let mut board = Board::new("Alpha".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Task One".to_string(), 0, "TST");
+    let card = Card::new(&mut board, column.id, "Task One".to_string(), 0);
     let snapshot = Snapshot {
         boards: vec![board],
         columns: vec![column],
