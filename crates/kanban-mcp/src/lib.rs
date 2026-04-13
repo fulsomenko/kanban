@@ -786,8 +786,6 @@ impl KanbanMcpServer {
                 }
             },
             sprint_id: FieldUpdate::NoChange,
-            assigned_prefix: FieldUpdate::NoChange,
-            card_prefix: FieldUpdate::NoChange,
         };
         let card = mutating_op!(self.ctx, update_card, id, updates)?;
         to_call_tool_result(&card)
