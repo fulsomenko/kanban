@@ -170,6 +170,14 @@ impl StoreManager {
     }
 }
 
+impl Clone for StoreManager {
+    fn clone(&self) -> Self {
+        Self {
+            registry: Arc::clone(&self.registry),
+        }
+    }
+}
+
 fn repair_snapshot_fks(snapshot: &mut StoreSnapshot) -> Result<(), KanbanError> {
     let mut data: serde_json::Value = serde_json::from_slice(&snapshot.data).map_err(|e| {
         KanbanError::validation(format!("Failed to parse snapshot for FK repair: {e}"))
