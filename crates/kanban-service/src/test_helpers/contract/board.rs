@@ -103,7 +103,7 @@ pub async fn test_board_sprint_names_roundtrip(factory: &StoreFactory) {
     assert_eq!(b.sprint_name_used_count, 1);
 }
 
-pub async fn test_board_prefix_counters_roundtrip(factory: &StoreFactory) {
+pub async fn test_board_card_counter_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
     let store = factory(&path);
@@ -118,8 +118,7 @@ pub async fn test_board_prefix_counters_roundtrip(factory: &StoreFactory) {
         .iter_mut()
         .find(|b| b.id == board.id)
         .unwrap();
-    b.prefix_counters.insert("PFX".into(), 10);
-    b.prefix_counters.insert("OTHER".into(), 5);
+    b.card_counter = 10;
     b.sprint_counters.insert("SP".into(), 3);
     b.sprint_counters.insert("SPRINT".into(), 7);
 
@@ -129,8 +128,7 @@ pub async fn test_board_prefix_counters_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let b = ctx.get_board(board.id).unwrap().unwrap();
-    assert_eq!(b.prefix_counters.get("PFX"), Some(&10));
-    assert_eq!(b.prefix_counters.get("OTHER"), Some(&5));
+    assert_eq!(b.card_counter, 10);
     assert_eq!(b.sprint_counters.get("SP"), Some(&3));
     assert_eq!(b.sprint_counters.get("SPRINT"), Some(&7));
 }

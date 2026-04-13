@@ -182,7 +182,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
         .unwrap();
     b.sprint_names = vec!["Alpha".into(), "Beta".into()];
     b.sprint_name_used_count = 1;
-    b.prefix_counters.insert("FB".into(), 10);
+    b.card_counter = 10;
     b.sprint_counters.insert("SP".into(), 5);
 
     let col_todo = ctx.create_column(board.id, "Todo".into(), Some(0)).unwrap();
@@ -338,7 +338,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     assert_eq!(b.completion_column_id, Some(col_done.id));
     assert_eq!(b.sprint_names, vec!["Alpha", "Beta"]);
     assert_eq!(b.sprint_name_used_count, 1);
-    assert_eq!(b.prefix_counters.get("FB"), Some(&14));
+    assert_eq!(b.card_counter, 14);
     assert_eq!(b.sprint_counters.get("SP"), Some(&6));
 
     let cols = loaded.list_columns(board.id).unwrap();
