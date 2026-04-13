@@ -66,6 +66,9 @@ impl HistoryManager {
     /// Push current state to redo stack (before applying undo).
     pub fn push_redo(&mut self, snapshot: Snapshot) {
         self.redo_stack.push_back(snapshot);
+        if self.redo_stack.len() > MAX_HISTORY_DEPTH {
+            self.redo_stack.pop_front();
+        }
     }
 
     /// Push current state to undo stack (before applying redo).
