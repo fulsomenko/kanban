@@ -23,7 +23,9 @@ fn validate_path_with_cwd(path: &Path, cwd: &Path) -> KanbanResult<PathBuf> {
         Ok(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
     } else {
         let resolved = cwd.join(path);
-        let canonical = resolved.canonicalize().unwrap_or_else(|_| normalize_path(&resolved));
+        let canonical = resolved
+            .canonicalize()
+            .unwrap_or_else(|_| normalize_path(&resolved));
         if !canonical.starts_with(cwd) {
             return Err(KanbanError::validation(format!(
                 "Path traversal not allowed: '{}' resolves outside current directory",
