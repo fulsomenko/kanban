@@ -46,9 +46,10 @@ impl Command for CreateCard {
                 .filter(|c| c.column_id == self.column_id)
                 .count();
             if current >= limit as usize {
-                return Err(KanbanError::Domain(
-                    crate::DomainError::wip_limit_exceeded(self.column_id, limit as u32),
-                ));
+                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
+                    self.column_id,
+                    limit as u32,
+                )));
             }
         }
         let board = context.board_mut(self.board_id)?;
@@ -121,9 +122,10 @@ impl Command for MoveCard {
                 .filter(|c| c.column_id == self.new_column_id && c.id != self.card_id)
                 .count();
             if current >= limit as usize {
-                return Err(KanbanError::Domain(
-                    crate::DomainError::wip_limit_exceeded(self.new_column_id, limit as u32),
-                ));
+                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
+                    self.new_column_id,
+                    limit as u32,
+                )));
             }
         }
         let card = context.card_mut(self.card_id)?;
@@ -238,9 +240,10 @@ impl Command for MoveCards {
             .count();
         if let Some(limit) = wip_limit {
             if base + valid_ids.len() > limit as usize {
-                return Err(KanbanError::Domain(
-                    crate::DomainError::wip_limit_exceeded(self.column_id, limit as u32),
-                ));
+                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
+                    self.column_id,
+                    limit as u32,
+                )));
             }
         }
         for (i, id) in valid_ids.iter().enumerate() {
