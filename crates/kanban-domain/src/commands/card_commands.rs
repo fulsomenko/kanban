@@ -663,6 +663,53 @@ mod tests {
     }
 
     #[test]
+    fn test_restore_card_to_deleted_column_returns_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let col_id = col.id;
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0, "TST");
+        let card_id = card.id;
+        let archived = crate::ArchivedCard::new(card, col_id, 0);
+        tc.boards.push(board);
+        // Column intentionally NOT added — it has been deleted
+        tc.archived_cards.push(archived);
+        let mut context = tc.as_command_context();
+
+        let cmd = RestoreCard {
+            card_id,
+            column_id: col_id,
+            position: 0,
+        };
+        let result = cmd.execute(&mut context);
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_restore_card_to_valid_column_succeeds() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let col_id = col.id;
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0, "TST");
+        let card_id = card.id;
+        let archived = crate::ArchivedCard::new(card, col_id, 0);
+        tc.boards.push(board);
+        tc.columns.push(col);
+        tc.archived_cards.push(archived);
+        let mut context = tc.as_command_context();
+
+        let cmd = RestoreCard {
+            card_id,
+            column_id: col_id,
+            position: 0,
+        };
+        assert!(cmd.execute(&mut context).is_ok());
+        assert_eq!(context.cards.len(), 1);
+        assert_eq!(context.archived_cards.len(), 0);
+    }
+
+    #[test]
     fn test_restore_card_not_found_returns_error() {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
