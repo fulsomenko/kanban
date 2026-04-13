@@ -1,7 +1,5 @@
 #[cfg(not(any(feature = "json", feature = "sqlite")))]
-compile_error!(
-    "kanban binary requires at least one backend feature: `json` or `sqlite`."
-);
+compile_error!("kanban binary requires at least one backend feature: `json` or `sqlite`.");
 
 use kanban_cli::CliApp;
 
