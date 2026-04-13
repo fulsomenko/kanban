@@ -67,7 +67,7 @@ use std::time::Instant;
 
 /// Builds a `StoreManager` that mirrors the default CLI registry: SQLite
 /// first (so content-sniffing prefers it) and JSON second as a catch-all
-/// fallback. Used by the `App::new` test convenience and nothing else.
+/// fallback. Used by [`App::new`] as the default backend configuration.
 fn default_store_manager() -> StoreManager {
     StoreManager::new(kanban_service::default_registry())
 }
@@ -176,10 +176,9 @@ pub enum BoardField {
 }
 
 impl App {
-    /// Test-only convenience wrapper that builds a default `StoreManager`
-    /// (JSON + SQLite) and delegates to [`App::new_with_store`]. Real
-    /// embedders should call `new_with_store` directly and pass their own
-    /// `StoreManager` so backend registration stays under their control.
+    /// Convenience constructor using the default built-in backends (SQLite +
+    /// JSON). Prefer [`App::new_with_store`] when embedding the TUI in a
+    /// third-party binary that registers its own [`StoreFactory`].
     pub fn new(
         save_file: Option<String>,
     ) -> kanban_domain::KanbanResult<(
