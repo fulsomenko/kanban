@@ -363,16 +363,13 @@ impl App {
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;
 
-                                let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> =
-                                    Vec::new();
-
-                                commands.push(Box::new(
-                                    kanban_domain::commands::AssignCardsToSprint {
-                                        ids: card_ids.clone(),
-                                        sprint_id,
-                                    },
-                                )
-                                    as Box<dyn kanban_domain::commands::Command>);
+                                let commands: Vec<Box<dyn kanban_domain::commands::Command>> =
+                                    vec![Box::new(
+                                        kanban_domain::commands::AssignCardsToSprint {
+                                            ids: card_ids.clone(),
+                                            sprint_id,
+                                        },
+                                    )];
 
                                 if let Err(e) = self.execute_commands_batch(commands) {
                                     tracing::error!("Failed to assign cards to sprint: {}", e);

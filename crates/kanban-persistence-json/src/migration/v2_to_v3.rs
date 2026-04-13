@@ -111,7 +111,7 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
                 .push((card_id.as_str(), prefix.as_str()));
         }
 
-        for (_, entries) in &number_to_entries {
+        for entries in number_to_entries.values() {
             let prefixes: HashSet<&str> = entries.iter().map(|(_, p)| *p).collect();
             if prefixes.len() > 1 {
                 // Collision: renumber every card whose prefix differs from canonical
