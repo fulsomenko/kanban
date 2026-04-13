@@ -15,28 +15,38 @@ pub struct StoreManager {
 }
 
 impl StoreManager {
+    /// Wraps `registry` in an `Arc`. Cloning a `StoreManager` is cheap —
+    /// all clones share the same underlying registry.
     pub fn new(registry: StoreRegistry) -> Self {
         Self {
             registry: Arc::new(registry),
         }
     }
 
+    /// Returns a reference to the underlying `StoreRegistry`.
+    /// Useful for introspection and testing.
     pub fn registry(&self) -> &StoreRegistry {
         &self.registry
     }
 
+    /// Returns `true` if at least one backend factory is registered.
     pub fn has_backends(&self) -> bool {
         !self.registry.is_empty()
     }
 
+    /// Returns the names of all registered factories in registration order.
     pub fn backend_names(&self) -> Vec<&str> {
         self.registry.backend_names()
     }
 
+    /// Pattern-matches `locator` against all registered factories and returns
+    /// the name of the first match. Returns `None` if no factory matches.
     pub fn detect_backend(&self, locator: &str) -> Option<String> {
         self.registry.detect_backend(locator).map(String::from)
     }
 
+    /// Updates `config.storage_backend` to match the backend inferred from
+    /// `locator`. Returns `true` if the config value changed.
     pub fn sync_backend_with_file(&self, locator: &str, config: &mut AppConfig) -> bool {
         if let Some(detected) = self.detect_backend(locator) {
             if detected != config.effective_storage_backend() {
@@ -47,6 +57,8 @@ impl StoreManager {
         false
     }
 
+    /// Creates a `PersistenceStore` for the named `backend` at `locator`.
+    /// Returns an error if `backend` is not registered in this manager.
     pub fn make_store(
         &self,
         backend: &str,
@@ -55,6 +67,10 @@ impl StoreManager {
         Ok(self.registry.create_store(backend, locator)?)
     }
 
+    /// Creates a store from an explicit file locator, or falls back to the
+    /// storage location in `config` when `file` is `None`. The backend is
+    /// inferred from the locator; if no factory matches, `config`'s backend
+    /// is used as a fallback.
     pub fn make_store_with_config(
         &self,
         file: Option<&str>,
@@ -70,6 +86,9 @@ impl StoreManager {
         self.make_store(&backend, &locator)
     }
 
+    /// Creates a store for `path`, verifies the file exists, then loads and
+    /// deserializes the snapshot. Returns an error if the file is missing or
+    /// the data cannot be parsed.
     pub async fn validate_and_load_store(
         &self,
         backend: &str,
@@ -130,6 +149,9 @@ impl StoreManager {
         Ok(())
     }
 
+    /// Copies a snapshot from one backend/path pair to another, repairing
+    /// any dangling foreign keys in the process. Rolls back (deletes the
+    /// partial destination file) on failure.
     pub async fn migrate_store(
         &self,
         from_backend: &str,
