@@ -114,11 +114,11 @@ impl PersistenceStore for JsonFileStore {
         snapshot.metadata.instance_id = self.instance_id;
         snapshot.metadata.saved_at = chrono::Utc::now();
 
-        // Create JSON envelope with v2 format
+        // Create JSON envelope with v3 format
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let envelope = JsonEnvelope {
-            version: 2,
+            version: 3,
             metadata: snapshot.metadata.clone(),
             data: data_value,
         };
@@ -150,13 +150,14 @@ impl PersistenceStore for JsonFileStore {
         let current_version = Migrator::detect_version(&self.path).await?;
 
         // Migrate if necessary
-        if current_version == FormatVersion::V1 {
+        if current_version < FormatVersion::V3 {
             tracing::info!(
-                "Detected V1 format at {}. Starting migration to V2...",
+                "Detected {:?} format at {}. Migrating to V3...",
+                current_version,
                 self.path.display()
             );
-            Migrator::migrate(FormatVersion::V1, FormatVersion::V2, &self.path).await?;
-            tracing::info!("Migration completed successfully");
+            Migrator::migrate(current_version, FormatVersion::V3, &self.path).await?;
+            tracing::info!("Migration to V3 completed successfully");
         }
 
         // Read file
@@ -166,8 +167,8 @@ impl PersistenceStore for JsonFileStore {
         let envelope: JsonEnvelope = serde_json::from_slice(&file_bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        // Validate version
-        if envelope.version != 2 {
+        // Validate version (accept V2 and V3)
+        if envelope.version != 3 && envelope.version != 2 {
             return Err(PersistenceError::Serialization(format!(
                 "Unsupported format version: {}",
                 envelope.version

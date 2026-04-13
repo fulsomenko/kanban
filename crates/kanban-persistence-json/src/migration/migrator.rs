@@ -10,14 +10,14 @@ impl Migrator {
     /// Detect the version of a persisted file
     pub async fn detect_version(path: &Path) -> PersistenceResult<FormatVersion> {
         if !path.exists() {
-            return Ok(FormatVersion::V2); // Default to V2 for new files
+            return Ok(FormatVersion::V3); // Default to V3 for new files
         }
 
         let content = tokio::fs::read_to_string(path).await?;
         let value: Value = serde_json::from_str(&content)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        // V2 files have a "version" field at root level
+        // V2+ files have a "version" field at root level
         if let Some(version) = value.get("version").and_then(|v| v.as_u64()) {
             return Ok(FormatVersion::from_u32(version as u32).unwrap_or(FormatVersion::V2));
         }
@@ -31,7 +31,7 @@ impl Migrator {
         Ok(FormatVersion::V2)
     }
 
-    /// Migrate a file from one version to another
+    /// Migrate a file from one version to another, stepping through intermediate versions
     pub async fn migrate(
         from: FormatVersion,
         to: FormatVersion,
@@ -43,6 +43,13 @@ impl Migrator {
 
         match (from, to) {
             (FormatVersion::V1, FormatVersion::V2) => Self::migrate_v1_to_v2(path).await,
+            (FormatVersion::V1, FormatVersion::V3) => {
+                Self::migrate_v1_to_v2(path).await?;
+                super::v2_to_v3::migrate_v2_to_v3(path).await
+            }
+            (FormatVersion::V2, FormatVersion::V3) => {
+                super::v2_to_v3::migrate_v2_to_v3(path).await
+            }
             _ => Err(PersistenceError::Serialization(format!(
                 "Unsupported migration: {:?} -> {:?}",
                 from, to
