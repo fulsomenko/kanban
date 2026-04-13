@@ -148,6 +148,9 @@ pub struct RestoreCard {
 
 impl Command for RestoreCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        if !context.columns.iter().any(|c| c.id == self.column_id) {
+            return Err(KanbanError::not_found("column", self.column_id));
+        }
         let pos = context
             .archived_cards
             .iter()
