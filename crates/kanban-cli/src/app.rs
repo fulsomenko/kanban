@@ -166,12 +166,9 @@ impl CliApp {
                     app.run(save_rx).await?;
                 }
                 #[cfg(not(feature = "tui"))]
-                {
-                    drop(store_manager);
-                    anyhow::bail!(
-                        "TUI not available in this build. Run `kanban --help` for available subcommands."
-                    );
-                }
+                anyhow::bail!(
+                    "TUI not available in this build. Run `kanban --help` for available subcommands."
+                );
             }
             Some(Commands::Completions { .. }) => unreachable!(),
             Some(Commands::Migrate(args)) => {

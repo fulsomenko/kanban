@@ -294,8 +294,12 @@ async fn test_migrate_rejects_unknown_backend() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
+    // clap rejects unrecognised backends via PossibleValuesParser before the
+    // service layer is reached; both rejection sites are acceptable.
     assert!(
-        stderr.contains("No backend named") || stderr.contains("Unknown backend"),
+        stderr.contains("No backend named")
+            || stderr.contains("Unknown backend")
+            || stderr.contains("invalid value"),
         "stderr: {stderr}"
     );
 }
