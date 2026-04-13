@@ -94,6 +94,28 @@ fn test_store_manager_has_backends_reflects_registration_count() {
 }
 
 #[test]
+fn test_store_manager_clone_shares_registry() {
+    // Cloning a StoreManager must produce a handle that can build the same
+    // stores — the underlying Arc<StoreRegistry> is shared, not copied.
+    let mut registry = StoreRegistry::new();
+    registry.register(Box::new(JsonStoreFactory));
+    let original = StoreManager::new(registry);
+    let cloned = original.clone();
+
+    // Both handles must see the same backends.
+    assert!(original.has_backends());
+    assert!(cloned.has_backends());
+
+    // Both must produce a store for the same locator.
+    let store_a = original.make_store("json", "/tmp/clone_a.json").unwrap();
+    let store_b = cloned.make_store("json", "/tmp/clone_b.json").unwrap();
+
+    // instance_ids are per-handle, but both paths must be set correctly.
+    assert!(store_a.path().to_str().unwrap().ends_with(".json"));
+    assert!(store_b.path().to_str().unwrap().ends_with(".json"));
+}
+
+#[test]
 fn test_store_manager_registry_exposes_arc_sharing_semantics() {
     // StoreManager owns Arc<StoreRegistry>; callers should be able to peek
     // at the registry without consuming the manager.
