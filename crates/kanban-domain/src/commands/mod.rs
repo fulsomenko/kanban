@@ -95,9 +95,10 @@ impl<'a> CommandContext<'a> {
                 .filter(|c| c.column_id == column_id && !exclude.contains(&c.id))
                 .count();
             if current + adding > limit as usize {
-                return Err(KanbanError::Domain(
-                    crate::DomainError::wip_limit_exceeded(column_id, limit as u32),
-                ));
+                return Err(KanbanError::Domain(crate::DomainError::wip_limit_exceeded(
+                    column_id,
+                    limit as u32,
+                )));
             }
         }
         Ok(())

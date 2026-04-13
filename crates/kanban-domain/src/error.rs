@@ -200,6 +200,18 @@ mod tests {
     }
 
     #[test]
+    fn test_is_self_reference_returns_false_for_other_error() {
+        let err = KanbanError::not_found("card", Uuid::new_v4());
+        assert!(!err.is_self_reference());
+    }
+
+    #[test]
+    fn test_is_edge_not_found_returns_false_for_other_error() {
+        let err = KanbanError::not_found("card", Uuid::new_v4());
+        assert!(!err.is_edge_not_found());
+    }
+
+    #[test]
     fn test_is_conflict_detected_returns_true() {
         let err = KanbanError::ConflictDetected {
             path: "test.json".to_string(),
