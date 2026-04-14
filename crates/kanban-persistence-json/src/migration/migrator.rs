@@ -223,4 +223,53 @@ mod tests {
             "Backup should be removed after successful migration"
         );
     }
+
+    #[tokio::test]
+    async fn test_migrate_v1_to_v3_via_chain() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("board.json");
+
+        let v1_content = json!({
+            "boards": [{
+                "id": "550e8400-e29b-41d4-a716-446655440001",
+                "name": "Test",
+                "card_prefix": "KAN",
+                "prefix_counters": { "KAN": 3 },
+                "sprint_counters": {},
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            }],
+            "columns": [{ "id": "550e8400-e29b-41d4-a716-446655440002",
+                          "board_id": "550e8400-e29b-41d4-a716-446655440001" }],
+            "cards": [{
+                "id": "550e8400-e29b-41d4-a716-446655440003",
+                "column_id": "550e8400-e29b-41d4-a716-446655440002",
+                "card_number": 1,
+                "assigned_prefix": "KAN",
+                "card_prefix": "KAN"
+            }],
+            "archived_cards": [],
+            "sprints": []
+        });
+        tokio::fs::write(&path, v1_content.to_string()).await.unwrap();
+
+        Migrator::migrate(FormatVersion::V1, FormatVersion::V3, &path)
+            .await
+            .expect("V1→V3 migration must succeed");
+
+        let result: serde_json::Value =
+            serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
+
+        assert_eq!(result["version"], 3, "output version must be 3");
+        assert!(result["metadata"].is_object());
+
+        let board = &result["data"]["boards"][0];
+        assert!(board.get("prefix_counters").is_none(), "prefix_counters must be stripped");
+        assert_eq!(board["card_counter"], 3, "card_counter derived from prefix_counters[KAN]");
+
+        let card = &result["data"]["cards"][0];
+        assert!(card.get("assigned_prefix").is_none(), "assigned_prefix must be stripped");
+        assert!(card.get("card_prefix").is_none(), "card_prefix must be stripped");
+        assert_eq!(card["card_number"], 1);
+    }
 }
