@@ -395,6 +395,32 @@ mod tests {
     }
 
     #[test]
+    fn test_update_sprint_clear_card_prefix_locked_after_card_assigned_returns_validation_error() {
+        let mut tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let sprint_id = sprint.id;
+        let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
+        card.sprint_id = Some(sprint_id);
+        tc.boards.push(board);
+        tc.columns.push(col);
+        tc.sprints.push(sprint);
+        tc.cards.push(card);
+        let mut context = tc.as_command_context();
+
+        let cmd = UpdateSprint {
+            sprint_id,
+            updates: crate::SprintUpdate {
+                card_prefix: crate::FieldUpdate::Clear,
+                ..Default::default()
+            },
+        };
+        let err = cmd.execute(&mut context).unwrap_err();
+        assert!(err.is_validation());
+    }
+
+    #[test]
     fn test_update_sprint_card_prefix_collides_with_board_prefix_returns_validation_error() {
         let mut tc = TestContext::new();
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
