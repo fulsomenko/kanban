@@ -536,6 +536,11 @@ mod tests {
 
         assert_eq!(card.get_sprint_history().len(), 1);
         assert_eq!(card.sprint_id, Some(sprint_id_1));
+        let first_log = &card.get_sprint_history()[0];
+        assert_eq!(first_log.sprint_id, sprint_id_1);
+        assert_eq!(first_log.sprint_number, 1);
+        assert_eq!(first_log.sprint_name, Some("Sprint 1".to_string()));
+        assert!(first_log.ended_at.is_none());
     }
 
     #[test]
@@ -586,6 +591,10 @@ mod tests {
 
         assert_eq!(card.sprint_id, Some(sprint_id_2));
         assert_eq!(card.get_sprint_history().len(), 2);
+        let first_log = &card.get_sprint_history()[0];
+        assert!(first_log.ended_at.is_some());
+        let second_log = &card.get_sprint_history()[1];
+        assert!(second_log.ended_at.is_none());
     }
 
     #[test]
@@ -602,6 +611,8 @@ mod tests {
             Some("Sprint 1".to_string()),
             "Active".to_string(),
         );
+        assert_eq!(card.sprint_id, Some(sprint_id));
+        assert_eq!(card.get_sprint_history().len(), 1);
 
         card.assign_to_sprint(
             sprint_id,
@@ -612,5 +623,8 @@ mod tests {
 
         assert_eq!(card.sprint_id, Some(sprint_id));
         assert_eq!(card.get_sprint_history().len(), 1);
+        let log = &card.get_sprint_history()[0];
+        assert_eq!(log.sprint_id, sprint_id);
+        assert!(log.ended_at.is_none());
     }
 }
