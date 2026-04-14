@@ -229,7 +229,8 @@ fn parse_identifier(identifier: &str) -> Option<ParsedIdentifier> {
 ///
 /// - `"PREFIX-N"`: returns all cards whose resolved prefix equals `PREFIX` (case-insensitive)
 ///   and whose `card_number` equals `N`. Prefix resolution follows:
-///   `card.card_prefix → card.assigned_prefix → sprint.card_prefix → board.card_prefix`.
+///   `sprint.card_prefix → board.card_prefix → "task"` (boards with no configured prefix
+///   are addressed as "task-N", matching the display behaviour of `CardIdentifierSearcher`).
 /// - `"N"` (bare number): returns all cards with `card_number == N` regardless of board.
 /// - Returns an empty `Vec` if the identifier cannot be parsed or no cards match.
 pub fn find_cards_by_identifier<'a>(
@@ -255,11 +256,9 @@ pub fn find_cards_by_identifier<'a>(
                     .sprint_id
                     .and_then(|sid| sprints.iter().find(|s| s.id == sid))
                     .and_then(|s| s.card_prefix.as_deref())
-                    .or(board.card_prefix.as_deref());
-                resolved_prefix
-                    .map(|p: &str| p.to_lowercase() == *prefix)
-                    .unwrap_or(false)
-                    && card.card_number == *number
+                    .or(board.card_prefix.as_deref())
+                    .unwrap_or("task");
+                resolved_prefix.to_lowercase() == *prefix && card.card_number == *number
             }
             ParsedIdentifier::NumberOnly(number) => card.card_number == *number,
         })
