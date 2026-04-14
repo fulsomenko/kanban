@@ -679,9 +679,28 @@ mod tests {
         let card = Card::new(&mut board, column.id, "No prefix task".to_string(), 0);
         let boards = vec![board];
         let columns = vec![column];
-        let cards = vec![card];
+        let cards = vec![card.clone()];
 
-        assert!(find_cards_by_identifier("task-1", &cards, &columns, &boards, &[]).is_empty());
+        let result = find_cards_by_identifier("task-1", &cards, &columns, &boards, &[]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, card.id);
+        assert!(find_cards_by_identifier("KAN-1", &cards, &columns, &boards, &[]).is_empty());
+    }
+
+    #[test]
+    fn test_find_cards_by_identifier_uses_task_fallback_for_no_prefix_board() {
+        let mut board = Board::new("Project".to_string(), None);
+        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let card = Card::new(&mut board, column.id, "task".to_string(), 0);
+        let boards = vec![board];
+        let columns = vec![column];
+        let cards = vec![card.clone()];
+
+        let result = find_cards_by_identifier("task-1", &cards, &columns, &boards, &[]);
+        assert_eq!(result.len(), 1, "no-prefix board should match 'task-N'");
+        assert_eq!(result[0].id, card.id);
+
+        assert!(find_cards_by_identifier("task-99", &cards, &columns, &boards, &[]).is_empty());
         assert!(find_cards_by_identifier("KAN-1", &cards, &columns, &boards, &[]).is_empty());
     }
 
