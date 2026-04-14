@@ -280,6 +280,7 @@ impl App {
     pub fn spawn_save_worker(
         &mut self,
         mut rx: tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>,
+        deferred_watch_path: Option<std::path::PathBuf>,
     ) {
         use kanban_domain::KanbanError;
         use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
@@ -292,7 +293,9 @@ impl App {
 
             tracing::info!("Spawning save worker to process snapshots");
             let handle = tokio::spawn(async move {
+                use kanban_persistence::ChangeDetector;
                 tracing::info!("Save worker task started, waiting for snapshots");
+                let mut watching_started = deferred_watch_path.is_none();
                 while let Some(snapshot) = rx.recv().await {
                     tracing::debug!("Save worker received snapshot, starting save operation");
 
@@ -319,6 +322,25 @@ impl App {
                     {
                         Ok(_) => {
                             tracing::debug!("Save worker completed save");
+                            if !watching_started {
+                                if let (Some(ref watcher), Some(ref p)) =
+                                    (&file_watcher, &deferred_watch_path)
+                                {
+                                    match watcher.start_watching(p.clone()).await {
+                                        Ok(()) => {
+                                            tracing::info!(
+                                                "Deferred file watching started for: {}",
+                                                p.display()
+                                            );
+                                            watching_started = true;
+                                        }
+                                        Err(e) => tracing::warn!(
+                                            "Failed to start deferred file watching: {}",
+                                            e
+                                        ),
+                                    }
+                                }
+                            }
                             if let Some(ref tx) = save_completion_tx {
                                 if let Err(e) = tx.send(()) {
                                     tracing::error!("Failed to send save completion signal: {}", e);
@@ -1633,26 +1655,39 @@ impl App {
             tracing::debug!("File change broadcast receiver subscribed");
 
             let path = std::path::PathBuf::from(save_file);
-            if let Err(e) = watcher.start_watching(path.clone()).await {
-                tracing::warn!(
-                    "Failed to start file watching for {}: {}",
-                    path.display(),
-                    e
-                );
+            let deferred_watch_path = if path.exists() {
+                if let Err(e) = watcher.start_watching(path.clone()).await {
+                    tracing::warn!(
+                        "Failed to start file watching for {}: {}",
+                        path.display(),
+                        e
+                    );
+                } else {
+                    tracing::info!("File watcher started for: {}", path.display());
+                }
+                None
             } else {
-                tracing::info!("File watcher started for: {}", path.display());
-            }
+                tracing::debug!(
+                    "File does not exist yet, deferring file watching until first save: {}",
+                    path.display()
+                );
+                Some(path)
+            };
 
             // Store the watcher to keep the background task alive
             self.persistence.file_watcher = Some(watcher.clone());
             // Also set it on the state manager (wrapped in Arc) so queue_snapshot can pause it
             let watcher_arc = std::sync::Arc::new(watcher);
             self.ctx.save_coordinator.set_file_watcher(watcher_arc);
-        }
 
-        // Spawn async save worker if save channel is configured
-        if let Some(rx) = save_rx {
-            self.spawn_save_worker(rx);
+            // Spawn async save worker if save channel is configured
+            if let Some(rx) = save_rx {
+                self.spawn_save_worker(rx, deferred_watch_path);
+            } else {
+                tracing::debug!("No save channel receiver - no saves will be processed");
+            }
+        } else if let Some(rx) = save_rx {
+            self.spawn_save_worker(rx, None);
         } else {
             tracing::debug!("No save channel receiver - no saves will be processed");
         }

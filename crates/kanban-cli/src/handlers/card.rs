@@ -250,8 +250,6 @@ fn build_card_update(args: &CardUpdateArgs) -> Result<CardUpdate, String> {
             }
         },
         sprint_id: FieldUpdate::NoChange,
-        assigned_prefix: FieldUpdate::NoChange,
-        card_prefix: FieldUpdate::NoChange,
     })
 }
 

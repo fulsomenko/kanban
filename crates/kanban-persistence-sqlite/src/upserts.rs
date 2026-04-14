@@ -23,6 +23,7 @@ pub(crate) async fn upsert_board(
     let next_sprint_number = board["next_sprint_number"].as_i64().unwrap_or(1) as i32;
     let active_sprint_id = board["active_sprint_id"].as_str();
     let task_list_view = required_str(board, "task_list_view")?;
+    let card_counter = board["card_counter"].as_i64().unwrap_or(1) as i32;
     let completion_column_id = board["completion_column_id"].as_str();
     let created_at = required_str(board, "created_at")?;
     let updated_at = required_str(board, "updated_at")?;
@@ -31,8 +32,8 @@ pub(crate) async fn upsert_board(
         "INSERT INTO boards (id, name, description, sprint_prefix, card_prefix,
             task_sort_field, task_sort_order, sprint_duration_days,
             sprint_name_used_count, next_sprint_number, active_sprint_id,
-            task_list_view, completion_column_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            task_list_view, card_counter, completion_column_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             description = excluded.description,
@@ -45,6 +46,7 @@ pub(crate) async fn upsert_board(
             next_sprint_number = excluded.next_sprint_number,
             active_sprint_id = excluded.active_sprint_id,
             task_list_view = excluded.task_list_view,
+            card_counter = excluded.card_counter,
             completion_column_id = excluded.completion_column_id,
             updated_at = excluded.updated_at",
     )
@@ -60,6 +62,7 @@ pub(crate) async fn upsert_board(
     .bind(next_sprint_number)
     .bind(active_sprint_id)
     .bind(task_list_view)
+    .bind(card_counter)
     .bind(completion_column_id)
     .bind(created_at)
     .bind(updated_at)
@@ -81,27 +84,6 @@ pub(crate) async fn upsert_board(
             .bind(id)
             .bind(i as i32)
             .bind(name_val.as_str().unwrap_or_default())
-            .execute(&mut **tx)
-            .await
-            .map_err(db_err)?;
-        }
-    }
-
-    sqlx::query("DELETE FROM board_prefix_counters WHERE board_id = ?")
-        .bind(id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
-
-    if let Some(counters) = board["prefix_counters"].as_object() {
-        for (prefix, counter) in counters {
-            sqlx::query(
-                "INSERT INTO board_prefix_counters (board_id, prefix, counter)
-                 VALUES (?, ?, ?)",
-            )
-            .bind(id)
-            .bind(prefix)
-            .bind(counter.as_i64().unwrap_or(0) as i32)
             .execute(&mut **tx)
             .await
             .map_err(db_err)?;
@@ -189,17 +171,15 @@ pub(crate) async fn upsert_card(
         .transpose()?;
     let card_number = card["card_number"].as_i64().unwrap_or(0) as i32;
     let sprint_id = card["sprint_id"].as_str();
-    let assigned_prefix = card["assigned_prefix"].as_str();
-    let card_prefix = card["card_prefix"].as_str();
     let created_at = required_str(card, "created_at")?;
     let updated_at = required_str(card, "updated_at")?;
     let completed_at = card["completed_at"].as_str();
 
     sqlx::query(
         "INSERT INTO cards (id, column_id, title, description, priority, status, position,
-            due_date, points, card_number, sprint_id, assigned_prefix, card_prefix,
+            due_date, points, card_number, sprint_id,
             created_at, updated_at, completed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
             column_id = excluded.column_id,
             title = excluded.title,
@@ -211,8 +191,6 @@ pub(crate) async fn upsert_card(
             points = excluded.points,
             card_number = excluded.card_number,
             sprint_id = excluded.sprint_id,
-            assigned_prefix = excluded.assigned_prefix,
-            card_prefix = excluded.card_prefix,
             updated_at = excluded.updated_at,
             completed_at = excluded.completed_at",
     )
@@ -227,8 +205,6 @@ pub(crate) async fn upsert_card(
     .bind(points)
     .bind(card_number)
     .bind(sprint_id)
-    .bind(assigned_prefix)
-    .bind(card_prefix)
     .bind(created_at)
     .bind(updated_at)
     .bind(completed_at)

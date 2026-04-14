@@ -36,14 +36,7 @@ impl Command for CreateCard {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let board = context.board_mut(self.board_id)?;
-        let prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
-        let card = crate::Card::new(
-            board,
-            self.column_id,
-            self.title.clone(),
-            self.position,
-            &prefix,
-        );
+        let card = crate::Card::new(board, self.column_id, self.title.clone(), self.position);
         context.cards.push(card);
 
         if self.options.description.is_some()
@@ -393,7 +386,7 @@ mod tests {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
         let card_id = card.id;
         context.cards.push(card);
         let cmd = MoveCard {
@@ -422,7 +415,7 @@ mod tests {
         let mut tc = TestContext::new();
         let mut context = tc.as_command_context();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
         let valid_id = card.id;
         context.cards.push(card);
 
@@ -443,7 +436,7 @@ mod tests {
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let column = crate::Column::new(board.id, "Col".to_string(), 0);
         let column_id = column.id;
-        let card = crate::Card::new(&mut board, column_id, "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, column_id, "Card".to_string(), 0);
         let valid_id = card.id;
         context.columns.push(column);
         let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
@@ -468,7 +461,7 @@ mod tests {
         let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
         column.wip_limit = Some(1);
         let column_id = column.id;
-        let existing = crate::Card::new(&mut board, column_id, "Existing".to_string(), 0, "TST");
+        let existing = crate::Card::new(&mut board, column_id, "Existing".to_string(), 0);
         tc.boards.push(board);
         tc.columns.push(column);
         tc.cards.push(existing);
@@ -492,8 +485,8 @@ mod tests {
         let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
         column.wip_limit = Some(2);
         let column_id = column.id;
-        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0, "TST");
-        let card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 1, "TST");
+        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
+        let card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 1);
         tc.boards.push(board);
         tc.columns.push(column);
         tc.cards.push(card1);
@@ -518,7 +511,7 @@ mod tests {
         let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
         column.wip_limit = Some(2);
         let column_id = column.id;
-        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0, "TST");
+        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
         let board_id = board.id;
         tc.boards.push(board);
         tc.columns.push(column);
@@ -544,8 +537,8 @@ mod tests {
         dst_col.wip_limit = Some(1);
         let src_id = src_col.id;
         let dst_id = dst_col.id;
-        let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0, "TST");
-        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0, "TST");
+        let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0);
+        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0);
         let mover_id = mover.id;
         tc.boards.push(board);
         tc.columns.push(src_col);
@@ -572,8 +565,8 @@ mod tests {
         dst_col.wip_limit = Some(1);
         let src_id = src_col.id;
         let dst_id = dst_col.id;
-        let card1 = crate::Card::new(&mut board, src_id, "C1".to_string(), 0, "TST");
-        let card2 = crate::Card::new(&mut board, src_id, "C2".to_string(), 1, "TST");
+        let card1 = crate::Card::new(&mut board, src_id, "C1".to_string(), 0);
+        let card2 = crate::Card::new(&mut board, src_id, "C2".to_string(), 1);
         let c1_id = card1.id;
         let c2_id = card2.id;
         tc.boards.push(board);
@@ -600,8 +593,8 @@ mod tests {
         dst_col.wip_limit = Some(1);
         let src_id = src_col.id;
         let dst_id = dst_col.id;
-        let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0, "TST");
-        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0, "TST");
+        let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0);
+        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0);
         let mover_id = mover.id;
         tc.boards.push(board);
         tc.columns.push(src_col);
@@ -624,7 +617,7 @@ mod tests {
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
         tc.boards.push(board);
@@ -647,7 +640,7 @@ mod tests {
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
         tc.boards.push(board);
@@ -672,8 +665,8 @@ mod tests {
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
-        let existing = crate::Card::new(&mut board, col_id, "Existing".to_string(), 0, "TST");
-        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 1, "TST");
+        let existing = crate::Card::new(&mut board, col_id, "Existing".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 1);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
         tc.boards.push(board);
@@ -708,7 +701,7 @@ mod tests {
     fn test_assign_cards_to_sprint_validates_sprint_exists() {
         let mut tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
         context_push_board_and_card(&mut tc, board, card);
         let mut context = tc.as_command_context();
 
@@ -724,7 +717,7 @@ mod tests {
     fn test_assign_cards_to_sprint_invalid_ids_skipped_valid_ids_assigned() {
         let mut tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0, "TST");
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
         let valid_id = card.id;
         let sprint = crate::Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
         let sprint_id = sprint.id;
@@ -763,10 +756,10 @@ mod tests {
         let col1_id = col1.id;
         let col2_id = col2.id;
 
-        let existing1 = crate::Card::new(&mut board, col2_id, "Existing1".to_string(), 0, "TST");
-        let existing2 = crate::Card::new(&mut board, col2_id, "Existing2".to_string(), 1, "TST");
-        let move1 = crate::Card::new(&mut board, col1_id, "Move1".to_string(), 0, "TST");
-        let move2 = crate::Card::new(&mut board, col1_id, "Move2".to_string(), 1, "TST");
+        let existing1 = crate::Card::new(&mut board, col2_id, "Existing1".to_string(), 0);
+        let existing2 = crate::Card::new(&mut board, col2_id, "Existing2".to_string(), 1);
+        let move1 = crate::Card::new(&mut board, col1_id, "Move1".to_string(), 0);
+        let move2 = crate::Card::new(&mut board, col1_id, "Move2".to_string(), 1);
         let move1_id = move1.id;
         let move2_id = move2.id;
 
@@ -798,9 +791,9 @@ mod tests {
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let col_id = col.id;
 
-        let card1 = crate::Card::new(&mut board, col_id, "C1".to_string(), 0, "TST");
-        let card2 = crate::Card::new(&mut board, col_id, "C2".to_string(), 1, "TST");
-        let card3 = crate::Card::new(&mut board, col_id, "C3".to_string(), 2, "TST");
+        let card1 = crate::Card::new(&mut board, col_id, "C1".to_string(), 0);
+        let card2 = crate::Card::new(&mut board, col_id, "C2".to_string(), 1);
+        let card3 = crate::Card::new(&mut board, col_id, "C3".to_string(), 2);
         let c1_id = card1.id;
         let c3_id = card3.id;
 
@@ -832,7 +825,7 @@ mod tests {
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let sprint = crate::Sprint::new(board.id, 1, None, Some("Alpha".to_string()));
         let sprint_id = sprint.id;
-        let mut card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0, "TST");
+        let mut card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0);
         // Card has sprint_id set but no sprint logs
         card.sprint_id = Some(sprint_id);
         assert!(card.sprint_logs.is_empty());
@@ -858,9 +851,9 @@ mod tests {
         let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let column_id = col.id;
-        let mut card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0, "TST");
+        let mut card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
         card1.position = 0;
-        let mut card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 5, "TST");
+        let mut card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 5);
         card2.position = 5;
         tc.boards.push(board);
         tc.columns.push(col);

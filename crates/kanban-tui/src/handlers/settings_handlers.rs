@@ -270,7 +270,7 @@ impl App {
 
                 self.persistence.save_file = Some(new_storage_location.clone());
                 self.persistence.save_completion_rx = Some(completion_rx);
-                self.spawn_save_worker(save_rx);
+                self.spawn_save_worker(save_rx, None);
                 self.cli_file_override = false;
                 self.cli_file_provided = false;
                 let msg = if file_existed {

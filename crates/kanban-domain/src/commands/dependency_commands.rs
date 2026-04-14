@@ -132,14 +132,7 @@ pub struct CreateSubcardCommand {
 impl Command for CreateSubcardCommand {
     fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let board = context.board_mut(self.board_id)?;
-        let prefix = board.card_prefix.as_deref().unwrap_or("task").to_string();
-        let mut card = Card::new(
-            board,
-            self.column_id,
-            self.title.clone(),
-            self.position,
-            &prefix,
-        );
+        let mut card = Card::new(board, self.column_id, self.title.clone(), self.position);
 
         if let Some(desc) = &self.description {
             card.description = Some(desc.clone());

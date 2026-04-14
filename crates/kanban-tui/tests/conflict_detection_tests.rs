@@ -14,7 +14,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     // Create initial data and save via first instance
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot1 = Snapshot {
         boards: vec![board.clone()],
@@ -82,7 +82,7 @@ async fn test_no_conflict_when_file_unchanged() {
     // Create and save initial data
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot = Snapshot {
         boards: vec![board.clone()],
@@ -117,7 +117,7 @@ async fn test_conflict_detection_tracks_file_metadata() {
     // Create and save initial data
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let _card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let _card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot = Snapshot {
         boards: vec![board.clone()],
@@ -175,7 +175,7 @@ async fn test_multiple_instances_with_different_ids() {
 
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot = Snapshot {
         boards: vec![board.clone()],
@@ -219,7 +219,7 @@ async fn test_conflict_resolution_with_force_overwrite() {
 
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot = Snapshot {
         boards: vec![board.clone()],
@@ -275,8 +275,8 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     let column1 = Column::new(board1.id, "Todo".to_string(), 0);
     let column2 = Column::new(board1.id, "In Progress".to_string(), 1);
 
-    let card1 = Card::new(&mut board1, column1.id, "Task A".to_string(), 0, "feature");
-    let card2 = Card::new(&mut board1, column2.id, "Task B".to_string(), 0, "bug");
+    let card1 = Card::new(&mut board1, column1.id, "Task A".to_string(), 0);
+    let card2 = Card::new(&mut board1, column2.id, "Task B".to_string(), 0);
 
     let snapshot1 = Snapshot {
         boards: vec![board1.clone()],
@@ -306,7 +306,6 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
         snapshot2.columns[0].id,
         "Task C (from Instance 2)".to_string(),
         0,
-        "chore",
     );
     snapshot2.cards.push(new_card);
 

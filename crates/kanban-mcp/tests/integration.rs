@@ -138,8 +138,6 @@ async fn create_card_then_update_with_all_fields() {
                 points: kanban_domain::FieldUpdate::Set(5),
                 due_date: kanban_domain::FieldUpdate::NoChange,
                 sprint_id: kanban_domain::FieldUpdate::NoChange,
-                assigned_prefix: kanban_domain::FieldUpdate::NoChange,
-                card_prefix: kanban_domain::FieldUpdate::NoChange,
             },
         )
         .unwrap();

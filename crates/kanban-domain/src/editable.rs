@@ -169,8 +169,9 @@ mod tests {
     }
 
     #[test]
-    fn test_card_deserialization_without_card_prefix() {
-        // Test that old Card JSON without card_prefix field deserializes correctly
+    fn test_card_deserialization_from_old_format() {
+        // Test that old Card JSON with legacy fields (assigned_prefix, card_prefix)
+        // still deserializes correctly — unknown fields are silently ignored.
         let old_card_json = r#"{
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "column_id": "550e8400-e29b-41d4-a716-446655440002",
@@ -184,6 +185,7 @@ mod tests {
             "card_number": 1,
             "sprint_id": null,
             "assigned_prefix": "task",
+            "card_prefix": null,
             "created_at": "2024-01-01T00:00:00Z",
             "updated_at": "2024-01-01T00:00:00Z",
             "completed_at": null,
@@ -191,10 +193,8 @@ mod tests {
         }"#;
 
         let card: Card = serde_json::from_str(old_card_json)
-            .expect("Failed to deserialize Card without card_prefix field");
+            .expect("Failed to deserialize Card from old format");
 
-        // card_prefix should default to None via #[serde(default)]
-        assert_eq!(card.card_prefix, None);
         assert_eq!(card.title, "Test Card");
         assert_eq!(card.card_number, 1);
     }

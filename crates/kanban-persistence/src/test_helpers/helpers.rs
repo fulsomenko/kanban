@@ -28,11 +28,7 @@ pub fn fully_populated_snapshot() -> Snapshot {
         next_sprint_number: 3,
         active_sprint_id: Some(sprint_id),
         task_list_view: kanban_domain::task_list_view::TaskListView::GroupedByColumn,
-        prefix_counters: {
-            let mut m = std::collections::HashMap::new();
-            m.insert("FB".into(), 4u32);
-            m
-        },
+        card_counter: 4,
         sprint_counters: {
             let mut m = std::collections::HashMap::new();
             m.insert("sprint".into(), 3u32);
@@ -79,8 +75,6 @@ pub fn fully_populated_snapshot() -> Snapshot {
         points: Some(3),
         card_number: 1,
         sprint_id: Some(sprint_id),
-        assigned_prefix: Some("FB".into()),
-        card_prefix: Some("TASK".into()),
         created_at: now,
         updated_at: now,
         completed_at: None,
@@ -107,8 +101,6 @@ pub fn fully_populated_snapshot() -> Snapshot {
             points: Some(5),
             card_number: 2,
             sprint_id: Some(sprint_id),
-            assigned_prefix: Some("FB".into()),
-            card_prefix: None,
             created_at: now,
             updated_at: now,
             completed_at: Some(now),

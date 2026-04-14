@@ -87,13 +87,7 @@ async fn test_v2_format_is_imported_correctly() {
     let board = Board::new("My Project".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let mut board_mut = board.clone();
-    let card = Card::new(
-        &mut board_mut,
-        column.id,
-        "Important Task".to_string(),
-        0,
-        "task",
-    );
+    let card = Card::new(&mut board_mut, column.id, "Important Task".to_string(), 0);
 
     // Create snapshot with board, column, and card
     let snapshot = Snapshot {

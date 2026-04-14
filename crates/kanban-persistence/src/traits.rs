@@ -110,6 +110,7 @@ pub trait Serializer<T: Send + Sync>: Send + Sync {
 pub enum FormatVersion {
     V1,
     V2,
+    V3,
 }
 
 impl FormatVersion {
@@ -117,6 +118,7 @@ impl FormatVersion {
         match self {
             Self::V1 => 1,
             Self::V2 => 2,
+            Self::V3 => 3,
         }
     }
 
@@ -124,6 +126,7 @@ impl FormatVersion {
         match v {
             1 => Some(Self::V1),
             2 => Some(Self::V2),
+            3 => Some(Self::V3),
             _ => None,
         }
     }

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub(crate) fn build_board(
     row: &sqlx::sqlite::SqliteRow,
     sprint_names: Vec<String>,
-    prefix_counters: HashMap<String, u32>,
+    card_counter: u32,
     sprint_counters: HashMap<String, u32>,
 ) -> PersistenceResult<serde_json::Value> {
     use kanban_domain::board::Board;
@@ -46,7 +46,7 @@ pub(crate) fn build_board(
             .map(parse_uuid)
             .transpose()?,
         task_list_view: parse_enum(&task_list_view_str, "task_list_view")?,
-        prefix_counters,
+        card_counter,
         sprint_counters,
         completion_column_id: completion_column_id_str
             .as_deref()
@@ -113,8 +113,6 @@ pub(crate) fn build_card(
             .transpose()?,
         card_number: row.try_get::<i32, _>("card_number").map_err(db_err)? as u32,
         sprint_id: sprint_id_str.as_deref().map(parse_uuid).transpose()?,
-        assigned_prefix: row.try_get("assigned_prefix").map_err(db_err)?,
-        card_prefix: row.try_get("card_prefix").map_err(db_err)?,
         created_at: parse_datetime(&created_at_str)?,
         updated_at: parse_datetime(&updated_at_str)?,
         completed_at: completed_at_str
