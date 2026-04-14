@@ -23,8 +23,12 @@ impl Command for UpdateSprint {
             let board_id = sprint.board_id;
             let sprint_id = sprint.id;
 
-            // Lock check: prefix is locked if any card is assigned to this sprint
-            let has_cards = context.cards.iter().any(|c| c.sprint_id == Some(sprint_id));
+            // Lock check: prefix is locked if any card (active or archived) is assigned to this sprint
+            let has_cards = context.cards.iter().any(|c| c.sprint_id == Some(sprint_id))
+                || context
+                    .archived_cards
+                    .iter()
+                    .any(|ac| ac.card.sprint_id == Some(sprint_id));
             if has_cards {
                 return Err(KanbanError::validation(
                     "sprint card_prefix cannot be changed after cards have been assigned",
