@@ -368,7 +368,8 @@ mod tests {
     }
 
     #[test]
-    fn test_update_sprint_card_prefix_locked_after_archived_card_assigned_returns_validation_error() {
+    fn test_update_sprint_card_prefix_locked_after_archived_card_assigned_returns_validation_error()
+    {
         let mut tc = TestContext::new();
         let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);

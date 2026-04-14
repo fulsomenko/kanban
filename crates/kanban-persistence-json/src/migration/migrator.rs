@@ -251,7 +251,9 @@ mod tests {
             "archived_cards": [],
             "sprints": []
         });
-        tokio::fs::write(&path, v1_content.to_string()).await.unwrap();
+        tokio::fs::write(&path, v1_content.to_string())
+            .await
+            .unwrap();
 
         Migrator::migrate(FormatVersion::V1, FormatVersion::V3, &path)
             .await
@@ -264,12 +266,24 @@ mod tests {
         assert!(result["metadata"].is_object());
 
         let board = &result["data"]["boards"][0];
-        assert!(board.get("prefix_counters").is_none(), "prefix_counters must be stripped");
-        assert_eq!(board["card_counter"], 3, "card_counter derived from prefix_counters[KAN]");
+        assert!(
+            board.get("prefix_counters").is_none(),
+            "prefix_counters must be stripped"
+        );
+        assert_eq!(
+            board["card_counter"], 3,
+            "card_counter derived from prefix_counters[KAN]"
+        );
 
         let card = &result["data"]["cards"][0];
-        assert!(card.get("assigned_prefix").is_none(), "assigned_prefix must be stripped");
-        assert!(card.get("card_prefix").is_none(), "card_prefix must be stripped");
+        assert!(
+            card.get("assigned_prefix").is_none(),
+            "assigned_prefix must be stripped"
+        );
+        assert!(
+            card.get("card_prefix").is_none(),
+            "card_prefix must be stripped"
+        );
         assert_eq!(card["card_number"], 1);
     }
 }
