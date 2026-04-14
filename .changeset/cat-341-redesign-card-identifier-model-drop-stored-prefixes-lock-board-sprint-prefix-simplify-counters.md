@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 - fix(persistence-json): renumber colliding cards instead of aborting V2→V3 migration
