@@ -24,7 +24,7 @@ pub enum CardCommand {
 }
 
 impl CardCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         match self {
             CardCommand::Create(c) => c.execute(context),
             CardCommand::Update(c) => c.execute(context),
@@ -67,9 +67,10 @@ pub struct UpdateCard {
 }
 
 impl UpdateCard {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let card = context.card_mut(self.card_id)?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut card = context.get_card(self.card_id)?;
         card.update(self.updates.clone());
+        context.store.upsert_card(card)?;
         Ok(())
     }
 
@@ -89,41 +90,42 @@ pub struct CreateCard {
 }
 
 impl CreateCard {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
-        let board = context.board_mut(self.board_id)?;
-        let card = crate::Card::new(board, self.column_id, self.title.clone(), self.position);
-        context.cards.push(card);
+        let mut board = context.get_board(self.board_id)?;
+        let mut card =
+            crate::Card::new(&mut board, self.column_id, self.title.clone(), self.position);
 
         if self.options.description.is_some()
             || self.options.priority.is_some()
             || self.options.points.is_some()
             || self.options.due_date.is_some()
         {
-            if let Some(card) = context.cards.last_mut() {
-                let updates = CardUpdate {
-                    description: self
-                        .options
-                        .description
-                        .clone()
-                        .map(crate::FieldUpdate::Set)
-                        .unwrap_or(crate::FieldUpdate::NoChange),
-                    priority: self.options.priority,
-                    points: self
-                        .options
-                        .points
-                        .map(crate::FieldUpdate::Set)
-                        .unwrap_or(crate::FieldUpdate::NoChange),
-                    due_date: self
-                        .options
-                        .due_date
-                        .map(crate::FieldUpdate::Set)
-                        .unwrap_or(crate::FieldUpdate::NoChange),
-                    ..Default::default()
-                };
-                card.update(updates);
-            }
+            let updates = CardUpdate {
+                description: self
+                    .options
+                    .description
+                    .clone()
+                    .map(crate::FieldUpdate::Set)
+                    .unwrap_or(crate::FieldUpdate::NoChange),
+                priority: self.options.priority,
+                points: self
+                    .options
+                    .points
+                    .map(crate::FieldUpdate::Set)
+                    .unwrap_or(crate::FieldUpdate::NoChange),
+                due_date: self
+                    .options
+                    .due_date
+                    .map(crate::FieldUpdate::Set)
+                    .unwrap_or(crate::FieldUpdate::NoChange),
+                ..Default::default()
+            };
+            card.update(updates);
         }
+
+        context.store.upsert_board(board)?;
+        context.store.upsert_card(card)?;
         Ok(())
     }
 
@@ -141,10 +143,11 @@ pub struct MoveCard {
 }
 
 impl MoveCard {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
-        let card = context.card_mut(self.card_id)?;
+        let mut card = context.get_card(self.card_id)?;
         card.move_to_column(self.new_column_id, self.new_position);
+        context.store.upsert_card(card)?;
         Ok(())
     }
 
@@ -165,20 +168,23 @@ pub struct RestoreCard {
 }
 
 impl RestoreCard {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
-        let pos = context
-            .archived_cards
-            .iter()
-            .position(|c| c.card.id == self.card_id)
+        let archived = context
+            .store
+            .get_archived_card(self.card_id)?
             .ok_or_else(|| KanbanError::not_found("archived card", self.card_id))?;
-        let archived = context.archived_cards.remove(pos);
         let mut card = archived.into_card();
         card.column_id = self.column_id;
         card.position = self.position;
         card.updated_at = Utc::now();
-        context.cards.push(card);
-        context.graph.cards.unarchive_node(self.card_id);
+
+        context.store.delete_archived_card(self.card_id)?;
+        context.store.upsert_card(card)?;
+
+        let mut graph = context.store.get_graph()?;
+        graph.cards.unarchive_node(self.card_id);
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -194,9 +200,11 @@ pub struct DeleteCard {
 }
 
 impl DeleteCard {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        context.archived_cards.retain(|c| c.card.id != self.card_id);
-        context.graph.cards.remove_card_edges(self.card_id);
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context.store.delete_archived_card(self.card_id)?;
+        let mut graph = context.store.get_graph()?;
+        graph.cards.remove_card_edges(self.card_id);
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -212,17 +220,19 @@ pub struct ArchiveCards {
 }
 
 impl ArchiveCards {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let valid_ids = context.filter_valid_card_ids(&self.ids, "ArchiveCards");
+        let mut graph = context.store.get_graph()?;
         for id in &valid_ids {
-            let pos = context.cards.iter().position(|c| c.id == *id).unwrap();
-            let card = context.cards.remove(pos);
+            let card = context.store.get_card(*id)?.unwrap();
             let original_column_id = card.column_id;
             let original_position = card.position;
             let archived = crate::ArchivedCard::new(card, original_column_id, original_position);
-            context.archived_cards.push(archived);
-            context.graph.cards.archive_card_edges(*id);
+            context.store.insert_archived_card(archived)?;
+            context.store.delete_card(*id)?;
+            graph.cards.archive_card_edges(*id);
         }
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -239,20 +249,22 @@ pub struct MoveCards {
 }
 
 impl MoveCards {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         use std::collections::HashSet;
 
         let valid_ids = context.filter_valid_card_ids(&self.ids, "MoveCards");
         context.check_wip_limit(self.column_id, valid_ids.len(), &valid_ids)?;
         let id_set: HashSet<Uuid> = valid_ids.iter().copied().collect();
         let base = context
-            .cards
+            .store
+            .list_cards_by_column(self.column_id)?
             .iter()
-            .filter(|c| c.column_id == self.column_id && !id_set.contains(&c.id))
+            .filter(|c| !id_set.contains(&c.id))
             .count();
         for (i, id) in valid_ids.iter().enumerate() {
-            let card = context.card_mut(*id)?;
+            let mut card = context.get_card(*id)?;
             card.move_to_column(self.column_id, (base + i) as i32);
+            context.store.upsert_card(card)?;
         }
         Ok(())
     }
@@ -274,24 +286,16 @@ pub struct AssignCardsToSprint {
 }
 
 impl AssignCardsToSprint {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let sprint = context
-            .sprints
-            .iter()
-            .find(|s| s.id == self.sprint_id)
-            .ok_or_else(|| KanbanError::not_found("sprint", self.sprint_id))?;
-        let board = context
-            .boards
-            .iter()
-            .find(|b| b.id == sprint.board_id)
-            .ok_or_else(|| KanbanError::not_found("board", sprint.board_id))?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let sprint = context.get_sprint(self.sprint_id)?;
+        let board = context.get_board(sprint.board_id)?;
         let sprint_number = sprint.sprint_number;
-        let sprint_name = sprint.get_name(board).map(|s| s.to_string());
+        let sprint_name = sprint.get_name(&board).map(|s| s.to_string());
         let sprint_status = format!("{:?}", sprint.status);
 
         let valid_ids = context.filter_valid_card_ids(&self.ids, "AssignCardsToSprint");
         for id in &valid_ids {
-            let card = context.card_mut(*id)?;
+            let mut card = context.get_card(*id)?;
             if let Some(old_sprint_id) = card.sprint_id {
                 if old_sprint_id != self.sprint_id {
                     card.end_current_sprint_log();
@@ -303,6 +307,7 @@ impl AssignCardsToSprint {
                 sprint_name.clone(),
                 sprint_status.clone(),
             );
+            context.store.upsert_card(card)?;
         }
         Ok(())
     }
@@ -323,11 +328,12 @@ pub struct UnassignCardFromSprint {
 }
 
 impl UnassignCardFromSprint {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let card = context.card_mut(self.card_id)?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut card = context.get_card(self.card_id)?;
         card.end_current_sprint_log();
         card.sprint_id = None;
         card.updated_at = Utc::now();
+        context.store.upsert_card(card)?;
         Ok(())
     }
 
@@ -344,9 +350,10 @@ pub struct ApplyCardMetadata {
 }
 
 impl ApplyCardMetadata {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let card = context.card_mut(self.card_id)?;
-        self.dto.clone().apply_to(card);
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut card = context.get_card(self.card_id)?;
+        self.dto.clone().apply_to(&mut card);
+        context.store.upsert_card(card)?;
         Ok(())
     }
 
@@ -362,8 +369,14 @@ pub struct CompactColumnPositions {
 }
 
 impl CompactColumnPositions {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        crate::card_lifecycle::compact_column_positions(context.cards, self.column_id);
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let cards = context.store.list_cards_by_column(self.column_id)?;
+        for (i, mut card) in cards.into_iter().enumerate() {
+            if card.position != i as i32 {
+                card.position = i as i32;
+                context.store.upsert_card(card)?;
+            }
+        }
         Ok(())
     }
 
@@ -377,14 +390,17 @@ impl CompactColumnPositions {
 pub struct MigrateSprintLogs;
 
 impl MigrateSprintLogs {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let count = crate::card_lifecycle::migrate_sprint_logs(
-            context.cards,
-            context.sprints,
-            context.boards,
-        );
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut cards = context.store.list_all_cards()?;
+        let sprints = context.store.list_all_sprints()?;
+        let boards = context.store.list_boards()?;
+        let count =
+            crate::card_lifecycle::migrate_sprint_logs(&mut cards, &sprints, &boards);
         if count > 0 {
             tracing::info!("Migrated sprint logs for {} card(s)", count);
+            for card in cards {
+                context.store.upsert_card(card)?;
+            }
         }
         Ok(())
     }
@@ -398,28 +414,24 @@ impl MigrateSprintLogs {
 mod tests {
     use super::super::test_helpers::TestContext;
     use super::*;
-
-    fn context_push_board_and_card(tc: &mut TestContext, board: crate::Board, card: crate::Card) {
-        tc.boards.push(board);
-        tc.cards.push(card);
-    }
+    use crate::DataStore;
 
     #[test]
     fn test_update_card_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = UpdateCard {
             card_id: Uuid::new_v4(),
             updates: CardUpdate::default(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_create_card_board_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = CreateCard {
             board_id: Uuid::new_v4(),
             column_id: Uuid::new_v4(),
@@ -427,163 +439,112 @@ mod tests {
             position: 0,
             options: CreateCardOptions::default(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_move_card_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let column = crate::Column::new(Uuid::new_v4(), "Col".to_string(), 0);
         let column_id = column.id;
-        context.columns.push(column);
+        tc.store.upsert_column(column).unwrap();
+        let context = tc.as_command_context();
         let cmd = MoveCard {
             card_id: Uuid::new_v4(),
             new_column_id: column_id,
             new_position: 0,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_move_card_column_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
         let card_id = card.id;
-        context.cards.push(card);
+        tc.store.upsert_card(card).unwrap();
+        let context = tc.as_command_context();
         let cmd = MoveCard {
             card_id,
             new_column_id: Uuid::new_v4(),
             new_position: 0,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_archive_cards_all_invalid_ids_skipped_returns_ok() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = ArchiveCards {
             ids: vec![Uuid::new_v4()],
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.is_ok());
-        assert_eq!(context.archived_cards.len(), 0);
+        assert_eq!(tc.store.list_archived_cards().unwrap().len(), 0);
     }
 
     #[test]
     fn test_archive_cards_invalid_ids_skipped_valid_ids_archived() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
         let valid_id = card.id;
-        context.cards.push(card);
+        tc.store.upsert_card(card).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = ArchiveCards {
             ids: vec![valid_id, Uuid::new_v4()],
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.is_ok());
-        // Valid card IS archived; invalid ID is skipped
-        assert_eq!(context.cards.len(), 0);
-        assert_eq!(context.archived_cards.len(), 1);
+        assert_eq!(tc.store.list_all_cards().unwrap().len(), 0);
+        assert_eq!(tc.store.list_archived_cards().unwrap().len(), 1);
     }
 
     #[test]
     fn test_move_cards_invalid_ids_skipped_valid_ids_moved() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let column = crate::Column::new(board.id, "Col".to_string(), 0);
         let column_id = column.id;
         let card = crate::Card::new(&mut board, column_id, "Card".to_string(), 0);
         let valid_id = card.id;
-        context.columns.push(column);
+        tc.store.upsert_column(column).unwrap();
         let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
         let target_id = col2.id;
-        context.columns.push(col2);
-        context.cards.push(card);
+        tc.store.upsert_column(col2).unwrap();
+        tc.store.upsert_card(card).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = MoveCards {
             ids: vec![valid_id, Uuid::new_v4()],
             column_id: target_id,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.is_ok());
-        // Valid card IS moved; invalid ID is skipped
-        assert_eq!(context.cards[0].column_id, target_id);
+        let card = tc.store.get_card(valid_id).unwrap().unwrap();
+        assert_eq!(card.column_id, target_id);
     }
 
     #[test]
     fn test_create_card_exceeding_wip_limit_returns_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
         column.wip_limit = Some(1);
         let column_id = column.id;
         let existing = crate::Card::new(&mut board, column_id, "Existing".to_string(), 0);
-        tc.boards.push(board);
-        tc.columns.push(column);
-        tc.cards.push(existing);
-        let mut context = tc.as_command_context();
-
-        let cmd = CreateCard {
-            board_id: context.boards[0].id,
-            column_id,
-            title: "New".to_string(),
-            position: 1,
-            options: CreateCardOptions::default(),
-        };
-        let result = cmd.execute(&mut context);
-        assert!(result.unwrap_err().is_wip_limit_exceeded());
-    }
-
-    #[test]
-    fn test_create_card_at_wip_limit_returns_error() {
-        let mut tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
-        column.wip_limit = Some(2);
-        let column_id = column.id;
-        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
-        let card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 1);
-        tc.boards.push(board);
-        tc.columns.push(column);
-        tc.cards.push(card1);
-        tc.cards.push(card2);
-        let mut context = tc.as_command_context();
-
-        let cmd = CreateCard {
-            board_id: context.boards[0].id,
-            column_id,
-            title: "New".to_string(),
-            position: 2,
-            options: CreateCardOptions::default(),
-        };
-        let result = cmd.execute(&mut context);
-        assert!(result.unwrap_err().is_wip_limit_exceeded());
-    }
-
-    #[test]
-    fn test_create_card_below_wip_limit_succeeds() {
-        let mut tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
-        column.wip_limit = Some(2);
-        let column_id = column.id;
-        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
         let board_id = board.id;
-        tc.boards.push(board);
-        tc.columns.push(column);
-        tc.cards.push(card1);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(column).unwrap();
+        tc.store.upsert_card(existing).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = CreateCard {
             board_id,
             column_id,
@@ -591,40 +552,91 @@ mod tests {
             position: 1,
             options: CreateCardOptions::default(),
         };
-        assert!(cmd.execute(&mut context).is_ok());
+        let result = cmd.execute(&context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_create_card_at_wip_limit_returns_error() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
+        column.wip_limit = Some(2);
+        let column_id = column.id;
+        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
+        let card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 1);
+        let board_id = board.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(column).unwrap();
+        tc.store.upsert_card(card1).unwrap();
+        tc.store.upsert_card(card2).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "New".to_string(),
+            position: 2,
+            options: CreateCardOptions::default(),
+        };
+        let result = cmd.execute(&context);
+        assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_create_card_below_wip_limit_succeeds() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
+        column.wip_limit = Some(2);
+        let column_id = column.id;
+        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
+        let board_id = board.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(column).unwrap();
+        tc.store.upsert_card(card1).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = CreateCard {
+            board_id,
+            column_id,
+            title: "New".to_string(),
+            position: 1,
+            options: CreateCardOptions::default(),
+        };
+        assert!(cmd.execute(&context).is_ok());
     }
 
     #[test]
     fn test_move_card_exceeding_wip_limit_returns_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let src_col = crate::Column::new(board.id, "Source".to_string(), 0);
         let mut dst_col = crate::Column::new(board.id, "Dest".to_string(), 1);
         dst_col.wip_limit = Some(1);
-        let src_id = src_col.id;
         let dst_id = dst_col.id;
         let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0);
-        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0);
+        let mover = crate::Card::new(&mut board, src_col.id, "Mover".to_string(), 0);
         let mover_id = mover.id;
-        tc.boards.push(board);
-        tc.columns.push(src_col);
-        tc.columns.push(dst_col);
-        tc.cards.push(existing);
-        tc.cards.push(mover);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(src_col).unwrap();
+        tc.store.upsert_column(dst_col).unwrap();
+        tc.store.upsert_card(existing).unwrap();
+        tc.store.upsert_card(mover).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = MoveCard {
             card_id: mover_id,
             new_column_id: dst_id,
             new_position: 1,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
     }
 
     #[test]
     fn test_move_cards_exceeding_wip_limit_returns_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let src_col = crate::Column::new(board.id, "Source".to_string(), 0);
         let mut dst_col = crate::Column::new(board.id, "Dest".to_string(), 1);
@@ -635,98 +647,97 @@ mod tests {
         let card2 = crate::Card::new(&mut board, src_id, "C2".to_string(), 1);
         let c1_id = card1.id;
         let c2_id = card2.id;
-        tc.boards.push(board);
-        tc.columns.push(src_col);
-        tc.columns.push(dst_col);
-        tc.cards.push(card1);
-        tc.cards.push(card2);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(src_col).unwrap();
+        tc.store.upsert_column(dst_col).unwrap();
+        tc.store.upsert_card(card1).unwrap();
+        tc.store.upsert_card(card2).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = MoveCards {
             ids: vec![c1_id, c2_id],
             column_id: dst_id,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
     }
 
     #[test]
     fn test_move_cards_exactly_at_wip_limit_returns_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let src_col = crate::Column::new(board.id, "Source".to_string(), 0);
         let mut dst_col = crate::Column::new(board.id, "Dest".to_string(), 1);
         dst_col.wip_limit = Some(1);
-        let src_id = src_col.id;
         let dst_id = dst_col.id;
         let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0);
-        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0);
+        let mover = crate::Card::new(&mut board, src_col.id, "Mover".to_string(), 0);
         let mover_id = mover.id;
-        tc.boards.push(board);
-        tc.columns.push(src_col);
-        tc.columns.push(dst_col);
-        tc.cards.push(existing);
-        tc.cards.push(mover);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(src_col).unwrap();
+        tc.store.upsert_column(dst_col).unwrap();
+        tc.store.upsert_card(existing).unwrap();
+        tc.store.upsert_card(mover).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = MoveCards {
             ids: vec![mover_id],
             column_id: dst_id,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
     }
 
     #[test]
     fn test_restore_card_to_deleted_column_returns_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let col_id = col.id;
         let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
-        tc.boards.push(board);
+        tc.store.upsert_board(board).unwrap();
         // Column intentionally NOT added — it has been deleted
-        tc.archived_cards.push(archived);
-        let mut context = tc.as_command_context();
+        tc.store.insert_archived_card(archived).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = RestoreCard {
             card_id,
             column_id: col_id,
             position: 0,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_restore_card_to_valid_column_succeeds() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let col_id = col.id;
         let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
-        tc.boards.push(board);
-        tc.columns.push(col);
-        tc.archived_cards.push(archived);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.insert_archived_card(archived).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = RestoreCard {
             card_id,
             column_id: col_id,
             position: 0,
         };
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.cards.len(), 1);
-        assert_eq!(context.archived_cards.len(), 0);
+        assert!(cmd.execute(&context).is_ok());
+        assert_eq!(tc.store.list_all_cards().unwrap().len(), 1);
+        assert_eq!(tc.store.list_archived_cards().unwrap().len(), 0);
     }
 
     #[test]
     fn test_restore_card_exceeding_wip_limit_returns_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(1);
@@ -735,87 +746,89 @@ mod tests {
         let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 1);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
-        tc.boards.push(board);
-        tc.columns.push(col);
-        tc.cards.push(existing);
-        tc.archived_cards.push(archived);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_card(existing).unwrap();
+        tc.store.insert_archived_card(archived).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = RestoreCard {
             card_id,
             column_id: col_id,
             position: 1,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
     }
 
     #[test]
     fn test_restore_card_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = RestoreCard {
             card_id: Uuid::new_v4(),
             column_id: Uuid::new_v4(),
             position: 0,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_assign_cards_to_sprint_validates_sprint_exists() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
-        context_push_board_and_card(&mut tc, board, card);
-        let mut context = tc.as_command_context();
+        let card_id = card.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_card(card).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = AssignCardsToSprint {
-            ids: vec![context.cards[0].id],
+            ids: vec![card_id],
             sprint_id: Uuid::new_v4(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_assign_cards_to_sprint_invalid_ids_skipped_valid_ids_assigned() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
         let valid_id = card.id;
         let sprint = crate::Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
         let sprint_id = sprint.id;
-        tc.boards.push(board);
-        tc.cards.push(card);
-        tc.sprints.push(sprint);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_card(card).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = AssignCardsToSprint {
             ids: vec![valid_id, Uuid::new_v4()],
             sprint_id,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.is_ok());
-        // Valid card IS assigned; invalid ID is skipped
-        assert_eq!(context.cards[0].sprint_id, Some(sprint_id));
+        let card = tc.store.get_card(valid_id).unwrap().unwrap();
+        assert_eq!(card.sprint_id, Some(sprint_id));
     }
 
     #[test]
     fn test_unassign_card_from_sprint_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = UnassignCardFromSprint {
             card_id: Uuid::new_v4(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_move_cards_with_existing_cards_appends_after_last_position() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let col1 = crate::Column::new(board.id, "From".to_string(), 0);
         let col2 = crate::Column::new(board.id, "To".to_string(), 1);
@@ -829,30 +842,30 @@ mod tests {
         let move1_id = move1.id;
         let move2_id = move2.id;
 
-        tc.boards.push(board);
-        tc.columns.push(col1);
-        tc.columns.push(col2);
-        tc.cards.push(existing1);
-        tc.cards.push(existing2);
-        tc.cards.push(move1);
-        tc.cards.push(move2);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col1).unwrap();
+        tc.store.upsert_column(col2).unwrap();
+        tc.store.upsert_card(existing1).unwrap();
+        tc.store.upsert_card(existing2).unwrap();
+        tc.store.upsert_card(move1).unwrap();
+        tc.store.upsert_card(move2).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = MoveCards {
             ids: vec![move1_id, move2_id],
             column_id: col2_id,
         };
-        let mut context = tc.as_command_context();
-        cmd.execute(&mut context).unwrap();
+        cmd.execute(&context).unwrap();
 
-        let m1 = context.cards.iter().find(|c| c.id == move1_id).unwrap();
-        let m2 = context.cards.iter().find(|c| c.id == move2_id).unwrap();
+        let m1 = tc.store.get_card(move1_id).unwrap().unwrap();
+        let m2 = tc.store.get_card(move2_id).unwrap().unwrap();
         assert_eq!(m1.position, 2, "first moved card should be at position 2");
         assert_eq!(m2.position, 3, "second moved card should be at position 3");
     }
 
     #[test]
     fn test_move_cards_within_same_column_reindexes() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let col_id = col.id;
@@ -863,57 +876,59 @@ mod tests {
         let c1_id = card1.id;
         let c3_id = card3.id;
 
-        tc.boards.push(board);
-        tc.columns.push(col);
-        tc.cards.push(card1);
-        tc.cards.push(card2);
-        tc.cards.push(card3);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_card(card1).unwrap();
+        tc.store.upsert_card(card2).unwrap();
+        tc.store.upsert_card(card3).unwrap();
 
+        let context = tc.as_command_context();
         // Move cards 1 and 3 within the same column — card2 stays
         let cmd = MoveCards {
             ids: vec![c1_id, c3_id],
             column_id: col_id,
         };
-        let mut context = tc.as_command_context();
-        cmd.execute(&mut context).unwrap();
+        cmd.execute(&context).unwrap();
 
         // card2 is the only non-moved card in the column, so base = 1
-        let c1 = context.cards.iter().find(|c| c.id == c1_id).unwrap();
-        let c3 = context.cards.iter().find(|c| c.id == c3_id).unwrap();
+        let c1 = tc.store.get_card(c1_id).unwrap().unwrap();
+        let c3 = tc.store.get_card(c3_id).unwrap().unwrap();
         assert_eq!(c1.position, 1, "first moved card should be at base(1) + 0");
         assert_eq!(c3.position, 2, "second moved card should be at base(1) + 1");
     }
 
     #[test]
     fn test_migrate_sprint_logs_backfills_cards_missing_sprint_log() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let sprint = crate::Sprint::new(board.id, 1, None, Some("Alpha".to_string()));
         let sprint_id = sprint.id;
         let mut card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0);
+        let card_id = card.id;
         // Card has sprint_id set but no sprint logs
         card.sprint_id = Some(sprint_id);
         assert!(card.sprint_logs.is_empty());
-        tc.boards.push(board);
-        tc.sprints.push(sprint);
-        tc.cards.push(card);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+        tc.store.upsert_card(card).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = MigrateSprintLogs;
-        let mut context = tc.as_command_context();
-        cmd.execute(&mut context).unwrap();
+        cmd.execute(&context).unwrap();
 
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
         assert_eq!(
-            context.cards[0].sprint_logs.len(),
+            card.sprint_logs.len(),
             1,
             "sprint log should be backfilled for card with sprint_id but empty logs"
         );
-        assert_eq!(context.cards[0].sprint_logs[0].sprint_number, 1);
+        assert_eq!(card.sprint_logs[0].sprint_number, 1);
     }
 
     #[test]
     fn test_compact_column_positions_makes_sequential() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let column_id = col.id;
@@ -921,16 +936,17 @@ mod tests {
         card1.position = 0;
         let mut card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 5);
         card2.position = 5;
-        tc.boards.push(board);
-        tc.columns.push(col);
-        tc.cards.push(card1);
-        tc.cards.push(card2);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_card(card1).unwrap();
+        tc.store.upsert_card(card2).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = CompactColumnPositions { column_id };
-        let mut context = tc.as_command_context();
-        cmd.execute(&mut context).unwrap();
+        cmd.execute(&context).unwrap();
 
-        assert_eq!(context.cards[0].position, 0);
-        assert_eq!(context.cards[1].position, 1);
+        let cards = tc.store.list_cards_by_column(column_id).unwrap();
+        assert_eq!(cards[0].position, 0);
+        assert_eq!(cards[1].position, 1);
     }
 }

@@ -17,7 +17,7 @@ pub enum DependencyCommand {
 }
 
 impl DependencyCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         match self {
             DependencyCommand::AddBlocks(c) => c.execute(context),
             DependencyCommand::AddRelatesTo(c) => c.execute(context),
@@ -48,11 +48,10 @@ pub struct AddBlocksDependencyCommand {
 }
 
 impl AddBlocksDependencyCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        context
-            .graph
-            .cards
-            .add_blocks(self.blocker_id, self.blocked_id)?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut graph = context.store.get_graph()?;
+        graph.cards.add_blocks(self.blocker_id, self.blocked_id)?;
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -72,11 +71,12 @@ pub struct AddRelatesToDependencyCommand {
 }
 
 impl AddRelatesToDependencyCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        context
-            .graph
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut graph = context.store.get_graph()?;
+        graph
             .cards
             .add_relates_to(self.card_a_id, self.card_b_id)?;
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -96,11 +96,10 @@ pub struct RemoveDependencyCommand {
 }
 
 impl RemoveDependencyCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        context
-            .graph
-            .cards
-            .remove_edge(self.source_id, self.target_id);
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut graph = context.store.get_graph()?;
+        graph.cards.remove_edge(self.source_id, self.target_id);
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -120,11 +119,10 @@ pub struct SetParentCommand {
 }
 
 impl SetParentCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        context
-            .graph
-            .cards
-            .set_parent(self.child_id, self.parent_id)?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut graph = context.store.get_graph()?;
+        graph.cards.set_parent(self.child_id, self.parent_id)?;
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -144,11 +142,10 @@ pub struct RemoveParentCommand {
 }
 
 impl RemoveParentCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        context
-            .graph
-            .cards
-            .remove_parent(self.child_id, self.parent_id)?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut graph = context.store.get_graph()?;
+        graph.cards.remove_parent(self.child_id, self.parent_id)?;
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -172,18 +169,21 @@ pub struct CreateSubcardCommand {
 }
 
 impl CreateSubcardCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let board = context.board_mut(self.board_id)?;
-        let mut card = Card::new(board, self.column_id, self.title.clone(), self.position);
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut board = context.get_board(self.board_id)?;
+        let mut card = Card::new(&mut board, self.column_id, self.title.clone(), self.position);
 
         if let Some(desc) = &self.description {
             card.description = Some(desc.clone());
         }
 
         let card_id = card.id;
-        context.cards.push(card);
+        context.store.upsert_board(board)?;
+        context.store.upsert_card(card)?;
 
-        context.graph.cards.set_parent(card_id, self.parent_id)?;
+        let mut graph = context.store.get_graph()?;
+        graph.cards.set_parent(card_id, self.parent_id)?;
+        context.store.set_graph(graph)?;
         Ok(())
     }
 
@@ -199,11 +199,12 @@ impl CreateSubcardCommand {
 mod tests {
     use super::super::test_helpers::TestContext;
     use super::*;
+    use crate::DataStore;
 
     #[test]
     fn test_add_blocks_dependency() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let card_a = Uuid::new_v4();
         let card_b = Uuid::new_v4();
 
@@ -212,14 +213,15 @@ mod tests {
             blocked_id: card_b,
         };
 
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.graph.cards.blockers(card_b).len(), 1);
+        assert!(cmd.execute(&context).is_ok());
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(graph.cards.blockers(card_b).len(), 1);
     }
 
     #[test]
     fn test_add_relates_to_dependency() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let card_a = Uuid::new_v4();
         let card_b = Uuid::new_v4();
 
@@ -228,34 +230,40 @@ mod tests {
             card_b_id: card_b,
         };
 
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.graph.cards.related(card_a).len(), 1);
-        assert_eq!(context.graph.cards.related(card_b).len(), 1);
+        assert!(cmd.execute(&context).is_ok());
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(graph.cards.related(card_a).len(), 1);
+        assert_eq!(graph.cards.related(card_b).len(), 1);
     }
 
     #[test]
     fn test_remove_dependency() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let card_a = Uuid::new_v4();
         let card_b = Uuid::new_v4();
 
-        context.graph.cards.add_blocks(card_a, card_b).unwrap();
-        assert_eq!(context.graph.cards.blockers(card_b).len(), 1);
+        {
+            let mut graph = tc.store.get_graph().unwrap();
+            graph.cards.add_blocks(card_a, card_b).unwrap();
+            tc.store.set_graph(graph).unwrap();
+        }
+        assert_eq!(tc.store.get_graph().unwrap().cards.blockers(card_b).len(), 1);
 
+        let context = tc.as_command_context();
         let cmd = RemoveDependencyCommand {
             source_id: card_a,
             target_id: card_b,
         };
 
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.graph.cards.blockers(card_b).len(), 0);
+        assert!(cmd.execute(&context).is_ok());
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(graph.cards.blockers(card_b).len(), 0);
     }
 
     #[test]
     fn test_set_parent_command() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
 
@@ -264,16 +272,17 @@ mod tests {
             parent_id,
         };
 
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.graph.cards.children(parent_id).len(), 1);
-        assert_eq!(context.graph.cards.parents(child_id).len(), 1);
-        assert!(context.graph.cards.children(parent_id).contains(&child_id));
+        assert!(cmd.execute(&context).is_ok());
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(graph.cards.children(parent_id).len(), 1);
+        assert_eq!(graph.cards.parents(child_id).len(), 1);
+        assert!(graph.cards.children(parent_id).contains(&child_id));
     }
 
     #[test]
     fn test_set_parent_command_prevents_cycle() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let card_a = Uuid::new_v4();
         let card_b = Uuid::new_v4();
 
@@ -281,38 +290,46 @@ mod tests {
             child_id: card_b,
             parent_id: card_a,
         };
-        assert!(cmd1.execute(&mut context).is_ok());
+        assert!(cmd1.execute(&context).is_ok());
 
         let cmd2 = SetParentCommand {
             child_id: card_a,
             parent_id: card_b,
         };
-        assert!(cmd2.execute(&mut context).is_err());
+        assert!(cmd2.execute(&context).is_err());
     }
 
     #[test]
     fn test_remove_parent_command() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
 
-        context.graph.cards.set_parent(child_id, parent_id).unwrap();
-        assert_eq!(context.graph.cards.children(parent_id).len(), 1);
+        {
+            let mut graph = tc.store.get_graph().unwrap();
+            graph.cards.set_parent(child_id, parent_id).unwrap();
+            tc.store.set_graph(graph).unwrap();
+        }
+        assert_eq!(
+            tc.store.get_graph().unwrap().cards.children(parent_id).len(),
+            1
+        );
 
+        let context = tc.as_command_context();
         let cmd = RemoveParentCommand {
             child_id,
             parent_id,
         };
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.graph.cards.children(parent_id).len(), 0);
-        assert_eq!(context.graph.cards.parents(child_id).len(), 0);
+        assert!(cmd.execute(&context).is_ok());
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(graph.cards.children(parent_id).len(), 0);
+        assert_eq!(graph.cards.parents(child_id).len(), 0);
     }
 
     #[test]
     fn test_remove_parent_command_nonexistent() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
 
@@ -320,23 +337,23 @@ mod tests {
             child_id,
             parent_id,
         };
-        assert!(cmd.execute(&mut context).is_err());
+        assert!(cmd.execute(&context).is_err());
     }
 
     #[test]
     fn test_create_subcard_command() {
         use crate::Board;
 
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let column_id = Uuid::new_v4();
         let parent_id = Uuid::new_v4();
 
         let mut board = Board::new("Test Board".to_string(), None);
         board.card_prefix = Some("TEST".to_string());
         let board_id = board.id;
-        context.boards.push(board);
+        tc.store.upsert_board(board).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = CreateSubcardCommand {
             parent_id,
             board_id,
@@ -346,33 +363,35 @@ mod tests {
             position: 0,
         };
 
-        assert!(cmd.execute(&mut context).is_ok());
+        assert!(cmd.execute(&context).is_ok());
 
-        assert_eq!(context.cards.len(), 1);
-        let card = &context.cards[0];
+        let cards = tc.store.list_all_cards().unwrap();
+        assert_eq!(cards.len(), 1);
+        let card = &cards[0];
         assert_eq!(card.title, "Test Subcard");
         assert_eq!(card.description, Some("Test description".to_string()));
         assert_eq!(card.column_id, column_id);
 
-        assert_eq!(context.graph.cards.children(parent_id).len(), 1);
-        assert_eq!(context.graph.cards.parents(card.id).len(), 1);
-        assert!(context.graph.cards.children(parent_id).contains(&card.id));
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(graph.cards.children(parent_id).len(), 1);
+        assert_eq!(graph.cards.parents(card.id).len(), 1);
+        assert!(graph.cards.children(parent_id).contains(&card.id));
     }
 
     #[test]
     fn test_create_subcard_without_description() {
         use crate::Board;
 
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let parent_id = Uuid::new_v4();
         let column_id = Uuid::new_v4();
 
         let mut board = Board::new("Test Board".to_string(), None);
         board.card_prefix = Some("TEST".to_string());
         let board_id = board.id;
-        context.boards.push(board);
+        tc.store.upsert_board(board).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = CreateSubcardCommand {
             parent_id,
             board_id,
@@ -382,8 +401,9 @@ mod tests {
             position: 0,
         };
 
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.cards.len(), 1);
-        assert_eq!(context.cards[0].description, None);
+        assert!(cmd.execute(&context).is_ok());
+        let cards = tc.store.list_all_cards().unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].description, None);
     }
 }

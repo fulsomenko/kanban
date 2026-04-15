@@ -1,7 +1,7 @@
 use super::CommandContext;
 use crate::field_update::FieldUpdate;
 use crate::KanbanResult;
-use crate::{ArchivedCard, Board, BoardUpdate, Card, Column, DependencyGraph, KanbanError, Sprint};
+use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, Sprint};
 use kanban_core::Editable;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -19,7 +19,7 @@ pub enum BoardCommand {
 }
 
 impl BoardCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         match self {
             BoardCommand::Create(c) => c.execute(context),
             BoardCommand::Update(c) => c.execute(context),
@@ -52,9 +52,9 @@ pub struct CreateBoard {
 }
 
 impl CreateBoard {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let board = Board::new(self.name.clone(), self.card_prefix.clone());
-        context.boards.push(board);
+        context.store.upsert_board(board)?;
         Ok(())
     }
 
@@ -67,26 +67,19 @@ impl CreateBoard {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateBoard {
     pub board_id: Uuid,
-    pub updates: BoardUpdate,
+    pub updates: crate::BoardUpdate,
 }
 
 impl UpdateBoard {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        if !matches!(self.updates.card_prefix, FieldUpdate::NoChange) {
-            let card_counter = context
-                .boards
-                .iter()
-                .find(|b| b.id == self.board_id)
-                .ok_or_else(|| KanbanError::not_found("board", self.board_id))?
-                .card_counter;
-            if card_counter > 1 {
-                return Err(KanbanError::validation(
-                    "board card_prefix cannot be changed after cards have been created",
-                ));
-            }
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut board = context.get_board(self.board_id)?;
+        if !matches!(self.updates.card_prefix, FieldUpdate::NoChange) && board.card_counter > 1 {
+            return Err(KanbanError::validation(
+                "board card_prefix cannot be changed after cards have been created",
+            ));
         }
-        let board = context.board_mut(self.board_id)?;
         board.update(self.updates.clone());
+        context.store.upsert_board(board)?;
         Ok(())
     }
 
@@ -104,9 +97,10 @@ pub struct SetBoardTaskSort {
 }
 
 impl SetBoardTaskSort {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let board = context.board_mut(self.board_id)?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut board = context.get_board(self.board_id)?;
         board.update_task_sort(self.field, self.order);
+        context.store.upsert_board(board)?;
         Ok(())
     }
 
@@ -123,9 +117,10 @@ pub struct SetBoardTaskListView {
 }
 
 impl SetBoardTaskListView {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let board = context.board_mut(self.board_id)?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut board = context.get_board(self.board_id)?;
         board.update_task_list_view(self.view);
+        context.store.upsert_board(board)?;
         Ok(())
     }
 
@@ -141,21 +136,26 @@ pub struct DeleteBoard {
 }
 
 impl DeleteBoard {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let column_ids: Vec<Uuid> = context
-            .columns
+            .store
+            .list_columns_by_board(self.board_id)?
             .iter()
-            .filter(|c| c.board_id == self.board_id)
             .map(|c| c.id)
             .collect();
 
-        context.boards.retain(|b| b.id != self.board_id);
-        context.columns.retain(|c| c.board_id != self.board_id);
-        context.cards.retain(|c| !column_ids.contains(&c.column_id));
-        context
-            .archived_cards
-            .retain(|ac| !column_ids.contains(&ac.original_column_id));
-        context.sprints.retain(|s| s.board_id != self.board_id);
+        context.store.delete_cards_by_columns(&column_ids)?;
+
+        let archived = context.store.list_archived_cards()?;
+        for ac in archived {
+            if column_ids.contains(&ac.original_column_id) {
+                context.store.delete_archived_card(ac.card.id)?;
+            }
+        }
+
+        context.store.delete_columns_by_board(self.board_id)?;
+        context.store.delete_sprints_by_board(self.board_id)?;
+        context.store.delete_board(self.board_id)?;
         Ok(())
     }
 
@@ -172,9 +172,10 @@ pub struct ApplyBoardSettings {
 }
 
 impl ApplyBoardSettings {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let board = context.board_mut(self.board_id)?;
-        self.dto.clone().apply_to(board);
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut board = context.get_board(self.board_id)?;
+        self.dto.clone().apply_to(&mut board);
+        context.store.upsert_board(board)?;
         Ok(())
     }
 
@@ -196,15 +197,35 @@ pub struct ImportEntities {
 }
 
 impl ImportEntities {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         use std::collections::HashSet;
 
-        let existing_board_ids: HashSet<Uuid> = context.boards.iter().map(|b| b.id).collect();
-        let existing_column_ids: HashSet<Uuid> = context.columns.iter().map(|c| c.id).collect();
-        let existing_card_ids: HashSet<Uuid> = context.cards.iter().map(|c| c.id).collect();
-        let existing_sprint_ids: HashSet<Uuid> = context.sprints.iter().map(|s| s.id).collect();
-        let existing_archived_ids: HashSet<Uuid> =
-            context.archived_cards.iter().map(|ac| ac.card.id).collect();
+        let existing_board_ids: HashSet<Uuid> =
+            context.store.list_boards()?.iter().map(|b| b.id).collect();
+        let existing_column_ids: HashSet<Uuid> = context
+            .store
+            .list_all_columns()?
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        let existing_card_ids: HashSet<Uuid> = context
+            .store
+            .list_all_cards()?
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        let existing_sprint_ids: HashSet<Uuid> = context
+            .store
+            .list_all_sprints()?
+            .iter()
+            .map(|s| s.id)
+            .collect();
+        let existing_archived_ids: HashSet<Uuid> = context
+            .store
+            .list_archived_cards()?
+            .iter()
+            .map(|ac| ac.card.id)
+            .collect();
 
         for b in &self.boards {
             if existing_board_ids.contains(&b.id) {
@@ -247,13 +268,23 @@ impl ImportEntities {
             }
         }
 
-        context.boards.extend(self.boards.clone());
-        context.columns.extend(self.columns.clone());
-        context.cards.extend(self.cards.clone());
-        context.archived_cards.extend(self.archived_cards.clone());
-        context.sprints.extend(self.sprints.clone());
+        for b in &self.boards {
+            context.store.upsert_board(b.clone())?;
+        }
+        for c in &self.columns {
+            context.store.upsert_column(c.clone())?;
+        }
+        for c in &self.cards {
+            context.store.upsert_card(c.clone())?;
+        }
+        for ac in &self.archived_cards {
+            context.store.insert_archived_card(ac.clone())?;
+        }
+        for s in &self.sprints {
+            context.store.upsert_sprint(s.clone())?;
+        }
         if let Some(ref graph) = self.graph {
-            *context.graph = graph.clone();
+            context.store.set_graph(graph.clone())?;
         }
         Ok(())
     }
@@ -267,50 +298,51 @@ impl ImportEntities {
 mod tests {
     use super::super::test_helpers::TestContext;
     use super::*;
+    use crate::DataStore;
 
     #[test]
     fn test_update_board_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = UpdateBoard {
             board_id: Uuid::new_v4(),
-            updates: BoardUpdate::default(),
+            updates: crate::BoardUpdate::default(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_set_board_task_sort_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = SetBoardTaskSort {
             board_id: Uuid::new_v4(),
             field: crate::SortField::Priority,
             order: crate::SortOrder::Ascending,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_set_board_task_list_view_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = SetBoardTaskListView {
             board_id: Uuid::new_v4(),
             view: crate::TaskListView::default(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_import_entities_with_duplicate_board_id_returns_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let b1 = Board::new("B1".to_string(), None);
         let dup_id = b1.id;
-        tc.boards.push(b1);
+        tc.store.upsert_board(b1).unwrap();
 
         let mut dup = Board::new("Dup".to_string(), None);
         dup.id = dup_id;
@@ -323,22 +355,22 @@ mod tests {
             sprints: vec![],
             graph: None,
         };
-        let mut context = tc.as_command_context();
-        let result = cmd.execute(&mut context);
+        let context = tc.as_command_context();
+        let result = cmd.execute(&context);
         assert!(result.is_err());
         assert!(result.unwrap_err().is_validation());
     }
 
     #[test]
     fn test_import_entities_with_duplicate_card_id_returns_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = Board::new("B".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0);
         let dup_card_id = card.id;
-        tc.boards.push(board.clone());
-        tc.columns.push(col);
-        tc.cards.push(card);
+        tc.store.upsert_board(board.clone()).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_card(card).unwrap();
 
         let mut dup_card = crate::Card::new(&mut board, Uuid::new_v4(), "Dup".to_string(), 0);
         dup_card.id = dup_card_id;
@@ -351,17 +383,17 @@ mod tests {
             sprints: vec![],
             graph: None,
         };
-        let mut context = tc.as_command_context();
-        let result = cmd.execute(&mut context);
+        let context = tc.as_command_context();
+        let result = cmd.execute(&context);
         assert!(result.is_err());
         assert!(result.unwrap_err().is_validation());
     }
 
     #[test]
     fn test_import_entities_appends_without_replacing() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let b1 = Board::new("B1".to_string(), None);
-        tc.boards.push(b1.clone());
+        tc.store.upsert_board(b1).unwrap();
 
         let b2 = Board::new("B2".to_string(), None);
         let col = crate::Column::new(b2.id, "Todo".to_string(), 0);
@@ -377,77 +409,79 @@ mod tests {
             graph: None,
         };
 
-        let mut context = tc.as_command_context();
-        cmd.execute(&mut context).unwrap();
+        let context = tc.as_command_context();
+        cmd.execute(&context).unwrap();
 
-        assert_eq!(context.boards.len(), 2);
-        assert_eq!(context.boards[0].name, "B1");
-        assert_eq!(context.boards[1].name, "B2");
-        assert_eq!(context.columns.len(), 1);
-        assert_eq!(context.cards.len(), 1);
+        let boards = tc.store.list_boards().unwrap();
+        assert_eq!(boards.len(), 2);
+        assert_eq!(boards[0].name, "B1");
+        assert_eq!(boards[1].name, "B2");
+        assert_eq!(tc.store.list_all_columns().unwrap().len(), 1);
+        assert_eq!(tc.store.list_all_cards().unwrap().len(), 1);
     }
 
     #[test]
     fn test_update_board_card_prefix_allowed_before_first_card_succeeds() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let board = Board::new("B".to_string(), Some("OLD".to_string()));
         let board_id = board.id;
-        tc.boards.push(board);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        let context = tc.as_command_context();
 
         let cmd = UpdateBoard {
             board_id,
-            updates: BoardUpdate {
+            updates: crate::BoardUpdate {
                 card_prefix: FieldUpdate::Set("NEW".to_string()),
                 ..Default::default()
             },
         };
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.boards[0].card_prefix, Some("NEW".to_string()));
+        assert!(cmd.execute(&context).is_ok());
+        let board = tc.store.get_board(board_id).unwrap().unwrap();
+        assert_eq!(board.card_prefix, Some("NEW".to_string()));
     }
 
     #[test]
     fn test_update_board_card_prefix_locked_after_first_card_returns_validation_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = Board::new("B".to_string(), Some("OLD".to_string()));
         let board_id = board.id;
         let col = Column::new(board_id, "Col".to_string(), 0);
         let _card = Card::new(&mut board, col.id, "C".to_string(), 0);
         // card_counter is now 2 (incremented past initial 1)
-        tc.boards.push(board);
-        tc.columns.push(col);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        let context = tc.as_command_context();
 
         let cmd = UpdateBoard {
             board_id,
-            updates: BoardUpdate {
+            updates: crate::BoardUpdate {
                 card_prefix: FieldUpdate::Set("NEW".to_string()),
                 ..Default::default()
             },
         };
-        let err = cmd.execute(&mut context).unwrap_err();
+        let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
 
     #[test]
     fn test_update_board_clear_card_prefix_locked_after_first_card_returns_validation_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = Board::new("B".to_string(), Some("OLD".to_string()));
         let board_id = board.id;
         let col = Column::new(board_id, "Col".to_string(), 0);
         let _card = Card::new(&mut board, col.id, "C".to_string(), 0);
-        tc.boards.push(board);
-        tc.columns.push(col);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        let context = tc.as_command_context();
 
         let cmd = UpdateBoard {
             board_id,
-            updates: BoardUpdate {
+            updates: crate::BoardUpdate {
                 card_prefix: FieldUpdate::Clear,
                 ..Default::default()
             },
         };
-        let err = cmd.execute(&mut context).unwrap_err();
+        let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
 }

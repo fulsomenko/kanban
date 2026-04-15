@@ -13,7 +13,7 @@ pub enum ColumnCommand {
 }
 
 impl ColumnCommand {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         match self {
             ColumnCommand::Create(c) => c.execute(context),
             ColumnCommand::Update(c) => c.execute(context),
@@ -38,9 +38,10 @@ pub struct UpdateColumn {
 }
 
 impl UpdateColumn {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let column = context.column_mut(self.column_id)?;
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut column = context.get_column(self.column_id)?;
         column.update(self.updates.clone());
+        context.store.upsert_column(column)?;
         Ok(())
     }
 
@@ -58,9 +59,9 @@ pub struct CreateColumn {
 }
 
 impl CreateColumn {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let column = crate::Column::new(self.board_id, self.name.clone(), self.position);
-        context.columns.push(column);
+        context.store.upsert_column(column)?;
         Ok(())
     }
 
@@ -76,8 +77,8 @@ pub struct DeleteColumn {
 }
 
 impl DeleteColumn {
-    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let has_cards = context.cards.iter().any(|c| c.column_id == self.column_id);
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let has_cards = context.store.count_cards_in_column(self.column_id)? > 0;
         if has_cards {
             return Err(crate::KanbanError::validation(format!(
                 "Cannot delete column {}: column contains cards",
@@ -86,7 +87,8 @@ impl DeleteColumn {
         }
 
         let has_archived_cards = context
-            .archived_cards
+            .store
+            .list_archived_cards()?
             .iter()
             .any(|ac| ac.original_column_id == self.column_id);
         if has_archived_cards {
@@ -96,7 +98,7 @@ impl DeleteColumn {
             )));
         }
 
-        context.columns.retain(|c| c.id != self.column_id);
+        context.store.delete_column(self.column_id)?;
         Ok(())
     }
 
@@ -112,13 +114,13 @@ mod tests {
 
     #[test]
     fn test_update_column_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = UpdateColumn {
             column_id: Uuid::new_v4(),
             updates: ColumnUpdate::default(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 }
