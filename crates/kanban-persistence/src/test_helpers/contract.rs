@@ -1,6 +1,7 @@
 use super::helpers::fully_populated_snapshot;
 use super::StoreFactory;
 use crate::{PersistenceError, PersistenceMetadata, StoreSnapshot};
+use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
 use kanban_domain::Snapshot;
 use tempfile::TempDir;
 
@@ -148,4 +149,90 @@ pub async fn test_path_matches_locator(factory: &StoreFactory) {
     let path = dir.path().join("test.store");
     let store = factory(&path);
     assert_eq!(store.path(), path.as_path());
+}
+
+pub async fn test_command_log_append_and_load(factory: &StoreFactory) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+    let store = factory(&path);
+
+    // Save initial snapshot so store exists
+    store
+        .save(StoreSnapshot {
+            data: to_snapshot_bytes(&Snapshot::default()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        })
+        .await
+        .unwrap();
+
+    let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+        name: "Test".into(),
+        card_prefix: None,
+    }));
+
+    let idx = store.append_command(&cmd).await.unwrap();
+    assert_eq!(idx, 1);
+    assert_eq!(store.command_count().await.unwrap(), 1);
+
+    let cmds = store.load_commands(0, 1).await.unwrap();
+    assert_eq!(cmds.len(), 1);
+}
+
+pub async fn test_command_log_cursor_persistence(factory: &StoreFactory) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+    let store = factory(&path);
+
+    store
+        .save(StoreSnapshot {
+            data: to_snapshot_bytes(&Snapshot::default()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        })
+        .await
+        .unwrap();
+
+    store.set_undo_cursor(5).await.unwrap();
+    assert_eq!(store.undo_cursor().await.unwrap(), 5);
+}
+
+pub async fn test_command_log_truncate_after(factory: &StoreFactory) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+    let store = factory(&path);
+
+    store
+        .save(StoreSnapshot {
+            data: to_snapshot_bytes(&Snapshot::default()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        })
+        .await
+        .unwrap();
+
+    for i in 0..3 {
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            name: format!("Board{}", i),
+            card_prefix: None,
+        }));
+        store.append_command(&cmd).await.unwrap();
+    }
+    assert_eq!(store.command_count().await.unwrap(), 3);
+
+    store.truncate_commands_after(1).await.unwrap();
+    assert_eq!(store.command_count().await.unwrap(), 1);
+}
+
+pub async fn test_command_count_starts_at_zero(factory: &StoreFactory) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+    let store = factory(&path);
+
+    store
+        .save(StoreSnapshot {
+            data: to_snapshot_bytes(&Snapshot::default()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(store.command_count().await.unwrap(), 0);
 }

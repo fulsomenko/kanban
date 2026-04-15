@@ -38,11 +38,17 @@ fn disk_for(path: &Path) -> SharedDisk {
         .clone()
 }
 
+struct CommandLogState {
+    commands: Vec<kanban_domain::commands::Command>,
+    undo_cursor: u64,
+}
+
 struct MemoryStore {
     path: PathBuf,
     instance_id: Uuid,
     disk: SharedDisk,
     last_known: AsyncMutex<Option<PersistenceMetadata>>,
+    cmd_state: AsyncMutex<CommandLogState>,
 }
 
 impl MemoryStore {
@@ -52,6 +58,10 @@ impl MemoryStore {
             instance_id: Uuid::new_v4(),
             disk: disk_for(path),
             last_known: AsyncMutex::new(None),
+            cmd_state: AsyncMutex::new(CommandLogState {
+                commands: vec![],
+                undo_cursor: 0,
+            }),
         }
     }
 }
@@ -105,6 +115,48 @@ impl PersistenceStore for MemoryStore {
 
     fn instance_id(&self) -> Uuid {
         self.instance_id
+    }
+
+    async fn append_command(
+        &self,
+        cmd: &kanban_domain::commands::Command,
+    ) -> PersistenceResult<u64> {
+        let mut state = self.cmd_state.lock().await;
+        state.commands.push(cmd.clone());
+        Ok(state.commands.len() as u64)
+    }
+
+    async fn command_count(&self) -> PersistenceResult<u64> {
+        let state = self.cmd_state.lock().await;
+        Ok(state.commands.len() as u64)
+    }
+
+    async fn undo_cursor(&self) -> PersistenceResult<u64> {
+        let state = self.cmd_state.lock().await;
+        Ok(state.undo_cursor)
+    }
+
+    async fn set_undo_cursor(&self, index: u64) -> PersistenceResult<()> {
+        let mut state = self.cmd_state.lock().await;
+        state.undo_cursor = index;
+        Ok(())
+    }
+
+    async fn load_commands(
+        &self,
+        from: u64,
+        to: u64,
+    ) -> PersistenceResult<Vec<kanban_domain::commands::Command>> {
+        let state = self.cmd_state.lock().await;
+        let from = from as usize;
+        let to = (to as usize).min(state.commands.len());
+        Ok(state.commands[from..to].to_vec())
+    }
+
+    async fn truncate_commands_after(&self, after: u64) -> PersistenceResult<()> {
+        let mut state = self.cmd_state.lock().await;
+        state.commands.truncate(after as usize);
+        Ok(())
     }
 }
 
