@@ -142,13 +142,13 @@ impl App {
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
 
                 if let Some(card_id) = card_id {
-                    let cmd = Box::new(kanban_domain::commands::UpdateCard {
+                    let cmd = kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
                         card_id,
                         updates: kanban_domain::CardUpdate {
                             points: points.into(),
                             ..Default::default()
                         },
-                    });
+                    }));
                     if let Err(e) = self.execute_command(cmd) {
                         tracing::error!("Failed to set card points: {}", e);
                         self.set_error(format!("Failed to set card points: {}", e));
@@ -182,13 +182,13 @@ impl App {
                                 if let Some(board_id) =
                                     self.ctx.boards().get(board_idx).map(|b| b.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateBoard {
+                                    let cmd = kanban_domain::commands::Command::Board(kanban_domain::commands::BoardCommand::Update(kanban_domain::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
                                             sprint_prefix: FieldUpdate::Clear,
                                             ..Default::default()
                                         },
-                                    });
+                                    }));
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to clear sprint prefix: {}", e);
                                         self.set_error(format!(
@@ -206,13 +206,13 @@ impl App {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints().get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
+                                    let cmd = kanban_domain::commands::Command::Sprint(kanban_domain::commands::SprintCommand::Update(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
                                             prefix: FieldUpdate::Clear,
                                             ..Default::default()
                                         },
-                                    });
+                                    }));
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to clear sprint prefix: {}", e);
                                         self.set_error(format!(
@@ -230,13 +230,13 @@ impl App {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints().get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
+                                    let cmd = kanban_domain::commands::Command::Sprint(kanban_domain::commands::SprintCommand::Update(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
                                             card_prefix: FieldUpdate::Clear,
                                             ..Default::default()
                                         },
-                                    });
+                                    }));
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!(
                                             "Failed to clear sprint card prefix override: {}",
@@ -260,13 +260,13 @@ impl App {
                                 if let Some(board_id) =
                                     self.ctx.boards().get(board_idx).map(|b| b.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateBoard {
+                                    let cmd = kanban_domain::commands::Command::Board(kanban_domain::commands::BoardCommand::Update(kanban_domain::commands::UpdateBoard {
                                         board_id,
                                         updates: kanban_domain::BoardUpdate {
                                             sprint_prefix: FieldUpdate::Set(prefix_str.clone()),
                                             ..Default::default()
                                         },
-                                    });
+                                    }));
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
                                         self.set_error(format!(
@@ -284,13 +284,13 @@ impl App {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints().get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
+                                    let cmd = kanban_domain::commands::Command::Sprint(kanban_domain::commands::SprintCommand::Update(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
                                             prefix: FieldUpdate::Set(prefix_str.clone()),
                                             ..Default::default()
                                         },
-                                    });
+                                    }));
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
                                         self.set_error(format!(
@@ -308,13 +308,13 @@ impl App {
                                 if let Some(sprint_id) =
                                     self.ctx.sprints().get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
+                                    let cmd = kanban_domain::commands::Command::Sprint(kanban_domain::commands::SprintCommand::Update(kanban_domain::commands::UpdateSprint {
                                         sprint_id,
                                         updates: kanban_domain::SprintUpdate {
                                             card_prefix: FieldUpdate::Set(prefix_str.clone()),
                                             ..Default::default()
                                         },
-                                    });
+                                    }));
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!(
                                             "Failed to set sprint card prefix override: {}",

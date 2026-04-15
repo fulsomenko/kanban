@@ -44,11 +44,11 @@ impl TuiContext {
         Ok((ctx, save_rx, completion_rx))
     }
 
-    pub fn execute_command(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
+    pub fn execute_command(&mut self, command: Command) -> KanbanResult<()> {
         self.execute_commands_batch(vec![command])
     }
 
-    pub fn execute_commands_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
+    pub fn execute_commands_batch(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         self.inner.execute(commands)?;
         let snapshot = self.inner.snapshot();
         self.save_coordinator.queue_snapshot(snapshot);

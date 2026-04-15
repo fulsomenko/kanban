@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use kanban_domain::commands::{CreateCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard};
+use kanban_domain::commands::{BoardCommand, CardCommand, Command, CreateCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard};
 use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, KanbanOperations, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -127,11 +127,11 @@ impl App {
                 if let Some(board_idx) = self.selection.active_board_index {
                     if let Some(board) = self.ctx.boards().get(board_idx) {
                         if let Some(field) = self.filter.current_sort_field {
-                            let cmd = Box::new(SetBoardTaskSort {
+                            let cmd = Command::Board(BoardCommand::SetTaskSort(SetBoardTaskSort {
                                 board_id: board.id,
                                 field,
                                 order: new_order,
-                            });
+                            }));
 
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set board task sort: {}", e);
@@ -244,7 +244,7 @@ impl App {
                 updates.status = Some(result.new_status);
             }
 
-            let cmd = Box::new(UpdateCard { card_id, updates });
+            let cmd = Command::Card(CardCommand::Update(UpdateCard { card_id, updates }));
             if let Err(e) = self.execute_command(cmd) {
                 tracing::error!("Failed to toggle card completion: {}", e);
                 self.set_error(format!("Failed to toggle card completion: {}", e));
@@ -261,7 +261,7 @@ impl App {
         let mut toggled_count = 0;
         let first_card_id = card_ids.first().copied();
 
-        let mut update_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+        let mut update_commands: Vec<Command> = Vec::new();
 
         for card_id in card_ids {
             let card = match self.ctx.cards().iter().find(|c| c.id == card_id) {
@@ -297,8 +297,7 @@ impl App {
                 updates.status = Some(result.new_status);
             }
 
-            let cmd = Box::new(UpdateCard { card_id, updates })
-                as Box<dyn kanban_domain::commands::Command>;
+            let cmd = Command::Card(CardCommand::Update(UpdateCard { card_id, updates }));
             update_commands.push(cmd);
             toggled_count += 1;
         }
@@ -376,13 +375,13 @@ impl App {
                     })
                     .unwrap_or(false);
 
-                let create_cmd = Box::new(CreateCard {
+                let create_cmd = Command::Card(CardCommand::Create(CreateCard {
                     board_id: bid,
                     column_id: column.id,
                     title: self.input.as_str().to_string(),
                     position,
                     options: kanban_domain::CreateCardOptions::default(),
-                });
+                }));
 
                 if let Err(e) = self.execute_command(create_cmd) {
                     tracing::error!("Failed to create card: {}", e);
@@ -399,13 +398,13 @@ impl App {
                         .find(|c| c.column_id == column.id)
                     {
                         let card_id = card.id;
-                        let update_cmd = Box::new(UpdateCard {
+                        let update_cmd = Command::Card(CardCommand::Update(UpdateCard {
                             card_id,
                             updates: CardUpdate {
                                 status: Some(CardStatus::Done),
                                 ..Default::default()
                             },
-                        });
+                        }));
 
                         if let Err(e) = self.execute_command(update_cmd) {
                             tracing::error!("Failed to update card status: {}", e);
@@ -471,22 +470,22 @@ impl App {
             };
 
             let card_id = card.id;
-            let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+            let mut commands: Vec<Command> = Vec::new();
 
-            commands.push(Box::new(MoveCard {
+            commands.push(Command::Card(CardCommand::Move(MoveCard {
                 card_id,
                 new_column_id: move_result.target_column_id,
                 new_position: move_result.new_position,
-            }));
+            })));
 
             if let Some(new_status) = move_result.new_status {
-                commands.push(Box::new(UpdateCard {
+                commands.push(Command::Card(CardCommand::Update(UpdateCard {
                     card_id,
                     updates: CardUpdate {
                         status: Some(new_status),
                         ..Default::default()
                     },
-                }));
+                })));
             }
 
             if let Err(e) = self.execute_commands_batch(commands) {
@@ -549,7 +548,7 @@ impl App {
 
         let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
         let first_card_id = card_ids.first().copied();
-        let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+        let mut commands: Vec<Command> = Vec::new();
         let mut moved_count = 0;
 
         for card_id in &card_ids {
@@ -571,20 +570,20 @@ impl App {
                 None => continue,
             };
 
-            commands.push(Box::new(MoveCard {
+            commands.push(Command::Card(CardCommand::Move(MoveCard {
                 card_id: *card_id,
                 new_column_id: move_result.target_column_id,
                 new_position: move_result.new_position,
-            }));
+            })));
 
             if let Some(new_status) = move_result.new_status {
-                commands.push(Box::new(UpdateCard {
+                commands.push(Command::Card(CardCommand::Update(UpdateCard {
                     card_id: *card_id,
                     updates: CardUpdate {
                         status: Some(new_status),
                         ..Default::default()
                     },
-                }));
+                })));
             }
 
             moved_count += 1;
@@ -649,7 +648,7 @@ impl App {
     }
 
     pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
-        let cmd = Box::new(kanban_domain::commands::CompactColumnPositions { column_id });
+        let cmd = Command::Card(CardCommand::CompactPositions(kanban_domain::commands::CompactColumnPositions { column_id }));
         if let Err(e) = self.ctx.execute_command(cmd) {
             tracing::error!("Failed to compact column positions: {}", e);
             self.set_error(format!("Failed to compact column positions: {}", e));
@@ -746,11 +745,11 @@ impl App {
             })
             .unwrap_or(original_column_id);
 
-        let cmd = Box::new(RestoreCard {
+        let cmd = Command::Card(CardCommand::Restore(RestoreCard {
             card_id,
             column_id: target_column_id,
             position: original_position,
-        });
+        }));
 
         if let Err(e) = self.execute_command(cmd) {
             tracing::error!("Failed to restore card: {}", e);

@@ -1,5 +1,7 @@
 use crate::app::{App, BoardFocus, DialogMode};
-use kanban_domain::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
+use kanban_domain::commands::{
+    ActivateSprint, BoardCommand, Command, CompleteSprint, CreateSprint, SprintCommand, UpdateBoard,
+};
 use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
 use uuid::Uuid;
 
@@ -43,20 +45,18 @@ impl App {
                         let board_id = board.id;
 
                         // Execute ActivateSprint and UpdateBoard as batch
-                        let activate_cmd = Box::new(ActivateSprint {
+                        let activate_cmd = Command::Sprint(SprintCommand::Activate(ActivateSprint {
                             sprint_id,
                             duration_days: duration,
-                        })
-                            as Box<dyn kanban_domain::commands::Command>;
+                        }));
 
-                        let board_cmd = Box::new(UpdateBoard {
+                        let board_cmd = Command::Board(BoardCommand::Update(UpdateBoard {
                             board_id,
                             updates: BoardUpdate {
                                 active_sprint_id: FieldUpdate::Set(sprint_id),
                                 ..Default::default()
                             },
-                        })
-                            as Box<dyn kanban_domain::commands::Command>;
+                        }));
 
                         if let Err(e) = self.execute_commands_batch(vec![activate_cmd, board_cmd]) {
                             tracing::error!("Failed to activate sprint: {}", e);
@@ -107,16 +107,15 @@ impl App {
 
             if let Some((sprint_id, board_id, sprint_name)) = sprint_info {
                 // Execute CompleteSprint and UpdateBoard as batch
-                let complete_cmd = Box::new(CompleteSprint { sprint_id })
-                    as Box<dyn kanban_domain::commands::Command>;
+                let complete_cmd = Command::Sprint(SprintCommand::Complete(CompleteSprint { sprint_id }));
 
-                let board_cmd = Box::new(UpdateBoard {
+                let board_cmd = Command::Board(BoardCommand::Update(UpdateBoard {
                     board_id,
                     updates: BoardUpdate {
                         active_sprint_id: FieldUpdate::Clear,
                         ..Default::default()
                     },
-                }) as Box<dyn kanban_domain::commands::Command>;
+                }));
 
                 if let Err(e) = self.execute_commands_batch(vec![complete_cmd, board_cmd]) {
                     tracing::error!("Failed to complete sprint: {}", e);
@@ -198,13 +197,13 @@ impl App {
                 .effective_default_sprint_prefix()
                 .to_string();
 
-            let cmd = Box::new(CreateSprint {
+            let cmd = Command::Sprint(SprintCommand::Create(CreateSprint {
                 board_id,
                 name,
                 default_sprint_prefix: default_sprint_prefix.clone(),
                 explicit_prefix: None,
                 auto_consume_name: true,
-            });
+            }));
 
             if let Err(e) = self.execute_command(cmd) {
                 tracing::error!("Failed to create sprint: {}", e);

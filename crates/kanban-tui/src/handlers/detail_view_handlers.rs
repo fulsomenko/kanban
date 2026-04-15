@@ -240,11 +240,11 @@ impl App {
                                 Ok(Some(new_content)) => {
                                     match serde_json::from_str::<CardMetadataDto>(&new_content) {
                                         Ok(new_dto) => {
-                                            let cmd = Box::new(
-                                                kanban_domain::commands::ApplyCardMetadata {
+                                            let cmd = kanban_domain::commands::Command::Card(
+                                                kanban_domain::commands::CardCommand::ApplyMetadata(kanban_domain::commands::ApplyCardMetadata {
                                                     card_id,
                                                     dto: new_dto,
-                                                },
+                                                }),
                                             );
                                             if let Err(e) = self.ctx.execute_command(cmd) {
                                                 tracing::error!("Failed to apply metadata: {}", e);
@@ -417,11 +417,11 @@ impl App {
                                 Ok(Some(new_content)) => {
                                     match serde_json::from_str::<BoardSettingsDto>(&new_content) {
                                         Ok(new_dto) => {
-                                            let cmd = Box::new(
-                                                kanban_domain::commands::ApplyBoardSettings {
+                                            let cmd = kanban_domain::commands::Command::Board(
+                                                kanban_domain::commands::BoardCommand::ApplySettings(kanban_domain::commands::ApplyBoardSettings {
                                                     board_id,
                                                     dto: new_dto,
-                                                },
+                                                }),
                                             );
                                             if let Err(e) = self.ctx.execute_command(cmd) {
                                                 tracing::error!(
@@ -813,10 +813,10 @@ impl App {
                                     updates.status = Some(result.new_status);
                                 }
 
-                                let cmd = Box::new(kanban_domain::commands::UpdateCard {
+                                let cmd = kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
                                     card_id,
                                     updates,
-                                });
+                                }));
                                 if let Err(e) = self.execute_command(cmd) {
                                     tracing::error!("Failed to toggle card completion: {}", e);
                                     self.set_error(format!(
@@ -933,11 +933,11 @@ impl App {
                                     });
 
                                 if let Some(result) = move_result {
-                                    let move_cmd = Box::new(kanban_domain::commands::MoveCard {
+                                    let move_cmd = kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Move(kanban_domain::commands::MoveCard {
                                         card_id,
                                         new_column_id: result.target_column_id,
                                         new_position: result.new_position,
-                                    });
+                                    }));
                                     if let Err(e) = self.execute_command(move_cmd) {
                                         tracing::error!("Failed to move card: {}", e);
                                         self.set_error(format!("Failed to move card: {}", e));
@@ -946,13 +946,13 @@ impl App {
 
                                     if let Some(new_status) = result.new_status {
                                         let status_cmd =
-                                            Box::new(kanban_domain::commands::UpdateCard {
+                                            kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
                                                 card_id,
                                                 updates: kanban_domain::CardUpdate {
                                                     status: Some(new_status),
                                                     ..Default::default()
                                                 },
-                                            });
+                                            }));
                                         if let Err(e) = self.execute_command(status_cmd) {
                                             tracing::error!("Failed to update card status: {}", e);
                                             self.set_error(format!(
@@ -1256,7 +1256,7 @@ impl App {
         use kanban_domain::commands::UpdateCard;
         use kanban_domain::{CardStatus, CardUpdate};
 
-        let mut update_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+        let mut update_commands: Vec<kanban_domain::commands::Command> = Vec::new();
 
         for card_id in &ids {
             let card = match self.ctx.cards().iter().find(|c| c.id == *card_id) {
@@ -1294,10 +1294,10 @@ impl App {
                 }
             };
 
-            update_commands.push(Box::new(UpdateCard {
+            update_commands.push(kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(UpdateCard {
                 card_id: *card_id,
                 updates,
-            }) as Box<dyn kanban_domain::commands::Command>);
+            })));
         }
 
         if !update_commands.is_empty() {

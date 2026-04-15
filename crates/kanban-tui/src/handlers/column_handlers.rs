@@ -1,7 +1,8 @@
 use crate::app::{App, BoardFocus, DialogMode};
 use crossterm::event::KeyCode;
 use kanban_domain::commands::{
-    CreateColumn, DeleteColumn, MoveCard, SetBoardTaskListView, UpdateColumn,
+    BoardCommand, CardCommand, ColumnCommand, Command, CreateColumn, DeleteColumn, MoveCard,
+    SetBoardTaskListView, UpdateColumn,
 };
 use kanban_domain::{ColumnUpdate, TaskListView};
 
@@ -89,23 +90,21 @@ impl App {
                             let curr_pos = board_columns[selected_idx].1;
 
                             // Swap positions using batched commands
-                            let cmd1 = Box::new(UpdateColumn {
+                            let cmd1 = Command::Column(ColumnCommand::Update(UpdateColumn {
                                 column_id: prev_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(curr_pos),
                                     ..Default::default()
                                 },
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
 
-                            let cmd2 = Box::new(UpdateColumn {
+                            let cmd2 = Command::Column(ColumnCommand::Update(UpdateColumn {
                                 column_id: curr_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(prev_pos),
                                     ..Default::default()
                                 },
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
@@ -147,23 +146,21 @@ impl App {
                             let next_pos = board_columns[selected_idx + 1].1;
 
                             // Swap positions using batched commands
-                            let cmd1 = Box::new(UpdateColumn {
+                            let cmd1 = Command::Column(ColumnCommand::Update(UpdateColumn {
                                 column_id: next_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(curr_pos),
                                     ..Default::default()
                                 },
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
 
-                            let cmd2 = Box::new(UpdateColumn {
+                            let cmd2 = Command::Column(ColumnCommand::Update(UpdateColumn {
                                 column_id: curr_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(next_pos),
                                     ..Default::default()
                                 },
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
@@ -224,11 +221,11 @@ impl App {
                     .unwrap_or(-1)
                     + 1;
 
-                let cmd = Box::new(CreateColumn {
+                let cmd = Command::Column(ColumnCommand::Create(CreateColumn {
                     board_id,
                     name: column_name.clone(),
                     position,
-                });
+                }));
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to create column: {}", e);
@@ -282,13 +279,13 @@ impl App {
                     return;
                 }
 
-                let cmd = Box::new(UpdateColumn {
+                let cmd = Command::Column(ColumnCommand::Update(UpdateColumn {
                     column_id,
                     updates: ColumnUpdate {
                         name: Some(new_name.clone()),
                         ..Default::default()
                     },
-                });
+                }));
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to rename column: {}", e);
@@ -359,15 +356,14 @@ impl App {
                         let card_count = cards_to_move.len();
 
                         // Batch all card moves together to avoid race conditions
-                        let mut move_commands: Vec<Box<dyn kanban_domain::commands::Command>> =
+                        let mut move_commands: Vec<Command> =
                             Vec::new();
                         for (card_id, position) in cards_to_move {
-                            let cmd = Box::new(MoveCard {
+                            let cmd = Command::Card(CardCommand::Move(MoveCard {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position: position,
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
                             move_commands.push(cmd);
                         }
 
@@ -381,7 +377,7 @@ impl App {
                     }
                 }
 
-                let cmd = Box::new(DeleteColumn { column_id });
+                let cmd = Command::Column(ColumnCommand::Delete(DeleteColumn { column_id }));
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to delete column: {}", e);
                     self.set_error(format!("Failed to delete column: {}", e));
@@ -520,10 +516,10 @@ impl App {
 
                     if let Some(board_idx) = self.selection.active_board_index {
                         if let Some(board) = self.ctx.boards().get(board_idx) {
-                            let cmd = Box::new(SetBoardTaskListView {
+                            let cmd = Command::Board(BoardCommand::SetTaskListView(SetBoardTaskListView {
                                 board_id: board.id,
                                 view,
-                            });
+                            }));
 
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set task list view: {}", e);

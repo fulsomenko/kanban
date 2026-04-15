@@ -1,5 +1,5 @@
 use crate::app::{App, AppMode, BoardFocus, DialogMode, Focus};
-use kanban_domain::commands::{CreateBoard, CreateColumn, UpdateBoard};
+use kanban_domain::commands::{BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn, UpdateBoard};
 use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {
@@ -69,10 +69,10 @@ impl App {
         let board_name = self.input.as_str().to_string();
 
         // Execute CreateBoard command first to get the board ID
-        let create_board_cmd = Box::new(CreateBoard {
+        let create_board_cmd = Command::Board(BoardCommand::Create(CreateBoard {
             name: board_name.clone(),
             card_prefix: None,
-        });
+        }));
 
         if let Err(e) = self.execute_command(create_board_cmd) {
             tracing::error!("Failed to create board: {}", e);
@@ -88,15 +88,15 @@ impl App {
         };
 
         // Now batch the column creation commands
-        let mut column_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+        let mut column_commands: Vec<Command> = Vec::new();
         let default_columns = vec![("TODO", 0i32), ("Doing", 1i32), ("Complete", 2i32)];
 
         for (name, position) in default_columns {
-            let create_col_cmd = Box::new(CreateColumn {
+            let create_col_cmd = Command::Column(ColumnCommand::Create(CreateColumn {
                 board_id,
                 name: name.to_string(),
                 position,
-            }) as Box<dyn kanban_domain::commands::Command>;
+            }));
             column_commands.push(create_col_cmd);
         }
 
@@ -124,13 +124,13 @@ impl App {
                 let new_name = self.input.as_str().to_string();
 
                 // Execute UpdateBoard command
-                let cmd = Box::new(UpdateBoard {
+                let cmd = Command::Board(BoardCommand::Update(UpdateBoard {
                     board_id,
                     updates: BoardUpdate {
                         name: Some(new_name.clone()),
                         ..Default::default()
                     },
-                });
+                }));
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to rename board: {}", e);
