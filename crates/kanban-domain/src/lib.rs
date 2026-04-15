@@ -6,11 +6,13 @@ pub mod card;
 pub mod card_lifecycle;
 pub mod column;
 pub mod commands;
+pub mod data_store;
 pub mod dependencies;
 pub mod editable;
 pub mod export;
 pub mod field_update;
 pub mod filter;
+pub mod in_memory_data_store;
 pub mod operations;
 pub mod query;
 pub mod search;
@@ -54,5 +56,8 @@ pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
 pub use task_list_view::TaskListView;
+
+pub use data_store::{DataStore, UndoPointId};
+pub use in_memory_data_store::InMemoryDataStore;
 
 pub use error::{DependencyError, DomainError, KanbanError, KanbanResult};
