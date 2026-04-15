@@ -556,13 +556,15 @@ impl App {
                             .selection
                             .board
                             .get()
-                            .and_then(|idx| self.ctx.boards().get(idx))
-                            .map(|board| {
-                                self.ctx
-                                    .sprints()
-                                    .iter()
-                                    .filter(|s| s.board_id == board.id)
-                                    .count()
+                            .and_then(|idx| {
+                                let boards = self.ctx.boards();
+                                boards.get(idx).map(|board| {
+                                    self.ctx
+                                        .sprints()
+                                        .iter()
+                                        .filter(|s| s.board_id == board.id)
+                                        .count()
+                                })
                             })
                             .unwrap_or(0);
                         if sprint_count == 0 {
@@ -592,10 +594,10 @@ impl App {
                 if self.focus.board_focus == BoardFocus::Sprints {
                     if let Some(sprint_idx) = self.selection.sprint.get() {
                         if let Some(board_idx) = self.selection.board.get() {
-                            if let Some(board) = self.ctx.boards().get(board_idx) {
-                                let board_sprints: Vec<_> = self
-                                    .ctx
-                                    .sprints()
+                            let boards = self.ctx.boards();
+                            if let Some(board) = boards.get(board_idx) {
+                                let sprints = self.ctx.sprints();
+                                let board_sprints: Vec<_> = sprints
                                     .iter()
                                     .enumerate()
                                     .filter(|(_, s)| s.board_id == board.id)
@@ -603,7 +605,7 @@ impl App {
                                 if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
                                     self.selection.active_sprint_index = Some(*actual_idx);
                                     self.selection.active_board_index = Some(board_idx);
-                                    if let Some(sprint) = self.ctx.sprints().get(*actual_idx) {
+                                    if let Some(sprint) = sprints.get(*actual_idx) {
                                         self.populate_sprint_task_lists(sprint.id);
                                     }
                                     self.push_mode(AppMode::SprintDetail);
@@ -790,14 +792,17 @@ impl App {
                                     CardStatus::Done
                                 };
 
+                                let boards = self.ctx.boards();
+                                let columns = self.ctx.columns();
+                                let cards = self.ctx.cards();
                                 let toggle_result =
                                     self.selection.active_board_index.and_then(|idx| {
-                                        self.ctx.boards().get(idx).and_then(|board| {
+                                        boards.get(idx).and_then(|board| {
                                         kanban_domain::card_lifecycle::compute_completion_toggle(
                                             card,
                                             board,
-                                            self.ctx.columns(),
-                                            self.ctx.cards(),
+                                            &columns,
+                                            &cards,
                                         )
                                     })
                                     });
@@ -919,14 +924,17 @@ impl App {
                                     kanban_domain::card_lifecycle::MoveDirection::Left
                                 };
 
+                                let boards = self.ctx.boards();
+                                let columns = self.ctx.columns();
+                                let cards = self.ctx.cards();
                                 let move_result =
                                     self.selection.active_board_index.and_then(|idx| {
-                                        self.ctx.boards().get(idx).and_then(|board| {
+                                        boards.get(idx).and_then(|board| {
                                             kanban_domain::card_lifecycle::compute_card_column_move(
                                                 &card,
                                                 board,
-                                                self.ctx.columns(),
-                                                self.ctx.cards(),
+                                                &columns,
+                                                &cards,
                                                 direction,
                                             )
                                         })
@@ -1259,18 +1267,22 @@ impl App {
         let mut update_commands: Vec<kanban_domain::commands::Command> = Vec::new();
 
         for card_id in &ids {
-            let card = match self.ctx.cards().iter().find(|c| c.id == *card_id) {
+            let all_cards = self.ctx.cards();
+            let card = match all_cards.iter().find(|c| c.id == *card_id) {
                 Some(c) => c.clone(),
                 None => continue,
             };
 
+            let boards = self.ctx.boards();
+            let columns = self.ctx.columns();
+            let cards = self.ctx.cards();
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                self.ctx.boards().get(idx).and_then(|board| {
+                boards.get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
                         &card,
                         board,
-                        self.ctx.columns(),
-                        self.ctx.cards(),
+                        &columns,
+                        &cards,
                     )
                 })
             });

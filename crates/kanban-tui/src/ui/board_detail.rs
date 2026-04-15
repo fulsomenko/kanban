@@ -99,7 +99,7 @@ fn render_board_settings_section(
     ];
 
     if let Some(sprint_prefix) =
-        kanban_domain::get_active_sprint_card_prefix_override(board, app.ctx.sprints())
+        kanban_domain::get_active_sprint_card_prefix_override(board, &app.ctx.sprints())
     {
         settings_lines.push(metadata_line_styled(
             "Active Sprint Card Prefix",
@@ -144,9 +144,8 @@ fn render_board_sprints_list(
         .with_focus_indicator("Sprints [4]")
         .focused(app.focus.board_focus == BoardFocus::Sprints);
 
-    let board_sprints: Vec<&Sprint> = app
-        .ctx
-        .sprints()
+    let sprints = app.ctx.sprints();
+    let board_sprints: Vec<&Sprint> = sprints
         .iter()
         .filter(|s| s.board_id == board.id)
         .collect();
@@ -232,9 +231,8 @@ fn render_board_columns_list(
         .with_focus_indicator("Columns [5]")
         .focused(app.focus.board_focus == BoardFocus::Columns);
 
-    let mut board_columns: Vec<_> = app
-        .ctx
-        .columns()
+    let columns = app.ctx.columns();
+    let mut board_columns: Vec<_> = columns
         .iter()
         .filter(|col| col.board_id == board.id)
         .collect();

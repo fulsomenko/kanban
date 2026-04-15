@@ -140,7 +140,7 @@ impl App {
                         .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning);
 
                     if has_planning
-                        && !get_sprint_uncompleted_cards(sprint_id, self.ctx.cards()).is_empty()
+                        && !get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards()).is_empty()
                     {
                         self.dialog_input.carry_over_source_sprint_id = Some(sprint_id);
                         self.dialog_input.carry_over_sprint_selection.set(Some(0));
@@ -212,15 +212,15 @@ impl App {
             }
 
             // Log the newly created sprint
-            let board_sprints: Vec<_> = self
-                .ctx
-                .sprints()
+            let sprints = self.ctx.sprints();
+            let board_sprints: Vec<_> = sprints
                 .iter()
                 .filter(|s| s.board_id == board_id)
                 .collect();
 
             if let Some(new_sprint) = board_sprints.last() {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
+                let boards = self.ctx.boards();
+                if let Some(board) = boards.get(board_idx) {
                     let effective_prefix = board
                         .sprint_prefix
                         .as_deref()

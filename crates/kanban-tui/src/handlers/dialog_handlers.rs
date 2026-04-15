@@ -134,10 +134,11 @@ impl App {
                     return false;
                 };
 
+                let cards = self.ctx.cards();
                 let card_id = self
                     .selection
                     .active_card_index
-                    .and_then(|idx| self.ctx.cards().get(idx))
+                    .and_then(|idx| cards.get(idx))
                     .map(|c| c.id)
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
 

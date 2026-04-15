@@ -625,16 +625,21 @@ impl App {
             return;
         }
 
+        let boards = self.ctx.boards();
+        let columns = self.ctx.columns();
+        let cards = self.ctx.cards();
+        let archived = self.ctx.archived_cards();
+        let sprints = self.ctx.sprints();
         let board_exports: Vec<_> = selected_indices
             .iter()
-            .filter_map(|&i| self.ctx.boards().get(i))
+            .filter_map(|&i| boards.get(i))
             .map(|board| {
                 BoardExporter::export_board(
                     board,
-                    self.ctx.columns(),
-                    self.ctx.cards(),
-                    self.ctx.archived_cards(),
-                    self.ctx.sprints(),
+                    &columns,
+                    &cards,
+                    &archived,
+                    &sprints,
                 )
             })
             .collect();

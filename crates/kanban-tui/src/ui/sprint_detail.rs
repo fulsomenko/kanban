@@ -237,10 +237,11 @@ pub(super) fn render_sprint_task_panel_with_selection(
                         .animating
                         .get(&card.id)
                         .map(|a| a.animation_type);
+                    let sprints = app.ctx.sprints();
                     let line = render_card_list_item(CardListItemConfig {
                         card,
                         board,
-                        sprints: app.ctx.sprints(),
+                        sprints: &sprints,
                         is_selected,
                         is_focused,
                         is_multi_selected: false,
@@ -260,7 +261,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
         ));
     }
 
-    let points = calculate_task_panel_points(task_list, app.ctx.cards());
+    let points = calculate_task_panel_points(task_list, &app.ctx.cards());
 
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),

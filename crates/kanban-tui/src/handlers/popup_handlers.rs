@@ -227,8 +227,10 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.selection.active_board_index {
-                    if let Some(board) = self.ctx.boards().get(board_idx) {
-                        let sprint_count = Sprint::assignable(self.ctx.sprints(), board.id).len();
+                    let boards = self.ctx.boards();
+                    if let Some(board) = boards.get(board_idx) {
+                        let sprints = self.ctx.sprints();
+                        let sprint_count = Sprint::assignable(&sprints, board.id).len();
                         self.dialog_input
                             .sprint_assign_selection
                             .next(sprint_count + 1);
@@ -266,8 +268,9 @@ impl App {
                             }
                         } else if let Some(board_idx) = self.selection.active_board_index {
                             if let Some(board_id) = self.ctx.boards().get(board_idx).map(|b| b.id) {
+                                let sprints = self.ctx.sprints();
                                 let board_sprints =
-                                    Sprint::assignable(self.ctx.sprints(), board_id);
+                                    Sprint::assignable(&sprints, board_id);
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                     let sprint_id = sprint.id;
 
@@ -316,8 +319,10 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.selection.active_board_index {
-                    if let Some(board) = self.ctx.boards().get(board_idx) {
-                        let sprint_count = Sprint::assignable(self.ctx.sprints(), board.id).len();
+                    let boards = self.ctx.boards();
+                    if let Some(board) = boards.get(board_idx) {
+                        let sprints = self.ctx.sprints();
+                        let sprint_count = Sprint::assignable(&sprints, board.id).len();
                         self.dialog_input
                             .sprint_assign_selection
                             .next(sprint_count + 1);
@@ -353,8 +358,10 @@ impl App {
                             );
                         }
                     } else if let Some(board_idx) = self.selection.active_board_index {
-                        if let Some(board_id) = self.ctx.boards().get(board_idx).map(|b| b.id) {
-                            let board_sprints = Sprint::assignable(self.ctx.sprints(), board_id);
+                        let boards = self.ctx.boards();
+                        if let Some(board_id) = boards.get(board_idx).map(|b| b.id) {
+                            let sprints = self.ctx.sprints();
+                            let board_sprints = Sprint::assignable(&sprints, board_id);
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;
 

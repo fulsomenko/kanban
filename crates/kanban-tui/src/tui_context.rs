@@ -129,28 +129,32 @@ impl TuiContext {
 
     // --- Delegation: field accessors ---
 
-    pub fn boards(&self) -> &[Board] {
+    pub fn boards(&self) -> Vec<Board> {
         self.inner.boards()
     }
 
-    pub fn columns(&self) -> &[Column] {
+    pub fn columns(&self) -> Vec<Column> {
         self.inner.columns()
     }
 
-    pub fn cards(&self) -> &[Card] {
+    pub fn cards(&self) -> Vec<Card> {
         self.inner.cards()
     }
 
-    pub fn sprints(&self) -> &[Sprint] {
+    pub fn sprints(&self) -> Vec<Sprint> {
         self.inner.sprints()
     }
 
-    pub fn archived_cards(&self) -> &[ArchivedCard] {
+    pub fn archived_cards(&self) -> Vec<ArchivedCard> {
         self.inner.archived_cards()
     }
 
-    pub fn graph(&self) -> &DependencyGraph {
+    pub fn graph(&self) -> DependencyGraph {
         self.inner.graph()
+    }
+
+    pub fn data_store(&self) -> &dyn kanban_domain::DataStore {
+        self.inner.data_store()
     }
 
     #[cfg(any(test, feature = "test-helpers"))]

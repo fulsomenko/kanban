@@ -32,9 +32,10 @@ pub(super) fn render_relationship_boxes(
     let parents_config = FieldSectionConfig::new("Parents")
         .with_focus_indicator("Parents [4]")
         .focused(app.focus.card_focus == CardFocus::Parents);
+    let all_cards = app.ctx.cards();
     let parents_lines = render_relationship_section(
         parents,
-        app.ctx.cards(),
+        &all_cards,
         "Parents",
         app.focus.card_focus == CardFocus::Parents,
         &app.relationship.parents_list,
@@ -51,7 +52,7 @@ pub(super) fn render_relationship_boxes(
         .focused(app.focus.card_focus == CardFocus::Children);
     let children_lines = render_relationship_section(
         children,
-        app.ctx.cards(),
+        &all_cards,
         "Children",
         app.focus.card_focus == CardFocus::Children,
         &app.relationship.children_list,
@@ -108,7 +109,7 @@ pub(super) fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) 
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.focus.card_focus == CardFocus::Metadata);
                         let meta_lines =
-                            build_metadata_lines(card, board, app.ctx.sprints(), &app.app_config);
+                            build_metadata_lines(card, board, &app.ctx.sprints(), &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, meta_chunks[0]);
 
@@ -142,7 +143,7 @@ pub(super) fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) 
                             .with_focus_indicator("Metadata [2]")
                             .focused(app.focus.card_focus == CardFocus::Metadata);
                         let meta_lines =
-                            build_metadata_lines(card, board, app.ctx.sprints(), &app.app_config);
+                            build_metadata_lines(card, board, &app.ctx.sprints(), &app.app_config);
                         let meta = Paragraph::new(meta_lines).block(meta_config.block());
                         frame.render_widget(meta, chunks[1]);
 

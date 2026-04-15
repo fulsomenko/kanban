@@ -23,10 +23,10 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
-                    let board_columns: Vec<_> = self
-                        .ctx
-                        .columns()
+                let boards = self.ctx.boards();
+                if let Some(board) = boards.get(board_idx) {
+                    let columns = self.ctx.columns();
+                    let board_columns: Vec<_> = columns
                         .iter()
                         .filter(|col| col.board_id == board.id)
                         .collect();
@@ -253,11 +253,11 @@ impl App {
         if let Some(board_idx) = self.selection.board.get() {
             // Collect column ID before mutable borrow
             let column_info = {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
+                let boards = self.ctx.boards();
+                if let Some(board) = boards.get(board_idx) {
                     if let Some(column_idx) = self.dialog_input.column_selection.get() {
-                        let board_columns: Vec<_> = self
-                            .ctx
-                            .columns()
+                        let columns = self.ctx.columns();
+                        let board_columns: Vec<_> = columns
                             .iter()
                             .filter(|col| col.board_id == board.id)
                             .collect();
