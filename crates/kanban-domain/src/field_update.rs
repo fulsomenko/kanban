@@ -14,7 +14,7 @@
 /// let description_update: FieldUpdate<String> = FieldUpdate::Clear;
 /// let priority_update: FieldUpdate<i32> = FieldUpdate::NoChange;
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum FieldUpdate<T> {
     /// Do not modify this field (keep existing value)
     #[default]
@@ -65,5 +65,118 @@ impl<T> From<Option<T>> for FieldUpdate<T> {
             Some(value) => FieldUpdate::Set(value),
             None => FieldUpdate::Clear,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_field_update_serde_roundtrip_set() {
+        let update = FieldUpdate::Set("hello".to_string());
+        let json = serde_json::to_string(&update).unwrap();
+        let back: FieldUpdate<String> = serde_json::from_str(&json).unwrap();
+        assert_eq!(update, back);
+    }
+
+    #[test]
+    fn test_field_update_serde_roundtrip_no_change() {
+        let update: FieldUpdate<String> = FieldUpdate::NoChange;
+        let json = serde_json::to_string(&update).unwrap();
+        let back: FieldUpdate<String> = serde_json::from_str(&json).unwrap();
+        assert_eq!(update, back);
+    }
+
+    #[test]
+    fn test_field_update_serde_roundtrip_clear() {
+        let update: FieldUpdate<String> = FieldUpdate::Clear;
+        let json = serde_json::to_string(&update).unwrap();
+        let back: FieldUpdate<String> = serde_json::from_str(&json).unwrap();
+        assert_eq!(update, back);
+    }
+
+    #[test]
+    fn test_field_update_serde_roundtrip_numeric() {
+        let update = FieldUpdate::Set(42u32);
+        let json = serde_json::to_string(&update).unwrap();
+        let back: FieldUpdate<u32> = serde_json::from_str(&json).unwrap();
+        assert_eq!(update, back);
+    }
+
+    #[test]
+    fn test_field_update_serde_roundtrip_uuid() {
+        let id = uuid::Uuid::new_v4();
+        let update = FieldUpdate::Set(id);
+        let json = serde_json::to_string(&update).unwrap();
+        let back: FieldUpdate<uuid::Uuid> = serde_json::from_str(&json).unwrap();
+        assert_eq!(update, back);
+    }
+
+    #[test]
+    fn test_board_update_serde_roundtrip() {
+        let update = crate::BoardUpdate {
+            name: Some("Test".to_string()),
+            description: FieldUpdate::Set("desc".to_string()),
+            sprint_prefix: FieldUpdate::Clear,
+            card_prefix: FieldUpdate::NoChange,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&update).unwrap();
+        let back: crate::BoardUpdate = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, Some("Test".to_string()));
+    }
+
+    #[test]
+    fn test_card_update_serde_roundtrip() {
+        let update = crate::CardUpdate {
+            title: Some("Card".to_string()),
+            description: FieldUpdate::Set("desc".to_string()),
+            priority: Some(crate::CardPriority::High),
+            points: FieldUpdate::Set(5),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&update).unwrap();
+        let back: crate::CardUpdate = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.title, Some("Card".to_string()));
+    }
+
+    #[test]
+    fn test_create_card_options_serde_roundtrip() {
+        let opts = crate::CreateCardOptions {
+            description: Some("desc".to_string()),
+            priority: Some(crate::CardPriority::Medium),
+            points: Some(3),
+            due_date: None,
+        };
+        let json = serde_json::to_string(&opts).unwrap();
+        let back: crate::CreateCardOptions = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.description, Some("desc".to_string()));
+    }
+
+    #[test]
+    fn test_column_update_serde_roundtrip() {
+        let update = crate::ColumnUpdate {
+            name: Some("Col".to_string()),
+            position: Some(1),
+            wip_limit: FieldUpdate::Set(5),
+        };
+        let json = serde_json::to_string(&update).unwrap();
+        let back: crate::ColumnUpdate = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, Some("Col".to_string()));
+    }
+
+    #[test]
+    fn test_sprint_update_serde_roundtrip() {
+        let update = crate::SprintUpdate {
+            name: Some("Sprint 1".to_string()),
+            name_index: FieldUpdate::Set(0),
+            prefix: FieldUpdate::Set("SPR".to_string()),
+            card_prefix: FieldUpdate::Clear,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&update).unwrap();
+        let back: crate::SprintUpdate = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, Some("Sprint 1".to_string()));
     }
 }
