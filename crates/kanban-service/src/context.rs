@@ -1,9 +1,10 @@
 use kanban_core::AppConfig;
-use kanban_domain::commands::{Command, CommandContext};
+use kanban_domain::commands::{
+    BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, SprintCommand,
+};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DependencyGraph, FieldUpdate, HistoryManager, KanbanOperations, Snapshot, Sprint,
-    SprintUpdate,
+    ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot};
@@ -32,7 +33,9 @@ pub struct KanbanContext {
     graph: DependencyGraph,
     app_config: AppConfig,
     store: Arc<dyn PersistenceStore + Send + Sync>,
-    history: HistoryManager,
+    snapshot_history: Vec<Snapshot>,
+    command_history: Vec<Vec<Command>>,
+    undo_cursor: usize,
     dirty: bool,
     conflict_pending: bool,
 }
@@ -50,6 +53,7 @@ impl KanbanContext {
         let data: Snapshot = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
+        let initial_snapshot = data.clone();
         Ok(Self {
             boards: data.boards,
             columns: data.columns,
@@ -59,7 +63,9 @@ impl KanbanContext {
             graph: data.graph,
             app_config: config,
             store,
-            history: HistoryManager::new(),
+            snapshot_history: vec![initial_snapshot],
+            command_history: vec![],
+            undo_cursor: 0,
             dirty: false,
             conflict_pending: false,
         })
@@ -81,7 +87,9 @@ impl KanbanContext {
             graph: DependencyGraph::new(),
             app_config: config,
             store,
-            history: HistoryManager::new(),
+            snapshot_history: vec![Snapshot::new()],
+            command_history: vec![],
+            undo_cursor: 0,
             dirty: false,
             conflict_pending: false,
         }
@@ -145,7 +153,7 @@ impl KanbanContext {
         &mut self.graph
     }
 
-    fn execute_raw(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
+    fn execute_raw(&mut self, command: &Command) -> KanbanResult<()> {
         let mut ctx = CommandContext {
             boards: &mut self.boards,
             columns: &mut self.columns,
@@ -177,66 +185,66 @@ impl KanbanContext {
         self.graph = snapshot.graph;
     }
 
-    pub fn execute(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
-        self.history.capture_before_command(self.snapshot());
-        for command in commands {
+    pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
+        self.snapshot_history.truncate(self.undo_cursor + 1);
+        self.command_history.truncate(self.undo_cursor);
+
+        let before = self.snapshot();
+        for command in &commands {
             if let Err(e) = self.execute_raw(command) {
-                if let Some(before) = self.history.pop_undo() {
-                    self.apply_snapshot(before);
-                }
+                self.apply_snapshot(before);
                 return Err(e);
             }
         }
+
+        self.snapshot_history.push(self.snapshot());
+        self.command_history.push(commands);
+        self.undo_cursor += 1;
         self.dirty = true;
         Ok(())
     }
 
     pub fn undo(&mut self) -> bool {
-        if let Some(snapshot) = self.history.pop_undo() {
-            self.history.suppress();
-            let current = self.snapshot();
-            self.history.push_redo(current);
-            self.apply_snapshot(snapshot);
-            self.dirty = true;
-            self.history.unsuppress();
-            true
-        } else {
-            false
+        if self.undo_cursor == 0 {
+            return false;
         }
+        self.undo_cursor -= 1;
+        self.apply_snapshot(self.snapshot_history[self.undo_cursor].clone());
+        self.dirty = true;
+        true
     }
 
     pub fn redo(&mut self) -> bool {
-        if let Some(snapshot) = self.history.pop_redo() {
-            self.history.suppress();
-            let current = self.snapshot();
-            self.history.push_undo(current);
-            self.apply_snapshot(snapshot);
-            self.dirty = true;
-            self.history.unsuppress();
-            true
-        } else {
-            false
+        if self.undo_cursor >= self.snapshot_history.len() - 1 {
+            return false;
         }
+        self.undo_cursor += 1;
+        self.apply_snapshot(self.snapshot_history[self.undo_cursor].clone());
+        self.dirty = true;
+        true
     }
 
     pub fn can_undo(&self) -> bool {
-        self.history.can_undo()
+        self.undo_cursor > 0
     }
 
     pub fn can_redo(&self) -> bool {
-        self.history.can_redo()
+        self.undo_cursor < self.snapshot_history.len() - 1
     }
 
     pub fn clear_history(&mut self) {
-        self.history.clear();
+        let current = self.snapshot();
+        self.snapshot_history = vec![current];
+        self.command_history.clear();
+        self.undo_cursor = 0;
     }
 
     pub fn undo_depth(&self) -> usize {
-        self.history.undo_depth()
+        self.undo_cursor
     }
 
     pub fn redo_depth(&self) -> usize {
-        self.history.redo_depth()
+        self.snapshot_history.len() - 1 - self.undo_cursor
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -318,9 +326,9 @@ impl KanbanContext {
             };
         }
         let succeeded = to_archive.clone();
-        match self.execute(vec![
-            Box::new(ArchiveCards { ids: to_archive }) as Box<dyn Command>
-        ]) {
+        match self.execute(vec![Command::Card(CardCommand::Archive(ArchiveCards {
+            ids: to_archive,
+        }))]) {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
@@ -359,11 +367,10 @@ impl KanbanContext {
             };
         }
         let succeeded = to_move.clone();
-        match self.execute(vec![Box::new(MoveCards {
+        match self.execute(vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
             ids: to_move,
             column_id,
-        }) as Box<dyn Command>])
-        {
+        }))]) {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
@@ -418,11 +425,12 @@ impl KanbanContext {
             };
         }
         let succeeded = to_assign.clone();
-        match self.execute(vec![Box::new(AssignCardsToSprint {
-            ids: to_assign,
-            sprint_id,
-        }) as Box<dyn Command>])
-        {
+        match self.execute(vec![Command::Card(CardCommand::AssignToSprint(
+            AssignCardsToSprint {
+                ids: to_assign,
+                sprint_id,
+            },
+        ))]) {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
@@ -443,8 +451,8 @@ impl KanbanContext {
 impl KanbanOperations for KanbanContext {
     fn create_board(&mut self, name: String, card_prefix: Option<String>) -> KanbanResult<Board> {
         use kanban_domain::commands::CreateBoard;
-        let cmd = CreateBoard { name, card_prefix };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard { name, card_prefix }));
+        self.execute(vec![cmd])?;
         self.boards.last().cloned().ok_or_else(|| {
             KanbanError::Internal("Board creation succeeded but board not found".into())
         })
@@ -460,19 +468,19 @@ impl KanbanOperations for KanbanContext {
 
     fn update_board(&mut self, id: Uuid, updates: BoardUpdate) -> KanbanResult<Board> {
         use kanban_domain::commands::UpdateBoard;
-        let cmd = UpdateBoard {
+        let cmd = Command::Board(BoardCommand::Update(UpdateBoard {
             board_id: id,
             updates,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.get_board(id)?
             .ok_or_else(|| KanbanError::not_found("board", id))
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
         use kanban_domain::commands::DeleteBoard;
-        let cmd = DeleteBoard { board_id: id };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])
+        let cmd = Command::Board(BoardCommand::Delete(DeleteBoard { board_id: id }));
+        self.execute(vec![cmd])
     }
 
     fn create_column(
@@ -488,12 +496,12 @@ impl KanbanOperations for KanbanContext {
                 .filter(|c| c.board_id == board_id)
                 .count() as i32
         });
-        let cmd = CreateColumn {
+        let cmd = Command::Column(ColumnCommand::Create(CreateColumn {
             board_id,
             name,
             position,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.columns.last().cloned().ok_or_else(|| {
             KanbanError::Internal("Column creation succeeded but column not found".into())
         })
@@ -514,19 +522,19 @@ impl KanbanOperations for KanbanContext {
 
     fn update_column(&mut self, id: Uuid, updates: ColumnUpdate) -> KanbanResult<Column> {
         use kanban_domain::commands::UpdateColumn;
-        let cmd = UpdateColumn {
+        let cmd = Command::Column(ColumnCommand::Update(UpdateColumn {
             column_id: id,
             updates,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.get_column(id)?
             .ok_or_else(|| KanbanError::not_found("column", id))
     }
 
     fn delete_column(&mut self, id: Uuid) -> KanbanResult<()> {
         use kanban_domain::commands::DeleteColumn;
-        let cmd = DeleteColumn { column_id: id };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])
+        let cmd = Command::Column(ColumnCommand::Delete(DeleteColumn { column_id: id }));
+        self.execute(vec![cmd])
     }
 
     fn reorder_column(&mut self, id: Uuid, new_position: i32) -> KanbanResult<Column> {
@@ -551,14 +559,14 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .filter(|c| c.column_id == column_id)
             .count() as i32;
-        let cmd = CreateCard {
+        let cmd = Command::Card(CardCommand::Create(CreateCard {
             board_id,
             column_id,
             title,
             position,
             options,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.cards.last().cloned().ok_or_else(|| {
             KanbanError::Internal("Card creation succeeded but card not found".into())
         })
@@ -612,11 +620,11 @@ impl KanbanOperations for KanbanContext {
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
         use kanban_domain::commands::UpdateCard;
-        let cmd = UpdateCard {
+        let cmd = Command::Card(CardCommand::Update(UpdateCard {
             card_id: id,
             updates,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
@@ -634,12 +642,12 @@ impl KanbanOperations for KanbanContext {
                 .filter(|c| c.column_id == column_id)
                 .count() as i32
         });
-        let cmd = MoveCard {
+        let cmd = Command::Card(CardCommand::Move(MoveCard {
             card_id: id,
             new_column_id: column_id,
             new_position: position,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
@@ -676,20 +684,20 @@ impl KanbanOperations for KanbanContext {
         };
 
         let position = archived.original_position;
-        let cmd = RestoreCard {
+        let cmd = Command::Card(CardCommand::Restore(RestoreCard {
             card_id: id,
             column_id: target_column,
             position,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
 
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()> {
         use kanban_domain::commands::DeleteCard;
-        let cmd = DeleteCard { card_id: id };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])
+        let cmd = Command::Card(CardCommand::Delete(DeleteCard { card_id: id }));
+        self.execute(vec![cmd])
     }
 
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
@@ -698,19 +706,21 @@ impl KanbanOperations for KanbanContext {
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
         use kanban_domain::commands::AssignCardsToSprint;
-        let cmd = AssignCardsToSprint {
+        let cmd = Command::Card(CardCommand::AssignToSprint(AssignCardsToSprint {
             ids: vec![card_id],
             sprint_id,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.get_card(card_id)?
             .ok_or_else(|| KanbanError::not_found("card", card_id))
     }
 
     fn unassign_card_from_sprint(&mut self, card_id: Uuid) -> KanbanResult<Card> {
         use kanban_domain::commands::UnassignCardFromSprint;
-        let cmd = UnassignCardFromSprint { card_id };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        let cmd = Command::Card(CardCommand::UnassignFromSprint(UnassignCardFromSprint {
+            card_id,
+        }));
+        self.execute(vec![cmd])?;
         self.get_card(card_id)?
             .ok_or_else(|| KanbanError::not_found("card", card_id))
     }
@@ -760,7 +770,9 @@ impl KanbanOperations for KanbanContext {
     fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
         use kanban_domain::commands::ArchiveCards;
         let before = self.archived_cards.len();
-        self.execute(vec![Box::new(ArchiveCards { ids }) as Box<dyn Command>])?;
+        self.execute(vec![Command::Card(CardCommand::Archive(ArchiveCards {
+            ids,
+        }))])?;
         Ok(self.archived_cards.len() - before)
     }
 
@@ -771,9 +783,10 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .filter(|c| c.column_id == column_id)
             .count();
-        self.execute(vec![
-            Box::new(MoveCards { ids, column_id }) as Box<dyn Command>
-        ])?;
+        self.execute(vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
+            ids,
+            column_id,
+        }))])?;
         let after = self
             .cards
             .iter()
@@ -789,9 +802,9 @@ impl KanbanOperations for KanbanContext {
             .iter()
             .filter(|c| c.sprint_id == Some(sprint_id))
             .count();
-        self.execute(vec![
-            Box::new(AssignCardsToSprint { ids, sprint_id }) as Box<dyn Command>
-        ])?;
+        self.execute(vec![Command::Card(CardCommand::AssignToSprint(
+            AssignCardsToSprint { ids, sprint_id },
+        ))])?;
         let after = self
             .cards
             .iter()
@@ -848,14 +861,14 @@ impl KanbanOperations for KanbanContext {
             .effective_default_sprint_prefix()
             .to_string();
 
-        let cmd = CreateSprint {
+        let cmd = Command::Sprint(SprintCommand::Create(CreateSprint {
             board_id,
             name,
             default_sprint_prefix,
             explicit_prefix: prefix,
             auto_consume_name: false,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.sprints.last().cloned().ok_or_else(|| {
             KanbanError::Internal("Sprint creation succeeded but sprint not found".into())
         })
@@ -876,11 +889,11 @@ impl KanbanOperations for KanbanContext {
 
     fn update_sprint(&mut self, id: Uuid, updates: SprintUpdate) -> KanbanResult<Sprint> {
         use kanban_domain::commands::UpdateSprint;
-        let cmd = UpdateSprint {
+        let cmd = Command::Sprint(SprintCommand::Update(UpdateSprint {
             sprint_id: id,
             updates,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.get_sprint(id)?
             .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
@@ -888,35 +901,35 @@ impl KanbanOperations for KanbanContext {
     fn activate_sprint(&mut self, id: Uuid, duration_days: Option<i32>) -> KanbanResult<Sprint> {
         use kanban_domain::commands::ActivateSprint;
         let duration = duration_days.unwrap_or(14) as u32;
-        let cmd = ActivateSprint {
+        let cmd = Command::Sprint(SprintCommand::Activate(ActivateSprint {
             sprint_id: id,
             duration_days: duration,
-        };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        }));
+        self.execute(vec![cmd])?;
         self.get_sprint(id)?
             .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
 
     fn complete_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
         use kanban_domain::commands::CompleteSprint;
-        let cmd = CompleteSprint { sprint_id: id };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        let cmd = Command::Sprint(SprintCommand::Complete(CompleteSprint { sprint_id: id }));
+        self.execute(vec![cmd])?;
         self.get_sprint(id)?
             .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
 
     fn cancel_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
         use kanban_domain::commands::CancelSprint;
-        let cmd = CancelSprint { sprint_id: id };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])?;
+        let cmd = Command::Sprint(SprintCommand::Cancel(CancelSprint { sprint_id: id }));
+        self.execute(vec![cmd])?;
         self.get_sprint(id)?
             .ok_or_else(|| KanbanError::not_found("sprint", id))
     }
 
     fn delete_sprint(&mut self, id: Uuid) -> KanbanResult<()> {
         use kanban_domain::commands::DeleteSprint;
-        let cmd = DeleteSprint { sprint_id: id };
-        self.execute(vec![Box::new(cmd) as Box<dyn Command>])
+        let cmd = Command::Sprint(SprintCommand::Delete(DeleteSprint { sprint_id: id }));
+        self.execute(vec![cmd])
     }
 
     fn export_board(&self, board_id: Option<Uuid>) -> KanbanResult<String> {
@@ -976,14 +989,14 @@ impl KanbanOperations for KanbanContext {
             .cloned()
             .ok_or_else(|| KanbanError::validation("No board in import data"))?;
 
-        self.execute(vec![Box::new(ImportEntities {
+        self.execute(vec![Command::Board(BoardCommand::Import(ImportEntities {
             boards: imported.boards,
             columns: imported.columns,
             cards: imported.cards,
             archived_cards: imported.archived_cards,
             sprints: imported.sprints,
             graph: Some(imported.graph),
-        }) as Box<dyn Command>])?;
+        }))])?;
 
         Ok(board)
     }
