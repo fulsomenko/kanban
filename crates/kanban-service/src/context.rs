@@ -4,7 +4,8 @@ use kanban_domain::commands::{
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot, Sprint, SprintUpdate,
+    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, InMemoryDataStore, KanbanOperations,
+    Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot};
@@ -25,12 +26,7 @@ pub struct BatchOperationFailure {
 }
 
 pub struct KanbanContext {
-    boards: Vec<Board>,
-    columns: Vec<Column>,
-    cards: Vec<Card>,
-    sprints: Vec<Sprint>,
-    archived_cards: Vec<ArchivedCard>,
-    graph: DependencyGraph,
+    data_store: InMemoryDataStore,
     app_config: AppConfig,
     store: Arc<dyn PersistenceStore + Send + Sync>,
     snapshot_history: Vec<Snapshot>,
@@ -53,17 +49,14 @@ impl KanbanContext {
         let data: Snapshot = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        let initial_snapshot = data.clone();
+        let data_store = InMemoryDataStore::new();
+        data_store.apply_snapshot(data.clone())?;
+
         Ok(Self {
-            boards: data.boards,
-            columns: data.columns,
-            cards: data.cards,
-            sprints: data.sprints,
-            archived_cards: data.archived_cards,
-            graph: data.graph,
+            data_store,
             app_config: config,
             store,
-            snapshot_history: vec![initial_snapshot],
+            snapshot_history: vec![data],
             command_history: vec![],
             undo_cursor: 0,
             dirty: false,
@@ -79,12 +72,7 @@ impl KanbanContext {
 
     pub fn empty(store: Arc<dyn PersistenceStore + Send + Sync>, config: AppConfig) -> Self {
         Self {
-            boards: Vec::new(),
-            columns: Vec::new(),
-            cards: Vec::new(),
-            sprints: Vec::new(),
-            archived_cards: Vec::new(),
-            graph: DependencyGraph::new(),
+            data_store: InMemoryDataStore::new(),
             app_config: config,
             store,
             snapshot_history: vec![Snapshot::new()],
@@ -99,90 +87,51 @@ impl KanbanContext {
         &self.app_config
     }
 
-    pub fn boards(&self) -> &[Board] {
-        &self.boards
+    pub fn data_store(&self) -> &dyn DataStore {
+        &self.data_store
     }
 
-    pub fn columns(&self) -> &[Column] {
-        &self.columns
+    pub fn boards(&self) -> Vec<Board> {
+        self.data_store.list_boards().unwrap_or_default()
     }
 
-    pub fn cards(&self) -> &[Card] {
-        &self.cards
+    pub fn columns(&self) -> Vec<Column> {
+        self.data_store.list_all_columns().unwrap_or_default()
     }
 
-    pub fn sprints(&self) -> &[Sprint] {
-        &self.sprints
+    pub fn cards(&self) -> Vec<Card> {
+        self.data_store.list_all_cards().unwrap_or_default()
     }
 
-    pub fn archived_cards(&self) -> &[ArchivedCard] {
-        &self.archived_cards
+    pub fn sprints(&self) -> Vec<Sprint> {
+        self.data_store.list_all_sprints().unwrap_or_default()
     }
 
-    pub fn graph(&self) -> &DependencyGraph {
-        &self.graph
+    pub fn archived_cards(&self) -> Vec<ArchivedCard> {
+        self.data_store.list_archived_cards().unwrap_or_default()
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn boards_mut(&mut self) -> &mut Vec<Board> {
-        &mut self.boards
+    pub fn graph(&self) -> DependencyGraph {
+        self.data_store
+            .get_graph()
+            .unwrap_or_else(|_| DependencyGraph::new())
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn columns_mut(&mut self) -> &mut Vec<Column> {
-        &mut self.columns
-    }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn cards_mut(&mut self) -> &mut Vec<Card> {
-        &mut self.cards
-    }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn sprints_mut(&mut self) -> &mut Vec<Sprint> {
-        &mut self.sprints
-    }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn archived_cards_mut(&mut self) -> &mut Vec<ArchivedCard> {
-        &mut self.archived_cards
-    }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn graph_mut(&mut self) -> &mut DependencyGraph {
-        &mut self.graph
-    }
-
-    fn execute_raw(&mut self, command: &Command) -> KanbanResult<()> {
-        let mut ctx = CommandContext {
-            boards: &mut self.boards,
-            columns: &mut self.columns,
-            cards: &mut self.cards,
-            sprints: &mut self.sprints,
-            archived_cards: &mut self.archived_cards,
-            graph: &mut self.graph,
+    fn execute_raw(&self, command: &Command) -> KanbanResult<()> {
+        let ctx = CommandContext {
+            store: &self.data_store,
         };
-        command.execute(&mut ctx)
+        command.execute(&ctx)
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        Snapshot {
-            boards: self.boards.clone(),
-            columns: self.columns.clone(),
-            cards: self.cards.clone(),
-            archived_cards: self.archived_cards.clone(),
-            sprints: self.sprints.clone(),
-            graph: self.graph.clone(),
-        }
+        self.data_store
+            .snapshot()
+            .unwrap_or_else(|_| Snapshot::new())
     }
 
-    pub fn apply_snapshot(&mut self, snapshot: Snapshot) {
-        self.boards = snapshot.boards;
-        self.columns = snapshot.columns;
-        self.cards = snapshot.cards;
-        self.archived_cards = snapshot.archived_cards;
-        self.sprints = snapshot.sprints;
-        self.graph = snapshot.graph;
+    pub fn apply_snapshot(&self, snapshot: Snapshot) {
+        let _ = self.data_store.apply_snapshot(snapshot);
     }
 
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
@@ -306,7 +255,8 @@ impl KanbanContext {
 
     pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BatchOperationResult {
         use kanban_domain::commands::ArchiveCards;
-        let card_ids: std::collections::HashSet<Uuid> = self.cards.iter().map(|c| c.id).collect();
+        let all_cards = self.cards();
+        let card_ids: std::collections::HashSet<Uuid> = all_cards.iter().map(|c| c.id).collect();
         let mut to_archive = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
@@ -347,7 +297,8 @@ impl KanbanContext {
 
     pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
         use kanban_domain::commands::MoveCards;
-        let card_ids: std::collections::HashSet<Uuid> = self.cards.iter().map(|c| c.id).collect();
+        let all_cards = self.cards();
+        let card_ids: std::collections::HashSet<Uuid> = all_cards.iter().map(|c| c.id).collect();
         let mut to_move = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
@@ -393,7 +344,8 @@ impl KanbanContext {
         sprint_id: Uuid,
     ) -> BatchOperationResult {
         use kanban_domain::commands::AssignCardsToSprint;
-        if !self.sprints.iter().any(|s| s.id == sprint_id) {
+        let all_sprints = self.sprints();
+        if !all_sprints.iter().any(|s| s.id == sprint_id) {
             return BatchOperationResult {
                 succeeded: vec![],
                 failed: ids
@@ -405,7 +357,8 @@ impl KanbanContext {
                     .collect(),
             };
         }
-        let card_ids: std::collections::HashSet<Uuid> = self.cards.iter().map(|c| c.id).collect();
+        let all_cards = self.cards();
+        let card_ids: std::collections::HashSet<Uuid> = all_cards.iter().map(|c| c.id).collect();
         let mut to_assign = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
@@ -451,19 +404,24 @@ impl KanbanContext {
 impl KanbanOperations for KanbanContext {
     fn create_board(&mut self, name: String, card_prefix: Option<String>) -> KanbanResult<Board> {
         use kanban_domain::commands::CreateBoard;
+        let before_ids: std::collections::HashSet<Uuid> =
+            self.boards().iter().map(|b| b.id).collect();
         let cmd = Command::Board(BoardCommand::Create(CreateBoard { name, card_prefix }));
         self.execute(vec![cmd])?;
-        self.boards.last().cloned().ok_or_else(|| {
-            KanbanError::Internal("Board creation succeeded but board not found".into())
-        })
+        self.boards()
+            .into_iter()
+            .find(|b| !before_ids.contains(&b.id))
+            .ok_or_else(|| {
+                KanbanError::Internal("Board creation succeeded but board not found".into())
+            })
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
-        Ok(self.boards.clone())
+        self.data_store.list_boards()
     }
 
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
-        Ok(self.boards.iter().find(|b| b.id == id).cloned())
+        self.data_store.get_board(id)
     }
 
     fn update_board(&mut self, id: Uuid, updates: BoardUpdate) -> KanbanResult<Board> {
@@ -491,33 +449,33 @@ impl KanbanOperations for KanbanContext {
     ) -> KanbanResult<Column> {
         use kanban_domain::commands::CreateColumn;
         let position = position.unwrap_or_else(|| {
-            self.columns
-                .iter()
-                .filter(|c| c.board_id == board_id)
-                .count() as i32
+            self.data_store
+                .list_columns_by_board(board_id)
+                .unwrap_or_default()
+                .len() as i32
         });
+        let before_ids: std::collections::HashSet<Uuid> =
+            self.columns().iter().map(|c| c.id).collect();
         let cmd = Command::Column(ColumnCommand::Create(CreateColumn {
             board_id,
             name,
             position,
         }));
         self.execute(vec![cmd])?;
-        self.columns.last().cloned().ok_or_else(|| {
-            KanbanError::Internal("Column creation succeeded but column not found".into())
-        })
+        self.columns()
+            .into_iter()
+            .find(|c| !before_ids.contains(&c.id))
+            .ok_or_else(|| {
+                KanbanError::Internal("Column creation succeeded but column not found".into())
+            })
     }
 
     fn list_columns(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
-        Ok(self
-            .columns
-            .iter()
-            .filter(|c| c.board_id == board_id)
-            .cloned()
-            .collect())
+        self.data_store.list_columns_by_board(board_id)
     }
 
     fn get_column(&self, id: Uuid) -> KanbanResult<Option<Column>> {
-        Ok(self.columns.iter().find(|c| c.id == id).cloned())
+        self.data_store.get_column(id)
     }
 
     fn update_column(&mut self, id: Uuid, updates: ColumnUpdate) -> KanbanResult<Column> {
@@ -555,10 +513,12 @@ impl KanbanOperations for KanbanContext {
     ) -> KanbanResult<Card> {
         use kanban_domain::commands::CreateCard;
         let position = self
-            .cards
-            .iter()
-            .filter(|c| c.column_id == column_id)
-            .count() as i32;
+            .data_store
+            .list_cards_by_column(column_id)
+            .unwrap_or_default()
+            .len() as i32;
+        let before_ids: std::collections::HashSet<Uuid> =
+            self.cards().iter().map(|c| c.id).collect();
         let cmd = Command::Card(CardCommand::Create(CreateCard {
             board_id,
             column_id,
@@ -567,19 +527,22 @@ impl KanbanOperations for KanbanContext {
             options,
         }));
         self.execute(vec![cmd])?;
-        self.cards.last().cloned().ok_or_else(|| {
-            KanbanError::Internal("Card creation succeeded but card not found".into())
-        })
+        self.cards()
+            .into_iter()
+            .find(|c| !before_ids.contains(&c.id))
+            .ok_or_else(|| {
+                KanbanError::Internal("Card creation succeeded but card not found".into())
+            })
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
-        let mut cards: Vec<_> = self.cards.to_vec();
+        let mut cards = self.data_store.list_all_cards()?;
 
         if let Some(board_id) = filter.board_id {
-            let board_columns: Vec<_> = self
-                .columns
+            let board_columns: Vec<Uuid> = self
+                .data_store
+                .list_columns_by_board(board_id)?
                 .iter()
-                .filter(|c| c.board_id == board_id)
                 .map(|c| c.id)
                 .collect();
             cards.retain(|c| board_columns.contains(&c.column_id));
@@ -601,21 +564,19 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {
-        Ok(self.cards.iter().find(|c| c.id == id).cloned())
+        self.data_store.get_card(id)
     }
 
     fn find_cards_by_identifier(&self, identifier: &str) -> KanbanResult<Vec<Card>> {
         use kanban_domain::search::find_cards_by_identifier as search;
-        Ok(search(
-            identifier,
-            &self.cards,
-            &self.columns,
-            &self.boards,
-            &self.sprints,
-        )
-        .into_iter()
-        .cloned()
-        .collect())
+        let cards = self.data_store.list_all_cards()?;
+        let columns = self.data_store.list_all_columns()?;
+        let boards = self.data_store.list_boards()?;
+        let sprints = self.data_store.list_all_sprints()?;
+        Ok(search(identifier, &cards, &columns, &boards, &sprints)
+            .into_iter()
+            .cloned()
+            .collect())
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
@@ -637,10 +598,10 @@ impl KanbanOperations for KanbanContext {
     ) -> KanbanResult<Card> {
         use kanban_domain::commands::MoveCard;
         let position = position.unwrap_or_else(|| {
-            self.cards
-                .iter()
-                .filter(|c| c.column_id == column_id)
-                .count() as i32
+            self.data_store
+                .list_cards_by_column(column_id)
+                .unwrap_or_default()
+                .len() as i32
         });
         let cmd = Command::Card(CardCommand::Move(MoveCard {
             card_id: id,
@@ -663,20 +624,19 @@ impl KanbanOperations for KanbanContext {
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card> {
         use kanban_domain::commands::RestoreCard;
         let archived = self
-            .archived_cards
-            .iter()
-            .find(|ac| ac.card.id == id)
+            .data_store
+            .get_archived_card(id)?
             .ok_or_else(|| KanbanError::not_found("archived card", id))?;
 
         let target_column = if let Some(col_id) = column_id {
-            if !self.columns.iter().any(|c| c.id == col_id) {
+            if self.data_store.get_column(col_id)?.is_none() {
                 return Err(KanbanError::not_found("column", col_id));
             }
             col_id
         } else if self
-            .columns
-            .iter()
-            .any(|c| c.id == archived.original_column_id)
+            .data_store
+            .get_column(archived.original_column_id)?
+            .is_some()
         {
             archived.original_column_id
         } else {
@@ -701,7 +661,7 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
-        Ok(self.archived_cards.clone())
+        self.data_store.list_archived_cards()
     }
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
@@ -730,18 +690,17 @@ impl KanbanOperations for KanbanContext {
             .get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))?;
         let column = self
-            .columns
-            .iter()
-            .find(|c| c.id == card.column_id)
+            .data_store
+            .get_column(card.column_id)?
             .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
         let board = self
-            .boards
-            .iter()
-            .find(|b| b.id == column.board_id)
+            .data_store
+            .get_board(column.board_id)?
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
+        let sprints = self.data_store.list_all_sprints()?;
         Ok(card.branch_name(
-            board,
-            &self.sprints,
+            &board,
+            &sprints,
             self.app_config.effective_default_card_prefix(),
         ))
     }
@@ -751,65 +710,60 @@ impl KanbanOperations for KanbanContext {
             .get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))?;
         let column = self
-            .columns
-            .iter()
-            .find(|c| c.id == card.column_id)
+            .data_store
+            .get_column(card.column_id)?
             .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
         let board = self
-            .boards
-            .iter()
-            .find(|b| b.id == column.board_id)
+            .data_store
+            .get_board(column.board_id)?
             .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
+        let sprints = self.data_store.list_all_sprints()?;
         Ok(card.git_checkout_command(
-            board,
-            &self.sprints,
+            &board,
+            &sprints,
             self.app_config.effective_default_card_prefix(),
         ))
     }
 
     fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
         use kanban_domain::commands::ArchiveCards;
-        let before = self.archived_cards.len();
+        let before = self.data_store.list_archived_cards()?.len();
         self.execute(vec![Command::Card(CardCommand::Archive(ArchiveCards {
             ids,
         }))])?;
-        Ok(self.archived_cards.len() - before)
+        Ok(self.data_store.list_archived_cards()?.len() - before)
     }
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::MoveCards;
         let before = self
-            .cards
-            .iter()
-            .filter(|c| c.column_id == column_id)
-            .count();
+            .data_store
+            .list_cards_by_column(column_id)?
+            .len();
         self.execute(vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
             ids,
             column_id,
         }))])?;
         let after = self
-            .cards
-            .iter()
-            .filter(|c| c.column_id == column_id)
-            .count();
+            .data_store
+            .list_cards_by_column(column_id)?
+            .len();
         Ok(after - before)
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::AssignCardsToSprint;
         let before = self
-            .cards
-            .iter()
-            .filter(|c| c.sprint_id == Some(sprint_id))
-            .count();
+            .data_store
+            .list_cards_by_sprint(sprint_id)?
+            .len();
         self.execute(vec![Command::Card(CardCommand::AssignToSprint(
             AssignCardsToSprint { ids, sprint_id },
         ))])?;
         let after = self
-            .cards
-            .iter()
-            .filter(|c| c.sprint_id == Some(sprint_id))
-            .count();
+            .data_store
+            .list_cards_by_sprint(sprint_id)?
+            .len();
         Ok(after - before)
     }
 
@@ -841,7 +795,8 @@ impl KanbanOperations for KanbanContext {
             )));
         }
 
-        let ids: Vec<Uuid> = get_sprint_uncompleted_cards(from_sprint_id, &self.cards)
+        let all_cards = self.data_store.list_all_cards()?;
+        let ids: Vec<Uuid> = get_sprint_uncompleted_cards(from_sprint_id, &all_cards)
             .iter()
             .map(|c| c.id)
             .collect();
@@ -861,6 +816,8 @@ impl KanbanOperations for KanbanContext {
             .effective_default_sprint_prefix()
             .to_string();
 
+        let before_ids: std::collections::HashSet<Uuid> =
+            self.sprints().iter().map(|s| s.id).collect();
         let cmd = Command::Sprint(SprintCommand::Create(CreateSprint {
             board_id,
             name,
@@ -869,22 +826,20 @@ impl KanbanOperations for KanbanContext {
             auto_consume_name: false,
         }));
         self.execute(vec![cmd])?;
-        self.sprints.last().cloned().ok_or_else(|| {
-            KanbanError::Internal("Sprint creation succeeded but sprint not found".into())
-        })
+        self.sprints()
+            .into_iter()
+            .find(|s| !before_ids.contains(&s.id))
+            .ok_or_else(|| {
+                KanbanError::Internal("Sprint creation succeeded but sprint not found".into())
+            })
     }
 
     fn list_sprints(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
-        Ok(self
-            .sprints
-            .iter()
-            .filter(|s| s.board_id == board_id)
-            .cloned()
-            .collect())
+        self.data_store.list_sprints_by_board(board_id)
     }
 
     fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>> {
-        Ok(self.sprints.iter().find(|s| s.id == id).cloned())
+        self.data_store.get_sprint(id)
     }
 
     fn update_sprint(&mut self, id: Uuid, updates: SprintUpdate) -> KanbanResult<Sprint> {
@@ -934,43 +889,32 @@ impl KanbanOperations for KanbanContext {
 
     fn export_board(&self, board_id: Option<Uuid>) -> KanbanResult<String> {
         let snapshot = if let Some(id) = board_id {
-            let boards: Vec<_> = self.boards.iter().filter(|b| b.id == id).cloned().collect();
-            let columns: Vec<_> = self
-                .columns
-                .iter()
-                .filter(|c| c.board_id == id)
-                .cloned()
+            let boards: Vec<_> = self
+                .data_store
+                .list_boards()?
+                .into_iter()
+                .filter(|b| b.id == id)
                 .collect();
+            let columns = self.data_store.list_columns_by_board(id)?;
             let column_ids: Vec<_> = columns.iter().map(|c| c.id).collect();
             let cards: Vec<_> = self
-                .cards
-                .iter()
+                .data_store
+                .list_all_cards()?
+                .into_iter()
                 .filter(|c| column_ids.contains(&c.column_id))
-                .cloned()
                 .collect();
-            let sprints: Vec<_> = self
-                .sprints
-                .iter()
-                .filter(|s| s.board_id == id)
-                .cloned()
-                .collect();
+            let sprints = self.data_store.list_sprints_by_board(id)?;
+            let graph = self.data_store.get_graph()?;
             Snapshot {
                 boards,
                 columns,
                 cards,
                 archived_cards: vec![],
                 sprints,
-                graph: self.graph.clone(),
+                graph,
             }
         } else {
-            Snapshot {
-                boards: self.boards.clone(),
-                columns: self.columns.clone(),
-                cards: self.cards.clone(),
-                archived_cards: self.archived_cards.clone(),
-                sprints: self.sprints.clone(),
-                graph: self.graph.clone(),
-            }
+            self.data_store.snapshot()?
         };
 
         serde_json::to_string_pretty(&snapshot)

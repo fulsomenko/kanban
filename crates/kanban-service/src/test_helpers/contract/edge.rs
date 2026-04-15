@@ -4,6 +4,12 @@ use kanban_core::{Edge, EdgeDirection};
 use kanban_domain::{CardEdgeType, CreateCardOptions, KanbanOperations};
 use tempfile::TempDir;
 
+fn add_edge(ctx: &KanbanContext, edge: Edge<CardEdgeType>) {
+    let mut graph = ctx.data_store().get_graph().unwrap();
+    graph.cards.add_edge(edge);
+    ctx.data_store().set_graph(graph).unwrap();
+}
+
 pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
@@ -32,7 +38,7 @@ pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph_mut().cards.add_edge(Edge {
+    add_edge(&ctx, Edge {
         source: card_a.id,
         target: card_b.id,
         edge_type: CardEdgeType::Blocks,
@@ -47,7 +53,8 @@ pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    let edges = ctx.graph().cards.edges();
+    let graph = ctx.graph();
+    let edges = graph.cards.edges();
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
     assert_eq!(e.source, card_a.id);
@@ -76,7 +83,7 @@ pub async fn test_relates_to_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph_mut().cards.add_edge(Edge {
+    add_edge(&ctx, Edge {
         source: card_a.id,
         target: card_b.id,
         edge_type: CardEdgeType::RelatesTo,
@@ -91,7 +98,8 @@ pub async fn test_relates_to_edge_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    let edges = ctx.graph().cards.edges();
+    let graph = ctx.graph();
+    let edges = graph.cards.edges();
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
     assert_eq!(e.edge_type, CardEdgeType::RelatesTo);
@@ -127,7 +135,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph_mut().cards.add_edge(Edge {
+    add_edge(&ctx, Edge {
         source: parent.id,
         target: child.id,
         edge_type: CardEdgeType::ParentOf,
@@ -142,7 +150,8 @@ pub async fn test_parent_of_edge_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    let edges = ctx.graph().cards.edges();
+    let graph = ctx.graph();
+    let edges = graph.cards.edges();
     assert_eq!(edges.len(), 1);
     assert_eq!(edges[0].edge_type, CardEdgeType::ParentOf);
 }
@@ -165,7 +174,7 @@ pub async fn test_archived_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph_mut().cards.add_edge(Edge {
+    add_edge(&ctx, Edge {
         source: card_a.id,
         target: card_b.id,
         edge_type: CardEdgeType::Blocks,
@@ -180,7 +189,8 @@ pub async fn test_archived_edge_roundtrip(factory: &StoreFactory) {
         .await
         .unwrap();
 
-    let edges = ctx.graph().cards.edges();
+    let graph = ctx.graph();
+    let edges = graph.cards.edges();
     assert_eq!(edges.len(), 1);
     assert!(edges[0].archived_at.is_some());
     assert!((edges[0].weight.unwrap() - 2.5).abs() < f32::EPSILON);
@@ -207,7 +217,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph_mut().cards.add_edge(Edge {
+    add_edge(&ctx, Edge {
         source: card_a.id,
         target: card_b.id,
         edge_type: CardEdgeType::Blocks,
@@ -216,7 +226,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
         created_at: now,
         archived_at: None,
     });
-    ctx.graph_mut().cards.add_edge(Edge {
+    add_edge(&ctx, Edge {
         source: card_b.id,
         target: card_c.id,
         edge_type: CardEdgeType::ParentOf,
@@ -225,7 +235,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
         created_at: now,
         archived_at: None,
     });
-    ctx.graph_mut().cards.add_edge(Edge {
+    add_edge(&ctx, Edge {
         source: card_a.id,
         target: card_c.id,
         edge_type: CardEdgeType::RelatesTo,

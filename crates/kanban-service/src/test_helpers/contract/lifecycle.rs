@@ -175,15 +175,14 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     let board = ctx
         .create_board("Full Board".into(), Some("FB".into()))
         .unwrap();
-    let b = ctx
-        .boards_mut()
-        .iter_mut()
-        .find(|b| b.id == board.id)
-        .unwrap();
-    b.sprint_names = vec!["Alpha".into(), "Beta".into()];
-    b.sprint_name_used_count = 1;
-    b.card_counter = 10;
-    b.sprint_counters.insert("SP".into(), 5);
+    {
+        let mut b = ctx.data_store().get_board(board.id).unwrap().unwrap();
+        b.sprint_names = vec!["Alpha".into(), "Beta".into()];
+        b.sprint_name_used_count = 1;
+        b.card_counter = 10;
+        b.sprint_counters.insert("SP".into(), 5);
+        ctx.data_store().upsert_board(b).unwrap();
+    }
 
     let col_todo = ctx.create_column(board.id, "Todo".into(), Some(0)).unwrap();
     let col_done = ctx.create_column(board.id, "Done".into(), Some(1)).unwrap();
@@ -292,33 +291,37 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     ctx.archive_card(card4.id).unwrap();
 
     let now = chrono::Utc::now();
-    ctx.graph_mut().cards.add_edge(Edge {
-        source: card1.id,
-        target: card2.id,
-        edge_type: CardEdgeType::Blocks,
-        direction: EdgeDirection::Directed,
-        weight: Some(1.0_f32),
-        created_at: now,
-        archived_at: None,
-    });
-    ctx.graph_mut().cards.add_edge(Edge {
-        source: card1.id,
-        target: card3.id,
-        edge_type: CardEdgeType::RelatesTo,
-        direction: EdgeDirection::Bidirectional,
-        weight: None,
-        created_at: now,
-        archived_at: Some(now),
-    });
-    ctx.graph_mut().cards.add_edge(Edge {
-        source: card2.id,
-        target: card3.id,
-        edge_type: CardEdgeType::ParentOf,
-        direction: EdgeDirection::Directed,
-        weight: Some(0.5_f32),
-        created_at: now,
-        archived_at: None,
-    });
+    {
+        let mut graph = ctx.data_store().get_graph().unwrap();
+        graph.cards.add_edge(Edge {
+            source: card1.id,
+            target: card2.id,
+            edge_type: CardEdgeType::Blocks,
+            direction: EdgeDirection::Directed,
+            weight: Some(1.0_f32),
+            created_at: now,
+            archived_at: None,
+        });
+        graph.cards.add_edge(Edge {
+            source: card1.id,
+            target: card3.id,
+            edge_type: CardEdgeType::RelatesTo,
+            direction: EdgeDirection::Bidirectional,
+            weight: None,
+            created_at: now,
+            archived_at: Some(now),
+        });
+        graph.cards.add_edge(Edge {
+            source: card2.id,
+            target: card3.id,
+            edge_type: CardEdgeType::ParentOf,
+            direction: EdgeDirection::Directed,
+            weight: Some(0.5_f32),
+            created_at: now,
+            archived_at: None,
+        });
+        ctx.data_store().set_graph(graph).unwrap();
+    }
 
     ctx.save().await.unwrap();
     let loaded = KanbanContext::load_with_defaults(factory(&path))
@@ -376,7 +379,8 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     assert_eq!(archived[0].card.points, Some(5));
     assert_eq!(archived[0].original_column_id, col_todo.id);
 
-    let edges = loaded.graph().cards.edges();
+    let graph = loaded.graph();
+    let edges = graph.cards.edges();
     assert_eq!(edges.len(), 3, "expected 3 edges, got {:?}", edges);
 }
 
