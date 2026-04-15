@@ -10,20 +10,40 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use uuid::Uuid;
 
+/// In-memory state for the command log
+struct CommandLogState {
+    commands: Vec<kanban_domain::commands::Command>,
+    undo_cursor: u64,
+}
+
+impl CommandLogState {
+    fn new() -> Self {
+        Self {
+            commands: vec![],
+            undo_cursor: 0,
+        }
+    }
+}
+
 /// JSON file-based persistence store
 /// Implements the PersistenceStore trait for JSON file operations
 pub struct JsonFileStore {
     path: PathBuf,
     instance_id: Uuid,
     last_known_metadata: Mutex<Option<FileMetadata>>,
+    command_log_state: Mutex<CommandLogState>,
 }
 
-/// Wrapper structure for the JSON file format v2
+/// Wrapper structure for the JSON file format (v2–v4)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonEnvelope {
     version: u32,
     metadata: PersistenceMetadata,
     data: serde_json::Value,
+    #[serde(default)]
+    commands: Vec<kanban_domain::commands::Command>,
+    #[serde(default)]
+    undo_cursor: u64,
 }
 
 impl JsonEnvelope {
@@ -36,6 +56,8 @@ impl JsonEnvelope {
                 saved_at: chrono::Utc::now(),
             },
             data,
+            commands: vec![],
+            undo_cursor: 0,
         }
     }
 
@@ -63,6 +85,7 @@ impl JsonFileStore {
             path: path.as_ref().to_path_buf(),
             instance_id: Uuid::new_v4(),
             last_known_metadata: Mutex::new(None),
+            command_log_state: Mutex::new(CommandLogState::new()),
         }
     }
 
@@ -73,6 +96,7 @@ impl JsonFileStore {
             path: path.as_ref().to_path_buf(),
             instance_id,
             last_known_metadata: Mutex::new(None),
+            command_log_state: Mutex::new(CommandLogState::new()),
         }
     }
 
@@ -114,13 +138,19 @@ impl PersistenceStore for JsonFileStore {
         snapshot.metadata.instance_id = self.instance_id;
         snapshot.metadata.saved_at = chrono::Utc::now();
 
-        // Create JSON envelope with v3 format
+        // Create JSON envelope with v4 format, including command log state
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let (cmd_log, cursor) = {
+            let cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+            (cls.commands.clone(), cls.undo_cursor)
+        };
         let envelope = JsonEnvelope {
-            version: 3,
+            version: 4,
             metadata: snapshot.metadata.clone(),
             data: data_value,
+            commands: cmd_log,
+            undo_cursor: cursor,
         };
 
         // Serialize envelope to JSON
@@ -149,7 +179,7 @@ impl PersistenceStore for JsonFileStore {
         // Detect current file version
         let current_version = Migrator::detect_version(&self.path).await?;
 
-        // Migrate if necessary
+        // Migrate if necessary (v4 is backward-compatible via serde defaults)
         if current_version < FormatVersion::V3 {
             tracing::info!(
                 "Detected {:?} format at {}. Migrating to V3...",
@@ -167,12 +197,19 @@ impl PersistenceStore for JsonFileStore {
         let envelope: JsonEnvelope = serde_json::from_slice(&file_bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        // Validate version (accept V2 and V3)
-        if envelope.version != 3 && envelope.version != 2 {
+        // Validate version (accept V2, V3, V4)
+        if envelope.version < 2 || envelope.version > 4 {
             return Err(PersistenceError::Serialization(format!(
                 "Unsupported format version: {}",
                 envelope.version
             )));
+        }
+
+        // Populate command log state from envelope
+        {
+            let mut cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+            cls.commands = envelope.commands;
+            cls.undo_cursor = envelope.undo_cursor;
         }
 
         // Reconstruct snapshot
@@ -208,6 +245,48 @@ impl PersistenceStore for JsonFileStore {
 
     fn instance_id(&self) -> Uuid {
         self.instance_id
+    }
+
+    async fn append_command(
+        &self,
+        cmd: &kanban_domain::commands::Command,
+    ) -> PersistenceResult<u64> {
+        let mut cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        cls.commands.push(cmd.clone());
+        Ok(cls.commands.len() as u64)
+    }
+
+    async fn command_count(&self) -> PersistenceResult<u64> {
+        let cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        Ok(cls.commands.len() as u64)
+    }
+
+    async fn undo_cursor(&self) -> PersistenceResult<u64> {
+        let cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        Ok(cls.undo_cursor)
+    }
+
+    async fn set_undo_cursor(&self, index: u64) -> PersistenceResult<()> {
+        let mut cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        cls.undo_cursor = index;
+        Ok(())
+    }
+
+    async fn load_commands(
+        &self,
+        from: u64,
+        to: u64,
+    ) -> PersistenceResult<Vec<kanban_domain::commands::Command>> {
+        let cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        let from = from as usize;
+        let to = (to as usize).min(cls.commands.len());
+        Ok(cls.commands[from..to].to_vec())
+    }
+
+    async fn truncate_commands_after(&self, after: u64) -> PersistenceResult<()> {
+        let mut cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        cls.commands.truncate(after as usize);
+        Ok(())
     }
 }
 
