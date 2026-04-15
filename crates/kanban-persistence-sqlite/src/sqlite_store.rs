@@ -575,6 +575,84 @@ impl PersistenceStore for SqliteStore {
     fn instance_id(&self) -> Uuid {
         self.instance_id
     }
+
+    async fn append_command(
+        &self,
+        cmd: &kanban_domain::commands::Command,
+    ) -> PersistenceResult<u64> {
+        let pool = self.get_pool().await?;
+        let json = serde_json::to_string(cmd).map_err(ser_err)?;
+        let row: (i64,) = sqlx::query_as(
+            "INSERT INTO command_log (cmd_json) VALUES (?) RETURNING idx",
+        )
+        .bind(&json)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+        Ok(row.0 as u64)
+    }
+
+    async fn command_count(&self) -> PersistenceResult<u64> {
+        let pool = self.get_pool().await?;
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM command_log")
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
+        Ok(row.0 as u64)
+    }
+
+    async fn undo_cursor(&self) -> PersistenceResult<u64> {
+        let pool = self.get_pool().await?;
+        let row: Option<(i64,)> =
+            sqlx::query_as("SELECT cursor FROM undo_state WHERE id = 1")
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?;
+        Ok(row.map_or(0, |r| r.0 as u64))
+    }
+
+    async fn set_undo_cursor(&self, index: u64) -> PersistenceResult<()> {
+        let pool = self.get_pool().await?;
+        sqlx::query(
+            "INSERT INTO undo_state (id, cursor) VALUES (1, ?) \
+             ON CONFLICT(id) DO UPDATE SET cursor = excluded.cursor",
+        )
+        .bind(index as i64)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    async fn load_commands(
+        &self,
+        from: u64,
+        to: u64,
+    ) -> PersistenceResult<Vec<kanban_domain::commands::Command>> {
+        let pool = self.get_pool().await?;
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT cmd_json FROM command_log ORDER BY idx LIMIT ? OFFSET ?",
+        )
+        .bind((to - from) as i64)
+        .bind(from as i64)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+        rows.iter()
+            .map(|(json,)| serde_json::from_str(json).map_err(ser_err))
+            .collect()
+    }
+
+    async fn truncate_commands_after(&self, after: u64) -> PersistenceResult<()> {
+        let pool = self.get_pool().await?;
+        // command_log idx is 1-based autoincrement, `after` is count of commands to keep
+        sqlx::query("DELETE FROM command_log WHERE idx > ?")
+            .bind(after as i64)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
