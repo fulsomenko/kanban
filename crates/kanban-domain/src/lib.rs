@@ -11,7 +11,6 @@ pub mod editable;
 pub mod export;
 pub mod field_update;
 pub mod filter;
-pub mod history;
 pub mod operations;
 pub mod query;
 pub mod search;
@@ -37,7 +36,6 @@ pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, ImportedEntities};
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
-pub use history::HistoryManager;
 pub use operations::{CardListFilter, KanbanOperations};
 pub use query::{
     sprint::{

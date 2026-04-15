@@ -1,52 +1,82 @@
-use super::{Command, CommandContext};
+use super::CommandContext;
 use crate::ColumnUpdate;
 use crate::KanbanResult;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum ColumnCommand {
+    Create(CreateColumn),
+    Update(UpdateColumn),
+    Delete(DeleteColumn),
+}
+
+impl ColumnCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        match self {
+            ColumnCommand::Create(c) => c.execute(context),
+            ColumnCommand::Update(c) => c.execute(context),
+            ColumnCommand::Delete(c) => c.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            ColumnCommand::Create(c) => c.description(),
+            ColumnCommand::Update(c) => c.description(),
+            ColumnCommand::Delete(c) => c.description(),
+        }
+    }
+}
+
 /// Update column properties (name, position, wip_limit)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateColumn {
     pub column_id: Uuid,
     pub updates: ColumnUpdate,
 }
 
-impl Command for UpdateColumn {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl UpdateColumn {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let column = context.column_mut(self.column_id)?;
         column.update(self.updates.clone());
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         "Update column".to_string()
     }
 }
 
 /// Create a new column
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateColumn {
     pub board_id: Uuid,
     pub name: String,
     pub position: i32,
 }
 
-impl Command for CreateColumn {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl CreateColumn {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let column = crate::Column::new(self.board_id, self.name.clone(), self.position);
         context.columns.push(column);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Create column: '{}'", self.name)
     }
 }
 
 /// Delete a column
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteColumn {
     pub column_id: Uuid,
 }
 
-impl Command for DeleteColumn {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl DeleteColumn {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let has_cards = context.cards.iter().any(|c| c.column_id == self.column_id);
         if has_cards {
             return Err(crate::KanbanError::validation(format!(
@@ -70,7 +100,7 @@ impl Command for DeleteColumn {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Delete column {}", self.column_id)
     }
 }

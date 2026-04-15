@@ -1,36 +1,77 @@
-use super::{Command, CommandContext};
+use super::CommandContext;
 use crate::field_update::FieldUpdate;
 use crate::KanbanResult;
 use crate::{ArchivedCard, Board, BoardUpdate, Card, Column, DependencyGraph, KanbanError, Sprint};
 use kanban_core::Editable;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum BoardCommand {
+    Create(CreateBoard),
+    Update(UpdateBoard),
+    SetTaskSort(SetBoardTaskSort),
+    SetTaskListView(SetBoardTaskListView),
+    Delete(DeleteBoard),
+    ApplySettings(ApplyBoardSettings),
+    Import(ImportEntities),
+}
+
+impl BoardCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        match self {
+            BoardCommand::Create(c) => c.execute(context),
+            BoardCommand::Update(c) => c.execute(context),
+            BoardCommand::SetTaskSort(c) => c.execute(context),
+            BoardCommand::SetTaskListView(c) => c.execute(context),
+            BoardCommand::Delete(c) => c.execute(context),
+            BoardCommand::ApplySettings(c) => c.execute(context),
+            BoardCommand::Import(c) => c.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            BoardCommand::Create(c) => c.description(),
+            BoardCommand::Update(c) => c.description(),
+            BoardCommand::SetTaskSort(c) => c.description(),
+            BoardCommand::SetTaskListView(c) => c.description(),
+            BoardCommand::Delete(c) => c.description(),
+            BoardCommand::ApplySettings(c) => c.description(),
+            BoardCommand::Import(c) => c.description(),
+        }
+    }
+}
+
 /// Create a new board
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateBoard {
     pub name: String,
     pub card_prefix: Option<String>,
 }
 
-impl Command for CreateBoard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl CreateBoard {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let board = Board::new(self.name.clone(), self.card_prefix.clone());
         context.boards.push(board);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Create board: '{}'", self.name)
     }
 }
 
 /// Update board properties (name, description, prefixes, sort options, etc.)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateBoard {
     pub board_id: Uuid,
     pub updates: BoardUpdate,
 }
 
-impl Command for UpdateBoard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl UpdateBoard {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         if !matches!(self.updates.card_prefix, FieldUpdate::NoChange) {
             let card_counter = context
                 .boards
@@ -49,55 +90,58 @@ impl Command for UpdateBoard {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         "Update board".to_string()
     }
 }
 
 /// Update board's task sorting preference
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetBoardTaskSort {
     pub board_id: Uuid,
     pub field: crate::SortField,
     pub order: crate::SortOrder,
 }
 
-impl Command for SetBoardTaskSort {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl SetBoardTaskSort {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let board = context.board_mut(self.board_id)?;
         board.update_task_sort(self.field, self.order);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Set board task sort to {:?} {:?}", self.field, self.order)
     }
 }
 
 /// Update board's task list view
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetBoardTaskListView {
     pub board_id: Uuid,
     pub view: crate::TaskListView,
 }
 
-impl Command for SetBoardTaskListView {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl SetBoardTaskListView {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let board = context.board_mut(self.board_id)?;
         board.update_task_list_view(self.view);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Set board task list view to {:?}", self.view)
     }
 }
 
 /// Delete a board and all associated columns, cards, and sprints
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteBoard {
     pub board_id: Uuid,
 }
 
-impl Command for DeleteBoard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl DeleteBoard {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let column_ids: Vec<Uuid> = context
             .columns
             .iter()
@@ -115,31 +159,33 @@ impl Command for DeleteBoard {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Delete board: {}", self.board_id)
     }
 }
 
 /// Apply board settings from a DTO (used by JSON editor).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplyBoardSettings {
     pub board_id: Uuid,
     pub dto: crate::editable::BoardSettingsDto,
 }
 
-impl Command for ApplyBoardSettings {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl ApplyBoardSettings {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let board = context.board_mut(self.board_id)?;
         self.dto.clone().apply_to(board);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Apply board settings for {}", self.board_id)
     }
 }
 
 /// Import entities (boards, columns, cards, etc.) into the context.
 /// Used by TUI import functionality. Appends without replacing existing data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportEntities {
     pub boards: Vec<Board>,
     pub columns: Vec<Column>,
@@ -149,8 +195,8 @@ pub struct ImportEntities {
     pub graph: Option<DependencyGraph>,
 }
 
-impl Command for ImportEntities {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl ImportEntities {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         use std::collections::HashSet;
 
         let existing_board_ids: HashSet<Uuid> = context.boards.iter().map(|b| b.id).collect();
@@ -212,7 +258,7 @@ impl Command for ImportEntities {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Import {} board(s)", self.boards.len())
     }
 }

@@ -1,17 +1,54 @@
-use super::{Command, CommandContext};
+use super::CommandContext;
 use crate::SprintUpdate;
 use crate::{KanbanError, KanbanResult};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum SprintCommand {
+    Create(CreateSprint),
+    Update(UpdateSprint),
+    Activate(ActivateSprint),
+    Complete(CompleteSprint),
+    Cancel(CancelSprint),
+    Delete(DeleteSprint),
+}
+
+impl SprintCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        match self {
+            SprintCommand::Create(c) => c.execute(context),
+            SprintCommand::Update(c) => c.execute(context),
+            SprintCommand::Activate(c) => c.execute(context),
+            SprintCommand::Complete(c) => c.execute(context),
+            SprintCommand::Cancel(c) => c.execute(context),
+            SprintCommand::Delete(c) => c.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            SprintCommand::Create(c) => c.description(),
+            SprintCommand::Update(c) => c.description(),
+            SprintCommand::Activate(c) => c.description(),
+            SprintCommand::Complete(c) => c.description(),
+            SprintCommand::Cancel(c) => c.description(),
+            SprintCommand::Delete(c) => c.description(),
+        }
+    }
+}
+
 /// Update sprint properties (name_index, prefix, card_prefix, status, dates)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateSprint {
     pub sprint_id: Uuid,
     pub updates: SprintUpdate,
 }
 
-impl Command for UpdateSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl UpdateSprint {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let mut updates = self.updates.clone();
 
         if !matches!(updates.card_prefix, crate::FieldUpdate::NoChange) {
@@ -94,7 +131,7 @@ impl Command for UpdateSprint {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         "Update sprint".to_string()
     }
 }
@@ -107,6 +144,7 @@ impl Command for UpdateSprint {
 ///
 /// If `auto_consume_name` is true and no explicit name is provided, the next
 /// available sprint name from the board's name pool will be consumed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSprint {
     pub board_id: Uuid,
     pub name: Option<String>,
@@ -118,8 +156,8 @@ pub struct CreateSprint {
     pub auto_consume_name: bool,
 }
 
-impl Command for CreateSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl CreateSprint {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let sprints_snapshot: Vec<_> = context
             .sprints
             .iter()
@@ -154,70 +192,74 @@ impl Command for CreateSprint {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Create sprint for board {}", self.board_id)
     }
 }
 
 /// Activate a sprint (change status to Active and set dates)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActivateSprint {
     pub sprint_id: Uuid,
     pub duration_days: u32,
 }
 
-impl Command for ActivateSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl ActivateSprint {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let sprint = context.sprint_mut(self.sprint_id)?;
         sprint.activate(self.duration_days);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Activate sprint {}", self.sprint_id)
     }
 }
 
 /// Complete a sprint (change status to Completed)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompleteSprint {
     pub sprint_id: Uuid,
 }
 
-impl Command for CompleteSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl CompleteSprint {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let sprint = context.sprint_mut(self.sprint_id)?;
         sprint.complete();
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Complete sprint {}", self.sprint_id)
     }
 }
 
 /// Cancel a sprint (change status to Cancelled)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CancelSprint {
     pub sprint_id: Uuid,
 }
 
-impl Command for CancelSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl CancelSprint {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let sprint = context.sprint_mut(self.sprint_id)?;
         sprint.cancel();
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Cancel sprint {}", self.sprint_id)
     }
 }
 
 /// Delete a sprint
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteSprint {
     pub sprint_id: Uuid,
 }
 
-impl Command for DeleteSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl DeleteSprint {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let now = Utc::now();
         for card in context.cards.iter_mut() {
             if card.sprint_id == Some(self.sprint_id) {
@@ -237,7 +279,7 @@ impl Command for DeleteSprint {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Delete sprint {}", self.sprint_id)
     }
 }

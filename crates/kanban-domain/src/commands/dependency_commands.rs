@@ -1,17 +1,54 @@
 use crate::KanbanResult;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{Command, CommandContext};
+use super::CommandContext;
 use crate::{dependencies::CardGraphExt, Card};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum DependencyCommand {
+    AddBlocks(AddBlocksDependencyCommand),
+    AddRelatesTo(AddRelatesToDependencyCommand),
+    Remove(RemoveDependencyCommand),
+    SetParent(SetParentCommand),
+    RemoveParent(RemoveParentCommand),
+    CreateSubcard(CreateSubcardCommand),
+}
+
+impl DependencyCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        match self {
+            DependencyCommand::AddBlocks(c) => c.execute(context),
+            DependencyCommand::AddRelatesTo(c) => c.execute(context),
+            DependencyCommand::Remove(c) => c.execute(context),
+            DependencyCommand::SetParent(c) => c.execute(context),
+            DependencyCommand::RemoveParent(c) => c.execute(context),
+            DependencyCommand::CreateSubcard(c) => c.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            DependencyCommand::AddBlocks(c) => c.description(),
+            DependencyCommand::AddRelatesTo(c) => c.description(),
+            DependencyCommand::Remove(c) => c.description(),
+            DependencyCommand::SetParent(c) => c.description(),
+            DependencyCommand::RemoveParent(c) => c.description(),
+            DependencyCommand::CreateSubcard(c) => c.description(),
+        }
+    }
+}
+
 /// Add a blocking dependency between two cards
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddBlocksDependencyCommand {
     pub blocker_id: Uuid,
     pub blocked_id: Uuid,
 }
 
-impl Command for AddBlocksDependencyCommand {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl AddBlocksDependencyCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context
             .graph
             .cards
@@ -19,7 +56,7 @@ impl Command for AddBlocksDependencyCommand {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Add blocks dependency: {} blocks {}",
             self.blocker_id, self.blocked_id
@@ -28,13 +65,14 @@ impl Command for AddBlocksDependencyCommand {
 }
 
 /// Add a relates-to dependency between two cards
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddRelatesToDependencyCommand {
     pub card_a_id: Uuid,
     pub card_b_id: Uuid,
 }
 
-impl Command for AddRelatesToDependencyCommand {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl AddRelatesToDependencyCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context
             .graph
             .cards
@@ -42,7 +80,7 @@ impl Command for AddRelatesToDependencyCommand {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Add relates-to dependency: {} <-> {}",
             self.card_a_id, self.card_b_id
@@ -51,13 +89,14 @@ impl Command for AddRelatesToDependencyCommand {
 }
 
 /// Remove a dependency between two cards
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoveDependencyCommand {
     pub source_id: Uuid,
     pub target_id: Uuid,
 }
 
-impl Command for RemoveDependencyCommand {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl RemoveDependencyCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context
             .graph
             .cards
@@ -65,7 +104,7 @@ impl Command for RemoveDependencyCommand {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Remove dependency: {} -> {}",
             self.source_id, self.target_id
@@ -74,13 +113,14 @@ impl Command for RemoveDependencyCommand {
 }
 
 /// Set parent-child relationship between two cards
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetParentCommand {
     pub child_id: Uuid,
     pub parent_id: Uuid,
 }
 
-impl Command for SetParentCommand {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl SetParentCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context
             .graph
             .cards
@@ -88,7 +128,7 @@ impl Command for SetParentCommand {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Set parent: {} is parent of {}",
             self.parent_id, self.child_id
@@ -97,13 +137,14 @@ impl Command for SetParentCommand {
 }
 
 /// Remove parent-child relationship between two cards
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoveParentCommand {
     pub child_id: Uuid,
     pub parent_id: Uuid,
 }
 
-impl Command for RemoveParentCommand {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl RemoveParentCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context
             .graph
             .cards
@@ -111,7 +152,7 @@ impl Command for RemoveParentCommand {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Remove parent: {} is no longer parent of {}",
             self.parent_id, self.child_id
@@ -120,6 +161,7 @@ impl Command for RemoveParentCommand {
 }
 
 /// Create a new card as a subcard of a parent card
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSubcardCommand {
     pub parent_id: Uuid,
     pub board_id: Uuid,
@@ -129,8 +171,8 @@ pub struct CreateSubcardCommand {
     pub position: i32,
 }
 
-impl Command for CreateSubcardCommand {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl CreateSubcardCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let board = context.board_mut(self.board_id)?;
         let mut card = Card::new(board, self.column_id, self.title.clone(), self.position);
 
@@ -145,7 +187,7 @@ impl Command for CreateSubcardCommand {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Create subcard '{}' under parent {}",
             self.title, self.parent_id

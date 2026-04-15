@@ -1,29 +1,85 @@
-use super::{Command, CommandContext};
+use super::CommandContext;
 use crate::dependencies::card_graph::CardGraphExt;
 use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult};
 use chrono::Utc;
 use kanban_core::Editable;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum CardCommand {
+    Create(CreateCard),
+    Update(UpdateCard),
+    Move(MoveCard),
+    Restore(RestoreCard),
+    Delete(DeleteCard),
+    Archive(ArchiveCards),
+    MoveMultiple(MoveCards),
+    AssignToSprint(AssignCardsToSprint),
+    UnassignFromSprint(UnassignCardFromSprint),
+    ApplyMetadata(ApplyCardMetadata),
+    CompactPositions(CompactColumnPositions),
+    MigrateSprintLogs(MigrateSprintLogs),
+}
+
+impl CardCommand {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        match self {
+            CardCommand::Create(c) => c.execute(context),
+            CardCommand::Update(c) => c.execute(context),
+            CardCommand::Move(c) => c.execute(context),
+            CardCommand::Restore(c) => c.execute(context),
+            CardCommand::Delete(c) => c.execute(context),
+            CardCommand::Archive(c) => c.execute(context),
+            CardCommand::MoveMultiple(c) => c.execute(context),
+            CardCommand::AssignToSprint(c) => c.execute(context),
+            CardCommand::UnassignFromSprint(c) => c.execute(context),
+            CardCommand::ApplyMetadata(c) => c.execute(context),
+            CardCommand::CompactPositions(c) => c.execute(context),
+            CardCommand::MigrateSprintLogs(c) => c.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            CardCommand::Create(c) => c.description(),
+            CardCommand::Update(c) => c.description(),
+            CardCommand::Move(c) => c.description(),
+            CardCommand::Restore(c) => c.description(),
+            CardCommand::Delete(c) => c.description(),
+            CardCommand::Archive(c) => c.description(),
+            CardCommand::MoveMultiple(c) => c.description(),
+            CardCommand::AssignToSprint(c) => c.description(),
+            CardCommand::UnassignFromSprint(c) => c.description(),
+            CardCommand::ApplyMetadata(c) => c.description(),
+            CardCommand::CompactPositions(c) => c.description(),
+            CardCommand::MigrateSprintLogs(c) => c.description(),
+        }
+    }
+}
+
 /// Update card properties (title, description, priority, status, etc.)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateCard {
     pub card_id: Uuid,
     pub updates: CardUpdate,
 }
 
-impl Command for UpdateCard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl UpdateCard {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let card = context.card_mut(self.card_id)?;
         card.update(self.updates.clone());
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         "Update card".to_string()
     }
 }
 
 /// Create a new card in a column
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateCard {
     pub board_id: Uuid,
     pub column_id: Uuid,
@@ -32,8 +88,8 @@ pub struct CreateCard {
     pub options: CreateCardOptions,
 }
 
-impl Command for CreateCard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl CreateCard {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let board = context.board_mut(self.board_id)?;
         let card = crate::Card::new(board, self.column_id, self.title.clone(), self.position);
@@ -71,27 +127,28 @@ impl Command for CreateCard {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Create card: '{}'", self.title)
     }
 }
 
 /// Move card to a different column
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveCard {
     pub card_id: Uuid,
     pub new_column_id: Uuid,
     pub new_position: i32,
 }
 
-impl Command for MoveCard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl MoveCard {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
         let card = context.card_mut(self.card_id)?;
         card.move_to_column(self.new_column_id, self.new_position);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Move card {} to column {}",
             self.card_id, self.new_column_id
@@ -100,14 +157,15 @@ impl Command for MoveCard {
 }
 
 /// Restore an archived card
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RestoreCard {
     pub card_id: Uuid,
     pub column_id: Uuid,
     pub position: i32,
 }
 
-impl Command for RestoreCard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl RestoreCard {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let pos = context
             .archived_cards
@@ -124,35 +182,37 @@ impl Command for RestoreCard {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Restore card {}", self.card_id)
     }
 }
 
 /// Permanently delete an archived card
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteCard {
     pub card_id: Uuid,
 }
 
-impl Command for DeleteCard {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl DeleteCard {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         context.archived_cards.retain(|c| c.card.id != self.card_id);
         context.graph.cards.remove_card_edges(self.card_id);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Delete card {}", self.card_id)
     }
 }
 
 /// Archive one or more cards in a single command (single undo entry)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchiveCards {
     pub ids: Vec<Uuid>,
 }
 
-impl Command for ArchiveCards {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl ArchiveCards {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let valid_ids = context.filter_valid_card_ids(&self.ids, "ArchiveCards");
         for id in &valid_ids {
             let pos = context.cards.iter().position(|c| c.id == *id).unwrap();
@@ -166,19 +226,20 @@ impl Command for ArchiveCards {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Archive {} card(s)", self.ids.len())
     }
 }
 
 /// Move one or more cards to a target column in a single command
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveCards {
     pub ids: Vec<Uuid>,
     pub column_id: Uuid,
 }
 
-impl Command for MoveCards {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl MoveCards {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         use std::collections::HashSet;
 
         let valid_ids = context.filter_valid_card_ids(&self.ids, "MoveCards");
@@ -196,7 +257,7 @@ impl Command for MoveCards {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Move {} card(s) to column {}",
             self.ids.len(),
@@ -206,13 +267,14 @@ impl Command for MoveCards {
 }
 
 /// Assign one or more cards to a sprint in a single command (single undo entry)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssignCardsToSprint {
     pub ids: Vec<Uuid>,
     pub sprint_id: Uuid,
 }
 
-impl Command for AssignCardsToSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl AssignCardsToSprint {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let sprint = context
             .sprints
             .iter()
@@ -245,7 +307,7 @@ impl Command for AssignCardsToSprint {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!(
             "Assign {} card(s) to sprint {}",
             self.ids.len(),
@@ -255,12 +317,13 @@ impl Command for AssignCardsToSprint {
 }
 
 /// Unassign card from current sprint
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnassignCardFromSprint {
     pub card_id: Uuid,
 }
 
-impl Command for UnassignCardFromSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl UnassignCardFromSprint {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let card = context.card_mut(self.card_id)?;
         card.end_current_sprint_log();
         card.sprint_id = None;
@@ -268,50 +331,53 @@ impl Command for UnassignCardFromSprint {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Unassign card {} from sprint", self.card_id)
     }
 }
 
 /// Apply card metadata from a DTO (used by JSON editor).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplyCardMetadata {
     pub card_id: Uuid,
     pub dto: crate::editable::CardMetadataDto,
 }
 
-impl Command for ApplyCardMetadata {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl ApplyCardMetadata {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let card = context.card_mut(self.card_id)?;
         self.dto.clone().apply_to(card);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Apply card metadata for {}", self.card_id)
     }
 }
 
 /// Compact card positions in a column to be sequential (0, 1, 2, ...).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactColumnPositions {
     pub column_id: Uuid,
 }
 
-impl Command for CompactColumnPositions {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl CompactColumnPositions {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         crate::card_lifecycle::compact_column_positions(context.cards, self.column_id);
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Compact positions in column {}", self.column_id)
     }
 }
 
 /// Backfill sprint_logs for cards that have a sprint_id but empty logs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MigrateSprintLogs;
 
-impl Command for MigrateSprintLogs {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl MigrateSprintLogs {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
         let count = crate::card_lifecycle::migrate_sprint_logs(
             context.cards,
             context.sprints,
@@ -323,7 +389,7 @@ impl Command for MigrateSprintLogs {
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         "Migrate sprint logs".to_string()
     }
 }

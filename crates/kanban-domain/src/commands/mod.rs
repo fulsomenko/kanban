@@ -1,4 +1,5 @@
 use crate::{KanbanError, KanbanResult};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub mod board_commands;
@@ -13,14 +14,38 @@ pub use column_commands::*;
 pub use dependency_commands::*;
 pub use sprint_commands::*;
 
-/// Trait for domain commands that mutate state
-/// Commands represent intent and can be executed, queued, and persisted
-pub trait Command: Send + Sync {
-    /// Execute this command, mutating the domain state
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()>;
+/// Serializable command enum that represents all possible domain mutations.
+/// Replaces the former `Command` trait with a concrete, serde-friendly hierarchy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "domain", rename_all = "snake_case")]
+pub enum Command {
+    Board(BoardCommand),
+    Column(ColumnCommand),
+    Card(CardCommand),
+    Sprint(SprintCommand),
+    Dependency(DependencyCommand),
+}
 
-    /// Human-readable description of what this command does
-    fn description(&self) -> String;
+impl Command {
+    pub fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+        match self {
+            Command::Board(cmd) => cmd.execute(context),
+            Command::Column(cmd) => cmd.execute(context),
+            Command::Card(cmd) => cmd.execute(context),
+            Command::Sprint(cmd) => cmd.execute(context),
+            Command::Dependency(cmd) => cmd.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            Command::Board(cmd) => cmd.description(),
+            Command::Column(cmd) => cmd.description(),
+            Command::Card(cmd) => cmd.description(),
+            Command::Sprint(cmd) => cmd.description(),
+            Command::Dependency(cmd) => cmd.description(),
+        }
+    }
 }
 
 /// Context passed to commands for mutation
@@ -108,7 +133,7 @@ impl<'a> CommandContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::test_helpers::TestContext;
-    use uuid::Uuid;
+    use super::*;
 
     #[test]
     fn test_check_wip_limit_column_not_found_returns_error() {
@@ -187,6 +212,79 @@ mod tests {
         let ctx = tc.as_command_context();
         let result = ctx.check_wip_limit(col_id, 2, &[]);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_command_serde_roundtrip_create_board() {
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            name: "B".into(),
+            card_prefix: None,
+        }));
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: Command = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, Command::Board(BoardCommand::Create(_))));
+    }
+
+    #[test]
+    fn test_command_serde_tagged_format() {
+        let cmd = Command::Card(CardCommand::Move(MoveCard {
+            card_id: Uuid::new_v4(),
+            new_column_id: Uuid::new_v4(),
+            new_position: 0,
+        }));
+        let json = serde_json::to_string(&cmd).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["domain"], "card");
+        assert_eq!(value["action"], "move");
+    }
+
+    #[test]
+    fn test_command_execute_delegates_to_struct() {
+        let mut tc = TestContext::new();
+        let mut ctx = tc.as_command_context();
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            name: "B".into(),
+            card_prefix: None,
+        }));
+        cmd.execute(&mut ctx).unwrap();
+        assert_eq!(ctx.boards.len(), 1);
+    }
+
+    #[test]
+    fn test_command_description_delegates() {
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            name: "My Board".into(),
+            card_prefix: None,
+        }));
+        assert!(cmd.description().contains("My Board"));
+    }
+
+    #[test]
+    fn test_command_serde_roundtrip_all_domains() {
+        let commands = vec![
+            Command::Board(BoardCommand::Delete(DeleteBoard {
+                board_id: Uuid::new_v4(),
+            })),
+            Command::Column(ColumnCommand::Create(CreateColumn {
+                board_id: Uuid::new_v4(),
+                name: "Col".into(),
+                position: 0,
+            })),
+            Command::Card(CardCommand::Delete(DeleteCard {
+                card_id: Uuid::new_v4(),
+            })),
+            Command::Sprint(SprintCommand::Delete(DeleteSprint {
+                sprint_id: Uuid::new_v4(),
+            })),
+            Command::Dependency(DependencyCommand::Remove(RemoveDependencyCommand {
+                source_id: Uuid::new_v4(),
+                target_id: Uuid::new_v4(),
+            })),
+        ];
+        for cmd in commands {
+            let json = serde_json::to_string(&cmd).unwrap();
+            let _back: Command = serde_json::from_str(&json).unwrap();
+        }
     }
 }
 
