@@ -66,6 +66,43 @@ pub trait PersistenceStore: Send + Sync {
 
     /// Get the unique instance ID for this store
     fn instance_id(&self) -> uuid::Uuid;
+
+    /// Append a command to the log. Returns the 1-based index of the new entry.
+    async fn append_command(
+        &self,
+        _cmd: &kanban_domain::commands::Command,
+    ) -> PersistenceResult<u64> {
+        Ok(0)
+    }
+
+    /// Return the number of commands in the log.
+    async fn command_count(&self) -> PersistenceResult<u64> {
+        Ok(0)
+    }
+
+    /// Return the current undo cursor position.
+    async fn undo_cursor(&self) -> PersistenceResult<u64> {
+        Ok(0)
+    }
+
+    /// Set the undo cursor position.
+    async fn set_undo_cursor(&self, _index: u64) -> PersistenceResult<()> {
+        Ok(())
+    }
+
+    /// Load commands in the range `[from, to)` (0-based indices).
+    async fn load_commands(
+        &self,
+        _from: u64,
+        _to: u64,
+    ) -> PersistenceResult<Vec<kanban_domain::commands::Command>> {
+        Ok(vec![])
+    }
+
+    /// Remove all commands with index > `after` (0-based).
+    async fn truncate_commands_after(&self, _after: u64) -> PersistenceResult<()> {
+        Ok(())
+    }
 }
 
 /// Trait for detecting changes to the storage file
@@ -111,6 +148,7 @@ pub enum FormatVersion {
     V1,
     V2,
     V3,
+    V4,
 }
 
 impl FormatVersion {
@@ -119,6 +157,7 @@ impl FormatVersion {
             Self::V1 => 1,
             Self::V2 => 2,
             Self::V3 => 3,
+            Self::V4 => 4,
         }
     }
 
@@ -127,6 +166,7 @@ impl FormatVersion {
             1 => Some(Self::V1),
             2 => Some(Self::V2),
             3 => Some(Self::V3),
+            4 => Some(Self::V4),
             _ => None,
         }
     }
