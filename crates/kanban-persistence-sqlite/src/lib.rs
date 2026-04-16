@@ -1,8 +1,10 @@
 mod builders;
 mod helpers;
+pub mod sqlite_data_store;
 pub mod sqlite_store;
 mod upserts;
 
+pub use sqlite_data_store::SqliteDataStore;
 pub use sqlite_store::SqliteStore;
 
 use kanban_persistence::{PersistenceError, PersistenceStore, StoreFactory};
