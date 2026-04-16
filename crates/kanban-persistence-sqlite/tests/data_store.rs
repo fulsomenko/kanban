@@ -1,0 +1,377 @@
+use kanban_domain::data_store::DataStore;
+use kanban_domain::*;
+use kanban_persistence_sqlite::SqliteDataStore;
+use tempfile::TempDir;
+use uuid::Uuid;
+
+async fn make_store() -> (SqliteDataStore, TempDir) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.db");
+    let store = SqliteDataStore::open(&path).await.unwrap();
+    (store, dir)
+}
+
+fn make_board(name: &str) -> Board {
+    Board::new(name.to_string(), None)
+}
+
+fn make_column(board_id: Uuid, name: &str, pos: i32) -> Column {
+    Column::new(board_id, name.to_string(), pos)
+}
+
+fn make_card(board: &mut Board, column_id: Uuid, title: &str, pos: i32) -> Card {
+    Card::new(board, column_id, title.to_string(), pos)
+}
+
+// --- Board CRUD ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_upsert_and_get_board() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("Test Board");
+    board.sprint_names = vec!["Alpha".to_string(), "Beta".to_string()];
+    board.sprint_counters.insert("SP".to_string(), 5);
+    let id = board.id;
+    store.upsert_board(board).unwrap();
+
+    let fetched = store.get_board(id).unwrap().unwrap();
+    assert_eq!(fetched.name, "Test Board");
+    assert_eq!(fetched.sprint_names, vec!["Alpha", "Beta"]);
+    assert_eq!(fetched.sprint_counters.get("SP"), Some(&5));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_list_boards_empty() {
+    let (store, _dir) = make_store().await;
+    assert!(store.list_boards().unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_delete_board_removes_it() {
+    let (store, _dir) = make_store().await;
+    let board = make_board("To Delete");
+    let id = board.id;
+    store.upsert_board(board).unwrap();
+    store.delete_board(id).unwrap();
+    assert!(store.get_board(id).unwrap().is_none());
+}
+
+// --- Column CRUD ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_upsert_and_get_column() {
+    let (store, _dir) = make_store().await;
+    let board = make_board("B");
+    store.upsert_board(board.clone()).unwrap();
+    let col = make_column(board.id, "Col", 0);
+    let col_id = col.id;
+    store.upsert_column(col).unwrap();
+
+    let fetched = store.get_column(col_id).unwrap().unwrap();
+    assert_eq!(fetched.name, "Col");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_list_columns_by_board_filters_correctly() {
+    let (store, _dir) = make_store().await;
+    let board1 = make_board("B1");
+    let board2 = make_board("B2");
+    store.upsert_board(board1.clone()).unwrap();
+    store.upsert_board(board2.clone()).unwrap();
+
+    store
+        .upsert_column(make_column(board1.id, "C1", 0))
+        .unwrap();
+    store
+        .upsert_column(make_column(board1.id, "C2", 1))
+        .unwrap();
+    store
+        .upsert_column(make_column(board2.id, "C3", 0))
+        .unwrap();
+
+    let cols = store.list_columns_by_board(board1.id).unwrap();
+    assert_eq!(cols.len(), 2);
+    assert!(cols.iter().all(|c| c.board_id == board1.id));
+}
+
+// --- Card CRUD ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_upsert_and_get_card() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("B");
+    let col = make_column(board.id, "Col", 0);
+    store.upsert_board(board.clone()).unwrap();
+    store.upsert_column(col.clone()).unwrap();
+
+    let card = make_card(&mut board, col.id, "Card", 0);
+    let card_id = card.id;
+    store.upsert_card(card).unwrap();
+
+    let fetched = store.get_card(card_id).unwrap().unwrap();
+    assert_eq!(fetched.title, "Card");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_list_cards_by_column() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("B");
+    let col1 = make_column(board.id, "C1", 0);
+    let col2 = make_column(board.id, "C2", 1);
+    store.upsert_board(board.clone()).unwrap();
+    store.upsert_column(col1.clone()).unwrap();
+    store.upsert_column(col2.clone()).unwrap();
+
+    store
+        .upsert_card(make_card(&mut board, col1.id, "Card1", 0))
+        .unwrap();
+    store
+        .upsert_card(make_card(&mut board, col1.id, "Card2", 1))
+        .unwrap();
+    store
+        .upsert_card(make_card(&mut board, col2.id, "Card3", 0))
+        .unwrap();
+
+    let cards = store.list_cards_by_column(col1.id).unwrap();
+    assert_eq!(cards.len(), 2);
+    assert!(cards.iter().all(|c| c.column_id == col1.id));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_list_cards_by_sprint() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("B");
+    let col = make_column(board.id, "C", 0);
+    let sprint = Sprint::new(board.id, 1, None, None);
+    store.upsert_board(board.clone()).unwrap();
+    store.upsert_column(col.clone()).unwrap();
+    store.upsert_sprint(sprint.clone()).unwrap();
+
+    let mut card1 = make_card(&mut board, col.id, "Card1", 0);
+    card1.sprint_id = Some(sprint.id);
+    let card2 = make_card(&mut board, col.id, "Card2", 1);
+    store.upsert_card(card1).unwrap();
+    store.upsert_card(card2).unwrap();
+
+    let cards = store.list_cards_by_sprint(sprint.id).unwrap();
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].sprint_id, Some(sprint.id));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_count_cards_in_column() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("B");
+    let col = make_column(board.id, "C", 0);
+    store.upsert_board(board.clone()).unwrap();
+    store.upsert_column(col.clone()).unwrap();
+
+    store
+        .upsert_card(make_card(&mut board, col.id, "C1", 0))
+        .unwrap();
+    store
+        .upsert_card(make_card(&mut board, col.id, "C2", 1))
+        .unwrap();
+
+    assert_eq!(store.count_cards_in_column(col.id).unwrap(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_count_cards_in_column_excluding() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("B");
+    let col = make_column(board.id, "C", 0);
+    store.upsert_board(board.clone()).unwrap();
+    store.upsert_column(col.clone()).unwrap();
+
+    let card1 = make_card(&mut board, col.id, "C1", 0);
+    let card1_id = card1.id;
+    store.upsert_card(card1).unwrap();
+    store
+        .upsert_card(make_card(&mut board, col.id, "C2", 1))
+        .unwrap();
+
+    let count = store
+        .count_cards_in_column_excluding(col.id, &[card1_id])
+        .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_clear_sprint_from_cards() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("B");
+    let col = make_column(board.id, "C", 0);
+    let sprint = Sprint::new(board.id, 1, None, None);
+    store.upsert_board(board.clone()).unwrap();
+    store.upsert_column(col.clone()).unwrap();
+    store.upsert_sprint(sprint.clone()).unwrap();
+
+    let mut card1 = make_card(&mut board, col.id, "C1", 0);
+    card1.sprint_id = Some(sprint.id);
+    let card1_id = card1.id;
+    store.upsert_card(card1).unwrap();
+
+    store.clear_sprint_from_cards(sprint.id).unwrap();
+    assert!(store.get_card(card1_id).unwrap().unwrap().sprint_id.is_none());
+}
+
+// --- Sprint CRUD ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_upsert_and_get_sprint() {
+    let (store, _dir) = make_store().await;
+    let board = make_board("B");
+    store.upsert_board(board.clone()).unwrap();
+    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint_id = sprint.id;
+    store.upsert_sprint(sprint).unwrap();
+
+    let fetched = store.get_sprint(sprint_id).unwrap().unwrap();
+    assert_eq!(fetched.sprint_number, 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_list_sprints_by_board() {
+    let (store, _dir) = make_store().await;
+    let board1 = make_board("B1");
+    let board2 = make_board("B2");
+    store.upsert_board(board1.clone()).unwrap();
+    store.upsert_board(board2.clone()).unwrap();
+
+    store
+        .upsert_sprint(Sprint::new(board1.id, 1, None, None))
+        .unwrap();
+    store
+        .upsert_sprint(Sprint::new(board1.id, 2, None, None))
+        .unwrap();
+    store
+        .upsert_sprint(Sprint::new(board2.id, 1, None, None))
+        .unwrap();
+
+    let sprints = store.list_sprints_by_board(board1.id).unwrap();
+    assert_eq!(sprints.len(), 2);
+}
+
+// --- Archived card ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_insert_and_get_archived_card() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("B");
+    let col = make_column(board.id, "C", 0);
+    store.upsert_board(board.clone()).unwrap();
+    store.upsert_column(col.clone()).unwrap();
+
+    let card = make_card(&mut board, col.id, "Card", 0);
+    let card_id = card.id;
+    let ac = ArchivedCard::new(card, col.id, 0);
+    store.insert_archived_card(ac).unwrap();
+
+    let fetched = store.get_archived_card(card_id).unwrap().unwrap();
+    assert_eq!(fetched.card.id, card_id);
+    assert_eq!(fetched.original_column_id, col.id);
+
+    // Archived card should NOT appear in active card queries
+    assert!(store.get_card(card_id).unwrap().is_none());
+    assert!(store.list_all_cards().unwrap().is_empty());
+}
+
+// --- Graph ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_set_and_get_graph() {
+    let (store, _dir) = make_store().await;
+    let graph = DependencyGraph::new();
+    store.set_graph(graph.clone()).unwrap();
+    let fetched = store.get_graph().unwrap();
+    assert_eq!(fetched, graph);
+}
+
+// --- Snapshot ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_snapshot_roundtrip() {
+    let (store, _dir) = make_store().await;
+    let mut board = make_board("B");
+    let col = make_column(board.id, "C", 0);
+    let sprint = Sprint::new(board.id, 1, None, None);
+    store.upsert_board(board.clone()).unwrap();
+    store.upsert_column(col.clone()).unwrap();
+    store.upsert_sprint(sprint.clone()).unwrap();
+    let card = make_card(&mut board, col.id, "Card", 0);
+    store.upsert_card(card).unwrap();
+
+    let snap = store.snapshot().unwrap();
+    assert_eq!(snap.boards.len(), 1);
+    assert_eq!(snap.columns.len(), 1);
+    assert_eq!(snap.cards.len(), 1);
+    assert_eq!(snap.sprints.len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_apply_snapshot_replaces_existing_data() {
+    let (store, _dir) = make_store().await;
+    let board_old = make_board("Old");
+    store.upsert_board(board_old).unwrap();
+
+    let board_new = make_board("New");
+    let snap = Snapshot::from_data(
+        vec![board_new],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        DependencyGraph::new(),
+    );
+    store.apply_snapshot(snap).unwrap();
+
+    let boards = store.list_boards().unwrap();
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].name, "New");
+}
+
+// --- Undo ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_create_undo_point_and_undo_to() {
+    let (store, _dir) = make_store().await;
+    let board = make_board("Before");
+    store.upsert_board(board.clone()).unwrap();
+
+    let point = store.create_undo_point().unwrap();
+    store.delete_board(board.id).unwrap();
+    assert!(store.get_board(board.id).unwrap().is_none());
+
+    store.undo_to(point).unwrap();
+    let fetched = store.get_board(board.id).unwrap().unwrap();
+    assert_eq!(fetched.name, "Before");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_multiple_undo_points() {
+    let (store, _dir) = make_store().await;
+    let board1 = make_board("State1");
+    store.upsert_board(board1.clone()).unwrap();
+    let point1 = store.create_undo_point().unwrap();
+
+    store.delete_board(board1.id).unwrap();
+    let board2 = make_board("State2");
+    store.upsert_board(board2.clone()).unwrap();
+    let _point2 = store.create_undo_point().unwrap();
+
+    store.delete_board(board2.id).unwrap();
+
+    store.undo_to(point1).unwrap();
+    let boards = store.list_boards().unwrap();
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].name, "State1");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_discard_undo_point() {
+    let (store, _dir) = make_store().await;
+    let point = store.create_undo_point().unwrap();
+    store.discard_undo_point(point).unwrap();
+    assert!(store.undo_to(point).is_err());
+}
