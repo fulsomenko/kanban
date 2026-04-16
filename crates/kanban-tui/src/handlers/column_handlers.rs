@@ -222,6 +222,7 @@ impl App {
                     + 1;
 
                 let cmd = Command::Column(ColumnCommand::Create(CreateColumn {
+                    id: uuid::Uuid::new_v4(),
                     board_id,
                     name: column_name.clone(),
                     position,

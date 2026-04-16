@@ -204,6 +204,7 @@ mod tests {
     #[test]
     fn test_command_serde_roundtrip_create_board() {
         let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: Uuid::new_v4(),
             name: "B".into(),
             card_prefix: None,
         }));
@@ -230,6 +231,7 @@ mod tests {
         let tc = TestContext::new();
         let ctx = tc.as_command_context();
         let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: Uuid::new_v4(),
             name: "B".into(),
             card_prefix: None,
         }));
@@ -240,6 +242,7 @@ mod tests {
     #[test]
     fn test_command_description_delegates() {
         let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: Uuid::new_v4(),
             name: "My Board".into(),
             card_prefix: None,
         }));
@@ -253,6 +256,7 @@ mod tests {
                 board_id: Uuid::new_v4(),
             })),
             Command::Column(ColumnCommand::Create(CreateColumn {
+                id: Uuid::new_v4(),
                 board_id: Uuid::new_v4(),
                 name: "Col".into(),
                 position: 0,

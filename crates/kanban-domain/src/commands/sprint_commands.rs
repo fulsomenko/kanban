@@ -137,6 +137,7 @@ impl UpdateSprint {
 /// available sprint name from the board's name pool will be consumed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSprint {
+    pub id: Uuid,
     pub board_id: Uuid,
     pub name: Option<String>,
     pub default_sprint_prefix: String,
@@ -168,12 +169,13 @@ impl CreateSprint {
             _ => None,
         };
 
-        let sprint = crate::Sprint::new(
+        let mut sprint = crate::Sprint::new(
             self.board_id,
             sprint_number,
             name_index,
             Some(effective_prefix),
         );
+        sprint.id = self.id;
         context.store.upsert_board(board)?;
         context.store.upsert_sprint(sprint)?;
         Ok(())
@@ -354,6 +356,7 @@ mod tests {
 
         let context = tc.as_command_context();
         let cmd = CreateSprint {
+            id: Uuid::new_v4(),
             board_id,
             name: None,
             default_sprint_prefix: "Sprint".to_string(),

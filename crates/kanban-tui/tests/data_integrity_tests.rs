@@ -15,6 +15,8 @@ fn test_delete_card_cleans_dependencies() {
     let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card A".to_string(),
@@ -25,6 +27,8 @@ fn test_delete_card_cleans_dependencies() {
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card B".to_string(),
@@ -60,6 +64,8 @@ fn test_delete_column_with_cards_fails() {
     let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Test Card".to_string(),
@@ -88,6 +94,8 @@ fn test_delete_column_with_archived_cards_fails() {
     let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Test Card".to_string(),
@@ -123,6 +131,8 @@ fn test_delete_sprint_unassigns_cards() {
     let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card A".to_string(),
@@ -133,6 +143,8 @@ fn test_delete_sprint_unassigns_cards() {
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card B".to_string(),
@@ -185,6 +197,8 @@ fn test_archive_card_preserves_edges() {
     let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card A".to_string(),
@@ -195,6 +209,8 @@ fn test_archive_card_preserves_edges() {
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card B".to_string(),
@@ -257,6 +273,8 @@ fn test_cycle_detection_parent_child() {
     let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card A".to_string(),
@@ -267,6 +285,8 @@ fn test_cycle_detection_parent_child() {
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card B".to_string(),
@@ -277,6 +297,8 @@ fn test_cycle_detection_parent_child() {
     let card_b = store.list_all_cards().unwrap().last().unwrap().id;
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card C".to_string(),
@@ -313,6 +335,8 @@ fn test_cycle_detection_blocks() {
     let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card A".to_string(),
@@ -323,6 +347,8 @@ fn test_cycle_detection_blocks() {
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card B".to_string(),
@@ -333,6 +359,8 @@ fn test_cycle_detection_blocks() {
     let card_b = store.list_all_cards().unwrap().last().unwrap().id;
 
     let cmd = CreateCard {
+        id: uuid::Uuid::new_v4(),
+        card_number: 1,
         board_id,
         column_id,
         title: "Card C".to_string(),

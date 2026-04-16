@@ -330,9 +330,9 @@ impl App {
     pub fn create_card(&mut self) {
         if let Some(idx) = self.selection.active_board_index {
             let focused_col_id = self.get_focused_column_id();
-            let board_id = self.ctx.boards().get(idx).map(|b| b.id);
+            let board_info = self.ctx.boards().get(idx).map(|b| (b.id, b.card_counter));
 
-            if let Some(bid) = board_id {
+            if let Some((bid, card_number)) = board_info {
                 let target_column_id = if let Some(focused_col_id) = focused_col_id {
                     Some(focused_col_id)
                 } else {
@@ -381,6 +381,8 @@ impl App {
                     .unwrap_or(false);
 
                 let create_cmd = Command::Card(CardCommand::Create(CreateCard {
+                    id: uuid::Uuid::new_v4(),
+                    card_number,
                     board_id: bid,
                     column_id: column.id,
                     title: self.input.as_str().to_string(),

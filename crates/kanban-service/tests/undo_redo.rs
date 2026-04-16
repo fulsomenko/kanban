@@ -46,6 +46,7 @@ async fn test_snapshot_roundtrip_preserves_all_fields() {
 async fn test_execute_enables_undo() {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
     }));
@@ -57,6 +58,7 @@ async fn test_execute_enables_undo() {
 async fn test_undo_restores_previous_state() {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
     }));
@@ -71,6 +73,7 @@ async fn test_undo_restores_previous_state() {
 async fn test_redo_restores_undone_state() {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
     }));
@@ -93,6 +96,7 @@ async fn test_undo_on_empty_returns_false() {
 async fn test_new_action_after_undo_clears_redo() {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "A".into(),
         card_prefix: None,
     }))])
@@ -101,6 +105,7 @@ async fn test_new_action_after_undo_clears_redo() {
     assert!(ctx.can_redo());
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
     }))])
@@ -116,6 +121,7 @@ async fn test_reload_no_longer_clears_history() {
     let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
     }))])
@@ -123,6 +129,7 @@ async fn test_reload_no_longer_clears_history() {
     ctx.save().await.unwrap();
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B2".into(),
         card_prefix: None,
     }))])
@@ -140,6 +147,7 @@ async fn test_dirty_flag_lifecycle() {
     assert!(!ctx.is_dirty());
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
     }))])
@@ -303,6 +311,7 @@ async fn test_reload_preserves_history() {
 async fn test_undo_pops_before_pushing_to_redo() {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
     }))])
@@ -310,6 +319,7 @@ async fn test_undo_pops_before_pushing_to_redo() {
     ctx.clear_history();
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B2".into(),
         card_prefix: None,
     }))])
@@ -324,6 +334,7 @@ async fn test_undo_pops_before_pushing_to_redo() {
 async fn test_redo_pops_before_pushing_to_undo() {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
     }))])
@@ -351,6 +362,7 @@ async fn test_execute_batch_partial_failure_rollback_leaves_clean_undo_stack() {
 
     let batch: Vec<Command> = vec![
         Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
             name: "B2".into(),
             card_prefix: None,
         })),
@@ -509,6 +521,7 @@ async fn test_execute_batch_partial_failure_rolls_back() {
 
     let batch: Vec<Command> = vec![
         Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
             name: "B2".into(),
             card_prefix: None,
         })),
@@ -539,10 +552,12 @@ async fn test_execute_batch_success_is_undoable() {
 
     let batch: Vec<Command> = vec![
         Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
             name: "B2".into(),
             card_prefix: None,
         })),
         Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
             name: "B3".into(),
             card_prefix: None,
         })),
@@ -862,4 +877,54 @@ async fn test_compact_column_positions_is_undoable() {
         ctx.cards().iter().find(|c| c.id == c2.id).unwrap().position,
         5
     );
+}
+
+#[tokio::test]
+async fn test_undo_cursor_tracks_command_count() {
+    let mut ctx = make_ctx().await;
+    assert_eq!(ctx.undo_depth(), 0);
+    assert_eq!(ctx.redo_depth(), 0);
+
+    ctx.create_board("B1".into(), None).unwrap();
+    assert_eq!(ctx.undo_depth(), 1);
+    assert_eq!(ctx.redo_depth(), 0);
+
+    ctx.create_board("B2".into(), None).unwrap();
+    assert_eq!(ctx.undo_depth(), 2);
+    assert_eq!(ctx.redo_depth(), 0);
+
+    ctx.undo();
+    assert_eq!(ctx.undo_depth(), 1);
+    assert_eq!(ctx.redo_depth(), 1);
+
+    ctx.undo();
+    assert_eq!(ctx.undo_depth(), 0);
+    assert_eq!(ctx.redo_depth(), 2);
+}
+
+#[tokio::test]
+async fn test_redo_uses_stored_commands() {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let board_id = board.id;
+
+    ctx.undo();
+    assert!(ctx.boards().is_empty());
+
+    ctx.redo();
+    let boards = ctx.boards();
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].id, board_id, "redo must replay the original command, producing the same id");
+}
+
+#[tokio::test]
+async fn test_clear_history_resets_baseline() {
+    let mut ctx = make_ctx().await;
+    ctx.create_board("B".into(), None).unwrap();
+    assert!(ctx.can_undo());
+
+    ctx.clear_history();
+    assert!(!ctx.can_undo(), "clear_history makes current state the new baseline");
+    assert!(!ctx.can_redo(), "clear_history drops all redo entries too");
+    assert_eq!(ctx.boards().len(), 1, "clear_history preserves current state");
 }

@@ -166,6 +166,7 @@ pub async fn test_command_log_append_and_load(factory: &StoreFactory) {
         .unwrap();
 
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
         name: "Test".into(),
         card_prefix: None,
     }));
@@ -210,6 +211,7 @@ pub async fn test_command_log_truncate_after(factory: &StoreFactory) {
 
     for i in 0..3 {
         let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
             name: format!("Board{}", i),
             card_prefix: None,
         }));

@@ -53,6 +53,7 @@ impl UpdateColumn {
 /// Create a new column
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateColumn {
+    pub id: Uuid,
     pub board_id: Uuid,
     pub name: String,
     pub position: i32,
@@ -60,7 +61,8 @@ pub struct CreateColumn {
 
 impl CreateColumn {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let column = crate::Column::new(self.board_id, self.name.clone(), self.position);
+        let mut column = crate::Column::new(self.board_id, self.name.clone(), self.position);
+        column.id = self.id;
         context.store.upsert_column(column)?;
         Ok(())
     }

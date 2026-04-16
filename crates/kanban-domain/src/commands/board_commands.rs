@@ -47,13 +47,15 @@ impl BoardCommand {
 /// Create a new board
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateBoard {
+    pub id: Uuid,
     pub name: String,
     pub card_prefix: Option<String>,
 }
 
 impl CreateBoard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let board = Board::new(self.name.clone(), self.card_prefix.clone());
+        let mut board = Board::new(self.name.clone(), self.card_prefix.clone());
+        board.id = self.id;
         context.store.upsert_board(board)?;
         Ok(())
     }

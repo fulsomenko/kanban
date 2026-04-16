@@ -82,6 +82,8 @@ impl UpdateCard {
 /// Create a new card in a column
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateCard {
+    pub id: Uuid,
+    pub card_number: u32,
     pub board_id: Uuid,
     pub column_id: Uuid,
     pub title: String,
@@ -93,12 +95,29 @@ impl CreateCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let mut board = context.get_board(self.board_id)?;
-        let mut card = crate::Card::new(
-            &mut board,
-            self.column_id,
-            self.title.clone(),
-            self.position,
-        );
+
+        let now = Utc::now();
+        let mut card = crate::Card {
+            id: self.id,
+            column_id: self.column_id,
+            title: self.title.clone(),
+            description: None,
+            priority: crate::CardPriority::Medium,
+            status: crate::CardStatus::Todo,
+            position: self.position,
+            due_date: None,
+            points: None,
+            card_number: self.card_number,
+            sprint_id: None,
+            created_at: now,
+            updated_at: now,
+            completed_at: None,
+            sprint_logs: Vec::new(),
+        };
+
+        if board.card_counter <= self.card_number {
+            board.card_counter = self.card_number + 1;
+        }
 
         if self.options.description.is_some()
             || self.options.priority.is_some()
@@ -436,6 +455,8 @@ mod tests {
         let tc = TestContext::new();
         let context = tc.as_command_context();
         let cmd = CreateCard {
+            id: Uuid::new_v4(),
+            card_number: 1,
             board_id: Uuid::new_v4(),
             column_id: Uuid::new_v4(),
             title: "Test".to_string(),
@@ -549,6 +570,8 @@ mod tests {
 
         let context = tc.as_command_context();
         let cmd = CreateCard {
+            id: Uuid::new_v4(),
+            card_number: 1,
             board_id,
             column_id,
             title: "New".to_string(),
@@ -576,6 +599,8 @@ mod tests {
 
         let context = tc.as_command_context();
         let cmd = CreateCard {
+            id: Uuid::new_v4(),
+            card_number: 1,
             board_id,
             column_id,
             title: "New".to_string(),
@@ -601,6 +626,8 @@ mod tests {
 
         let context = tc.as_command_context();
         let cmd = CreateCard {
+            id: Uuid::new_v4(),
+            card_number: 1,
             board_id,
             column_id,
             title: "New".to_string(),

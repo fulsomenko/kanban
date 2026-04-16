@@ -72,6 +72,7 @@ impl App {
 
         // Execute CreateBoard command first to get the board ID
         let create_board_cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
             name: board_name.clone(),
             card_prefix: None,
         }));
@@ -95,6 +96,7 @@ impl App {
 
         for (name, position) in default_columns {
             let create_col_cmd = Command::Column(ColumnCommand::Create(CreateColumn {
+                id: uuid::Uuid::new_v4(),
                 board_id,
                 name: name.to_string(),
                 position,

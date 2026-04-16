@@ -200,6 +200,7 @@ impl App {
                 .to_string();
 
             let cmd = Command::Sprint(SprintCommand::Create(CreateSprint {
+                id: uuid::Uuid::new_v4(),
                 board_id,
                 name,
                 default_sprint_prefix: default_sprint_prefix.clone(),
