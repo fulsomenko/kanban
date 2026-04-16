@@ -4,6 +4,8 @@ use std::sync::{Mutex, RwLock};
 
 use uuid::Uuid;
 
+use crate::command_store::CommandStore;
+use crate::commands::Command;
 use crate::data_store::{DataStore, UndoPointId};
 use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Snapshot, Sprint};
 
@@ -34,6 +36,7 @@ pub struct InMemoryDataStore {
     state: RwLock<StoreState>,
     undo_stack: Mutex<Vec<(UndoPointId, StoreState)>>,
     next_undo_id: AtomicU64,
+    command_log: RwLock<Vec<Vec<Command>>>,
 }
 
 impl InMemoryDataStore {
@@ -42,6 +45,7 @@ impl InMemoryDataStore {
             state: RwLock::new(StoreState::new()),
             undo_stack: Mutex::new(Vec::new()),
             next_undo_id: AtomicU64::new(1),
+            command_log: RwLock::new(Vec::new()),
         }
     }
 }
@@ -357,6 +361,31 @@ impl DataStore for InMemoryDataStore {
     fn discard_undo_point(&self, point: UndoPointId) -> KanbanResult<()> {
         let mut stack = self.undo_stack.lock().unwrap();
         stack.retain(|(id, _)| *id != point);
+        Ok(())
+    }
+}
+
+impl CommandStore for InMemoryDataStore {
+    fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
+        let mut log = self.command_log.write().unwrap();
+        log.push(cmds.to_vec());
+        Ok(log.len() as u64)
+    }
+
+    fn command_count(&self) -> KanbanResult<u64> {
+        Ok(self.command_log.read().unwrap().len() as u64)
+    }
+
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
+        let log = self.command_log.read().unwrap();
+        let from = from as usize;
+        let to = (to as usize).min(log.len());
+        Ok(log[from..to].to_vec())
+    }
+
+    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
+        let mut log = self.command_log.write().unwrap();
+        log.truncate(after as usize);
         Ok(())
     }
 }

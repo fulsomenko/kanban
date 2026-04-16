@@ -5,6 +5,7 @@ pub mod board;
 pub mod card;
 pub mod card_lifecycle;
 pub mod column;
+pub mod command_store;
 pub mod commands;
 pub mod data_store;
 pub mod dependencies;
@@ -57,6 +58,7 @@ pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
 pub use task_list_view::TaskListView;
 
+pub use command_store::CommandStore;
 pub use data_store::{DataStore, UndoPointId};
 pub use in_memory_data_store::InMemoryDataStore;
 
