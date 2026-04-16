@@ -19,6 +19,12 @@ impl CliContext {
         file_path: &str,
         mut config: AppConfig,
     ) -> KanbanResult<Self> {
+        if file_path.ends_with(".sqlite") || file_path.ends_with(".db") {
+            #[cfg(feature = "sqlite")]
+            return Ok(Self {
+                inner: KanbanContext::open_sqlite(file_path, config).await?,
+            });
+        }
         if store_manager.sync_backend_with_file(file_path, &mut config) {
             eprintln!(
                 "Warning: storage backend auto-corrected from config value to '{}' based on file content.",

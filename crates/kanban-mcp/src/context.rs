@@ -17,6 +17,12 @@ impl McpContext {
         data_file: &str,
         mut config: AppConfig,
     ) -> KanbanResult<Self> {
+        if data_file.ends_with(".sqlite") || data_file.ends_with(".db") {
+            #[cfg(feature = "sqlite")]
+            return Ok(Self {
+                inner: KanbanContext::open_sqlite(data_file, config).await?,
+            });
+        }
         if store_manager.sync_backend_with_file(data_file, &mut config) {
             tracing::warn!(
                 "Storage backend auto-corrected to '{}' based on file content.",

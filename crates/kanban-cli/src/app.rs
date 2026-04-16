@@ -219,8 +219,19 @@ impl CliApp {
             None => {
                 #[cfg(feature = "tui")]
                 {
-                    let (mut app, save_rx) = App::new_with_store(store_manager, validated_file)?;
-                    app.run(save_rx).await?;
+                    let is_sqlite = validated_file
+                        .as_deref()
+                        .map(|f| f.ends_with(".sqlite") || f.ends_with(".db"))
+                        .unwrap_or(false);
+                    if is_sqlite {
+                        let path = validated_file.as_deref().unwrap();
+                        let mut app = App::open_sqlite(path, config).await?;
+                        app.run(None).await?;
+                    } else {
+                        let (mut app, save_rx) =
+                            App::new_with_store(store_manager, validated_file)?;
+                        app.run(save_rx).await?;
+                    }
                 }
                 #[cfg(not(feature = "tui"))]
                 anyhow::bail!(

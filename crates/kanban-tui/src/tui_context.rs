@@ -44,6 +44,25 @@ impl TuiContext {
         Ok((ctx, save_rx, completion_rx))
     }
 
+    /// Wrap a pre-built `KanbanContext` (e.g. from `KanbanContext::open_sqlite`).
+    /// No blob-write save coordinator is created — persistence is handled
+    /// inline by the context's backend.
+    #[allow(clippy::type_complexity)]
+    pub fn from_context(
+        ctx: KanbanContext,
+    ) -> (
+        Self,
+        Option<mpsc::Receiver<Snapshot>>,
+        Option<mpsc::UnboundedReceiver<()>>,
+    ) {
+        let (save_coordinator, save_rx, completion_rx) = SaveCoordinator::new(false);
+        let tui_ctx = Self {
+            inner: ctx,
+            save_coordinator,
+        };
+        (tui_ctx, save_rx, completion_rx)
+    }
+
     pub fn execute_command(&mut self, command: Command) -> KanbanResult<()> {
         self.execute_commands_batch(vec![command])
     }
