@@ -303,8 +303,7 @@ impl App {
         app_config.storage_backend = Some("sqlite".to_string());
 
         let inner = kanban_service::KanbanContext::open_sqlite(&effective_file, app_config.clone())
-            .await
-            .map_err(|e| kanban_domain::KanbanError::from(e))?;
+            .await?;
 
         let (ctx, _save_rx, save_completion_rx) = crate::tui_context::TuiContext::from_context(inner);
         let store_manager = Arc::new(default_store_manager());
