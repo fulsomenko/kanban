@@ -736,34 +736,22 @@ impl KanbanOperations for KanbanContext {
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::MoveCards;
-        let before = self
-            .data_store
-            .list_cards_by_column(column_id)?
-            .len();
+        let before = self.data_store.list_cards_by_column(column_id)?.len();
         self.execute(vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
             ids,
             column_id,
         }))])?;
-        let after = self
-            .data_store
-            .list_cards_by_column(column_id)?
-            .len();
+        let after = self.data_store.list_cards_by_column(column_id)?.len();
         Ok(after - before)
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::AssignCardsToSprint;
-        let before = self
-            .data_store
-            .list_cards_by_sprint(sprint_id)?
-            .len();
+        let before = self.data_store.list_cards_by_sprint(sprint_id)?.len();
         self.execute(vec![Command::Card(CardCommand::AssignToSprint(
             AssignCardsToSprint { ids, sprint_id },
         ))])?;
-        let after = self
-            .data_store
-            .list_cards_by_sprint(sprint_id)?
-            .len();
+        let after = self.data_store.list_cards_by_sprint(sprint_id)?.len();
         Ok(after - before)
     }
 

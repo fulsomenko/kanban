@@ -574,8 +574,18 @@ mod tests {
 
         store.clear_sprint_from_cards(sprint_id).unwrap();
 
-        assert!(store.get_card(card1_id).unwrap().unwrap().sprint_id.is_none());
-        assert!(store.get_card(card2_id).unwrap().unwrap().sprint_id.is_none());
+        assert!(store
+            .get_card(card1_id)
+            .unwrap()
+            .unwrap()
+            .sprint_id
+            .is_none());
+        assert!(store
+            .get_card(card2_id)
+            .unwrap()
+            .unwrap()
+            .sprint_id
+            .is_none());
     }
 
     // Sprint CRUD

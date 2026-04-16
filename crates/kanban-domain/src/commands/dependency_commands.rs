@@ -73,9 +73,7 @@ pub struct AddRelatesToDependencyCommand {
 impl AddRelatesToDependencyCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let mut graph = context.store.get_graph()?;
-        graph
-            .cards
-            .add_relates_to(self.card_a_id, self.card_b_id)?;
+        graph.cards.add_relates_to(self.card_a_id, self.card_b_id)?;
         context.store.set_graph(graph)?;
         Ok(())
     }
@@ -171,7 +169,12 @@ pub struct CreateSubcardCommand {
 impl CreateSubcardCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let mut board = context.get_board(self.board_id)?;
-        let mut card = Card::new(&mut board, self.column_id, self.title.clone(), self.position);
+        let mut card = Card::new(
+            &mut board,
+            self.column_id,
+            self.title.clone(),
+            self.position,
+        );
 
         if let Some(desc) = &self.description {
             card.description = Some(desc.clone());
@@ -247,7 +250,10 @@ mod tests {
             graph.cards.add_blocks(card_a, card_b).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
-        assert_eq!(tc.store.get_graph().unwrap().cards.blockers(card_b).len(), 1);
+        assert_eq!(
+            tc.store.get_graph().unwrap().cards.blockers(card_b).len(),
+            1
+        );
 
         let context = tc.as_command_context();
         let cmd = RemoveDependencyCommand {
@@ -311,7 +317,12 @@ mod tests {
             tc.store.set_graph(graph).unwrap();
         }
         assert_eq!(
-            tc.store.get_graph().unwrap().cards.children(parent_id).len(),
+            tc.store
+                .get_graph()
+                .unwrap()
+                .cards
+                .children(parent_id)
+                .len(),
             1
         );
 

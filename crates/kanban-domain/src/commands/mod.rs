@@ -292,9 +292,7 @@ pub(crate) mod test_helpers {
         }
 
         pub fn as_command_context(&self) -> CommandContext<'_> {
-            CommandContext {
-                store: &self.store,
-            }
+            CommandContext { store: &self.store }
         }
     }
 }

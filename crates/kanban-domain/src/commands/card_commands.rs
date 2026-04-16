@@ -93,8 +93,12 @@ impl CreateCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let mut board = context.get_board(self.board_id)?;
-        let mut card =
-            crate::Card::new(&mut board, self.column_id, self.title.clone(), self.position);
+        let mut card = crate::Card::new(
+            &mut board,
+            self.column_id,
+            self.title.clone(),
+            self.position,
+        );
 
         if self.options.description.is_some()
             || self.options.priority.is_some()
@@ -394,8 +398,7 @@ impl MigrateSprintLogs {
         let mut cards = context.store.list_all_cards()?;
         let sprints = context.store.list_all_sprints()?;
         let boards = context.store.list_boards()?;
-        let count =
-            crate::card_lifecycle::migrate_sprint_logs(&mut cards, &sprints, &boards);
+        let count = crate::card_lifecycle::migrate_sprint_logs(&mut cards, &sprints, &boards);
         if count > 0 {
             tracing::info!("Migrated sprint logs for {} card(s)", count);
             for card in cards {

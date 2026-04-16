@@ -633,15 +633,7 @@ impl App {
         let board_exports: Vec<_> = selected_indices
             .iter()
             .filter_map(|&i| boards.get(i))
-            .map(|board| {
-                BoardExporter::export_board(
-                    board,
-                    &columns,
-                    &cards,
-                    &archived,
-                    &sprints,
-                )
-            })
+            .map(|board| BoardExporter::export_board(board, &columns, &cards, &archived, &sprints))
             .collect();
 
         let export = AllBoardsExport::from_boards(board_exports);

@@ -241,10 +241,12 @@ impl App {
                                     match serde_json::from_str::<CardMetadataDto>(&new_content) {
                                         Ok(new_dto) => {
                                             let cmd = kanban_domain::commands::Command::Card(
-                                                kanban_domain::commands::CardCommand::ApplyMetadata(kanban_domain::commands::ApplyCardMetadata {
-                                                    card_id,
-                                                    dto: new_dto,
-                                                }),
+                                                kanban_domain::commands::CardCommand::ApplyMetadata(
+                                                    kanban_domain::commands::ApplyCardMetadata {
+                                                        card_id,
+                                                        dto: new_dto,
+                                                    },
+                                                ),
                                             );
                                             if let Err(e) = self.ctx.execute_command(cmd) {
                                                 tracing::error!("Failed to apply metadata: {}", e);
@@ -818,10 +820,11 @@ impl App {
                                     updates.status = Some(result.new_status);
                                 }
 
-                                let cmd = kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
-                                    card_id,
-                                    updates,
-                                }));
+                                let cmd = kanban_domain::commands::Command::Card(
+                                    kanban_domain::commands::CardCommand::Update(
+                                        kanban_domain::commands::UpdateCard { card_id, updates },
+                                    ),
+                                );
                                 if let Err(e) = self.execute_command(cmd) {
                                     tracing::error!("Failed to toggle card completion: {}", e);
                                     self.set_error(format!(
@@ -931,21 +934,21 @@ impl App {
                                     self.selection.active_board_index.and_then(|idx| {
                                         boards.get(idx).and_then(|board| {
                                             kanban_domain::card_lifecycle::compute_card_column_move(
-                                                &card,
-                                                board,
-                                                &columns,
-                                                &cards,
-                                                direction,
+                                                &card, board, &columns, &cards, direction,
                                             )
                                         })
                                     });
 
                                 if let Some(result) = move_result {
-                                    let move_cmd = kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Move(kanban_domain::commands::MoveCard {
-                                        card_id,
-                                        new_column_id: result.target_column_id,
-                                        new_position: result.new_position,
-                                    }));
+                                    let move_cmd = kanban_domain::commands::Command::Card(
+                                        kanban_domain::commands::CardCommand::Move(
+                                            kanban_domain::commands::MoveCard {
+                                                card_id,
+                                                new_column_id: result.target_column_id,
+                                                new_position: result.new_position,
+                                            },
+                                        ),
+                                    );
                                     if let Err(e) = self.execute_command(move_cmd) {
                                         tracing::error!("Failed to move card: {}", e);
                                         self.set_error(format!("Failed to move card: {}", e));
@@ -953,14 +956,17 @@ impl App {
                                     }
 
                                     if let Some(new_status) = result.new_status {
-                                        let status_cmd =
-                                            kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
-                                                card_id,
-                                                updates: kanban_domain::CardUpdate {
-                                                    status: Some(new_status),
-                                                    ..Default::default()
+                                        let status_cmd = kanban_domain::commands::Command::Card(
+                                            kanban_domain::commands::CardCommand::Update(
+                                                kanban_domain::commands::UpdateCard {
+                                                    card_id,
+                                                    updates: kanban_domain::CardUpdate {
+                                                        status: Some(new_status),
+                                                        ..Default::default()
+                                                    },
                                                 },
-                                            }));
+                                            ),
+                                        );
                                         if let Err(e) = self.execute_command(status_cmd) {
                                             tracing::error!("Failed to update card status: {}", e);
                                             self.set_error(format!(
@@ -1279,10 +1285,7 @@ impl App {
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
                 boards.get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
-                        &card,
-                        board,
-                        &columns,
-                        &cards,
+                        &card, board, &columns, &cards,
                     )
                 })
             });
@@ -1306,10 +1309,12 @@ impl App {
                 }
             };
 
-            update_commands.push(kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(UpdateCard {
-                card_id: *card_id,
-                updates,
-            })));
+            update_commands.push(kanban_domain::commands::Command::Card(
+                kanban_domain::commands::CardCommand::Update(UpdateCard {
+                    card_id: *card_id,
+                    updates,
+                }),
+            ));
         }
 
         if !update_commands.is_empty() {

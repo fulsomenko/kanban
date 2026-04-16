@@ -79,10 +79,8 @@ impl App {
                             let boards = self.ctx.boards();
                             if let Some(board) = boards.get(board_idx) {
                                 let sprints = self.ctx.sprints();
-                                let board_sprints: Vec<_> = sprints
-                                    .iter()
-                                    .filter(|s| s.board_id == board.id)
-                                    .collect();
+                                let board_sprints: Vec<_> =
+                                    sprints.iter().filter(|s| s.board_id == board.id).collect();
 
                                 let sprint_idx = dialog_state.item_selection - 1;
                                 if let Some(sprint) = board_sprints.get(sprint_idx) {

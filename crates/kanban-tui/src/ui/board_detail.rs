@@ -145,10 +145,7 @@ fn render_board_sprints_list(
         .focused(app.focus.board_focus == BoardFocus::Sprints);
 
     let sprints = app.ctx.sprints();
-    let board_sprints: Vec<&Sprint> = sprints
-        .iter()
-        .filter(|s| s.board_id == board.id)
-        .collect();
+    let board_sprints: Vec<&Sprint> = sprints.iter().filter(|s| s.board_id == board.id).collect();
 
     let mut sprint_lines = vec![];
 

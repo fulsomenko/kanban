@@ -582,13 +582,12 @@ impl PersistenceStore for SqliteStore {
     ) -> PersistenceResult<u64> {
         let pool = self.get_pool().await?;
         let json = serde_json::to_string(cmd).map_err(ser_err)?;
-        let row: (i64,) = sqlx::query_as(
-            "INSERT INTO command_log (cmd_json) VALUES (?) RETURNING idx",
-        )
-        .bind(&json)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+        let row: (i64,) =
+            sqlx::query_as("INSERT INTO command_log (cmd_json) VALUES (?) RETURNING idx")
+                .bind(&json)
+                .fetch_one(pool)
+                .await
+                .map_err(db_err)?;
         Ok(row.0 as u64)
     }
 
@@ -603,11 +602,10 @@ impl PersistenceStore for SqliteStore {
 
     async fn undo_cursor(&self) -> PersistenceResult<u64> {
         let pool = self.get_pool().await?;
-        let row: Option<(i64,)> =
-            sqlx::query_as("SELECT cursor FROM undo_state WHERE id = 1")
-                .fetch_optional(pool)
-                .await
-                .map_err(db_err)?;
+        let row: Option<(i64,)> = sqlx::query_as("SELECT cursor FROM undo_state WHERE id = 1")
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
         Ok(row.map_or(0, |r| r.0 as u64))
     }
 
@@ -630,14 +628,13 @@ impl PersistenceStore for SqliteStore {
         to: u64,
     ) -> PersistenceResult<Vec<kanban_domain::commands::Command>> {
         let pool = self.get_pool().await?;
-        let rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT cmd_json FROM command_log ORDER BY idx LIMIT ? OFFSET ?",
-        )
-        .bind((to - from) as i64)
-        .bind(from as i64)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT cmd_json FROM command_log ORDER BY idx LIMIT ? OFFSET ?")
+                .bind((to - from) as i64)
+                .bind(from as i64)
+                .fetch_all(pool)
+                .await
+                .map_err(db_err)?;
         rows.iter()
             .map(|(json,)| serde_json::from_str(json).map_err(ser_err))
             .collect()

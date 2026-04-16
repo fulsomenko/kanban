@@ -213,7 +213,12 @@ async fn test_sqlite_clear_sprint_from_cards() {
     store.upsert_card(card1).unwrap();
 
     store.clear_sprint_from_cards(sprint.id).unwrap();
-    assert!(store.get_card(card1_id).unwrap().unwrap().sprint_id.is_none());
+    assert!(store
+        .get_card(card1_id)
+        .unwrap()
+        .unwrap()
+        .sprint_id
+        .is_none());
 }
 
 // --- Sprint CRUD ---

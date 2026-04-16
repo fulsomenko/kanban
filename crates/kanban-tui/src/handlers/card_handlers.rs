@@ -1,7 +1,10 @@
 use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
-use kanban_domain::commands::{BoardCommand, CardCommand, Command, CreateCard, MoveCard, RestoreCard, SetBoardTaskSort, UpdateCard};
+use kanban_domain::commands::{
+    BoardCommand, CardCommand, Command, CreateCard, MoveCard, RestoreCard, SetBoardTaskSort,
+    UpdateCard,
+};
 use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, KanbanOperations, SortOrder, Sprint};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -232,10 +235,7 @@ impl App {
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
                 boards.get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
-                        &card,
-                        board,
-                        &columns,
-                        &cards,
+                        &card, board, &columns, &cards,
                     )
                 })
             });
@@ -289,10 +289,7 @@ impl App {
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
                 boards.get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
-                        &card,
-                        board,
-                        &columns,
-                        &cards,
+                        &card, board, &columns, &cards,
                     )
                 })
             });
@@ -369,10 +366,8 @@ impl App {
                 };
 
                 let cards = self.ctx.cards();
-                let position = kanban_domain::card_lifecycle::next_position_in_column(
-                    &cards,
-                    column.id,
-                );
+                let position =
+                    kanban_domain::card_lifecycle::next_position_in_column(&cards, column.id);
 
                 let boards = self.ctx.boards();
                 let columns = self.ctx.columns();
@@ -380,9 +375,7 @@ impl App {
                     .get(idx)
                     .map(|board| {
                         kanban_domain::card_lifecycle::should_auto_complete_new_card(
-                            column.id,
-                            board,
-                            &columns,
+                            column.id, board, &columns,
                         )
                     })
                     .unwrap_or(false);
@@ -472,11 +465,7 @@ impl App {
             let columns = self.ctx.columns();
             let cards = self.ctx.cards();
             let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
-                &card,
-                board,
-                &columns,
-                &cards,
-                direction,
+                &card, board, &columns, &cards, direction,
             );
 
             let move_result = match move_result {
@@ -530,12 +519,7 @@ impl App {
                                 .selection
                                 .active_board_index
                                 .and_then(|idx| boards.get(idx))
-                                .map(|b| {
-                                    columns
-                                        .iter()
-                                        .filter(|c| c.board_id == b.id)
-                                        .count()
-                                })
+                                .map(|b| columns.iter().filter(|c| c.board_id == b.id).count())
                                 .unwrap_or(0);
                             if current_col_idx < num_cols - 1 {
                                 self.dialog_input
@@ -578,11 +562,7 @@ impl App {
             let columns = self.ctx.columns();
             let cards = self.ctx.cards();
             let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
-                card,
-                board,
-                &columns,
-                &cards,
-                direction,
+                card, board, &columns, &cards, direction,
             );
 
             let move_result = match move_result {
@@ -668,7 +648,9 @@ impl App {
     }
 
     pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
-        let cmd = Command::Card(CardCommand::CompactPositions(kanban_domain::commands::CompactColumnPositions { column_id }));
+        let cmd = Command::Card(CardCommand::CompactPositions(
+            kanban_domain::commands::CompactColumnPositions { column_id },
+        ));
         if let Err(e) = self.ctx.execute_command(cmd) {
             tracing::error!("Failed to compact column positions: {}", e);
             self.set_error(format!("Failed to compact column positions: {}", e));
@@ -898,11 +880,8 @@ impl App {
 
         // Get current children (for checkbox display)
         let graph = self.ctx.graph();
-        let current_children: std::collections::HashSet<_> = graph
-            .cards
-            .children(card_id)
-            .into_iter()
-            .collect();
+        let current_children: std::collections::HashSet<_> =
+            graph.cards.children(card_id).into_iter().collect();
 
         // Store the card index so the popup knows which card we're managing
         let cards = self.ctx.cards();

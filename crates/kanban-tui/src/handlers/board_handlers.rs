@@ -1,5 +1,7 @@
 use crate::app::{App, AppMode, BoardFocus, DialogMode, Focus};
-use kanban_domain::commands::{BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn, UpdateBoard};
+use kanban_domain::commands::{
+    BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn, UpdateBoard,
+};
 use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {

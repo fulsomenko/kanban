@@ -96,7 +96,7 @@ async fn test_new_action_after_undo_clears_redo() {
         name: "A".into(),
         card_prefix: None,
     }))])
-        .unwrap();
+    .unwrap();
     ctx.undo();
     assert!(ctx.can_redo());
 
@@ -104,7 +104,7 @@ async fn test_new_action_after_undo_clears_redo() {
         name: "B".into(),
         card_prefix: None,
     }))])
-        .unwrap();
+    .unwrap();
     assert!(!ctx.can_redo());
 }
 
@@ -119,14 +119,14 @@ async fn test_reload_no_longer_clears_history() {
         name: "B".into(),
         card_prefix: None,
     }))])
-        .unwrap();
+    .unwrap();
     ctx.save().await.unwrap();
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         name: "B2".into(),
         card_prefix: None,
     }))])
-        .unwrap();
+    .unwrap();
     assert!(ctx.can_undo());
 
     ctx.reload().await.unwrap();
@@ -143,7 +143,7 @@ async fn test_dirty_flag_lifecycle() {
         name: "B".into(),
         card_prefix: None,
     }))])
-        .unwrap();
+    .unwrap();
     assert!(ctx.is_dirty());
 
     ctx.mark_clean();
@@ -306,14 +306,14 @@ async fn test_undo_pops_before_pushing_to_redo() {
         name: "B".into(),
         card_prefix: None,
     }))])
-        .unwrap();
+    .unwrap();
     ctx.clear_history();
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         name: "B2".into(),
         card_prefix: None,
     }))])
-        .unwrap();
+    .unwrap();
 
     assert!(ctx.undo());
     assert_eq!(ctx.redo_depth(), 1);
@@ -327,7 +327,7 @@ async fn test_redo_pops_before_pushing_to_undo() {
         name: "B".into(),
         card_prefix: None,
     }))])
-        .unwrap();
+    .unwrap();
     ctx.undo();
 
     assert!(ctx.redo());
@@ -840,7 +840,9 @@ async fn test_compact_column_positions_is_undoable() {
     .unwrap();
     ctx.clear_history();
 
-    let cmd = Command::Card(CardCommand::CompactPositions(CompactColumnPositions { column_id: col.id }));
+    let cmd = Command::Card(CardCommand::CompactPositions(CompactColumnPositions {
+        column_id: col.id,
+    }));
     ctx.execute(vec![cmd]).unwrap();
     assert_eq!(
         ctx.cards().iter().find(|c| c.id == c1.id).unwrap().position,

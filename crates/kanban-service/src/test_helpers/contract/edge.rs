@@ -38,15 +38,18 @@ pub async fn test_blocks_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    add_edge(&ctx, Edge {
-        source: card_a.id,
-        target: card_b.id,
-        edge_type: CardEdgeType::Blocks,
-        direction: EdgeDirection::Directed,
-        weight: Some(1.0_f32),
-        created_at: now,
-        archived_at: None,
-    });
+    add_edge(
+        &ctx,
+        Edge {
+            source: card_a.id,
+            target: card_b.id,
+            edge_type: CardEdgeType::Blocks,
+            direction: EdgeDirection::Directed,
+            weight: Some(1.0_f32),
+            created_at: now,
+            archived_at: None,
+        },
+    );
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load_with_defaults(factory(&path))
@@ -83,15 +86,18 @@ pub async fn test_relates_to_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    add_edge(&ctx, Edge {
-        source: card_a.id,
-        target: card_b.id,
-        edge_type: CardEdgeType::RelatesTo,
-        direction: EdgeDirection::Bidirectional,
-        weight: None,
-        created_at: now,
-        archived_at: None,
-    });
+    add_edge(
+        &ctx,
+        Edge {
+            source: card_a.id,
+            target: card_b.id,
+            edge_type: CardEdgeType::RelatesTo,
+            direction: EdgeDirection::Bidirectional,
+            weight: None,
+            created_at: now,
+            archived_at: None,
+        },
+    );
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load_with_defaults(factory(&path))
@@ -135,15 +141,18 @@ pub async fn test_parent_of_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    add_edge(&ctx, Edge {
-        source: parent.id,
-        target: child.id,
-        edge_type: CardEdgeType::ParentOf,
-        direction: EdgeDirection::Directed,
-        weight: None,
-        created_at: now,
-        archived_at: None,
-    });
+    add_edge(
+        &ctx,
+        Edge {
+            source: parent.id,
+            target: child.id,
+            edge_type: CardEdgeType::ParentOf,
+            direction: EdgeDirection::Directed,
+            weight: None,
+            created_at: now,
+            archived_at: None,
+        },
+    );
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load_with_defaults(factory(&path))
@@ -174,15 +183,18 @@ pub async fn test_archived_edge_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    add_edge(&ctx, Edge {
-        source: card_a.id,
-        target: card_b.id,
-        edge_type: CardEdgeType::Blocks,
-        direction: EdgeDirection::Directed,
-        weight: Some(2.5_f32),
-        created_at: now,
-        archived_at: Some(now),
-    });
+    add_edge(
+        &ctx,
+        Edge {
+            source: card_a.id,
+            target: card_b.id,
+            edge_type: CardEdgeType::Blocks,
+            direction: EdgeDirection::Directed,
+            weight: Some(2.5_f32),
+            created_at: now,
+            archived_at: Some(now),
+        },
+    );
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load_with_defaults(factory(&path))
@@ -217,33 +229,42 @@ pub async fn test_multiple_edges_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     let now = chrono::Utc::now();
-    add_edge(&ctx, Edge {
-        source: card_a.id,
-        target: card_b.id,
-        edge_type: CardEdgeType::Blocks,
-        direction: EdgeDirection::Directed,
-        weight: None,
-        created_at: now,
-        archived_at: None,
-    });
-    add_edge(&ctx, Edge {
-        source: card_b.id,
-        target: card_c.id,
-        edge_type: CardEdgeType::ParentOf,
-        direction: EdgeDirection::Directed,
-        weight: Some(3.0_f32),
-        created_at: now,
-        archived_at: None,
-    });
-    add_edge(&ctx, Edge {
-        source: card_a.id,
-        target: card_c.id,
-        edge_type: CardEdgeType::RelatesTo,
-        direction: EdgeDirection::Bidirectional,
-        weight: None,
-        created_at: now,
-        archived_at: Some(now),
-    });
+    add_edge(
+        &ctx,
+        Edge {
+            source: card_a.id,
+            target: card_b.id,
+            edge_type: CardEdgeType::Blocks,
+            direction: EdgeDirection::Directed,
+            weight: None,
+            created_at: now,
+            archived_at: None,
+        },
+    );
+    add_edge(
+        &ctx,
+        Edge {
+            source: card_b.id,
+            target: card_c.id,
+            edge_type: CardEdgeType::ParentOf,
+            direction: EdgeDirection::Directed,
+            weight: Some(3.0_f32),
+            created_at: now,
+            archived_at: None,
+        },
+    );
+    add_edge(
+        &ctx,
+        Edge {
+            source: card_a.id,
+            target: card_c.id,
+            edge_type: CardEdgeType::RelatesTo,
+            direction: EdgeDirection::Bidirectional,
+            weight: None,
+            created_at: now,
+            archived_at: Some(now),
+        },
+    );
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load_with_defaults(factory(&path))

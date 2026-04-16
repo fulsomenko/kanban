@@ -356,8 +356,7 @@ impl App {
                         let card_count = cards_to_move.len();
 
                         // Batch all card moves together to avoid race conditions
-                        let mut move_commands: Vec<Command> =
-                            Vec::new();
+                        let mut move_commands: Vec<Command> = Vec::new();
                         for (card_id, position) in cards_to_move {
                             let cmd = Command::Card(CardCommand::Move(MoveCard {
                                 card_id,
@@ -516,10 +515,12 @@ impl App {
 
                     if let Some(board_idx) = self.selection.active_board_index {
                         if let Some(board) = self.ctx.boards().get(board_idx) {
-                            let cmd = Command::Board(BoardCommand::SetTaskListView(SetBoardTaskListView {
-                                board_id: board.id,
-                                view,
-                            }));
+                            let cmd = Command::Board(BoardCommand::SetTaskListView(
+                                SetBoardTaskListView {
+                                    board_id: board.id,
+                                    view,
+                                },
+                            ));
 
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set task list view: {}", e);

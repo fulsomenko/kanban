@@ -96,7 +96,10 @@ fn row_to_board(
         task_list_view: p_enum(&task_list_view_str, "task_list_view")?,
         card_counter: row.try_get::<i32, _>("card_counter").map_err(db_err)? as u32,
         sprint_counters,
-        completion_column_id: completion_column_id_str.as_deref().map(p_uuid).transpose()?,
+        completion_column_id: completion_column_id_str
+            .as_deref()
+            .map(p_uuid)
+            .transpose()?,
         created_at: p_dt(&created_at_str)?,
         updated_at: p_dt(&updated_at_str)?,
     })
@@ -359,10 +362,7 @@ impl SqliteDataStore {
         Ok(())
     }
 
-    async fn fetch_sprint_logs_for_card(
-        &self,
-        card_id: &str,
-    ) -> KanbanResult<Vec<SprintLog>> {
+    async fn fetch_sprint_logs_for_card(&self, card_id: &str) -> KanbanResult<Vec<SprintLog>> {
         let rows = sqlx::query(
             "SELECT sprint_id, sprint_number, sprint_name, started_at, ended_at, status
              FROM sprint_logs WHERE card_id = ? ORDER BY id",
@@ -973,8 +973,7 @@ impl DataStore for SqliteDataStore {
                     let logs = self.fetch_sprint_logs_for_card(&id_str).await?;
                     let card = row_to_card(&row, logs)?;
                     let archived_at_str: String = row.try_get("archived_at").map_err(db_err)?;
-                    let orig_col_str: String =
-                        row.try_get("original_column_id").map_err(db_err)?;
+                    let orig_col_str: String = row.try_get("original_column_id").map_err(db_err)?;
                     Ok(Some(ArchivedCard {
                         card,
                         archived_at: p_dt(&archived_at_str)?,

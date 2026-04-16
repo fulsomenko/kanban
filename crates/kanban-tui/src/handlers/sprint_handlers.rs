@@ -45,10 +45,11 @@ impl App {
                         let board_id = board.id;
 
                         // Execute ActivateSprint and UpdateBoard as batch
-                        let activate_cmd = Command::Sprint(SprintCommand::Activate(ActivateSprint {
-                            sprint_id,
-                            duration_days: duration,
-                        }));
+                        let activate_cmd =
+                            Command::Sprint(SprintCommand::Activate(ActivateSprint {
+                                sprint_id,
+                                duration_days: duration,
+                            }));
 
                         let board_cmd = Command::Board(BoardCommand::Update(UpdateBoard {
                             board_id,
@@ -107,7 +108,8 @@ impl App {
 
             if let Some((sprint_id, board_id, sprint_name)) = sprint_info {
                 // Execute CompleteSprint and UpdateBoard as batch
-                let complete_cmd = Command::Sprint(SprintCommand::Complete(CompleteSprint { sprint_id }));
+                let complete_cmd =
+                    Command::Sprint(SprintCommand::Complete(CompleteSprint { sprint_id }));
 
                 let board_cmd = Command::Board(BoardCommand::Update(UpdateBoard {
                     board_id,
@@ -213,10 +215,7 @@ impl App {
 
             // Log the newly created sprint
             let sprints = self.ctx.sprints();
-            let board_sprints: Vec<_> = sprints
-                .iter()
-                .filter(|s| s.board_id == board_id)
-                .collect();
+            let board_sprints: Vec<_> = sprints.iter().filter(|s| s.board_id == board_id).collect();
 
             if let Some(new_sprint) = board_sprints.last() {
                 let boards = self.ctx.boards();

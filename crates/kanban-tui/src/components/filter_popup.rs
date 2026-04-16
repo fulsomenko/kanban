@@ -85,10 +85,7 @@ fn render_filter_sprints_section(
         let boards = app.ctx.boards();
         if let Some(board) = boards.get(board_idx) {
             let sprints = app.ctx.sprints();
-            let board_sprints: Vec<_> = sprints
-                .iter()
-                .filter(|s| s.board_id == board.id)
-                .collect();
+            let board_sprints: Vec<_> = sprints.iter().filter(|s| s.board_id == board.id).collect();
 
             if board_sprints.is_empty() {
                 sprint_lines.push(Line::from(Span::styled(

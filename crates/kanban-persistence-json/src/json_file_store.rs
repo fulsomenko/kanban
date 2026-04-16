@@ -142,7 +142,10 @@ impl PersistenceStore for JsonFileStore {
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let (cmd_log, cursor) = {
-            let cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+            let cls = self
+                .command_log_state
+                .lock()
+                .expect("command_log_state mutex poisoned");
             (cls.commands.clone(), cls.undo_cursor)
         };
         let envelope = JsonEnvelope {
@@ -207,7 +210,10 @@ impl PersistenceStore for JsonFileStore {
 
         // Populate command log state from envelope
         {
-            let mut cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+            let mut cls = self
+                .command_log_state
+                .lock()
+                .expect("command_log_state mutex poisoned");
             cls.commands = envelope.commands;
             cls.undo_cursor = envelope.undo_cursor;
         }
@@ -251,23 +257,35 @@ impl PersistenceStore for JsonFileStore {
         &self,
         cmd: &kanban_domain::commands::Command,
     ) -> PersistenceResult<u64> {
-        let mut cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        let mut cls = self
+            .command_log_state
+            .lock()
+            .expect("command_log_state mutex poisoned");
         cls.commands.push(cmd.clone());
         Ok(cls.commands.len() as u64)
     }
 
     async fn command_count(&self) -> PersistenceResult<u64> {
-        let cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        let cls = self
+            .command_log_state
+            .lock()
+            .expect("command_log_state mutex poisoned");
         Ok(cls.commands.len() as u64)
     }
 
     async fn undo_cursor(&self) -> PersistenceResult<u64> {
-        let cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        let cls = self
+            .command_log_state
+            .lock()
+            .expect("command_log_state mutex poisoned");
         Ok(cls.undo_cursor)
     }
 
     async fn set_undo_cursor(&self, index: u64) -> PersistenceResult<()> {
-        let mut cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        let mut cls = self
+            .command_log_state
+            .lock()
+            .expect("command_log_state mutex poisoned");
         cls.undo_cursor = index;
         Ok(())
     }
@@ -277,14 +295,20 @@ impl PersistenceStore for JsonFileStore {
         from: u64,
         to: u64,
     ) -> PersistenceResult<Vec<kanban_domain::commands::Command>> {
-        let cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        let cls = self
+            .command_log_state
+            .lock()
+            .expect("command_log_state mutex poisoned");
         let from = from as usize;
         let to = (to as usize).min(cls.commands.len());
         Ok(cls.commands[from..to].to_vec())
     }
 
     async fn truncate_commands_after(&self, after: u64) -> PersistenceResult<()> {
-        let mut cls = self.command_log_state.lock().expect("command_log_state mutex poisoned");
+        let mut cls = self
+            .command_log_state
+            .lock()
+            .expect("command_log_state mutex poisoned");
         cls.commands.truncate(after as usize);
         Ok(())
     }
