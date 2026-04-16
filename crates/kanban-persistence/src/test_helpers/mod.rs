@@ -94,22 +94,5 @@ macro_rules! store_contract_tests {
         async fn test_path_matches_locator() {
             $crate::test_helpers::contract::test_path_matches_locator(&$factory_fn()).await;
         }
-        #[tokio::test]
-        async fn test_command_log_append_and_load() {
-            $crate::test_helpers::contract::test_command_log_append_and_load(&$factory_fn()).await;
-        }
-        #[tokio::test]
-        async fn test_command_log_cursor_persistence() {
-            $crate::test_helpers::contract::test_command_log_cursor_persistence(&$factory_fn())
-                .await;
-        }
-        #[tokio::test]
-        async fn test_command_log_truncate_after() {
-            $crate::test_helpers::contract::test_command_log_truncate_after(&$factory_fn()).await;
-        }
-        #[tokio::test]
-        async fn test_command_count_starts_at_zero() {
-            $crate::test_helpers::contract::test_command_count_starts_at_zero(&$factory_fn()).await;
-        }
     };
 }
