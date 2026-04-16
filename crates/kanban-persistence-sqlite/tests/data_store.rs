@@ -1,3 +1,5 @@
+use kanban_domain::command_store::CommandStore;
+use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
 use kanban_domain::data_store::DataStore;
 use kanban_domain::*;
 use kanban_persistence_sqlite::SqliteDataStore;
@@ -379,4 +381,74 @@ async fn test_sqlite_discard_undo_point() {
     let point = store.create_undo_point().unwrap();
     store.discard_undo_point(point).unwrap();
     assert!(store.undo_to(point).is_err());
+}
+
+// --- CommandStore ---
+
+fn make_board_cmd(name: &str) -> Command {
+    Command::Board(BoardCommand::Create(CreateBoard {
+        id: Uuid::new_v4(),
+        name: name.into(),
+        card_prefix: None,
+    }))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_append_returns_count() {
+    let (store, _dir) = make_store().await;
+    let count = store.append_commands(&[make_board_cmd("B1")]).unwrap();
+    assert_eq!(count, 1);
+    let count = store.append_commands(&[make_board_cmd("B2")]).unwrap();
+    assert_eq!(count, 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_count_starts_at_zero() {
+    let (store, _dir) = make_store().await;
+    assert_eq!(store.command_count().unwrap(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_load_returns_slice() {
+    let (store, _dir) = make_store().await;
+    store.append_commands(&[make_board_cmd("B1")]).unwrap();
+    store.append_commands(&[make_board_cmd("B2")]).unwrap();
+    store.append_commands(&[make_board_cmd("B3")]).unwrap();
+
+    let batches = store.load_commands(0, 3).unwrap();
+    assert_eq!(batches.len(), 3);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_load_range_exclusive_end() {
+    let (store, _dir) = make_store().await;
+    store.append_commands(&[make_board_cmd("B1")]).unwrap();
+    store.append_commands(&[make_board_cmd("B2")]).unwrap();
+
+    assert_eq!(store.load_commands(0, 1).unwrap().len(), 1);
+    assert_eq!(store.load_commands(1, 2).unwrap().len(), 1);
+    assert_eq!(store.load_commands(0, 2).unwrap().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_truncate_removes_tail() {
+    let (store, _dir) = make_store().await;
+    store.append_commands(&[make_board_cmd("B1")]).unwrap();
+    store.append_commands(&[make_board_cmd("B2")]).unwrap();
+    store.append_commands(&[make_board_cmd("B3")]).unwrap();
+
+    store.truncate_commands_after(1).unwrap();
+    assert_eq!(store.command_count().unwrap(), 1);
+    assert_eq!(store.load_commands(0, 1).unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_batch_stores_multiple_commands() {
+    let (store, _dir) = make_store().await;
+    let batch = vec![make_board_cmd("B1"), make_board_cmd("B2")];
+    store.append_commands(&batch).unwrap();
+
+    let batches = store.load_commands(0, 1).unwrap();
+    assert_eq!(batches.len(), 1);
+    assert_eq!(batches[0].len(), 2);
 }
