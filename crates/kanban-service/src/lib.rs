@@ -1,7 +1,9 @@
+pub mod backend;
 pub mod config;
 mod context;
 mod path;
 mod store_manager;
+pub use backend::KanbanBackend;
 pub use config::AppConfigDto;
 pub use context::{BatchOperationFailure, BatchOperationResult, KanbanContext};
 pub use path::validate_path;
