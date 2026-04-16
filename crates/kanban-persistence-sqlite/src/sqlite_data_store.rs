@@ -5,6 +5,8 @@ use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
 use kanban_core::graph::{Edge, Graph};
+use kanban_domain::command_store::CommandStore;
+use kanban_domain::commands::Command;
 use kanban_domain::data_store::{DataStore, UndoPointId};
 use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
@@ -1112,6 +1114,61 @@ impl DataStore for SqliteDataStore {
     fn discard_undo_point(&self, point: UndoPointId) -> KanbanResult<()> {
         let mut stack = self.undo_stack.lock().unwrap();
         stack.retain(|(id, _)| *id != point);
+        Ok(())
+    }
+}
+
+impl CommandStore for SqliteDataStore {
+    fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
+        let batch_json = serde_json::to_string(cmds).map_err(ser_err)?;
+        let count: i64 = run(async {
+            sqlx::query("INSERT INTO command_log (cmd_json) VALUES (?)")
+                .bind(&batch_json)
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)?;
+            sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
+        Ok(count as u64)
+    }
+
+    fn command_count(&self) -> KanbanResult<u64> {
+        let count: i64 = run(async {
+            sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
+        Ok(count as u64)
+    }
+
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
+        let rows: Vec<String> = run(async {
+            sqlx::query_scalar(
+                "SELECT cmd_json FROM command_log WHERE idx > ? AND idx <= ? ORDER BY idx",
+            )
+            .bind(from as i64)
+            .bind(to as i64)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db_err)
+        })?;
+        rows.iter()
+            .map(|json| serde_json::from_str::<Vec<Command>>(json).map_err(ser_err))
+            .collect()
+    }
+
+    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
+        run(async {
+            sqlx::query("DELETE FROM command_log WHERE idx > ?")
+                .bind(after as i64)
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
         Ok(())
     }
 }
