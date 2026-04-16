@@ -19,17 +19,17 @@ impl<T: DataStore + CommandStore + Send + Sync + 'static> KanbanBackend for T {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kanban_domain::InMemoryDataStore;
+    use kanban_domain::InMemoryStore;
 
     #[test]
     fn test_kanban_backend_is_object_safe() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         let _: &dyn KanbanBackend = &store;
     }
 
     #[test]
     fn test_as_data_store_returns_data_store_ref() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         let backend: &dyn KanbanBackend = &store;
         // as_data_store() compiles and returns a valid reference
         let _: &dyn DataStore = backend.as_data_store();

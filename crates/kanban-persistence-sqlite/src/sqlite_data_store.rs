@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 const SCHEMA: &str = include_str!("schema.sql");
 
-pub struct SqliteDataStore {
+pub struct SqliteStore {
     pool: Pool<Sqlite>,
     undo_stack: Mutex<Vec<(UndoPointId, Snapshot)>>,
     next_undo_id: AtomicU64,
@@ -221,9 +221,9 @@ fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {
     })
 }
 
-// --- SqliteDataStore ---
+// --- SqliteStore ---
 
-impl SqliteDataStore {
+impl SqliteStore {
     pub async fn open(path: impl AsRef<Path>) -> KanbanResult<Self> {
         let options = SqliteConnectOptions::new()
             .filename(path)
@@ -710,7 +710,7 @@ impl SqliteDataStore {
     }
 }
 
-impl DataStore for SqliteDataStore {
+impl DataStore for SqliteStore {
     // Board
 
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
@@ -1118,7 +1118,7 @@ impl DataStore for SqliteDataStore {
     }
 }
 
-impl CommandStore for SqliteDataStore {
+impl CommandStore for SqliteStore {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
         let batch_json = serde_json::to_string(cmds).map_err(ser_err)?;
         let count: i64 = run(async {

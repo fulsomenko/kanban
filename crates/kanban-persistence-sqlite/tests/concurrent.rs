@@ -1,9 +1,9 @@
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
-use kanban_persistence_sqlite::SqliteStore;
+use kanban_persistence_sqlite::SqliteBlobStore;
 use std::sync::Arc;
 use tempfile::tempdir;
 
-fn make_snapshot(store: &SqliteStore) -> StoreSnapshot {
+fn make_snapshot(store: &SqliteBlobStore) -> StoreSnapshot {
     let board_id = uuid::Uuid::new_v4().to_string();
     let col_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
@@ -45,7 +45,7 @@ fn make_snapshot(store: &SqliteStore) -> StoreSnapshot {
 async fn test_concurrent_saves_no_corruption() {
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("concurrent.db");
-    let store = Arc::new(SqliteStore::new(&db_path));
+    let store = Arc::new(SqliteBlobStore::new(&db_path));
 
     let initial = make_snapshot(&store);
     store.save(initial).await.unwrap();

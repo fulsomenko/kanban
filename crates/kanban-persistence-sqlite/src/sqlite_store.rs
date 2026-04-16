@@ -15,14 +15,14 @@ use crate::upserts;
 const SCHEMA: &str = include_str!("schema.sql");
 const CURRENT_SCHEMA_VERSION: i32 = 2;
 
-pub struct SqliteStore {
+pub struct SqliteBlobStore {
     path: PathBuf,
     instance_id: Uuid,
     pool: tokio::sync::OnceCell<Pool<Sqlite>>,
     last_known_metadata: tokio::sync::Mutex<Option<PersistenceMetadata>>,
 }
 
-impl SqliteStore {
+impl SqliteBlobStore {
     pub fn new(path: impl AsRef<Path>) -> Self {
         Self {
             path: path.as_ref().to_path_buf(),
@@ -423,7 +423,7 @@ async fn migrate(pool: &Pool<Sqlite>) -> PersistenceResult<()> {
 }
 
 #[async_trait]
-impl PersistenceStore for SqliteStore {
+impl PersistenceStore for SqliteBlobStore {
     async fn save(&self, mut snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
         let pool = self.get_pool().await?;
 
@@ -576,80 +576,6 @@ impl PersistenceStore for SqliteStore {
         self.instance_id
     }
 
-    async fn append_command(
-        &self,
-        cmd: &kanban_domain::commands::Command,
-    ) -> PersistenceResult<u64> {
-        let pool = self.get_pool().await?;
-        let json = serde_json::to_string(cmd).map_err(ser_err)?;
-        let row: (i64,) =
-            sqlx::query_as("INSERT INTO command_log (cmd_json) VALUES (?) RETURNING idx")
-                .bind(&json)
-                .fetch_one(pool)
-                .await
-                .map_err(db_err)?;
-        Ok(row.0 as u64)
-    }
-
-    async fn command_count(&self) -> PersistenceResult<u64> {
-        let pool = self.get_pool().await?;
-        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM command_log")
-            .fetch_one(pool)
-            .await
-            .map_err(db_err)?;
-        Ok(row.0 as u64)
-    }
-
-    async fn undo_cursor(&self) -> PersistenceResult<u64> {
-        let pool = self.get_pool().await?;
-        let row: Option<(i64,)> = sqlx::query_as("SELECT cursor FROM undo_state WHERE id = 1")
-            .fetch_optional(pool)
-            .await
-            .map_err(db_err)?;
-        Ok(row.map_or(0, |r| r.0 as u64))
-    }
-
-    async fn set_undo_cursor(&self, index: u64) -> PersistenceResult<()> {
-        let pool = self.get_pool().await?;
-        sqlx::query(
-            "INSERT INTO undo_state (id, cursor) VALUES (1, ?) \
-             ON CONFLICT(id) DO UPDATE SET cursor = excluded.cursor",
-        )
-        .bind(index as i64)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
-        Ok(())
-    }
-
-    async fn load_commands(
-        &self,
-        from: u64,
-        to: u64,
-    ) -> PersistenceResult<Vec<kanban_domain::commands::Command>> {
-        let pool = self.get_pool().await?;
-        let rows: Vec<(String,)> =
-            sqlx::query_as("SELECT cmd_json FROM command_log ORDER BY idx LIMIT ? OFFSET ?")
-                .bind((to - from) as i64)
-                .bind(from as i64)
-                .fetch_all(pool)
-                .await
-                .map_err(db_err)?;
-        rows.iter()
-            .map(|(json,)| serde_json::from_str(json).map_err(ser_err))
-            .collect()
-    }
-
-    async fn truncate_commands_after(&self, after: u64) -> PersistenceResult<()> {
-        let pool = self.get_pool().await?;
-        // command_log idx is 1-based autoincrement, `after` is count of commands to keep
-        sqlx::query("DELETE FROM command_log WHERE idx > ?")
-            .bind(after as i64)
-            .execute(pool)
-            .await
-            .map_err(db_err)?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -661,7 +587,7 @@ mod tests {
     async fn test_save_and_load() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         let data = serde_json::json!({
             "boards": [],
@@ -687,7 +613,7 @@ mod tests {
     async fn test_exists() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("nonexistent.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         assert!(!store.exists().await);
 
@@ -712,7 +638,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("path with spaces/test board.db");
         std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         let data = serde_json::json!({
             "boards": [],
@@ -736,7 +662,7 @@ mod tests {
     async fn test_cards_loaded_in_position_order() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("order.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         let board_id = uuid::Uuid::new_v4().to_string();
         let col_id = uuid::Uuid::new_v4().to_string();
@@ -806,7 +732,7 @@ mod tests {
     async fn test_upsert_board_missing_name_returns_error() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         let data = SnapshotData {
             boards: vec![serde_json::json!({
@@ -836,7 +762,7 @@ mod tests {
     async fn test_upsert_card_missing_title_returns_error() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         let board_id = uuid::Uuid::new_v4().to_string();
         let col_id = uuid::Uuid::new_v4().to_string();
@@ -879,7 +805,7 @@ mod tests {
     async fn test_upsert_card_missing_timestamps_returns_error() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         let board_id = uuid::Uuid::new_v4().to_string();
         let col_id = uuid::Uuid::new_v4().to_string();
@@ -924,7 +850,7 @@ mod tests {
     async fn test_unknown_priority_returns_error() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
         let pool = store.get_pool().await.unwrap();
 
         let bid = Uuid::new_v4().to_string();
@@ -957,7 +883,7 @@ mod tests {
     async fn test_unknown_sprint_status_returns_error() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
         let pool = store.get_pool().await.unwrap();
 
         let bid = Uuid::new_v4().to_string();
@@ -986,7 +912,7 @@ mod tests {
     async fn test_upsert_edges_removes_stale_edges() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         let board_id = uuid::Uuid::new_v4().to_string();
         let col_id = uuid::Uuid::new_v4().to_string();
@@ -1054,7 +980,7 @@ mod tests {
     async fn test_upsert_board_missing_id_returns_serialization_error() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
 
         let data = SnapshotData {
             boards: vec![serde_json::json!({
@@ -1249,7 +1175,7 @@ mod tests {
         drop(pool);
 
         // Load through SqliteStore — triggers migration
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
         store.load().await.unwrap();
 
         // Verify card_counter was set from prefix_counters
@@ -1319,7 +1245,7 @@ mod tests {
         .unwrap();
         drop(pool);
 
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
         store.load().await.unwrap();
 
         let pool2 = store.get_pool().await.unwrap();
@@ -1349,7 +1275,7 @@ mod tests {
         .unwrap();
         drop(pool);
 
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
         store.load().await.unwrap();
 
         // After migration, assigned_prefix and card_prefix must not exist on cards
@@ -1389,7 +1315,7 @@ mod tests {
         .unwrap();
         drop(pool);
 
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
         store.load().await.unwrap();
 
         let pool2 = store.get_pool().await.unwrap();
@@ -1406,7 +1332,7 @@ mod tests {
     async fn test_card_counter_roundtrip_save_and_load() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("counter.db");
-        let store = SqliteStore::new(&db_path);
+        let store = SqliteBlobStore::new(&db_path);
         let ts = "2024-01-01T00:00:00Z";
         let board_id = uuid::Uuid::new_v4().to_string();
 

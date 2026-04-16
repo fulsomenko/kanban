@@ -20,6 +20,7 @@ kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
 kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3", optional = true }
 kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.3", optional = true }
+async-trait.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

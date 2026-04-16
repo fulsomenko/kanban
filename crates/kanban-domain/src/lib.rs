@@ -14,6 +14,7 @@ pub mod export;
 pub mod field_update;
 pub mod filter;
 pub mod in_memory_data_store;
+pub mod in_memory_store;
 pub mod operations;
 pub mod query;
 pub mod search;
@@ -61,5 +62,6 @@ pub use task_list_view::TaskListView;
 pub use command_store::CommandStore;
 pub use data_store::{DataStore, UndoPointId};
 pub use in_memory_data_store::InMemoryDataStore;
+pub use in_memory_store::InMemoryStore;
 
 pub use error::{DependencyError, DomainError, KanbanError, KanbanResult};

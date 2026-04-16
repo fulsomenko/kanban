@@ -5,7 +5,7 @@ use kanban_domain::commands::{
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, InMemoryDataStore, KanbanOperations,
+    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, InMemoryStore, KanbanOperations,
     Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
@@ -49,7 +49,7 @@ impl KanbanContext {
         let data: Snapshot = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        let backend = InMemoryDataStore::new();
+        let backend = InMemoryStore::new();
         backend.apply_snapshot(data.clone())?;
 
         Ok(Self {
@@ -69,9 +69,33 @@ impl KanbanContext {
         Self::load(store, AppConfig::default()).await
     }
 
+    #[cfg(feature = "sqlite")]
+    pub async fn open_sqlite(path: &str, config: AppConfig) -> KanbanResult<Self> {
+        use crate::null_store::NullStore;
+        use kanban_persistence_sqlite::SqliteStore;
+        let store = SqliteStore::open(path).await?;
+        let baseline = store.snapshot()?;
+        Ok(Self {
+            backend: Arc::new(store),
+            app_config: config,
+            store: Arc::new(NullStore::new()),
+            baseline_snapshot: baseline,
+            undo_cursor: 0,
+            dirty: false,
+            conflict_pending: false,
+        })
+    }
+
+    #[cfg(feature = "json")]
+    pub async fn open_json(path: &str, config: AppConfig) -> KanbanResult<Self> {
+        use kanban_persistence_json::JsonFileStore;
+        let persistence_store = Arc::new(JsonFileStore::new(path));
+        Self::load(persistence_store, config).await
+    }
+
     pub fn empty(store: Arc<dyn PersistenceStore + Send + Sync>, config: AppConfig) -> Self {
         Self {
-            backend: Arc::new(InMemoryDataStore::new()),
+            backend: Arc::new(InMemoryStore::new()),
             app_config: config,
             store,
             baseline_snapshot: Snapshot::new(),

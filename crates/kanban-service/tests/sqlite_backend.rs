@@ -1,0 +1,80 @@
+use kanban_domain::{CardListFilter, KanbanOperations};
+use kanban_service::{AppConfig, KanbanContext};
+use tempfile::TempDir;
+
+async fn open_sqlite_ctx(dir: &TempDir) -> KanbanContext {
+    let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
+    KanbanContext::open_sqlite(&path, AppConfig::default())
+        .await
+        .expect("open_sqlite must succeed")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_backend_create_board_and_list() {
+    let dir = TempDir::new().unwrap();
+    let mut ctx = open_sqlite_ctx(&dir).await;
+
+    let board = ctx.create_board("Test Board".to_string(), None).unwrap();
+    assert_eq!(board.name, "Test Board");
+
+    let boards = ctx.list_boards().unwrap();
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].name, "Test Board");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_backend_full_workflow() {
+    let dir = TempDir::new().unwrap();
+    let mut ctx = open_sqlite_ctx(&dir).await;
+
+    let board = ctx.create_board("Board".to_string(), None).unwrap();
+    let col = ctx.create_column(board.id, "TODO".to_string(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "Task 1".to_string(), Default::default())
+        .unwrap();
+
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+    assert_eq!(ctx.list_columns(board.id).unwrap().len(), 1);
+    assert_eq!(
+        ctx.list_cards(CardListFilter::default()).unwrap().len(),
+        1
+    );
+
+    ctx.archive_card(card.id).unwrap();
+    assert_eq!(ctx.list_archived_cards().unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_backend_undo_redo() {
+    let dir = TempDir::new().unwrap();
+    let mut ctx = open_sqlite_ctx(&dir).await;
+
+    ctx.create_board("Board 1".to_string(), None).unwrap();
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+
+    assert!(ctx.undo());
+    assert_eq!(ctx.list_boards().unwrap().len(), 0);
+
+    assert!(ctx.redo());
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_backend_data_persists_across_opens() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
+
+    {
+        let mut ctx = KanbanContext::open_sqlite(&path, AppConfig::default())
+            .await
+            .unwrap();
+        ctx.create_board("Persistent Board".to_string(), None).unwrap();
+    }
+
+    let ctx2 = KanbanContext::open_sqlite(&path, AppConfig::default())
+        .await
+        .unwrap();
+    let boards = ctx2.list_boards().unwrap();
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].name, "Persistent Board");
+}

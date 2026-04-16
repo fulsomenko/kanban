@@ -124,7 +124,7 @@ pub async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: 
 
     let path = dir.join(name);
     let path_str = path.to_str().unwrap().to_string();
-    let store = kanban_persistence_sqlite::SqliteStore::new(&path_str);
+    let store = kanban_persistence_sqlite::SqliteBlobStore::new(&path_str);
 
     let domain_boards: Vec<kanban_domain::Board> = boards
         .iter()

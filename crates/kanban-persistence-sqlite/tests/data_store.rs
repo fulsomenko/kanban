@@ -2,14 +2,14 @@ use kanban_domain::command_store::CommandStore;
 use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
 use kanban_domain::data_store::DataStore;
 use kanban_domain::*;
-use kanban_persistence_sqlite::SqliteDataStore;
+use kanban_persistence_sqlite::SqliteStore;
 use tempfile::TempDir;
 use uuid::Uuid;
 
-async fn make_store() -> (SqliteDataStore, TempDir) {
+async fn make_store() -> (SqliteStore, TempDir) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.db");
-    let store = SqliteDataStore::open(&path).await.unwrap();
+    let store = SqliteStore::open(&path).await.unwrap();
     (store, dir)
 }
 

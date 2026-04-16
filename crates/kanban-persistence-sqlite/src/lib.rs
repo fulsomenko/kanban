@@ -4,8 +4,9 @@ pub mod sqlite_data_store;
 pub mod sqlite_store;
 mod upserts;
 
-pub use sqlite_data_store::SqliteDataStore;
-pub use sqlite_store::SqliteStore;
+pub use sqlite_data_store::SqliteStore;
+pub use sqlite_data_store::SqliteStore as SqliteDataStore;
+pub use sqlite_store::SqliteBlobStore;
 
 use kanban_persistence::{PersistenceError, PersistenceStore, StoreFactory};
 use std::sync::Arc;
@@ -25,7 +26,7 @@ impl StoreFactory for SqliteStoreFactory {
         &self,
         locator: &str,
     ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
-        Ok(Arc::new(SqliteStore::new(locator)))
+        Ok(Arc::new(SqliteBlobStore::new(locator)))
     }
 }
 

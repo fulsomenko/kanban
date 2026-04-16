@@ -1,7 +1,7 @@
 use kanban_domain::KanbanOperations;
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_json::JsonFileStore;
-use kanban_persistence_sqlite::SqliteStore;
+use kanban_persistence_sqlite::SqliteBlobStore;
 use kanban_service::KanbanContext;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -28,10 +28,10 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
     let original = create_populated_context(json_store.clone()).await;
 
     let (snapshot, _) = json_store.load().await.unwrap();
-    let sqlite_store = Arc::new(SqliteStore::new(&db_path));
+    let sqlite_store = Arc::new(SqliteBlobStore::new(&db_path));
     sqlite_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&db_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteBlobStore::new(&db_path)))
         .await
         .unwrap();
 
@@ -51,7 +51,7 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     let db_path = dir.path().join("source.db");
     let json_path = dir.path().join("dest.json");
 
-    let sqlite_store = Arc::new(SqliteStore::new(&db_path));
+    let sqlite_store = Arc::new(SqliteBlobStore::new(&db_path));
     let original = create_populated_context(sqlite_store.clone()).await;
 
     let (snapshot, _) = sqlite_store.load().await.unwrap();
@@ -98,14 +98,14 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     let src_path = dir.path().join("source.db");
     let dst_path = dir.path().join("dest.db");
 
-    let src_store = Arc::new(SqliteStore::new(&src_path));
+    let src_store = Arc::new(SqliteBlobStore::new(&src_path));
     create_populated_context(src_store.clone()).await;
 
     let (snapshot, _) = src_store.load().await.unwrap();
-    let dst_store = Arc::new(SqliteStore::new(&dst_path));
+    let dst_store = Arc::new(SqliteBlobStore::new(&dst_path));
     dst_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteBlobStore::new(&dst_path)))
         .await
         .unwrap();
 
@@ -197,7 +197,7 @@ async fn test_migrate_cli_with_explicit_output() {
     );
     assert!(dst_path.exists());
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteBlobStore::new(&dst_path)))
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
@@ -237,7 +237,7 @@ async fn test_migrate_cli_explicit_output_path() {
         dst_path.display()
     );
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteBlobStore::new(&dst_path)))
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);

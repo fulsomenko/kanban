@@ -226,7 +226,7 @@ async fn test_async_load_initial_state_sqlite() {
     let db_path = dir.path().join("test_load.db");
 
     // Create and populate a SQLite store
-    let store = kanban_persistence_sqlite::SqliteStore::new(db_path.to_str().unwrap());
+    let store = kanban_persistence_sqlite::SqliteBlobStore::new(db_path.to_str().unwrap());
 
     let board = Board::new("SQLite Board".to_string(), None);
     let column = Column::new(board.id, "Backlog".to_string(), 0);

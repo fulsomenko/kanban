@@ -1,9 +1,9 @@
 use kanban_persistence::test_helpers::StoreFactory;
-use kanban_persistence_sqlite::SqliteStore;
+use kanban_persistence_sqlite::SqliteBlobStore;
 use std::sync::Arc;
 
 fn sqlite_factory() -> StoreFactory {
-    Box::new(|path| Arc::new(SqliteStore::new(path)))
+    Box::new(|path| Arc::new(SqliteBlobStore::new(path)))
 }
 
 mod tier1 {

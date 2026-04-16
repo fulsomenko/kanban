@@ -122,7 +122,7 @@ async fn test_migrate_store_repairs_dangling_sprint_id() {
         .await
         .unwrap();
 
-    let store = kanban_persistence_sqlite::SqliteStore::new(&to);
+    let store = kanban_persistence_sqlite::SqliteBlobStore::new(&to);
     let (snap, _) = store.load().await.unwrap();
     let data: serde_json::Value = serde_json::from_slice(&snap.data).unwrap();
     let card = &data["cards"][0];
@@ -168,7 +168,7 @@ async fn test_migrate_store_repairs_orphaned_column_id() {
         .await
         .unwrap();
 
-    let store = kanban_persistence_sqlite::SqliteStore::new(&to);
+    let store = kanban_persistence_sqlite::SqliteBlobStore::new(&to);
     let (snap, _) = store.load().await.unwrap();
     let data: serde_json::Value = serde_json::from_slice(&snap.data).unwrap();
     let card = &data["cards"][0];
