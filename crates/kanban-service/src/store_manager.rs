@@ -1,7 +1,9 @@
 use crate::config;
 use crate::AppConfig;
-use kanban_domain::KanbanError;
-use kanban_persistence::{PersistenceStore, StoreRegistry, StoreSnapshot};
+use kanban_domain::{DataStore, KanbanError};
+use kanban_persistence::{
+    snapshot_from_json_bytes, PersistenceStore, StoreRegistry, StoreSnapshot,
+};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -40,9 +42,27 @@ impl StoreManager {
     }
 
     /// Pattern-matches `locator` against all registered factories and returns
-    /// the name of the first match. Returns `None` if no factory matches.
+    /// the name of the first match. For existing SQLite files, detects by
+    /// magic bytes even when no SQLite factory is in the registry.
     pub fn detect_backend(&self, locator: &str) -> Option<String> {
-        self.registry.detect_backend(locator).map(String::from)
+        if let Some(name) = self.registry.detect_backend(locator) {
+            return Some(name.to_string());
+        }
+        #[cfg(feature = "sqlite")]
+        {
+            let path = std::path::Path::new(locator);
+            if path.exists() {
+                if let Ok(mut f) = std::fs::File::open(path) {
+                    use std::io::Read;
+                    let mut hdr = [0u8; 16];
+                    let n = f.read(&mut hdr).unwrap_or(0);
+                    if hdr[..n].starts_with(b"SQLite format 3\0") {
+                        return Some("sqlite".to_string());
+                    }
+                }
+            }
+        }
+        None
     }
 
     /// Updates `config.storage_backend` to match the backend inferred from
@@ -89,11 +109,30 @@ impl StoreManager {
     /// Creates a store for `path`, verifies the file exists, then loads and
     /// deserializes the snapshot. Returns an error if the file is missing or
     /// the data cannot be parsed.
+    ///
+    /// For `.sqlite`/`.db` files, bypasses the registry and uses `SqliteStore`
+    /// directly.
     pub async fn validate_and_load_store(
         &self,
         backend: &str,
         path: &str,
     ) -> Result<kanban_domain::Snapshot, KanbanError> {
+        if matches!(backend, "sqlite" | "sqlite3" | "db") {
+            #[cfg(feature = "sqlite")]
+            {
+                if !std::path::Path::new(path).exists() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("Storage file does not exist: {}", path),
+                    )
+                    .into());
+                }
+                let store = kanban_persistence_sqlite::SqliteStore::open(path).await?;
+                return store.snapshot();
+            }
+            #[cfg(not(feature = "sqlite"))]
+            return Err(KanbanError::validation("sqlite feature not compiled in"));
+        }
         let store = self.make_store(backend, path)?;
         if !store.exists().await {
             return Err(std::io::Error::new(
@@ -103,55 +142,51 @@ impl StoreManager {
             .into());
         }
         let (snapshot, _metadata) = store.load().await?;
-        let data = kanban_persistence::snapshot_from_json_bytes(&snapshot.data)?;
+        let data = snapshot_from_json_bytes(&snapshot.data)?;
         Ok(data)
     }
 
-    /// Exports a board selection to a new SQLite file.
-    ///
-    /// **Requires:** the `"sqlite"` backend must be registered in this manager's
-    /// registry. If it is not, this method will return an error at the
-    /// `make_store` call.
+    /// Exports a board selection to a new SQLite file via `SqliteStore`.
     ///
     /// **Note:** The dependency graph is not part of the `AllBoardsExport` format
-    /// and will not be present in the exported file. This is by design — the export
-    /// format is board-centric, not a full snapshot. Use `migrate_store` instead
-    /// if you need to preserve card dependencies.
+    /// and will not be present in the exported file.
     pub async fn export_to_sqlite(
         &self,
         export: kanban_domain::export::AllBoardsExport,
         filename: &str,
     ) -> Result<(), KanbanError> {
-        use kanban_domain::export::BoardImporter;
-        use kanban_domain::{DependencyGraph, Snapshot};
-        use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot};
+        #[cfg(feature = "sqlite")]
+        {
+            use kanban_domain::export::BoardImporter;
+            use kanban_domain::{DependencyGraph, Snapshot};
 
-        let entities = BoardImporter::extract_entities(export);
-        let snapshot = Snapshot {
-            boards: entities.boards,
-            columns: entities.columns,
-            cards: entities.cards,
-            archived_cards: entities.archived_cards,
-            sprints: entities.sprints,
-            graph: DependencyGraph::default(),
-        };
-        let data = snapshot_to_json_bytes(&snapshot)?;
-        let store_snapshot = StoreSnapshot {
-            data,
-            metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
-        };
-        let store = self.make_store("sqlite", filename).map_err(|e| {
-            KanbanError::validation(format!(
-                "export_to_sqlite requires the 'sqlite' backend to be registered in this StoreManager: {e}"
-            ))
-        })?;
-        store.save(store_snapshot).await?;
-        Ok(())
+            let entities = BoardImporter::extract_entities(export);
+            let snapshot = Snapshot {
+                boards: entities.boards,
+                columns: entities.columns,
+                cards: entities.cards,
+                archived_cards: entities.archived_cards,
+                sprints: entities.sprints,
+                graph: DependencyGraph::default(),
+            };
+            let store = kanban_persistence_sqlite::SqliteStore::open(filename).await?;
+            store.apply_snapshot(snapshot)?;
+            Ok(())
+        }
+        #[cfg(not(feature = "sqlite"))]
+        {
+            let _ = export;
+            let _ = filename;
+            Err(KanbanError::validation("sqlite feature not compiled in"))
+        }
     }
 
     /// Copies a snapshot from one backend/path pair to another, repairing
     /// any dangling foreign keys in the process. Rolls back (deletes the
     /// partial destination file) on failure.
+    ///
+    /// SQLite source/destination are handled directly via `SqliteStore`;
+    /// JSON and other registry-backed backends go through the `StoreRegistry`.
     pub async fn migrate_store(
         &self,
         from_backend: &str,
@@ -178,15 +213,62 @@ impl StoreManager {
             )
             .into());
         }
-        let source = self.make_store(from_backend, from_path)?;
-        let (mut snapshot, _) = source.load().await?;
-        repair_snapshot_fks(&mut snapshot)?;
-        let target = self.make_store(to_backend, to_path)?;
-        if let Err(e) = target.save(snapshot).await {
-            let _ = std::fs::remove_file(to_path);
-            let _ = std::fs::remove_file(format!("{}-wal", to_path));
-            let _ = std::fs::remove_file(format!("{}-shm", to_path));
-            return Err(e.into());
+
+        // Load snapshot from source into a StoreSnapshot (JSON bytes) for FK repair
+        let mut store_snapshot: StoreSnapshot =
+            match from_backend {
+                "sqlite" | "sqlite3" | "db" => {
+                    #[cfg(feature = "sqlite")]
+                    {
+                        use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata};
+                        let store =
+                            kanban_persistence_sqlite::SqliteStore::open(from_path).await?;
+                        let snapshot = store.snapshot()?;
+                        let data = snapshot_to_json_bytes(&snapshot)?;
+                        StoreSnapshot {
+                            data,
+                            metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
+                        }
+                    }
+                    #[cfg(not(feature = "sqlite"))]
+                    return Err(KanbanError::validation("sqlite feature not compiled in"));
+                }
+                _ => {
+                    let source = self.make_store(from_backend, from_path)?;
+                    let (snap, _) = source.load().await?;
+                    snap
+                }
+            };
+
+        repair_snapshot_fks(&mut store_snapshot)?;
+
+        // Save to destination
+        match to_backend {
+            "sqlite" | "sqlite3" | "db" => {
+                #[cfg(feature = "sqlite")]
+                {
+                    let repaired = snapshot_from_json_bytes(&store_snapshot.data)?;
+                    let store =
+                        kanban_persistence_sqlite::SqliteStore::open(to_path).await?;
+                    if let Err(e) = store.apply_snapshot(repaired) {
+                        let _ = std::fs::remove_file(to_path);
+                        let _ = std::fs::remove_file(format!("{}-wal", to_path));
+                        let _ = std::fs::remove_file(format!("{}-shm", to_path));
+                        return Err(e);
+                    }
+                }
+                #[cfg(not(feature = "sqlite"))]
+                return Err(KanbanError::validation("sqlite feature not compiled in"));
+            }
+            _ => {
+                let target = self.make_store(to_backend, to_path)?;
+                if let Err(e) = target.save(store_snapshot).await {
+                    let _ = std::fs::remove_file(to_path);
+                    let _ = std::fs::remove_file(format!("{}-wal", to_path));
+                    let _ = std::fs::remove_file(format!("{}-shm", to_path));
+                    return Err(e.into());
+                }
+            }
         }
         Ok(())
     }

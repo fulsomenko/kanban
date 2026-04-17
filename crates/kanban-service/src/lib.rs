@@ -19,18 +19,11 @@ pub use kanban_core::AppConfig;
 #[cfg(feature = "json")]
 pub use kanban_persistence_json::JsonStoreFactory;
 
-#[cfg(feature = "sqlite")]
-pub use kanban_persistence_sqlite::SqliteStoreFactory;
-
-/// Returns a `StoreRegistry` pre-populated with all backends that were
-/// compiled in. SQLite is registered first so content-sniffing prefers it;
-/// JSON is registered as the catch-all fallback.
-#[cfg(any(feature = "json", feature = "sqlite"))]
+/// Returns a `StoreRegistry` pre-populated with the JSON backend.
+/// SQLite files are handled directly via `KanbanContext::open_sqlite`.
+#[cfg(feature = "json")]
 pub fn default_registry() -> kanban_persistence::StoreRegistry {
     let mut registry = kanban_persistence::StoreRegistry::new();
-    #[cfg(feature = "sqlite")]
-    registry.register(Box::new(SqliteStoreFactory));
-    #[cfg(feature = "json")]
     registry.register(Box::new(JsonStoreFactory));
     registry
 }
