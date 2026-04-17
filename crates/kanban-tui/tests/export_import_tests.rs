@@ -216,17 +216,18 @@ async fn test_failed_import_clears_save_file() {
     assert!(app.persistence.save_file.is_none());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_async_load_initial_state_sqlite() {
-    use kanban_domain::{Board, Column};
-    use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
-    use uuid::Uuid;
+    use kanban_core::AppConfig;
+    use kanban_domain::{Board, Column, DataStore};
 
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("test_load.db");
 
     // Create and populate a SQLite store
-    let store = kanban_persistence_sqlite::SqliteBlobStore::new(db_path.to_str().unwrap());
+    let store = kanban_persistence_sqlite::SqliteStore::open(db_path.to_str().unwrap())
+        .await
+        .unwrap();
 
     let board = Board::new("SQLite Board".to_string(), None);
     let column = Column::new(board.id, "Backlog".to_string(), 0);
@@ -239,18 +240,13 @@ async fn test_async_load_initial_state_sqlite() {
         sprints: vec![],
         graph: Default::default(),
     };
-    let data = serde_json::to_vec(&snapshot).unwrap();
-    store
-        .save(StoreSnapshot {
-            data,
-            metadata: PersistenceMetadata::new(Uuid::new_v4()),
-        })
+    store.apply_snapshot(snapshot).unwrap();
+    drop(store);
+
+    // Load via App::open_sqlite (SQLite is no longer registry-backed)
+    let app = App::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
-
-    // Now load via App
-    let (mut app, _rx) = App::new(Some(db_path.to_str().unwrap().to_string())).unwrap();
-    app.load_initial_state().await;
 
     assert_eq!(app.ctx.boards().len(), 1);
     assert_eq!(app.ctx.boards()[0].name, "SQLite Board");
