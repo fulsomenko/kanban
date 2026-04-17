@@ -45,11 +45,18 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    let backend_names: Vec<String> = store_manager
+    let mut backend_names: Vec<String> = store_manager
         .backend_names()
         .into_iter()
         .map(str::to_owned)
         .collect();
+    // SQLite is handled directly by KanbanContext::open_sqlite, not via the
+    // StoreRegistry, so it never appears in backend_names(). Add it here so
+    // the `migrate` subcommand accepts "sqlite" as a valid target.
+    #[cfg(feature = "sqlite")]
+    if !backend_names.contains(&"sqlite".to_string()) {
+        backend_names.push("sqlite".to_string());
+    }
     let mut cmd = Cli::command().mut_subcommand("migrate", |sub| {
         sub.mut_arg("backend", |arg| {
             arg.value_parser(clap::builder::PossibleValuesParser::new(
