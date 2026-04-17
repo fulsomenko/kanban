@@ -1,9 +1,9 @@
-use kanban_persistence::{PersistenceStore, StoreRegistry};
-use kanban_service::StoreManager;
+use kanban_core::AppConfig;
+use kanban_persistence::StoreRegistry;
+use kanban_service::{KanbanContext, StoreManager};
 
 fn manager() -> StoreManager {
     let mut registry = StoreRegistry::new();
-    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
     registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
     StoreManager::new(registry)
 }
@@ -47,7 +47,7 @@ async fn test_migrate_store_json_to_json_round_trip() {
     assert!(to.exists());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_json_to_sqlite() {
     let dir = tempfile::tempdir().unwrap();
     let from = create_test_json(dir.path(), "source.json");
@@ -87,7 +87,7 @@ async fn test_migrate_store_fails_if_source_missing() {
     assert!(err.to_string().contains("not found"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_repairs_dangling_sprint_id() {
     let dir = tempfile::tempdir().unwrap();
     let board_id = uuid::Uuid::new_v4().to_string();
@@ -122,19 +122,18 @@ async fn test_migrate_store_repairs_dangling_sprint_id() {
         .await
         .unwrap();
 
-    let store = kanban_persistence_sqlite::SqliteBlobStore::new(&to);
-    let (snap, _) = store.load().await.unwrap();
-    let data: serde_json::Value = serde_json::from_slice(&snap.data).unwrap();
-    let card = &data["cards"][0];
-    assert_eq!(card["id"], card_id, "card should be present");
+    let ctx = KanbanContext::open_sqlite(to.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    let cards = ctx.cards();
+    assert_eq!(cards.len(), 1, "card should be present");
     assert!(
-        card["sprint_id"].is_null(),
-        "dangling sprint_id should be nulled out, got: {}",
-        card["sprint_id"]
+        cards[0].sprint_id.is_none(),
+        "dangling sprint_id should be nulled out"
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_repairs_orphaned_column_id() {
     let dir = tempfile::tempdir().unwrap();
     let board_id = uuid::Uuid::new_v4().to_string();
@@ -168,18 +167,19 @@ async fn test_migrate_store_repairs_orphaned_column_id() {
         .await
         .unwrap();
 
-    let store = kanban_persistence_sqlite::SqliteBlobStore::new(&to);
-    let (snap, _) = store.load().await.unwrap();
-    let data: serde_json::Value = serde_json::from_slice(&snap.data).unwrap();
-    let card = &data["cards"][0];
-    assert_eq!(card["id"], card_id, "card should be present");
+    let ctx = KanbanContext::open_sqlite(to.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    let cards = ctx.cards();
+    assert_eq!(cards.len(), 1, "card should be present");
+    let expected_col_id = uuid::Uuid::parse_str(&valid_col_id).unwrap();
     assert_eq!(
-        card["column_id"], valid_col_id,
+        cards[0].column_id, expected_col_id,
         "orphaned card should be moved to the first valid column"
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_cleans_up_destination_on_failure() {
     let dir = tempfile::tempdir().unwrap();
     let ghost_col_id = uuid::Uuid::new_v4().to_string();

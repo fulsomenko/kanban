@@ -1,9 +1,9 @@
+use kanban_domain::DataStore;
 use kanban_persistence::StoreRegistry;
 use kanban_service::StoreManager;
 
 fn manager() -> StoreManager {
     let mut registry = StoreRegistry::new();
-    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
     registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
     StoreManager::new(registry)
 }
@@ -153,11 +153,11 @@ fn test_storage_location_with_nested_dotdot_fails_validation() {
 }
 
 async fn create_test_sqlite(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
-    use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
+    use kanban_persistence_sqlite::SqliteStore;
 
     let path = dir.join(name);
     let path_str = path.to_str().unwrap().to_string();
-    let store = manager().make_store("sqlite", &path_str).unwrap();
+    let store = SqliteStore::open(&path_str).await.unwrap();
 
     let domain_boards: Vec<kanban_domain::Board> = boards
         .iter()
@@ -171,17 +171,12 @@ async fn create_test_sqlite(dir: &std::path::Path, name: &str, boards: &[&str]) 
         sprints: vec![],
         graph: Default::default(),
     };
-
-    let store_snapshot = StoreSnapshot {
-        data: serde_json::to_vec(&snapshot).unwrap(),
-        metadata: PersistenceMetadata::new(store.instance_id()),
-    };
-    store.save(store_snapshot).await.unwrap();
+    store.apply_snapshot(snapshot).unwrap();
 
     path_str
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_valid_sqlite_returns_snapshot() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_sqlite(dir.path(), "board.sqlite", &["Board1"]).await;
@@ -193,7 +188,7 @@ async fn test_validate_and_load_valid_sqlite_returns_snapshot() {
     assert_eq!(snapshot.boards.len(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_sqlite_preserves_board_data() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_sqlite(dir.path(), "board.sqlite", &["SQLiteBoard"]).await;

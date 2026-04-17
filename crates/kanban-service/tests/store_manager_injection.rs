@@ -3,11 +3,10 @@
 //! These tests drive the public API that third-party backend crates will
 //! consume: build an explicit `StoreRegistry`, wrap it in a `StoreManager`,
 //! and confirm that registration order and locator dispatch behave as
-//! advertised in the KAN-260 plan.
+//! advertised.
 
 use kanban_persistence::StoreRegistry;
 use kanban_persistence_json::JsonStoreFactory;
-use kanban_persistence_sqlite::SqliteStoreFactory;
 use kanban_service::StoreManager;
 use std::sync::Arc;
 
@@ -39,29 +38,6 @@ fn test_store_manager_unknown_backend_is_rejected() {
 }
 
 #[test]
-fn test_store_manager_preserves_registration_order() {
-    // SQLite registered first — it must win content-sniffing when both match.
-    // JSON is registered second as the catch-all fallback.
-    let mut registry = StoreRegistry::new();
-    registry.register(Box::new(SqliteStoreFactory));
-    registry.register(Box::new(JsonStoreFactory));
-    let manager = StoreManager::new(registry);
-
-    let dir = tempfile::tempdir().unwrap();
-    let sqlite_path = dir.path().join("fake.sqlite");
-    // Write a SQLite header byte sequence; JSON's matches_content would reject it.
-    std::fs::write(&sqlite_path, b"SQLite format 3\0").unwrap();
-
-    let detected = manager
-        .detect_backend(sqlite_path.to_str().unwrap())
-        .expect("should detect backend for SQLite header");
-    assert_eq!(
-        detected, "sqlite",
-        "SQLite must be preferred over JSON when both are registered"
-    );
-}
-
-#[test]
 fn test_store_manager_has_backends_returns_false_when_empty() {
     let manager = StoreManager::new(StoreRegistry::new());
     assert!(
@@ -88,7 +64,6 @@ fn test_store_manager_has_backends_reflects_registration_count() {
 
     let mut registry = StoreRegistry::new();
     registry.register(Box::new(JsonStoreFactory));
-    registry.register(Box::new(SqliteStoreFactory));
     let full_manager = StoreManager::new(registry);
     assert!(full_manager.has_backends());
 }
