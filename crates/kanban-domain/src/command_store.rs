@@ -26,7 +26,7 @@ pub trait CommandStore: Send + Sync {
 mod tests {
     use super::*;
     use crate::commands::{BoardCommand, Command, CreateBoard};
-    use crate::InMemoryDataStore;
+    use crate::InMemoryStore;
     use uuid::Uuid;
 
     fn make_board_cmd(name: &str) -> Command {
@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn test_append_command_returns_count() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         let count = store.append_commands(&[make_board_cmd("B1")]).unwrap();
         assert_eq!(count, 1);
 
@@ -49,13 +49,13 @@ mod tests {
 
     #[test]
     fn test_command_count_starts_at_zero() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         assert_eq!(store.command_count().unwrap(), 0);
     }
 
     #[test]
     fn test_load_commands_returns_slice() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         store.append_commands(&[make_board_cmd("B1")]).unwrap();
         store.append_commands(&[make_board_cmd("B2")]).unwrap();
         store.append_commands(&[make_board_cmd("B3")]).unwrap();
@@ -66,7 +66,7 @@ mod tests {
 
     #[test]
     fn test_load_range_is_exclusive_end() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         store.append_commands(&[make_board_cmd("B1")]).unwrap();
         store.append_commands(&[make_board_cmd("B2")]).unwrap();
 
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn test_truncate_commands_after_removes_tail() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         store.append_commands(&[make_board_cmd("B1")]).unwrap();
         store.append_commands(&[make_board_cmd("B2")]).unwrap();
         store.append_commands(&[make_board_cmd("B3")]).unwrap();
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_truncate_commands_after_zero_clears_all() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         store.append_commands(&[make_board_cmd("B1")]).unwrap();
         store.append_commands(&[make_board_cmd("B2")]).unwrap();
 
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_batch_stores_multiple_commands() {
-        let store = InMemoryDataStore::new();
+        let store = InMemoryStore::new();
         let batch = vec![make_board_cmd("B1"), make_board_cmd("B2")];
         store.append_commands(&batch).unwrap();
 

@@ -4,7 +4,7 @@ use kanban_domain::*;
 
 #[test]
 fn test_delete_card_cleans_dependencies() {
-    let store = InMemoryDataStore::new();
+    let store = InMemoryStore::new();
     let board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let board_id = board.id;
@@ -53,7 +53,7 @@ fn test_delete_card_cleans_dependencies() {
 
 #[test]
 fn test_delete_column_with_cards_fails() {
-    let store = InMemoryDataStore::new();
+    let store = InMemoryStore::new();
     let board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let board_id = board.id;
@@ -83,7 +83,7 @@ fn test_delete_column_with_cards_fails() {
 
 #[test]
 fn test_delete_column_with_archived_cards_fails() {
-    let store = InMemoryDataStore::new();
+    let store = InMemoryStore::new();
     let board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let board_id = board.id;
@@ -117,7 +117,7 @@ fn test_delete_column_with_archived_cards_fails() {
 
 #[test]
 fn test_delete_sprint_unassigns_cards() {
-    let store = InMemoryDataStore::new();
+    let store = InMemoryStore::new();
     let board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let sprint = Sprint::new(board.id, 1, None, None);
@@ -186,7 +186,7 @@ fn test_delete_sprint_unassigns_cards() {
 
 #[test]
 fn test_archive_card_preserves_edges() {
-    let store = InMemoryDataStore::new();
+    let store = InMemoryStore::new();
     let board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let board_id = board.id;
@@ -244,7 +244,7 @@ fn test_archive_card_preserves_edges() {
 
 #[test]
 fn test_delete_column_succeeds_when_empty() {
-    let store = InMemoryDataStore::new();
+    let store = InMemoryStore::new();
     let board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let column_id = column.id;
@@ -262,7 +262,7 @@ fn test_delete_column_succeeds_when_empty() {
 
 #[test]
 fn test_cycle_detection_parent_child() {
-    let store = InMemoryDataStore::new();
+    let store = InMemoryStore::new();
     let board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let board_id = board.id;
@@ -324,7 +324,7 @@ fn test_cycle_detection_parent_child() {
 
 #[test]
 fn test_cycle_detection_blocks() {
-    let store = InMemoryDataStore::new();
+    let store = InMemoryStore::new();
     let board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let board_id = board.id;

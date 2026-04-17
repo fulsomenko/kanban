@@ -282,16 +282,16 @@ mod tests {
 #[cfg(test)]
 pub(crate) mod test_helpers {
     use super::*;
-    use crate::InMemoryDataStore;
+    use crate::InMemoryStore;
 
     pub struct TestContext {
-        pub store: InMemoryDataStore,
+        pub store: InMemoryStore,
     }
 
     impl TestContext {
         pub fn new() -> Self {
             Self {
-                store: InMemoryDataStore::new(),
+                store: InMemoryStore::new(),
             }
         }
 
