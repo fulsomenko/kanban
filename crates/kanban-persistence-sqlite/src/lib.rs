@@ -1,4 +1,3 @@
-pub mod sqlite_data_store;
+pub mod sqlite_store;
 
-pub use sqlite_data_store::SqliteStore;
-pub use sqlite_data_store::SqliteStore as SqliteDataStore;
+pub use sqlite_store::SqliteStore;
