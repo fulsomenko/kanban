@@ -489,4 +489,40 @@ mod tests {
         let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
+
+    #[test]
+    fn test_delete_board_cleans_dependency_graph_edges() {
+        use crate::dependencies::CardGraphExt;
+
+        let tc = TestContext::new();
+        let mut board = Board::new("B".to_string(), Some("TST".to_string()));
+        let col = Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        let card_a = Card::new(&mut board, column_id, "A".to_string(), 0);
+        let card_b = Card::new(&mut board, column_id, "B".to_string(), 1);
+        let card_a_id = card_a.id;
+        let card_b_id = card_b.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_card(card_a).unwrap();
+        tc.store.upsert_card(card_b).unwrap();
+
+        let mut graph = tc.store.get_graph().unwrap();
+        graph.cards.add_blocks(card_a_id, card_b_id).unwrap();
+        tc.store.set_graph(graph).unwrap();
+
+        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 2);
+
+        let context = tc.as_command_context();
+        let cmd = DeleteBoard { board_id };
+        cmd.execute(&context).unwrap();
+
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(
+            graph.cards.edges().len(),
+            0,
+            "DeleteBoard should clean all dependency graph edges for deleted cards"
+        );
+    }
 }
