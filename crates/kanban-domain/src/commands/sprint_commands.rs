@@ -1,7 +1,6 @@
 use super::CommandContext;
 use crate::SprintUpdate;
 use crate::{KanbanError, KanbanResult};
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -248,11 +247,13 @@ impl CancelSprint {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteSprint {
     pub sprint_id: Uuid,
+    #[serde(default = "chrono::Utc::now")]
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 impl DeleteSprint {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let now = Utc::now();
+        let now = self.timestamp;
 
         context.store.clear_sprint_from_cards(self.sprint_id)?;
 
@@ -523,6 +524,54 @@ mod tests {
         };
         let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
+    }
+
+    #[test]
+    fn test_delete_sprint_uses_embedded_timestamp() {
+        use chrono::{TimeZone, Utc};
+
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let col = crate::Column::new(board_id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col.clone()).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let card = crate::Card {
+            id: Uuid::new_v4(),
+            column_id: col.id,
+            title: "C".to_string(),
+            description: None,
+            priority: crate::CardPriority::Medium,
+            status: crate::CardStatus::Todo,
+            position: 0,
+            due_date: None,
+            points: None,
+            card_number: 1,
+            sprint_id: Some(sprint_id),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: None,
+            sprint_logs: Vec::new(),
+        };
+        let archived = crate::ArchivedCard::new(card, col.id, 0);
+        tc.store.insert_archived_card(archived).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let cmd = DeleteSprint {
+            sprint_id,
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let archived_cards = tc.store.list_archived_cards().unwrap();
+        assert_eq!(archived_cards.len(), 1);
+        assert_eq!(archived_cards[0].card.updated_at, fixed_time);
+        assert_eq!(archived_cards[0].card.sprint_id, None);
     }
 
     #[test]

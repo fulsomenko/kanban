@@ -269,6 +269,7 @@ mod tests {
             })),
             Command::Sprint(SprintCommand::Delete(DeleteSprint {
                 sprint_id: Uuid::new_v4(),
+                timestamp: chrono::Utc::now(),
             })),
             Command::Dependency(DependencyCommand::Remove(RemoveDependencyCommand {
                 source_id: Uuid::new_v4(),
@@ -334,6 +335,7 @@ mod tests {
                 card_id: Uuid::new_v4(),
                 column_id: Uuid::new_v4(),
                 position: 3,
+                timestamp: chrono::Utc::now(),
             })),
             Command::Card(CardCommand::CompactPositions(CompactColumnPositions {
                 column_id: Uuid::new_v4(),

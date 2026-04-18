@@ -1,7 +1,7 @@
 use super::CommandContext;
 use crate::dependencies::card_graph::CardGraphExt;
 use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use kanban_core::Editable;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -89,6 +89,8 @@ pub struct CreateCard {
     pub title: String,
     pub position: i32,
     pub options: CreateCardOptions,
+    #[serde(default = "chrono::Utc::now")]
+    pub timestamp: DateTime<Utc>,
 }
 
 impl CreateCard {
@@ -96,7 +98,7 @@ impl CreateCard {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let mut board = context.get_board(self.board_id)?;
 
-        let now = Utc::now();
+        let now = self.timestamp;
         let mut card = crate::Card {
             id: self.id,
             column_id: self.column_id,
@@ -188,6 +190,8 @@ pub struct RestoreCard {
     pub card_id: Uuid,
     pub column_id: Uuid,
     pub position: i32,
+    #[serde(default = "chrono::Utc::now")]
+    pub timestamp: DateTime<Utc>,
 }
 
 impl RestoreCard {
@@ -200,7 +204,7 @@ impl RestoreCard {
         let mut card = archived.into_card();
         card.column_id = self.column_id;
         card.position = self.position;
-        card.updated_at = Utc::now();
+        card.updated_at = self.timestamp;
 
         context.store.delete_archived_card(self.card_id)?;
         context.store.upsert_card(card)?;
@@ -358,6 +362,8 @@ impl AssignCardsToSprint {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnassignCardFromSprint {
     pub card_id: Uuid,
+    #[serde(default = "chrono::Utc::now")]
+    pub timestamp: DateTime<Utc>,
 }
 
 impl UnassignCardFromSprint {
@@ -365,7 +371,7 @@ impl UnassignCardFromSprint {
         let mut card = context.get_card(self.card_id)?;
         card.end_current_sprint_log();
         card.sprint_id = None;
-        card.updated_at = Utc::now();
+        card.updated_at = self.timestamp;
         context.store.upsert_card(card)?;
         Ok(())
     }
@@ -475,6 +481,7 @@ mod tests {
             title: "Test".to_string(),
             position: 0,
             options: CreateCardOptions::default(),
+            timestamp: Utc::now(),
         };
         let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
@@ -605,6 +612,7 @@ mod tests {
             title: "New".to_string(),
             position: 1,
             options: CreateCardOptions::default(),
+            timestamp: Utc::now(),
         };
         let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
@@ -634,6 +642,7 @@ mod tests {
             title: "New".to_string(),
             position: 2,
             options: CreateCardOptions::default(),
+            timestamp: Utc::now(),
         };
         let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
@@ -661,6 +670,7 @@ mod tests {
             title: "New".to_string(),
             position: 1,
             options: CreateCardOptions::default(),
+            timestamp: Utc::now(),
         };
         assert!(cmd.execute(&context).is_ok());
     }
@@ -764,6 +774,7 @@ mod tests {
             card_id,
             column_id: col_id,
             position: 0,
+            timestamp: Utc::now(),
         };
         let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
@@ -787,6 +798,7 @@ mod tests {
             card_id,
             column_id: col_id,
             position: 0,
+            timestamp: Utc::now(),
         };
         assert!(cmd.execute(&context).is_ok());
         assert_eq!(tc.store.list_all_cards().unwrap().len(), 1);
@@ -814,6 +826,7 @@ mod tests {
             card_id,
             column_id: col_id,
             position: 1,
+            timestamp: Utc::now(),
         };
         let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
@@ -827,6 +840,7 @@ mod tests {
             card_id: Uuid::new_v4(),
             column_id: Uuid::new_v4(),
             position: 0,
+            timestamp: Utc::now(),
         };
         let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
@@ -879,6 +893,7 @@ mod tests {
         let context = tc.as_command_context();
         let cmd = UnassignCardFromSprint {
             card_id: Uuid::new_v4(),
+            timestamp: Utc::now(),
         };
         let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
@@ -1006,5 +1021,90 @@ mod tests {
         let cards = tc.store.list_cards_by_column(column_id).unwrap();
         assert_eq!(cards[0].position, 0);
         assert_eq!(cards[1].position, 1);
+    }
+
+    #[test]
+    fn test_create_card_uses_embedded_timestamp() {
+        use chrono::{TimeZone, Utc};
+
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "Test".to_string(),
+            position: 0,
+            options: CreateCardOptions::default(),
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.created_at, fixed_time);
+        assert_eq!(card.updated_at, fixed_time);
+    }
+
+    #[test]
+    fn test_restore_card_uses_embedded_timestamp() {
+        use chrono::{TimeZone, Utc};
+
+        let tc = TestContext::new();
+        let col = crate::Column::new(Uuid::new_v4(), "Col".to_string(), 0);
+        let column_id = col.id;
+        tc.store.upsert_column(col).unwrap();
+
+        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let card = crate::Card::new(&mut board, column_id, "Card".to_string(), 0);
+        let card_id = card.id;
+        let archived = crate::ArchivedCard::new(card, column_id, 0);
+        tc.store.insert_archived_card(archived).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2020, 6, 15, 12, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let cmd = RestoreCard {
+            card_id,
+            column_id,
+            position: 0,
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.updated_at, fixed_time);
+    }
+
+    #[test]
+    fn test_unassign_card_from_sprint_uses_embedded_timestamp() {
+        use chrono::{TimeZone, Utc};
+
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0);
+        let card_id = card.id;
+        card.sprint_id = Some(Uuid::new_v4());
+        tc.store.upsert_card(card).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2020, 3, 10, 8, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let cmd = UnassignCardFromSprint {
+            card_id,
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.updated_at, fixed_time);
     }
 }
