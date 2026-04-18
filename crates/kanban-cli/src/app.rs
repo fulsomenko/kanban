@@ -222,17 +222,24 @@ impl CliApp {
             None => None,
         };
 
+        let effective_file = validated_file
+            .clone()
+            .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
+        let is_sqlite = store_manager
+            .detect_backend(&effective_file)
+            .as_deref()
+            == Some("sqlite")
+            || effective_file.ends_with(".sqlite")
+            || effective_file.ends_with(".sqlite3")
+            || effective_file.ends_with(".db")
+            || config.effective_storage_backend() == "sqlite";
+
         match command {
             None => {
                 #[cfg(feature = "tui")]
                 {
-                    let is_sqlite = validated_file
-                        .as_deref()
-                        .map(|f| f.ends_with(".sqlite") || f.ends_with(".db"))
-                        .unwrap_or(false);
                     if is_sqlite {
-                        let path = validated_file.as_deref().unwrap();
-                        let mut app = App::open_sqlite(path, config).await?;
+                        let mut app = App::open_sqlite(&effective_file, config).await?;
                         app.run(None).await?;
                     } else {
                         let (mut app, save_rx) =
@@ -250,14 +257,7 @@ impl CliApp {
                 handlers::migrate::handle(&store_manager, args).await?;
             }
             Some(cmd) => {
-                let file_path = match validated_file {
-                    Some(f) => f,
-                    None => {
-                        let store = store_manager.make_store_with_config(None, &config)?;
-                        store.path().to_string_lossy().to_string()
-                    }
-                };
-                let mut ctx = CliContext::load(&store_manager, &file_path, config).await?;
+                let mut ctx = CliContext::load(&store_manager, &effective_file, config).await?;
                 dispatch_subcommand(&mut ctx, cmd).await?;
             }
         }
