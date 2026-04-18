@@ -150,16 +150,11 @@ impl DeleteBoard {
             .map(|c| c.id)
             .collect();
 
-        let active_card_ids: Vec<Uuid> = column_ids
-            .iter()
-            .flat_map(|col_id| {
-                context
-                    .store
-                    .list_cards_by_column(*col_id)
-                    .unwrap_or_default()
-            })
-            .map(|c| c.id)
-            .collect();
+        let mut active_card_ids: Vec<Uuid> = Vec::new();
+        for col_id in &column_ids {
+            let cards = context.store.list_cards_by_column(*col_id)?;
+            active_card_ids.extend(cards.iter().map(|c| c.id));
+        }
 
         let archived = context.store.list_archived_cards()?;
         let archived_card_ids: Vec<Uuid> = archived
@@ -512,6 +507,30 @@ mod tests {
         };
         let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
+    }
+
+    #[test]
+    fn test_delete_board_propagates_list_cards_by_column_errors() {
+        let tc = TestContext::new();
+        let mut board = Board::new("B".to_string(), Some("TST".to_string()));
+        let board_id = board.id;
+        let col1 = Column::new(board_id, "Col1".to_string(), 0);
+        let col2 = Column::new(board_id, "Col2".to_string(), 1);
+        let card1 = Card::new(&mut board, col1.id, "C1".to_string(), 0);
+        let card2 = Card::new(&mut board, col2.id, "C2".to_string(), 0);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col1.clone()).unwrap();
+        tc.store.upsert_column(col2.clone()).unwrap();
+        tc.store.upsert_card(card1).unwrap();
+        tc.store.upsert_card(card2).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteBoard { board_id };
+        cmd.execute(&context).unwrap();
+
+        assert!(tc.store.list_boards().unwrap().is_empty());
+        assert!(tc.store.list_all_columns().unwrap().is_empty());
+        assert!(tc.store.list_all_cards().unwrap().is_empty());
     }
 
     #[test]
