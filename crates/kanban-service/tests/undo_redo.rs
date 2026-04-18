@@ -2,7 +2,7 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, Command, CompactColumnPositions, CreateBoard, ImportEntities,
     UpdateBoard,
 };
-use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, Snapshot};
+use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, KanbanResult, Snapshot};
 use kanban_persistence::{NullStore, StoreRegistry};
 use kanban_service::{KanbanContext, StoreManager};
 use std::sync::Arc;
@@ -25,25 +25,25 @@ async fn make_ctx() -> KanbanContext {
 }
 
 #[tokio::test]
-async fn test_snapshot_roundtrip_preserves_all_fields() {
+async fn test_snapshot_roundtrip_preserves_all_fields() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    ctx.create_board("B".into(), None).unwrap();
-    let board_id = ctx.boards()[0].id;
-    ctx.create_column(board_id, "C".into(), None).unwrap();
-    let col_id = ctx.columns()[0].id;
-    ctx.create_card(board_id, col_id, "Card".into(), Default::default())
-        .unwrap();
+    ctx.create_board("B".into(), None)?;
+    let board_id = ctx.boards()?[0].id;
+    ctx.create_column(board_id, "C".into(), None)?;
+    let col_id = ctx.columns()?[0].id;
+    ctx.create_card(board_id, col_id, "Card".into(), Default::default())?;
 
-    let snap = ctx.snapshot();
-    ctx.apply_snapshot(Snapshot::new()).unwrap();
-    assert!(ctx.boards().is_empty());
+    let snap = ctx.snapshot()?;
+    ctx.apply_snapshot(Snapshot::new())?;
+    assert!(ctx.boards()?.is_empty());
 
-    ctx.apply_snapshot(snap.clone()).unwrap();
-    assert_eq!(ctx.snapshot(), snap);
+    ctx.apply_snapshot(snap.clone())?;
+    assert_eq!(ctx.snapshot()?, snap);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_execute_enables_undo() {
+async fn test_execute_enables_undo() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
@@ -51,12 +51,13 @@ async fn test_execute_enables_undo() {
         card_prefix: None,
         position: 0,
     }));
-    ctx.execute(vec![cmd]).unwrap();
+    ctx.execute(vec![cmd])?;
     assert!(ctx.can_undo());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_undo_restores_previous_state() {
+async fn test_undo_restores_previous_state() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
@@ -64,15 +65,16 @@ async fn test_undo_restores_previous_state() {
         card_prefix: None,
         position: 0,
     }));
-    ctx.execute(vec![cmd]).unwrap();
-    assert_eq!(ctx.boards().len(), 1);
+    ctx.execute(vec![cmd])?;
+    assert_eq!(ctx.boards()?.len(), 1);
 
-    assert!(ctx.undo().unwrap());
-    assert!(ctx.boards().is_empty());
+    assert!(ctx.undo()?);
+    assert!(ctx.boards()?.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_redo_restores_undone_state() {
+async fn test_redo_restores_undone_state() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
@@ -80,32 +82,31 @@ async fn test_redo_restores_undone_state() {
         card_prefix: None,
         position: 0,
     }));
-    ctx.execute(vec![cmd]).unwrap();
-    ctx.undo().unwrap();
-    assert!(ctx.boards().is_empty());
+    ctx.execute(vec![cmd])?;
+    ctx.undo()?;
+    assert!(ctx.boards()?.is_empty());
 
-    assert!(ctx.redo().unwrap());
-    assert_eq!(ctx.boards().len(), 1);
+    assert!(ctx.redo()?);
+    assert_eq!(ctx.boards()?.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]
 async fn test_undo_on_empty_returns_false() {
     let ctx = make_ctx().await;
-    // fresh context has nothing to undo
     assert!(!ctx.can_undo());
 }
 
 #[tokio::test]
-async fn test_new_action_after_undo_clears_redo() {
+async fn test_new_action_after_undo_clears_redo() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
         name: "A".into(),
         card_prefix: None,
         position: 0,
-    }))])
-    .unwrap();
-    ctx.undo().unwrap();
+    }))])?;
+    ctx.undo()?;
     assert!(ctx.can_redo());
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
@@ -113,13 +114,13 @@ async fn test_new_action_after_undo_clears_redo() {
         name: "B".into(),
         card_prefix: None,
         position: 0,
-    }))])
-    .unwrap();
+    }))])?;
     assert!(!ctx.can_redo());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_reload_no_longer_clears_history() {
+async fn test_reload_no_longer_clears_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
     let store = make_json_store(&path);
@@ -130,26 +131,24 @@ async fn test_reload_no_longer_clears_history() {
         name: "B".into(),
         card_prefix: None,
         position: 0,
-    }))])
-    .unwrap();
-    ctx.save().await.unwrap();
+    }))])?;
+    ctx.save().await?;
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
         name: "B2".into(),
         card_prefix: None,
         position: 0,
-    }))])
-    .unwrap();
+    }))])?;
     assert!(ctx.can_undo());
 
-    ctx.reload().await.unwrap();
-    // reload no longer clears history — callers that want it call clear_history() explicitly
+    ctx.reload().await?;
     assert!(ctx.can_undo());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_dirty_flag_lifecycle() {
+async fn test_dirty_flag_lifecycle() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     assert!(!ctx.is_dirty());
 
@@ -158,32 +157,31 @@ async fn test_dirty_flag_lifecycle() {
         name: "B".into(),
         card_prefix: None,
         position: 0,
-    }))])
-    .unwrap();
+    }))])?;
     assert!(ctx.is_dirty());
 
     ctx.mark_clean();
     assert!(!ctx.is_dirty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_operations_create_board_captures_history() {
+async fn test_operations_create_board_captures_history() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    ctx.create_board("B".into(), None).unwrap();
+    ctx.create_board("B".into(), None)?;
     assert!(
         ctx.can_undo(),
         "create_board via KanbanOperations should capture history"
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_operations_update_card_is_undoable() {
+async fn test_operations_update_card_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let card = ctx
-        .create_card(board.id, col.id, "Original".into(), Default::default())
-        .unwrap();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "Original".into(), Default::default())?;
 
     ctx.update_card(
         card.id,
@@ -191,181 +189,172 @@ async fn test_operations_update_card_is_undoable() {
             title: Some("Updated".into()),
             ..Default::default()
         },
-    )
-    .unwrap();
-    assert_eq!(ctx.get_card(card.id).unwrap().unwrap().title, "Updated");
+    )?;
+    assert_eq!(ctx.get_card(card.id)?.unwrap().title, "Updated");
 
-    ctx.undo().unwrap();
-    assert_eq!(ctx.get_card(card.id).unwrap().unwrap().title, "Original");
+    ctx.undo()?;
+    assert_eq!(ctx.get_card(card.id)?.unwrap().title, "Original");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_archive_cards_creates_single_undo_entry() {
+async fn test_archive_cards_creates_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col.id, "Card 2".into(), Default::default())
-        .unwrap();
-    let c3 = ctx
-        .create_card(board.id, col.id, "Card 3".into(), Default::default())
-        .unwrap();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col.id, "Card 2".into(), Default::default())?;
+    let c3 = ctx.create_card(board.id, col.id, "Card 3".into(), Default::default())?;
 
-    // Clear history from setup operations
-    ctx.clear_history();
+    ctx.clear_history()?;
 
-    ctx.archive_cards(vec![c1.id, c2.id, c3.id]).unwrap();
-    assert_eq!(ctx.cards().len(), 0);
-    assert_eq!(ctx.archived_cards().len(), 3);
+    ctx.archive_cards(vec![c1.id, c2.id, c3.id])?;
+    assert_eq!(ctx.cards()?.len(), 0);
+    assert_eq!(ctx.archived_cards()?.len(), 3);
 
-    // Single undo should restore all 3 cards
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.cards().len(), 3);
-    assert_eq!(ctx.archived_cards().len(), 0);
-
-    // No more undo entries (it was a single batch)
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.cards()?.len(), 3);
+    assert_eq!(ctx.archived_cards()?.len(), 0);
     assert!(!ctx.can_undo());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_create_sprint_undo_restores_board_counters() {
+async fn test_create_sprint_undo_restores_board_counters() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    ctx.clear_history();
+    let board = ctx.create_board("B".into(), None)?;
+    ctx.clear_history()?;
 
-    let _sprint = ctx.create_sprint(board.id, None, None).unwrap();
-    assert_eq!(ctx.sprints().len(), 1);
+    let _sprint = ctx.create_sprint(board.id, None, None)?;
+    assert_eq!(ctx.sprints()?.len(), 1);
 
-    ctx.undo().unwrap();
-    assert_eq!(ctx.sprints().len(), 0);
+    ctx.undo()?;
+    assert_eq!(ctx.sprints()?.len(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_import_board_clears_history() {
+async fn test_import_board_clears_history() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("Export".into(), None).unwrap();
-    let _col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let json = ctx.export_board(Some(board.id)).unwrap();
+    let board = ctx.create_board("Export".into(), None)?;
+    let _col = ctx.create_column(board.id, "C".into(), None)?;
+    let json = ctx.export_board(Some(board.id))?;
 
     let mut ctx2 = make_ctx().await;
-    ctx2.import_board(&json).unwrap();
-    assert_eq!(ctx2.boards().len(), 1);
-    assert_eq!(ctx2.boards()[0].name, "Export");
+    ctx2.import_board(&json)?;
+    assert_eq!(ctx2.boards()?.len(), 1);
+    assert_eq!(ctx2.boards()?[0].name, "Export");
 
     assert!(!ctx2.can_undo(), "import should clear history");
     assert_eq!(ctx2.undo_depth(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_import_board_includes_archived_cards() {
+async fn test_import_board_includes_archived_cards() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("Export".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let card = ctx
-        .create_card(board.id, col.id, "Card".into(), Default::default())
-        .unwrap();
-    ctx.archive_card(card.id).unwrap();
-    assert_eq!(ctx.archived_cards().len(), 1);
+    let board = ctx.create_board("Export".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "Card".into(), Default::default())?;
+    ctx.archive_card(card.id)?;
+    assert_eq!(ctx.archived_cards()?.len(), 1);
 
-    let json = ctx.export_board(None).unwrap();
+    let json = ctx.export_board(None)?;
 
     let mut ctx2 = make_ctx().await;
-    ctx2.import_board(&json).unwrap();
+    ctx2.import_board(&json)?;
     assert_eq!(
-        ctx2.archived_cards().len(),
+        ctx2.archived_cards()?.len(),
         1,
         "imported archived cards should appear"
     );
     assert!(!ctx2.can_undo(), "import should clear history");
+    Ok(())
 }
 
 #[tokio::test]
 async fn test_conflict_flag_lifecycle() {
     let mut ctx = make_ctx().await;
     assert!(!ctx.has_conflict());
-
     ctx.set_conflict();
     assert!(ctx.has_conflict());
-
     ctx.clear_conflict();
     assert!(!ctx.has_conflict());
 }
 
 #[tokio::test]
-async fn test_reload_preserves_history() {
+async fn test_reload_preserves_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
     let store = make_json_store(&path);
     let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
 
-    ctx.create_board("B".into(), None).unwrap();
-    ctx.save().await.unwrap();
+    ctx.create_board("B".into(), None)?;
+    ctx.save().await?;
 
-    ctx.create_board("B2".into(), None).unwrap();
+    ctx.create_board("B2".into(), None)?;
     assert!(ctx.can_undo());
 
-    ctx.reload().await.unwrap();
+    ctx.reload().await?;
     assert!(ctx.can_undo(), "reload should preserve history");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_undo_pops_before_pushing_to_redo() {
+async fn test_undo_pops_before_pushing_to_redo() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
         position: 0,
-    }))])
-    .unwrap();
-    ctx.clear_history();
+    }))])?;
+    ctx.clear_history()?;
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
         name: "B2".into(),
         card_prefix: None,
         position: 0,
-    }))])
-    .unwrap();
+    }))])?;
 
-    assert!(ctx.undo().unwrap());
+    assert!(ctx.undo()?);
     assert_eq!(ctx.redo_depth(), 1);
     assert_eq!(ctx.undo_depth(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_redo_pops_before_pushing_to_undo() {
+async fn test_redo_pops_before_pushing_to_undo() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
         position: 0,
-    }))])
-    .unwrap();
-    ctx.undo().unwrap();
+    }))])?;
+    ctx.undo()?;
 
-    assert!(ctx.redo().unwrap());
+    assert!(ctx.redo()?);
     assert_eq!(ctx.undo_depth(), 1);
     assert_eq!(ctx.redo_depth(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_undo_on_empty_history_does_not_corrupt() {
+async fn test_undo_on_empty_history_does_not_corrupt() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    assert!(!ctx.undo().unwrap());
+    assert!(!ctx.undo()?);
     assert_eq!(ctx.undo_depth(), 0);
     assert_eq!(ctx.redo_depth(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_execute_batch_partial_failure_rollback_leaves_clean_undo_stack() {
+async fn test_execute_batch_partial_failure_rollback_leaves_clean_undo_stack() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    ctx.create_board("B1".into(), None).unwrap();
-    ctx.clear_history();
+    ctx.create_board("B1".into(), None)?;
+    ctx.clear_history()?;
 
     let batch: Vec<Command> = vec![
         Command::Board(BoardCommand::Create(CreateBoard {
@@ -383,149 +372,114 @@ async fn test_execute_batch_partial_failure_rollback_leaves_clean_undo_stack() {
         })),
     ];
     assert!(ctx.execute(batch).is_err());
-    assert_eq!(ctx.boards().len(), 1);
+    assert_eq!(ctx.boards()?.len(), 1);
     assert!(!ctx.can_undo(), "undo stack should be empty after rollback");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_move_cards_returns_actual_moved_count() {
+async fn test_move_cards_returns_actual_moved_count() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col_a = ctx.create_column(board.id, "A".into(), None).unwrap();
-    let col_b = ctx.create_column(board.id, "B".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col_a.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col_a.id, "Card 2".into(), Default::default())
-        .unwrap();
-    let c3 = ctx
-        .create_card(board.id, col_b.id, "Card 3".into(), Default::default())
-        .unwrap();
+    let board = ctx.create_board("B".into(), None)?;
+    let col_a = ctx.create_column(board.id, "A".into(), None)?;
+    let col_b = ctx.create_column(board.id, "B".into(), None)?;
+    let c1 = ctx.create_card(board.id, col_a.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col_a.id, "Card 2".into(), Default::default())?;
+    let c3 = ctx.create_card(board.id, col_b.id, "Card 3".into(), Default::default())?;
 
-    let count = ctx.move_cards(vec![c1.id, c2.id, c3.id], col_b.id).unwrap();
+    let count = ctx.move_cards(vec![c1.id, c2.id, c3.id], col_b.id)?;
     assert_eq!(count, 2, "only 2 cards should have actually moved");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_assign_cards_to_sprint_returns_actual_assigned_count() {
+async fn test_assign_cards_to_sprint_returns_actual_assigned_count() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col.id, "Card 2".into(), Default::default())
-        .unwrap();
-    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col.id, "Card 2".into(), Default::default())?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
 
-    ctx.assign_card_to_sprint(c1.id, sprint.id).unwrap();
+    ctx.assign_card_to_sprint(c1.id, sprint.id)?;
 
-    let count = ctx
-        .assign_cards_to_sprint(vec![c1.id, c2.id], sprint.id)
-        .unwrap();
+    let count = ctx.assign_cards_to_sprint(vec![c1.id, c2.id], sprint.id)?;
     assert_eq!(count, 1, "only 1 card should have been newly assigned");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_null_store_context_loads_empty() {
+async fn test_null_store_context_loads_empty() -> KanbanResult<()> {
     let ctx = make_ctx().await;
-    assert!(ctx.boards().is_empty());
-    assert!(ctx.columns().is_empty());
-    assert!(ctx.cards().is_empty());
+    assert!(ctx.boards()?.is_empty());
+    assert!(ctx.columns()?.is_empty());
+    assert!(ctx.cards()?.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_move_cards_single_undo_entry() {
+async fn test_move_cards_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col1 = ctx.create_column(board.id, "From".into(), None).unwrap();
-    let col2 = ctx.create_column(board.id, "To".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col1.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col1.id, "Card 2".into(), Default::default())
-        .unwrap();
-    ctx.clear_history();
+    let board = ctx.create_board("B".into(), None)?;
+    let col1 = ctx.create_column(board.id, "From".into(), None)?;
+    let col2 = ctx.create_column(board.id, "To".into(), None)?;
+    let c1 = ctx.create_card(board.id, col1.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col1.id, "Card 2".into(), Default::default())?;
+    ctx.clear_history()?;
 
-    ctx.move_cards(vec![c1.id, c2.id], col2.id).unwrap();
-    assert!(ctx.cards().iter().all(|c| c.column_id == col2.id));
+    ctx.move_cards(vec![c1.id, c2.id], col2.id)?;
+    assert!(ctx.cards()?.iter().all(|c| c.column_id == col2.id));
 
-    assert!(ctx.undo().unwrap());
-    assert!(ctx.cards().iter().all(|c| c.column_id == col1.id));
+    assert!(ctx.undo()?);
+    assert!(ctx.cards()?.iter().all(|c| c.column_id == col1.id));
     assert!(!ctx.can_undo());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_assign_cards_to_sprint_renamed_trait_method() {
+async fn test_assign_cards_to_sprint_renamed_trait_method() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let card = ctx
-        .create_card(board.id, col.id, "Card".into(), Default::default())
-        .unwrap();
-    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "Card".into(), Default::default())?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
 
-    let count = ctx
-        .assign_cards_to_sprint(vec![card.id], sprint.id)
-        .unwrap();
+    let count = ctx.assign_cards_to_sprint(vec![card.id], sprint.id)?;
     assert_eq!(count, 1);
-    assert_eq!(
-        ctx.get_card(card.id).unwrap().unwrap().sprint_id,
-        Some(sprint.id)
-    );
+    assert_eq!(ctx.get_card(card.id)?.unwrap().sprint_id, Some(sprint.id));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_assign_cards_to_sprint_creates_single_undo_entry() {
+async fn test_assign_cards_to_sprint_creates_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col.id, "Card 2".into(), Default::default())
-        .unwrap();
-    let c3 = ctx
-        .create_card(board.id, col.id, "Card 3".into(), Default::default())
-        .unwrap();
-    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col.id, "Card 2".into(), Default::default())?;
+    let c3 = ctx.create_card(board.id, col.id, "Card 3".into(), Default::default())?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
 
-    ctx.clear_history();
+    ctx.clear_history()?;
 
-    ctx.assign_cards_to_sprint(vec![c1.id, c2.id, c3.id], sprint.id)
-        .unwrap();
-    assert_eq!(
-        ctx.get_card(c1.id).unwrap().unwrap().sprint_id,
-        Some(sprint.id)
-    );
-    assert_eq!(
-        ctx.get_card(c2.id).unwrap().unwrap().sprint_id,
-        Some(sprint.id)
-    );
-    assert_eq!(
-        ctx.get_card(c3.id).unwrap().unwrap().sprint_id,
-        Some(sprint.id)
-    );
+    ctx.assign_cards_to_sprint(vec![c1.id, c2.id, c3.id], sprint.id)?;
+    assert_eq!(ctx.get_card(c1.id)?.unwrap().sprint_id, Some(sprint.id));
+    assert_eq!(ctx.get_card(c2.id)?.unwrap().sprint_id, Some(sprint.id));
+    assert_eq!(ctx.get_card(c3.id)?.unwrap().sprint_id, Some(sprint.id));
 
-    // Single undo should restore all 3 cards
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.get_card(c1.id).unwrap().unwrap().sprint_id, None);
-    assert_eq!(ctx.get_card(c2.id).unwrap().unwrap().sprint_id, None);
-    assert_eq!(ctx.get_card(c3.id).unwrap().unwrap().sprint_id, None);
-
-    // No more undo entries (it was a single batch)
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.get_card(c1.id)?.unwrap().sprint_id, None);
+    assert_eq!(ctx.get_card(c2.id)?.unwrap().sprint_id, None);
+    assert_eq!(ctx.get_card(c3.id)?.unwrap().sprint_id, None);
     assert!(!ctx.can_undo());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_execute_batch_partial_failure_rolls_back() {
+async fn test_execute_batch_partial_failure_rolls_back() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    ctx.create_board("B1".into(), None).unwrap();
-    ctx.clear_history();
+    ctx.create_board("B1".into(), None)?;
+    ctx.clear_history()?;
 
     let batch: Vec<Command> = vec![
         Command::Board(BoardCommand::Create(CreateBoard {
@@ -545,19 +499,17 @@ async fn test_execute_batch_partial_failure_rolls_back() {
     let result = ctx.execute(batch);
     assert!(result.is_err());
 
-    // Rolled back: B2 should not exist
-    assert_eq!(ctx.boards().len(), 1);
-    assert_eq!(ctx.boards()[0].name, "B1");
-
-    // Undo stack should be clean
+    assert_eq!(ctx.boards()?.len(), 1);
+    assert_eq!(ctx.boards()?[0].name, "B1");
     assert!(!ctx.can_undo());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_execute_batch_success_is_undoable() {
+async fn test_execute_batch_success_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    ctx.create_board("B1".into(), None).unwrap();
-    ctx.clear_history();
+    ctx.create_board("B1".into(), None)?;
+    ctx.clear_history()?;
 
     let batch: Vec<Command> = vec![
         Command::Board(BoardCommand::Create(CreateBoard {
@@ -573,19 +525,20 @@ async fn test_execute_batch_success_is_undoable() {
             position: 0,
         })),
     ];
-    ctx.execute(batch).unwrap();
-    assert_eq!(ctx.boards().len(), 3);
+    ctx.execute(batch)?;
+    assert_eq!(ctx.boards()?.len(), 3);
 
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.boards().len(), 1);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.boards()?.len(), 1);
     assert!(!ctx.can_undo());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_import_entities_is_undoable() {
+async fn test_import_entities_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    ctx.create_board("B1".into(), None).unwrap();
-    ctx.clear_history();
+    ctx.create_board("B1".into(), None)?;
+    ctx.clear_history()?;
 
     let b2 = kanban_domain::Board::new("B2".to_string(), None);
     let col = kanban_domain::Column::new(b2.id, "Todo".to_string(), 0);
@@ -597,12 +550,13 @@ async fn test_import_entities_is_undoable() {
         sprints: vec![],
         graph: None,
     }));
-    ctx.execute(vec![cmd]).unwrap();
-    assert_eq!(ctx.boards().len(), 2);
+    ctx.execute(vec![cmd])?;
+    assert_eq!(ctx.boards()?.len(), 2);
 
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.boards().len(), 1);
-    assert_eq!(ctx.boards()[0].name, "B1");
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.boards()?.len(), 1);
+    assert_eq!(ctx.boards()?[0].name, "B1");
+    Ok(())
 }
 
 #[tokio::test]
@@ -614,32 +568,29 @@ async fn test_archive_card_not_found_returns_error() {
 }
 
 #[tokio::test]
-async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() {
+async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col.id, "Card 2".into(), Default::default())
-        .unwrap();
-    ctx.clear_history();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col.id, "Card 2".into(), Default::default())?;
+    ctx.clear_history()?;
     ctx.mark_clean();
 
     let result = ctx.archive_cards_detailed(vec![c1.id, c2.id]);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
-    assert_eq!(ctx.archived_cards().len(), 2);
+    assert_eq!(ctx.archived_cards()?.len(), 2);
 
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.cards().len(), 2);
-    assert_eq!(ctx.archived_cards().len(), 0);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.cards()?.len(), 2);
+    assert_eq!(ctx.archived_cards()?.len(), 0);
     assert!(
         !ctx.can_undo(),
         "should be a single undo entry for the whole batch"
     );
+    Ok(())
 }
 
 #[tokio::test]
@@ -660,54 +611,50 @@ async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
 }
 
 #[tokio::test]
-async fn test_detailed_archive_partial_success_is_undoable() {
+async fn test_detailed_archive_partial_success_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let card = ctx
-        .create_card(board.id, col.id, "Card".into(), Default::default())
-        .unwrap();
-    ctx.clear_history();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "Card".into(), Default::default())?;
+    ctx.clear_history()?;
     ctx.mark_clean();
 
     let result = ctx.archive_cards_detailed(vec![card.id, uuid::Uuid::new_v4()]);
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
     assert!(ctx.is_dirty());
-    assert_eq!(ctx.archived_cards().len(), 1);
+    assert_eq!(ctx.archived_cards()?.len(), 1);
 
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.cards().len(), 1);
-    assert_eq!(ctx.archived_cards().len(), 0);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.cards()?.len(), 1);
+    assert_eq!(ctx.archived_cards()?.len(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() {
+async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col_a = ctx.create_column(board.id, "A".into(), None).unwrap();
-    let col_b = ctx.create_column(board.id, "B".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col_a.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col_a.id, "Card 2".into(), Default::default())
-        .unwrap();
-    ctx.clear_history();
+    let board = ctx.create_board("B".into(), None)?;
+    let col_a = ctx.create_column(board.id, "A".into(), None)?;
+    let col_b = ctx.create_column(board.id, "B".into(), None)?;
+    let c1 = ctx.create_card(board.id, col_a.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col_a.id, "Card 2".into(), Default::default())?;
+    ctx.clear_history()?;
     ctx.mark_clean();
 
     let result = ctx.move_cards_detailed(vec![c1.id, c2.id], col_b.id);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
-    assert!(ctx.cards().iter().all(|c| c.column_id == col_b.id));
+    assert!(ctx.cards()?.iter().all(|c| c.column_id == col_b.id));
 
-    assert!(ctx.undo().unwrap());
-    assert!(ctx.cards().iter().all(|c| c.column_id == col_a.id));
+    assert!(ctx.undo()?);
+    assert!(ctx.cards()?.iter().all(|c| c.column_id == col_a.id));
     assert!(
         !ctx.can_undo(),
         "should be a single undo entry for the whole batch"
     );
+    Ok(())
 }
 
 #[tokio::test]
@@ -731,62 +678,53 @@ async fn test_move_cards_detailed_all_fail_does_not_set_dirty() {
 }
 
 #[tokio::test]
-async fn test_move_cards_detailed_partial_success_is_undoable() {
+async fn test_move_cards_detailed_partial_success_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col_a = ctx.create_column(board.id, "A".into(), None).unwrap();
-    let col_b = ctx.create_column(board.id, "B".into(), None).unwrap();
-    let card = ctx
-        .create_card(board.id, col_a.id, "Card".into(), Default::default())
-        .unwrap();
-    ctx.clear_history();
+    let board = ctx.create_board("B".into(), None)?;
+    let col_a = ctx.create_column(board.id, "A".into(), None)?;
+    let col_b = ctx.create_column(board.id, "B".into(), None)?;
+    let card = ctx.create_card(board.id, col_a.id, "Card".into(), Default::default())?;
+    ctx.clear_history()?;
     ctx.mark_clean();
 
     let result = ctx.move_cards_detailed(vec![card.id, uuid::Uuid::new_v4()], col_b.id);
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
     assert!(ctx.is_dirty());
-    assert_eq!(ctx.cards().first().unwrap().column_id, col_b.id);
+    assert_eq!(ctx.cards()?.first().unwrap().column_id, col_b.id);
 
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.cards().first().unwrap().column_id, col_a.id);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.cards()?.first().unwrap().column_id, col_a.id);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entry() {
+async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entry(
+) -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col.id, "Card 1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col.id, "Card 2".into(), Default::default())
-        .unwrap();
-    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
-    ctx.clear_history();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col.id, "Card 2".into(), Default::default())?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
+    ctx.clear_history()?;
     ctx.mark_clean();
 
     let result = ctx.assign_cards_to_sprint_detailed(vec![c1.id, c2.id], sprint.id);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
-    assert_eq!(
-        ctx.get_card(c1.id).unwrap().unwrap().sprint_id,
-        Some(sprint.id)
-    );
-    assert_eq!(
-        ctx.get_card(c2.id).unwrap().unwrap().sprint_id,
-        Some(sprint.id)
-    );
+    assert_eq!(ctx.get_card(c1.id)?.unwrap().sprint_id, Some(sprint.id));
+    assert_eq!(ctx.get_card(c2.id)?.unwrap().sprint_id, Some(sprint.id));
 
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.get_card(c1.id).unwrap().unwrap().sprint_id, None);
-    assert_eq!(ctx.get_card(c2.id).unwrap().unwrap().sprint_id, None);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.get_card(c1.id)?.unwrap().sprint_id, None);
+    assert_eq!(ctx.get_card(c2.id)?.unwrap().sprint_id, None);
     assert!(
         !ctx.can_undo(),
         "should be a single undo entry for the whole batch"
     );
+    Ok(())
 }
 
 #[tokio::test]
@@ -810,15 +748,13 @@ async fn test_assign_cards_to_sprint_detailed_all_fail_does_not_set_dirty() {
 }
 
 #[tokio::test]
-async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() {
+async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let card = ctx
-        .create_card(board.id, col.id, "Card".into(), Default::default())
-        .unwrap();
-    let sprint = ctx.create_sprint(board.id, None, None).unwrap();
-    ctx.clear_history();
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "Card".into(), Default::default())?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
+    ctx.clear_history()?;
     ctx.mark_clean();
 
     let result =
@@ -826,200 +762,205 @@ async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() {
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
     assert!(ctx.is_dirty());
-    assert_eq!(
-        ctx.get_card(card.id).unwrap().unwrap().sprint_id,
-        Some(sprint.id)
-    );
+    assert_eq!(ctx.get_card(card.id)?.unwrap().sprint_id, Some(sprint.id));
 
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.get_card(card.id).unwrap().unwrap().sprint_id, None);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.get_card(card.id)?.unwrap().sprint_id, None);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_compact_column_positions_is_undoable() {
+async fn test_compact_column_positions_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
-    let col = ctx.create_column(board.id, "C".into(), None).unwrap();
-    let c1 = ctx
-        .create_card(board.id, col.id, "Card1".into(), Default::default())
-        .unwrap();
-    let c2 = ctx
-        .create_card(board.id, col.id, "Card2".into(), Default::default())
-        .unwrap();
+    let board = ctx.create_board("B".into(), Some("TST".into()))?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let c1 = ctx.create_card(board.id, col.id, "Card1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col.id, "Card2".into(), Default::default())?;
 
-    // Manually set positions to non-sequential values
     ctx.update_card(
         c1.id,
         CardUpdate {
             position: Some(0),
             ..Default::default()
         },
-    )
-    .unwrap();
+    )?;
     ctx.update_card(
         c2.id,
         CardUpdate {
             position: Some(5),
             ..Default::default()
         },
-    )
-    .unwrap();
-    ctx.clear_history();
+    )?;
+    ctx.clear_history()?;
 
     let cmd = Command::Card(CardCommand::CompactPositions(CompactColumnPositions {
         column_id: col.id,
     }));
-    ctx.execute(vec![cmd]).unwrap();
+    ctx.execute(vec![cmd])?;
     assert_eq!(
-        ctx.cards().iter().find(|c| c.id == c1.id).unwrap().position,
+        ctx.cards()?
+            .iter()
+            .find(|c| c.id == c1.id)
+            .unwrap()
+            .position,
         0
     );
     assert_eq!(
-        ctx.cards().iter().find(|c| c.id == c2.id).unwrap().position,
+        ctx.cards()?
+            .iter()
+            .find(|c| c.id == c2.id)
+            .unwrap()
+            .position,
         1
     );
 
-    assert!(ctx.undo().unwrap());
+    assert!(ctx.undo()?);
     assert_eq!(
-        ctx.cards().iter().find(|c| c.id == c1.id).unwrap().position,
+        ctx.cards()?
+            .iter()
+            .find(|c| c.id == c1.id)
+            .unwrap()
+            .position,
         0
     );
     assert_eq!(
-        ctx.cards().iter().find(|c| c.id == c2.id).unwrap().position,
+        ctx.cards()?
+            .iter()
+            .find(|c| c.id == c2.id)
+            .unwrap()
+            .position,
         5
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_undo_cursor_tracks_command_count() {
+async fn test_undo_cursor_tracks_command_count() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     assert_eq!(ctx.undo_depth(), 0);
     assert_eq!(ctx.redo_depth(), 0);
 
-    ctx.create_board("B1".into(), None).unwrap();
+    ctx.create_board("B1".into(), None)?;
     assert_eq!(ctx.undo_depth(), 1);
     assert_eq!(ctx.redo_depth(), 0);
 
-    ctx.create_board("B2".into(), None).unwrap();
+    ctx.create_board("B2".into(), None)?;
     assert_eq!(ctx.undo_depth(), 2);
     assert_eq!(ctx.redo_depth(), 0);
 
-    ctx.undo().unwrap();
+    ctx.undo()?;
     assert_eq!(ctx.undo_depth(), 1);
     assert_eq!(ctx.redo_depth(), 1);
 
-    ctx.undo().unwrap();
+    ctx.undo()?;
     assert_eq!(ctx.undo_depth(), 0);
     assert_eq!(ctx.redo_depth(), 2);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_redo_uses_stored_commands() {
+async fn test_redo_uses_stored_commands() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    let board = ctx.create_board("B".into(), None).unwrap();
+    let board = ctx.create_board("B".into(), None)?;
     let board_id = board.id;
 
-    ctx.undo().unwrap();
-    assert!(ctx.boards().is_empty());
+    ctx.undo()?;
+    assert!(ctx.boards()?.is_empty());
 
-    ctx.redo().unwrap();
-    let boards = ctx.boards();
+    ctx.redo()?;
+    let boards = ctx.boards()?;
     assert_eq!(boards.len(), 1);
     assert_eq!(
         boards[0].id, board_id,
         "redo must replay the original command, producing the same id"
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_clear_history_resets_baseline() {
+async fn test_clear_history_resets_baseline() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    ctx.create_board("B".into(), None).unwrap();
+    ctx.create_board("B".into(), None)?;
     assert!(ctx.can_undo());
 
-    ctx.clear_history();
+    ctx.clear_history()?;
     assert!(
         !ctx.can_undo(),
         "clear_history makes current state the new baseline"
     );
     assert!(!ctx.can_redo(), "clear_history drops all redo entries too");
     assert_eq!(
-        ctx.boards().len(),
+        ctx.boards()?.len(),
         1,
         "clear_history preserves current state"
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_multi_step_undo_redo_full_cycle() {
+async fn test_multi_step_undo_redo_full_cycle() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
 
-    // Execute 3 batches
-    ctx.create_board("B1".into(), None).unwrap();
-    ctx.create_board("B2".into(), None).unwrap();
-    ctx.create_board("B3".into(), None).unwrap();
-    assert_eq!(ctx.boards().len(), 3);
+    ctx.create_board("B1".into(), None)?;
+    ctx.create_board("B2".into(), None)?;
+    ctx.create_board("B3".into(), None)?;
+    assert_eq!(ctx.boards()?.len(), 3);
     assert_eq!(ctx.undo_depth(), 3);
 
-    // Undo all 3
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.boards().len(), 2);
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.boards().len(), 1);
-    assert!(ctx.undo().unwrap());
-    assert_eq!(ctx.boards().len(), 0);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.boards()?.len(), 2);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.boards()?.len(), 1);
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.boards()?.len(), 0);
     assert!(!ctx.can_undo());
     assert_eq!(ctx.redo_depth(), 3);
 
-    // Redo all 3
-    assert!(ctx.redo().unwrap());
-    assert_eq!(ctx.boards().len(), 1);
-    assert!(ctx.redo().unwrap());
-    assert_eq!(ctx.boards().len(), 2);
-    assert!(ctx.redo().unwrap());
-    assert_eq!(ctx.boards().len(), 3);
+    assert!(ctx.redo()?);
+    assert_eq!(ctx.boards()?.len(), 1);
+    assert!(ctx.redo()?);
+    assert_eq!(ctx.boards()?.len(), 2);
+    assert!(ctx.redo()?);
+    assert_eq!(ctx.boards()?.len(), 3);
     assert!(!ctx.can_redo());
     assert_eq!(ctx.undo_depth(), 3);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_redo_past_end_returns_false() {
+async fn test_redo_past_end_returns_false() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
-    // No commands executed — redo should return false
-    assert!(!ctx.redo().unwrap());
+    assert!(!ctx.redo()?);
 
-    // Execute one, redo should return false (already at tip)
-    ctx.create_board("B".into(), None).unwrap();
-    assert!(!ctx.redo().unwrap());
+    ctx.create_board("B".into(), None)?;
+    assert!(!ctx.redo()?);
 
-    // Undo, then redo, then redo again should return false
-    ctx.undo().unwrap();
-    assert!(ctx.redo().unwrap());
-    assert!(!ctx.redo().unwrap());
+    ctx.undo()?;
+    assert!(ctx.redo()?);
+    assert!(!ctx.redo()?);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_save_and_reload_preserves_undo_history() {
+async fn test_save_and_reload_preserves_undo_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("history.json");
     let store = make_json_store(&path);
     let mut ctx = KanbanContext::empty(store.clone(), kanban_core::AppConfig::default());
 
-    ctx.create_board("B1".into(), None).unwrap();
-    ctx.create_board("B2".into(), None).unwrap();
-    assert_eq!(ctx.boards().len(), 2);
+    ctx.create_board("B1".into(), None)?;
+    ctx.create_board("B2".into(), None)?;
+    assert_eq!(ctx.boards()?.len(), 2);
     assert_eq!(ctx.undo_depth(), 2);
 
-    ctx.save().await.unwrap();
+    ctx.save().await?;
 
-    // Reload from the same file
-    let ctx2 = KanbanContext::load(store, kanban_core::AppConfig::default())
-        .await
-        .unwrap();
-    assert_eq!(ctx2.boards().len(), 2);
+    let ctx2 = KanbanContext::load(store, kanban_core::AppConfig::default()).await?;
+    assert_eq!(ctx2.boards()?.len(), 2);
     assert!(
         ctx2.can_undo(),
         "undo history should persist across restarts"
     );
     assert_eq!(ctx2.undo_depth(), 2);
+    Ok(())
 }

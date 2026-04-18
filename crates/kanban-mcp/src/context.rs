@@ -49,8 +49,8 @@ impl McpContext {
         self.inner.reload().await
     }
 
-    pub fn clear_history(&mut self) {
-        self.inner.clear_history();
+    pub fn clear_history(&mut self) -> KanbanResult<()> {
+        self.inner.clear_history()
     }
 
     pub fn undo(&mut self) -> KanbanResult<bool> {

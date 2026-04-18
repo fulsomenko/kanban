@@ -9,7 +9,7 @@ use kanban_domain::task_list_view::TaskListView;
 use kanban_domain::Snapshot;
 use kanban_domain::{
     BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
-    KanbanOperations,
+    KanbanOperations, KanbanResult,
 };
 use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
 use tempfile::TempDir;
@@ -165,7 +165,7 @@ pub async fn test_delete_sprint_roundtrip(factory: &StoreFactory) {
     assert!(ctx.get_sprint(sprint.id).unwrap().is_none());
 }
 
-pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
+pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::load_with_defaults(factory(&path))
@@ -379,9 +379,10 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) {
     assert_eq!(archived[0].card.points, Some(5));
     assert_eq!(archived[0].original_column_id, col_todo.id);
 
-    let graph = loaded.graph();
+    let graph = loaded.graph()?;
     let edges = graph.cards.edges();
     assert_eq!(edges.len(), 3, "expected 3 edges, got {:?}", edges);
+    Ok(())
 }
 
 pub async fn test_full_roundtrip_preserves_all_fields(factory: &StoreFactory) {

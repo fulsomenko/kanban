@@ -127,7 +127,7 @@ async fn test_migrate_store_repairs_dangling_sprint_id() {
     let ctx = KanbanContext::open_sqlite(to.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
-    let cards = ctx.cards();
+    let cards = ctx.cards().unwrap();
     assert_eq!(cards.len(), 1, "card should be present");
     assert!(
         cards[0].sprint_id.is_none(),
@@ -173,7 +173,7 @@ async fn test_migrate_store_repairs_orphaned_column_id() {
     let ctx = KanbanContext::open_sqlite(to.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
-    let cards = ctx.cards();
+    let cards = ctx.cards().unwrap();
     assert_eq!(cards.len(), 1, "card should be present");
     let expected_col_id = uuid::Uuid::parse_str(&valid_col_id).unwrap();
     assert_eq!(

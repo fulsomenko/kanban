@@ -21,7 +21,7 @@ pub trait TuiSnapshot {
 
 impl TuiSnapshot for Snapshot {
     fn from_app(app: &App) -> Self {
-        app.ctx.snapshot()
+        app.ctx.snapshot().unwrap_or_default()
     }
 
     fn apply_to_app(&self, app: &mut App) {

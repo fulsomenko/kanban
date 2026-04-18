@@ -69,7 +69,7 @@ impl TuiContext {
 
     pub fn execute_commands_batch(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         self.inner.execute(commands)?;
-        let snapshot = self.inner.snapshot();
+        let snapshot = self.inner.snapshot()?;
         self.save_coordinator.queue_snapshot(snapshot);
         Ok(())
     }
@@ -79,7 +79,7 @@ impl TuiContext {
     pub fn undo(&mut self) -> KanbanResult<bool> {
         let result = self.inner.undo()?;
         if result {
-            let snapshot = self.inner.snapshot();
+            let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
         Ok(result)
@@ -88,7 +88,7 @@ impl TuiContext {
     pub fn redo(&mut self) -> KanbanResult<bool> {
         let result = self.inner.redo()?;
         if result {
-            let snapshot = self.inner.snapshot();
+            let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
         Ok(result)
@@ -102,7 +102,7 @@ impl TuiContext {
         self.inner.can_redo()
     }
 
-    pub fn snapshot(&self) -> Snapshot {
+    pub fn snapshot(&self) -> KanbanResult<Snapshot> {
         self.inner.snapshot()
     }
 
@@ -122,7 +122,7 @@ impl TuiContext {
         self.inner.is_dirty()
     }
 
-    pub fn clear_history(&mut self) {
+    pub fn clear_history(&mut self) -> KanbanResult<()> {
         self.inner.clear_history()
     }
 
@@ -149,27 +149,27 @@ impl TuiContext {
     // --- Delegation: field accessors ---
 
     pub fn boards(&self) -> Vec<Board> {
-        self.inner.boards()
+        self.inner.boards().unwrap_or_default()
     }
 
     pub fn columns(&self) -> Vec<Column> {
-        self.inner.columns()
+        self.inner.columns().unwrap_or_default()
     }
 
     pub fn cards(&self) -> Vec<Card> {
-        self.inner.cards()
+        self.inner.cards().unwrap_or_default()
     }
 
     pub fn sprints(&self) -> Vec<Sprint> {
-        self.inner.sprints()
+        self.inner.sprints().unwrap_or_default()
     }
 
     pub fn archived_cards(&self) -> Vec<ArchivedCard> {
-        self.inner.archived_cards()
+        self.inner.archived_cards().unwrap_or_default()
     }
 
     pub fn graph(&self) -> DependencyGraph {
-        self.inner.graph()
+        self.inner.graph().unwrap_or_default()
     }
 
     pub fn data_store(&self) -> &dyn kanban_domain::DataStore {
@@ -183,7 +183,7 @@ impl TuiContext {
 
     fn with_snapshot<T>(&mut self, result: KanbanResult<T>) -> KanbanResult<T> {
         if result.is_ok() {
-            let snapshot = self.inner.snapshot();
+            let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
         result

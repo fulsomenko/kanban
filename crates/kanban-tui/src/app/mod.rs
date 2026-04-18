@@ -1703,7 +1703,9 @@ impl App {
                             Ok(data) => {
                                 data.apply_to_app(self);
                                 self.ctx.mark_clean();
-                                self.ctx.clear_history();
+                                if let Err(e) = self.ctx.clear_history() {
+                                    tracing::error!("Failed to clear history: {}", e);
+                                }
                                 tracing::info!("Loaded initial state from store");
                             }
                             Err(e) => {
@@ -1872,7 +1874,9 @@ impl App {
                                                     match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                                                         Ok(data) => {
                                                             data.apply_to_app(self);
-                                                            self.ctx.clear_history();
+                                                            if let Err(e) = self.ctx.clear_history() {
+                                                                tracing::error!("Failed to clear history: {}", e);
+                                                            }
                                                             self.ctx.clear_conflict();
                                                             self.refresh_view();
                                                             tracing::info!("Reloaded state from disk");
@@ -2117,7 +2121,9 @@ impl App {
                 match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                     Ok(data) => {
                         data.apply_to_app(self);
-                        self.ctx.clear_history();
+                        if let Err(e) = self.ctx.clear_history() {
+                            tracing::error!("Failed to clear history: {}", e);
+                        }
                         self.ctx.mark_clean();
                         self.ctx.clear_conflict();
                         self.refresh_view();

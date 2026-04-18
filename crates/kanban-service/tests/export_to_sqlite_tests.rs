@@ -42,5 +42,5 @@ async fn test_export_to_sqlite_result_is_readable_via_open_sqlite() {
     let ctx = KanbanContext::open_sqlite(&output, AppConfig::default())
         .await
         .expect("open_sqlite must succeed on exported file");
-    assert_eq!(ctx.boards().len(), 0);
+    assert_eq!(ctx.boards().unwrap().len(), 0);
 }

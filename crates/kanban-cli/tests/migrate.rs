@@ -73,7 +73,7 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
         .unwrap();
 
     // Migrate snapshot from SQLite to JSON via context snapshot
-    let snapshot = original.snapshot();
+    let snapshot = original.snapshot().unwrap();
     let data = serde_json::to_vec(&snapshot).unwrap();
     let json_store = Arc::new(JsonFileStore::new(&json_path));
     let store_snap = kanban_persistence::StoreSnapshot {
@@ -137,7 +137,7 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
         .unwrap();
 
     // Copy snapshot to destination
-    let snapshot = original.snapshot();
+    let snapshot = original.snapshot().unwrap();
     let dst = SqliteStore::open(dst_path.to_str().unwrap()).await.unwrap();
     dst.apply_snapshot(snapshot).unwrap();
     drop(dst);

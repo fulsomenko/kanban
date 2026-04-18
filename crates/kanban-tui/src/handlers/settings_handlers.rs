@@ -263,7 +263,9 @@ impl App {
         use crate::state::snapshot::TuiSnapshot;
         snapshot.apply_to_app(self);
         self.ctx.mark_clean();
-        self.ctx.clear_history();
+        if let Err(e) = self.ctx.clear_history() {
+            tracing::error!("Failed to clear history: {}", e);
+        }
 
         self.selection.active_board_index = if self.ctx.boards().is_empty() {
             None
