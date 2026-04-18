@@ -323,6 +323,17 @@ impl DataStore for InMemoryStore {
         Ok(())
     }
 
+    fn modify_graph(
+        &self,
+        f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
+    ) -> KanbanResult<()> {
+        let mut state = self.write_state()?;
+        let mut graph = state.graph.clone();
+        f(&mut graph)?;
+        state.graph = graph;
+        Ok(())
+    }
+
     // Snapshot
 
     fn snapshot(&self) -> KanbanResult<Snapshot> {
@@ -707,6 +718,32 @@ mod tests {
     }
 
     // Graph
+
+    #[test]
+    fn test_modify_graph_atomic_on_error_leaves_graph_unchanged() {
+        use crate::dependencies::CardGraphExt;
+
+        let store = InMemoryStore::new();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+
+        let mut graph = store.get_graph().unwrap();
+        graph.cards.add_blocks(a, b).unwrap();
+        store.set_graph(graph).unwrap();
+
+        let result = store.modify_graph(Box::new(move |graph| {
+            graph.cards.remove_card_edges(a);
+            Err(crate::KanbanError::validation("rollback"))
+        }));
+        assert!(result.is_err());
+
+        let graph = store.get_graph().unwrap();
+        assert_eq!(
+            graph.cards.edges().len(),
+            1,
+            "modify_graph should not apply partial changes on error"
+        );
+    }
 
     #[test]
     fn test_set_and_get_graph() {
