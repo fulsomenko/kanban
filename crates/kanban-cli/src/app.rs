@@ -225,10 +225,7 @@ impl CliApp {
         let effective_file = validated_file
             .clone()
             .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
-        let is_sqlite = store_manager.detect_backend(&effective_file).as_deref() == Some("sqlite")
-            || effective_file.ends_with(".sqlite")
-            || effective_file.ends_with(".sqlite3")
-            || effective_file.ends_with(".db")
+        let is_sqlite = store_manager.is_sqlite(&effective_file)
             || config.effective_storage_backend() == "sqlite";
 
         match command {
@@ -236,8 +233,15 @@ impl CliApp {
                 #[cfg(feature = "tui")]
                 {
                     if is_sqlite {
-                        let mut app = App::open_sqlite(&effective_file, config).await?;
-                        app.run(None).await?;
+                        #[cfg(feature = "sqlite")]
+                        {
+                            let mut app = App::open_sqlite(&effective_file, config).await?;
+                            app.run(None).await?;
+                        }
+                        #[cfg(not(feature = "sqlite"))]
+                        anyhow::bail!(
+                            "File appears to be SQLite but the sqlite feature is not compiled in"
+                        );
                     } else {
                         let (mut app, save_rx) =
                             App::new_with_store(store_manager, validated_file)?;

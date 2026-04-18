@@ -19,20 +19,19 @@ impl CliContext {
         file_path: &str,
         mut config: AppConfig,
     ) -> KanbanResult<Self> {
-        let is_sqlite = match store_manager.detect_backend(file_path).as_deref() {
-            Some("sqlite") => true,
-            None => {
-                file_path.ends_with(".sqlite")
-                    || file_path.ends_with(".sqlite3")
-                    || file_path.ends_with(".db")
-            }
-            _ => false,
-        };
-        if is_sqlite {
+        if store_manager.is_sqlite(file_path) {
             #[cfg(feature = "sqlite")]
-            return Ok(Self {
-                inner: KanbanContext::open_sqlite(file_path, config).await?,
-            });
+            {
+                return Ok(Self {
+                    inner: KanbanContext::open_sqlite(file_path, config).await?,
+                });
+            }
+            #[cfg(not(feature = "sqlite"))]
+            {
+                return Err(kanban_domain::KanbanError::validation(
+                    "File appears to be SQLite but the sqlite feature is not compiled in",
+                ));
+            }
         }
         if store_manager.sync_backend_with_file(file_path, &mut config) {
             eprintln!(
