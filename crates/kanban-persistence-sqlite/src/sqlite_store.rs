@@ -467,6 +467,32 @@ impl SqliteStore {
         Ok(())
     }
 
+    async fn fetch_sprint_logs_batch(
+        &self,
+        card_ids: &[String],
+    ) -> KanbanResult<HashMap<String, Vec<SprintLog>>> {
+        if card_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let placeholders = card_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT card_id, sprint_id, sprint_number, sprint_name, started_at, ended_at, status
+             FROM sprint_logs WHERE card_id IN ({placeholders}) ORDER BY id"
+        );
+        let mut query = sqlx::query(&sql);
+        for id in card_ids {
+            query = query.bind(id);
+        }
+        let rows = query.fetch_all(&self.pool).await.map_err(db_err)?;
+        let mut map: HashMap<String, Vec<SprintLog>> = HashMap::new();
+        for row in &rows {
+            let card_id: String = row.try_get("card_id").map_err(db_err)?;
+            let log = row_to_sprint_log(row)?;
+            map.entry(card_id).or_default().push(log);
+        }
+        Ok(map)
+    }
+
     async fn fetch_cards_with_filter(
         &self,
         where_clause: &str,
@@ -485,10 +511,16 @@ impl SqliteStore {
         }
         let rows = query.fetch_all(&self.pool).await.map_err(db_err)?;
 
+        let card_ids: Vec<String> = rows
+            .iter()
+            .map(|r| r.try_get("id").map_err(db_err))
+            .collect::<KanbanResult<_>>()?;
+        let mut logs_map = self.fetch_sprint_logs_batch(&card_ids).await?;
+
         let mut cards = Vec::with_capacity(rows.len());
         for row in &rows {
             let id_str: String = row.try_get("id").map_err(db_err)?;
-            let logs = self.fetch_sprint_logs_for_card(&id_str).await?;
+            let logs = logs_map.remove(&id_str).unwrap_or_default();
             cards.push(row_to_card(row, logs)?);
         }
         Ok(cards)
@@ -581,6 +613,44 @@ impl SqliteStore {
         Ok(())
     }
 
+    async fn fetch_all_board_aux(
+        &self,
+    ) -> KanbanResult<(
+        HashMap<String, Vec<String>>,
+        HashMap<String, HashMap<String, u32>>,
+    )> {
+        let name_rows = sqlx::query(
+            "SELECT board_id, name FROM board_sprint_names ORDER BY board_id, position",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
+        let mut names_map: HashMap<String, Vec<String>> = HashMap::new();
+        for row in &name_rows {
+            let board_id: String = row.try_get("board_id").map_err(db_err)?;
+            let name: String = row.try_get("name").map_err(db_err)?;
+            names_map.entry(board_id).or_default().push(name);
+        }
+
+        let counter_rows =
+            sqlx::query("SELECT board_id, prefix, counter FROM board_sprint_counters")
+                .fetch_all(&self.pool)
+                .await
+                .map_err(db_err)?;
+        let mut counters_map: HashMap<String, HashMap<String, u32>> = HashMap::new();
+        for row in &counter_rows {
+            let board_id: String = row.try_get("board_id").map_err(db_err)?;
+            let prefix: String = row.try_get("prefix").map_err(db_err)?;
+            let counter: i32 = row.try_get("counter").map_err(db_err)?;
+            counters_map
+                .entry(board_id)
+                .or_default()
+                .insert(prefix, counter as u32);
+        }
+
+        Ok((names_map, counters_map))
+    }
+
     async fn list_boards_async(&self) -> KanbanResult<Vec<Board>> {
         let rows = sqlx::query(
             "SELECT id, name, description, sprint_prefix, card_prefix, task_sort_field,
@@ -594,10 +664,13 @@ impl SqliteStore {
         .await
         .map_err(db_err)?;
 
+        let (mut names_map, mut counters_map) = self.fetch_all_board_aux().await?;
+
         let mut boards = Vec::with_capacity(rows.len());
         for row in &rows {
             let id_str: String = row.try_get("id").map_err(db_err)?;
-            let (names, counters) = self.fetch_board_aux(&id_str).await?;
+            let names = names_map.remove(&id_str).unwrap_or_default();
+            let counters = counters_map.remove(&id_str).unwrap_or_default();
             boards.push(row_to_board(row, names, counters)?);
         }
         Ok(boards)
@@ -640,10 +713,16 @@ impl SqliteStore {
         .await
         .map_err(db_err)?;
 
+        let card_ids: Vec<String> = rows
+            .iter()
+            .map(|r| r.try_get("id").map_err(db_err))
+            .collect::<KanbanResult<_>>()?;
+        let mut logs_map = self.fetch_sprint_logs_batch(&card_ids).await?;
+
         let mut result = Vec::with_capacity(rows.len());
         for row in &rows {
             let id_str: String = row.try_get("id").map_err(db_err)?;
-            let logs = self.fetch_sprint_logs_for_card(&id_str).await?;
+            let logs = logs_map.remove(&id_str).unwrap_or_default();
             let card = row_to_card(row, logs)?;
             let archived_at_str: String = row.try_get("archived_at").map_err(db_err)?;
             let orig_col_str: String = row.try_get("original_column_id").map_err(db_err)?;
