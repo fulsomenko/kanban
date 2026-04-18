@@ -35,7 +35,7 @@ impl From<PersistenceError> for kanban_domain::KanbanError {
             PersistenceError::Database(s) => kanban_domain::KanbanError::Database(s),
             PersistenceError::UnsupportedLocator { locator, supported } => {
                 kanban_domain::KanbanError::Internal(format!(
-                    "No backend named {:?} is registered. Available backends: {}",
+                    "No backend registered for {:?}. Available backends: {}",
                     locator,
                     if supported.is_empty() {
                         "none".to_string()
