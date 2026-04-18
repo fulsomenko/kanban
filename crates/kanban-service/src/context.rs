@@ -1,3 +1,14 @@
+/// Two-tier persistence architecture:
+///
+/// **JSON path** — `InMemoryStore` + `JsonFileStore`:
+///   All state lives in memory (`InMemoryStore`). A `JsonFileStore` periodically
+///   serialises the full snapshot to disk. The `dirty` flag and `save()` method
+///   are meaningful only on this path.
+///
+/// **SQLite path** — `SqliteStore` + `NullStore`:
+///   `SqliteStore` implements both `DataStore` and `CommandStore`; every write
+///   goes straight to the database. The `PersistenceStore` slot holds a
+///   `NullStore` (no-op), so `dirty` / `save()` are effectively dead code.
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
@@ -5,8 +16,8 @@ use kanban_domain::commands::{
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, InMemoryStore, KanbanOperations,
-    Snapshot, Sprint, SprintUpdate,
+    ColumnUpdate, CommandStore, DataStore, DependencyGraph, FieldUpdate, InMemoryStore,
+    KanbanOperations, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot};
@@ -32,7 +43,7 @@ pub struct KanbanContext {
     store: Arc<dyn PersistenceStore + Send + Sync>,
     baseline_snapshot: Snapshot,
     undo_cursor: usize,
-    dirty: bool,
+    dirty: bool, // JSON-only: SQLite writes go to DB immediately
     conflict_pending: bool,
 }
 
@@ -51,13 +62,14 @@ impl KanbanContext {
 
         let backend = InMemoryStore::new();
         backend.apply_snapshot(data.clone())?;
+        let undo_cursor = backend.command_count()? as usize;
 
         Ok(Self {
             backend: Arc::new(backend),
             app_config: config,
             store,
             baseline_snapshot: data,
-            undo_cursor: 0,
+            undo_cursor,
             dirty: false,
             conflict_pending: false,
         })
@@ -75,12 +87,13 @@ impl KanbanContext {
         use kanban_persistence_sqlite::SqliteStore;
         let store = SqliteStore::open(path).await?;
         let baseline = store.snapshot()?;
+        let undo_cursor = store.command_count()? as usize;
         Ok(Self {
             backend: Arc::new(store),
             app_config: config,
             store: Arc::new(NullStore::new()),
             baseline_snapshot: baseline,
-            undo_cursor: 0,
+            undo_cursor,
             dirty: false,
             conflict_pending: false,
         })
@@ -113,40 +126,57 @@ impl KanbanContext {
         self.backend.as_data_store()
     }
 
+    /// Convenience accessor — returns empty vec on error.
+    /// For fallible access, use `KanbanOperations::list_boards()`.
     pub fn boards(&self) -> Vec<Board> {
         self.backend.list_boards().unwrap_or_default()
     }
 
+    /// Convenience accessor — returns empty vec on error.
+    /// For fallible access, use `DataStore::list_all_columns()` via `data_store()`.
     pub fn columns(&self) -> Vec<Column> {
         self.backend.list_all_columns().unwrap_or_default()
     }
 
+    /// Convenience accessor — returns empty vec on error.
+    /// For fallible access, use `DataStore::list_all_cards()` via `data_store()`.
     pub fn cards(&self) -> Vec<Card> {
         self.backend.list_all_cards().unwrap_or_default()
     }
 
+    /// Convenience accessor — returns empty vec on error.
+    /// For fallible access, use `DataStore::list_all_sprints()` via `data_store()`.
     pub fn sprints(&self) -> Vec<Sprint> {
         self.backend.list_all_sprints().unwrap_or_default()
     }
 
+    /// Convenience accessor — returns empty vec on error.
+    /// For fallible access, use `KanbanOperations::list_archived_cards()`.
     pub fn archived_cards(&self) -> Vec<ArchivedCard> {
         self.backend.list_archived_cards().unwrap_or_default()
     }
 
+    /// Convenience accessor — returns empty graph on error.
+    /// For fallible access, use `DataStore::get_graph()` via `data_store()`.
     pub fn graph(&self) -> DependencyGraph {
         self.backend
             .get_graph()
             .unwrap_or_else(|_| DependencyGraph::new())
     }
 
+    /// Convenience accessor — returns empty snapshot on error.
+    /// For fallible access, use `DataStore::snapshot()` via `data_store()`.
     pub fn snapshot(&self) -> Snapshot {
         self.backend
             .snapshot()
             .unwrap_or_else(|_| Snapshot::new())
     }
 
-    pub fn apply_snapshot(&self, snapshot: Snapshot) {
-        let _ = self.backend.apply_snapshot(snapshot);
+    /// Replaces the in-memory state with the given snapshot.
+    ///
+    /// Returns an error if the backend rejects the snapshot (e.g. database I/O failure).
+    pub fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
+        self.backend.apply_snapshot(snapshot)
     }
 
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
@@ -162,60 +192,86 @@ impl KanbanContext {
             commands.iter().try_for_each(|cmd| cmd.execute(&ctx))
         };
         if let Err(e) = result {
-            let _ = self.backend.apply_snapshot(before);
+            if let Err(rollback_err) = self.backend.apply_snapshot(before) {
+                tracing::error!("Rollback failed after command error: {rollback_err}");
+            }
             return Err(e);
         }
 
         self.backend.append_commands(&commands)?;
         self.undo_cursor += 1;
+
+        if self.backend.supports_indexed_snapshots() {
+            let snap = self.backend.snapshot()?;
+            self.backend.store_snapshot_at(self.undo_cursor as u64, &snap)?;
+        }
+
         self.dirty = true;
         Ok(())
     }
 
-    pub fn undo(&mut self) -> bool {
+    pub fn undo(&mut self) -> KanbanResult<bool> {
         if self.undo_cursor == 0 {
-            return false;
+            return Ok(false);
         }
         self.undo_cursor -= 1;
-        let _ = self.backend.apply_snapshot(self.baseline_snapshot.clone());
-        let batches = self
-            .backend
-            .load_commands(0, self.undo_cursor as u64)
-            .unwrap_or_default();
-        {
+
+        if self.backend.supports_indexed_snapshots() {
+            let snap = if self.undo_cursor == 0 {
+                self.baseline_snapshot.clone()
+            } else {
+                self.backend
+                    .load_snapshot_at(self.undo_cursor as u64)?
+                    .unwrap_or_else(|| self.baseline_snapshot.clone())
+            };
+            self.backend.apply_snapshot(snap)?;
+        } else {
+            self.backend.apply_snapshot(self.baseline_snapshot.clone())?;
+            let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
             for batch in &batches {
                 for cmd in batch {
-                    let _ = cmd.execute(&ctx);
+                    cmd.execute(&ctx)?;
                 }
             }
         }
+
         self.dirty = true;
-        true
+        Ok(true)
     }
 
-    pub fn redo(&mut self) -> bool {
-        let count = self.backend.command_count().unwrap_or(0) as usize;
+    pub fn redo(&mut self) -> KanbanResult<bool> {
+        let count = self.backend.command_count()? as usize;
         if self.undo_cursor >= count {
-            return false;
+            return Ok(false);
         }
+
+        if self.backend.supports_indexed_snapshots() {
+            let target = self.undo_cursor as u64 + 1;
+            if let Some(snap) = self.backend.load_snapshot_at(target)? {
+                self.backend.apply_snapshot(snap)?;
+                self.undo_cursor += 1;
+                self.dirty = true;
+                return Ok(true);
+            }
+        }
+
         let batches = self
             .backend
-            .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)
-            .unwrap_or_default();
+            .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
         {
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
             for batch in &batches {
                 for cmd in batch {
-                    let _ = cmd.execute(&ctx);
+                    cmd.execute(&ctx)?;
                 }
             }
         }
         self.undo_cursor += 1;
         self.dirty = true;
-        true
+        Ok(true)
     }
 
     pub fn can_undo(&self) -> bool {
@@ -280,10 +336,12 @@ impl KanbanContext {
         let (snapshot, _metadata) = self.store.load().await?;
         let data: Snapshot = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        let _ = self.backend.apply_snapshot(data);
+        self.backend.apply_snapshot(data)?;
         Ok(())
     }
 
+    /// JSON-only: serialises the full snapshot to the persistence store.
+    /// On the SQLite path `self.store` is a `NullStore`, so this is a no-op.
     pub async fn save(&self) -> KanbanResult<()> {
         let snapshot = self.snapshot();
         let bytes = serde_json::to_vec_pretty(&snapshot)
@@ -450,7 +508,7 @@ impl KanbanOperations for KanbanContext {
     fn create_board(&mut self, name: String, card_prefix: Option<String>) -> KanbanResult<Board> {
         use kanban_domain::commands::CreateBoard;
         let id = Uuid::new_v4();
-        let position = self.list_boards().map(|b| b.len() as i32).unwrap_or(0);
+        let position = self.backend.list_boards().unwrap_or_default().len() as i32;
         let cmd = Command::Board(BoardCommand::Create(CreateBoard { id, name, card_prefix, position }));
         self.execute(vec![cmd])?;
         self.get_board(id)?.ok_or_else(|| {
@@ -968,6 +1026,8 @@ impl KanbanOperations for KanbanContext {
             sprints: imported.sprints,
             graph: Some(imported.graph),
         }))])?;
+
+        self.clear_history();
 
         Ok(board)
     }

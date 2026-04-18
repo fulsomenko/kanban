@@ -25,7 +25,7 @@ impl TuiSnapshot for Snapshot {
     }
 
     fn apply_to_app(&self, app: &mut App) {
-        app.ctx.apply_snapshot(self.clone());
+        let _ = app.ctx.apply_snapshot(self.clone());
 
         // Sync sort field/order from active board to preserve user's selection after reload
         if let Some(board_idx) = app.selection.active_board_index {
