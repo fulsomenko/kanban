@@ -1,4 +1,5 @@
 use super::CommandContext;
+use crate::dependencies::card_graph::CardGraphExt;
 use crate::field_update::FieldUpdate;
 use crate::KanbanResult;
 use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, Sprint};
@@ -149,9 +150,32 @@ impl DeleteBoard {
             .map(|c| c.id)
             .collect();
 
-        context.store.delete_cards_by_columns(&column_ids)?;
+        let active_card_ids: Vec<Uuid> = column_ids
+            .iter()
+            .flat_map(|col_id| {
+                context
+                    .store
+                    .list_cards_by_column(*col_id)
+                    .unwrap_or_default()
+            })
+            .map(|c| c.id)
+            .collect();
 
         let archived = context.store.list_archived_cards()?;
+        let archived_card_ids: Vec<Uuid> = archived
+            .iter()
+            .filter(|ac| column_ids.contains(&ac.original_column_id))
+            .map(|ac| ac.card.id)
+            .collect();
+
+        let mut graph = context.store.get_graph()?;
+        for id in active_card_ids.iter().chain(archived_card_ids.iter()) {
+            graph.cards.remove_card_edges(*id);
+        }
+        context.store.set_graph(graph)?;
+
+        context.store.delete_cards_by_columns(&column_ids)?;
+
         for ac in archived {
             if column_ids.contains(&ac.original_column_id) {
                 context.store.delete_archived_card(ac.card.id)?;
@@ -512,7 +536,7 @@ mod tests {
         graph.cards.add_blocks(card_a_id, card_b_id).unwrap();
         tc.store.set_graph(graph).unwrap();
 
-        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 2);
+        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 1);
 
         let context = tc.as_command_context();
         let cmd = DeleteBoard { board_id };
