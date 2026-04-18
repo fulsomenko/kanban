@@ -6,7 +6,9 @@ use uuid::Uuid;
 use crate::command_store::CommandStore;
 use crate::commands::Command;
 use crate::data_store::DataStore;
-use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Snapshot, Sprint};
+use crate::{
+    ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, KanbanResult, Snapshot, Sprint,
+};
 
 #[derive(Debug, Clone)]
 struct StoreState {
@@ -43,6 +45,30 @@ impl InMemoryStore {
             command_log: RwLock::new(Vec::new()),
         }
     }
+
+    fn read_state(&self) -> KanbanResult<std::sync::RwLockReadGuard<'_, StoreState>> {
+        self.state
+            .read()
+            .map_err(|e| KanbanError::Internal(format!("State RwLock poisoned (read): {e}")))
+    }
+
+    fn write_state(&self) -> KanbanResult<std::sync::RwLockWriteGuard<'_, StoreState>> {
+        self.state
+            .write()
+            .map_err(|e| KanbanError::Internal(format!("State RwLock poisoned (write): {e}")))
+    }
+
+    fn read_log(&self) -> KanbanResult<std::sync::RwLockReadGuard<'_, Vec<Vec<Command>>>> {
+        self.command_log
+            .read()
+            .map_err(|e| KanbanError::Internal(format!("Command log RwLock poisoned (read): {e}")))
+    }
+
+    fn write_log(&self) -> KanbanResult<std::sync::RwLockWriteGuard<'_, Vec<Vec<Command>>>> {
+        self.command_log
+            .write()
+            .map_err(|e| KanbanError::Internal(format!("Command log RwLock poisoned (write): {e}")))
+    }
 }
 
 impl Default for InMemoryStore {
@@ -55,25 +81,25 @@ impl DataStore for InMemoryStore {
     // Board
 
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         Ok(state.boards.get(&id).cloned())
     }
 
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut boards: Vec<Board> = state.boards.values().cloned().collect();
         boards.sort_by_key(|b| b.position);
         Ok(boards)
     }
 
     fn upsert_board(&self, board: Board) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.boards.insert(board.id, board);
         Ok(())
     }
 
     fn delete_board(&self, id: Uuid) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.boards.remove(&id);
         Ok(())
     }
@@ -81,12 +107,12 @@ impl DataStore for InMemoryStore {
     // Column
 
     fn get_column(&self, id: Uuid) -> KanbanResult<Option<Column>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         Ok(state.columns.get(&id).cloned())
     }
 
     fn list_columns_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut cols: Vec<Column> = state
             .columns
             .values()
@@ -98,26 +124,26 @@ impl DataStore for InMemoryStore {
     }
 
     fn list_all_columns(&self) -> KanbanResult<Vec<Column>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut cols: Vec<Column> = state.columns.values().cloned().collect();
         cols.sort_by_key(|c| c.position);
         Ok(cols)
     }
 
     fn upsert_column(&self, column: Column) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.columns.insert(column.id, column);
         Ok(())
     }
 
     fn delete_column(&self, id: Uuid) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.columns.remove(&id);
         Ok(())
     }
 
     fn delete_columns_by_board(&self, board_id: Uuid) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.columns.retain(|_, c| c.board_id != board_id);
         Ok(())
     }
@@ -125,19 +151,19 @@ impl DataStore for InMemoryStore {
     // Card
 
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         Ok(state.cards.get(&id).cloned())
     }
 
     fn list_all_cards(&self) -> KanbanResult<Vec<Card>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut cards: Vec<Card> = state.cards.values().cloned().collect();
         cards.sort_by_key(|c| c.position);
         Ok(cards)
     }
 
     fn list_cards_by_column(&self, column_id: Uuid) -> KanbanResult<Vec<Card>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut cards: Vec<Card> = state
             .cards
             .values()
@@ -149,7 +175,7 @@ impl DataStore for InMemoryStore {
     }
 
     fn list_cards_by_sprint(&self, sprint_id: Uuid) -> KanbanResult<Vec<Card>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut cards: Vec<Card> = state
             .cards
             .values()
@@ -161,7 +187,7 @@ impl DataStore for InMemoryStore {
     }
 
     fn count_cards_in_column(&self, column_id: Uuid) -> KanbanResult<usize> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let count = state
             .cards
             .values()
@@ -175,7 +201,7 @@ impl DataStore for InMemoryStore {
         column_id: Uuid,
         exclude: &[Uuid],
     ) -> KanbanResult<usize> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let count = state
             .cards
             .values()
@@ -185,19 +211,19 @@ impl DataStore for InMemoryStore {
     }
 
     fn upsert_card(&self, card: Card) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.cards.insert(card.id, card);
         Ok(())
     }
 
     fn delete_card(&self, id: Uuid) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.cards.remove(&id);
         Ok(())
     }
 
     fn delete_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state
             .cards
             .retain(|_, c| !column_ids.contains(&c.column_id));
@@ -205,7 +231,7 @@ impl DataStore for InMemoryStore {
     }
 
     fn clear_sprint_from_cards(&self, sprint_id: Uuid) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         for card in state.cards.values_mut() {
             if card.sprint_id == Some(sprint_id) {
                 card.sprint_id = None;
@@ -217,25 +243,25 @@ impl DataStore for InMemoryStore {
     // Archived card
 
     fn get_archived_card(&self, card_id: Uuid) -> KanbanResult<Option<ArchivedCard>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         Ok(state.archived_cards.get(&card_id).cloned())
     }
 
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut acs: Vec<ArchivedCard> = state.archived_cards.values().cloned().collect();
         acs.sort_by(|a, b| a.archived_at.cmp(&b.archived_at));
         Ok(acs)
     }
 
     fn insert_archived_card(&self, ac: ArchivedCard) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.archived_cards.insert(ac.card.id, ac);
         Ok(())
     }
 
     fn delete_archived_card(&self, card_id: Uuid) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.archived_cards.remove(&card_id);
         Ok(())
     }
@@ -243,12 +269,12 @@ impl DataStore for InMemoryStore {
     // Sprint
 
     fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         Ok(state.sprints.get(&id).cloned())
     }
 
     fn list_sprints_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut sprints: Vec<Sprint> = state
             .sprints
             .values()
@@ -260,26 +286,26 @@ impl DataStore for InMemoryStore {
     }
 
     fn list_all_sprints(&self) -> KanbanResult<Vec<Sprint>> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         let mut sprints: Vec<Sprint> = state.sprints.values().cloned().collect();
         sprints.sort_by_key(|s| s.sprint_number);
         Ok(sprints)
     }
 
     fn upsert_sprint(&self, sprint: Sprint) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.sprints.insert(sprint.id, sprint);
         Ok(())
     }
 
     fn delete_sprint(&self, id: Uuid) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.sprints.remove(&id);
         Ok(())
     }
 
     fn delete_sprints_by_board(&self, board_id: Uuid) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.sprints.retain(|_, s| s.board_id != board_id);
         Ok(())
     }
@@ -287,12 +313,12 @@ impl DataStore for InMemoryStore {
     // Graph
 
     fn get_graph(&self) -> KanbanResult<DependencyGraph> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         Ok(state.graph.clone())
     }
 
     fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.graph = graph;
         Ok(())
     }
@@ -300,7 +326,7 @@ impl DataStore for InMemoryStore {
     // Snapshot
 
     fn snapshot(&self) -> KanbanResult<Snapshot> {
-        let state = self.state.read().unwrap();
+        let state = self.read_state()?;
         Ok(Snapshot::from_data(
             state.boards.values().cloned().collect(),
             state.columns.values().cloned().collect(),
@@ -312,7 +338,7 @@ impl DataStore for InMemoryStore {
     }
 
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.write_state()?;
         state.boards = snapshot.boards.into_iter().map(|b| (b.id, b)).collect();
         state.columns = snapshot.columns.into_iter().map(|c| (c.id, c)).collect();
         state.cards = snapshot.cards.into_iter().map(|c| (c.id, c)).collect();
@@ -329,24 +355,24 @@ impl DataStore for InMemoryStore {
 
 impl CommandStore for InMemoryStore {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
-        let mut log = self.command_log.write().unwrap();
+        let mut log = self.write_log()?;
         log.push(cmds.to_vec());
         Ok(log.len() as u64)
     }
 
     fn command_count(&self) -> KanbanResult<u64> {
-        Ok(self.command_log.read().unwrap().len() as u64)
+        Ok(self.read_log()?.len() as u64)
     }
 
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
-        let log = self.command_log.read().unwrap();
+        let log = self.read_log()?;
         let from = from as usize;
         let to = (to as usize).min(log.len());
         Ok(log[from..to].to_vec())
     }
 
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        let mut log = self.command_log.write().unwrap();
+        let mut log = self.write_log()?;
         log.truncate(after as usize);
         Ok(())
     }
