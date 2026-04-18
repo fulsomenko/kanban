@@ -949,3 +949,77 @@ async fn test_clear_history_resets_baseline() {
         "clear_history preserves current state"
     );
 }
+
+#[tokio::test]
+async fn test_multi_step_undo_redo_full_cycle() {
+    let mut ctx = make_ctx().await;
+
+    // Execute 3 batches
+    ctx.create_board("B1".into(), None).unwrap();
+    ctx.create_board("B2".into(), None).unwrap();
+    ctx.create_board("B3".into(), None).unwrap();
+    assert_eq!(ctx.boards().len(), 3);
+    assert_eq!(ctx.undo_depth(), 3);
+
+    // Undo all 3
+    assert!(ctx.undo().unwrap());
+    assert_eq!(ctx.boards().len(), 2);
+    assert!(ctx.undo().unwrap());
+    assert_eq!(ctx.boards().len(), 1);
+    assert!(ctx.undo().unwrap());
+    assert_eq!(ctx.boards().len(), 0);
+    assert!(!ctx.can_undo());
+    assert_eq!(ctx.redo_depth(), 3);
+
+    // Redo all 3
+    assert!(ctx.redo().unwrap());
+    assert_eq!(ctx.boards().len(), 1);
+    assert!(ctx.redo().unwrap());
+    assert_eq!(ctx.boards().len(), 2);
+    assert!(ctx.redo().unwrap());
+    assert_eq!(ctx.boards().len(), 3);
+    assert!(!ctx.can_redo());
+    assert_eq!(ctx.undo_depth(), 3);
+}
+
+#[tokio::test]
+async fn test_redo_past_end_returns_false() {
+    let mut ctx = make_ctx().await;
+    // No commands executed — redo should return false
+    assert!(!ctx.redo().unwrap());
+
+    // Execute one, redo should return false (already at tip)
+    ctx.create_board("B".into(), None).unwrap();
+    assert!(!ctx.redo().unwrap());
+
+    // Undo, then redo, then redo again should return false
+    ctx.undo().unwrap();
+    assert!(ctx.redo().unwrap());
+    assert!(!ctx.redo().unwrap());
+}
+
+#[tokio::test]
+async fn test_save_and_reload_preserves_undo_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("history.json");
+    let store = make_json_store(&path);
+    let mut ctx = KanbanContext::empty(store.clone(), kanban_core::AppConfig::default());
+
+    ctx.create_board("B1".into(), None).unwrap();
+    ctx.create_board("B2".into(), None).unwrap();
+    assert_eq!(ctx.boards().len(), 2);
+    assert_eq!(ctx.undo_depth(), 2);
+
+    ctx.save().await.unwrap();
+
+    // Reload from the same file
+    let ctx2 = KanbanContext::load(store, kanban_core::AppConfig::default())
+        .await
+        .unwrap();
+    assert_eq!(ctx2.boards().len(), 2);
+    assert!(
+        ctx2.can_undo(),
+        "undo history should persist across restarts"
+    );
+    assert_eq!(ctx2.undo_depth(), 2);
+}
