@@ -45,6 +45,13 @@ pub trait CommandStore: Send + Sync {
     fn load_snapshot_at(&self, _idx: u64) -> KanbanResult<Option<Snapshot>> {
         Ok(None)
     }
+
+    /// Removes the oldest `drop_count` batches and renumbers the remaining
+    /// batches so they start from index 0. Also removes any indexed snapshots
+    /// for dropped batches and renumbers surviving ones.
+    fn shift_commands(&self, _drop_count: u64) -> KanbanResult<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

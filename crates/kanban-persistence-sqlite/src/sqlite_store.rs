@@ -23,7 +23,7 @@ pub struct SqliteStore {
 
 fn run<F: std::future::Future<Output = T>, T>(f: F) -> T {
     let handle = tokio::runtime::Handle::current();
-    assert!(
+    debug_assert!(
         handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread,
         "SqliteStore requires a multi-threaded Tokio runtime (e.g. #[tokio::main] or \
          tokio::runtime::Runtime::new()). The current_thread runtime is not supported \
@@ -230,6 +230,16 @@ fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {
 
 impl SqliteStore {
     pub async fn open(path: impl AsRef<Path>) -> KanbanResult<Self> {
+        let handle = tokio::runtime::Handle::current();
+        if handle.runtime_flavor() != tokio::runtime::RuntimeFlavor::MultiThread {
+            return Err(KanbanError::Database(
+                "SqliteStore requires a multi-threaded Tokio runtime (e.g. #[tokio::main] or \
+                 tokio::runtime::Runtime::new()). The current_thread runtime is not supported \
+                 because synchronous DataStore methods need to block on async SQLite I/O."
+                    .to_string(),
+            ));
+        }
+
         let options = SqliteConnectOptions::new()
             .filename(path)
             .create_if_missing(true)
@@ -1502,6 +1512,55 @@ impl CommandStore for SqliteStore {
                 .map_err(db_err)
         })?;
         Ok(())
+    }
+
+    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
+        run(async {
+            let mut tx = self.pool.begin().await.map_err(db_err)?;
+
+            // Get the idx values to keep (ordered), skip the first drop_count
+            let kept_ids: Vec<i64> =
+                sqlx::query_scalar("SELECT idx FROM command_log ORDER BY idx LIMIT -1 OFFSET ?")
+                    .bind(drop_count as i64)
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+
+            if kept_ids.is_empty() {
+                sqlx::query("DELETE FROM command_log")
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+            } else {
+                // Delete the oldest drop_count rows
+                sqlx::query("DELETE FROM command_log WHERE idx < ?")
+                    .bind(kept_ids[0])
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+
+                // Renumber remaining rows to be 1-based contiguous
+                for (new_idx, &old_idx) in kept_ids.iter().enumerate() {
+                    let new_val = (new_idx + 1) as i64;
+                    if new_val != old_idx {
+                        sqlx::query("UPDATE command_log SET idx = -? WHERE idx = ?")
+                            .bind(new_val)
+                            .bind(old_idx)
+                            .execute(&mut *tx)
+                            .await
+                            .map_err(db_err)?;
+                    }
+                }
+                // Fix negative indices (used to avoid conflicts during renumbering)
+                sqlx::query("UPDATE command_log SET idx = -idx WHERE idx < 0")
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+            }
+
+            tx.commit().await.map_err(db_err)?;
+            Ok(())
+        })
     }
 
     fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
