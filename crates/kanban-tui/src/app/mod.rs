@@ -1394,6 +1394,7 @@ impl App {
                 self.view.sprints = sprints;
                 self.view.columns = columns;
                 self.view.boards = boards;
+                self.view.graph = self.ctx.graph();
             }
         }
         self.sync_card_list_component();

@@ -1,7 +1,7 @@
 use crate::card_list::CardListId;
 use crate::card_list_component::{CardListComponent, CardListComponentConfig};
 use crate::view_strategy::{UnifiedViewStrategy, ViewStrategy};
-use kanban_domain::{Board, Card, Column, Sprint};
+use kanban_domain::{Board, Card, Column, DependencyGraph, Sprint};
 use ratatui::layout::Rect;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -15,6 +15,7 @@ pub struct ViewState {
     pub sprints: Vec<Sprint>,
     pub columns: Vec<Column>,
     pub cards_by_id: HashMap<Uuid, Card>,
+    pub graph: DependencyGraph,
 }
 
 impl Default for ViewState {
@@ -31,6 +32,7 @@ impl Default for ViewState {
             sprints: Vec::new(),
             columns: Vec::new(),
             cards_by_id: HashMap::new(),
+            graph: DependencyGraph::new(),
         }
     }
 }
