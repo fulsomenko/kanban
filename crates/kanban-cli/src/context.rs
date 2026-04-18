@@ -19,7 +19,12 @@ impl CliContext {
         file_path: &str,
         mut config: AppConfig,
     ) -> KanbanResult<Self> {
-        if file_path.ends_with(".sqlite") || file_path.ends_with(".db") {
+        let is_sqlite = match store_manager.detect_backend(file_path).as_deref() {
+            Some("sqlite") => true,
+            None => file_path.ends_with(".sqlite") || file_path.ends_with(".sqlite3") || file_path.ends_with(".db"),
+            _ => false,
+        };
+        if is_sqlite {
             #[cfg(feature = "sqlite")]
             return Ok(Self {
                 inner: KanbanContext::open_sqlite(file_path, config).await?,
