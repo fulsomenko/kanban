@@ -21,6 +21,15 @@ pub trait CommandStore: Send + Sync {
     /// Removes all batches with index >= after (i.e. retains batches 0..after).
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()>;
 
+    /// Atomically loads all command batches and the count.
+    /// Default implementation calls `command_count()` then `load_commands()`,
+    /// which is not atomic. Backends with interior locks should override.
+    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
+        let count = self.command_count()?;
+        let batches = self.load_commands(0, count)?;
+        Ok((batches, count))
+    }
+
     /// Whether this store supports O(1) snapshot lookup at a given command index.
     /// When true, `undo()`/`redo()` load a stored snapshot instead of replaying.
     fn supports_indexed_snapshots(&self) -> bool {
@@ -120,6 +129,18 @@ mod tests {
 
         store.truncate_commands_after(0).unwrap();
         assert_eq!(store.command_count().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_load_all_commands_returns_consistent_count_and_data() {
+        let store = InMemoryStore::new();
+        store.append_commands(&[make_board_cmd("B1")]).unwrap();
+        store.append_commands(&[make_board_cmd("B2")]).unwrap();
+        store.append_commands(&[make_board_cmd("B3")]).unwrap();
+
+        let (batches, count) = store.load_all_commands().unwrap();
+        assert_eq!(count, 3);
+        assert_eq!(batches.len(), 3);
     }
 
     #[test]
