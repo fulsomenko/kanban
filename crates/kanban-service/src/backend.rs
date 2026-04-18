@@ -10,7 +10,14 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
     fn as_data_store(&self) -> &dyn DataStore;
 }
 
-impl<T: DataStore + CommandStore + Send + Sync + 'static> KanbanBackend for T {
+impl KanbanBackend for kanban_domain::InMemoryStore {
+    fn as_data_store(&self) -> &dyn DataStore {
+        self
+    }
+}
+
+#[cfg(feature = "sqlite")]
+impl KanbanBackend for kanban_persistence_sqlite::SqliteStore {
     fn as_data_store(&self) -> &dyn DataStore {
         self
     }
@@ -31,7 +38,6 @@ mod tests {
     fn test_as_data_store_returns_data_store_ref() {
         let store = InMemoryStore::new();
         let backend: &dyn KanbanBackend = &store;
-        // as_data_store() compiles and returns a valid reference
         let _: &dyn DataStore = backend.as_data_store();
     }
 }
