@@ -161,9 +161,10 @@ CREATE INDEX IF NOT EXISTS idx_archived_cards_archived_at ON archived_cards(arch
 
 -- Command log for undo/redo support
 CREATE TABLE IF NOT EXISTS command_log (
-    idx        INTEGER PRIMARY KEY AUTOINCREMENT,
-    cmd_json   TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    idx           INTEGER PRIMARY KEY AUTOINCREMENT,
+    cmd_json      TEXT NOT NULL,
+    snapshot_data BLOB,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE TABLE IF NOT EXISTS undo_state (

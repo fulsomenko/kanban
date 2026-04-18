@@ -1315,6 +1315,7 @@ version = "0.3.5"
 dependencies = [
  "async-trait",
  "chrono",
+ "flate2",
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",

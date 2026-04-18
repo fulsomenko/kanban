@@ -245,6 +245,20 @@ impl SqliteStore {
     }
 
     async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        let has_snapshot_col: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('command_log') WHERE name = 'snapshot_data'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+
+        if !has_snapshot_col {
+            sqlx::raw_sql("ALTER TABLE command_log ADD COLUMN snapshot_data BLOB")
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
+        }
+
         let has_position_col: bool = sqlx::query_scalar(
             "SELECT COUNT(*) > 0 FROM pragma_table_info('boards') WHERE name = 'position'",
         )
@@ -1159,5 +1173,54 @@ impl CommandStore for SqliteStore {
                 .map_err(db_err)
         })?;
         Ok(())
+    }
+
+    fn supports_indexed_snapshots(&self) -> bool {
+        true
+    }
+
+    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
+        use flate2::write::DeflateEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+
+        let json = serde_json::to_vec(snapshot).map_err(ser_err)?;
+        let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
+        encoder.write_all(&json).map_err(|e| KanbanError::Database(e.to_string()))?;
+        let compressed = encoder.finish().map_err(|e| KanbanError::Database(e.to_string()))?;
+
+        run(async {
+            sqlx::query("UPDATE command_log SET snapshot_data = ? WHERE idx = ?")
+                .bind(&compressed)
+                .bind(idx as i64)
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
+        Ok(())
+    }
+
+    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
+        use flate2::read::DeflateDecoder;
+        use std::io::Read;
+
+        let blob: Option<Vec<u8>> = run(async {
+            sqlx::query_scalar("SELECT snapshot_data FROM command_log WHERE idx = ?")
+                .bind(idx as i64)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
+
+        match blob {
+            Some(compressed) => {
+                let mut decoder = DeflateDecoder::new(&compressed[..]);
+                let mut json = Vec::new();
+                decoder.read_to_end(&mut json).map_err(|e| KanbanError::Database(e.to_string()))?;
+                let snapshot: Snapshot = serde_json::from_slice(&json).map_err(ser_err)?;
+                Ok(Some(snapshot))
+            }
+            None => Ok(None),
+        }
     }
 }
