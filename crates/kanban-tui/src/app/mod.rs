@@ -1723,8 +1723,8 @@ impl App {
         self.check_ended_sprints();
         if self.selection.board.get().is_none() && !self.ctx.boards().is_empty() {
             self.selection.board.set(Some(0));
-            self.refresh_view();
         }
+        self.refresh_view();
     }
 
     pub async fn run(
@@ -1803,6 +1803,7 @@ impl App {
                                 }
                                 // Drain buffered events before next draw to
                                 // prevent input lag when rendering is slow.
+                                let mut saw_tick = false;
                                 while let Some(queued) = events.try_next() {
                                     match queued {
                                         Event::Key(k) => {
@@ -1811,7 +1812,18 @@ impl App {
                                                 break;
                                             }
                                         }
-                                        Event::Tick => {}
+                                        Event::Tick => {
+                                            saw_tick = true;
+                                        }
+                                    }
+                                }
+                                if saw_tick {
+                                    self.handle_animation_tick();
+                                    if let Some(ref banner) = self.ui_state.banner {
+                                        if banner.is_expired(std::time::Duration::from_secs(3)) {
+                                            self.clear_banner();
+                                            self.needs_redraw = true;
+                                        }
                                     }
                                 }
                             }
