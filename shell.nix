@@ -36,6 +36,7 @@ pkgs.mkShell {
     # Development utilities
     bacon
 
+    sqlite
   ] ++ lib.optionals stdenv.isLinux [
     # Clipboard support
     wayland
