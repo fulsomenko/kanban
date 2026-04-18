@@ -50,7 +50,6 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, InputState};
 use kanban_domain::AnimationType;
-use kanban_domain::KanbanOperations;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
@@ -1278,16 +1277,7 @@ impl App {
     }
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<Card> {
-        if self.mode == AppMode::ArchivedCardsView {
-            self.ctx
-                .data_store()
-                .get_archived_card(card_id)
-                .ok()
-                .flatten()
-                .map(|dc| dc.card)
-        } else {
-            self.ctx.get_card(card_id).ok().flatten()
-        }
+        self.view.cards_by_id.get(&card_id).cloned()
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
@@ -1396,6 +1386,16 @@ impl App {
                     search_query,
                 };
                 self.view.strategy.refresh_task_lists(&ctx);
+
+                // Keep the already-fetched data for rendering so the render
+                // path never re-queries the database just to display cards.
+                self.view.cards_by_id = cards_for_display
+                    .into_iter()
+                    .map(|c| (c.id, c))
+                    .collect();
+                self.view.sprints = sprints;
+                self.view.columns = columns;
+                self.view.boards = boards;
             }
         }
         self.sync_card_list_component();
