@@ -618,15 +618,42 @@ impl SqliteStore {
             .await
             .map_err(db_err)?;
 
-        sqlx::query("DELETE FROM card_edges").execute(&mut *tx).await.map_err(db_err)?;
-        sqlx::query("DELETE FROM archived_cards").execute(&mut *tx).await.map_err(db_err)?;
-        sqlx::query("DELETE FROM sprint_logs").execute(&mut *tx).await.map_err(db_err)?;
-        sqlx::query("DELETE FROM cards").execute(&mut *tx).await.map_err(db_err)?;
-        sqlx::query("DELETE FROM sprints").execute(&mut *tx).await.map_err(db_err)?;
-        sqlx::query("DELETE FROM board_sprint_names").execute(&mut *tx).await.map_err(db_err)?;
-        sqlx::query("DELETE FROM board_sprint_counters").execute(&mut *tx).await.map_err(db_err)?;
-        sqlx::query("DELETE FROM columns").execute(&mut *tx).await.map_err(db_err)?;
-        sqlx::query("DELETE FROM boards").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM card_edges")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM archived_cards")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM sprint_logs")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM cards")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM sprints")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM board_sprint_names")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM board_sprint_counters")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM columns")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM boards")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
 
         for board in &snapshot.boards {
             Self::write_board_with_conn(&mut tx, board).await?;
@@ -809,8 +836,7 @@ impl SqliteStore {
     }
 
     async fn write_column_async(&self, column: &Column) -> KanbanResult<()> {
-        Self::write_column_with_conn(&mut *self.pool.acquire().await.map_err(db_err)?, column)
-            .await
+        Self::write_column_with_conn(&mut *self.pool.acquire().await.map_err(db_err)?, column).await
     }
 
     async fn write_sprint_with_conn(
@@ -846,8 +872,7 @@ impl SqliteStore {
     }
 
     async fn write_sprint_async(&self, sprint: &Sprint) -> KanbanResult<()> {
-        Self::write_sprint_with_conn(&mut *self.pool.acquire().await.map_err(db_err)?, sprint)
-            .await
+        Self::write_sprint_with_conn(&mut *self.pool.acquire().await.map_err(db_err)?, sprint).await
     }
 
     async fn write_archived_card_with_conn(

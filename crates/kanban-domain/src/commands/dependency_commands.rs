@@ -419,7 +419,10 @@ mod tests {
         assert!(cmd.execute(&context).is_ok());
         let cards = tc.store.list_all_cards().unwrap();
         assert_eq!(cards.len(), 2);
-        let subcard = cards.iter().find(|c| c.title == "Subcard without description").unwrap();
+        let subcard = cards
+            .iter()
+            .find(|c| c.title == "Subcard without description")
+            .unwrap();
         assert_eq!(subcard.description, None);
     }
 

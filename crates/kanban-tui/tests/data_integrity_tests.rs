@@ -176,7 +176,10 @@ fn test_delete_sprint_unassigns_cards() {
         2
     );
 
-    let cmd = DeleteSprint { sprint_id, timestamp: chrono::Utc::now() };
+    let cmd = DeleteSprint {
+        sprint_id,
+        timestamp: chrono::Utc::now(),
+    };
     cmd.execute(&ctx).unwrap();
 
     assert_eq!(
