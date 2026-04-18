@@ -232,9 +232,11 @@ impl DataStore for InMemoryStore {
 
     fn clear_sprint_from_cards(&self, sprint_id: Uuid) -> KanbanResult<()> {
         let mut state = self.write_state()?;
+        let now = chrono::Utc::now();
         for card in state.cards.values_mut() {
             if card.sprint_id == Some(sprint_id) {
                 card.sprint_id = None;
+                card.updated_at = now;
             }
         }
         Ok(())
@@ -588,6 +590,28 @@ mod tests {
 
         assert!(store.list_cards_by_column(col1.id).unwrap().is_empty());
         assert!(store.get_card(card2_id).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_clear_sprint_from_cards_sets_updated_at() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col = make_column(board.id, "C", 0);
+        let sprint_id = Uuid::new_v4();
+        let mut card = make_card(&mut board, col.id, "C1", 0);
+        card.sprint_id = Some(sprint_id);
+        let card_id = card.id;
+        let before = card.updated_at;
+        store.upsert_card(card).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        store.clear_sprint_from_cards(sprint_id).unwrap();
+
+        let card = store.get_card(card_id).unwrap().unwrap();
+        assert!(
+            card.updated_at > before,
+            "clear_sprint_from_cards should bump updated_at"
+        );
     }
 
     #[test]
