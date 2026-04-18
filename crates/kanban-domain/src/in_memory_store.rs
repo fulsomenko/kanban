@@ -367,12 +367,28 @@ impl DataStore for InMemoryStore {
 
     fn snapshot(&self) -> KanbanResult<Snapshot> {
         let state = self.read_state()?;
+
+        let mut boards: Vec<_> = state.boards.values().cloned().collect();
+        boards.sort_by_key(|b| b.position);
+
+        let mut columns: Vec<_> = state.columns.values().cloned().collect();
+        columns.sort_by_key(|c| c.position);
+
+        let mut cards: Vec<_> = state.cards.values().cloned().collect();
+        cards.sort_by_key(|c| c.position);
+
+        let mut archived_cards: Vec<_> = state.archived_cards.values().cloned().collect();
+        archived_cards.sort_by(|a, b| a.archived_at.cmp(&b.archived_at));
+
+        let mut sprints: Vec<_> = state.sprints.values().cloned().collect();
+        sprints.sort_by_key(|s| s.sprint_number);
+
         Ok(Snapshot::from_data(
-            state.boards.values().cloned().collect(),
-            state.columns.values().cloned().collect(),
-            state.cards.values().cloned().collect(),
-            state.archived_cards.values().cloned().collect(),
-            state.sprints.values().cloned().collect(),
+            boards,
+            columns,
+            cards,
+            archived_cards,
+            sprints,
             state.graph.clone(),
         ))
     }
@@ -886,6 +902,46 @@ mod tests {
         assert_eq!(store2.list_all_columns().unwrap().len(), 1);
         assert_eq!(store2.list_all_cards().unwrap().len(), 1);
         assert_eq!(store2.list_all_sprints().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_snapshot_sorts_entities_by_position() {
+        let store = InMemoryStore::new();
+        let mut board_b = make_board("B");
+        board_b.position = 1;
+        let mut board_a = make_board("A");
+        board_a.position = 0;
+        store.upsert_board(board_b.clone()).unwrap();
+        store.upsert_board(board_a.clone()).unwrap();
+
+        let col_z = make_column(board_a.id, "Z", 2);
+        let col_a = make_column(board_a.id, "A", 0);
+        let col_m = make_column(board_a.id, "M", 1);
+        store.upsert_column(col_z).unwrap();
+        store.upsert_column(col_a.clone()).unwrap();
+        store.upsert_column(col_m).unwrap();
+
+        let card3 = make_card(&mut board_a.clone(), col_a.id, "C3", 2);
+        let card1 = make_card(&mut board_a.clone(), col_a.id, "C1", 0);
+        store.upsert_card(card3).unwrap();
+        store.upsert_card(card1).unwrap();
+
+        let s2 = Sprint::new(board_a.id, 2, None, None);
+        let s1 = Sprint::new(board_a.id, 1, None, None);
+        store.upsert_sprint(s2).unwrap();
+        store.upsert_sprint(s1).unwrap();
+
+        let snap = store.snapshot().unwrap();
+
+        assert_eq!(snap.boards[0].name, "A", "boards should be sorted by position");
+        assert_eq!(snap.boards[1].name, "B");
+        assert_eq!(snap.columns[0].name, "A", "columns should be sorted by position");
+        assert_eq!(snap.columns[1].name, "M");
+        assert_eq!(snap.columns[2].name, "Z");
+        assert_eq!(snap.cards[0].title, "C1", "cards should be sorted by position");
+        assert_eq!(snap.cards[1].title, "C3");
+        assert_eq!(snap.sprints[0].sprint_number, 1, "sprints should be sorted by sprint_number");
+        assert_eq!(snap.sprints[1].sprint_number, 2);
     }
 
     #[test]
