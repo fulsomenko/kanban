@@ -267,7 +267,7 @@ impl App {
                             // Unassign from sprint
                             let unassign_cmd = kanban_domain::commands::Command::Card(
                                 kanban_domain::commands::CardCommand::UnassignFromSprint(
-                                    kanban_domain::commands::UnassignCardFromSprint { card_id },
+                                    kanban_domain::commands::UnassignCardFromSprint { card_id, timestamp: chrono::Utc::now() },
                                 ),
                             );
                             if let Err(e) = self.execute_commands_batch(vec![unassign_cmd]) {
@@ -360,6 +360,7 @@ impl App {
                                 kanban_domain::commands::CardCommand::UnassignFromSprint(
                                     kanban_domain::commands::UnassignCardFromSprint {
                                         card_id: *card_id,
+                                        timestamp: chrono::Utc::now(),
                                     },
                                 ),
                             );

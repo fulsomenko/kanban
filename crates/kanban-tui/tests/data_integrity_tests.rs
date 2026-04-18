@@ -22,6 +22,7 @@ fn test_delete_card_cleans_dependencies() {
         title: "Card A".to_string(),
         position: 0,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
@@ -34,6 +35,7 @@ fn test_delete_card_cleans_dependencies() {
         title: "Card B".to_string(),
         position: 1,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_b = store.list_all_cards().unwrap().last().unwrap().id;
@@ -71,6 +73,7 @@ fn test_delete_column_with_cards_fails() {
         title: "Test Card".to_string(),
         position: 0,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
 
@@ -101,6 +104,7 @@ fn test_delete_column_with_archived_cards_fails() {
         title: "Test Card".to_string(),
         position: 0,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_id = store.list_all_cards().unwrap().last().unwrap().id;
@@ -138,6 +142,7 @@ fn test_delete_sprint_unassigns_cards() {
         title: "Card A".to_string(),
         position: 0,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
@@ -150,6 +155,7 @@ fn test_delete_sprint_unassigns_cards() {
         title: "Card B".to_string(),
         position: 1,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_b = store.list_all_cards().unwrap().last().unwrap().id;
@@ -170,7 +176,7 @@ fn test_delete_sprint_unassigns_cards() {
         2
     );
 
-    let cmd = DeleteSprint { sprint_id };
+    let cmd = DeleteSprint { sprint_id, timestamp: chrono::Utc::now() };
     cmd.execute(&ctx).unwrap();
 
     assert_eq!(
@@ -204,6 +210,7 @@ fn test_archive_card_preserves_edges() {
         title: "Card A".to_string(),
         position: 0,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
@@ -216,6 +223,7 @@ fn test_archive_card_preserves_edges() {
         title: "Card B".to_string(),
         position: 1,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_b = store.list_all_cards().unwrap().last().unwrap().id;
@@ -236,6 +244,7 @@ fn test_archive_card_preserves_edges() {
         card_id: card_a,
         column_id,
         position: 0,
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
 
@@ -280,6 +289,7 @@ fn test_cycle_detection_parent_child() {
         title: "Card A".to_string(),
         position: 0,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
@@ -292,6 +302,7 @@ fn test_cycle_detection_parent_child() {
         title: "Card B".to_string(),
         position: 1,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_b = store.list_all_cards().unwrap().last().unwrap().id;
@@ -304,6 +315,7 @@ fn test_cycle_detection_parent_child() {
         title: "Card C".to_string(),
         position: 2,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_c = store.list_all_cards().unwrap().last().unwrap().id;
@@ -342,6 +354,7 @@ fn test_cycle_detection_blocks() {
         title: "Card A".to_string(),
         position: 0,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_a = store.list_all_cards().unwrap().last().unwrap().id;
@@ -354,6 +367,7 @@ fn test_cycle_detection_blocks() {
         title: "Card B".to_string(),
         position: 1,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_b = store.list_all_cards().unwrap().last().unwrap().id;
@@ -366,6 +380,7 @@ fn test_cycle_detection_blocks() {
         title: "Card C".to_string(),
         position: 2,
         options: Default::default(),
+        timestamp: chrono::Utc::now(),
     };
     cmd.execute(&ctx).unwrap();
     let card_c = store.list_all_cards().unwrap().last().unwrap().id;

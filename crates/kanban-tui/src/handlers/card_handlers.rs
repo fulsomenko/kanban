@@ -388,6 +388,7 @@ impl App {
                     title: self.input.as_str().to_string(),
                     position,
                     options: kanban_domain::CreateCardOptions::default(),
+                    timestamp: chrono::Utc::now(),
                 }));
 
                 if let Err(e) = self.execute_command(create_cmd) {
@@ -755,6 +756,7 @@ impl App {
             card_id,
             column_id: target_column_id,
             position: original_position,
+            timestamp: chrono::Utc::now(),
         }));
 
         if let Err(e) = self.execute_command(cmd) {
