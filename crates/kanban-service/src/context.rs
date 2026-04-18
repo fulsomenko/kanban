@@ -382,8 +382,7 @@ impl KanbanContext {
     /// On the SQLite path `self.store` is a `NullStore`, so this is a no-op.
     pub async fn save(&self) -> KanbanResult<()> {
         // Sync command log from in-memory backend to persistence store
-        let cmd_count = self.backend.command_count()? as usize;
-        let batches = self.backend.load_commands(0, cmd_count as u64)?;
+        let (batches, _cmd_count) = self.backend.load_all_commands()?;
         let baseline_bytes = serde_json::to_vec(&self.baseline_snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         self.store
@@ -767,11 +766,13 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
-        let count = self.archive_cards(vec![id])?;
-        if count == 0 {
-            return Err(KanbanError::not_found("card", id));
+        match self.archive_cards(vec![id]) {
+            Ok(0) | Err(KanbanError::Domain(kanban_domain::DomainError::Validation(_))) => {
+                Err(KanbanError::not_found("card", id))
+            }
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
         }
-        Ok(())
     }
 
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card> {

@@ -371,6 +371,11 @@ impl CommandStore for InMemoryStore {
         Ok(log[from..to].to_vec())
     }
 
+    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
+        let log = self.read_log()?;
+        Ok((log.clone(), log.len() as u64))
+    }
+
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
         let mut log = self.write_log()?;
         log.truncate(after as usize);
@@ -873,16 +878,19 @@ mod tests {
     #[test]
     fn test_load_commands_from_beyond_end_returns_empty() {
         let store = InMemoryStore::new();
-        let cmd1 = crate::commands::Command::Board(
-            crate::commands::BoardCommand::Delete(crate::commands::DeleteBoard {
+        let cmd1 = crate::commands::Command::Board(crate::commands::BoardCommand::Delete(
+            crate::commands::DeleteBoard {
                 board_id: Uuid::new_v4(),
-            }),
-        );
+            },
+        ));
         store.append_commands(&[cmd1.clone()]).unwrap();
         store.append_commands(&[cmd1.clone()]).unwrap();
         store.append_commands(&[cmd1]).unwrap();
 
         let result = store.load_commands(10, 20).unwrap();
-        assert!(result.is_empty(), "Expected empty vec for out-of-bounds range");
+        assert!(
+            result.is_empty(),
+            "Expected empty vec for out-of-bounds range"
+        );
     }
 }
