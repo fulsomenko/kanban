@@ -51,6 +51,15 @@ pub trait DataStore: Send + Sync {
     fn get_graph(&self) -> KanbanResult<DependencyGraph>;
     fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()>;
 
+    fn modify_graph(
+        &self,
+        f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
+    ) -> KanbanResult<()> {
+        let mut graph = self.get_graph()?;
+        f(&mut graph)?;
+        self.set_graph(graph)
+    }
+
     // Snapshot (import/export, JSON file I/O, migration)
     fn snapshot(&self) -> KanbanResult<Snapshot>;
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()>;

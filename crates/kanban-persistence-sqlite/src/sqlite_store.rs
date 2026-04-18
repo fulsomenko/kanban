@@ -564,6 +564,29 @@ impl SqliteStore {
         Ok(cards)
     }
 
+    async fn get_graph_with_conn(conn: &mut sqlx::SqliteConnection) -> KanbanResult<DependencyGraph> {
+        let rows = sqlx::query(
+            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
+             FROM card_edges",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db_err)?;
+        rows_to_graph(&rows)
+    }
+
+    async fn modify_graph_async(
+        &self,
+        f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
+    ) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        let mut graph = Self::get_graph_with_conn(&mut tx).await?;
+        f(&mut graph)?;
+        Self::write_graph_with_conn(&mut tx, &graph).await?;
+        tx.commit().await.map_err(db_err)?;
+        Ok(())
+    }
+
     async fn write_graph_with_conn(
         conn: &mut sqlx::SqliteConnection,
         graph: &DependencyGraph,
@@ -1281,6 +1304,13 @@ impl DataStore for SqliteStore {
 
     fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()> {
         run(self.write_graph_async(&graph))
+    }
+
+    fn modify_graph(
+        &self,
+        f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
+    ) -> KanbanResult<()> {
+        run(self.modify_graph_async(f))
     }
 
     // Snapshot
