@@ -187,7 +187,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         let line = render_card_list_item(CardListItemConfig {
                                             card: &card,
                                             board,
-                                            sprints: &sprints,
+                                            sprints,
                                             is_selected,
                                             is_focused: app.focus.active
                                                 == crate::app::Focus::Cards,
@@ -214,29 +214,27 @@ impl RenderStrategy for SinglePanelRenderer {
                                 "Task",
                             ));
                         }
-                    } else {
-                        if let Some(board) = app.view.boards.get(board_idx.unwrap()) {
-                            let mut board_columns: Vec<_> = app
-                                .view
-                                .columns
-                                .iter()
-                                .filter(|col| col.board_id == board.id)
-                                .collect();
-                            board_columns.sort_by_key(|col| col.position);
+                    } else if let Some(board) = app.view.boards.get(board_idx.unwrap()) {
+                        let mut board_columns: Vec<_> = app
+                            .view
+                            .columns
+                            .iter()
+                            .filter(|col| col.board_id == board.id)
+                            .collect();
+                        board_columns.sort_by_key(|col| col.position);
 
-                            if board_columns.is_empty() {
-                                lines.push(Line::from(Span::styled(
-                                    "  No columns yet. Add columns in board settings.",
-                                    label_text(),
-                                )));
+                        if board_columns.is_empty() {
+                            lines.push(Line::from(Span::styled(
+                                "  No columns yet. Add columns in board settings.",
+                                label_text(),
+                            )));
+                        } else {
+                            let message = if app.selection.active_board_index.is_some() {
+                                "  No tasks yet. Press 'n' to create one!"
                             } else {
-                                let message = if app.selection.active_board_index.is_some() {
-                                    "  No tasks yet. Press 'n' to create one!"
-                                } else {
-                                    "  (Enter/Space) to add tasks"
-                                };
-                                lines.push(Line::from(Span::styled(message, label_text())));
-                            }
+                                "  (Enter/Space) to add tasks"
+                            };
+                            lines.push(Line::from(Span::styled(message, label_text())));
                         }
                     }
                 } else if let Some(task_list) = app.view.strategy.get_active_task_list() {
@@ -284,7 +282,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                     let line = render_card_list_item(CardListItemConfig {
                                         card: &card,
                                         board,
-                                        sprints: &sprints,
+                                        sprints,
                                         is_selected: task_list.get_selected_index()
                                             == Some(*card_idx),
                                         is_focused: app.focus.active == crate::app::Focus::Cards,
@@ -434,7 +432,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                     let line = render_card_list_item(CardListItemConfig {
                                         card: &card,
                                         board,
-                                        sprints: &sprints,
+                                        sprints,
                                         is_selected,
                                         is_focused: app.focus.active == crate::app::Focus::Cards
                                             && is_focused_column,

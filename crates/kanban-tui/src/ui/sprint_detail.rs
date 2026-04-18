@@ -242,7 +242,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
                     let line = render_card_list_item(CardListItemConfig {
                         card: &card,
                         board,
-                        sprints: &sprints,
+                        sprints,
                         is_selected,
                         is_focused,
                         is_multi_selected: false,
