@@ -16,6 +16,14 @@ use uuid::Uuid;
 
 const SCHEMA: &str = include_str!("schema.sql");
 
+/// SQLite-backed persistence store using sqlx connection pool.
+///
+/// # Runtime requirement
+///
+/// This store uses `tokio::task::block_in_place` to run async SQLite operations
+/// synchronously. This requires a **multi-threaded** Tokio runtime
+/// (`#[tokio::test]` or `Runtime::new()`). Using a `current_thread` runtime
+/// will panic.
 pub struct SqliteStore {
     pool: Pool<Sqlite>,
 }
@@ -1290,15 +1298,18 @@ impl CommandStore for SqliteStore {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
         let batch_json = serde_json::to_string(cmds).map_err(ser_err)?;
         let count: i64 = run(async {
+            let mut tx = self.pool.begin().await.map_err(db_err)?;
             sqlx::query("INSERT INTO command_log (cmd_json) VALUES (?)")
                 .bind(&batch_json)
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await
                 .map_err(db_err)?;
-            sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
-                .fetch_one(&self.pool)
+            let c: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
+                .fetch_one(&mut *tx)
                 .await
-                .map_err(db_err)
+                .map_err(db_err)?;
+            tx.commit().await.map_err(db_err)?;
+            Ok::<i64, KanbanError>(c)
         })?;
         Ok(count as u64)
     }
@@ -1327,6 +1338,27 @@ impl CommandStore for SqliteStore {
         rows.iter()
             .map(|json| serde_json::from_str::<Vec<Command>>(json).map_err(ser_err))
             .collect()
+    }
+
+    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
+        run(async {
+            let mut tx = self.pool.begin().await.map_err(db_err)?;
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(db_err)?;
+            let rows: Vec<String> =
+                sqlx::query_scalar("SELECT cmd_json FROM command_log ORDER BY idx")
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+            tx.commit().await.map_err(db_err)?;
+            let batches = rows
+                .iter()
+                .map(|json| serde_json::from_str::<Vec<Command>>(json).map_err(ser_err))
+                .collect::<KanbanResult<Vec<Vec<Command>>>>()?;
+            Ok((batches, count as u64))
+        })
     }
 
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
