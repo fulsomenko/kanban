@@ -470,6 +470,14 @@ async fn test_sqlite_command_store_load_from_beyond_end_returns_empty() {
     assert!(batches.is_empty());
 }
 
+#[tokio::test(flavor = "current_thread")]
+#[should_panic(expected = "SqliteStore requires a multi-threaded Tokio runtime")]
+async fn test_sqlite_on_current_thread_runtime_gives_clear_error() {
+    let (store, _dir) = make_store().await;
+    let board = make_board("CurrentThread");
+    store.upsert_board(board).unwrap();
+}
+
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_concurrent_reads_and_writes_no_panic() {
