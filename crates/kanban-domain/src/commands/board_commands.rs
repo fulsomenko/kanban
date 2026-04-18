@@ -163,11 +163,17 @@ impl DeleteBoard {
             .map(|ac| ac.card.id)
             .collect();
 
-        let mut graph = context.store.get_graph()?;
-        for id in active_card_ids.iter().chain(archived_card_ids.iter()) {
-            graph.cards.remove_card_edges(*id);
-        }
-        context.store.set_graph(graph)?;
+        let all_ids: Vec<Uuid> = active_card_ids
+            .iter()
+            .chain(archived_card_ids.iter())
+            .copied()
+            .collect();
+        context.store.modify_graph(Box::new(move |graph| {
+            for id in &all_ids {
+                graph.cards.remove_card_edges(*id);
+            }
+            Ok(())
+        }))?;
 
         context.store.delete_cards_by_columns(&column_ids)?;
 

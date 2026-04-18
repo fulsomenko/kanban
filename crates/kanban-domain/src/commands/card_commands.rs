@@ -209,9 +209,11 @@ impl RestoreCard {
         context.store.delete_archived_card(self.card_id)?;
         context.store.upsert_card(card)?;
 
-        let mut graph = context.store.get_graph()?;
-        graph.cards.unarchive_node(self.card_id);
-        context.store.set_graph(graph)?;
+        let card_id = self.card_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.cards.unarchive_node(card_id);
+            Ok(())
+        }))?;
         Ok(())
     }
 
@@ -229,9 +231,11 @@ pub struct DeleteCard {
 impl DeleteCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.store.delete_archived_card(self.card_id)?;
-        let mut graph = context.store.get_graph()?;
-        graph.cards.remove_card_edges(self.card_id);
-        context.store.set_graph(graph)?;
+        let card_id = self.card_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.cards.remove_card_edges(card_id);
+            Ok(())
+        }))?;
         Ok(())
     }
 
@@ -254,7 +258,6 @@ impl ArchiveCards {
                 "All card IDs in ArchiveCards batch are invalid",
             ));
         }
-        let mut graph = context.store.get_graph()?;
         for id in &valid_ids {
             let card = context.store.get_card(*id)?.unwrap();
             let original_column_id = card.column_id;
@@ -262,9 +265,13 @@ impl ArchiveCards {
             let archived = crate::ArchivedCard::new(card, original_column_id, original_position);
             context.store.insert_archived_card(archived)?;
             context.store.delete_card(*id)?;
-            graph.cards.archive_card_edges(*id);
         }
-        context.store.set_graph(graph)?;
+        context.store.modify_graph(Box::new(move |graph| {
+            for id in &valid_ids {
+                graph.cards.archive_card_edges(*id);
+            }
+            Ok(())
+        }))?;
         Ok(())
     }
 

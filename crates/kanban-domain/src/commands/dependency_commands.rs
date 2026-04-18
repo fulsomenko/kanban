@@ -49,10 +49,12 @@ pub struct AddBlocksDependencyCommand {
 
 impl AddBlocksDependencyCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let mut graph = context.store.get_graph()?;
-        graph.cards.add_blocks(self.blocker_id, self.blocked_id)?;
-        context.store.set_graph(graph)?;
-        Ok(())
+        let blocker_id = self.blocker_id;
+        let blocked_id = self.blocked_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.cards.add_blocks(blocker_id, blocked_id)?;
+            Ok(())
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -72,10 +74,12 @@ pub struct AddRelatesToDependencyCommand {
 
 impl AddRelatesToDependencyCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let mut graph = context.store.get_graph()?;
-        graph.cards.add_relates_to(self.card_a_id, self.card_b_id)?;
-        context.store.set_graph(graph)?;
-        Ok(())
+        let card_a_id = self.card_a_id;
+        let card_b_id = self.card_b_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.cards.add_relates_to(card_a_id, card_b_id)?;
+            Ok(())
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -95,10 +99,12 @@ pub struct RemoveDependencyCommand {
 
 impl RemoveDependencyCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let mut graph = context.store.get_graph()?;
-        graph.cards.remove_edge(self.source_id, self.target_id);
-        context.store.set_graph(graph)?;
-        Ok(())
+        let source_id = self.source_id;
+        let target_id = self.target_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.cards.remove_edge(source_id, target_id);
+            Ok(())
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -118,10 +124,12 @@ pub struct SetParentCommand {
 
 impl SetParentCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let mut graph = context.store.get_graph()?;
-        graph.cards.set_parent(self.child_id, self.parent_id)?;
-        context.store.set_graph(graph)?;
-        Ok(())
+        let child_id = self.child_id;
+        let parent_id = self.parent_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.cards.set_parent(child_id, parent_id)?;
+            Ok(())
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -141,10 +149,12 @@ pub struct RemoveParentCommand {
 
 impl RemoveParentCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let mut graph = context.store.get_graph()?;
-        graph.cards.remove_parent(self.child_id, self.parent_id)?;
-        context.store.set_graph(graph)?;
-        Ok(())
+        let child_id = self.child_id;
+        let parent_id = self.parent_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.cards.remove_parent(child_id, parent_id)?;
+            Ok(())
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -182,13 +192,14 @@ impl CreateSubcardCommand {
         }
 
         let card_id = card.id;
+        let parent_id = self.parent_id;
         context.store.upsert_board(board)?;
         context.store.upsert_card(card)?;
 
-        let mut graph = context.store.get_graph()?;
-        graph.cards.set_parent(card_id, self.parent_id)?;
-        context.store.set_graph(graph)?;
-        Ok(())
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.cards.set_parent(card_id, parent_id)?;
+            Ok(())
+        }))
     }
 
     pub fn description(&self) -> String {
