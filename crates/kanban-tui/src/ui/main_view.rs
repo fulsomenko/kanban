@@ -37,14 +37,15 @@ pub(super) fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
 
 pub(super) fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     let mut lines = vec![];
+    let boards = app.ctx.boards();
 
-    if app.ctx.boards().is_empty() {
+    if boards.is_empty() {
         lines.push(Line::from(Span::styled(
             "No projects yet. Press 'n' to create one!",
             label_text(),
         )));
     } else {
-        for (idx, board) in app.ctx.boards().iter().enumerate() {
+        for (idx, board) in boards.iter().enumerate() {
             let config = ListItemConfig::new()
                 .selected(app.selection.board.get() == Some(idx))
                 .focused(app.focus.active == Focus::Boards)

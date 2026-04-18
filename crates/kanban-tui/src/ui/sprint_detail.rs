@@ -228,18 +228,19 @@ pub(super) fn render_sprint_task_panel_with_selection(
             "Task",
         ));
 
+        let sprints = app.ctx.sprints();
+
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
-                if let Some(card) = app.ctx.cards().iter().find(|c| c.id == *card_id) {
+                if let Some(card) = app.get_card_by_id(*card_id) {
                     let is_selected = selected_idx == Some(*card_idx) && is_focused;
                     let animation_type = app
                         .animation
                         .animating
                         .get(&card.id)
                         .map(|a| a.animation_type);
-                    let sprints = app.ctx.sprints();
                     let line = render_card_list_item(CardListItemConfig {
-                        card,
+                        card: &card,
                         board,
                         sprints: &sprints,
                         is_selected,

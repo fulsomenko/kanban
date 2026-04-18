@@ -155,6 +155,7 @@ fn render_board_sprints_list(
             label_text(),
         )));
     } else {
+        let all_cards = app.ctx.cards();
         for (sprint_idx, sprint) in board_sprints.iter().enumerate() {
             let is_selected = app.selection.sprint.get() == Some(sprint_idx);
             let is_focused = app.focus.board_focus == BoardFocus::Sprints;
@@ -168,9 +169,7 @@ fn render_board_sprints_list(
 
             let sprint_name = sprint.formatted_name(board, "sprint");
 
-            let card_count = app
-                .ctx
-                .cards()
+            let card_count = all_cards
                 .iter()
                 .filter(|c| c.sprint_id == Some(sprint.id))
                 .count();
@@ -243,13 +242,12 @@ fn render_board_columns_list(
             label_text(),
         )));
     } else {
+        let all_cards = app.ctx.cards();
         for (column_idx, column) in board_columns.iter().enumerate() {
             let is_selected = app.dialog_input.column_selection.get() == Some(column_idx);
             let is_focused = app.focus.board_focus == BoardFocus::Columns;
 
-            let card_count = app
-                .ctx
-                .cards()
+            let card_count = all_cards
                 .iter()
                 .filter(|c| c.column_id == column.id)
                 .count();

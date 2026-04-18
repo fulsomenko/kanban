@@ -150,6 +150,7 @@ impl RenderStrategy for SinglePanelRenderer {
 
                             // Render all cards with column headers interspersed
                             let mut columns_shown = std::collections::HashSet::new();
+                            let sprints = app.ctx.sprints();
 
                             for card_idx in &render_info.visible_card_indices {
                                 // Find which column this card belongs to
@@ -183,7 +184,6 @@ impl RenderStrategy for SinglePanelRenderer {
                                             .animating
                                             .get(&card.id)
                                             .map(|a| a.animation_type);
-                                        let sprints = app.ctx.sprints();
                                         let line = render_card_list_item(CardListItemConfig {
                                             card: &card,
                                             board,
@@ -271,6 +271,8 @@ impl RenderStrategy for SinglePanelRenderer {
                             "Task",
                         ));
 
+                        let sprints = app.ctx.sprints();
+
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
                                 if let Some(card) = app.get_card_by_id(*card_id) {
@@ -279,7 +281,6 @@ impl RenderStrategy for SinglePanelRenderer {
                                         .animating
                                         .get(&card.id)
                                         .map(|a| a.animation_type);
-                                    let sprints = app.ctx.sprints();
                                     let line = render_card_list_item(CardListItemConfig {
                                         card: &card,
                                         board,
@@ -379,6 +380,7 @@ impl RenderStrategy for MultiPanelRenderer {
                     .split(area);
 
                 let active_task_list = app.view.strategy.get_active_task_list();
+                let sprints = app.ctx.sprints();
 
                 for (col_idx, task_list) in task_lists.iter().enumerate() {
                     let mut lines = vec![];
@@ -429,7 +431,6 @@ impl RenderStrategy for MultiPanelRenderer {
                                         .animating
                                         .get(&card.id)
                                         .map(|a| a.animation_type);
-                                    let sprints = app.ctx.sprints();
                                     let line = render_card_list_item(CardListItemConfig {
                                         card: &card,
                                         board,

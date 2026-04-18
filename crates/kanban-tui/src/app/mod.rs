@@ -50,6 +50,7 @@ use crossterm::{
 };
 use kanban_core::{AppConfig, Editable, InputState};
 use kanban_domain::AnimationType;
+use kanban_domain::KanbanOperations;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
@@ -1254,16 +1255,7 @@ impl App {
     pub fn get_selected_card_in_context(&self) -> Option<Card> {
         if let Some(task_list) = self.view.strategy.get_active_task_list() {
             if let Some(card_id) = task_list.get_selected_card_id() {
-                if self.mode == AppMode::ArchivedCardsView {
-                    return self
-                        .ctx
-                        .archived_cards()
-                        .into_iter()
-                        .find(|dc| dc.card.id == card_id)
-                        .map(|dc| dc.card);
-                } else {
-                    return self.ctx.cards().into_iter().find(|c| c.id == card_id);
-                }
+                return self.get_card_by_id(card_id);
             }
         }
         None
@@ -1285,12 +1277,13 @@ impl App {
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<Card> {
         if self.mode == AppMode::ArchivedCardsView {
             self.ctx
-                .archived_cards()
-                .into_iter()
-                .find(|dc| dc.card.id == card_id)
+                .data_store()
+                .get_archived_card(card_id)
+                .ok()
+                .flatten()
                 .map(|dc| dc.card)
         } else {
-            self.ctx.cards().into_iter().find(|c| c.id == card_id)
+            self.ctx.get_card(card_id).ok().flatten()
         }
     }
 
