@@ -1234,6 +1234,74 @@ impl DataStore for SqliteStore {
         })
     }
 
+    fn list_archived_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<Vec<ArchivedCard>> {
+        if column_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        run(async {
+            let placeholders: Vec<&str> = column_ids.iter().map(|_| "?").collect();
+            let sql = format!(
+                "SELECT c.id, c.column_id, c.title, c.description, c.priority, c.status,
+                        c.position, c.due_date, c.points, c.card_number, c.sprint_id,
+                        c.created_at, c.updated_at, c.completed_at,
+                        ac.archived_at, ac.original_column_id, ac.original_position
+                 FROM archived_cards ac
+                 JOIN cards c ON ac.card_id = c.id
+                 WHERE ac.original_column_id IN ({})
+                 ORDER BY ac.archived_at",
+                placeholders.join(", ")
+            );
+            let mut query = sqlx::query(&sql);
+            for id in column_ids {
+                query = query.bind(id.to_string());
+            }
+            let rows = query.fetch_all(&self.pool).await.map_err(db_err)?;
+
+            let card_ids: Vec<String> = rows
+                .iter()
+                .map(|r| r.try_get("id").map_err(db_err))
+                .collect::<KanbanResult<_>>()?;
+            let mut logs_map = self.fetch_sprint_logs_batch(&card_ids).await?;
+
+            let mut result = Vec::with_capacity(rows.len());
+            for row in &rows {
+                let id_str: String = row.try_get("id").map_err(db_err)?;
+                let logs = logs_map.remove(&id_str).unwrap_or_default();
+                let card = row_to_card(row, logs)?;
+                let archived_at_str: String = row.try_get("archived_at").map_err(db_err)?;
+                let orig_col_str: String = row.try_get("original_column_id").map_err(db_err)?;
+                result.push(ArchivedCard {
+                    card,
+                    archived_at: p_dt(&archived_at_str)?,
+                    original_column_id: p_uuid(&orig_col_str)?,
+                    original_position: row.try_get("original_position").map_err(db_err)?,
+                });
+            }
+            Ok(result)
+        })
+    }
+
+    fn clear_sprint_from_archived_cards(
+        &self,
+        sprint_id: Uuid,
+        timestamp: DateTime<Utc>,
+    ) -> KanbanResult<()> {
+        run(async {
+            let now = fmt_dt(&timestamp);
+            sqlx::query(
+                "UPDATE cards SET sprint_id = NULL, updated_at = ?
+                 WHERE sprint_id = ?
+                   AND id IN (SELECT card_id FROM archived_cards)",
+            )
+            .bind(&now)
+            .bind(sprint_id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
     // Sprint
 
     fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>> {

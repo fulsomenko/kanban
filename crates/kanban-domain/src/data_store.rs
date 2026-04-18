@@ -39,6 +39,30 @@ pub trait DataStore: Send + Sync {
     fn insert_archived_card(&self, ac: ArchivedCard) -> KanbanResult<()>;
     fn delete_archived_card(&self, card_id: Uuid) -> KanbanResult<()>;
 
+    fn list_archived_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<Vec<ArchivedCard>> {
+        let all = self.list_archived_cards()?;
+        Ok(all
+            .into_iter()
+            .filter(|ac| column_ids.contains(&ac.original_column_id))
+            .collect())
+    }
+
+    fn clear_sprint_from_archived_cards(
+        &self,
+        sprint_id: Uuid,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> KanbanResult<()> {
+        let all = self.list_archived_cards()?;
+        for mut ac in all {
+            if ac.card.sprint_id == Some(sprint_id) {
+                ac.card.sprint_id = None;
+                ac.card.updated_at = timestamp;
+                self.insert_archived_card(ac)?;
+            }
+        }
+        Ok(())
+    }
+
     // Sprint
     fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>>;
     fn list_sprints_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>>;
