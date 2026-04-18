@@ -869,4 +869,20 @@ mod tests {
         let boards = store.list_boards().unwrap();
         assert_eq!(boards.len(), 10);
     }
+
+    #[test]
+    fn test_load_commands_from_beyond_end_returns_empty() {
+        let store = InMemoryStore::new();
+        let cmd1 = crate::commands::Command::Board(
+            crate::commands::BoardCommand::Delete(crate::commands::DeleteBoard {
+                board_id: Uuid::new_v4(),
+            }),
+        );
+        store.append_commands(&[cmd1.clone()]).unwrap();
+        store.append_commands(&[cmd1.clone()]).unwrap();
+        store.append_commands(&[cmd1]).unwrap();
+
+        let result = store.load_commands(10, 20).unwrap();
+        assert!(result.is_empty(), "Expected empty vec for out-of-bounds range");
+    }
 }

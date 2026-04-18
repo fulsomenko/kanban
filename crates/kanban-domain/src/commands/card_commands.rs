@@ -504,15 +504,30 @@ mod tests {
     }
 
     #[test]
-    fn test_archive_cards_all_invalid_ids_skipped_returns_ok() {
+    fn test_archive_cards_all_invalid_ids_returns_error() {
         let tc = TestContext::new();
         let context = tc.as_command_context();
         let cmd = ArchiveCards {
             ids: vec![Uuid::new_v4()],
         };
         let result = cmd.execute(&context);
-        assert!(result.is_ok());
-        assert_eq!(tc.store.list_archived_cards().unwrap().len(), 0);
+        assert!(result.is_err(), "Expected error when all IDs are invalid");
+    }
+
+    #[test]
+    fn test_move_cards_all_invalid_ids_returns_error() {
+        let tc = TestContext::new();
+        let column = crate::Column::new(Uuid::new_v4(), "Col".to_string(), 0);
+        let column_id = column.id;
+        tc.store.upsert_column(column).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = MoveCards {
+            ids: vec![Uuid::new_v4()],
+            column_id,
+        };
+        let result = cmd.execute(&context);
+        assert!(result.is_err(), "Expected error when all IDs are invalid");
     }
 
     #[test]

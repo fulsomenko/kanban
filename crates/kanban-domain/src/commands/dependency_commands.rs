@@ -417,4 +417,28 @@ mod tests {
         assert_eq!(cards.len(), 1);
         assert_eq!(cards[0].description, None);
     }
+
+    #[test]
+    fn test_create_subcard_with_nonexistent_parent_returns_not_found() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = CreateSubcardCommand {
+            parent_id: Uuid::new_v4(),
+            board_id,
+            column_id,
+            title: "Subcard".to_string(),
+            description: None,
+            position: 0,
+        };
+        let result = cmd.execute(&context);
+        assert!(result.is_err(), "Expected error for nonexistent parent");
+        assert!(result.unwrap_err().is_not_found());
+    }
 }
