@@ -104,6 +104,7 @@ pub struct App {
     pub export_dialog: Option<ExportDialogState>,
     pub migration_state: MigrationState,
     pub export_result_rx: Option<tokio::sync::oneshot::Receiver<Result<String, String>>>,
+    pub needs_redraw: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,6 +270,7 @@ impl App {
             export_dialog: None,
             migration_state: MigrationState::Idle,
             export_result_rx: None,
+            needs_redraw: true,
         };
 
         Ok((app, save_rx))
@@ -340,6 +342,7 @@ impl App {
             export_dialog: None,
             migration_state: MigrationState::Idle,
             export_result_rx: None,
+            needs_redraw: true,
         })
     }
 
@@ -1785,24 +1788,32 @@ impl App {
             let mut events = EventHandler::new();
 
             loop {
-                terminal.draw(|frame| ui::render(self, frame))?;
+                if self.needs_redraw {
+                    terminal.draw(|frame| ui::render(self, frame))?;
+                    self.needs_redraw = false;
+                }
 
                 tokio::select! {
                     Some(event) = events.next() => {
                         match event {
                             Event::Key(key) => {
+                                self.needs_redraw = true;
                                 let should_restart = self.handle_key_event(key, &mut terminal, &events);
                                 if should_restart {
                                     break;
                                 }
                             }
                             Event::Tick => {
+                                if !self.animation.animating.is_empty() {
+                                    self.needs_redraw = true;
+                                }
                                 self.handle_animation_tick();
 
                                 // Auto-clear banner after 3 seconds
                                 if let Some(ref banner) = self.ui_state.banner {
                                     if banner.is_expired(std::time::Duration::from_secs(3)) {
                                         self.clear_banner();
+                                        self.needs_redraw = true;
                                     }
                                 }
 
@@ -1812,6 +1823,7 @@ impl App {
                                 match self.pending_key {
                                     Some('o') => {
                                         self.pending_key = None;
+                                        self.needs_redraw = true;
                                         // Pause file watcher to avoid conflict detection for our own save
                                         if let Some(ref watcher) = self.persistence.file_watcher {
                                             watcher.pause();
@@ -1827,6 +1839,7 @@ impl App {
                                     }
                                     Some('t') => {
                                         self.pending_key = None;
+                                        self.needs_redraw = true;
                                         // Reload from disk
                                         {
                                             let store = self.ctx.store().clone();
@@ -1853,6 +1866,7 @@ impl App {
                                     }
                                     Some('r') => {
                                         self.pending_key = None;
+                                        self.needs_redraw = true;
                                         self.auto_reload_from_external_change().await;
                                     }
                                     // Don't consume pending_key for other values (e.g., 'g' for gg sequence)
@@ -1862,6 +1876,7 @@ impl App {
                                 // Check if help menu pending action should execute
                                 if let Some((start_time, action)) = &self.ui_state.help_pending_action {
                                     if start_time.elapsed().as_millis() >= 100 {
+                                        self.needs_redraw = true;
                                         if let AppMode::Help(previous_mode) = &self.mode {
                                             self.mode = (**previous_mode).clone();
                                         } else {
@@ -1885,6 +1900,7 @@ impl App {
                             std::future::pending().await
                         }
                     } => {
+                        self.needs_redraw = true;
                         let old_config = match std::mem::replace(&mut self.migration_state, MigrationState::Idle) {
                             MigrationState::Migrating { old_config, .. } => old_config,
                             MigrationState::Idle => unreachable!(),
@@ -1900,6 +1916,7 @@ impl App {
                             std::future::pending().await
                         }
                     } => {
+                        self.needs_redraw = true;
                         self.export_result_rx = None;
                         if let Some(result) = export_result {
                             match result {
@@ -1950,6 +1967,7 @@ impl App {
                             std::future::pending().await
                         }
                     } => {
+                        self.needs_redraw = true;
                         // Check if this is our own write by comparing instance IDs
                         {
                             let store = self.ctx.store().clone();
@@ -2259,6 +2277,7 @@ impl App {
             export_dialog: None,
             migration_state: MigrationState::Idle,
             export_result_rx: None,
+            needs_redraw: true,
         }
     }
 }
