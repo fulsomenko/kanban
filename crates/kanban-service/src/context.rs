@@ -37,12 +37,15 @@ pub struct BatchOperationFailure {
     pub error: String,
 }
 
+pub const MAX_UNDO_DEPTH: usize = 200;
+
 pub struct KanbanContext {
     backend: Arc<dyn KanbanBackend>,
     app_config: AppConfig,
     store: Arc<dyn PersistenceStore + Send + Sync>,
     baseline_snapshot: Snapshot,
     undo_cursor: usize,
+    command_count: usize,
     dirty: bool, // JSON-only: SQLite writes go to DB immediately
     conflict_pending: bool,
 }
@@ -81,12 +84,15 @@ impl KanbanContext {
             data
         };
 
+        let command_count = batches.len();
+
         Ok(Self {
             backend: Arc::new(backend),
             app_config: config,
             store,
             baseline_snapshot,
             undo_cursor,
+            command_count,
             dirty: false,
             conflict_pending: false,
         })
@@ -104,13 +110,15 @@ impl KanbanContext {
         use kanban_persistence_sqlite::SqliteStore;
         let store = SqliteStore::open(path).await?;
         let baseline = store.snapshot()?;
-        let undo_cursor = store.command_count()? as usize;
+        let command_count = store.command_count()? as usize;
+        let undo_cursor = command_count;
         Ok(Self {
             backend: Arc::new(store),
             app_config: config,
             store: Arc::new(NullStore::new()),
             baseline_snapshot: baseline,
             undo_cursor,
+            command_count,
             dirty: false,
             conflict_pending: false,
         })
@@ -130,6 +138,7 @@ impl KanbanContext {
             store,
             baseline_snapshot: Snapshot::new(),
             undo_cursor: 0,
+            command_count: 0,
             dirty: false,
             conflict_pending: false,
         }
@@ -186,8 +195,7 @@ impl KanbanContext {
     ///
     /// After success: `undo_cursor` is incremented by 1 (pointing past the new batch).
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
-        let count = self.backend.command_count()? as usize;
-        if self.undo_cursor < count {
+        if self.undo_cursor < self.command_count {
             self.backend
                 .truncate_commands_after(self.undo_cursor as u64)?;
         }
@@ -209,11 +217,23 @@ impl KanbanContext {
 
         self.backend.append_commands(&commands)?;
         self.undo_cursor += 1;
+        self.command_count = self.undo_cursor;
 
         if self.backend.supports_indexed_snapshots() {
             let snap = self.backend.snapshot()?;
             self.backend
                 .store_snapshot_at(self.undo_cursor as u64, &snap)?;
+        }
+
+        // Prune old commands if undo depth exceeds the limit
+        if self.undo_cursor > MAX_UNDO_DEPTH {
+            let excess = self.undo_cursor - MAX_UNDO_DEPTH;
+            if let Some(new_baseline) = self.backend.load_snapshot_at(excess as u64)? {
+                self.baseline_snapshot = new_baseline;
+            }
+            self.backend.shift_commands(excess as u64)?;
+            self.undo_cursor = MAX_UNDO_DEPTH;
+            self.command_count = MAX_UNDO_DEPTH;
         }
 
         self.dirty = true;
@@ -264,8 +284,7 @@ impl KanbanContext {
     /// Returns `false` if `undo_cursor` is already at the tip (no redo available).
     /// `load_commands(from, to)` uses half-open range `[from, to)`.
     pub fn redo(&mut self) -> KanbanResult<bool> {
-        let count = self.backend.command_count()? as usize;
-        if self.undo_cursor >= count {
+        if self.undo_cursor >= self.command_count {
             return Ok(false);
         }
 
@@ -301,13 +320,14 @@ impl KanbanContext {
     }
 
     pub fn can_redo(&self) -> bool {
-        self.undo_cursor < self.backend.command_count().unwrap_or(0) as usize
+        self.undo_cursor < self.command_count
     }
 
     pub fn clear_history(&mut self) -> KanbanResult<()> {
         self.baseline_snapshot = self.backend.snapshot()?;
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
+        self.command_count = 0;
         Ok(())
     }
 
@@ -316,8 +336,7 @@ impl KanbanContext {
     }
 
     pub fn redo_depth(&self) -> usize {
-        let count = self.backend.command_count().unwrap_or(0) as usize;
-        count.saturating_sub(self.undo_cursor)
+        self.command_count.saturating_sub(self.undo_cursor)
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -1130,6 +1149,7 @@ impl KanbanOperations for KanbanContext {
         self.baseline_snapshot = self.backend.snapshot()?;
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
+        self.command_count = 0;
         self.dirty = true;
 
         Ok(board)
