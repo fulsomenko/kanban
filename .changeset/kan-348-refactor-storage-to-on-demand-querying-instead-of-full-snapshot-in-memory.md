@@ -22,7 +22,7 @@ bump: minor
 - Eliminated N+1 SQL query pattern when loading sprint logs and board auxiliary data on the SQLite backend
 
 ### Removed
-- `SqliteBlobStore` and `SqliteStoreFactory` — replaced by direct `SqliteStore` wiring through `StoreManager`
+- `SqliteBlobStore` and `SqliteStoreFactory` — replaced by `SqliteStore` (formerly `SqliteDataStore`), wired directly through `StoreManager`
 - `InMemoryDataStore` type alias — use `InMemoryStore` directly
 - `UndoPointId` and snapshot-based undo-point methods from `DataStore` trait — superseded by command-replay undo
 - Command log methods from `PersistenceStore` trait — moved to the dedicated `CommandStore` trait
