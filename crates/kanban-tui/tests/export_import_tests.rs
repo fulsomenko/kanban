@@ -216,6 +216,7 @@ async fn test_failed_import_clears_save_file() {
     assert!(app.persistence.save_file.is_none());
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_async_load_initial_state_sqlite() {
     use kanban_core::AppConfig;

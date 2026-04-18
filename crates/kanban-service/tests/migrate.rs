@@ -47,6 +47,7 @@ async fn test_migrate_store_json_to_json_round_trip() {
     assert!(to.exists());
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_json_to_sqlite() {
     let dir = tempfile::tempdir().unwrap();
@@ -87,6 +88,7 @@ async fn test_migrate_store_fails_if_source_missing() {
     assert!(err.to_string().contains("not found"));
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_repairs_dangling_sprint_id() {
     let dir = tempfile::tempdir().unwrap();
@@ -133,6 +135,7 @@ async fn test_migrate_store_repairs_dangling_sprint_id() {
     );
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_repairs_orphaned_column_id() {
     let dir = tempfile::tempdir().unwrap();
@@ -179,6 +182,7 @@ async fn test_migrate_store_repairs_orphaned_column_id() {
     );
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_cleans_up_destination_on_failure() {
     let dir = tempfile::tempdir().unwrap();

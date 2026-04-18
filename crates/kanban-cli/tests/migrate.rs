@@ -19,6 +19,7 @@ async fn create_populated_json_context(store: Arc<dyn PersistenceStore + Send + 
     ctx
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_json_to_sqlite_roundtrip() {
     let dir = TempDir::new().unwrap();
@@ -49,6 +50,7 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
     assert_eq!(orig_board.card_prefix, loaded_board.card_prefix);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_sqlite_to_json_roundtrip() {
     let dir = TempDir::new().unwrap();
@@ -111,6 +113,7 @@ async fn test_migrate_json_to_json_roundtrip() {
     assert_eq!(loaded.list_boards().unwrap()[0].name, "Test Board");
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     let dir = TempDir::new().unwrap();
@@ -199,6 +202,7 @@ async fn test_migrate_rejects_existing_target() {
     assert!(stderr.contains("already exists"), "stderr: {stderr}");
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_cli_with_explicit_output() {
     use assert_cmd::cargo_bin_cmd;
@@ -234,6 +238,7 @@ async fn test_migrate_cli_with_explicit_output() {
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_cli_explicit_output_path() {
     use assert_cmd::cargo_bin_cmd;

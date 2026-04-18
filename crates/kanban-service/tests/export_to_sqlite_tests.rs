@@ -8,6 +8,7 @@ fn manager() -> StoreManager {
     StoreManager::new(registry)
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_export_to_sqlite_succeeds_and_creates_file() {
     let dir = tempfile::tempdir().unwrap();
@@ -24,6 +25,7 @@ async fn test_export_to_sqlite_succeeds_and_creates_file() {
     );
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_export_to_sqlite_result_is_readable_via_open_sqlite() {
     use kanban_core::AppConfig;

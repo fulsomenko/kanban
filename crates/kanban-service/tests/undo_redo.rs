@@ -35,10 +35,10 @@ async fn test_snapshot_roundtrip_preserves_all_fields() {
         .unwrap();
 
     let snap = ctx.snapshot();
-    ctx.apply_snapshot(Snapshot::new());
+    ctx.apply_snapshot(Snapshot::new()).unwrap();
     assert!(ctx.boards().is_empty());
 
-    ctx.apply_snapshot(snap.clone());
+    ctx.apply_snapshot(snap.clone()).unwrap();
     assert_eq!(ctx.snapshot(), snap);
 }
 
@@ -49,6 +49,7 @@ async fn test_execute_enables_undo() {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
+        position: 0,
     }));
     ctx.execute(vec![cmd]).unwrap();
     assert!(ctx.can_undo());
@@ -61,11 +62,12 @@ async fn test_undo_restores_previous_state() {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
+        position: 0,
     }));
     ctx.execute(vec![cmd]).unwrap();
     assert_eq!(ctx.boards().len(), 1);
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert!(ctx.boards().is_empty());
 }
 
@@ -76,12 +78,13 @@ async fn test_redo_restores_undone_state() {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
+        position: 0,
     }));
     ctx.execute(vec![cmd]).unwrap();
-    ctx.undo();
+    ctx.undo().unwrap();
     assert!(ctx.boards().is_empty());
 
-    assert!(ctx.redo());
+    assert!(ctx.redo().unwrap());
     assert_eq!(ctx.boards().len(), 1);
 }
 
@@ -99,15 +102,17 @@ async fn test_new_action_after_undo_clears_redo() {
         id: uuid::Uuid::new_v4(),
         name: "A".into(),
         card_prefix: None,
+        position: 0,
     }))])
     .unwrap();
-    ctx.undo();
+    ctx.undo().unwrap();
     assert!(ctx.can_redo());
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
+        position: 0,
     }))])
     .unwrap();
     assert!(!ctx.can_redo());
@@ -124,6 +129,7 @@ async fn test_reload_no_longer_clears_history() {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
+        position: 0,
     }))])
     .unwrap();
     ctx.save().await.unwrap();
@@ -132,6 +138,7 @@ async fn test_reload_no_longer_clears_history() {
         id: uuid::Uuid::new_v4(),
         name: "B2".into(),
         card_prefix: None,
+        position: 0,
     }))])
     .unwrap();
     assert!(ctx.can_undo());
@@ -150,6 +157,7 @@ async fn test_dirty_flag_lifecycle() {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
+        position: 0,
     }))])
     .unwrap();
     assert!(ctx.is_dirty());
@@ -187,7 +195,7 @@ async fn test_operations_update_card_is_undoable() {
     .unwrap();
     assert_eq!(ctx.get_card(card.id).unwrap().unwrap().title, "Updated");
 
-    ctx.undo();
+    ctx.undo().unwrap();
     assert_eq!(ctx.get_card(card.id).unwrap().unwrap().title, "Original");
 }
 
@@ -214,7 +222,7 @@ async fn test_archive_cards_creates_single_undo_entry() {
     assert_eq!(ctx.archived_cards().len(), 3);
 
     // Single undo should restore all 3 cards
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.cards().len(), 3);
     assert_eq!(ctx.archived_cards().len(), 0);
 
@@ -231,25 +239,24 @@ async fn test_create_sprint_undo_restores_board_counters() {
     let _sprint = ctx.create_sprint(board.id, None, None).unwrap();
     assert_eq!(ctx.sprints().len(), 1);
 
-    ctx.undo();
+    ctx.undo().unwrap();
     assert_eq!(ctx.sprints().len(), 0);
 }
 
 #[tokio::test]
-async fn test_import_board_is_undoable() {
+async fn test_import_board_clears_history() {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("Export".into(), None).unwrap();
     let _col = ctx.create_column(board.id, "C".into(), None).unwrap();
     let json = ctx.export_board(Some(board.id)).unwrap();
 
-    // Import into a fresh context to avoid duplicate UUID errors
     let mut ctx2 = make_ctx().await;
     ctx2.import_board(&json).unwrap();
     assert_eq!(ctx2.boards().len(), 1);
     assert_eq!(ctx2.boards()[0].name, "Export");
 
-    ctx2.undo();
-    assert_eq!(ctx2.boards().len(), 0);
+    assert!(!ctx2.can_undo(), "import should clear history");
+    assert_eq!(ctx2.undo_depth(), 0);
 }
 
 #[tokio::test]
@@ -265,7 +272,6 @@ async fn test_import_board_includes_archived_cards() {
 
     let json = ctx.export_board(None).unwrap();
 
-    // Import into a fresh context to avoid duplicate UUID errors
     let mut ctx2 = make_ctx().await;
     ctx2.import_board(&json).unwrap();
     assert_eq!(
@@ -273,9 +279,7 @@ async fn test_import_board_includes_archived_cards() {
         1,
         "imported archived cards should appear"
     );
-
-    ctx2.undo();
-    assert_eq!(ctx2.archived_cards().len(), 0);
+    assert!(!ctx2.can_undo(), "import should clear history");
 }
 
 #[tokio::test]
@@ -314,6 +318,7 @@ async fn test_undo_pops_before_pushing_to_redo() {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
+        position: 0,
     }))])
     .unwrap();
     ctx.clear_history();
@@ -322,10 +327,11 @@ async fn test_undo_pops_before_pushing_to_redo() {
         id: uuid::Uuid::new_v4(),
         name: "B2".into(),
         card_prefix: None,
+        position: 0,
     }))])
     .unwrap();
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.redo_depth(), 1);
     assert_eq!(ctx.undo_depth(), 0);
 }
@@ -337,11 +343,12 @@ async fn test_redo_pops_before_pushing_to_undo() {
         id: uuid::Uuid::new_v4(),
         name: "B".into(),
         card_prefix: None,
+        position: 0,
     }))])
     .unwrap();
-    ctx.undo();
+    ctx.undo().unwrap();
 
-    assert!(ctx.redo());
+    assert!(ctx.redo().unwrap());
     assert_eq!(ctx.undo_depth(), 1);
     assert_eq!(ctx.redo_depth(), 0);
 }
@@ -349,7 +356,7 @@ async fn test_redo_pops_before_pushing_to_undo() {
 #[tokio::test]
 async fn test_undo_on_empty_history_does_not_corrupt() {
     let mut ctx = make_ctx().await;
-    assert!(!ctx.undo());
+    assert!(!ctx.undo().unwrap());
     assert_eq!(ctx.undo_depth(), 0);
     assert_eq!(ctx.redo_depth(), 0);
 }
@@ -365,6 +372,7 @@ async fn test_execute_batch_partial_failure_rollback_leaves_clean_undo_stack() {
             id: uuid::Uuid::new_v4(),
             name: "B2".into(),
             card_prefix: None,
+            position: 0,
         })),
         Command::Board(BoardCommand::Update(UpdateBoard {
             board_id: uuid::Uuid::nil(),
@@ -445,7 +453,7 @@ async fn test_move_cards_single_undo_entry() {
     ctx.move_cards(vec![c1.id, c2.id], col2.id).unwrap();
     assert!(ctx.cards().iter().all(|c| c.column_id == col2.id));
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert!(ctx.cards().iter().all(|c| c.column_id == col1.id));
     assert!(!ctx.can_undo());
 }
@@ -504,7 +512,7 @@ async fn test_assign_cards_to_sprint_creates_single_undo_entry() {
     );
 
     // Single undo should restore all 3 cards
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.get_card(c1.id).unwrap().unwrap().sprint_id, None);
     assert_eq!(ctx.get_card(c2.id).unwrap().unwrap().sprint_id, None);
     assert_eq!(ctx.get_card(c3.id).unwrap().unwrap().sprint_id, None);
@@ -524,6 +532,7 @@ async fn test_execute_batch_partial_failure_rolls_back() {
             id: uuid::Uuid::new_v4(),
             name: "B2".into(),
             card_prefix: None,
+            position: 0,
         })),
         Command::Board(BoardCommand::Update(UpdateBoard {
             board_id: uuid::Uuid::nil(),
@@ -555,17 +564,19 @@ async fn test_execute_batch_success_is_undoable() {
             id: uuid::Uuid::new_v4(),
             name: "B2".into(),
             card_prefix: None,
+            position: 0,
         })),
         Command::Board(BoardCommand::Create(CreateBoard {
             id: uuid::Uuid::new_v4(),
             name: "B3".into(),
             card_prefix: None,
+            position: 0,
         })),
     ];
     ctx.execute(batch).unwrap();
     assert_eq!(ctx.boards().len(), 3);
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.boards().len(), 1);
     assert!(!ctx.can_undo());
 }
@@ -589,7 +600,7 @@ async fn test_import_entities_is_undoable() {
     ctx.execute(vec![cmd]).unwrap();
     assert_eq!(ctx.boards().len(), 2);
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.boards().len(), 1);
     assert_eq!(ctx.boards()[0].name, "B1");
 }
@@ -622,7 +633,7 @@ async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() {
     assert!(ctx.is_dirty());
     assert_eq!(ctx.archived_cards().len(), 2);
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.cards().len(), 2);
     assert_eq!(ctx.archived_cards().len(), 0);
     assert!(
@@ -665,7 +676,7 @@ async fn test_detailed_archive_partial_success_is_undoable() {
     assert!(ctx.is_dirty());
     assert_eq!(ctx.archived_cards().len(), 1);
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.cards().len(), 1);
     assert_eq!(ctx.archived_cards().len(), 0);
 }
@@ -691,7 +702,7 @@ async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() {
     assert!(ctx.is_dirty());
     assert!(ctx.cards().iter().all(|c| c.column_id == col_b.id));
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert!(ctx.cards().iter().all(|c| c.column_id == col_a.id));
     assert!(
         !ctx.can_undo(),
@@ -737,7 +748,7 @@ async fn test_move_cards_detailed_partial_success_is_undoable() {
     assert!(ctx.is_dirty());
     assert_eq!(ctx.cards().first().unwrap().column_id, col_b.id);
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.cards().first().unwrap().column_id, col_a.id);
 }
 
@@ -769,7 +780,7 @@ async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entr
         Some(sprint.id)
     );
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.get_card(c1.id).unwrap().unwrap().sprint_id, None);
     assert_eq!(ctx.get_card(c2.id).unwrap().unwrap().sprint_id, None);
     assert!(
@@ -820,7 +831,7 @@ async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() {
         Some(sprint.id)
     );
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.get_card(card.id).unwrap().unwrap().sprint_id, None);
 }
 
@@ -868,7 +879,7 @@ async fn test_compact_column_positions_is_undoable() {
         1
     );
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(
         ctx.cards().iter().find(|c| c.id == c1.id).unwrap().position,
         0
@@ -893,11 +904,11 @@ async fn test_undo_cursor_tracks_command_count() {
     assert_eq!(ctx.undo_depth(), 2);
     assert_eq!(ctx.redo_depth(), 0);
 
-    ctx.undo();
+    ctx.undo().unwrap();
     assert_eq!(ctx.undo_depth(), 1);
     assert_eq!(ctx.redo_depth(), 1);
 
-    ctx.undo();
+    ctx.undo().unwrap();
     assert_eq!(ctx.undo_depth(), 0);
     assert_eq!(ctx.redo_depth(), 2);
 }
@@ -908,10 +919,10 @@ async fn test_redo_uses_stored_commands() {
     let board = ctx.create_board("B".into(), None).unwrap();
     let board_id = board.id;
 
-    ctx.undo();
+    ctx.undo().unwrap();
     assert!(ctx.boards().is_empty());
 
-    ctx.redo();
+    ctx.redo().unwrap();
     let boards = ctx.boards();
     assert_eq!(boards.len(), 1);
     assert_eq!(boards[0].id, board_id, "redo must replay the original command, producing the same id");

@@ -176,6 +176,7 @@ async fn create_test_sqlite(dir: &std::path::Path, name: &str, boards: &[&str]) 
     path_str
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_valid_sqlite_returns_snapshot() {
     let dir = tempfile::tempdir().unwrap();
@@ -188,6 +189,7 @@ async fn test_validate_and_load_valid_sqlite_returns_snapshot() {
     assert_eq!(snapshot.boards.len(), 1);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_sqlite_preserves_board_data() {
     let dir = tempfile::tempdir().unwrap();

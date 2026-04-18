@@ -9,6 +9,7 @@ async fn open_sqlite_ctx(dir: &TempDir) -> KanbanContext {
         .expect("open_sqlite must succeed")
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_backend_create_board_and_list() {
     let dir = TempDir::new().unwrap();
@@ -22,6 +23,7 @@ async fn test_sqlite_backend_create_board_and_list() {
     assert_eq!(boards[0].name, "Test Board");
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_backend_full_workflow() {
     let dir = TempDir::new().unwrap();
@@ -44,6 +46,7 @@ async fn test_sqlite_backend_full_workflow() {
     assert_eq!(ctx.list_archived_cards().unwrap().len(), 1);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_backend_undo_redo() {
     let dir = TempDir::new().unwrap();
@@ -52,13 +55,41 @@ async fn test_sqlite_backend_undo_redo() {
     ctx.create_board("Board 1".to_string(), None).unwrap();
     assert_eq!(ctx.list_boards().unwrap().len(), 1);
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert_eq!(ctx.list_boards().unwrap().len(), 0);
 
-    assert!(ctx.redo());
+    assert!(ctx.redo().unwrap());
     assert_eq!(ctx.list_boards().unwrap().len(), 1);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_backend_undo_cursor_restored_after_reopen() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
+
+    {
+        let mut ctx = KanbanContext::open_sqlite(&path, AppConfig::default())
+            .await
+            .unwrap();
+        ctx.create_board("Board 1".to_string(), None).unwrap();
+        ctx.create_board("Board 2".to_string(), None).unwrap();
+        assert_eq!(ctx.undo_depth(), 2);
+    }
+
+    let ctx2 = KanbanContext::open_sqlite(&path, AppConfig::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        ctx2.undo_depth(),
+        2,
+        "undo_cursor should be restored from command log on reopen"
+    );
+    assert!(ctx2.can_undo());
+    assert!(!ctx2.can_redo());
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_backend_data_persists_across_opens() {
     let dir = TempDir::new().unwrap();
