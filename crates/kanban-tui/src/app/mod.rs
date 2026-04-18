@@ -1802,6 +1802,19 @@ impl App {
                                 if should_restart {
                                     break;
                                 }
+                                // Drain buffered events before next draw to
+                                // prevent input lag when rendering is slow.
+                                while let Some(queued) = events.try_next() {
+                                    match queued {
+                                        Event::Key(k) => {
+                                            let should_restart = self.handle_key_event(k, &mut terminal, &events);
+                                            if should_restart {
+                                                break;
+                                            }
+                                        }
+                                        Event::Tick => {}
+                                    }
+                                }
                             }
                             Event::Tick => {
                                 if !self.animation.animating.is_empty() {
