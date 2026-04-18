@@ -925,7 +925,10 @@ async fn test_redo_uses_stored_commands() {
     ctx.redo().unwrap();
     let boards = ctx.boards();
     assert_eq!(boards.len(), 1);
-    assert_eq!(boards[0].id, board_id, "redo must replay the original command, producing the same id");
+    assert_eq!(
+        boards[0].id, board_id,
+        "redo must replay the original command, producing the same id"
+    );
 }
 
 #[tokio::test]
@@ -935,7 +938,14 @@ async fn test_clear_history_resets_baseline() {
     assert!(ctx.can_undo());
 
     ctx.clear_history();
-    assert!(!ctx.can_undo(), "clear_history makes current state the new baseline");
+    assert!(
+        !ctx.can_undo(),
+        "clear_history makes current state the new baseline"
+    );
     assert!(!ctx.can_redo(), "clear_history drops all redo entries too");
-    assert_eq!(ctx.boards().len(), 1, "clear_history preserves current state");
+    assert_eq!(
+        ctx.boards().len(),
+        1,
+        "clear_history preserves current state"
+    );
 }

@@ -225,10 +225,7 @@ impl CliApp {
         let effective_file = validated_file
             .clone()
             .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
-        let is_sqlite = store_manager
-            .detect_backend(&effective_file)
-            .as_deref()
-            == Some("sqlite")
+        let is_sqlite = store_manager.detect_backend(&effective_file).as_deref() == Some("sqlite")
             || effective_file.ends_with(".sqlite")
             || effective_file.ends_with(".sqlite3")
             || effective_file.ends_with(".db")

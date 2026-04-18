@@ -1,4 +1,6 @@
-use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{
+    PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot,
+};
 use std::path::Path;
 use uuid::Uuid;
 

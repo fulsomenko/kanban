@@ -215,30 +215,28 @@ impl StoreManager {
         }
 
         // Load snapshot from source into a StoreSnapshot (JSON bytes) for FK repair
-        let mut store_snapshot: StoreSnapshot =
-            match from_backend {
-                "sqlite" | "sqlite3" | "db" => {
-                    #[cfg(feature = "sqlite")]
-                    {
-                        use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata};
-                        let store =
-                            kanban_persistence_sqlite::SqliteStore::open(from_path).await?;
-                        let snapshot = store.snapshot()?;
-                        let data = snapshot_to_json_bytes(&snapshot)?;
-                        StoreSnapshot {
-                            data,
-                            metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
-                        }
+        let mut store_snapshot: StoreSnapshot = match from_backend {
+            "sqlite" | "sqlite3" | "db" => {
+                #[cfg(feature = "sqlite")]
+                {
+                    use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata};
+                    let store = kanban_persistence_sqlite::SqliteStore::open(from_path).await?;
+                    let snapshot = store.snapshot()?;
+                    let data = snapshot_to_json_bytes(&snapshot)?;
+                    StoreSnapshot {
+                        data,
+                        metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
                     }
-                    #[cfg(not(feature = "sqlite"))]
-                    return Err(KanbanError::validation("sqlite feature not compiled in"));
                 }
-                _ => {
-                    let source = self.make_store(from_backend, from_path)?;
-                    let (snap, _) = source.load().await?;
-                    snap
-                }
-            };
+                #[cfg(not(feature = "sqlite"))]
+                return Err(KanbanError::validation("sqlite feature not compiled in"));
+            }
+            _ => {
+                let source = self.make_store(from_backend, from_path)?;
+                let (snap, _) = source.load().await?;
+                snap
+            }
+        };
 
         repair_snapshot_fks(&mut store_snapshot)?;
 
@@ -248,8 +246,7 @@ impl StoreManager {
                 #[cfg(feature = "sqlite")]
                 {
                     let repaired = snapshot_from_json_bytes(&store_snapshot.data)?;
-                    let store =
-                        kanban_persistence_sqlite::SqliteStore::open(to_path).await?;
+                    let store = kanban_persistence_sqlite::SqliteStore::open(to_path).await?;
                     if let Err(e) = store.apply_snapshot(repaired) {
                         let _ = std::fs::remove_file(to_path);
                         let _ = std::fs::remove_file(format!("{}-wal", to_path));

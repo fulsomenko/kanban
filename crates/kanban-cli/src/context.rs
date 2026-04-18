@@ -21,7 +21,11 @@ impl CliContext {
     ) -> KanbanResult<Self> {
         let is_sqlite = match store_manager.detect_backend(file_path).as_deref() {
             Some("sqlite") => true,
-            None => file_path.ends_with(".sqlite") || file_path.ends_with(".sqlite3") || file_path.ends_with(".db"),
+            None => {
+                file_path.ends_with(".sqlite")
+                    || file_path.ends_with(".sqlite3")
+                    || file_path.ends_with(".db")
+            }
             _ => false,
         };
         if is_sqlite {

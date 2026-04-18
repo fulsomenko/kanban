@@ -30,17 +30,16 @@ async fn test_sqlite_backend_full_workflow() {
     let mut ctx = open_sqlite_ctx(&dir).await;
 
     let board = ctx.create_board("Board".to_string(), None).unwrap();
-    let col = ctx.create_column(board.id, "TODO".to_string(), None).unwrap();
+    let col = ctx
+        .create_column(board.id, "TODO".to_string(), None)
+        .unwrap();
     let card = ctx
         .create_card(board.id, col.id, "Task 1".to_string(), Default::default())
         .unwrap();
 
     assert_eq!(ctx.list_boards().unwrap().len(), 1);
     assert_eq!(ctx.list_columns(board.id).unwrap().len(), 1);
-    assert_eq!(
-        ctx.list_cards(CardListFilter::default()).unwrap().len(),
-        1
-    );
+    assert_eq!(ctx.list_cards(CardListFilter::default()).unwrap().len(), 1);
 
     ctx.archive_card(card.id).unwrap();
     assert_eq!(ctx.list_archived_cards().unwrap().len(), 1);
@@ -99,7 +98,8 @@ async fn test_sqlite_backend_data_persists_across_opens() {
         let mut ctx = KanbanContext::open_sqlite(&path, AppConfig::default())
             .await
             .unwrap();
-        ctx.create_board("Persistent Board".to_string(), None).unwrap();
+        ctx.create_board("Persistent Board".to_string(), None)
+            .unwrap();
     }
 
     let ctx2 = KanbanContext::open_sqlite(&path, AppConfig::default())

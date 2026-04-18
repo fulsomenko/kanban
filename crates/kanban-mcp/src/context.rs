@@ -19,7 +19,11 @@ impl McpContext {
     ) -> KanbanResult<Self> {
         let is_sqlite = match store_manager.detect_backend(data_file).as_deref() {
             Some("sqlite") => true,
-            None => data_file.ends_with(".sqlite") || data_file.ends_with(".sqlite3") || data_file.ends_with(".db"),
+            None => {
+                data_file.ends_with(".sqlite")
+                    || data_file.ends_with(".sqlite3")
+                    || data_file.ends_with(".db")
+            }
             _ => false,
         };
         if is_sqlite {

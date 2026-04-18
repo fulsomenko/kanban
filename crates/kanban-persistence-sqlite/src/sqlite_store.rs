@@ -1211,7 +1211,6 @@ impl DataStore for SqliteStore {
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
         run(self.apply_snapshot_async(snapshot))
     }
-
 }
 
 impl CommandStore for SqliteStore {
@@ -1279,8 +1278,12 @@ impl CommandStore for SqliteStore {
 
         let json = serde_json::to_vec(snapshot).map_err(ser_err)?;
         let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
-        encoder.write_all(&json).map_err(|e| KanbanError::Database(e.to_string()))?;
-        let compressed = encoder.finish().map_err(|e| KanbanError::Database(e.to_string()))?;
+        encoder
+            .write_all(&json)
+            .map_err(|e| KanbanError::Database(e.to_string()))?;
+        let compressed = encoder
+            .finish()
+            .map_err(|e| KanbanError::Database(e.to_string()))?;
 
         run(async {
             sqlx::query("UPDATE command_log SET snapshot_data = ? WHERE idx = ?")
@@ -1309,7 +1312,9 @@ impl CommandStore for SqliteStore {
             Some(compressed) => {
                 let mut decoder = DeflateDecoder::new(&compressed[..]);
                 let mut json = Vec::new();
-                decoder.read_to_end(&mut json).map_err(|e| KanbanError::Database(e.to_string()))?;
+                decoder
+                    .read_to_end(&mut json)
+                    .map_err(|e| KanbanError::Database(e.to_string()))?;
                 let snapshot: Snapshot = serde_json::from_slice(&json).map_err(ser_err)?;
                 Ok(Some(snapshot))
             }

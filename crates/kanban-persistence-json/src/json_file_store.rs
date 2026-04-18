@@ -252,7 +252,6 @@ impl PersistenceStore for JsonFileStore {
     fn instance_id(&self) -> Uuid {
         self.instance_id
     }
-
 }
 
 #[cfg(test)]

@@ -167,9 +167,7 @@ impl KanbanContext {
     /// Convenience accessor — returns empty snapshot on error.
     /// For fallible access, use `DataStore::snapshot()` via `data_store()`.
     pub fn snapshot(&self) -> Snapshot {
-        self.backend
-            .snapshot()
-            .unwrap_or_else(|_| Snapshot::new())
+        self.backend.snapshot().unwrap_or_else(|_| Snapshot::new())
     }
 
     /// Replaces the in-memory state with the given snapshot.
@@ -182,7 +180,8 @@ impl KanbanContext {
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         let count = self.backend.command_count()? as usize;
         if self.undo_cursor < count {
-            self.backend.truncate_commands_after(self.undo_cursor as u64)?;
+            self.backend
+                .truncate_commands_after(self.undo_cursor as u64)?;
         }
 
         let before = self.backend.snapshot()?;
@@ -203,7 +202,8 @@ impl KanbanContext {
 
         if self.backend.supports_indexed_snapshots() {
             let snap = self.backend.snapshot()?;
-            self.backend.store_snapshot_at(self.undo_cursor as u64, &snap)?;
+            self.backend
+                .store_snapshot_at(self.undo_cursor as u64, &snap)?;
         }
 
         self.dirty = true;
@@ -226,7 +226,8 @@ impl KanbanContext {
             };
             self.backend.apply_snapshot(snap)?;
         } else {
-            self.backend.apply_snapshot(self.baseline_snapshot.clone())?;
+            self.backend
+                .apply_snapshot(self.baseline_snapshot.clone())?;
             let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
@@ -509,7 +510,12 @@ impl KanbanOperations for KanbanContext {
         use kanban_domain::commands::CreateBoard;
         let id = Uuid::new_v4();
         let position = self.backend.list_boards().unwrap_or_default().len() as i32;
-        let cmd = Command::Board(BoardCommand::Create(CreateBoard { id, name, card_prefix, position }));
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id,
+            name,
+            card_prefix,
+            position,
+        }));
         self.execute(vec![cmd])?;
         self.get_board(id)?.ok_or_else(|| {
             KanbanError::Internal("Board creation succeeded but board not found".into())

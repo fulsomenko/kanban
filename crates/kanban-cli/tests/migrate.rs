@@ -7,7 +7,9 @@ use kanban_service::KanbanContext;
 use std::sync::Arc;
 use tempfile::TempDir;
 
-async fn create_populated_json_context(store: Arc<dyn PersistenceStore + Send + Sync>) -> KanbanContext {
+async fn create_populated_json_context(
+    store: Arc<dyn PersistenceStore + Send + Sync>,
+) -> KanbanContext {
     let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
@@ -57,14 +59,15 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     let db_path = dir.path().join("source.db");
     let json_path = dir.path().join("dest.json");
 
-    let mut original =
-        KanbanContext::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
-            .await
-            .unwrap();
+    let mut original = KanbanContext::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
     let board = original
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
-    let col = original.create_column(board.id, "Todo".into(), None).unwrap();
+    let col = original
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
     original
         .create_card(board.id, col.id, "Test Card".into(), Default::default())
         .unwrap();
@@ -120,14 +123,15 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     let src_path = dir.path().join("source.db");
     let dst_path = dir.path().join("dest.db");
 
-    let mut original =
-        KanbanContext::open_sqlite(src_path.to_str().unwrap(), AppConfig::default())
-            .await
-            .unwrap();
+    let mut original = KanbanContext::open_sqlite(src_path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
     let board = original
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
-    let col = original.create_column(board.id, "Todo".into(), None).unwrap();
+    let col = original
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
     original
         .create_card(board.id, col.id, "Test Card".into(), Default::default())
         .unwrap();
@@ -138,10 +142,9 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     dst.apply_snapshot(snapshot).unwrap();
     drop(dst);
 
-    let loaded =
-        KanbanContext::open_sqlite(dst_path.to_str().unwrap(), AppConfig::default())
-            .await
-            .unwrap();
+    let loaded = KanbanContext::open_sqlite(dst_path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
 
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
     assert_eq!(loaded.list_boards().unwrap()[0].name, "Test Board");

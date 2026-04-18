@@ -325,7 +325,6 @@ impl DataStore for InMemoryStore {
         state.graph = snapshot.graph;
         Ok(())
     }
-
 }
 
 impl CommandStore for InMemoryStore {
@@ -733,5 +732,4 @@ mod tests {
         assert_eq!(boards.len(), 1);
         assert_eq!(boards[0].name, "New");
     }
-
 }

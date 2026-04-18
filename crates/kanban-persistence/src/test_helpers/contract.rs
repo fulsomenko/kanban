@@ -149,4 +149,3 @@ pub async fn test_path_matches_locator(factory: &StoreFactory) {
     let store = factory(&path);
     assert_eq!(store.path(), path.as_path());
 }
-
