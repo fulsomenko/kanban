@@ -333,7 +333,7 @@ async fn test_migrate_rejects_unknown_backend() {
     // clap rejects unrecognised backends via PossibleValuesParser before the
     // service layer is reached; both rejection sites are acceptable.
     assert!(
-        stderr.contains("No backend named")
+        stderr.contains("No backend registered for")
             || stderr.contains("Unknown backend")
             || stderr.contains("invalid value"),
         "stderr: {stderr}"

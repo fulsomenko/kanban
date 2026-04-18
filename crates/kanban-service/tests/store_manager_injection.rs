@@ -31,7 +31,7 @@ fn test_store_manager_unknown_backend_is_rejected() {
     match manager.make_store("postgres", "/tmp/whatever.sql") {
         Ok(_) => panic!("expected missing-backend error"),
         Err(err) => assert!(
-            err.to_string().contains("No backend named"),
+            err.to_string().contains("No backend registered for"),
             "expected missing-backend error, got: {err}"
         ),
     }

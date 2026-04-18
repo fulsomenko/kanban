@@ -51,7 +51,7 @@ fn test_make_store_unknown_backend_returns_error() {
         Err(err) => {
             let msg = err.to_string();
             assert!(
-                msg.contains("No backend named"),
+                msg.contains("No backend registered for"),
                 "Expected no backend error, got: {msg}"
             );
         }
