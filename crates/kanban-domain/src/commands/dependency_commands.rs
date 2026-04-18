@@ -168,6 +168,7 @@ pub struct CreateSubcardCommand {
 
 impl CreateSubcardCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context.get_card(self.parent_id)?;
         let mut board = context.get_board(self.board_id)?;
         let mut card = Card::new(
             &mut board,
@@ -357,12 +358,14 @@ mod tests {
 
         let tc = TestContext::new();
         let column_id = Uuid::new_v4();
-        let parent_id = Uuid::new_v4();
 
         let mut board = Board::new("Test Board".to_string(), None);
         board.card_prefix = Some("TEST".to_string());
         let board_id = board.id;
+        let parent = crate::Card::new(&mut board, column_id, "Parent".to_string(), 0);
+        let parent_id = parent.id;
         tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_card(parent).unwrap();
 
         let context = tc.as_command_context();
         let cmd = CreateSubcardCommand {
@@ -377,9 +380,8 @@ mod tests {
         assert!(cmd.execute(&context).is_ok());
 
         let cards = tc.store.list_all_cards().unwrap();
-        assert_eq!(cards.len(), 1);
-        let card = &cards[0];
-        assert_eq!(card.title, "Test Subcard");
+        assert_eq!(cards.len(), 2);
+        let card = cards.iter().find(|c| c.title == "Test Subcard").unwrap();
         assert_eq!(card.description, Some("Test description".to_string()));
         assert_eq!(card.column_id, column_id);
 
@@ -394,13 +396,15 @@ mod tests {
         use crate::Board;
 
         let tc = TestContext::new();
-        let parent_id = Uuid::new_v4();
         let column_id = Uuid::new_v4();
 
         let mut board = Board::new("Test Board".to_string(), None);
         board.card_prefix = Some("TEST".to_string());
         let board_id = board.id;
+        let parent = crate::Card::new(&mut board, column_id, "Parent".to_string(), 0);
+        let parent_id = parent.id;
         tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_card(parent).unwrap();
 
         let context = tc.as_command_context();
         let cmd = CreateSubcardCommand {
@@ -414,8 +418,9 @@ mod tests {
 
         assert!(cmd.execute(&context).is_ok());
         let cards = tc.store.list_all_cards().unwrap();
-        assert_eq!(cards.len(), 1);
-        assert_eq!(cards[0].description, None);
+        assert_eq!(cards.len(), 2);
+        let subcard = cards.iter().find(|c| c.title == "Subcard without description").unwrap();
+        assert_eq!(subcard.description, None);
     }
 
     #[test]

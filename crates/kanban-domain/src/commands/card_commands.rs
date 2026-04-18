@@ -245,6 +245,11 @@ pub struct ArchiveCards {
 impl ArchiveCards {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let valid_ids = context.filter_valid_card_ids(&self.ids, "ArchiveCards");
+        if valid_ids.is_empty() && !self.ids.is_empty() {
+            return Err(KanbanError::validation(
+                "All card IDs in ArchiveCards batch are invalid",
+            ));
+        }
         let mut graph = context.store.get_graph()?;
         for id in &valid_ids {
             let card = context.store.get_card(*id)?.unwrap();
@@ -276,6 +281,11 @@ impl MoveCards {
         use std::collections::HashSet;
 
         let valid_ids = context.filter_valid_card_ids(&self.ids, "MoveCards");
+        if valid_ids.is_empty() && !self.ids.is_empty() {
+            return Err(KanbanError::validation(
+                "All card IDs in MoveCards batch are invalid",
+            ));
+        }
         context.check_wip_limit(self.column_id, valid_ids.len(), &valid_ids)?;
         let id_set: HashSet<Uuid> = valid_ids.iter().copied().collect();
         let base = context
