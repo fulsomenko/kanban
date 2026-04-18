@@ -62,13 +62,30 @@ impl KanbanContext {
 
         let backend = InMemoryStore::new();
         backend.apply_snapshot(data.clone())?;
-        let undo_cursor = backend.command_count()? as usize;
+
+        // Restore command log from persistence store (JSON path only;
+        // SQLite's default returns empty and manages its own log).
+        let (batches, cursor, baseline_bytes) = store.get_command_log()?;
+        for batch in &batches {
+            backend.append_commands(batch)?;
+        }
+        let undo_cursor = cursor as usize;
+
+        // If the persistence store saved a baseline snapshot, use it so that
+        // undo can replay commands from the correct starting point.
+        // Otherwise fall back to the loaded data as baseline (no cross-restart undo).
+        let baseline_snapshot = if let Some(ref bytes) = baseline_bytes {
+            serde_json::from_slice(bytes)
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
+        } else {
+            data
+        };
 
         Ok(Self {
             backend: Arc::new(backend),
             app_config: config,
             store,
-            baseline_snapshot: data,
+            baseline_snapshot,
             undo_cursor,
             dirty: false,
             conflict_pending: false,
@@ -177,6 +194,13 @@ impl KanbanContext {
         self.backend.apply_snapshot(snapshot)
     }
 
+    /// Execute a batch of commands as a single undo unit.
+    ///
+    /// Truncates any redo tail (commands after `undo_cursor`), takes a pre-execution
+    /// snapshot, runs all commands, and appends the batch to the command log.
+    /// On failure, rolls back to the pre-execution snapshot.
+    ///
+    /// After success: `undo_cursor` is incremented by 1 (pointing past the new batch).
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         let count = self.backend.command_count()? as usize;
         if self.undo_cursor < count {
@@ -192,7 +216,9 @@ impl KanbanContext {
         };
         if let Err(e) = result {
             if let Err(rollback_err) = self.backend.apply_snapshot(before) {
-                tracing::error!("Rollback failed after command error: {rollback_err}");
+                return Err(KanbanError::Internal(format!(
+                    "Command failed ({e}) and rollback also failed ({rollback_err}). State may be inconsistent."
+                )));
             }
             return Err(e);
         }
@@ -210,6 +236,12 @@ impl KanbanContext {
         Ok(())
     }
 
+    /// Undo the most recent batch by decrementing `undo_cursor` and replaying
+    /// batches `0..undo_cursor` from `baseline_snapshot`.
+    ///
+    /// Returns `false` if already at the baseline (cursor == 0).
+    /// With indexed snapshots, loads the snapshot at `undo_cursor` directly
+    /// instead of replaying.
     pub fn undo(&mut self) -> KanbanResult<bool> {
         if self.undo_cursor == 0 {
             return Ok(false);
@@ -242,6 +274,11 @@ impl KanbanContext {
         Ok(true)
     }
 
+    /// Redo the next undone batch by executing `command_log[undo_cursor]` and
+    /// incrementing `undo_cursor`.
+    ///
+    /// Returns `false` if `undo_cursor` is already at the tip (no redo available).
+    /// `load_commands(from, to)` uses half-open range `[from, to)`.
     pub fn redo(&mut self) -> KanbanResult<bool> {
         let count = self.backend.command_count()? as usize;
         if self.undo_cursor >= count {
@@ -344,6 +381,15 @@ impl KanbanContext {
     /// JSON-only: serialises the full snapshot to the persistence store.
     /// On the SQLite path `self.store` is a `NullStore`, so this is a no-op.
     pub async fn save(&self) -> KanbanResult<()> {
+        // Sync command log from in-memory backend to persistence store
+        let cmd_count = self.backend.command_count()? as usize;
+        let batches = self.backend.load_commands(0, cmd_count as u64)?;
+        let baseline_bytes = serde_json::to_vec(&self.baseline_snapshot)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        self.store
+            .sync_command_log(&batches, self.undo_cursor as u64, Some(&baseline_bytes))
+            .await?;
+
         let snapshot = self.snapshot();
         let bytes = serde_json::to_vec_pretty(&snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
