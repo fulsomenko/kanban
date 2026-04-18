@@ -252,6 +252,13 @@ impl PersistenceStore for JsonFileStore {
             )));
         }
 
+        if envelope.command_schema_version > kanban_domain::COMMAND_SCHEMA_VERSION {
+            return Err(PersistenceError::Serialization(format!(
+                "Unsupported command schema version {}. This build supports up to {}. Please upgrade.",
+                envelope.command_schema_version, kanban_domain::COMMAND_SCHEMA_VERSION
+            )));
+        }
+
         // Parse command log: V5 = batched Vec<Vec<Command>>, V4 = flat Vec<Command>
         let batches = envelope
             .parse_batches()
@@ -553,5 +560,33 @@ mod tests {
         let (batches, cursor, _baseline) = store.get_command_log().unwrap();
         assert_eq!(batches.len(), 2, "two separate batches should be preserved");
         assert_eq!(cursor, 2);
+    }
+
+    #[tokio::test]
+    async fn test_load_rejects_unsupported_command_schema_version() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("future.json");
+
+        let envelope = json!({
+            "version": 5,
+            "metadata": { "instance_id": "00000000-0000-0000-0000-000000000000", "saved_at": "2020-01-01T00:00:00Z" },
+            "data": { "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [], "graph": { "cards": { "edges": [] } } },
+            "commands": [],
+            "undo_cursor": 0,
+            "command_schema_version": 99
+        });
+
+        tokio::fs::write(&file_path, serde_json::to_vec_pretty(&envelope).unwrap())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let result = store.load().await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("command schema version"),
+            "Error should mention command schema version, got: {err}"
+        );
     }
 }
