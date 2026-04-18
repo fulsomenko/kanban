@@ -2,9 +2,6 @@ use uuid::Uuid;
 
 use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Snapshot, Sprint};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UndoPointId(pub u64);
-
 pub trait DataStore: Send + Sync {
     // Board
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>>;
@@ -57,11 +54,6 @@ pub trait DataStore: Send + Sync {
     // Snapshot (import/export, JSON file I/O, migration)
     fn snapshot(&self) -> KanbanResult<Snapshot>;
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()>;
-
-    // Undo support
-    fn create_undo_point(&self) -> KanbanResult<UndoPointId>;
-    fn undo_to(&self, point: UndoPointId) -> KanbanResult<()>;
-    fn discard_undo_point(&self, point: UndoPointId) -> KanbanResult<()>;
 }
 
 #[cfg(test)]

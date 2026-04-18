@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, RwLock};
+use std::sync::RwLock;
 
 use uuid::Uuid;
 
 use crate::command_store::CommandStore;
 use crate::commands::Command;
-use crate::data_store::{DataStore, UndoPointId};
+use crate::data_store::DataStore;
 use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Snapshot, Sprint};
 
 #[derive(Debug, Clone)]
@@ -34,8 +33,6 @@ impl StoreState {
 
 pub struct InMemoryStore {
     state: RwLock<StoreState>,
-    undo_stack: Mutex<Vec<(UndoPointId, StoreState)>>,
-    next_undo_id: AtomicU64,
     command_log: RwLock<Vec<Vec<Command>>>,
 }
 
@@ -43,8 +40,6 @@ impl InMemoryStore {
     pub fn new() -> Self {
         Self {
             state: RwLock::new(StoreState::new()),
-            undo_stack: Mutex::new(Vec::new()),
-            next_undo_id: AtomicU64::new(1),
             command_log: RwLock::new(Vec::new()),
         }
     }
@@ -331,38 +326,6 @@ impl DataStore for InMemoryStore {
         Ok(())
     }
 
-    // Undo
-
-    fn create_undo_point(&self) -> KanbanResult<UndoPointId> {
-        let id = UndoPointId(self.next_undo_id.fetch_add(1, Ordering::SeqCst));
-        let state_clone = self.state.read().unwrap().clone();
-        let mut stack = self.undo_stack.lock().unwrap();
-        stack.push((id, state_clone));
-        Ok(id)
-    }
-
-    fn undo_to(&self, point: UndoPointId) -> KanbanResult<()> {
-        let mut stack = self.undo_stack.lock().unwrap();
-        let pos = stack
-            .iter()
-            .position(|(id, _)| *id == point)
-            .ok_or_else(|| {
-                crate::KanbanError::Internal(format!("undo point {:?} not found", point))
-            })?;
-        let (_, saved_state) = stack[pos].clone();
-        stack.truncate(pos);
-        drop(stack);
-
-        let mut state = self.state.write().unwrap();
-        *state = saved_state;
-        Ok(())
-    }
-
-    fn discard_undo_point(&self, point: UndoPointId) -> KanbanResult<()> {
-        let mut stack = self.undo_stack.lock().unwrap();
-        stack.retain(|(id, _)| *id != point);
-        Ok(())
-    }
 }
 
 impl CommandStore for InMemoryStore {
@@ -771,54 +734,4 @@ mod tests {
         assert_eq!(boards[0].name, "New");
     }
 
-    // Undo
-
-    #[test]
-    fn test_create_undo_point_and_undo_to() {
-        let store = InMemoryStore::new();
-        let board = make_board("Before");
-        store.upsert_board(board.clone()).unwrap();
-
-        let point = store.create_undo_point().unwrap();
-        store.delete_board(board.id).unwrap();
-        assert!(store.get_board(board.id).unwrap().is_none());
-
-        store.undo_to(point).unwrap();
-        let fetched = store.get_board(board.id).unwrap().unwrap();
-        assert_eq!(fetched.name, "Before");
-    }
-
-    #[test]
-    fn test_discard_undo_point() {
-        let store = InMemoryStore::new();
-        let point = store.create_undo_point().unwrap();
-        store.discard_undo_point(point).unwrap();
-
-        let result = store.undo_to(point);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_multiple_undo_points() {
-        let store = InMemoryStore::new();
-
-        let board1 = make_board("State1");
-        store.upsert_board(board1.clone()).unwrap();
-        let point1 = store.create_undo_point().unwrap();
-
-        store.delete_board(board1.id).unwrap();
-        let board2 = make_board("State2");
-        store.upsert_board(board2.clone()).unwrap();
-        let _point2 = store.create_undo_point().unwrap();
-
-        store.delete_board(board2.id).unwrap();
-        let board3 = make_board("State3");
-        store.upsert_board(board3).unwrap();
-
-        store.undo_to(point1).unwrap();
-
-        let boards = store.list_boards().unwrap();
-        assert_eq!(boards.len(), 1);
-        assert_eq!(boards[0].name, "State1");
-    }
 }

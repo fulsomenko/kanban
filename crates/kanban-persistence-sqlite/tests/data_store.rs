@@ -338,51 +338,6 @@ async fn test_sqlite_apply_snapshot_replaces_existing_data() {
     assert_eq!(boards[0].name, "New");
 }
 
-// --- Undo ---
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_create_undo_point_and_undo_to() {
-    let (store, _dir) = make_store().await;
-    let board = make_board("Before");
-    store.upsert_board(board.clone()).unwrap();
-
-    let point = store.create_undo_point().unwrap();
-    store.delete_board(board.id).unwrap();
-    assert!(store.get_board(board.id).unwrap().is_none());
-
-    store.undo_to(point).unwrap();
-    let fetched = store.get_board(board.id).unwrap().unwrap();
-    assert_eq!(fetched.name, "Before");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_multiple_undo_points() {
-    let (store, _dir) = make_store().await;
-    let board1 = make_board("State1");
-    store.upsert_board(board1.clone()).unwrap();
-    let point1 = store.create_undo_point().unwrap();
-
-    store.delete_board(board1.id).unwrap();
-    let board2 = make_board("State2");
-    store.upsert_board(board2.clone()).unwrap();
-    let _point2 = store.create_undo_point().unwrap();
-
-    store.delete_board(board2.id).unwrap();
-
-    store.undo_to(point1).unwrap();
-    let boards = store.list_boards().unwrap();
-    assert_eq!(boards.len(), 1);
-    assert_eq!(boards[0].name, "State1");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_discard_undo_point() {
-    let (store, _dir) = make_store().await;
-    let point = store.create_undo_point().unwrap();
-    store.discard_undo_point(point).unwrap();
-    assert!(store.undo_to(point).is_err());
-}
-
 // --- CommandStore ---
 
 fn make_board_cmd(name: &str) -> Command {

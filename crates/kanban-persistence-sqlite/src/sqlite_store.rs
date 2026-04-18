@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
 use kanban_core::graph::{Edge, Graph};
 use kanban_domain::command_store::CommandStore;
 use kanban_domain::commands::Command;
-use kanban_domain::data_store::{DataStore, UndoPointId};
+use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
     Snapshot, Sprint, SprintLog,
@@ -20,8 +18,6 @@ const SCHEMA: &str = include_str!("schema.sql");
 
 pub struct SqliteStore {
     pool: Pool<Sqlite>,
-    undo_stack: Mutex<Vec<(UndoPointId, Snapshot)>>,
-    next_undo_id: AtomicU64,
 }
 
 fn run<F: std::future::Future<Output = T>, T>(f: F) -> T {
@@ -242,11 +238,7 @@ impl SqliteStore {
             .await
             .map_err(|e| KanbanError::Database(e.to_string()))?;
 
-        Ok(Self {
-            pool,
-            undo_stack: Mutex::new(Vec::new()),
-            next_undo_id: AtomicU64::new(1),
-        })
+        Ok(Self { pool })
     }
 
     pub fn pool(&self) -> &Pool<Sqlite> {
@@ -1089,33 +1081,6 @@ impl DataStore for SqliteStore {
         run(self.apply_snapshot_async(snapshot))
     }
 
-    // Undo (snapshot-based)
-
-    fn create_undo_point(&self) -> KanbanResult<UndoPointId> {
-        let id = UndoPointId(self.next_undo_id.fetch_add(1, Ordering::SeqCst));
-        let snap = self.snapshot()?;
-        let mut stack = self.undo_stack.lock().unwrap();
-        stack.push((id, snap));
-        Ok(id)
-    }
-
-    fn undo_to(&self, point: UndoPointId) -> KanbanResult<()> {
-        let mut stack = self.undo_stack.lock().unwrap();
-        let pos = stack
-            .iter()
-            .position(|(id, _)| *id == point)
-            .ok_or_else(|| KanbanError::Internal(format!("undo point {:?} not found", point)))?;
-        let (_, saved_snapshot) = stack[pos].clone();
-        stack.truncate(pos);
-        drop(stack);
-        self.apply_snapshot(saved_snapshot)
-    }
-
-    fn discard_undo_point(&self, point: UndoPointId) -> KanbanResult<()> {
-        let mut stack = self.undo_stack.lock().unwrap();
-        stack.retain(|(id, _)| *id != point);
-        Ok(())
-    }
 }
 
 impl CommandStore for SqliteStore {

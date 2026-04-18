@@ -59,7 +59,7 @@ pub use tag::{Tag, TagId};
 pub use task_list_view::TaskListView;
 
 pub use command_store::CommandStore;
-pub use data_store::{DataStore, UndoPointId};
+pub use data_store::DataStore;
 pub use in_memory_store::InMemoryStore;
 
 pub use error::{DependencyError, DomainError, KanbanError, KanbanResult};
