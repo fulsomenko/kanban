@@ -17,19 +17,19 @@ use uuid::Uuid;
 const SCHEMA: &str = include_str!("schema.sql");
 
 /// SQLite-backed persistence store using sqlx connection pool.
-///
-/// # Runtime requirement
-///
-/// This store uses `tokio::task::block_in_place` to run async SQLite operations
-/// synchronously. This requires a **multi-threaded** Tokio runtime
-/// (`#[tokio::test]` or `Runtime::new()`). Using a `current_thread` runtime
-/// will panic.
 pub struct SqliteStore {
     pool: Pool<Sqlite>,
 }
 
 fn run<F: std::future::Future<Output = T>, T>(f: F) -> T {
-    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(f))
+    let handle = tokio::runtime::Handle::current();
+    assert!(
+        handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread,
+        "SqliteStore requires a multi-threaded Tokio runtime (e.g. #[tokio::main] or \
+         tokio::runtime::Runtime::new()). The current_thread runtime is not supported \
+         because synchronous DataStore methods need to block on async SQLite I/O."
+    );
+    tokio::task::block_in_place(|| handle.block_on(f))
 }
 
 fn db_err(e: sqlx::Error) -> KanbanError {
