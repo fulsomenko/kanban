@@ -680,6 +680,7 @@ impl KanbanOperations for KanbanContext {
             title,
             position,
             options,
+            timestamp: chrono::Utc::now(),
         }));
         self.execute(vec![cmd])?;
         self.get_card(id)?.ok_or_else(|| {
@@ -800,6 +801,7 @@ impl KanbanOperations for KanbanContext {
             card_id: id,
             column_id: target_column,
             position,
+            timestamp: chrono::Utc::now(),
         }));
         self.execute(vec![cmd])?;
         self.get_card(id)?
@@ -831,6 +833,7 @@ impl KanbanOperations for KanbanContext {
         use kanban_domain::commands::UnassignCardFromSprint;
         let cmd = Command::Card(CardCommand::UnassignFromSprint(UnassignCardFromSprint {
             card_id,
+            timestamp: chrono::Utc::now(),
         }));
         self.execute(vec![cmd])?;
         self.get_card(card_id)?
@@ -1020,7 +1023,10 @@ impl KanbanOperations for KanbanContext {
 
     fn delete_sprint(&mut self, id: Uuid) -> KanbanResult<()> {
         use kanban_domain::commands::DeleteSprint;
-        let cmd = Command::Sprint(SprintCommand::Delete(DeleteSprint { sprint_id: id }));
+        let cmd = Command::Sprint(SprintCommand::Delete(DeleteSprint {
+            sprint_id: id,
+            timestamp: chrono::Utc::now(),
+        }));
         self.execute(vec![cmd])
     }
 
