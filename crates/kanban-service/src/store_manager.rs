@@ -41,6 +41,21 @@ impl StoreManager {
         self.registry.backend_names()
     }
 
+    /// Returns `true` if `locator` points to a SQLite database — either
+    /// because `detect_backend` recognised it as `"sqlite"`, or because the
+    /// file extension matches one of the conventional SQLite extensions.
+    pub fn is_sqlite(&self, locator: &str) -> bool {
+        match self.detect_backend(locator).as_deref() {
+            Some("sqlite") => true,
+            None => {
+                locator.ends_with(".sqlite")
+                    || locator.ends_with(".sqlite3")
+                    || locator.ends_with(".db")
+            }
+            _ => false,
+        }
+    }
+
     /// Pattern-matches `locator` against all registered factories and returns
     /// the name of the first match. For existing SQLite files, detects by
     /// magic bytes even when no SQLite factory is in the registry.
