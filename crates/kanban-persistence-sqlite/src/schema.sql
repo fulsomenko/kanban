@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS command_log (
 );
 
 CREATE TABLE IF NOT EXISTS undo_state (
-    id     INTEGER PRIMARY KEY CHECK (id = 1),
-    cursor INTEGER NOT NULL DEFAULT 0
+    id                     INTEGER PRIMARY KEY CHECK (id = 1),
+    cursor                 INTEGER NOT NULL DEFAULT 0,
+    command_schema_version INTEGER NOT NULL DEFAULT 1
 );
