@@ -261,7 +261,9 @@ impl App {
         self.ctx.replace_store(new_store);
         let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
         use crate::state::snapshot::TuiSnapshot;
-        snapshot.apply_to_app(self);
+        if let Err(e) = snapshot.apply_to_app(self) {
+            tracing::error!("Failed to apply snapshot: {}", e);
+        }
         self.ctx.mark_clean();
         if let Err(e) = self.ctx.clear_history() {
             tracing::error!("Failed to clear history: {}", e);

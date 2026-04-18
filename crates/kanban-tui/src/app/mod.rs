@@ -1701,12 +1701,15 @@ impl App {
                     Ok((snapshot, _metadata)) => {
                         match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                             Ok(data) => {
-                                data.apply_to_app(self);
-                                self.ctx.mark_clean();
-                                if let Err(e) = self.ctx.clear_history() {
-                                    tracing::error!("Failed to clear history: {}", e);
+                                if let Err(e) = data.apply_to_app(self) {
+                                    tracing::error!("Failed to apply snapshot: {}", e);
+                                } else {
+                                    self.ctx.mark_clean();
+                                    if let Err(e) = self.ctx.clear_history() {
+                                        tracing::error!("Failed to clear history: {}", e);
+                                    }
+                                    tracing::info!("Loaded initial state from store");
                                 }
-                                tracing::info!("Loaded initial state from store");
                             }
                             Err(e) => {
                                 tracing::error!("Failed to deserialize store data: {}", e);
@@ -1873,13 +1876,16 @@ impl App {
                                                 Ok((snapshot, _metadata)) => {
                                                     match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                                                         Ok(data) => {
-                                                            data.apply_to_app(self);
-                                                            if let Err(e) = self.ctx.clear_history() {
-                                                                tracing::error!("Failed to clear history: {}", e);
+                                                            if let Err(e) = data.apply_to_app(self) {
+                                                                tracing::error!("Failed to apply snapshot: {}", e);
+                                                            } else {
+                                                                if let Err(e) = self.ctx.clear_history() {
+                                                                    tracing::error!("Failed to clear history: {}", e);
+                                                                }
+                                                                self.ctx.clear_conflict();
+                                                                self.refresh_view();
+                                                                tracing::info!("Reloaded state from disk");
                                                             }
-                                                            self.ctx.clear_conflict();
-                                                            self.refresh_view();
-                                                            tracing::info!("Reloaded state from disk");
                                                         }
                                                         Err(e) => {
                                                             tracing::error!("Failed to deserialize reloaded state: {}", e);
@@ -2120,14 +2126,17 @@ impl App {
             Ok((snapshot, _metadata)) => {
                 match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
                     Ok(data) => {
-                        data.apply_to_app(self);
-                        if let Err(e) = self.ctx.clear_history() {
-                            tracing::error!("Failed to clear history: {}", e);
+                        if let Err(e) = data.apply_to_app(self) {
+                            tracing::error!("Failed to apply snapshot: {}", e);
+                        } else {
+                            if let Err(e) = self.ctx.clear_history() {
+                                tracing::error!("Failed to clear history: {}", e);
+                            }
+                            self.ctx.mark_clean();
+                            self.ctx.clear_conflict();
+                            self.refresh_view();
+                            tracing::info!("Auto-reloaded state from external file change");
                         }
-                        self.ctx.mark_clean();
-                        self.ctx.clear_conflict();
-                        self.refresh_view();
-                        tracing::info!("Auto-reloaded state from external file change");
                     }
                     Err(e) => {
                         tracing::error!("Failed to deserialize reloaded state: {}", e);
