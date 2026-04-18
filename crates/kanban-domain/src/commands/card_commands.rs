@@ -417,11 +417,14 @@ impl MigrateSprintLogs {
         let mut cards = context.store.list_all_cards()?;
         let sprints = context.store.list_all_sprints()?;
         let boards = context.store.list_boards()?;
+        let before_lens: Vec<usize> = cards.iter().map(|c| c.sprint_logs.len()).collect();
         let count = crate::card_lifecycle::migrate_sprint_logs(&mut cards, &sprints, &boards);
         if count > 0 {
             tracing::info!("Migrated sprint logs for {} card(s)", count);
-            for card in cards {
-                context.store.upsert_card(card)?;
+            for (card, before_len) in cards.into_iter().zip(before_lens) {
+                if card.sprint_logs.len() != before_len {
+                    context.store.upsert_card(card)?;
+                }
             }
         }
         Ok(())
