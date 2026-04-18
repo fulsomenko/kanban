@@ -431,3 +431,80 @@ async fn test_sqlite_command_store_batch_stores_multiple_commands() {
     assert_eq!(batches.len(), 1);
     assert_eq!(batches[0].len(), 2);
 }
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_truncate_after_zero_clears_all() {
+    let (store, _dir) = make_store().await;
+    store.append_commands(&[make_board_cmd("B1")]).unwrap();
+    store.append_commands(&[make_board_cmd("B2")]).unwrap();
+    store.append_commands(&[make_board_cmd("B3")]).unwrap();
+    assert_eq!(store.command_count().unwrap(), 3);
+
+    store.truncate_commands_after(0).unwrap();
+    assert_eq!(store.command_count().unwrap(), 0);
+    assert!(store.load_commands(0, 10).unwrap().is_empty());
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_load_all_commands_consistent() {
+    let (store, _dir) = make_store().await;
+    store.append_commands(&[make_board_cmd("B1")]).unwrap();
+    store.append_commands(&[make_board_cmd("B2")]).unwrap();
+
+    let (batches, count) = store.load_all_commands().unwrap();
+    assert_eq!(count, 2);
+    assert_eq!(batches.len(), 2);
+    assert_eq!(batches[0].len(), 1);
+    assert_eq!(batches[1].len(), 1);
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_command_store_load_from_beyond_end_returns_empty() {
+    let (store, _dir) = make_store().await;
+    store.append_commands(&[make_board_cmd("B1")]).unwrap();
+
+    let batches = store.load_commands(5, 10).unwrap();
+    assert!(batches.is_empty());
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_concurrent_reads_and_writes_no_panic() {
+    use std::sync::Arc;
+
+    let (store, _dir) = make_store().await;
+    let store = Arc::new(store);
+    let mut handles = vec![];
+
+    for i in 0..10 {
+        let s = Arc::clone(&store);
+        handles.push(tokio::spawn(async move {
+            let board = Board::new(format!("Board-{i}"), None);
+            s.upsert_board(board.clone()).unwrap();
+            let col = Column::new(board.id, format!("Col-{i}"), i);
+            s.upsert_column(col).unwrap();
+        }));
+    }
+
+    for _ in 0..10 {
+        let s = Arc::clone(&store);
+        handles.push(tokio::spawn(async move {
+            for _ in 0..10 {
+                let _ = s.list_boards();
+                let _ = s.list_all_columns();
+                let _ = s.list_all_cards();
+                let _ = s.snapshot();
+            }
+        }));
+    }
+
+    for h in handles {
+        h.await.expect("task should not panic");
+    }
+
+    let boards = store.list_boards().unwrap();
+    assert_eq!(boards.len(), 10);
+}

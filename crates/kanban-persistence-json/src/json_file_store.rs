@@ -589,4 +589,75 @@ mod tests {
             "Error should mention command schema version, got: {err}"
         );
     }
+
+    #[tokio::test]
+    async fn test_v5_save_reload_roundtrip_preserves_all_data() {
+        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("roundtrip.json");
+
+        let board_id = "550e8400-e29b-41d4-a716-446655440000";
+        let cmd1 = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "Batch1".into(),
+            card_prefix: None,
+            position: 1,
+        }));
+        let cmd2 = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "Batch2".into(),
+            card_prefix: None,
+            position: 2,
+        }));
+
+        let snapshot_data = json!({
+            "boards": [{"id": board_id, "name": "B1",
+                "task_sort_field": "Default", "task_sort_order": "Ascending",
+                "sprint_name_used_count": 0, "next_sprint_number": 1,
+                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                "sprint_names": [], "card_counter": 0, "position": 0}],
+            "columns": [],
+            "cards": [],
+            "archived_cards": [],
+            "sprints": [],
+            "graph": { "cards": { "edges": [] } }
+        });
+
+        let batched_cmds = serde_json::to_value(vec![vec![&cmd1], vec![&cmd2]]).unwrap();
+        let baseline_data = snapshot_data.clone();
+
+        let v5_content = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440001",
+                "saved_at": "2024-06-01T00:00:00Z"
+            },
+            "data": snapshot_data,
+            "commands": batched_cmds,
+            "undo_cursor": 2,
+            "command_schema_version": 1,
+            "baseline_data": baseline_data
+        });
+        tokio::fs::write(&file_path, v5_content.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (loaded_snapshot, _meta) = store.load().await.unwrap();
+
+        let (batches, cursor, loaded_baseline) = store.get_command_log().unwrap();
+        assert_eq!(batches.len(), 2, "two command batches should persist");
+        assert_eq!(cursor, 2, "undo cursor should persist");
+        assert!(
+            loaded_baseline.is_some(),
+            "baseline snapshot should persist"
+        );
+
+        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded_snapshot.data).unwrap();
+        assert_eq!(
+            loaded_data["boards"][0]["name"], "B1",
+            "snapshot data should roundtrip"
+        );
+    }
 }
