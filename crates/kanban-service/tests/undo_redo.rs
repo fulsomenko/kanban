@@ -964,3 +964,57 @@ async fn test_save_and_reload_preserves_undo_history() -> KanbanResult<()> {
     assert_eq!(ctx2.undo_depth(), 2);
     Ok(())
 }
+
+#[tokio::test]
+async fn test_undo_depth_limit_prunes_old_commands() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+
+    // Execute MAX_UNDO_DEPTH + 10 commands
+    let limit = kanban_service::MAX_UNDO_DEPTH;
+    for i in 0..(limit + 10) {
+        ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: format!("B{i}"),
+            card_prefix: None,
+            position: i as i32,
+        }))])?;
+    }
+
+    assert!(
+        ctx.undo_depth() <= limit,
+        "undo depth {} should be capped at MAX_UNDO_DEPTH {}",
+        ctx.undo_depth(),
+        limit
+    );
+
+    // All boards should still be present in state
+    assert_eq!(ctx.boards()?.len(), limit + 10);
+
+    // We can undo up to the capped depth
+    for _ in 0..ctx.undo_depth() {
+        assert!(ctx.undo()?);
+    }
+    assert!(!ctx.can_undo(), "should not be able to undo past the limit");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_can_redo_uses_cached_count() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
+        name: "B".into(),
+        card_prefix: None,
+        position: 0,
+    }))])?;
+    assert!(!ctx.can_redo());
+
+    ctx.undo()?;
+    assert!(ctx.can_redo());
+    assert_eq!(ctx.redo_depth(), 1);
+
+    ctx.redo()?;
+    assert!(!ctx.can_redo());
+    assert_eq!(ctx.redo_depth(), 0);
+    Ok(())
+}
