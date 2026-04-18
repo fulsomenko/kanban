@@ -98,7 +98,7 @@ fn row_to_board(
             .as_deref()
             .map(p_uuid)
             .transpose()?,
-        position: row.try_get::<i32, _>("position").unwrap_or(0),
+        position: row.try_get::<i32, _>("position").map_err(db_err)?,
         created_at: p_dt(&created_at_str)?,
         updated_at: p_dt(&updated_at_str)?,
     })
@@ -325,8 +325,10 @@ impl SqliteStore {
         Ok((sprint_names, sprint_counters))
     }
 
-    async fn write_board_async(&self, board: &Board) -> KanbanResult<()> {
-        let mut tx = self.pool.begin().await.map_err(db_err)?;
+    async fn write_board_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        board: &Board,
+    ) -> KanbanResult<()> {
         let id = board.id.to_string();
 
         sqlx::query(
@@ -366,13 +368,13 @@ impl SqliteStore {
         .bind(board.position)
         .bind(fmt_dt(&board.created_at))
         .bind(fmt_dt(&board.updated_at))
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await
         .map_err(db_err)?;
 
         sqlx::query("DELETE FROM board_sprint_names WHERE board_id = ?")
             .bind(&id)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(db_err)?;
         for (i, name) in board.sprint_names.iter().enumerate() {
@@ -382,14 +384,14 @@ impl SqliteStore {
             .bind(&id)
             .bind(i as i32)
             .bind(name)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(db_err)?;
         }
 
         sqlx::query("DELETE FROM board_sprint_counters WHERE board_id = ?")
             .bind(&id)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(db_err)?;
         for (prefix, counter) in &board.sprint_counters {
@@ -399,11 +401,17 @@ impl SqliteStore {
             .bind(&id)
             .bind(prefix)
             .bind(*counter as i32)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(db_err)?;
         }
 
+        Ok(())
+    }
+
+    async fn write_board_async(&self, board: &Board) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        Self::write_board_with_conn(&mut tx, board).await?;
         tx.commit().await.map_err(db_err)?;
         Ok(())
     }
@@ -420,8 +428,10 @@ impl SqliteStore {
         rows.iter().map(row_to_sprint_log).collect()
     }
 
-    async fn write_card_async(&self, card: &Card) -> KanbanResult<()> {
-        let mut tx = self.pool.begin().await.map_err(db_err)?;
+    async fn write_card_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        card: &Card,
+    ) -> KanbanResult<()> {
         let id = card.id.to_string();
 
         sqlx::query(
@@ -450,13 +460,13 @@ impl SqliteStore {
         .bind(fmt_dt(&card.created_at))
         .bind(fmt_dt(&card.updated_at))
         .bind(opt_dt(&card.completed_at))
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await
         .map_err(db_err)?;
 
         sqlx::query("DELETE FROM sprint_logs WHERE card_id = ?")
             .bind(&id)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(db_err)?;
         for log in &card.sprint_logs {
@@ -472,11 +482,17 @@ impl SqliteStore {
             .bind(fmt_dt(&log.started_at))
             .bind(opt_dt(&log.ended_at))
             .bind(&log.status)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(db_err)?;
         }
 
+        Ok(())
+    }
+
+    async fn write_card_async(&self, card: &Card) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        Self::write_card_with_conn(&mut tx, card).await?;
         tx.commit().await.map_err(db_err)?;
         Ok(())
     }
@@ -540,11 +556,12 @@ impl SqliteStore {
         Ok(cards)
     }
 
-    async fn write_graph_async(&self, graph: &DependencyGraph) -> KanbanResult<()> {
-        let mut tx = self.pool.begin().await.map_err(db_err)?;
-
+    async fn write_graph_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        graph: &DependencyGraph,
+    ) -> KanbanResult<()> {
         sqlx::query("DELETE FROM card_edges")
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(db_err)?;
 
@@ -561,11 +578,17 @@ impl SqliteStore {
             .bind(edge.weight.map(|w| w as f64))
             .bind(fmt_dt(&edge.created_at))
             .bind(opt_dt(&edge.archived_at))
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(db_err)?;
         }
 
+        Ok(())
+    }
+
+    async fn write_graph_async(&self, graph: &DependencyGraph) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        Self::write_graph_with_conn(&mut tx, graph).await?;
         tx.commit().await.map_err(db_err)?;
         Ok(())
     }
@@ -590,40 +613,39 @@ impl SqliteStore {
     async fn apply_snapshot_async(&self, snapshot: Snapshot) -> KanbanResult<()> {
         let mut tx = self.pool.begin().await.map_err(db_err)?;
 
-        for table in &[
-            "card_edges",
-            "archived_cards",
-            "sprint_logs",
-            "cards",
-            "sprints",
-            "board_sprint_names",
-            "board_sprint_counters",
-            "columns",
-            "boards",
-        ] {
-            sqlx::query(&format!("DELETE FROM {table}"))
-                .execute(&mut *tx)
-                .await
-                .map_err(db_err)?;
-        }
-        tx.commit().await.map_err(db_err)?;
+        sqlx::query("PRAGMA defer_foreign_keys = ON")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+
+        sqlx::query("DELETE FROM card_edges").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM archived_cards").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM sprint_logs").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM cards").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM sprints").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM board_sprint_names").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM board_sprint_counters").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM columns").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM boards").execute(&mut *tx).await.map_err(db_err)?;
 
         for board in &snapshot.boards {
-            self.write_board_async(board).await?;
+            Self::write_board_with_conn(&mut tx, board).await?;
         }
         for column in &snapshot.columns {
-            self.write_column_async(column).await?;
+            Self::write_column_with_conn(&mut tx, column).await?;
         }
         for sprint in &snapshot.sprints {
-            self.write_sprint_async(sprint).await?;
+            Self::write_sprint_with_conn(&mut tx, sprint).await?;
         }
         for card in &snapshot.cards {
-            self.write_card_async(card).await?;
+            Self::write_card_with_conn(&mut tx, card).await?;
         }
         for ac in &snapshot.archived_cards {
-            self.write_archived_card_async(ac).await?;
+            Self::write_archived_card_with_conn(&mut tx, ac).await?;
         }
-        self.write_graph_async(&snapshot.graph).await?;
+        Self::write_graph_with_conn(&mut tx, &snapshot.graph).await?;
+
+        tx.commit().await.map_err(db_err)?;
         Ok(())
     }
 
@@ -761,7 +783,10 @@ impl SqliteStore {
         rows_to_graph(&rows)
     }
 
-    async fn write_column_async(&self, column: &Column) -> KanbanResult<()> {
+    async fn write_column_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        column: &Column,
+    ) -> KanbanResult<()> {
         sqlx::query(
             "INSERT INTO columns (id, board_id, name, position, wip_limit, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -777,13 +802,21 @@ impl SqliteStore {
         .bind(column.wip_limit)
         .bind(fmt_dt(&column.created_at))
         .bind(fmt_dt(&column.updated_at))
-        .execute(&self.pool)
+        .execute(&mut *conn)
         .await
         .map_err(db_err)?;
         Ok(())
     }
 
-    async fn write_sprint_async(&self, sprint: &Sprint) -> KanbanResult<()> {
+    async fn write_column_async(&self, column: &Column) -> KanbanResult<()> {
+        Self::write_column_with_conn(&mut *self.pool.acquire().await.map_err(db_err)?, column)
+            .await
+    }
+
+    async fn write_sprint_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        sprint: &Sprint,
+    ) -> KanbanResult<()> {
         sqlx::query(
             "INSERT INTO sprints (id, board_id, sprint_number, name_index, prefix, card_prefix,
                 status, start_date, end_date, created_at, updated_at)
@@ -806,14 +839,22 @@ impl SqliteStore {
         .bind(opt_dt(&sprint.end_date))
         .bind(fmt_dt(&sprint.created_at))
         .bind(fmt_dt(&sprint.updated_at))
-        .execute(&self.pool)
+        .execute(&mut *conn)
         .await
         .map_err(db_err)?;
         Ok(())
     }
 
-    async fn write_archived_card_async(&self, ac: &ArchivedCard) -> KanbanResult<()> {
-        self.write_card_async(&ac.card).await?;
+    async fn write_sprint_async(&self, sprint: &Sprint) -> KanbanResult<()> {
+        Self::write_sprint_with_conn(&mut *self.pool.acquire().await.map_err(db_err)?, sprint)
+            .await
+    }
+
+    async fn write_archived_card_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        ac: &ArchivedCard,
+    ) -> KanbanResult<()> {
+        Self::write_card_with_conn(conn, &ac.card).await?;
         sqlx::query(
             "INSERT INTO archived_cards (card_id, archived_at, original_column_id, original_position)
              VALUES (?, ?, ?, ?)
@@ -826,9 +867,16 @@ impl SqliteStore {
         .bind(fmt_dt(&ac.archived_at))
         .bind(ac.original_column_id.to_string())
         .bind(ac.original_position)
-        .execute(&self.pool)
+        .execute(&mut *conn)
         .await
         .map_err(db_err)?;
+        Ok(())
+    }
+
+    async fn write_archived_card_async(&self, ac: &ArchivedCard) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        Self::write_archived_card_with_conn(&mut tx, ac).await?;
+        tx.commit().await.map_err(db_err)?;
         Ok(())
     }
 }
@@ -844,7 +892,7 @@ impl DataStore for SqliteStore {
                         task_sort_order, sprint_duration_days, sprint_name_used_count,
                         next_sprint_number, active_sprint_id, task_list_view,
                         COALESCE(card_counter, 1) as card_counter,
-                        completion_column_id, created_at, updated_at
+                        completion_column_id, position, created_at, updated_at
                  FROM boards WHERE id = ?",
             )
             .bind(&id_str)
