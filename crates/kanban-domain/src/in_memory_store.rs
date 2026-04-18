@@ -262,7 +262,10 @@ impl DataStore for InMemoryStore {
         Ok(())
     }
 
-    fn list_archived_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<Vec<ArchivedCard>> {
+    fn list_archived_cards_by_columns(
+        &self,
+        column_ids: &[Uuid],
+    ) -> KanbanResult<Vec<ArchivedCard>> {
         let state = self.read_state()?;
         let mut acs: Vec<ArchivedCard> = state
             .archived_cards
@@ -933,14 +936,26 @@ mod tests {
 
         let snap = store.snapshot().unwrap();
 
-        assert_eq!(snap.boards[0].name, "A", "boards should be sorted by position");
+        assert_eq!(
+            snap.boards[0].name, "A",
+            "boards should be sorted by position"
+        );
         assert_eq!(snap.boards[1].name, "B");
-        assert_eq!(snap.columns[0].name, "A", "columns should be sorted by position");
+        assert_eq!(
+            snap.columns[0].name, "A",
+            "columns should be sorted by position"
+        );
         assert_eq!(snap.columns[1].name, "M");
         assert_eq!(snap.columns[2].name, "Z");
-        assert_eq!(snap.cards[0].title, "C1", "cards should be sorted by position");
+        assert_eq!(
+            snap.cards[0].title, "C1",
+            "cards should be sorted by position"
+        );
         assert_eq!(snap.cards[1].title, "C3");
-        assert_eq!(snap.sprints[0].sprint_number, 1, "sprints should be sorted by sprint_number");
+        assert_eq!(
+            snap.sprints[0].sprint_number, 1,
+            "sprints should be sorted by sprint_number"
+        );
         assert_eq!(snap.sprints[1].sprint_number, 2);
     }
 

@@ -564,7 +564,9 @@ impl SqliteStore {
         Ok(cards)
     }
 
-    async fn get_graph_with_conn(conn: &mut sqlx::SqliteConnection) -> KanbanResult<DependencyGraph> {
+    async fn get_graph_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+    ) -> KanbanResult<DependencyGraph> {
         let rows = sqlx::query(
             "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
              FROM card_edges",
@@ -1234,7 +1236,10 @@ impl DataStore for SqliteStore {
         })
     }
 
-    fn list_archived_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<Vec<ArchivedCard>> {
+    fn list_archived_cards_by_columns(
+        &self,
+        column_ids: &[Uuid],
+    ) -> KanbanResult<Vec<ArchivedCard>> {
         if column_ids.is_empty() {
             return Ok(Vec::new());
         }
