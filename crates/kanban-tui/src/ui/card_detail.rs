@@ -66,15 +66,16 @@ pub(super) fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) 
     use kanban_domain::dependencies::CardGraphExt;
 
     if let Some(card_idx) = app.selection.active_card_index {
-        if let Some(card) = app.ctx.cards().get(card_idx) {
+        let cards_vec: Vec<_> = app.view.cards_by_id.values().collect();
+        if let Some(card) = cards_vec.get(card_idx) {
             if let Some(board_idx) = app.selection.active_board_index {
                 if let Some(board) = app.view.boards.get(board_idx) {
                     let has_sprint_logs = card.sprint_logs.len() > 1;
                     let card_id = card.id;
 
                     // Get parent and child information
-                    let parents = app.ctx.graph().cards.parents(card_id);
-                    let children = app.ctx.graph().cards.children(card_id);
+                    let parents = app.view.graph.cards.parents(card_id);
+                    let children = app.view.graph.cards.children(card_id);
                     let child_count = children.len();
 
                     let constraints = vec![
