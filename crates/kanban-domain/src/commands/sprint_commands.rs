@@ -253,19 +253,10 @@ pub struct DeleteSprint {
 
 impl DeleteSprint {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let now = self.timestamp;
-
         context.store.clear_sprint_from_cards(self.sprint_id)?;
-
-        let archived = context.store.list_archived_cards()?;
-        for mut ac in archived {
-            if ac.card.sprint_id == Some(self.sprint_id) {
-                ac.card.sprint_id = None;
-                ac.card.updated_at = now;
-                context.store.insert_archived_card(ac)?;
-            }
-        }
-
+        context
+            .store
+            .clear_sprint_from_archived_cards(self.sprint_id, self.timestamp)?;
         context.store.delete_sprint(self.sprint_id)?;
         Ok(())
     }

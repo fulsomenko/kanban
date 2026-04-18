@@ -156,12 +156,8 @@ impl DeleteBoard {
             active_card_ids.extend(cards.iter().map(|c| c.id));
         }
 
-        let archived = context.store.list_archived_cards()?;
-        let archived_card_ids: Vec<Uuid> = archived
-            .iter()
-            .filter(|ac| column_ids.contains(&ac.original_column_id))
-            .map(|ac| ac.card.id)
-            .collect();
+        let archived = context.store.list_archived_cards_by_columns(&column_ids)?;
+        let archived_card_ids: Vec<Uuid> = archived.iter().map(|ac| ac.card.id).collect();
 
         let all_ids: Vec<Uuid> = active_card_ids
             .iter()
@@ -177,10 +173,8 @@ impl DeleteBoard {
 
         context.store.delete_cards_by_columns(&column_ids)?;
 
-        for ac in archived {
-            if column_ids.contains(&ac.original_column_id) {
-                context.store.delete_archived_card(ac.card.id)?;
-            }
+        for ac in &archived {
+            context.store.delete_archived_card(ac.card.id)?;
         }
 
         context.store.delete_columns_by_board(self.board_id)?;
