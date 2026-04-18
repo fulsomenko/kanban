@@ -27,6 +27,7 @@ fn make_card(board: &mut Board, column_id: Uuid, title: &str, pos: i32) -> Card 
 
 // --- Board CRUD ---
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_upsert_and_get_board() {
     let (store, _dir) = make_store().await;
@@ -42,12 +43,14 @@ async fn test_sqlite_upsert_and_get_board() {
     assert_eq!(fetched.sprint_counters.get("SP"), Some(&5));
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_list_boards_empty() {
     let (store, _dir) = make_store().await;
     assert!(store.list_boards().unwrap().is_empty());
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_delete_board_removes_it() {
     let (store, _dir) = make_store().await;
@@ -60,6 +63,7 @@ async fn test_sqlite_delete_board_removes_it() {
 
 // --- Column CRUD ---
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_upsert_and_get_column() {
     let (store, _dir) = make_store().await;
@@ -73,6 +77,7 @@ async fn test_sqlite_upsert_and_get_column() {
     assert_eq!(fetched.name, "Col");
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_list_columns_by_board_filters_correctly() {
     let (store, _dir) = make_store().await;
@@ -98,6 +103,7 @@ async fn test_sqlite_list_columns_by_board_filters_correctly() {
 
 // --- Card CRUD ---
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_upsert_and_get_card() {
     let (store, _dir) = make_store().await;
@@ -114,6 +120,7 @@ async fn test_sqlite_upsert_and_get_card() {
     assert_eq!(fetched.title, "Card");
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_list_cards_by_column() {
     let (store, _dir) = make_store().await;
@@ -139,6 +146,7 @@ async fn test_sqlite_list_cards_by_column() {
     assert!(cards.iter().all(|c| c.column_id == col1.id));
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_list_cards_by_sprint() {
     let (store, _dir) = make_store().await;
@@ -160,6 +168,7 @@ async fn test_sqlite_list_cards_by_sprint() {
     assert_eq!(cards[0].sprint_id, Some(sprint.id));
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_count_cards_in_column() {
     let (store, _dir) = make_store().await;
@@ -178,6 +187,7 @@ async fn test_sqlite_count_cards_in_column() {
     assert_eq!(store.count_cards_in_column(col.id).unwrap(), 2);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_count_cards_in_column_excluding() {
     let (store, _dir) = make_store().await;
@@ -199,6 +209,7 @@ async fn test_sqlite_count_cards_in_column_excluding() {
     assert_eq!(count, 1);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_clear_sprint_from_cards() {
     let (store, _dir) = make_store().await;
@@ -225,6 +236,7 @@ async fn test_sqlite_clear_sprint_from_cards() {
 
 // --- Sprint CRUD ---
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_upsert_and_get_sprint() {
     let (store, _dir) = make_store().await;
@@ -238,6 +250,7 @@ async fn test_sqlite_upsert_and_get_sprint() {
     assert_eq!(fetched.sprint_number, 1);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_list_sprints_by_board() {
     let (store, _dir) = make_store().await;
@@ -262,6 +275,7 @@ async fn test_sqlite_list_sprints_by_board() {
 
 // --- Archived card ---
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_insert_and_get_archived_card() {
     let (store, _dir) = make_store().await;
@@ -286,6 +300,7 @@ async fn test_sqlite_insert_and_get_archived_card() {
 
 // --- Graph ---
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_set_and_get_graph() {
     let (store, _dir) = make_store().await;
@@ -297,6 +312,7 @@ async fn test_sqlite_set_and_get_graph() {
 
 // --- Snapshot ---
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_snapshot_roundtrip() {
     let (store, _dir) = make_store().await;
@@ -316,6 +332,7 @@ async fn test_sqlite_snapshot_roundtrip() {
     assert_eq!(snap.sprints.len(), 1);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_apply_snapshot_replaces_existing_data() {
     let (store, _dir) = make_store().await;
@@ -345,9 +362,11 @@ fn make_board_cmd(name: &str) -> Command {
         id: Uuid::new_v4(),
         name: name.into(),
         card_prefix: None,
+        position: 0,
     }))
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_command_store_append_returns_count() {
     let (store, _dir) = make_store().await;
@@ -357,12 +376,14 @@ async fn test_sqlite_command_store_append_returns_count() {
     assert_eq!(count, 2);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_command_store_count_starts_at_zero() {
     let (store, _dir) = make_store().await;
     assert_eq!(store.command_count().unwrap(), 0);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_command_store_load_returns_slice() {
     let (store, _dir) = make_store().await;
@@ -374,6 +395,7 @@ async fn test_sqlite_command_store_load_returns_slice() {
     assert_eq!(batches.len(), 3);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_command_store_load_range_exclusive_end() {
     let (store, _dir) = make_store().await;
@@ -385,6 +407,7 @@ async fn test_sqlite_command_store_load_range_exclusive_end() {
     assert_eq!(store.load_commands(0, 2).unwrap().len(), 2);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_command_store_truncate_removes_tail() {
     let (store, _dir) = make_store().await;
@@ -397,6 +420,7 @@ async fn test_sqlite_command_store_truncate_removes_tail() {
     assert_eq!(store.load_commands(0, 1).unwrap().len(), 1);
 }
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_command_store_batch_stores_multiple_commands() {
     let (store, _dir) = make_store().await;

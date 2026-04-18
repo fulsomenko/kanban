@@ -450,7 +450,8 @@ impl KanbanOperations for KanbanContext {
     fn create_board(&mut self, name: String, card_prefix: Option<String>) -> KanbanResult<Board> {
         use kanban_domain::commands::CreateBoard;
         let id = Uuid::new_v4();
-        let cmd = Command::Board(BoardCommand::Create(CreateBoard { id, name, card_prefix }));
+        let position = self.list_boards().map(|b| b.len() as i32).unwrap_or(0);
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard { id, name, card_prefix, position }));
         self.execute(vec![cmd])?;
         self.get_board(id)?.ok_or_else(|| {
             KanbanError::Internal("Board creation succeeded but board not found".into())

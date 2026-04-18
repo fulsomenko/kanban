@@ -35,6 +35,7 @@ pub fn fully_populated_snapshot() -> Snapshot {
             m
         },
         completion_column_id: Some(col_id),
+        position: 0,
         created_at: now,
         updated_at: now,
     };

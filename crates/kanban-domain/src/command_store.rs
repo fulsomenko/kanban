@@ -34,6 +34,7 @@ mod tests {
             id: Uuid::new_v4(),
             name: name.into(),
             card_prefix: None,
+            position: 0,
         }))
     }
 

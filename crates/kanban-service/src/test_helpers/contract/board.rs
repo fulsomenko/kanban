@@ -55,6 +55,7 @@ pub async fn test_board_update_all_optional_fields_roundtrip(factory: &StoreFact
             task_list_view: Some(TaskListView::GroupedByColumn),
             active_sprint_id: FieldUpdate::Set(sprint.id),
             completion_column_id: FieldUpdate::Set(col.id),
+            position: None,
         },
     )
     .unwrap();

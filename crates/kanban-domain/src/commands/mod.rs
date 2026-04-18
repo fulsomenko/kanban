@@ -207,6 +207,7 @@ mod tests {
             id: Uuid::new_v4(),
             name: "B".into(),
             card_prefix: None,
+            position: 0,
         }));
         let json = serde_json::to_string(&cmd).unwrap();
         let back: Command = serde_json::from_str(&json).unwrap();
@@ -234,6 +235,7 @@ mod tests {
             id: Uuid::new_v4(),
             name: "B".into(),
             card_prefix: None,
+            position: 0,
         }));
         cmd.execute(&ctx).unwrap();
         assert_eq!(tc.store.list_boards().unwrap().len(), 1);
@@ -245,6 +247,7 @@ mod tests {
             id: Uuid::new_v4(),
             name: "My Board".into(),
             card_prefix: None,
+            position: 0,
         }));
         assert!(cmd.description().contains("My Board"));
     }

@@ -71,10 +71,12 @@ impl App {
         let board_name = self.input.as_str().to_string();
 
         // Execute CreateBoard command first to get the board ID
+        let position = self.ctx.boards().len() as i32;
         let create_board_cmd = Command::Board(BoardCommand::Create(CreateBoard {
             id: uuid::Uuid::new_v4(),
             name: board_name.clone(),
             card_prefix: None,
+            position,
         }));
 
         if let Err(e) = self.execute_command(create_board_cmd) {

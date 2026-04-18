@@ -50,12 +50,15 @@ pub struct CreateBoard {
     pub id: Uuid,
     pub name: String,
     pub card_prefix: Option<String>,
+    #[serde(default)]
+    pub position: i32,
 }
 
 impl CreateBoard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let mut board = Board::new(self.name.clone(), self.card_prefix.clone());
         board.id = self.id;
+        board.position = self.position;
         context.store.upsert_board(board)?;
         Ok(())
     }
@@ -416,8 +419,8 @@ mod tests {
 
         let boards = tc.store.list_boards().unwrap();
         assert_eq!(boards.len(), 2);
-        assert_eq!(boards[0].name, "B1");
-        assert_eq!(boards[1].name, "B2");
+        assert!(boards.iter().any(|b| b.name == "B1"));
+        assert!(boards.iter().any(|b| b.name == "B2"));
         assert_eq!(tc.store.list_all_columns().unwrap().len(), 1);
         assert_eq!(tc.store.list_all_cards().unwrap().len(), 1);
     }

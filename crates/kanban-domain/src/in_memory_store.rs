@@ -62,7 +62,7 @@ impl DataStore for InMemoryStore {
     fn list_boards(&self) -> KanbanResult<Vec<Board>> {
         let state = self.state.read().unwrap();
         let mut boards: Vec<Board> = state.boards.values().cloned().collect();
-        boards.sort_by(|a, b| a.name.cmp(&b.name));
+        boards.sort_by_key(|b| b.position);
         Ok(boards)
     }
 

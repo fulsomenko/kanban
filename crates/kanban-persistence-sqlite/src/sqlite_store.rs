@@ -98,6 +98,7 @@ fn row_to_board(
             .as_deref()
             .map(p_uuid)
             .transpose()?,
+        position: row.try_get::<i32, _>("position").unwrap_or(0),
         created_at: p_dt(&created_at_str)?,
         updated_at: p_dt(&updated_at_str)?,
     })
@@ -238,7 +239,27 @@ impl SqliteStore {
             .await
             .map_err(|e| KanbanError::Database(e.to_string()))?;
 
+        Self::migrate(&pool).await?;
+
         Ok(Self { pool })
+    }
+
+    async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        let has_position_col: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('boards') WHERE name = 'position'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+
+        if !has_position_col {
+            sqlx::raw_sql("ALTER TABLE boards ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
+        }
+
+        Ok(())
     }
 
     pub fn pool(&self) -> &Pool<Sqlite> {
@@ -284,8 +305,9 @@ impl SqliteStore {
             "INSERT INTO boards (id, name, description, sprint_prefix, card_prefix,
                 task_sort_field, task_sort_order, sprint_duration_days,
                 sprint_name_used_count, next_sprint_number, active_sprint_id,
-                task_list_view, card_counter, completion_column_id, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                task_list_view, card_counter, completion_column_id, position,
+                created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name, description=excluded.description,
                 sprint_prefix=excluded.sprint_prefix, card_prefix=excluded.card_prefix,
@@ -296,6 +318,7 @@ impl SqliteStore {
                 active_sprint_id=excluded.active_sprint_id,
                 task_list_view=excluded.task_list_view, card_counter=excluded.card_counter,
                 completion_column_id=excluded.completion_column_id,
+                position=excluded.position,
                 updated_at=excluded.updated_at",
         )
         .bind(&id)
@@ -312,6 +335,7 @@ impl SqliteStore {
         .bind(format!("{:?}", board.task_list_view))
         .bind(board.card_counter as i32)
         .bind(board.completion_column_id.map(|id| id.to_string()))
+        .bind(board.position)
         .bind(fmt_dt(&board.created_at))
         .bind(fmt_dt(&board.updated_at))
         .execute(&mut *tx)
@@ -549,7 +573,8 @@ impl SqliteStore {
                     task_sort_order, sprint_duration_days, sprint_name_used_count,
                     next_sprint_number, active_sprint_id, task_list_view,
                     COALESCE(card_counter, 1) as card_counter,
-                    completion_column_id, created_at, updated_at FROM boards",
+                    completion_column_id, position, created_at, updated_at
+             FROM boards ORDER BY position ASC",
         )
         .fetch_all(&self.pool)
         .await
@@ -561,7 +586,6 @@ impl SqliteStore {
             let (names, counters) = self.fetch_board_aux(&id_str).await?;
             boards.push(row_to_board(row, names, counters)?);
         }
-        boards.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(boards)
     }
 

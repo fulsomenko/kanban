@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS boards (
     task_list_view TEXT NOT NULL DEFAULT 'Flat',
     card_counter INTEGER NOT NULL DEFAULT 1,
     completion_column_id TEXT,
+    position INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (active_sprint_id) REFERENCES sprints(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED,
