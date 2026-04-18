@@ -273,6 +273,20 @@ impl SqliteStore {
                 .map_err(db_err)?;
         }
 
+        let has_card_counter_col: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('boards') WHERE name = 'card_counter'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+
+        if !has_card_counter_col {
+            sqlx::raw_sql("ALTER TABLE boards ADD COLUMN card_counter INTEGER NOT NULL DEFAULT 1")
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
+        }
+
         Ok(())
     }
 
