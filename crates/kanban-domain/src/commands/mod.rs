@@ -280,6 +280,71 @@ mod tests {
             let _back: Command = serde_json::from_str(&json).unwrap();
         }
     }
+
+    #[test]
+    fn test_command_serde_roundtrip_import_entities() {
+        let board = crate::Board::new("Imported".to_string(), Some("IMP".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let cmd = Command::Board(BoardCommand::Import(ImportEntities {
+            boards: vec![board],
+            columns: vec![col],
+            cards: vec![],
+            archived_cards: vec![],
+            sprints: vec![],
+            graph: Some(crate::DependencyGraph::new()),
+        }));
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: Command = serde_json::from_str(&json).unwrap();
+        match back {
+            Command::Board(BoardCommand::Import(ie)) => {
+                assert_eq!(ie.boards.len(), 1);
+                assert_eq!(ie.columns.len(), 1);
+                assert!(ie.graph.is_some());
+            }
+            _ => panic!("expected ImportEntities"),
+        }
+    }
+
+    #[test]
+    fn test_command_serde_roundtrip_migrate_sprint_logs() {
+        let cmd = Command::Card(CardCommand::MigrateSprintLogs(MigrateSprintLogs));
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: Command = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            back,
+            Command::Card(CardCommand::MigrateSprintLogs(_))
+        ));
+    }
+
+    #[test]
+    fn test_command_serde_roundtrip_complex_card_commands() {
+        let commands = vec![
+            Command::Card(CardCommand::Archive(ArchiveCards {
+                ids: vec![Uuid::new_v4(), Uuid::new_v4()],
+            })),
+            Command::Card(CardCommand::MoveMultiple(MoveCards {
+                ids: vec![Uuid::new_v4()],
+                column_id: Uuid::new_v4(),
+            })),
+            Command::Card(CardCommand::AssignToSprint(AssignCardsToSprint {
+                ids: vec![Uuid::new_v4()],
+                sprint_id: Uuid::new_v4(),
+            })),
+            Command::Card(CardCommand::Restore(RestoreCard {
+                card_id: Uuid::new_v4(),
+                column_id: Uuid::new_v4(),
+                position: 3,
+            })),
+            Command::Card(CardCommand::CompactPositions(CompactColumnPositions {
+                column_id: Uuid::new_v4(),
+            })),
+        ];
+        for cmd in commands {
+            let json = serde_json::to_string(&cmd).unwrap();
+            let back: Command = serde_json::from_str(&json).unwrap();
+            assert_eq!(std::mem::discriminant(&cmd), std::mem::discriminant(&back));
+        }
+    }
 }
 
 #[cfg(test)]
