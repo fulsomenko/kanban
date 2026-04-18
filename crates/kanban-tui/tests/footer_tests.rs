@@ -13,7 +13,7 @@ fn render_footer_to_string(app: &App) -> String {
 
 #[test]
 fn test_render_footer_normal_mode_renders_without_panic() {
-    let (app, _rx) = App::new(None).unwrap();
+    let app = App::test_default();
     let output = render_footer_to_string(&app);
     // Normal mode renders keybindings in "key: description" format
     assert!(
@@ -24,7 +24,7 @@ fn test_render_footer_normal_mode_renders_without_panic() {
 
 #[test]
 fn test_render_footer_search_active_shows_search_query() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     app.filter.search.is_active = true;
     for c in "hello".chars() {
@@ -37,7 +37,7 @@ fn test_render_footer_search_active_shows_search_query() {
 #[test]
 fn test_render_footer_search_mode_renders_without_panic() {
     use kanban_tui::app::mode::AppMode;
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     app.push_mode(AppMode::Search);
     let output = render_footer_to_string(&app);
@@ -55,7 +55,7 @@ fn test_render_footer_search_mode_renders_without_panic() {
 #[test]
 fn test_render_footer_sprint_detail_mode_includes_component_help() {
     use kanban_tui::app::AppMode;
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::SprintDetail);
     let output = render_footer_to_string(&app);
     assert!(!output.trim().is_empty());
@@ -67,7 +67,7 @@ fn test_render_footer_sprint_detail_mode_includes_component_help() {
 #[test]
 fn test_render_footer_multiselect_active_shows_select_prefix() {
     use uuid::Uuid;
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.multi_select.selection_mode_active = true;
     app.multi_select.selected_cards.insert(Uuid::new_v4());
     let output = render_footer_to_string(&app);

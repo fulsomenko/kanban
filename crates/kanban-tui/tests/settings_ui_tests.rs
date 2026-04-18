@@ -8,7 +8,7 @@ use kanban_tui::App;
 
 #[test]
 fn test_settings_keybinding_provider_returns_bindings() {
-    let (app, _rx) = App::new(None).unwrap();
+    let app = App::test_default();
     let mut app = app;
     app.push_mode(AppMode::Settings);
 
@@ -24,7 +24,7 @@ fn test_settings_keybinding_provider_returns_bindings() {
 
 #[test]
 fn test_open_settings_from_boards_focus() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     assert_eq!(app.mode, AppMode::Normal);
 
@@ -34,7 +34,7 @@ fn test_open_settings_from_boards_focus() {
 
 #[test]
 fn test_open_settings_ignored_from_cards_focus() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Cards;
     assert_eq!(app.mode, AppMode::Normal);
 
@@ -44,7 +44,7 @@ fn test_open_settings_ignored_from_cards_focus() {
 
 #[test]
 fn test_settings_escape_returns_to_previous_mode() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     app.handle_open_settings();
     assert_eq!(app.mode, AppMode::Settings);
@@ -55,7 +55,7 @@ fn test_settings_escape_returns_to_previous_mode() {
 
 #[test]
 fn test_edit_config_applies_changes() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.app_config = kanban_core::AppConfig::default();
     assert!(app.app_config.storage_backend.is_none());
 
@@ -70,7 +70,7 @@ fn test_render_settings_view_no_panic() {
 
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).unwrap();
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
 
     terminal
@@ -82,7 +82,7 @@ fn test_render_settings_view_no_panic() {
 
 #[test]
 fn test_settings_edit_uses_configured_format() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.app_config.editing_format = Some("json".into());
     let format = EditFormat::parse(app.app_config.effective_editing_format());
     assert_eq!(format, EditFormat::Json);
@@ -98,7 +98,7 @@ fn test_settings_edit_uses_configured_format() {
 
 #[test]
 fn test_render_settings_two_column_contains_configuration_section() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(
@@ -109,7 +109,7 @@ fn test_render_settings_two_column_contains_configuration_section() {
 
 #[test]
 fn test_render_settings_two_column_contains_storage_section() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(output.contains("Storage"), "Missing 'Storage' section");
@@ -117,7 +117,7 @@ fn test_render_settings_two_column_contains_storage_section() {
 
 #[test]
 fn test_render_settings_two_column_contains_config_file_section() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(
@@ -128,7 +128,7 @@ fn test_render_settings_two_column_contains_config_file_section() {
 
 #[test]
 fn test_render_settings_contains_export_boards() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(
@@ -139,7 +139,7 @@ fn test_render_settings_contains_export_boards() {
 
 #[test]
 fn test_render_settings_shows_storage_fields_by_default() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(
@@ -154,7 +154,7 @@ fn test_render_settings_shows_storage_fields_by_default() {
 
 #[test]
 fn test_render_settings_shows_storage_fields_when_has_data_file() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(
@@ -170,7 +170,7 @@ fn test_render_settings_shows_storage_fields_when_has_data_file() {
 #[test]
 fn test_render_settings_config_only_shows_storage_labels_not_active() {
     // No CLI arg: storage comes from config → use "Storage *" labels, not "Active Storage *".
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.has_data_file = true;
     app.cli_file_provided = false;
     app.cli_file_override = false;
@@ -189,7 +189,7 @@ fn test_render_settings_config_only_shows_storage_labels_not_active() {
 #[test]
 fn test_render_settings_cli_only_shows_active_storage_labels_not_plain() {
     // CLI arg provided but no override: storage comes from CLI → use "Active Storage *" labels.
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.has_data_file = true;
     app.cli_file_provided = true;
     app.cli_file_override = false;
@@ -210,7 +210,7 @@ fn test_render_settings_cli_only_shows_active_storage_labels_not_plain() {
 
 #[test]
 fn test_render_settings_storage_fields_greyed_when_cli_file_override() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.cli_file_override = true;
     app.app_config.storage_backend = Some("json".into());
     // original_storage_backend must be set so grayed rows are shown
@@ -231,7 +231,7 @@ fn test_render_settings_storage_fields_greyed_when_cli_file_override() {
 
 #[test]
 fn test_render_settings_no_override_label_without_cli_file() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(
@@ -242,7 +242,7 @@ fn test_render_settings_no_override_label_without_cli_file() {
 
 #[test]
 fn test_render_settings_shows_editing_format_label() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
     let output = helpers::render_to_string(&app);
     assert!(output.contains("Editing Format"), "Missing label");
@@ -281,7 +281,7 @@ fn value_after_label<'a>(rows: &'a [String], label: &str) -> Option<&'a str> {
 
 #[test]
 fn test_render_settings_storage_location_shows_absolute_path() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.app_config = kanban_core::AppConfig::default();
     app.has_data_file = true;
     app.push_mode(AppMode::Settings);
@@ -299,7 +299,7 @@ fn test_render_settings_storage_location_shows_absolute_path() {
 
 #[test]
 fn test_render_settings_active_storage_location_shows_absolute_path_with_cli_override() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.app_config = kanban_core::AppConfig::default();
     app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
     app.app_config.storage_backend = Some("json".into());
@@ -323,7 +323,7 @@ fn test_render_settings_cli_override_without_config_storage_hides_config_storage
     // When CLI overrides the file but config defines no storage, the grayed-out
     // "Storage Backend" / "Storage Location" rows must NOT appear — only the
     // "Active Storage *" rows should be shown.
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.cli_file_provided = true;
     app.cli_file_override = true;
     app.original_storage_backend = None;
@@ -353,7 +353,7 @@ fn test_render_settings_cli_override_without_config_storage_hides_config_storage
 
 #[test]
 fn test_apply_config_edit_with_non_default_content_writes_config() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.app_config = kanban_core::AppConfig {
         default_card_prefix: Some("feat".into()),
         ..Default::default()

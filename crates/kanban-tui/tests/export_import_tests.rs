@@ -8,7 +8,7 @@ fn test_export_single_board() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_export.json");
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     let board = app
         .ctx
@@ -48,7 +48,7 @@ fn test_export_all_boards() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_export_all.json");
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     let board1 = app.ctx.create_board("Board 1".to_string(), None).unwrap();
     let column1 = app
@@ -97,7 +97,7 @@ fn test_export_empty_boards() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_empty.json");
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.persistence.save_file = Some(file_path.to_str().unwrap().to_string());
 
     app.auto_save().unwrap();
@@ -153,7 +153,7 @@ fn test_import_valid_format() {
 
     fs::write(&file_path, json).unwrap();
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 
@@ -172,7 +172,7 @@ fn test_import_invalid_format_fails() {
     let json = r#"{"invalid": "format"}"#;
     fs::write(&file_path, json).unwrap();
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let result = app.import_board_from_file(file_path.to_str().unwrap());
 
     assert!(result.is_err());
@@ -261,7 +261,7 @@ fn test_export_import_sprint_and_card_prefixes() {
     let file_path = dir.path().join("test_prefixes.json");
 
     // Create board with both sprint_prefix and card_prefix
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     use kanban_domain::{BoardUpdate, FieldUpdate, SprintUpdate};
     let board = app
         .ctx
@@ -317,7 +317,7 @@ fn test_export_import_sprint_and_card_prefixes() {
     assert_eq!(parsed["boards"][0]["sprints"][0]["card_prefix"], "hotfix");
 
     // Clear and reimport
-    let (mut app2, _rx2) = App::new(None).unwrap();
+    let mut app2 = App::test_default();
     app2.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 
@@ -397,7 +397,7 @@ fn test_backward_compat_old_export_format() {
     fs::write(&file_path, old_json).unwrap();
 
     // Import old format
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 

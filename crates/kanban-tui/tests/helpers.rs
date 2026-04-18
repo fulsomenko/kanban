@@ -69,7 +69,7 @@ pub fn render_to_string_with_colors(app: &App) -> Vec<(String, Option<ratatui::s
 }
 
 pub fn setup_settings_app() -> App {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     app.handle_open_settings();
     app
@@ -77,7 +77,7 @@ pub fn setup_settings_app() -> App {
 
 pub fn setup_app_with_export_dialog(board_count: usize) -> App {
     use kanban_domain::KanbanOperations;
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     app.push_mode(AppMode::Settings);
     for i in 0..board_count {

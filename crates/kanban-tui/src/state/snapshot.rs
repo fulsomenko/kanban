@@ -40,7 +40,6 @@ impl TuiSnapshot for Snapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{FilterState, SelectionHub};
     use kanban_domain::{Board, DependencyGraph, SortField};
 
     #[test]
@@ -78,18 +77,9 @@ mod tests {
         };
 
         // Create a minimal app with active_board_index set
-        let app = App {
-            selection: SelectionHub {
-                active_board_index: Some(0),
-                ..SelectionHub::default()
-            },
-            filter: FilterState {
-                current_sort_field: Some(SortField::Default),
-                ..FilterState::default()
-            },
-            ..Default::default()
-        };
-        let mut app = app;
+        let mut app = App::test_default();
+        app.selection.active_board_index = Some(0);
+        app.filter.current_sort_field = Some(SortField::Default);
 
         // Apply snapshot - should sync sort field from board
         snapshot.apply_to_app(&mut app);

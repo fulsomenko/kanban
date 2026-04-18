@@ -2230,6 +2230,46 @@ impl Default for App {
     }
 }
 
+impl App {
+    #[doc(hidden)]
+    pub fn test_default() -> Self {
+        let (ctx, _save_rx, save_completion_rx) =
+            crate::tui_context::TuiContext::new(None).expect("TuiContext::new(None) failed");
+        Self {
+            store_manager: Arc::new(default_store_manager()),
+            should_quit: false,
+            quit_with_pending: false,
+            mode: AppMode::Normal,
+            mode_stack: Vec::new(),
+            input: InputState::new(),
+            ctx,
+            app_config: kanban_core::AppConfig::default(),
+            selection: SelectionHub::default(),
+            animation: AnimationState::default(),
+            filter: FilterState::default(),
+            dialog_input: DialogInputState::default(),
+            focus: FocusState::default(),
+            persistence: PersistenceState::new(None, save_completion_rx),
+            multi_select: MultiSelectState::default(),
+            ui_state: UiState::default(),
+            sprint_view: SprintViewState::default(),
+            view: ViewState::default(),
+            relationship: RelationshipState::default(),
+            pending_key: None,
+            has_data_file: true,
+            cli_file_provided: false,
+            cli_file_override: false,
+            config_storage_backend: "json".into(),
+            config_storage_location: "kanban.json".into(),
+            original_storage_backend: None,
+            original_storage_location: None,
+            export_dialog: None,
+            migration_state: MigrationState::Idle,
+            export_result_rx: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2237,7 +2277,7 @@ mod tests {
 
     #[test]
     fn test_scroll_help_into_view_scrolls_deep_item() {
-        let mut app = App::default();
+        let mut app = App::test_default();
         app.view.last_frame_area = Rect {
             x: 0,
             y: 0,

@@ -133,13 +133,13 @@ mod tests {
 
     #[test]
     fn test_build_filter_title_suffix_no_filters_returns_none() {
-        let (app, _rx) = App::new(None).unwrap();
+        let app = App::test_default();
         assert_eq!(build_filter_title_suffix(&app), None);
     }
 
     #[test]
     fn test_build_filter_title_suffix_unassigned_cards_flag() {
-        let (mut app, _rx) = App::new(None).unwrap();
+        let mut app = App::test_default();
         app.filter.hide_assigned_cards = true;
         assert_eq!(
             build_filter_title_suffix(&app),
@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn test_build_filter_title_suffix_sprint_filter_formats_sprint_name() {
         use kanban_domain::KanbanOperations;
-        let (mut app, _rx) = App::new(None).unwrap();
+        let mut app = App::test_default();
         let board = app
             .ctx
             .inner_mut()
@@ -179,27 +179,27 @@ mod tests {
 
     #[test]
     fn test_build_tasks_panel_title_default() {
-        let (app, _rx) = App::new(None).unwrap();
+        let app = App::test_default();
         assert_eq!(build_tasks_panel_title(&app, false), "Tasks");
     }
 
     #[test]
     fn test_build_tasks_panel_title_archived_view() {
-        let (mut app, _rx) = App::new(None).unwrap();
+        let mut app = App::test_default();
         app.mode = AppMode::ArchivedCardsView;
         assert_eq!(build_tasks_panel_title(&app, false), "Archive");
     }
 
     #[test]
     fn test_build_tasks_panel_title_cards_focus() {
-        let (mut app, _rx) = App::new(None).unwrap();
+        let mut app = App::test_default();
         app.focus.active = Focus::Cards;
         assert_eq!(build_tasks_panel_title(&app, false), "Tasks [2]");
     }
 
     #[test]
     fn test_build_tasks_panel_title_with_filter_suffix() {
-        let (mut app, _rx) = App::new(None).unwrap();
+        let mut app = App::test_default();
         app.filter.hide_assigned_cards = true;
         let title = build_tasks_panel_title(&app, true);
         assert!(
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_build_tasks_panel_title_archived_ignores_filter_suffix() {
-        let (mut app, _rx) = App::new(None).unwrap();
+        let mut app = App::test_default();
         app.mode = AppMode::ArchivedCardsView;
         app.filter.hide_assigned_cards = true;
         assert_eq!(build_tasks_panel_title(&app, true), "Archive");

@@ -5,7 +5,7 @@ use kanban_tui::App;
 
 #[test]
 fn test_apply_config_edit_save_failure_does_not_update_in_memory_config() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let original_prefix = app.app_config.effective_default_card_prefix().to_string();
 
     let format = kanban_tui::edit_format::EditFormat::Json;
@@ -77,7 +77,7 @@ async fn test_migration_edit_rejected_while_migrating() {
 
 #[test]
 fn test_export_filename_rejects_path_separator_forward_slash() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.export_dialog = Some(ExportDialogState {
         board_selections: vec![true],
         cursor: 0,
@@ -97,7 +97,7 @@ fn test_export_filename_rejects_path_separator_forward_slash() {
 
 #[test]
 fn test_export_filename_rejects_path_separator_backslash() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.export_dialog = Some(ExportDialogState {
         board_selections: vec![true],
         cursor: 0,
@@ -114,7 +114,7 @@ fn test_export_filename_rejects_path_separator_backslash() {
 
 #[test]
 fn test_export_filename_rejects_null_byte() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.export_dialog = Some(ExportDialogState {
         board_selections: vec![true],
         cursor: 0,
@@ -131,7 +131,7 @@ fn test_export_filename_rejects_null_byte() {
 
 #[test]
 fn test_apply_config_edit_valid_json_updates_config() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let format = kanban_tui::edit_format::EditFormat::Json;
     let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml"}"#;
     let result = app.apply_config_edit(json, &format);
@@ -141,7 +141,7 @@ fn test_apply_config_edit_valid_json_updates_config() {
 
 #[test]
 fn test_apply_config_edit_invalid_json_returns_error() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let format = kanban_tui::edit_format::EditFormat::Json;
     let result = app.apply_config_edit("{not valid json", &format);
     assert!(result.is_err());
@@ -151,7 +151,7 @@ fn test_apply_config_edit_invalid_json_returns_error() {
 
 #[test]
 fn test_apply_config_edit_invalid_backend_returns_error() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let format = kanban_tui::edit_format::EditFormat::Json;
     let json = r#"{"default_card_prefix":"task","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"yaml"}"#;
     let result = app.apply_config_edit(json, &format);
@@ -166,7 +166,7 @@ fn test_apply_config_edit_unchanged_storage_not_written_to_config() {
     // user only changes card prefix and saves, that absolute path comes back in
     // the DTO and is written to config because strip_defaults compares against
     // the relative default ("kanban.json"), not the absolute.
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     // Reset to a known fresh-install state so the test is not affected by
     // any config file that may exist on the developer's machine.
     app.app_config = kanban_core::AppConfig::default();
@@ -194,7 +194,7 @@ fn test_apply_config_edit_with_startup_absolute_path_not_written_to_config() {
     // location as the default. App::new sets app_config.storage_location to
     // the absolute canonical path and storage_backend via sync_backend_with_file.
     // Editing only card prefix must NOT write storage_location to the config file.
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     // Reset to a known fresh-install state so the test is not affected by
     // any config file that may exist on the developer's machine.
     app.app_config = kanban_core::AppConfig::default();
@@ -224,7 +224,7 @@ fn test_apply_config_edit_with_cli_override_preserves_session_storage_location()
     // Red: currently self.app_config = config clears storage_location to None,
     // then apply_storage_location_change triggers a spurious migration that
     // eventually overwrites the config with the default path.
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let cli_path = "/tmp/cli_supplied.json".to_string();
     app.cli_file_override = true;
     app.app_config.storage_location = Some(cli_path.clone());
@@ -245,7 +245,7 @@ fn test_apply_config_edit_with_cli_override_preserves_session_storage_location()
 fn test_apply_config_edit_with_cli_override_does_not_trigger_migration() {
     // Red: currently apply_storage_location_change is called with old=cli_path,
     // new=cwd/kanban.json (default after storage is cleared), triggering a migration.
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.cli_file_override = true;
     app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
     app.app_config.storage_backend = Some("json".into());
@@ -265,7 +265,7 @@ fn test_apply_config_edit_with_cli_override_unloads_when_storage_explicitly_prov
     // When cli_file_override is active, storage lines are commented out in the
     // editor. If the user uncomments them (DTO has storage fields), that is an
     // intentional request to persist those storage settings and drop the override.
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.cli_file_override = true;
     app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
     app.app_config.storage_backend = Some("json".into());
@@ -285,7 +285,7 @@ fn test_apply_config_edit_with_cli_override_unloads_when_storage_explicitly_prov
 
 #[test]
 fn test_apply_config_edit_syncs_prefixes() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let format = kanban_tui::edit_format::EditFormat::Json;
     let json = r#"{"default_card_prefix":"myprefix","default_sprint_prefix":"mysprint","editing_format":"json","configuration_format":"toml"}"#;
     let result = app.apply_config_edit(json, &format);

@@ -71,7 +71,7 @@ async fn test_load_initial_state_with_no_boards_leaves_selection_none() -> Kanba
 
 #[tokio::test]
 async fn test_load_initial_state_with_no_file_leaves_selection_none() -> KanbanResult<()> {
-    let (mut app, _rx) = kanban_tui::App::new(None)?;
+    let mut app = kanban_tui::App::test_default();
     app.load_initial_state().await;
 
     assert_eq!(
