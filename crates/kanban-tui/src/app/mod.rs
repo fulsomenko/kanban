@@ -76,6 +76,7 @@ pub struct App {
     pub store_manager: Arc<StoreManager>,
     pub should_quit: bool,
     pub quit_with_pending: bool, // Force quit even if saves are pending (second 'q' press)
+    pub quit_with_migration: bool, // Force quit even if migration is in progress (second 'q' press)
     pub mode: AppMode,
     pub mode_stack: Vec<AppMode>,
     pub input: InputState,
@@ -242,6 +243,7 @@ impl App {
             store_manager,
             should_quit: false,
             quit_with_pending: false,
+            quit_with_migration: false,
             mode: AppMode::Normal,
             mode_stack: Vec::new(),
             input: InputState::new(),
@@ -315,6 +317,7 @@ impl App {
             store_manager,
             should_quit: false,
             quit_with_pending: false,
+            quit_with_migration: false,
             mode: AppMode::Normal,
             mode_stack: Vec::new(),
             input: kanban_core::InputState::new(),
@@ -348,6 +351,38 @@ impl App {
 
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    pub fn handle_quit_key(&mut self) {
+        let needs_pending_confirm =
+            self.ctx.save_coordinator.has_pending_saves() && !self.quit_with_pending;
+        let needs_migration_confirm =
+            matches!(self.migration_state, MigrationState::Migrating { .. })
+                && !self.quit_with_migration;
+
+        if needs_pending_confirm || needs_migration_confirm {
+            if needs_pending_confirm && needs_migration_confirm {
+                self.set_error(
+                    "⏳ Saves pending and migration in progress... press 'q' again to force quit"
+                        .to_string(),
+                );
+            } else if needs_pending_confirm {
+                self.set_error(
+                    "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
+                        .to_string(),
+                );
+                tracing::warn!("Quit attempted with pending saves, requiring confirmation");
+            } else {
+                self.set_error(
+                    "Migration in progress... press 'q' again to abort and quit".to_string(),
+                );
+            }
+            self.quit_with_pending = true;
+            self.quit_with_migration = true;
+            return;
+        }
+
+        self.quit();
     }
 
     pub fn spawn_save_worker(
@@ -647,20 +682,7 @@ impl App {
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
-            // Check for pending saves before quitting
-            if self.ctx.save_coordinator.has_pending_saves() && !self.quit_with_pending {
-                // First quit attempt with pending saves - show warning
-                self.set_error(
-                    "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
-                        .to_string(),
-                );
-                self.quit_with_pending = true;
-                tracing::warn!("Quit attempted with pending saves, requiring confirmation");
-                return false;
-            }
-
-            // Either no pending saves, or user confirmed force quit
-            self.quit();
+            self.handle_quit_key();
             return false;
         }
 
@@ -2048,6 +2070,9 @@ impl App {
             }
         }
 
+        // If a migration completed at the same instant as quit, apply it before tearing down.
+        self.await_migration().await;
+
         // Graceful shutdown: ensure all queued saves complete before exit
         self.ctx.save_coordinator.close_save_channel(); // Close save_tx channel to signal worker to finish
 
@@ -2289,6 +2314,7 @@ impl App {
             store_manager: Arc::new(default_store_manager()),
             should_quit: false,
             quit_with_pending: false,
+            quit_with_migration: false,
             mode: AppMode::Normal,
             mode_stack: Vec::new(),
             input: InputState::new(),

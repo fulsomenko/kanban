@@ -8,6 +8,18 @@ use kanban_service::StoreManager;
 #[cfg(feature = "tui")]
 use kanban_tui::App;
 
+pub(crate) fn resolve_is_sqlite(
+    store_manager: &kanban_service::StoreManager,
+    validated_file: Option<&str>,
+    config: &kanban_core::AppConfig,
+) -> bool {
+    let effective_file = validated_file
+        .map(str::to_owned)
+        .unwrap_or_else(|| kanban_service::config::resolve_storage_location(config));
+    store_manager.is_sqlite(&effective_file)
+        || (validated_file.is_none() && config.effective_storage_backend() == "sqlite")
+}
+
 fn init_tracing() {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -225,8 +237,7 @@ impl CliApp {
         let effective_file = validated_file
             .clone()
             .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
-        let is_sqlite = store_manager.is_sqlite(&effective_file)
-            || config.effective_storage_backend() == "sqlite";
+        let is_sqlite = resolve_is_sqlite(&store_manager, validated_file.as_deref(), &config);
 
         match command {
             None => {
@@ -264,5 +275,53 @@ impl CliApp {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kanban_core::AppConfig;
+
+    fn default_store_manager() -> kanban_service::StoreManager {
+        kanban_service::StoreManager::new(kanban_service::default_registry())
+    }
+
+    #[test]
+    fn test_resolve_is_sqlite_explicit_json_file_ignores_config_backend() {
+        let sm = default_store_manager();
+        let config = AppConfig {
+            storage_backend: Some("sqlite".to_string()),
+            ..Default::default()
+        };
+        let result = resolve_is_sqlite(&sm, Some("myboard.json"), &config);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_resolve_is_sqlite_no_explicit_file_uses_config_backend() {
+        let sm = default_store_manager();
+        let config = AppConfig {
+            storage_backend: Some("sqlite".to_string()),
+            ..Default::default()
+        };
+        let result = resolve_is_sqlite(&sm, None, &config);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_resolve_is_sqlite_explicit_sqlite_extension_is_sqlite() {
+        let sm = default_store_manager();
+        let config = AppConfig::default();
+        let result = resolve_is_sqlite(&sm, Some("myboard.sqlite"), &config);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_resolve_is_sqlite_no_file_default_config_is_not_sqlite() {
+        let sm = default_store_manager();
+        let config = AppConfig::default();
+        let result = resolve_is_sqlite(&sm, None, &config);
+        assert!(!result);
     }
 }
