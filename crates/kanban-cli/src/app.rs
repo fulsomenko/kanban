@@ -226,7 +226,7 @@ impl CliApp {
             .clone()
             .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
         let is_sqlite = store_manager.is_sqlite(&effective_file)
-            || config.effective_storage_backend() == "sqlite";
+            || (validated_file.is_none() && config.effective_storage_backend() == "sqlite");
 
         match command {
             None => {
