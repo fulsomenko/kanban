@@ -125,27 +125,27 @@ macro_rules! context_contract_tests {
         // Edge tests
         #[tokio::test]
         async fn test_blocks_edge_roundtrip() {
-            $crate::test_helpers::contract::edge::test_blocks_edge_roundtrip(&$factory_fn()).await;
+            $crate::test_helpers::contract::edge::test_blocks_edge_roundtrip(&$factory_fn()).await.unwrap();
         }
         #[tokio::test]
         async fn test_relates_to_edge_roundtrip() {
-            $crate::test_helpers::contract::edge::test_relates_to_edge_roundtrip(&$factory_fn()).await;
+            $crate::test_helpers::contract::edge::test_relates_to_edge_roundtrip(&$factory_fn()).await.unwrap();
         }
         #[tokio::test]
         async fn test_parent_of_edge_roundtrip() {
-            $crate::test_helpers::contract::edge::test_parent_of_edge_roundtrip(&$factory_fn()).await;
+            $crate::test_helpers::contract::edge::test_parent_of_edge_roundtrip(&$factory_fn()).await.unwrap();
         }
         #[tokio::test]
         async fn test_archived_edge_roundtrip() {
-            $crate::test_helpers::contract::edge::test_archived_edge_roundtrip(&$factory_fn()).await;
+            $crate::test_helpers::contract::edge::test_archived_edge_roundtrip(&$factory_fn()).await.unwrap();
         }
         #[tokio::test]
         async fn test_multiple_edges_roundtrip() {
-            $crate::test_helpers::contract::edge::test_multiple_edges_roundtrip(&$factory_fn()).await;
+            $crate::test_helpers::contract::edge::test_multiple_edges_roundtrip(&$factory_fn()).await.unwrap();
         }
         #[tokio::test]
         async fn test_empty_graph_roundtrip() {
-            $crate::test_helpers::contract::edge::test_empty_graph_roundtrip(&$factory_fn()).await;
+            $crate::test_helpers::contract::edge::test_empty_graph_roundtrip(&$factory_fn()).await.unwrap();
         }
 
         // Movement tests
@@ -177,7 +177,7 @@ macro_rules! context_contract_tests {
         }
         #[tokio::test]
         async fn test_full_populated_context_roundtrip() {
-            $crate::test_helpers::contract::lifecycle::test_full_populated_context_roundtrip(&$factory_fn()).await;
+            $crate::test_helpers::contract::lifecycle::test_full_populated_context_roundtrip(&$factory_fn()).await.unwrap();
         }
         #[tokio::test]
         async fn test_full_roundtrip_preserves_all_fields() {

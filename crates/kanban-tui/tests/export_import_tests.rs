@@ -8,7 +8,7 @@ fn test_export_single_board() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_export.json");
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     let board = app
         .ctx
@@ -48,7 +48,7 @@ fn test_export_all_boards() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_export_all.json");
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     let board1 = app.ctx.create_board("Board 1".to_string(), None).unwrap();
     let column1 = app
@@ -97,7 +97,7 @@ fn test_export_empty_boards() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_empty.json");
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.persistence.save_file = Some(file_path.to_str().unwrap().to_string());
 
     app.auto_save().unwrap();
@@ -153,7 +153,7 @@ fn test_import_valid_format() {
 
     fs::write(&file_path, json).unwrap();
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 
@@ -172,7 +172,7 @@ fn test_import_invalid_format_fails() {
     let json = r#"{"invalid": "format"}"#;
     fs::write(&file_path, json).unwrap();
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let result = app.import_board_from_file(file_path.to_str().unwrap());
 
     assert!(result.is_err());
@@ -216,17 +216,19 @@ async fn test_failed_import_clears_save_file() {
     assert!(app.persistence.save_file.is_none());
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_async_load_initial_state_sqlite() {
-    use kanban_domain::{Board, Column};
-    use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
-    use uuid::Uuid;
+    use kanban_core::AppConfig;
+    use kanban_domain::{Board, Column, DataStore};
 
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("test_load.db");
 
     // Create and populate a SQLite store
-    let store = kanban_persistence_sqlite::SqliteStore::new(db_path.to_str().unwrap());
+    let store = kanban_persistence_sqlite::SqliteStore::open(db_path.to_str().unwrap())
+        .await
+        .unwrap();
 
     let board = Board::new("SQLite Board".to_string(), None);
     let column = Column::new(board.id, "Backlog".to_string(), 0);
@@ -239,18 +241,13 @@ async fn test_async_load_initial_state_sqlite() {
         sprints: vec![],
         graph: Default::default(),
     };
-    let data = serde_json::to_vec(&snapshot).unwrap();
-    store
-        .save(StoreSnapshot {
-            data,
-            metadata: PersistenceMetadata::new(Uuid::new_v4()),
-        })
+    store.apply_snapshot(snapshot).unwrap();
+    drop(store);
+
+    // Load via App::open_sqlite (SQLite is no longer registry-backed)
+    let app = App::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
-
-    // Now load via App
-    let (mut app, _rx) = App::new(Some(db_path.to_str().unwrap().to_string())).unwrap();
-    app.load_initial_state().await;
 
     assert_eq!(app.ctx.boards().len(), 1);
     assert_eq!(app.ctx.boards()[0].name, "SQLite Board");
@@ -264,7 +261,7 @@ fn test_export_import_sprint_and_card_prefixes() {
     let file_path = dir.path().join("test_prefixes.json");
 
     // Create board with both sprint_prefix and card_prefix
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     use kanban_domain::{BoardUpdate, FieldUpdate, SprintUpdate};
     let board = app
         .ctx
@@ -320,7 +317,7 @@ fn test_export_import_sprint_and_card_prefixes() {
     assert_eq!(parsed["boards"][0]["sprints"][0]["card_prefix"], "hotfix");
 
     // Clear and reimport
-    let (mut app2, _rx2) = App::new(None).unwrap();
+    let mut app2 = App::test_default();
     app2.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 
@@ -400,7 +397,7 @@ fn test_backward_compat_old_export_format() {
     fs::write(&file_path, old_json).unwrap();
 
     // Import old format
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 

@@ -1,5 +1,7 @@
 use crate::app::{App, BoardFocus, DialogMode};
-use kanban_domain::commands::{ActivateSprint, CompleteSprint, CreateSprint, UpdateBoard};
+use kanban_domain::commands::{
+    ActivateSprint, BoardCommand, Command, CompleteSprint, CreateSprint, SprintCommand, UpdateBoard,
+};
 use kanban_domain::{BoardUpdate, FieldUpdate, SprintStatus};
 use uuid::Uuid;
 
@@ -43,20 +45,19 @@ impl App {
                         let board_id = board.id;
 
                         // Execute ActivateSprint and UpdateBoard as batch
-                        let activate_cmd = Box::new(ActivateSprint {
-                            sprint_id,
-                            duration_days: duration,
-                        })
-                            as Box<dyn kanban_domain::commands::Command>;
+                        let activate_cmd =
+                            Command::Sprint(SprintCommand::Activate(ActivateSprint {
+                                sprint_id,
+                                duration_days: duration,
+                            }));
 
-                        let board_cmd = Box::new(UpdateBoard {
+                        let board_cmd = Command::Board(BoardCommand::Update(UpdateBoard {
                             board_id,
                             updates: BoardUpdate {
                                 active_sprint_id: FieldUpdate::Set(sprint_id),
                                 ..Default::default()
                             },
-                        })
-                            as Box<dyn kanban_domain::commands::Command>;
+                        }));
 
                         if let Err(e) = self.execute_commands_batch(vec![activate_cmd, board_cmd]) {
                             tracing::error!("Failed to activate sprint: {}", e);
@@ -107,16 +108,16 @@ impl App {
 
             if let Some((sprint_id, board_id, sprint_name)) = sprint_info {
                 // Execute CompleteSprint and UpdateBoard as batch
-                let complete_cmd = Box::new(CompleteSprint { sprint_id })
-                    as Box<dyn kanban_domain::commands::Command>;
+                let complete_cmd =
+                    Command::Sprint(SprintCommand::Complete(CompleteSprint { sprint_id }));
 
-                let board_cmd = Box::new(UpdateBoard {
+                let board_cmd = Command::Board(BoardCommand::Update(UpdateBoard {
                     board_id,
                     updates: BoardUpdate {
                         active_sprint_id: FieldUpdate::Clear,
                         ..Default::default()
                     },
-                }) as Box<dyn kanban_domain::commands::Command>;
+                }));
 
                 if let Err(e) = self.execute_commands_batch(vec![complete_cmd, board_cmd]) {
                     tracing::error!("Failed to complete sprint: {}", e);
@@ -141,7 +142,7 @@ impl App {
                         .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning);
 
                     if has_planning
-                        && !get_sprint_uncompleted_cards(sprint_id, self.ctx.cards()).is_empty()
+                        && !get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards()).is_empty()
                     {
                         self.dialog_input.carry_over_source_sprint_id = Some(sprint_id);
                         self.dialog_input.carry_over_sprint_selection.set(Some(0));
@@ -198,13 +199,14 @@ impl App {
                 .effective_default_sprint_prefix()
                 .to_string();
 
-            let cmd = Box::new(CreateSprint {
+            let cmd = Command::Sprint(SprintCommand::Create(CreateSprint {
+                id: uuid::Uuid::new_v4(),
                 board_id,
                 name,
                 default_sprint_prefix: default_sprint_prefix.clone(),
                 explicit_prefix: None,
                 auto_consume_name: true,
-            });
+            }));
 
             if let Err(e) = self.execute_command(cmd) {
                 tracing::error!("Failed to create sprint: {}", e);
@@ -213,15 +215,12 @@ impl App {
             }
 
             // Log the newly created sprint
-            let board_sprints: Vec<_> = self
-                .ctx
-                .sprints()
-                .iter()
-                .filter(|s| s.board_id == board_id)
-                .collect();
+            let sprints = self.ctx.sprints();
+            let board_sprints: Vec<_> = sprints.iter().filter(|s| s.board_id == board_id).collect();
 
             if let Some(new_sprint) = board_sprints.last() {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
+                let boards = self.ctx.boards();
+                if let Some(board) = boards.get(board_idx) {
                     let effective_prefix = board
                         .sprint_prefix
                         .as_deref()

@@ -1,53 +1,86 @@
-use super::{Command, CommandContext};
+use super::CommandContext;
 use crate::ColumnUpdate;
 use crate::KanbanResult;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum ColumnCommand {
+    Create(CreateColumn),
+    Update(UpdateColumn),
+    Delete(DeleteColumn),
+}
+
+impl ColumnCommand {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        match self {
+            ColumnCommand::Create(c) => c.execute(context),
+            ColumnCommand::Update(c) => c.execute(context),
+            ColumnCommand::Delete(c) => c.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            ColumnCommand::Create(c) => c.description(),
+            ColumnCommand::Update(c) => c.description(),
+            ColumnCommand::Delete(c) => c.description(),
+        }
+    }
+}
+
 /// Update column properties (name, position, wip_limit)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateColumn {
     pub column_id: Uuid,
     pub updates: ColumnUpdate,
 }
 
-impl Command for UpdateColumn {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let column = context.column_mut(self.column_id)?;
+impl UpdateColumn {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut column = context.get_column(self.column_id)?;
         column.update(self.updates.clone());
+        context.store.upsert_column(column)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         "Update column".to_string()
     }
 }
 
 /// Create a new column
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateColumn {
+    pub id: Uuid,
     pub board_id: Uuid,
     pub name: String,
     pub position: i32,
 }
 
-impl Command for CreateColumn {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let column = crate::Column::new(self.board_id, self.name.clone(), self.position);
-        context.columns.push(column);
+impl CreateColumn {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut column = crate::Column::new(self.board_id, self.name.clone(), self.position);
+        column.id = self.id;
+        context.store.upsert_column(column)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Create column: '{}'", self.name)
     }
 }
 
 /// Delete a column
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteColumn {
     pub column_id: Uuid,
 }
 
-impl Command for DeleteColumn {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let has_cards = context.cards.iter().any(|c| c.column_id == self.column_id);
+impl DeleteColumn {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let has_cards = context.store.count_cards_in_column(self.column_id)? > 0;
         if has_cards {
             return Err(crate::KanbanError::validation(format!(
                 "Cannot delete column {}: column contains cards",
@@ -56,7 +89,8 @@ impl Command for DeleteColumn {
         }
 
         let has_archived_cards = context
-            .archived_cards
+            .store
+            .list_archived_cards()?
             .iter()
             .any(|ac| ac.original_column_id == self.column_id);
         if has_archived_cards {
@@ -66,11 +100,11 @@ impl Command for DeleteColumn {
             )));
         }
 
-        context.columns.retain(|c| c.id != self.column_id);
+        context.store.delete_column(self.column_id)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Delete column {}", self.column_id)
     }
 }
@@ -82,13 +116,13 @@ mod tests {
 
     #[test]
     fn test_update_column_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = UpdateColumn {
             column_id: Uuid::new_v4(),
             updates: ColumnUpdate::default(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 }

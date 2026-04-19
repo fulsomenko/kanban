@@ -64,7 +64,7 @@ impl Column {
 ///
 /// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
 /// See [`FieldUpdate`] documentation for usage examples.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ColumnUpdate {
     pub name: Option<String>,
     pub position: Option<i32>,

@@ -16,16 +16,16 @@ pub trait TuiSnapshot {
     fn from_app(app: &App) -> Self;
 
     /// Apply snapshot to app state (overwrites).
-    fn apply_to_app(&self, app: &mut App);
+    fn apply_to_app(&self, app: &mut App) -> kanban_domain::KanbanResult<()>;
 }
 
 impl TuiSnapshot for Snapshot {
     fn from_app(app: &App) -> Self {
-        app.ctx.snapshot()
+        app.ctx.snapshot().unwrap_or_default()
     }
 
-    fn apply_to_app(&self, app: &mut App) {
-        app.ctx.apply_snapshot(self.clone());
+    fn apply_to_app(&self, app: &mut App) -> kanban_domain::KanbanResult<()> {
+        app.ctx.apply_snapshot(self.clone())?;
 
         // Sync sort field/order from active board to preserve user's selection after reload
         if let Some(board_idx) = app.selection.active_board_index {
@@ -34,13 +34,13 @@ impl TuiSnapshot for Snapshot {
                 app.filter.current_sort_order = Some(board.task_sort_order);
             }
         }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{FilterState, SelectionHub};
     use kanban_domain::{Board, DependencyGraph, SortField};
 
     #[test]
@@ -78,21 +78,12 @@ mod tests {
         };
 
         // Create a minimal app with active_board_index set
-        let app = App {
-            selection: SelectionHub {
-                active_board_index: Some(0),
-                ..SelectionHub::default()
-            },
-            filter: FilterState {
-                current_sort_field: Some(SortField::Default),
-                ..FilterState::default()
-            },
-            ..Default::default()
-        };
-        let mut app = app;
+        let mut app = App::test_default();
+        app.selection.active_board_index = Some(0);
+        app.filter.current_sort_field = Some(SortField::Default);
 
         // Apply snapshot - should sync sort field from board
-        snapshot.apply_to_app(&mut app);
+        snapshot.apply_to_app(&mut app).unwrap();
 
         // After apply, current_sort_field should match the board's task_sort_field
         assert_eq!(

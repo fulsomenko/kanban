@@ -96,16 +96,17 @@ async fn test_mcp_server_build_no_data_file_uses_config_location() {
 }
 
 #[test]
-fn test_mcp_server_with_defaults_registers_sqlite_before_json() {
+fn test_mcp_server_with_defaults_detects_json_backend() {
+    // JSON is the only registry-backed backend; .json files must be detected.
     let server = McpServer::with_defaults();
 
     let dir = tempfile::tempdir().unwrap();
-    let sqlite_path = dir.path().join("fake.sqlite");
-    std::fs::write(&sqlite_path, b"SQLite format 3\0").unwrap();
+    let json_path = dir.path().join("board.json");
+    std::fs::write(&json_path, b"{}").unwrap();
 
     let detected = server
         .registry()
-        .detect_backend(sqlite_path.to_str().unwrap())
-        .expect("should detect backend for SQLite header");
-    assert_eq!(detected, "sqlite");
+        .detect_backend(json_path.to_str().unwrap())
+        .expect("should detect json backend for .json file");
+    assert_eq!(detected, "json");
 }

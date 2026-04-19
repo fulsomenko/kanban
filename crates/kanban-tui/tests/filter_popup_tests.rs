@@ -6,7 +6,7 @@ use kanban_tui::App;
 fn setup_app_with_filter_dialog() -> App {
     use kanban_domain::CardFilters;
     use kanban_tui::filters::FilterDialogState;
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Dialog(DialogMode::FilterOptions));
     app.filter.dialog_state = Some(FilterDialogState::new(CardFilters::default()));
     app
@@ -14,7 +14,7 @@ fn setup_app_with_filter_dialog() -> App {
 
 #[test]
 fn test_render_filter_options_popup_renders_without_dialog_state() {
-    let (app, _rx) = App::new(None).unwrap();
+    let app = App::test_default();
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::components::render_filter_options_popup(&app, frame);
     });
@@ -56,7 +56,7 @@ fn test_render_filter_options_popup_shows_tags_section() {
 fn test_render_filter_popup_with_sprint_shows_sprint_name() {
     use kanban_domain::CardFilters;
     use kanban_tui::filters::FilterDialogState;
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     use kanban_domain::KanbanOperations;
     let board = app
         .ctx

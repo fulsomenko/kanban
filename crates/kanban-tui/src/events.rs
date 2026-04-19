@@ -31,13 +31,16 @@ impl EventHandler {
                         break;
                     }
                     _ = tokio::time::sleep(Duration::from_millis(16)) => {
-                        if event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                        let mut had_key = false;
+                        while event::poll(Duration::from_millis(0)).unwrap_or(false) {
                             if let Ok(CrosstermEvent::Key(key)) = event::read() {
+                                had_key = true;
                                 if tx.send(Event::Key(key)).is_err() {
                                     break;
                                 }
                             }
-                        } else if tx.send(Event::Tick).is_err() {
+                        }
+                        if !had_key && tx.send(Event::Tick).is_err() {
                             break;
                         }
                     }
@@ -50,6 +53,10 @@ impl EventHandler {
 
     pub async fn next(&mut self) -> Option<Event> {
         self.rx.recv().await
+    }
+
+    pub fn try_next(&mut self) -> Option<Event> {
+        self.rx.try_recv().ok()
     }
 
     pub fn stop(&self) {

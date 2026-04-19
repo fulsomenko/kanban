@@ -4,7 +4,6 @@ use kanban_service::StoreManager;
 
 fn manager() -> StoreManager {
     let mut registry = StoreRegistry::new();
-    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
     registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
     StoreManager::new(registry)
 }
@@ -45,14 +44,6 @@ async fn test_make_store_json_roundtrip() {
 }
 
 #[test]
-fn test_make_store_sqlite_backend() {
-    let store = manager()
-        .make_store("sqlite", "/tmp/test_board.sqlite")
-        .unwrap();
-    assert!(store.path().to_str().unwrap().ends_with(".sqlite"));
-}
-
-#[test]
 fn test_make_store_unknown_backend_returns_error() {
     let result = manager().make_store("txt", "/tmp/test_board.txt");
     match result {
@@ -60,7 +51,7 @@ fn test_make_store_unknown_backend_returns_error() {
         Err(err) => {
             let msg = err.to_string();
             assert!(
-                msg.contains("No backend named"),
+                msg.contains("No backend registered for"),
                 "Expected no backend error, got: {msg}"
             );
         }
@@ -72,10 +63,7 @@ fn test_make_store_with_config_explicit_path_wins() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("explicit.json");
     let path_str = path.to_str().unwrap().to_string();
-    let config = AppConfig {
-        storage_backend: Some("sqlite".into()),
-        ..Default::default()
-    };
+    let config = AppConfig::default();
     let store = manager()
         .make_store_with_config(Some(&path_str), &config)
         .unwrap();
@@ -87,14 +75,4 @@ fn test_make_store_with_config_none_uses_json_default() {
     let config = AppConfig::default();
     let store = manager().make_store_with_config(None, &config).unwrap();
     assert!(store.path().to_str().unwrap().ends_with("kanban.json"));
-}
-
-#[test]
-fn test_make_store_with_config_none_uses_sqlite_when_configured() {
-    let config = AppConfig {
-        storage_backend: Some("sqlite".into()),
-        ..Default::default()
-    };
-    let store = manager().make_store_with_config(None, &config).unwrap();
-    assert!(store.path().to_str().unwrap().ends_with("kanban.sqlite"));
 }

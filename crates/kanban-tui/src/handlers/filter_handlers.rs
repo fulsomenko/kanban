@@ -76,13 +76,11 @@ impl App {
                             );
                             self.apply_filters();
                         } else if let Some(board_idx) = self.selection.active_board_index {
-                            if let Some(board) = self.ctx.boards().get(board_idx) {
-                                let board_sprints: Vec<_> = self
-                                    .ctx
-                                    .sprints()
-                                    .iter()
-                                    .filter(|s| s.board_id == board.id)
-                                    .collect();
+                            let boards = self.ctx.boards();
+                            if let Some(board) = boards.get(board_idx) {
+                                let sprints = self.ctx.sprints();
+                                let board_sprints: Vec<_> =
+                                    sprints.iter().filter(|s| s.board_id == board.id).collect();
 
                                 let sprint_idx = dialog_state.item_selection - 1;
                                 if let Some(sprint) = board_sprints.get(sprint_idx) {

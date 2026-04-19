@@ -56,6 +56,8 @@ pub struct Board {
     pub sprint_counters: HashMap<String, u32>,
     #[serde(default)]
     pub completion_column_id: Option<Uuid>,
+    #[serde(default)]
+    pub position: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -102,6 +104,8 @@ impl<'de> Deserialize<'de> for Board {
             pub sprint_counters: HashMap<String, u32>,
             #[serde(default)]
             pub completion_column_id: Option<Uuid>,
+            #[serde(default)]
+            pub position: i32,
             pub created_at: DateTime<Utc>,
             pub updated_at: DateTime<Utc>,
             /// Very old field for migration
@@ -149,6 +153,7 @@ impl<'de> Deserialize<'de> for Board {
             card_counter,
             sprint_counters: helper.sprint_counters,
             completion_column_id: helper.completion_column_id,
+            position: helper.position,
             created_at: helper.created_at,
             updated_at: helper.updated_at,
         };
@@ -189,6 +194,7 @@ impl Board {
             card_counter: 1,
             sprint_counters: HashMap::new(),
             completion_column_id: None,
+            position: 0,
             created_at: now,
             updated_at: now,
         }
@@ -385,6 +391,9 @@ impl Board {
         updates
             .completion_column_id
             .apply_to(&mut self.completion_column_id);
+        if let Some(position) = updates.position {
+            self.position = position;
+        }
         self.updated_at = Utc::now();
     }
 }
@@ -393,7 +402,7 @@ impl Board {
 ///
 /// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
 /// See [`FieldUpdate`] documentation for usage examples.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct BoardUpdate {
     pub name: Option<String>,
     pub description: FieldUpdate<String>,
@@ -405,6 +414,7 @@ pub struct BoardUpdate {
     pub task_list_view: Option<TaskListView>,
     pub active_sprint_id: FieldUpdate<Uuid>,
     pub completion_column_id: FieldUpdate<Uuid>,
+    pub position: Option<i32>,
 }
 
 /// Get the active sprint's card prefix override if one exists.

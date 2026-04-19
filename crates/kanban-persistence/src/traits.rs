@@ -66,6 +66,30 @@ pub trait PersistenceStore: Send + Sync {
 
     /// Get the unique instance ID for this store
     fn instance_id(&self) -> uuid::Uuid;
+
+    /// Sync the command log from the in-memory backend to persistent storage.
+    /// Default implementation is a no-op (SQLite backend writes directly).
+    async fn sync_command_log(
+        &self,
+        _batches: &[Vec<kanban_domain::commands::Command>],
+        _cursor: u64,
+        _baseline: Option<&[u8]>,
+    ) -> PersistenceResult<()> {
+        Ok(())
+    }
+
+    /// Retrieve the command log, undo cursor, and optional baseline snapshot.
+    /// Returns `(batches, cursor, baseline_bytes)`. Default returns empty.
+    #[allow(clippy::type_complexity)]
+    fn get_command_log(
+        &self,
+    ) -> PersistenceResult<(
+        Vec<Vec<kanban_domain::commands::Command>>,
+        u64,
+        Option<Vec<u8>>,
+    )> {
+        Ok((vec![], 0, None))
+    }
 }
 
 /// Trait for detecting changes to the storage file
@@ -111,6 +135,8 @@ pub enum FormatVersion {
     V1,
     V2,
     V3,
+    V4,
+    V5,
 }
 
 impl FormatVersion {
@@ -119,6 +145,8 @@ impl FormatVersion {
             Self::V1 => 1,
             Self::V2 => 2,
             Self::V3 => 3,
+            Self::V4 => 4,
+            Self::V5 => 5,
         }
     }
 
@@ -127,6 +155,8 @@ impl FormatVersion {
             1 => Some(Self::V1),
             2 => Some(Self::V2),
             3 => Some(Self::V3),
+            4 => Some(Self::V4),
+            5 => Some(Self::V5),
             _ => None,
         }
     }

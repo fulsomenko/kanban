@@ -241,10 +241,10 @@ impl SelectionDialog for CarryOverSprintDialog {
         let mut lines = vec![];
 
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards().get(board_idx) {
-                let planning_sprints: Vec<_> = app
-                    .ctx
-                    .sprints()
+            let boards = app.ctx.boards();
+            if let Some(board) = boards.get(board_idx) {
+                let sprints = app.ctx.sprints();
+                let planning_sprints: Vec<_> = sprints
                     .iter()
                     .filter(|s| s.board_id == board.id && s.status == SprintStatus::Planning)
                     .collect();
@@ -288,8 +288,10 @@ impl SelectionDialog for SprintAssignDialog {
 
     fn options_count(&self, app: &App) -> usize {
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards().get(board_idx) {
-                let sprint_count = Sprint::assignable(app.ctx.sprints(), board.id).len();
+            let boards = app.ctx.boards();
+            if let Some(board) = boards.get(board_idx) {
+                let sprints = app.ctx.sprints();
+                let sprint_count = Sprint::assignable(&sprints, board.id).len();
                 sprint_count + 1 // +1 for None option
             } else {
                 1
@@ -331,11 +333,14 @@ impl SelectionDialog for SprintAssignDialog {
         let mut lines = vec![];
 
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards().get(board_idx) {
-                let board_sprints = Sprint::assignable(app.ctx.sprints(), board.id);
+            let boards = app.ctx.boards();
+            if let Some(board) = boards.get(board_idx) {
+                let sprints = app.ctx.sprints();
+                let board_sprints = Sprint::assignable(&sprints, board.id);
 
+                let cards = app.ctx.cards();
                 let current_sprint_id = if let Some(card_idx) = app.selection.active_card_index {
-                    app.ctx.cards().get(card_idx).and_then(|c| c.sprint_id)
+                    cards.get(card_idx).and_then(|c| c.sprint_id)
                 } else {
                     None
                 };

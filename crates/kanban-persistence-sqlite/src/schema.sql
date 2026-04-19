@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS boards (
     task_list_view TEXT NOT NULL DEFAULT 'Flat',
     card_counter INTEGER NOT NULL DEFAULT 1,
     completion_column_id TEXT,
+    position INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (active_sprint_id) REFERENCES sprints(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED,
@@ -157,3 +158,17 @@ CREATE INDEX IF NOT EXISTS idx_cards_priority ON cards(priority);
 CREATE INDEX IF NOT EXISTS idx_cards_updated_at ON cards(updated_at);
 
 CREATE INDEX IF NOT EXISTS idx_archived_cards_archived_at ON archived_cards(archived_at);
+
+-- Command log for undo/redo support
+CREATE TABLE IF NOT EXISTS command_log (
+    idx           INTEGER PRIMARY KEY AUTOINCREMENT,
+    cmd_json      TEXT NOT NULL,
+    snapshot_data BLOB,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS undo_state (
+    id                     INTEGER PRIMARY KEY CHECK (id = 1),
+    cursor                 INTEGER NOT NULL DEFAULT 0,
+    command_schema_version INTEGER NOT NULL DEFAULT 1
+);

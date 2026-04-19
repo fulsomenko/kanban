@@ -1,4 +1,5 @@
-use kanban_domain::KanbanOperations;
+use kanban_core::AppConfig;
+use kanban_domain::{DataStore, KanbanOperations};
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_json::JsonFileStore;
 use kanban_persistence_sqlite::SqliteStore;
@@ -6,7 +7,9 @@ use kanban_service::KanbanContext;
 use std::sync::Arc;
 use tempfile::TempDir;
 
-async fn create_populated_context(store: Arc<dyn PersistenceStore + Send + Sync>) -> KanbanContext {
+async fn create_populated_json_context(
+    store: Arc<dyn PersistenceStore + Send + Sync>,
+) -> KanbanContext {
     let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
@@ -18,20 +21,24 @@ async fn create_populated_context(store: Arc<dyn PersistenceStore + Send + Sync>
     ctx
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_json_to_sqlite_roundtrip() {
     let dir = TempDir::new().unwrap();
     let json_path = dir.path().join("source.json");
     let db_path = dir.path().join("dest.db");
 
     let json_store = Arc::new(JsonFileStore::new(&json_path));
-    let original = create_populated_context(json_store.clone()).await;
+    let original = create_populated_json_context(json_store.clone()).await;
 
-    let (snapshot, _) = json_store.load().await.unwrap();
-    let sqlite_store = Arc::new(SqliteStore::new(&db_path));
-    sqlite_store.save(snapshot).await.unwrap();
+    // Migrate snapshot from JSON to SQLite
+    let (snap, _) = json_store.load().await.unwrap();
+    let snapshot: kanban_domain::Snapshot = serde_json::from_slice(&snap.data).unwrap();
+    let sqlite = SqliteStore::open(db_path.to_str().unwrap()).await.unwrap();
+    sqlite.apply_snapshot(snapshot).unwrap();
+    drop(sqlite);
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&db_path)))
+    let loaded = KanbanContext::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
 
@@ -45,18 +52,35 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
     assert_eq!(orig_board.card_prefix, loaded_board.card_prefix);
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_sqlite_to_json_roundtrip() {
     let dir = TempDir::new().unwrap();
     let db_path = dir.path().join("source.db");
     let json_path = dir.path().join("dest.json");
 
-    let sqlite_store = Arc::new(SqliteStore::new(&db_path));
-    let original = create_populated_context(sqlite_store.clone()).await;
+    let mut original = KanbanContext::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    let board = original
+        .create_board("Test Board".into(), Some("TB".into()))
+        .unwrap();
+    let col = original
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
+    original
+        .create_card(board.id, col.id, "Test Card".into(), Default::default())
+        .unwrap();
 
-    let (snapshot, _) = sqlite_store.load().await.unwrap();
+    // Migrate snapshot from SQLite to JSON via context snapshot
+    let snapshot = original.snapshot().unwrap();
+    let data = serde_json::to_vec(&snapshot).unwrap();
     let json_store = Arc::new(JsonFileStore::new(&json_path));
-    json_store.save(snapshot).await.unwrap();
+    let store_snap = kanban_persistence::StoreSnapshot {
+        data,
+        metadata: kanban_persistence::PersistenceMetadata::new(uuid::Uuid::new_v4()),
+    };
+    json_store.save(store_snap).await.unwrap();
 
     let loaded = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&json_path)))
         .await
@@ -78,7 +102,7 @@ async fn test_migrate_json_to_json_roundtrip() {
     let dst_path = dir.path().join("dest.json");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_context(src_store.clone()).await;
+    create_populated_json_context(src_store.clone()).await;
 
     let (snapshot, _) = src_store.load().await.unwrap();
     let dst_store = Arc::new(JsonFileStore::new(&dst_path));
@@ -92,20 +116,33 @@ async fn test_migrate_json_to_json_roundtrip() {
     assert_eq!(loaded.list_boards().unwrap()[0].name, "Test Board");
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     let dir = TempDir::new().unwrap();
     let src_path = dir.path().join("source.db");
     let dst_path = dir.path().join("dest.db");
 
-    let src_store = Arc::new(SqliteStore::new(&src_path));
-    create_populated_context(src_store.clone()).await;
+    let mut original = KanbanContext::open_sqlite(src_path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    let board = original
+        .create_board("Test Board".into(), Some("TB".into()))
+        .unwrap();
+    let col = original
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
+    original
+        .create_card(board.id, col.id, "Test Card".into(), Default::default())
+        .unwrap();
 
-    let (snapshot, _) = src_store.load().await.unwrap();
-    let dst_store = Arc::new(SqliteStore::new(&dst_path));
-    dst_store.save(snapshot).await.unwrap();
+    // Copy snapshot to destination
+    let snapshot = original.snapshot().unwrap();
+    let dst = SqliteStore::open(dst_path.to_str().unwrap()).await.unwrap();
+    dst.apply_snapshot(snapshot).unwrap();
+    drop(dst);
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::open_sqlite(dst_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
 
@@ -148,7 +185,7 @@ async fn test_migrate_rejects_existing_target() {
     let dst_path = dir.path().join("dest.db");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_context(src_store).await;
+    create_populated_json_context(src_store).await;
 
     std::fs::write(&dst_path, "existing").unwrap();
 
@@ -168,7 +205,8 @@ async fn test_migrate_rejects_existing_target() {
     assert!(stderr.contains("already exists"), "stderr: {stderr}");
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_cli_with_explicit_output() {
     use assert_cmd::cargo_bin_cmd;
 
@@ -177,7 +215,7 @@ async fn test_migrate_cli_with_explicit_output() {
     let dst_path = dir.path().join("custom_output.db");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_context(src_store).await;
+    create_populated_json_context(src_store).await;
 
     let output = cargo_bin_cmd!("kanban")
         .args([
@@ -197,13 +235,14 @@ async fn test_migrate_cli_with_explicit_output() {
     );
     assert!(dst_path.exists());
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::open_sqlite(dst_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_cli_explicit_output_path() {
     use assert_cmd::cargo_bin_cmd;
 
@@ -212,7 +251,7 @@ async fn test_migrate_cli_explicit_output_path() {
     let dst_path = dir.path().join("myboard.db");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_context(src_store).await;
+    create_populated_json_context(src_store).await;
 
     let output = cargo_bin_cmd!("kanban")
         .args([
@@ -237,7 +276,7 @@ async fn test_migrate_cli_explicit_output_path() {
         dst_path.display()
     );
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(SqliteStore::new(&dst_path)))
+    let loaded = KanbanContext::open_sqlite(dst_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
@@ -252,7 +291,7 @@ async fn test_migrate_cli_default_output_path() {
     let expected_output = dir.path().join("myboard.sqlite");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_context(src_store).await;
+    create_populated_json_context(src_store).await;
 
     let output = cargo_bin_cmd!("kanban")
         .args(["migrate", src_path.to_str().unwrap(), "sqlite"])
@@ -279,7 +318,7 @@ async fn test_migrate_rejects_unknown_backend() {
     let src_path = dir.path().join("source.json");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_context(src_store).await;
+    create_populated_json_context(src_store).await;
 
     let output = cargo_bin_cmd!("kanban")
         .args([
@@ -297,7 +336,7 @@ async fn test_migrate_rejects_unknown_backend() {
     // clap rejects unrecognised backends via PossibleValuesParser before the
     // service layer is reached; both rejection sites are acceptable.
     assert!(
-        stderr.contains("No backend named")
+        stderr.contains("No backend registered for")
             || stderr.contains("Unknown backend")
             || stderr.contains("invalid value"),
         "stderr: {stderr}"

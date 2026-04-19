@@ -10,7 +10,7 @@ fn render_help_popup_to_string(app: &mut App) -> String {
 
 #[test]
 fn test_render_help_popup_renders_without_panic() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     let output = render_help_popup_to_string(&mut app);
     assert!(output.contains("Help") || output.contains('─'));
 }

@@ -10,7 +10,7 @@ impl Migrator {
     /// Detect the version of a persisted file
     pub async fn detect_version(path: &Path) -> PersistenceResult<FormatVersion> {
         if !path.exists() {
-            return Ok(FormatVersion::V3); // Default to V3 for new files
+            return Ok(FormatVersion::V4); // Default to V4 for new files
         }
 
         let content = tokio::fs::read_to_string(path).await?;

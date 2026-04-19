@@ -59,13 +59,17 @@ impl App {
                                 _ => CardPriority::Medium,
                             };
                             let card_id = card.id;
-                            let cmd = Box::new(kanban_domain::commands::UpdateCard {
-                                card_id,
-                                updates: CardUpdate {
-                                    priority: Some(priority),
-                                    ..Default::default()
-                                },
-                            });
+                            let cmd = kanban_domain::commands::Command::Card(
+                                kanban_domain::commands::CardCommand::Update(
+                                    kanban_domain::commands::UpdateCard {
+                                        card_id,
+                                        updates: CardUpdate {
+                                            priority: Some(priority),
+                                            ..Default::default()
+                                        },
+                                    },
+                                ),
+                            );
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to update card priority: {}", e);
                                 self.set_error(format!("Failed to update card priority: {}", e));
@@ -104,17 +108,20 @@ impl App {
 
                     let card_ids: Vec<uuid::Uuid> =
                         self.multi_select.selected_cards.iter().copied().collect();
-                    let mut commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+                    let mut commands: Vec<kanban_domain::commands::Command> = Vec::new();
 
                     for card_id in &card_ids {
-                        let cmd = Box::new(kanban_domain::commands::UpdateCard {
-                            card_id: *card_id,
-                            updates: CardUpdate {
-                                priority: Some(priority),
-                                ..Default::default()
-                            },
-                        })
-                            as Box<dyn kanban_domain::commands::Command>;
+                        let cmd = kanban_domain::commands::Command::Card(
+                            kanban_domain::commands::CardCommand::Update(
+                                kanban_domain::commands::UpdateCard {
+                                    card_id: *card_id,
+                                    updates: CardUpdate {
+                                        priority: Some(priority),
+                                        ..Default::default()
+                                    },
+                                },
+                            ),
+                        );
                         commands.push(cmd);
                     }
 
@@ -190,11 +197,15 @@ impl App {
                     if let Some(board_idx) = self.selection.active_board_index {
                         if let Some(board) = self.ctx.boards().get(board_idx) {
                             let board_id = board.id;
-                            let cmd = Box::new(kanban_domain::commands::SetBoardTaskSort {
-                                board_id,
-                                field,
-                                order,
-                            });
+                            let cmd = kanban_domain::commands::Command::Board(
+                                kanban_domain::commands::BoardCommand::SetTaskSort(
+                                    kanban_domain::commands::SetBoardTaskSort {
+                                        board_id,
+                                        field,
+                                        order,
+                                    },
+                                ),
+                            );
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set board task sort: {}", e);
                                 self.set_error(format!("Failed to set board task sort: {}", e));
@@ -228,8 +239,10 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.selection.active_board_index {
-                    if let Some(board) = self.ctx.boards().get(board_idx) {
-                        let sprint_count = Sprint::assignable(self.ctx.sprints(), board.id).len();
+                    let boards = self.ctx.boards();
+                    if let Some(board) = boards.get(board_idx) {
+                        let sprints = self.ctx.sprints();
+                        let sprint_count = Sprint::assignable(&sprints, board.id).len();
                         self.dialog_input
                             .sprint_assign_selection
                             .next(sprint_count + 1);
@@ -252,10 +265,14 @@ impl App {
 
                         if selection_idx == 0 {
                             // Unassign from sprint
-                            let unassign_cmd =
-                                Box::new(kanban_domain::commands::UnassignCardFromSprint {
-                                    card_id,
-                                });
+                            let unassign_cmd = kanban_domain::commands::Command::Card(
+                                kanban_domain::commands::CardCommand::UnassignFromSprint(
+                                    kanban_domain::commands::UnassignCardFromSprint {
+                                        card_id,
+                                        timestamp: chrono::Utc::now(),
+                                    },
+                                ),
+                            );
                             if let Err(e) = self.execute_commands_batch(vec![unassign_cmd]) {
                                 tracing::error!("Failed to unassign card from sprint: {}", e);
                                 self.set_error(format!(
@@ -267,21 +284,22 @@ impl App {
                             }
                         } else if let Some(board_idx) = self.selection.active_board_index {
                             if let Some(board_id) = self.ctx.boards().get(board_idx).map(|b| b.id) {
-                                let board_sprints =
-                                    Sprint::assignable(self.ctx.sprints(), board_id);
+                                let sprints = self.ctx.sprints();
+                                let board_sprints = Sprint::assignable(&sprints, board_id);
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                     let sprint_id = sprint.id;
 
-                                    let mut commands: Vec<
-                                        Box<dyn kanban_domain::commands::Command>,
-                                    > = Vec::new();
+                                    let mut commands: Vec<kanban_domain::commands::Command> =
+                                        Vec::new();
 
-                                    let assign_cmd =
-                                        Box::new(kanban_domain::commands::AssignCardsToSprint {
-                                            ids: vec![card_id],
-                                            sprint_id,
-                                        })
-                                            as Box<dyn kanban_domain::commands::Command>;
+                                    let assign_cmd = kanban_domain::commands::Command::Card(
+                                        kanban_domain::commands::CardCommand::AssignToSprint(
+                                            kanban_domain::commands::AssignCardsToSprint {
+                                                ids: vec![card_id],
+                                                sprint_id,
+                                            },
+                                        ),
+                                    );
                                     commands.push(assign_cmd);
 
                                     if let Err(e) = self.execute_commands_batch(commands) {
@@ -318,8 +336,10 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.selection.active_board_index {
-                    if let Some(board) = self.ctx.boards().get(board_idx) {
-                        let sprint_count = Sprint::assignable(self.ctx.sprints(), board.id).len();
+                    let boards = self.ctx.boards();
+                    if let Some(board) = boards.get(board_idx) {
+                        let sprints = self.ctx.sprints();
+                        let sprint_count = Sprint::assignable(&sprints, board.id).len();
                         self.dialog_input
                             .sprint_assign_selection
                             .next(sprint_count + 1);
@@ -336,13 +356,17 @@ impl App {
 
                     if selection_idx == 0 {
                         // Unassign cards from sprint - batch all unassignments
-                        let mut unassign_commands: Vec<Box<dyn kanban_domain::commands::Command>> =
+                        let mut unassign_commands: Vec<kanban_domain::commands::Command> =
                             Vec::new();
                         for card_id in &card_ids {
-                            let cmd = Box::new(kanban_domain::commands::UnassignCardFromSprint {
-                                card_id: *card_id,
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            let cmd = kanban_domain::commands::Command::Card(
+                                kanban_domain::commands::CardCommand::UnassignFromSprint(
+                                    kanban_domain::commands::UnassignCardFromSprint {
+                                        card_id: *card_id,
+                                        timestamp: chrono::Utc::now(),
+                                    },
+                                ),
+                            );
                             unassign_commands.push(cmd);
                         }
 
@@ -356,16 +380,22 @@ impl App {
                             );
                         }
                     } else if let Some(board_idx) = self.selection.active_board_index {
-                        if let Some(board_id) = self.ctx.boards().get(board_idx).map(|b| b.id) {
-                            let board_sprints = Sprint::assignable(self.ctx.sprints(), board_id);
+                        let boards = self.ctx.boards();
+                        if let Some(board_id) = boards.get(board_idx).map(|b| b.id) {
+                            let sprints = self.ctx.sprints();
+                            let board_sprints = Sprint::assignable(&sprints, board_id);
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;
 
-                                let commands: Vec<Box<dyn kanban_domain::commands::Command>> =
-                                    vec![Box::new(kanban_domain::commands::AssignCardsToSprint {
-                                        ids: card_ids.clone(),
-                                        sprint_id,
-                                    })];
+                                let commands: Vec<kanban_domain::commands::Command> =
+                                    vec![kanban_domain::commands::Command::Card(
+                                        kanban_domain::commands::CardCommand::AssignToSprint(
+                                            kanban_domain::commands::AssignCardsToSprint {
+                                                ids: card_ids.clone(),
+                                                sprint_id,
+                                            },
+                                        ),
+                                    )];
 
                                 if let Err(e) = self.execute_commands_batch(commands) {
                                     tracing::error!("Failed to assign cards to sprint: {}", e);
@@ -571,11 +601,14 @@ impl App {
                                     } else {
                                         (selected_card_id, current_card_id)
                                     };
-                                    let cmd =
-                                        Box::new(kanban_domain::commands::RemoveParentCommand {
-                                            child_id,
-                                            parent_id,
-                                        });
+                                    let cmd = kanban_domain::commands::Command::Dependency(
+                                        kanban_domain::commands::DependencyCommand::RemoveParent(
+                                            kanban_domain::commands::RemoveParentCommand {
+                                                child_id,
+                                                parent_id,
+                                            },
+                                        ),
+                                    );
                                     if self.execute_command(cmd).is_ok() {
                                         self.relationship.selected.remove(&selected_card_id);
                                     }
@@ -586,10 +619,14 @@ impl App {
                                     } else {
                                         (selected_card_id, current_card_id)
                                     };
-                                    let cmd = Box::new(kanban_domain::commands::SetParentCommand {
-                                        child_id,
-                                        parent_id,
-                                    });
+                                    let cmd = kanban_domain::commands::Command::Dependency(
+                                        kanban_domain::commands::DependencyCommand::SetParent(
+                                            kanban_domain::commands::SetParentCommand {
+                                                child_id,
+                                                parent_id,
+                                            },
+                                        ),
+                                    );
                                     if self.execute_command(cmd).is_ok() {
                                         self.relationship.selected.insert(selected_card_id);
                                     }

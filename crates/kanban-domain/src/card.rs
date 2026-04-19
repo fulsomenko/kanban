@@ -297,7 +297,7 @@ impl Card {
 ///
 /// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
 /// See [`FieldUpdate`] documentation for usage examples.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct CardUpdate {
     pub title: Option<String>,
     pub description: FieldUpdate<String>,
@@ -310,7 +310,7 @@ pub struct CardUpdate {
     pub sprint_id: FieldUpdate<Uuid>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct CreateCardOptions {
     pub description: Option<String>,
     pub priority: Option<CardPriority>,
