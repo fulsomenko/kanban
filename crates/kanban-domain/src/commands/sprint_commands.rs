@@ -253,7 +253,9 @@ pub struct DeleteSprint {
 
 impl DeleteSprint {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        context.store.clear_sprint_from_cards(self.sprint_id)?;
+        context
+            .store
+            .clear_sprint_from_cards(self.sprint_id, self.timestamp)?;
         context
             .store
             .clear_sprint_from_archived_cards(self.sprint_id, self.timestamp)?;
@@ -515,6 +517,46 @@ mod tests {
         };
         let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
+    }
+
+    #[test]
+    fn test_delete_sprint_clears_sprint_from_cards_with_command_timestamp() {
+        use chrono::{TimeZone, Utc};
+
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let col = crate::Column::new(board_id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col.clone()).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let mut card = crate::Card::new(
+            &mut crate::Board::new("B".to_string(), Some("KAN".to_string())),
+            col.id,
+            "C".to_string(),
+            0,
+        );
+        card.sprint_id = Some(sprint_id);
+        let card_id = card.id;
+        tc.store.upsert_card(card).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let cmd = DeleteSprint {
+            sprint_id,
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(
+            card.updated_at, fixed_time,
+            "clear_sprint_from_cards should use the command's timestamp, not Utc::now()"
+        );
+        assert_eq!(card.sprint_id, None);
     }
 
     #[test]

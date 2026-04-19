@@ -1173,9 +1173,13 @@ impl DataStore for SqliteStore {
         })
     }
 
-    fn clear_sprint_from_cards(&self, sprint_id: Uuid) -> KanbanResult<()> {
+    fn clear_sprint_from_cards(
+        &self,
+        sprint_id: Uuid,
+        timestamp: DateTime<Utc>,
+    ) -> KanbanResult<()> {
         run(async {
-            let now = fmt_dt(&Utc::now());
+            let now = fmt_dt(&timestamp);
             sqlx::query(
                 "UPDATE cards SET sprint_id = NULL, updated_at = ?
                  WHERE sprint_id = ?

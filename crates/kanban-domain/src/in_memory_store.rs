@@ -248,13 +248,16 @@ impl DataStore for InMemoryStore {
         Ok(())
     }
 
-    fn clear_sprint_from_cards(&self, sprint_id: Uuid) -> KanbanResult<()> {
+    fn clear_sprint_from_cards(
+        &self,
+        sprint_id: Uuid,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> KanbanResult<()> {
         let mut state = self.write_state()?;
-        let now = chrono::Utc::now();
         for card in state.cards.values_mut() {
             if card.sprint_id == Some(sprint_id) {
                 card.sprint_id = None;
-                card.updated_at = now;
+                card.updated_at = timestamp;
             }
         }
         Ok(())
@@ -702,16 +705,15 @@ mod tests {
         let mut card = make_card(&mut board, col.id, "C1", 0);
         card.sprint_id = Some(sprint_id);
         let card_id = card.id;
-        let before = card.updated_at;
         store.upsert_card(card).unwrap();
 
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        store.clear_sprint_from_cards(sprint_id).unwrap();
+        let later = chrono::Utc::now() + chrono::Duration::seconds(10);
+        store.clear_sprint_from_cards(sprint_id, later).unwrap();
 
         let card = store.get_card(card_id).unwrap().unwrap();
-        assert!(
-            card.updated_at > before,
-            "clear_sprint_from_cards should bump updated_at"
+        assert_eq!(
+            card.updated_at, later,
+            "clear_sprint_from_cards should set updated_at to the provided timestamp"
         );
     }
 
@@ -730,7 +732,9 @@ mod tests {
         store.upsert_card(card1).unwrap();
         store.upsert_card(card2).unwrap();
 
-        store.clear_sprint_from_cards(sprint_id).unwrap();
+        store
+            .clear_sprint_from_cards(sprint_id, chrono::Utc::now())
+            .unwrap();
 
         assert!(store
             .get_card(card1_id)
@@ -1061,7 +1065,9 @@ mod tests {
         assert!(store.list_cards_by_sprint(Uuid::new_v4()).is_ok());
         assert!(store.count_cards_in_column(col.id).is_ok());
         assert!(store.count_cards_in_column_excluding(col.id, &[]).is_ok());
-        assert!(store.clear_sprint_from_cards(Uuid::new_v4()).is_ok());
+        assert!(store
+            .clear_sprint_from_cards(Uuid::new_v4(), chrono::Utc::now())
+            .is_ok());
         assert!(store.insert_archived_card(ac).is_ok());
         assert!(store.get_archived_card(card.id).is_ok());
         assert!(store.list_archived_cards().is_ok());

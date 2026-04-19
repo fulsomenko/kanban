@@ -225,7 +225,9 @@ async fn test_sqlite_clear_sprint_from_cards() {
     let card1_id = card1.id;
     store.upsert_card(card1).unwrap();
 
-    store.clear_sprint_from_cards(sprint.id).unwrap();
+    store
+        .clear_sprint_from_cards(sprint.id, chrono::Utc::now())
+        .unwrap();
     assert!(store
         .get_card(card1_id)
         .unwrap()

@@ -31,7 +31,11 @@ pub trait DataStore: Send + Sync {
     fn upsert_card(&self, card: Card) -> KanbanResult<()>;
     fn delete_card(&self, id: Uuid) -> KanbanResult<()>;
     fn delete_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<()>;
-    fn clear_sprint_from_cards(&self, sprint_id: Uuid) -> KanbanResult<()>;
+    fn clear_sprint_from_cards(
+        &self,
+        sprint_id: Uuid,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> KanbanResult<()>;
 
     // Archived card
     fn get_archived_card(&self, card_id: Uuid) -> KanbanResult<Option<ArchivedCard>>;
