@@ -82,6 +82,16 @@ pub trait DataStore: Send + Sync {
     fn get_graph(&self) -> KanbanResult<DependencyGraph>;
     fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()>;
 
+    /// Atomically read-modify-write the dependency graph.
+    ///
+    /// # TOCTOU warning for implementors
+    ///
+    /// The default implementation calls `get_graph()` and `set_graph()` as two
+    /// separate operations. Any concurrent writer that runs between the two calls
+    /// will have its changes silently overwritten. Implementors that wrap interior
+    /// locking (e.g. `RwLock`, database transactions) **must** override this method
+    /// to perform the read and write within a single lock span, as `InMemoryStore`
+    /// already does.
     fn modify_graph(
         &self,
         f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
