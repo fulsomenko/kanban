@@ -2,22 +2,15 @@ use kanban_domain::command_store::CommandStore;
 use kanban_domain::data_store::DataStore;
 
 /// Combines the entity-level CRUD interface (`DataStore`) with the command
-/// log (`CommandStore`) needed for command-replay undo/redo. Backends that
-/// implement both traits automatically satisfy this supertrait via the blanket
-/// impl below.
+/// log (`CommandStore`) needed for command-replay undo/redo. Any type that
+/// implements both traits automatically satisfies this supertrait via the
+/// blanket impl below.
 pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
     /// Upcast to `&dyn DataStore`.
     fn as_data_store(&self) -> &dyn DataStore;
 }
 
-impl KanbanBackend for kanban_domain::InMemoryStore {
-    fn as_data_store(&self) -> &dyn DataStore {
-        self
-    }
-}
-
-#[cfg(feature = "sqlite")]
-impl KanbanBackend for kanban_persistence_sqlite::SqliteStore {
+impl<T: DataStore + CommandStore + Send + Sync> KanbanBackend for T {
     fn as_data_store(&self) -> &dyn DataStore {
         self
     }
