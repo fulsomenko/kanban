@@ -1023,9 +1023,7 @@ mod tests {
         // Here we test the happy path still works, plus we ensure the error
         // path is properly handled (not an unwrap panic) via the impl fix.
         let context = tc.as_command_context();
-        let cmd = ArchiveCards {
-            ids: vec![card_id],
-        };
+        let cmd = ArchiveCards { ids: vec![card_id] };
         assert!(cmd.execute(&context).is_ok());
         assert_eq!(tc.store.list_all_cards().unwrap().len(), 0);
         assert_eq!(tc.store.list_archived_cards().unwrap().len(), 1);

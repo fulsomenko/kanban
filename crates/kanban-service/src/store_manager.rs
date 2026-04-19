@@ -3,14 +3,14 @@ use crate::AppConfig;
 use kanban_domain::commands::Command;
 #[cfg(feature = "sqlite")]
 use kanban_domain::commands::CommandContext;
+use kanban_domain::KanbanError;
 #[cfg(feature = "sqlite")]
 use kanban_domain::{DataStore, InMemoryStore, Snapshot};
-use kanban_domain::KanbanError;
+#[cfg(feature = "sqlite")]
+use kanban_persistence::snapshot_to_json_bytes;
 use kanban_persistence::{
     snapshot_from_json_bytes, PersistenceStore, StoreRegistry, StoreSnapshot,
 };
-#[cfg(feature = "sqlite")]
-use kanban_persistence::snapshot_to_json_bytes;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -256,10 +256,7 @@ impl StoreManager {
                     };
                     let cmd_log = match store.load_all_commands() {
                         Ok((batches, count)) if !batches.is_empty() => {
-                            let baseline_bytes = snapshot_to_json_bytes(
-                                &Snapshot::new(),
-                            )
-                            .ok();
+                            let baseline_bytes = snapshot_to_json_bytes(&Snapshot::new()).ok();
                             Some((batches, count, baseline_bytes))
                         }
                         _ => None,
@@ -298,14 +295,10 @@ impl StoreManager {
                         return Err(e);
                     }
                     if let Some((batches, _cursor, baseline_bytes)) = command_log {
-                        if let Err(e) = transfer_commands_to_sqlite(
-                            &store,
-                            &batches,
-                            baseline_bytes.as_deref(),
-                        ) {
-                            tracing::warn!(
-                                "Command log transfer failed (undo history lost): {e}"
-                            );
+                        if let Err(e) =
+                            transfer_commands_to_sqlite(&store, &batches, baseline_bytes.as_deref())
+                        {
+                            tracing::warn!("Command log transfer failed (undo history lost): {e}");
                         }
                     }
                 }
@@ -316,12 +309,11 @@ impl StoreManager {
                 let target = self.make_store(to_backend, to_path)?;
                 // Sync command log BEFORE save, since save() reads from in-memory state
                 if let Some((batches, cursor, baseline_bytes)) = command_log {
-                    if let Err(e) =
-                        target.sync_command_log(&batches, cursor, baseline_bytes.as_deref()).await
+                    if let Err(e) = target
+                        .sync_command_log(&batches, cursor, baseline_bytes.as_deref())
+                        .await
                     {
-                        tracing::warn!(
-                            "Command log transfer failed (undo history lost): {e}"
-                        );
+                        tracing::warn!("Command log transfer failed (undo history lost): {e}");
                     }
                 }
                 if let Err(e) = target.save(store_snapshot).await {
@@ -334,7 +326,6 @@ impl StoreManager {
         }
         Ok(())
     }
-
 }
 
 #[cfg(feature = "sqlite")]

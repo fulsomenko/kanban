@@ -243,7 +243,9 @@ impl App {
             kanban_service::config::resolve_storage_location(&self.app_config);
         let new_backend = self.app_config.effective_storage_backend().to_string();
 
-        let new_store: Option<std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>> = match self
+        let new_store: Option<
+            std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>,
+        > = match self
             .store_manager
             .make_store(&new_backend, &new_storage_location)
         {

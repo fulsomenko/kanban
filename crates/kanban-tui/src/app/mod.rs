@@ -1164,7 +1164,6 @@ impl App {
         for card_id in restore_cards {
             self.complete_restore_animation(card_id);
         }
-
     }
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
