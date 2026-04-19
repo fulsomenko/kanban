@@ -200,14 +200,27 @@ impl KanbanContext {
                 .truncate_commands_after(self.undo_cursor as u64)?;
         }
 
-        let before = self.backend.snapshot()?;
+        let before = if self.backend.supports_indexed_snapshots() {
+            None
+        } else {
+            Some(self.backend.snapshot()?)
+        };
         let result = {
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
             commands.iter().try_for_each(|cmd| cmd.execute(&ctx))
         };
         if let Err(e) = result {
-            if let Err(rollback_err) = self.backend.apply_snapshot(before) {
+            let rollback_snap = if let Some(snap) = before {
+                snap
+            } else if self.undo_cursor > 0 {
+                self.backend
+                    .load_snapshot_at(self.undo_cursor as u64)?
+                    .unwrap_or_else(|| self.baseline_snapshot.clone())
+            } else {
+                self.baseline_snapshot.clone()
+            };
+            if let Err(rollback_err) = self.backend.apply_snapshot(rollback_snap) {
                 return Err(KanbanError::Internal(format!(
                     "Command failed ({e}) and rollback also failed ({rollback_err}). State may be inconsistent."
                 )));
