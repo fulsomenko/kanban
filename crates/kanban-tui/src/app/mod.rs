@@ -62,7 +62,7 @@ use kanban_service::StoreManager;
 
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 /// Builds a `StoreManager` that mirrors the default CLI registry: SQLite
@@ -105,6 +105,7 @@ pub struct App {
     pub migration_state: MigrationState,
     pub export_result_rx: Option<tokio::sync::oneshot::Receiver<Result<String, String>>>,
     pub needs_redraw: bool,
+    pub error_log: Arc<Mutex<crate::error_log::ErrorLogState>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,6 +273,7 @@ impl App {
             migration_state: MigrationState::Idle,
             export_result_rx: None,
             needs_redraw: true,
+            error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
         };
 
         Ok((app, save_rx))
@@ -346,6 +348,7 @@ impl App {
             migration_state: MigrationState::Idle,
             export_result_rx: None,
             needs_redraw: true,
+            error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
         })
     }
 
@@ -502,6 +505,32 @@ impl App {
             self.mode_stack.last().unwrap_or(&AppMode::Normal)
         } else {
             &self.mode
+        }
+    }
+
+    pub fn open_error_log(&mut self) {
+        {
+            let mut log = self.error_log.lock().unwrap();
+            log.has_unread_errors = false;
+        }
+        self.push_mode(AppMode::ErrorLog);
+    }
+
+    pub fn error_log_arc(&self) -> Arc<Mutex<crate::error_log::ErrorLogState>> {
+        Arc::clone(&self.error_log)
+    }
+
+    fn handle_error_log_mode(&mut self, key_code: crossterm::event::KeyCode) {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Esc | KeyCode::Char('q') => self.pop_mode(),
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.ui_state.error_log_list.navigate_down();
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.ui_state.error_log_list.navigate_up();
+            }
+            _ => {}
         }
     }
 
@@ -683,6 +712,11 @@ impl App {
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
             self.handle_quit_key();
+            return false;
+        }
+
+        if matches!(key.code, KeyCode::F(12)) && !matches!(self.mode, AppMode::ErrorLog) {
+            self.open_error_log();
             return false;
         }
 
@@ -928,6 +962,7 @@ impl App {
                 should_restart_events = self.handle_settings_key(key.code, terminal, event_handler);
             }
             AppMode::Help(_) => self.handle_help_mode(key.code),
+            AppMode::ErrorLog => self.handle_error_log_mode(key.code),
             AppMode::Dialog(ref dialog) => match dialog {
                 DialogMode::CreateBoard => self.handle_create_board_dialog(key.code),
                 DialogMode::CreateCard => self.handle_create_card_dialog(key.code),
@@ -1860,6 +1895,14 @@ impl App {
                                 }
                                 self.handle_animation_tick();
 
+                                // Auto-open error log on new unread errors
+                                let has_unread =
+                                    self.error_log.lock().unwrap().has_unread_errors;
+                                if has_unread && !matches!(self.mode, AppMode::ErrorLog) {
+                                    self.open_error_log();
+                                    self.needs_redraw = true;
+                                }
+
                                 // Auto-clear banner after 3 seconds
                                 if let Some(ref banner) = self.ui_state.banner {
                                     if banner.is_expired(std::time::Duration::from_secs(3)) {
@@ -2343,6 +2386,7 @@ impl App {
             migration_state: MigrationState::Idle,
             export_result_rx: None,
             needs_redraw: true,
+            error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
         }
     }
 }

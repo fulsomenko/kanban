@@ -107,6 +107,7 @@ impl KeybindingRegistry {
                 }
                 DialogMode::ExportBoards => Box::new(DialogSelectionProvider::new("Export Boards")),
             },
+            AppMode::ErrorLog => Box::new(NormalModeBoardsProvider),
         }
     }
 }
