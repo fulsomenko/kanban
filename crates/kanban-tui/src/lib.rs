@@ -1,4 +1,5 @@
 pub mod app;
+pub mod error_log;
 pub mod card_list;
 pub mod card_list_component;
 pub mod clipboard;
