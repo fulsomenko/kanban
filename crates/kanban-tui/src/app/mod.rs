@@ -354,22 +354,30 @@ impl App {
     }
 
     pub fn handle_quit_key(&mut self) {
-        if self.ctx.save_coordinator.has_pending_saves() && !self.quit_with_pending {
-            self.set_error(
-                "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
-                    .to_string(),
-            );
-            self.quit_with_pending = true;
-            tracing::warn!("Quit attempted with pending saves, requiring confirmation");
-            return;
-        }
+        let needs_pending_confirm =
+            self.ctx.save_coordinator.has_pending_saves() && !self.quit_with_pending;
+        let needs_migration_confirm =
+            matches!(self.migration_state, MigrationState::Migrating { .. })
+                && !self.quit_with_migration;
 
-        if matches!(self.migration_state, MigrationState::Migrating { .. })
-            && !self.quit_with_migration
-        {
-            self.set_error(
-                "Migration in progress... press 'q' again to abort and quit".to_string(),
-            );
+        if needs_pending_confirm || needs_migration_confirm {
+            if needs_pending_confirm && needs_migration_confirm {
+                self.set_error(
+                    "⏳ Saves pending and migration in progress... press 'q' again to force quit"
+                        .to_string(),
+                );
+            } else if needs_pending_confirm {
+                self.set_error(
+                    "⏳ Saves pending... press 'q' again to force quit, or wait for completion"
+                        .to_string(),
+                );
+                tracing::warn!("Quit attempted with pending saves, requiring confirmation");
+            } else {
+                self.set_error(
+                    "Migration in progress... press 'q' again to abort and quit".to_string(),
+                );
+            }
+            self.quit_with_pending = true;
             self.quit_with_migration = true;
             return;
         }
