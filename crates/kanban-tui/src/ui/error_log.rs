@@ -61,7 +61,10 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
             };
             let ts = entry.timestamp.format("%H:%M:%S").to_string();
             Line::from(vec![
-                Span::styled(label, Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    label,
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(format!(" {} {} ", ts, entry.target)),
                 Span::raw(entry.message.clone()),
             ])

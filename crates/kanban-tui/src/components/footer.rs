@@ -105,7 +105,10 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             .collect::<Vec<_>>()
             .join(" | ");
         let component_help = component.help_text();
-        format!("{}{} | {}{}", selection_prefix, keybindings, component_help, error_badge)
+        format!(
+            "{}{} | {}{}",
+            selection_prefix, keybindings, component_help, error_badge
+        )
     } else {
         let provider = KeybindingRegistry::get_provider(app);
         let context = provider.get_context();

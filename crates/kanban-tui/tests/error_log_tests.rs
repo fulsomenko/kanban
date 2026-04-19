@@ -19,10 +19,20 @@ fn test_error_log_captures_entries() {
 fn test_error_log_marks_unread_on_error_only() {
     let mut state = ErrorLogState::default();
     state.push("warn msg".to_string(), "target".to_string(), LogLevel::Warn);
-    assert!(!state.has_unread_errors, "WARN must not set has_unread_errors");
-    assert_eq!(state.unread_count, 0, "WARN must not increment unread_count");
+    assert!(
+        !state.has_unread_errors,
+        "WARN must not set has_unread_errors"
+    );
+    assert_eq!(
+        state.unread_count, 0,
+        "WARN must not increment unread_count"
+    );
 
-    state.push("error msg".to_string(), "target".to_string(), LogLevel::Error);
+    state.push(
+        "error msg".to_string(),
+        "target".to_string(),
+        LogLevel::Error,
+    );
     assert!(state.has_unread_errors, "ERROR must set has_unread_errors");
     assert_eq!(state.unread_count, 1, "ERROR must increment unread_count");
 }
@@ -36,8 +46,14 @@ fn test_error_log_clears_unread() {
 
     state.clear_unread();
 
-    assert!(!state.has_unread_errors, "clear_unread must reset has_unread_errors");
-    assert_eq!(state.unread_count, 0, "clear_unread must reset unread_count");
+    assert!(
+        !state.has_unread_errors,
+        "clear_unread must reset has_unread_errors"
+    );
+    assert_eq!(
+        state.unread_count, 0,
+        "clear_unread must reset unread_count"
+    );
 }
 
 #[test]
@@ -64,7 +80,11 @@ fn test_f12_opens_error_log() {
     let mut app = App::test_default();
     {
         let mut log = app.error_log.lock().unwrap();
-        log.push("test error".to_string(), "test".to_string(), LogLevel::Error);
+        log.push(
+            "test error".to_string(),
+            "test".to_string(),
+            LogLevel::Error,
+        );
     }
     assert_eq!(app.mode, AppMode::Normal);
 

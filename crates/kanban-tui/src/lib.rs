@@ -1,5 +1,4 @@
 pub mod app;
-pub mod error_log;
 pub mod card_list;
 pub mod card_list_component;
 pub mod clipboard;
@@ -7,6 +6,7 @@ pub mod components;
 pub mod dialog;
 pub mod edit_format;
 pub mod editor;
+pub mod error_log;
 pub mod events;
 pub mod filters;
 pub mod handlers;
