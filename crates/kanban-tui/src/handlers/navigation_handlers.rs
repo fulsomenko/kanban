@@ -490,6 +490,7 @@ impl App {
                     let card_id = selected_card.id;
                     let actual_idx = self.ctx.cards().iter().position(|c| c.id == card_id);
                     self.selection.active_card_index = actual_idx;
+                    self.selection.active_card_id = Some(card_id);
                     // Initialize list components with item counts
                     let parents = self.get_current_card_parents();
                     let children = self.get_current_card_children();
