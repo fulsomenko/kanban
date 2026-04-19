@@ -229,6 +229,7 @@ impl App {
         result: Result<(kanban_domain::Snapshot, bool), String>,
     ) {
         self.migration_state = crate::app::MigrationState::Idle;
+        self.quit_with_migration = false;
 
         let (snapshot, file_existed) = match result {
             Ok(s) => s,

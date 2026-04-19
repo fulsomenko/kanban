@@ -159,6 +159,11 @@ impl SaveCoordinator {
         self.save_completion_tx.as_ref()
     }
 
+    #[doc(hidden)]
+    pub fn set_pending_for_test(&mut self, n: usize) {
+        self.pending_saves = n;
+    }
+
     /// Set the file watcher for coordinating pause/resume with saves
     /// Called after the file watcher is initialized in App::run()
     pub fn set_file_watcher(&mut self, watcher: Arc<kanban_persistence::FileWatcher>) {
