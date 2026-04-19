@@ -3,7 +3,7 @@ use kanban_domain::commands::{
     UpdateBoard,
 };
 use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, KanbanResult, Snapshot};
-use kanban_persistence::{NullStore, StoreRegistry};
+use kanban_persistence::StoreRegistry;
 use kanban_service::{KanbanContext, StoreManager};
 use std::sync::Arc;
 
@@ -18,10 +18,7 @@ fn make_json_store(
 }
 
 async fn make_ctx() -> KanbanContext {
-    KanbanContext::empty(
-        Arc::new(NullStore::new()),
-        kanban_core::AppConfig::default(),
-    )
+    KanbanContext::empty(None, kanban_core::AppConfig::default())
 }
 
 #[tokio::test]
@@ -124,7 +121,7 @@ async fn test_reload_no_longer_clears_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
     let store = make_json_store(&path);
-    let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
+    let mut ctx = KanbanContext::empty(Some(store), kanban_core::AppConfig::default());
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
@@ -287,7 +284,7 @@ async fn test_reload_preserves_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
     let store = make_json_store(&path);
-    let mut ctx = KanbanContext::empty(store, kanban_core::AppConfig::default());
+    let mut ctx = KanbanContext::empty(Some(store), kanban_core::AppConfig::default());
 
     ctx.create_board("B".into(), None)?;
     ctx.save().await?;
@@ -946,7 +943,7 @@ async fn test_save_and_reload_preserves_undo_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("history.json");
     let store = make_json_store(&path);
-    let mut ctx = KanbanContext::empty(store.clone(), kanban_core::AppConfig::default());
+    let mut ctx = KanbanContext::empty(Some(store.clone()), kanban_core::AppConfig::default());
 
     ctx.create_board("B1".into(), None)?;
     ctx.create_board("B2".into(), None)?;
