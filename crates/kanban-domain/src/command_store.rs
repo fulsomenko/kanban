@@ -6,15 +6,22 @@ use crate::{KanbanResult, Snapshot};
 /// Each entry in the log is one "undo unit" — a batch of commands that were
 /// executed together via a single `execute(cmds)` call. Undo replays batches
 /// 0..cursor from the baseline snapshot; redo applies batch[cursor].
+///
+/// # Index semantics
+///
+/// Indices are **logical**, not physical. After `shift_commands(n)` the
+/// surviving batches are renumbered so that the first one becomes index 0.
+/// Callers (e.g. `KanbanContext`) track `undo_cursor` as a logical offset
+/// from the current baseline, so they are unaffected by the renumbering.
 pub trait CommandStore: Send + Sync {
-    /// Appends a batch of commands as one undo unit. Returns the new total
+    /// Appends a batch of commands as one undo unit. Returns the new logical
     /// batch count (which equals the new cursor position after execute).
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64>;
 
-    /// Returns the number of batches currently stored.
+    /// Returns the number of batches currently stored (logical count).
     fn command_count(&self) -> KanbanResult<u64>;
 
-    /// Returns batches in the half-open range [from, to).
+    /// Returns batches in the half-open logical range `[from, to)`.
     /// `from` is 0-indexed; `to` is exclusive.
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>>;
 
