@@ -376,10 +376,7 @@ impl DataStore for InMemoryStore {
         Ok(())
     }
 
-    fn modify_graph(
-        &self,
-        f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
-    ) -> KanbanResult<()> {
+    fn modify_graph(&self, f: crate::data_store::GraphMutFn) -> KanbanResult<()> {
         let mut state = self.write_state()?;
         let mut graph = state.graph.clone();
         f(&mut graph)?;
@@ -1269,8 +1266,8 @@ mod tests {
                 board_id: Uuid::new_v4(),
             },
         ));
-        store.append_commands(&[cmd.clone()]).unwrap();
-        store.append_commands(&[cmd.clone()]).unwrap();
+        store.append_commands(std::slice::from_ref(&cmd)).unwrap();
+        store.append_commands(std::slice::from_ref(&cmd)).unwrap();
         store.append_commands(&[cmd]).unwrap();
 
         store.store_snapshot_at(1, &snap).unwrap();
@@ -1302,8 +1299,8 @@ mod tests {
                 board_id: Uuid::new_v4(),
             },
         ));
-        store.append_commands(&[cmd1.clone()]).unwrap();
-        store.append_commands(&[cmd1.clone()]).unwrap();
+        store.append_commands(std::slice::from_ref(&cmd1)).unwrap();
+        store.append_commands(std::slice::from_ref(&cmd1)).unwrap();
         store.append_commands(&[cmd1]).unwrap();
 
         let result = store.load_commands(10, 20).unwrap();

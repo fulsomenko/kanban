@@ -2,6 +2,8 @@ use uuid::Uuid;
 
 use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Snapshot, Sprint};
 
+pub type GraphMutFn = Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>;
+
 pub trait DataStore: Send + Sync {
     // Board
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>>;
@@ -92,10 +94,7 @@ pub trait DataStore: Send + Sync {
     /// locking (e.g. `RwLock`, database transactions) **must** override this method
     /// to perform the read and write within a single lock span, as `InMemoryStore`
     /// already does.
-    fn modify_graph(
-        &self,
-        f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
-    ) -> KanbanResult<()> {
+    fn modify_graph(&self, f: GraphMutFn) -> KanbanResult<()> {
         let mut graph = self.get_graph()?;
         f(&mut graph)?;
         self.set_graph(graph)

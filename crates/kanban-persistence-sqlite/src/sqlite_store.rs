@@ -587,10 +587,7 @@ impl SqliteStore {
         rows_to_graph(&rows)
     }
 
-    async fn modify_graph_async(
-        &self,
-        f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
-    ) -> KanbanResult<()> {
+    async fn modify_graph_async(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
         let mut tx = self.pool.begin().await.map_err(db_err)?;
         let mut graph = Self::get_graph_with_conn(&mut tx).await?;
         f(&mut graph)?;
@@ -1393,10 +1390,7 @@ impl DataStore for SqliteStore {
         run(self.write_graph_async(&graph))
     }
 
-    fn modify_graph(
-        &self,
-        f: Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>,
-    ) -> KanbanResult<()> {
+    fn modify_graph(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
         run(self.modify_graph_async(f))
     }
 
