@@ -1,9 +1,16 @@
 use crate::config;
 use crate::AppConfig;
-use kanban_domain::{DataStore, KanbanError};
+use kanban_domain::commands::Command;
+#[cfg(feature = "sqlite")]
+use kanban_domain::commands::CommandContext;
+#[cfg(feature = "sqlite")]
+use kanban_domain::{DataStore, InMemoryStore, Snapshot};
+use kanban_domain::KanbanError;
 use kanban_persistence::{
     snapshot_from_json_bytes, PersistenceStore, StoreRegistry, StoreSnapshot,
 };
+#[cfg(feature = "sqlite")]
+use kanban_persistence::snapshot_to_json_bytes;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -229,19 +236,35 @@ impl StoreManager {
             .into());
         }
 
-        // Load snapshot from source into a StoreSnapshot (JSON bytes) for FK repair
-        let mut store_snapshot: StoreSnapshot = match from_backend {
+        // Load snapshot from source into a StoreSnapshot (JSON bytes) for FK repair,
+        // and extract the command log for undo history preservation.
+        let (mut store_snapshot, command_log): (
+            StoreSnapshot,
+            Option<(Vec<Vec<Command>>, u64, Option<Vec<u8>>)>,
+        ) = match from_backend {
             "sqlite" | "sqlite3" | "db" => {
                 #[cfg(feature = "sqlite")]
                 {
-                    use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata};
+                    use kanban_domain::CommandStore;
+                    use kanban_persistence::PersistenceMetadata;
                     let store = kanban_persistence_sqlite::SqliteStore::open(from_path).await?;
                     let snapshot = store.snapshot()?;
                     let data = snapshot_to_json_bytes(&snapshot)?;
-                    StoreSnapshot {
+                    let snap = StoreSnapshot {
                         data,
                         metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
-                    }
+                    };
+                    let cmd_log = match store.load_all_commands() {
+                        Ok((batches, count)) if !batches.is_empty() => {
+                            let baseline_bytes = snapshot_to_json_bytes(
+                                &Snapshot::new(),
+                            )
+                            .ok();
+                            Some((batches, count, baseline_bytes))
+                        }
+                        _ => None,
+                    };
+                    (snap, cmd_log)
                 }
                 #[cfg(not(feature = "sqlite"))]
                 return Err(KanbanError::validation("sqlite feature not compiled in"));
@@ -249,7 +272,13 @@ impl StoreManager {
             _ => {
                 let source = self.make_store(from_backend, from_path)?;
                 let (snap, _) = source.load().await?;
-                snap
+                let cmd_log = match source.get_command_log() {
+                    Ok((batches, cursor, baseline_bytes)) if !batches.is_empty() => {
+                        Some((batches, cursor, baseline_bytes))
+                    }
+                    _ => None,
+                };
+                (snap, cmd_log)
             }
         };
 
@@ -262,11 +291,22 @@ impl StoreManager {
                 {
                     let repaired = snapshot_from_json_bytes(&store_snapshot.data)?;
                     let store = kanban_persistence_sqlite::SqliteStore::open(to_path).await?;
-                    if let Err(e) = store.apply_snapshot(repaired) {
+                    if let Err(e) = store.apply_snapshot(repaired.clone()) {
                         let _ = std::fs::remove_file(to_path);
                         let _ = std::fs::remove_file(format!("{}-wal", to_path));
                         let _ = std::fs::remove_file(format!("{}-shm", to_path));
                         return Err(e);
+                    }
+                    if let Some((batches, _cursor, baseline_bytes)) = command_log {
+                        if let Err(e) = transfer_commands_to_sqlite(
+                            &store,
+                            &batches,
+                            baseline_bytes.as_deref(),
+                        ) {
+                            tracing::warn!(
+                                "Command log transfer failed (undo history lost): {e}"
+                            );
+                        }
                     }
                 }
                 #[cfg(not(feature = "sqlite"))]
@@ -274,6 +314,16 @@ impl StoreManager {
             }
             _ => {
                 let target = self.make_store(to_backend, to_path)?;
+                // Sync command log BEFORE save, since save() reads from in-memory state
+                if let Some((batches, cursor, baseline_bytes)) = command_log {
+                    if let Err(e) =
+                        target.sync_command_log(&batches, cursor, baseline_bytes.as_deref()).await
+                    {
+                        tracing::warn!(
+                            "Command log transfer failed (undo history lost): {e}"
+                        );
+                    }
+                }
                 if let Err(e) = target.save(store_snapshot).await {
                     let _ = std::fs::remove_file(to_path);
                     let _ = std::fs::remove_file(format!("{}-wal", to_path));
@@ -284,6 +334,40 @@ impl StoreManager {
         }
         Ok(())
     }
+
+}
+
+#[cfg(feature = "sqlite")]
+fn transfer_commands_to_sqlite(
+    store: &kanban_persistence_sqlite::SqliteStore,
+    batches: &[Vec<Command>],
+    baseline_bytes: Option<&[u8]>,
+) -> Result<(), KanbanError> {
+    use kanban_domain::CommandStore;
+
+    let baseline: Snapshot = if let Some(bytes) = baseline_bytes {
+        serde_json::from_slice(bytes)
+            .map_err(|e| KanbanError::validation(format!("Failed to parse baseline: {e}")))?
+    } else {
+        Snapshot::new()
+    };
+
+    let temp = InMemoryStore::new();
+    temp.apply_snapshot(baseline)?;
+
+    for (i, batch) in batches.iter().enumerate() {
+        let ctx = CommandContext {
+            store: &temp as &dyn DataStore,
+        };
+        for cmd in batch {
+            cmd.execute(&ctx)?;
+        }
+        store.append_commands(batch)?;
+        let snap = temp.snapshot()?;
+        store.store_snapshot_at((i + 1) as u64, &snap)?;
+    }
+
+    Ok(())
 }
 
 impl Clone for StoreManager {
