@@ -8,6 +8,18 @@ use kanban_service::StoreManager;
 #[cfg(feature = "tui")]
 use kanban_tui::App;
 
+pub(crate) fn resolve_is_sqlite(
+    store_manager: &kanban_service::StoreManager,
+    validated_file: Option<&str>,
+    config: &kanban_core::AppConfig,
+) -> bool {
+    let effective_file = validated_file
+        .map(str::to_owned)
+        .unwrap_or_else(|| kanban_service::config::resolve_storage_location(config));
+    store_manager.is_sqlite(&effective_file)
+        || (validated_file.is_none() && config.effective_storage_backend() == "sqlite")
+}
+
 fn init_tracing() {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -225,8 +237,7 @@ impl CliApp {
         let effective_file = validated_file
             .clone()
             .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
-        let is_sqlite = store_manager.is_sqlite(&effective_file)
-            || (validated_file.is_none() && config.effective_storage_backend() == "sqlite");
+        let is_sqlite = resolve_is_sqlite(&store_manager, validated_file.as_deref(), &config);
 
         match command {
             None => {
