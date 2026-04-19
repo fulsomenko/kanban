@@ -277,3 +277,51 @@ impl CliApp {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kanban_core::AppConfig;
+
+    fn default_store_manager() -> kanban_service::StoreManager {
+        kanban_service::StoreManager::new(kanban_service::default_registry())
+    }
+
+    #[test]
+    fn test_resolve_is_sqlite_explicit_json_file_ignores_config_backend() {
+        let sm = default_store_manager();
+        let config = AppConfig {
+            storage_backend: Some("sqlite".to_string()),
+            ..Default::default()
+        };
+        let result = resolve_is_sqlite(&sm, Some("myboard.json"), &config);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_resolve_is_sqlite_no_explicit_file_uses_config_backend() {
+        let sm = default_store_manager();
+        let config = AppConfig {
+            storage_backend: Some("sqlite".to_string()),
+            ..Default::default()
+        };
+        let result = resolve_is_sqlite(&sm, None, &config);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_resolve_is_sqlite_explicit_sqlite_extension_is_sqlite() {
+        let sm = default_store_manager();
+        let config = AppConfig::default();
+        let result = resolve_is_sqlite(&sm, Some("myboard.sqlite"), &config);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_resolve_is_sqlite_no_file_default_config_is_not_sqlite() {
+        let sm = default_store_manager();
+        let config = AppConfig::default();
+        let result = resolve_is_sqlite(&sm, None, &config);
+        assert!(!result);
+    }
+}
