@@ -82,6 +82,15 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         String::new()
     };
 
+    let error_badge: String = {
+        let log = app.error_log.lock().unwrap();
+        if log.unread_count > 0 {
+            format!("  [!] {} errors  F12: error log", log.unread_count)
+        } else {
+            String::new()
+        }
+    };
+
     let help_text: String = if let AppMode::SprintDetail = app.mode {
         let component = match app.sprint_view.panel {
             crate::app::SprintTaskPanel::Uncompleted => &app.sprint_view.uncompleted_component,
@@ -96,7 +105,7 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             .collect::<Vec<_>>()
             .join(" | ");
         let component_help = component.help_text();
-        format!("{}{} | {}", selection_prefix, keybindings, component_help)
+        format!("{}{} | {}{}", selection_prefix, keybindings, component_help, error_badge)
     } else {
         let provider = KeybindingRegistry::get_provider(app);
         let context = provider.get_context();
@@ -106,7 +115,7 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             .map(|b| format!("{}: {}", b.key, b.short_description))
             .collect::<Vec<_>>()
             .join(" | ");
-        format!("{}{}", selection_prefix, keybindings)
+        format!("{}{}{}", selection_prefix, keybindings, error_badge)
     };
     let help = Paragraph::new(help_text)
         .style(label_text())
