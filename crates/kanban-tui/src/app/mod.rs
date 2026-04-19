@@ -358,8 +358,7 @@ impl App {
         use kanban_domain::KanbanError;
         use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
 
-        if self.persistence.save_file.is_some() {
-            let store = self.ctx.store().clone();
+        if let Some(store) = self.ctx.store() {
             let instance_id = store.instance_id();
             let file_watcher = self.persistence.file_watcher.clone();
             let save_completion_tx = self.ctx.save_coordinator.save_completion_tx().cloned();
@@ -1691,8 +1690,7 @@ impl App {
 
     #[doc(hidden)]
     pub async fn load_initial_state(&mut self) {
-        if self.persistence.save_file.is_some() {
-            let store = self.ctx.store().clone();
+        if let Some(store) = self.ctx.store() {
             if store.exists().await {
                 match store.load().await {
                     Ok((snapshot, _metadata)) => {
@@ -1867,8 +1865,7 @@ impl App {
                                         self.pending_key = None;
                                         self.needs_redraw = true;
                                         // Reload from disk
-                                        {
-                                            let store = self.ctx.store().clone();
+                                        if let Some(store) = self.ctx.store() {
                                             match store.load().await {
                                                 Ok((snapshot, _metadata)) => {
                                                     match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
@@ -2000,8 +1997,7 @@ impl App {
                     } => {
                         self.needs_redraw = true;
                         // Check if this is our own write by comparing instance IDs
-                        {
-                            let store = self.ctx.store().clone();
+                        if let Some(store) = self.ctx.store() {
                             match store.load().await {
                                 Ok((_snapshot, metadata)) => {
                                     // Compare instance IDs
@@ -2118,7 +2114,9 @@ impl App {
     }
 
     async fn auto_reload_from_external_change(&mut self) {
-        let store = self.ctx.store().clone();
+        let Some(store) = self.ctx.store() else {
+            return;
+        };
         match store.load().await {
             Ok((snapshot, _metadata)) => {
                 match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {

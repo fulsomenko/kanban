@@ -243,14 +243,12 @@ impl App {
             kanban_service::config::resolve_storage_location(&self.app_config);
         let new_backend = self.app_config.effective_storage_backend().to_string();
 
-        let new_store = match self
+        let new_store: Option<std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>> = match self
             .store_manager
             .make_store(&new_backend, &new_storage_location)
         {
-            Ok(s) => s,
-            Err(_) if matches!(new_backend.as_str(), "sqlite" | "sqlite3" | "db") => {
-                std::sync::Arc::new(kanban_service::NullStore::new())
-            }
+            Ok(s) => Some(s),
+            Err(_) if matches!(new_backend.as_str(), "sqlite" | "sqlite3" | "db") => None,
             Err(e) => {
                 self.app_config = old_config;
                 self.set_error(format!("Store swap failed: {}", e));

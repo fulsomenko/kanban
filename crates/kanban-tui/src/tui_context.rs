@@ -27,12 +27,7 @@ impl TuiContext {
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     )> {
-        let inner = KanbanContext::empty(
-            store
-                .clone()
-                .unwrap_or_else(|| Arc::new(kanban_persistence::NullStore::new())),
-            kanban_core::AppConfig::default(),
-        );
+        let inner = KanbanContext::empty(store.clone(), kanban_core::AppConfig::default());
 
         let (save_coordinator, save_rx, completion_rx) = SaveCoordinator::new(store.is_some());
 
@@ -134,11 +129,11 @@ impl TuiContext {
         self.inner.has_conflict()
     }
 
-    pub fn store(&self) -> Arc<dyn PersistenceStore + Send + Sync> {
-        self.inner.store().clone()
+    pub fn store(&self) -> Option<Arc<dyn PersistenceStore + Send + Sync>> {
+        self.inner.store().cloned()
     }
 
-    pub fn replace_store(&mut self, s: Arc<dyn PersistenceStore + Send + Sync>) {
+    pub fn replace_store(&mut self, s: Option<Arc<dyn PersistenceStore + Send + Sync>>) {
         self.inner.replace_store(s)
     }
 
