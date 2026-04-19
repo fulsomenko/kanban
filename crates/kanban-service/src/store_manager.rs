@@ -14,6 +14,8 @@ use kanban_persistence::{
 use std::collections::HashSet;
 use std::sync::Arc;
 
+type CommandLog = Option<(Vec<Vec<Command>>, u64, Option<Vec<u8>>)>;
+
 /// Owns the `StoreRegistry` and exposes the high-level operations that used
 /// to live as free functions in `kanban_service`. Callers (the CLI, TUI, MCP)
 /// construct a `StoreManager` with whichever factories they want available,
@@ -238,10 +240,7 @@ impl StoreManager {
 
         // Load snapshot from source into a StoreSnapshot (JSON bytes) for FK repair,
         // and extract the command log for undo history preservation.
-        let (mut store_snapshot, command_log): (
-            StoreSnapshot,
-            Option<(Vec<Vec<Command>>, u64, Option<Vec<u8>>)>,
-        ) = match from_backend {
+        let (mut store_snapshot, command_log): (StoreSnapshot, CommandLog) = match from_backend {
             "sqlite" | "sqlite3" | "db" => {
                 #[cfg(feature = "sqlite")]
                 {
