@@ -366,11 +366,7 @@ fn test_quit_with_both_pending_saves_and_migration_sets_both_flags_on_first_pres
     assert!(!app.should_quit, "should not quit on first q");
     assert!(app.quit_with_pending, "quit_with_pending must be set");
     assert!(app.quit_with_migration, "quit_with_migration must be set");
-    let banner = app
-        .ui_state
-        .banner
-        .as_ref()
-        .expect("banner must be set");
+    let banner = app.ui_state.banner.as_ref().expect("banner must be set");
     assert!(
         banner.message.contains("pending") || banner.message.contains("migration"),
         "banner must mention pending saves or migration, got: {}",
