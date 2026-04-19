@@ -350,6 +350,54 @@ fn test_migration_complete_resets_quit_with_migration_flag() {
 }
 
 #[test]
+fn test_quit_with_both_pending_saves_and_migration_sets_both_flags_on_first_press() {
+    use kanban_core::AppConfig;
+    let mut app = App::test_default();
+    app.ctx.save_coordinator.set_pending_for_test(1);
+    let (_tx, rx) = tokio::sync::oneshot::channel();
+    app.migration_state = MigrationState::Migrating {
+        old_config: AppConfig::default(),
+        old_storage_location: "old.json".to_string(),
+        result_rx: rx,
+    };
+
+    app.handle_quit_key();
+
+    assert!(!app.should_quit, "should not quit on first q");
+    assert!(app.quit_with_pending, "quit_with_pending must be set");
+    assert!(app.quit_with_migration, "quit_with_migration must be set");
+    let banner = app
+        .ui_state
+        .banner
+        .as_ref()
+        .expect("banner must be set");
+    assert!(
+        banner.message.contains("pending") || banner.message.contains("migration"),
+        "banner must mention pending saves or migration, got: {}",
+        banner.message
+    );
+}
+
+#[test]
+fn test_quit_twice_with_both_pending_saves_and_migration_quits() {
+    use kanban_core::AppConfig;
+    let mut app = App::test_default();
+    app.ctx.save_coordinator.set_pending_for_test(1);
+    let (_tx, rx) = tokio::sync::oneshot::channel();
+    app.migration_state = MigrationState::Migrating {
+        old_config: AppConfig::default(),
+        old_storage_location: "old.json".to_string(),
+        result_rx: rx,
+    };
+
+    app.handle_quit_key();
+    assert!(!app.should_quit, "should not quit after first q");
+
+    app.handle_quit_key();
+    assert!(app.should_quit, "should quit after second q");
+}
+
+#[test]
 fn test_apply_config_edit_syncs_prefixes() {
     let mut app = App::test_default();
     let format = kanban_tui::edit_format::EditFormat::Json;
