@@ -1274,6 +1274,12 @@ impl App {
         self.view.cards_by_id.get(&card_id).cloned()
     }
 
+    pub fn get_card_for_detail_view(&self) -> Option<Card> {
+        self.selection
+            .active_card_id
+            .and_then(|id| self.view.cards_by_id.get(&id).cloned())
+    }
+
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let cards = self.ctx.cards();
         let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &cards);
