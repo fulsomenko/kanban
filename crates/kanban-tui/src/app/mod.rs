@@ -1126,7 +1126,6 @@ impl App {
 
         let had_archives = !archive_cards.is_empty();
         let had_deletes = !delete_cards.is_empty();
-        let had_restores = !restore_cards.is_empty();
 
         // Execute batch archive commands
         if had_archives {
@@ -1167,10 +1166,6 @@ impl App {
             self.complete_restore_animation(card_id);
         }
 
-        // Refresh view once at the end
-        if had_archives || had_deletes || had_restores {
-            self.refresh_view();
-        }
     }
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
@@ -1347,7 +1342,9 @@ impl App {
         &mut self,
         commands: Vec<kanban_domain::commands::Command>,
     ) -> KanbanResult<()> {
-        self.ctx.execute_commands_batch(commands)
+        self.ctx.execute_commands_batch(commands)?;
+        self.refresh_view();
+        Ok(())
     }
 
     pub fn refresh_view(&mut self) {

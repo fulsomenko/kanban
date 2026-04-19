@@ -258,7 +258,6 @@ impl App {
                 return;
             }
 
-            self.refresh_view();
             self.select_card_by_id(card_id);
         }
     }
@@ -321,7 +320,6 @@ impl App {
         tracing::info!("Toggled {} cards completion status", toggled_count);
         self.multi_select.selected_cards.clear();
         self.multi_select.selection_mode_active = false;
-        self.refresh_view();
         if let Some(card_id) = first_card_id {
             self.select_card_by_id(card_id);
         }
@@ -421,7 +419,6 @@ impl App {
                     }
                 }
 
-                self.refresh_view();
                 // Select the most recently created card
                 if let Some(card) = self
                     .ctx
@@ -534,7 +531,6 @@ impl App {
                 }
             }
 
-            self.refresh_view();
             self.select_card_by_id(card_id);
         }
     }
@@ -607,7 +603,6 @@ impl App {
         tracing::info!("Moved {} cards", moved_count);
         self.multi_select.selected_cards.clear();
         self.multi_select.selection_mode_active = false;
-        self.refresh_view();
         if let Some(card_id) = first_card_id {
             self.select_card_by_id(card_id);
         }

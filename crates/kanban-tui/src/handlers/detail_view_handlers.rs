@@ -1324,7 +1324,5 @@ impl App {
                 return;
             }
         }
-
-        self.refresh_view();
     }
 }
