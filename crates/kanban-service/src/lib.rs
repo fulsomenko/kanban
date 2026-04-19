@@ -1,13 +1,11 @@
 pub mod backend;
 pub mod config;
 mod context;
-mod null_store;
 mod path;
 mod store_manager;
 pub use backend::KanbanBackend;
 pub use config::AppConfigDto;
 pub use context::{BatchOperationFailure, BatchOperationResult, KanbanContext, MAX_UNDO_DEPTH};
-pub use null_store::NullStore;
 pub use path::validate_path;
 pub use store_manager::StoreManager;
 

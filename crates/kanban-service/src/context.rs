@@ -5,10 +5,10 @@
 ///   serialises the full snapshot to disk. The `dirty` flag and `save()` method
 ///   are meaningful only on this path.
 ///
-/// **SQLite path** — `SqliteStore` + `NullStore`:
+/// **SQLite path** — `SqliteStore` only:
 ///   `SqliteStore` implements both `DataStore` and `CommandStore`; every write
-///   goes straight to the database. The `PersistenceStore` slot holds a
-///   `NullStore` (no-op), so `dirty` / `save()` are effectively dead code.
+///   goes straight to the database. `store` is `None` on this path, so
+///   `dirty` / `save()` / `reload()` are no-ops.
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
@@ -42,11 +42,11 @@ pub const MAX_UNDO_DEPTH: usize = 200;
 pub struct KanbanContext {
     backend: Arc<dyn KanbanBackend>,
     app_config: AppConfig,
-    store: Arc<dyn PersistenceStore + Send + Sync>,
+    store: Option<Arc<dyn PersistenceStore + Send + Sync>>,
     baseline_snapshot: Snapshot,
     undo_cursor: usize,
     command_count: usize,
-    dirty: bool, // JSON-only: SQLite writes go to DB immediately
+    dirty: bool, // JSON-only: None means no file persistence store
     conflict_pending: bool,
 }
 
@@ -56,7 +56,7 @@ impl KanbanContext {
         config: AppConfig,
     ) -> KanbanResult<Self> {
         if !store.exists().await {
-            return Ok(Self::empty(store, config));
+            return Ok(Self::empty(Some(store), config));
         }
 
         let (snapshot, _metadata) = store.load().await?;
@@ -89,7 +89,7 @@ impl KanbanContext {
         Ok(Self {
             backend: Arc::new(backend),
             app_config: config,
-            store,
+            store: Some(store),
             baseline_snapshot,
             undo_cursor,
             command_count,
@@ -106,7 +106,6 @@ impl KanbanContext {
 
     #[cfg(feature = "sqlite")]
     pub async fn open_sqlite(path: &str, config: AppConfig) -> KanbanResult<Self> {
-        use crate::null_store::NullStore;
         use kanban_persistence_sqlite::SqliteStore;
         let store = SqliteStore::open(path).await?;
         let baseline = store.snapshot()?;
@@ -115,7 +114,7 @@ impl KanbanContext {
         Ok(Self {
             backend: Arc::new(store),
             app_config: config,
-            store: Arc::new(NullStore::new()),
+            store: None,
             baseline_snapshot: baseline,
             undo_cursor,
             command_count,
@@ -131,7 +130,10 @@ impl KanbanContext {
         Self::load(persistence_store, config).await
     }
 
-    pub fn empty(store: Arc<dyn PersistenceStore + Send + Sync>, config: AppConfig) -> Self {
+    pub fn empty(
+        store: Option<Arc<dyn PersistenceStore + Send + Sync>>,
+        config: AppConfig,
+    ) -> Self {
         Self {
             backend: Arc::new(InMemoryStore::new()),
             app_config: config,
@@ -376,19 +378,22 @@ impl KanbanContext {
         self.conflict_pending = false;
     }
 
-    pub fn replace_store(&mut self, store: Arc<dyn PersistenceStore + Send + Sync>) {
+    pub fn replace_store(&mut self, store: Option<Arc<dyn PersistenceStore + Send + Sync>>) {
         self.store = store;
     }
 
-    pub fn store(&self) -> &Arc<dyn PersistenceStore + Send + Sync> {
-        &self.store
+    pub fn store(&self) -> Option<&Arc<dyn PersistenceStore + Send + Sync>> {
+        self.store.as_ref()
     }
 
     pub async fn reload(&mut self) -> KanbanResult<()> {
-        if !self.store.exists().await {
+        let Some(store) = &self.store else {
+            return Ok(());
+        };
+        if !store.exists().await {
             return Ok(());
         }
-        let (snapshot, _metadata) = self.store.load().await?;
+        let (snapshot, _metadata) = store.load().await?;
         let data: Snapshot = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         self.backend.apply_snapshot(data)?;
@@ -396,13 +401,16 @@ impl KanbanContext {
     }
 
     /// JSON-only: serialises the full snapshot to the persistence store.
-    /// On the SQLite path `self.store` is a `NullStore`, so this is a no-op.
+    /// On the SQLite path `self.store` is `None`, so this is a no-op.
     pub async fn save(&self) -> KanbanResult<()> {
+        let Some(store) = &self.store else {
+            return Ok(());
+        };
         // Sync command log from in-memory backend to persistence store
         let (batches, _cmd_count) = self.backend.load_all_commands()?;
         let baseline_bytes = serde_json::to_vec(&self.baseline_snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        self.store
+        store
             .sync_command_log(&batches, self.undo_cursor as u64, Some(&baseline_bytes))
             .await?;
 
@@ -412,10 +420,10 @@ impl KanbanContext {
 
         let store_snapshot = StoreSnapshot {
             data: bytes,
-            metadata: PersistenceMetadata::new(self.store.instance_id()),
+            metadata: PersistenceMetadata::new(store.instance_id()),
         };
 
-        self.store.save(store_snapshot).await?;
+        store.save(store_snapshot).await?;
         Ok(())
     }
 
