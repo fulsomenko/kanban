@@ -24,7 +24,7 @@ fn test_undo_queues_snapshot_to_save_coordinator() {
     // drain the post-create snapshot
     save_rx.try_recv().ok();
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     let snapshot = save_rx
         .try_recv()
         .expect("undo should queue a snapshot to the save coordinator");
@@ -39,11 +39,11 @@ fn test_redo_queues_snapshot_to_save_coordinator() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
 
     ctx.create_board("Board".into(), None).unwrap();
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     // drain setup snapshots (create + undo)
     while save_rx.try_recv().is_ok() {}
 
-    assert!(ctx.redo());
+    assert!(ctx.redo().unwrap());
     let snapshot = save_rx
         .try_recv()
         .expect("redo should queue a snapshot to the save coordinator");
@@ -58,7 +58,7 @@ fn test_redo_queues_snapshot_to_save_coordinator() {
 fn test_undo_when_nothing_to_undo_does_not_queue_snapshot() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
 
-    assert!(!ctx.undo());
+    assert!(!ctx.undo().unwrap());
     assert!(
         save_rx.try_recv().is_err(),
         "failed undo should not queue a snapshot"

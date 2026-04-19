@@ -168,7 +168,10 @@ fn render_settings_storage(app: &App, frame: &mut Frame, area: Rect) {
     } else {
         "(none)"
     };
-    let instance_id = app.ctx.store().instance_id().to_string();
+    let instance_id = app
+        .ctx
+        .store()
+        .map_or_else(String::new, |s| s.instance_id().to_string());
     let export_selected = is_storage_selected(3);
     let export_checkbox_style = if export_selected {
         Style::default().fg(Color::Yellow).bg(SELECTED_BG)

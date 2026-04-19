@@ -10,20 +10,50 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use uuid::Uuid;
 
+/// In-memory state for the command log (batched: each inner Vec is one undo unit)
+struct CommandLogState {
+    batches: Vec<Vec<kanban_domain::commands::Command>>,
+    undo_cursor: u64,
+    baseline_data: Option<serde_json::Value>,
+}
+
+impl CommandLogState {
+    fn new() -> Self {
+        Self {
+            batches: vec![],
+            undo_cursor: 0,
+            baseline_data: None,
+        }
+    }
+}
+
 /// JSON file-based persistence store
 /// Implements the PersistenceStore trait for JSON file operations
 pub struct JsonFileStore {
     path: PathBuf,
     instance_id: Uuid,
     last_known_metadata: Mutex<Option<FileMetadata>>,
+    command_log_state: Mutex<CommandLogState>,
 }
 
-/// Wrapper structure for the JSON file format v2
+/// Wrapper structure for the JSON file format (v2–v5)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonEnvelope {
     version: u32,
     metadata: PersistenceMetadata,
     data: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    baseline_data: Option<serde_json::Value>,
+    #[serde(default)]
+    commands: serde_json::Value,
+    #[serde(default)]
+    undo_cursor: u64,
+    #[serde(default = "default_command_schema_version")]
+    command_schema_version: u32,
+}
+
+fn default_command_schema_version() -> u32 {
+    1
 }
 
 impl JsonEnvelope {
@@ -36,6 +66,10 @@ impl JsonEnvelope {
                 saved_at: chrono::Utc::now(),
             },
             data,
+            baseline_data: None,
+            commands: serde_json::Value::Array(vec![]),
+            undo_cursor: 0,
+            command_schema_version: 1,
         }
     }
 
@@ -54,6 +88,33 @@ impl JsonEnvelope {
     pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(self)
     }
+
+    /// Parse the `commands` field into batched format.
+    /// V4 stored `Vec<Command>` (flat); V5+ stores `Vec<Vec<Command>>` (batched).
+    /// On load from V4, wraps the flat list as a single batch.
+    fn parse_batches(
+        &self,
+    ) -> Result<Vec<Vec<kanban_domain::commands::Command>>, serde_json::Error> {
+        if self.commands.is_null()
+            || (self.commands.is_array() && self.commands.as_array().unwrap().is_empty())
+        {
+            return Ok(vec![]);
+        }
+        // Try V5 batched format first
+        if let Ok(batches) = serde_json::from_value::<Vec<Vec<kanban_domain::commands::Command>>>(
+            self.commands.clone(),
+        ) {
+            return Ok(batches);
+        }
+        // Fall back to V4 flat format — wrap as single batch
+        let flat: Vec<kanban_domain::commands::Command> =
+            serde_json::from_value(self.commands.clone())?;
+        if flat.is_empty() {
+            Ok(vec![])
+        } else {
+            Ok(vec![flat])
+        }
+    }
 }
 
 impl JsonFileStore {
@@ -63,6 +124,7 @@ impl JsonFileStore {
             path: path.as_ref().to_path_buf(),
             instance_id: Uuid::new_v4(),
             last_known_metadata: Mutex::new(None),
+            command_log_state: Mutex::new(CommandLogState::new()),
         }
     }
 
@@ -73,6 +135,7 @@ impl JsonFileStore {
             path: path.as_ref().to_path_buf(),
             instance_id,
             last_known_metadata: Mutex::new(None),
+            command_log_state: Mutex::new(CommandLogState::new()),
         }
     }
 
@@ -81,12 +144,16 @@ impl JsonFileStore {
         self.instance_id
     }
 
-    /// Lock metadata mutex with fail-fast behavior on poisoning
-    fn lock_metadata(&self) -> std::sync::MutexGuard<'_, Option<FileMetadata>> {
-        self.last_known_metadata.lock().expect(
-            "Metadata mutex poisoned - a panic occurred while holding the lock. \
-             Application state may be corrupted and recovery is not safe.",
-        )
+    fn lock_metadata(&self) -> PersistenceResult<std::sync::MutexGuard<'_, Option<FileMetadata>>> {
+        self.last_known_metadata
+            .lock()
+            .map_err(|e| PersistenceError::Serialization(format!("Metadata mutex poisoned: {e}")))
+    }
+
+    fn lock_command_log(&self) -> PersistenceResult<std::sync::MutexGuard<'_, CommandLogState>> {
+        self.command_log_state.lock().map_err(|e| {
+            PersistenceError::Serialization(format!("Command log state mutex poisoned: {e}"))
+        })
     }
 }
 
@@ -99,7 +166,7 @@ impl PersistenceStore for JsonFileStore {
                 FileMetadata::from_file(&self.path).map_err(PersistenceError::Io)?;
 
             // Compare with last known metadata
-            let guard = self.lock_metadata();
+            let guard = self.lock_metadata()?;
             if let Some(last_known) = *guard {
                 if last_known != current_metadata {
                     return Err(PersistenceError::ConflictDetected {
@@ -114,13 +181,23 @@ impl PersistenceStore for JsonFileStore {
         snapshot.metadata.instance_id = self.instance_id;
         snapshot.metadata.saved_at = chrono::Utc::now();
 
-        // Create JSON envelope with v3 format
+        // Create JSON envelope with v4 format, including command log state
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let (batches_value, cursor, baseline) = {
+            let cls = self.lock_command_log()?;
+            let v = serde_json::to_value(&cls.batches)
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+            (v, cls.undo_cursor, cls.baseline_data.clone())
+        };
         let envelope = JsonEnvelope {
-            version: 3,
+            version: 5,
             metadata: snapshot.metadata.clone(),
             data: data_value,
+            baseline_data: baseline,
+            commands: batches_value,
+            undo_cursor: cursor,
+            command_schema_version: 1,
         };
 
         // Serialize envelope to JSON
@@ -132,7 +209,7 @@ impl PersistenceStore for JsonFileStore {
 
         // Update last known metadata after successful write
         if let Ok(new_metadata) = FileMetadata::from_file(&self.path) {
-            let mut guard = self.lock_metadata();
+            let mut guard = self.lock_metadata()?;
             *guard = Some(new_metadata);
         }
 
@@ -149,7 +226,7 @@ impl PersistenceStore for JsonFileStore {
         // Detect current file version
         let current_version = Migrator::detect_version(&self.path).await?;
 
-        // Migrate if necessary
+        // Migrate if necessary (v4 is backward-compatible via serde defaults)
         if current_version < FormatVersion::V3 {
             tracing::info!(
                 "Detected {:?} format at {}. Migrating to V3...",
@@ -167,12 +244,32 @@ impl PersistenceStore for JsonFileStore {
         let envelope: JsonEnvelope = serde_json::from_slice(&file_bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        // Validate version (accept V2 and V3)
-        if envelope.version != 3 && envelope.version != 2 {
+        // Validate version (accept V2, V3, V4, V5)
+        if envelope.version < 2 || envelope.version > 5 {
             return Err(PersistenceError::Serialization(format!(
                 "Unsupported format version: {}",
                 envelope.version
             )));
+        }
+
+        if envelope.command_schema_version > kanban_domain::COMMAND_SCHEMA_VERSION {
+            return Err(PersistenceError::Serialization(format!(
+                "Unsupported command schema version {}. This build supports up to {}. Please upgrade.",
+                envelope.command_schema_version, kanban_domain::COMMAND_SCHEMA_VERSION
+            )));
+        }
+
+        // Parse command log: V5 = batched Vec<Vec<Command>>, V4 = flat Vec<Command>
+        let batches = envelope
+            .parse_batches()
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+
+        // Populate command log state from envelope
+        {
+            let mut cls = self.lock_command_log()?;
+            cls.batches = batches;
+            cls.undo_cursor = envelope.undo_cursor;
+            cls.baseline_data = envelope.baseline_data;
         }
 
         // Reconstruct snapshot
@@ -185,7 +282,7 @@ impl PersistenceStore for JsonFileStore {
 
         // Track file metadata after successful load for conflict detection
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
-            let mut guard = self.lock_metadata();
+            let mut guard = self.lock_metadata()?;
             *guard = Some(file_metadata);
         }
 
@@ -208,6 +305,39 @@ impl PersistenceStore for JsonFileStore {
 
     fn instance_id(&self) -> Uuid {
         self.instance_id
+    }
+
+    async fn sync_command_log(
+        &self,
+        batches: &[Vec<kanban_domain::commands::Command>],
+        cursor: u64,
+        baseline: Option<&[u8]>,
+    ) -> PersistenceResult<()> {
+        let mut cls = self.lock_command_log()?;
+        cls.batches = batches.to_vec();
+        cls.undo_cursor = cursor;
+        cls.baseline_data = baseline
+            .map(serde_json::from_slice)
+            .transpose()
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        Ok(())
+    }
+
+    fn get_command_log(
+        &self,
+    ) -> PersistenceResult<(
+        Vec<Vec<kanban_domain::commands::Command>>,
+        u64,
+        Option<Vec<u8>>,
+    )> {
+        let cls = self.lock_command_log()?;
+        let baseline_bytes = cls
+            .baseline_data
+            .as_ref()
+            .map(serde_json::to_vec)
+            .transpose()
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        Ok((cls.batches.clone(), cls.undo_cursor, baseline_bytes))
     }
 }
 
@@ -271,5 +401,263 @@ mod tests {
         assert!(json["data"]["cards"].is_array());
         assert!(json["data"]["archived_cards"].is_array());
         assert!(json["data"]["sprints"].is_array());
+    }
+
+    #[test]
+    fn test_lock_metadata_returns_result_not_panic() {
+        let store = JsonFileStore::new("/tmp/nonexistent.json");
+        let guard = store.lock_metadata();
+        assert!(guard.is_ok());
+        assert!(guard.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_lock_command_log_returns_result_not_panic() {
+        let store = JsonFileStore::new("/tmp/nonexistent.json");
+        let guard = store.lock_command_log();
+        assert!(guard.is_ok());
+    }
+
+    #[test]
+    fn test_command_schema_version_defaults_to_1_for_old_files() {
+        let json_str = r#"{
+            "version": 4,
+            "metadata": { "instance_id": "00000000-0000-0000-0000-000000000000", "saved_at": "2024-01-01T00:00:00Z" },
+            "data": { "boards": [] }
+        }"#;
+        let envelope: JsonEnvelope = serde_json::from_str(json_str).unwrap();
+        assert_eq!(envelope.command_schema_version, 1);
+    }
+
+    #[tokio::test]
+    async fn test_v3_file_loads_with_empty_command_defaults() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("v3.json");
+
+        let v3_content = json!({
+            "version": 3,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [],
+                "cards": [],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        tokio::fs::write(&file_path, v3_content.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (snapshot, _meta) = store.load().await.unwrap();
+
+        let loaded: serde_json::Value = serde_json::from_slice(&snapshot.data).unwrap();
+        assert!(loaded["boards"].is_array());
+
+        let (batches, cursor, _baseline) = store.get_command_log().unwrap();
+        assert!(batches.is_empty());
+        assert_eq!(cursor, 0);
+    }
+
+    #[tokio::test]
+    async fn test_v4_flat_commands_loaded_as_single_batch() {
+        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("v4_flat.json");
+
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "B".into(),
+            card_prefix: None,
+            position: 0,
+        }));
+        let flat_commands = serde_json::to_value(vec![cmd]).unwrap();
+
+        let v4_content = json!({
+            "version": 4,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [],
+                "cards": [],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            },
+            "commands": flat_commands,
+            "undo_cursor": 1
+        });
+        tokio::fs::write(&file_path, v4_content.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (_snapshot, _meta) = store.load().await.unwrap();
+
+        let (batches, cursor, _baseline) = store.get_command_log().unwrap();
+        assert_eq!(
+            batches.len(),
+            1,
+            "flat commands should be wrapped as one batch"
+        );
+        assert_eq!(batches[0].len(), 1);
+        assert_eq!(cursor, 1);
+    }
+
+    #[tokio::test]
+    async fn test_v5_batched_commands_loaded_correctly() {
+        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("v5.json");
+
+        let cmd1 = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "B1".into(),
+            card_prefix: None,
+            position: 0,
+        }));
+        let cmd2 = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "B2".into(),
+            card_prefix: None,
+            position: 1,
+        }));
+        let batched = serde_json::to_value(vec![vec![cmd1], vec![cmd2]]).unwrap();
+
+        let v5_content = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [],
+                "cards": [],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            },
+            "commands": batched,
+            "undo_cursor": 2,
+            "command_schema_version": 1
+        });
+        tokio::fs::write(&file_path, v5_content.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (_snapshot, _meta) = store.load().await.unwrap();
+
+        let (batches, cursor, _baseline) = store.get_command_log().unwrap();
+        assert_eq!(batches.len(), 2, "two separate batches should be preserved");
+        assert_eq!(cursor, 2);
+    }
+
+    #[tokio::test]
+    async fn test_load_rejects_unsupported_command_schema_version() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("future.json");
+
+        let envelope = json!({
+            "version": 5,
+            "metadata": { "instance_id": "00000000-0000-0000-0000-000000000000", "saved_at": "2020-01-01T00:00:00Z" },
+            "data": { "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [], "graph": { "cards": { "edges": [] } } },
+            "commands": [],
+            "undo_cursor": 0,
+            "command_schema_version": 99
+        });
+
+        tokio::fs::write(&file_path, serde_json::to_vec_pretty(&envelope).unwrap())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let result = store.load().await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("command schema version"),
+            "Error should mention command schema version, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_v5_save_reload_roundtrip_preserves_all_data() {
+        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("roundtrip.json");
+
+        let board_id = "550e8400-e29b-41d4-a716-446655440000";
+        let cmd1 = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "Batch1".into(),
+            card_prefix: None,
+            position: 1,
+        }));
+        let cmd2 = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "Batch2".into(),
+            card_prefix: None,
+            position: 2,
+        }));
+
+        let snapshot_data = json!({
+            "boards": [{"id": board_id, "name": "B1",
+                "task_sort_field": "Default", "task_sort_order": "Ascending",
+                "sprint_name_used_count": 0, "next_sprint_number": 1,
+                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                "sprint_names": [], "card_counter": 0, "position": 0}],
+            "columns": [],
+            "cards": [],
+            "archived_cards": [],
+            "sprints": [],
+            "graph": { "cards": { "edges": [] } }
+        });
+
+        let batched_cmds = serde_json::to_value(vec![vec![&cmd1], vec![&cmd2]]).unwrap();
+        let baseline_data = snapshot_data.clone();
+
+        let v5_content = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440001",
+                "saved_at": "2024-06-01T00:00:00Z"
+            },
+            "data": snapshot_data,
+            "commands": batched_cmds,
+            "undo_cursor": 2,
+            "command_schema_version": 1,
+            "baseline_data": baseline_data
+        });
+        tokio::fs::write(&file_path, v5_content.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (loaded_snapshot, _meta) = store.load().await.unwrap();
+
+        let (batches, cursor, loaded_baseline) = store.get_command_log().unwrap();
+        assert_eq!(batches.len(), 2, "two command batches should persist");
+        assert_eq!(cursor, 2, "undo cursor should persist");
+        assert!(
+            loaded_baseline.is_some(),
+            "baseline snapshot should persist"
+        );
+
+        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded_snapshot.data).unwrap();
+        assert_eq!(
+            loaded_data["boards"][0]["name"], "B1",
+            "snapshot data should roundtrip"
+        );
     }
 }

@@ -1,1368 +1,1589 @@
-use async_trait::async_trait;
-use kanban_persistence::{
-    PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot,
-};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Pool, Row, Sqlite, Transaction};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+use chrono::{DateTime, Utc};
+use kanban_core::graph::{Edge, Graph};
+use kanban_domain::command_store::CommandStore;
+use kanban_domain::commands::Command;
+use kanban_domain::data_store::DataStore;
+use kanban_domain::{
+    ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
+    Snapshot, Sprint, SprintLog,
+};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
+use sqlx::{Pool, Row, Sqlite};
 use uuid::Uuid;
 
-use crate::builders::{build_board, build_card, build_column, build_graph, build_sprint};
-use crate::helpers::{db_err, parse_datetime, parse_uuid, ser_err, SnapshotData, Table};
-use crate::upserts;
-
 const SCHEMA: &str = include_str!("schema.sql");
-const CURRENT_SCHEMA_VERSION: i32 = 2;
 
+/// SQLite-backed persistence store using sqlx connection pool.
 pub struct SqliteStore {
-    path: PathBuf,
-    instance_id: Uuid,
-    pool: tokio::sync::OnceCell<Pool<Sqlite>>,
-    last_known_metadata: tokio::sync::Mutex<Option<PersistenceMetadata>>,
+    pool: Pool<Sqlite>,
 }
 
+fn run<F: std::future::Future<Output = T>, T>(f: F) -> T {
+    let handle = tokio::runtime::Handle::current();
+    debug_assert!(
+        handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread,
+        "SqliteStore requires a multi-threaded Tokio runtime (e.g. #[tokio::main] or \
+         tokio::runtime::Runtime::new()). The current_thread runtime is not supported \
+         because synchronous DataStore methods need to block on async SQLite I/O."
+    );
+    tokio::task::block_in_place(|| handle.block_on(f))
+}
+
+fn db_err(e: sqlx::Error) -> KanbanError {
+    KanbanError::Database(e.to_string())
+}
+
+fn ser_err(msg: impl std::fmt::Display) -> KanbanError {
+    KanbanError::Serialization(msg.to_string())
+}
+
+fn p_uuid(s: &str) -> KanbanResult<Uuid> {
+    Uuid::parse_str(s).map_err(ser_err)
+}
+
+fn p_dt(s: &str) -> KanbanResult<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(s)
+        .map_err(ser_err)
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+fn p_enum<T: serde::de::DeserializeOwned>(s: &str, label: &str) -> KanbanResult<T> {
+    serde_json::from_value(serde_json::Value::String(s.to_owned()))
+        .map_err(|_| ser_err(format!("unknown {label} variant: {s}")))
+}
+
+fn fmt_dt(dt: &DateTime<Utc>) -> String {
+    dt.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
+}
+
+fn opt_dt(dt: &Option<DateTime<Utc>>) -> Option<String> {
+    dt.as_ref().map(fmt_dt)
+}
+
+// --- Row parsers ---
+
+fn row_to_board(
+    row: &SqliteRow,
+    sprint_names: Vec<String>,
+    sprint_counters: HashMap<String, u32>,
+) -> KanbanResult<Board> {
+    let id_str: String = row.try_get("id").map_err(db_err)?;
+    let active_sprint_id_str: Option<String> = row.try_get("active_sprint_id").map_err(db_err)?;
+    let completion_column_id_str: Option<String> =
+        row.try_get("completion_column_id").map_err(db_err)?;
+    let task_sort_field_str: String = row.try_get("task_sort_field").map_err(db_err)?;
+    let task_sort_order_str: String = row.try_get("task_sort_order").map_err(db_err)?;
+    let task_list_view_str: String = row.try_get("task_list_view").map_err(db_err)?;
+    let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
+    let updated_at_str: String = row.try_get("updated_at").map_err(db_err)?;
+    let sprint_duration_days_raw: Option<i32> =
+        row.try_get("sprint_duration_days").map_err(db_err)?;
+
+    Ok(Board {
+        id: p_uuid(&id_str)?,
+        name: row.try_get("name").map_err(db_err)?,
+        description: row.try_get("description").map_err(db_err)?,
+        sprint_prefix: row.try_get("sprint_prefix").map_err(db_err)?,
+        card_prefix: row.try_get("card_prefix").map_err(db_err)?,
+        task_sort_field: p_enum(&task_sort_field_str, "task_sort_field")?,
+        task_sort_order: p_enum(&task_sort_order_str, "task_sort_order")?,
+        sprint_duration_days: sprint_duration_days_raw.map(|v| v as u32),
+        sprint_names,
+        sprint_name_used_count: row
+            .try_get::<i32, _>("sprint_name_used_count")
+            .map_err(db_err)? as usize,
+        next_sprint_number: row
+            .try_get::<i32, _>("next_sprint_number")
+            .map_err(db_err)? as u32,
+        active_sprint_id: active_sprint_id_str.as_deref().map(p_uuid).transpose()?,
+        task_list_view: p_enum(&task_list_view_str, "task_list_view")?,
+        card_counter: row.try_get::<i32, _>("card_counter").map_err(db_err)? as u32,
+        sprint_counters,
+        completion_column_id: completion_column_id_str
+            .as_deref()
+            .map(p_uuid)
+            .transpose()?,
+        position: row.try_get::<i32, _>("position").map_err(db_err)?,
+        created_at: p_dt(&created_at_str)?,
+        updated_at: p_dt(&updated_at_str)?,
+    })
+}
+
+fn row_to_column(row: &SqliteRow) -> KanbanResult<Column> {
+    let id_str: String = row.try_get("id").map_err(db_err)?;
+    let board_id_str: String = row.try_get("board_id").map_err(db_err)?;
+    let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
+    let updated_at_str: String = row.try_get("updated_at").map_err(db_err)?;
+
+    Ok(Column {
+        id: p_uuid(&id_str)?,
+        board_id: p_uuid(&board_id_str)?,
+        name: row.try_get("name").map_err(db_err)?,
+        position: row.try_get("position").map_err(db_err)?,
+        wip_limit: row.try_get("wip_limit").map_err(db_err)?,
+        created_at: p_dt(&created_at_str)?,
+        updated_at: p_dt(&updated_at_str)?,
+    })
+}
+
+fn row_to_card(row: &SqliteRow, sprint_logs: Vec<SprintLog>) -> KanbanResult<Card> {
+    let id_str: String = row.try_get("id").map_err(db_err)?;
+    let column_id_str: String = row.try_get("column_id").map_err(db_err)?;
+    let sprint_id_str: Option<String> = row.try_get("sprint_id").map_err(db_err)?;
+    let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
+    let updated_at_str: String = row.try_get("updated_at").map_err(db_err)?;
+    let completed_at_str: Option<String> = row.try_get("completed_at").map_err(db_err)?;
+    let due_date_str: Option<String> = row.try_get("due_date").map_err(db_err)?;
+    let priority_str: String = row.try_get("priority").map_err(db_err)?;
+    let status_str: String = row.try_get("status").map_err(db_err)?;
+    let points_raw: Option<i32> = row.try_get("points").map_err(db_err)?;
+
+    Ok(Card {
+        id: p_uuid(&id_str)?,
+        column_id: p_uuid(&column_id_str)?,
+        title: row.try_get("title").map_err(db_err)?,
+        description: row.try_get("description").map_err(db_err)?,
+        priority: p_enum(&priority_str, "priority")?,
+        status: p_enum(&status_str, "status")?,
+        position: row.try_get("position").map_err(db_err)?,
+        due_date: due_date_str.as_deref().map(p_dt).transpose()?,
+        points: points_raw
+            .map(|v| u8::try_from(v).map_err(|_| ser_err(format!("points {v} out of range"))))
+            .transpose()?,
+        card_number: row.try_get::<i32, _>("card_number").map_err(db_err)? as u32,
+        sprint_id: sprint_id_str.as_deref().map(p_uuid).transpose()?,
+        created_at: p_dt(&created_at_str)?,
+        updated_at: p_dt(&updated_at_str)?,
+        completed_at: completed_at_str.as_deref().map(p_dt).transpose()?,
+        sprint_logs,
+    })
+}
+
+fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
+    let id_str: String = row.try_get("id").map_err(db_err)?;
+    let board_id_str: String = row.try_get("board_id").map_err(db_err)?;
+    let status_str: String = row.try_get("status").map_err(db_err)?;
+    let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
+    let updated_at_str: String = row.try_get("updated_at").map_err(db_err)?;
+    let start_date_str: Option<String> = row.try_get("start_date").map_err(db_err)?;
+    let end_date_str: Option<String> = row.try_get("end_date").map_err(db_err)?;
+    let name_index_raw: Option<i32> = row.try_get("name_index").map_err(db_err)?;
+
+    Ok(Sprint {
+        id: p_uuid(&id_str)?,
+        board_id: p_uuid(&board_id_str)?,
+        sprint_number: row.try_get::<i32, _>("sprint_number").map_err(db_err)? as u32,
+        name_index: name_index_raw.map(|v| v as usize),
+        prefix: row.try_get("prefix").map_err(db_err)?,
+        card_prefix: row.try_get("card_prefix").map_err(db_err)?,
+        status: p_enum(&status_str, "sprint status")?,
+        start_date: start_date_str.as_deref().map(p_dt).transpose()?,
+        end_date: end_date_str.as_deref().map(p_dt).transpose()?,
+        created_at: p_dt(&created_at_str)?,
+        updated_at: p_dt(&updated_at_str)?,
+    })
+}
+
+fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
+    let mut graph: Graph<CardEdgeType> = Graph::new();
+    for row in rows {
+        let source_str: String = row.try_get("source_id").map_err(db_err)?;
+        let target_str: String = row.try_get("target_id").map_err(db_err)?;
+        let edge_type_str: String = row.try_get("edge_type").map_err(db_err)?;
+        let direction_str: String = row.try_get("direction").map_err(db_err)?;
+        let weight: Option<f64> = row.try_get("weight").map_err(db_err)?;
+        let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
+        let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
+
+        graph.add_edge(Edge {
+            source: p_uuid(&source_str)?,
+            target: p_uuid(&target_str)?,
+            edge_type: p_enum(&edge_type_str, "edge_type")?,
+            direction: p_enum(&direction_str, "edge direction")?,
+            weight: weight.map(|w| w as f32),
+            created_at: p_dt(&created_at_str)?,
+            archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
+        });
+    }
+    Ok(DependencyGraph { cards: graph })
+}
+
+fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {
+    let sprint_id_str: String = row.try_get("sprint_id").map_err(db_err)?;
+    let started_at_str: String = row.try_get("started_at").map_err(db_err)?;
+    let ended_at_str: Option<String> = row.try_get("ended_at").map_err(db_err)?;
+
+    Ok(SprintLog {
+        sprint_id: p_uuid(&sprint_id_str)?,
+        sprint_number: row.try_get::<i32, _>("sprint_number").map_err(db_err)? as u32,
+        sprint_name: row.try_get("sprint_name").map_err(db_err)?,
+        started_at: p_dt(&started_at_str)?,
+        ended_at: ended_at_str.as_deref().map(p_dt).transpose()?,
+        status: row.try_get("status").map_err(db_err)?,
+    })
+}
+
+// --- SqliteStore ---
+
 impl SqliteStore {
-    pub fn new(path: impl AsRef<Path>) -> Self {
-        Self {
-            path: path.as_ref().to_path_buf(),
-            instance_id: Uuid::new_v4(),
-            pool: tokio::sync::OnceCell::new(),
-            last_known_metadata: tokio::sync::Mutex::new(None),
+    pub async fn open(path: impl AsRef<Path>) -> KanbanResult<Self> {
+        let handle = tokio::runtime::Handle::current();
+        if handle.runtime_flavor() != tokio::runtime::RuntimeFlavor::MultiThread {
+            return Err(KanbanError::Database(
+                "SqliteStore requires a multi-threaded Tokio runtime (e.g. #[tokio::main] or \
+                 tokio::runtime::Runtime::new()). The current_thread runtime is not supported \
+                 because synchronous DataStore methods need to block on async SQLite I/O."
+                    .to_string(),
+            ));
         }
-    }
 
-    pub fn with_instance_id(path: impl AsRef<Path>, instance_id: Uuid) -> Self {
-        Self {
-            path: path.as_ref().to_path_buf(),
-            instance_id,
-            pool: tokio::sync::OnceCell::new(),
-            last_known_metadata: tokio::sync::Mutex::new(None),
-        }
-    }
+        let options = SqliteConnectOptions::new()
+            .filename(path)
+            .create_if_missing(true)
+            .foreign_keys(true)
+            .pragma("journal_mode", "wal");
 
-    pub fn instance_id(&self) -> Uuid {
-        self.instance_id
-    }
-
-    async fn get_pool(&self) -> PersistenceResult<&Pool<Sqlite>> {
-        self.pool
-            .get_or_try_init(|| async {
-                let options = SqliteConnectOptions::new()
-                    .filename(&self.path)
-                    .create_if_missing(true)
-                    .foreign_keys(true)
-                    .pragma("journal_mode", "wal");
-
-                let pool = SqlitePoolOptions::new()
-                    .max_connections(2)
-                    .connect_with(options)
-                    .await
-                    .map_err(|e| PersistenceError::Database(e.to_string()))?;
-
-                sqlx::raw_sql(SCHEMA)
-                    .execute(&pool)
-                    .await
-                    .map_err(|e| PersistenceError::Database(e.to_string()))?;
-
-                migrate(&pool).await?;
-
-                Ok(pool)
-            })
+        let pool = SqlitePoolOptions::new()
+            .max_connections(2)
+            .connect_with(options)
             .await
+            .map_err(|e| KanbanError::Database(e.to_string()))?;
+
+        sqlx::raw_sql(SCHEMA)
+            .execute(&pool)
+            .await
+            .map_err(|e| KanbanError::Database(e.to_string()))?;
+
+        Self::migrate(&pool).await?;
+
+        Ok(Self { pool })
     }
 
-    async fn load_current_state(
-        &self,
-        pool: &Pool<Sqlite>,
-    ) -> PersistenceResult<(SnapshotData, PersistenceMetadata)> {
-        let mut tx = pool.begin().await.map_err(db_err)?;
+    async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        let has_snapshot_col: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('command_log') WHERE name = 'snapshot_data'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
 
-        let meta_row: Option<(String, String)> =
-            sqlx::query_as("SELECT instance_id, saved_at FROM metadata WHERE id = 1")
-                .fetch_optional(&mut *tx)
+        if !has_snapshot_col {
+            sqlx::raw_sql("ALTER TABLE command_log ADD COLUMN snapshot_data BLOB")
+                .execute(pool)
                 .await
                 .map_err(db_err)?;
-
-        let metadata = if let Some((instance_id_str, saved_at_str)) = meta_row {
-            PersistenceMetadata {
-                instance_id: parse_uuid(&instance_id_str)?,
-                saved_at: parse_datetime(&saved_at_str)?,
-            }
-        } else {
-            PersistenceMetadata::new(self.instance_id)
-        };
-
-        let board_rows = sqlx::query(
-            "SELECT id, name, description, sprint_prefix, card_prefix, task_sort_field,
-                    task_sort_order, sprint_duration_days, sprint_name_used_count,
-                    next_sprint_number, active_sprint_id, task_list_view,
-                    COALESCE(card_counter, 1) as card_counter,
-                    completion_column_id, created_at, updated_at FROM boards",
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
-
-        let sprint_name_rows = sqlx::query(
-            "SELECT board_id, position, name FROM board_sprint_names ORDER BY board_id, position",
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
-
-        let mut sprint_names_map: HashMap<String, Vec<String>> = HashMap::new();
-        for row in &sprint_name_rows {
-            let board_id: String = row.try_get("board_id").map_err(db_err)?;
-            let name: String = row.try_get("name").map_err(db_err)?;
-            sprint_names_map.entry(board_id).or_default().push(name);
         }
 
-        let sprint_counter_rows =
-            sqlx::query("SELECT board_id, prefix, counter FROM board_sprint_counters")
-                .fetch_all(&mut *tx)
+        let has_position_col: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('boards') WHERE name = 'position'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+
+        if !has_position_col {
+            sqlx::raw_sql("ALTER TABLE boards ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+                .execute(pool)
                 .await
                 .map_err(db_err)?;
-
-        let mut sprint_counters_map: HashMap<String, HashMap<String, u32>> = HashMap::new();
-        for row in &sprint_counter_rows {
-            let board_id: String = row.try_get("board_id").map_err(db_err)?;
-            let prefix: String = row.try_get("prefix").map_err(db_err)?;
-            let counter: i32 = row.try_get("counter").map_err(db_err)?;
-            sprint_counters_map
-                .entry(board_id)
-                .or_default()
-                .insert(prefix, counter as u32);
         }
 
-        let mut boards = Vec::with_capacity(board_rows.len());
-        for row in &board_rows {
-            let id_str: String = row.try_get("id").map_err(db_err)?;
-            let card_counter: i32 = row.try_get("card_counter").map_err(db_err)?;
-            boards.push(build_board(
-                row,
-                sprint_names_map.remove(&id_str).unwrap_or_default(),
-                card_counter as u32,
-                sprint_counters_map.remove(&id_str).unwrap_or_default(),
-            )?);
-        }
-
-        let columns: Vec<serde_json::Value> = sqlx::query(
-            "SELECT id, board_id, name, position, wip_limit, created_at, updated_at FROM columns",
+        let has_card_counter_col: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('boards') WHERE name = 'card_counter'",
         )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?
-        .iter()
-        .map(build_column)
-        .collect::<PersistenceResult<Vec<_>>>()?;
-
-        let sprints: Vec<serde_json::Value> = sqlx::query(
-            "SELECT id, board_id, sprint_number, name_index, prefix, card_prefix, status,
-                    start_date, end_date, created_at, updated_at FROM sprints",
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?
-        .iter()
-        .map(build_sprint)
-        .collect::<PersistenceResult<Vec<_>>>()?;
-
-        let card_rows = sqlx::query(
-            "SELECT id, column_id, title, description, priority, status, position, due_date,
-                    points, card_number, sprint_id, created_at,
-                    updated_at, completed_at FROM cards
-             ORDER BY position ASC, created_at ASC",
-        )
-        .fetch_all(&mut *tx)
+        .fetch_one(pool)
         .await
         .map_err(db_err)?;
 
-        let sprint_log_rows = sqlx::query(
-            "SELECT card_id, sprint_id, sprint_number, sprint_name, started_at, ended_at, status
-             FROM sprint_logs ORDER BY card_id, id",
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
-
-        let mut sprint_logs_map: HashMap<String, Vec<kanban_domain::SprintLog>> = HashMap::new();
-        for row in &sprint_log_rows {
-            let card_id: String = row.try_get("card_id").map_err(db_err)?;
-            let sprint_id_str: String = row.try_get("sprint_id").map_err(db_err)?;
-            let sprint_number: i32 = row.try_get("sprint_number").map_err(db_err)?;
-            let sprint_name: Option<String> = row.try_get("sprint_name").map_err(db_err)?;
-            let started_at_str: String = row.try_get("started_at").map_err(db_err)?;
-            let ended_at_str: Option<String> = row.try_get("ended_at").map_err(db_err)?;
-            let status: String = row.try_get("status").map_err(db_err)?;
-
-            sprint_logs_map
-                .entry(card_id)
-                .or_default()
-                .push(kanban_domain::SprintLog {
-                    sprint_id: parse_uuid(&sprint_id_str)?,
-                    sprint_number: sprint_number as u32,
-                    sprint_name,
-                    started_at: parse_datetime(&started_at_str)?,
-                    ended_at: ended_at_str.as_deref().map(parse_datetime).transpose()?,
-                    status,
-                });
-        }
-
-        let mut all_cards_map: HashMap<String, serde_json::Value> = HashMap::new();
-        for row in &card_rows {
-            let id_str: String = row.try_get("id").map_err(db_err)?;
-            let logs = sprint_logs_map.remove(&id_str).unwrap_or_default();
-            let card_value = build_card(row, logs)?;
-            all_cards_map.insert(id_str, card_value);
-        }
-
-        let archived_rows = sqlx::query(
-            "SELECT card_id, archived_at, original_column_id, original_position
-             FROM archived_cards",
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
-
-        let mut archived_card_ids = std::collections::HashSet::new();
-        let mut archived_cards = Vec::with_capacity(archived_rows.len());
-        for row in &archived_rows {
-            let card_id: String = row.try_get("card_id").map_err(db_err)?;
-            let archived_at: String = row.try_get("archived_at").map_err(db_err)?;
-            let original_column_id: String = row.try_get("original_column_id").map_err(db_err)?;
-            let original_position: i32 = row.try_get("original_position").map_err(db_err)?;
-
-            if let Some(card_value) = all_cards_map.get(&card_id) {
-                archived_cards.push(serde_json::json!({
-                    "card": card_value,
-                    "archived_at": archived_at,
-                    "original_column_id": original_column_id,
-                    "original_position": original_position,
-                }));
-                archived_card_ids.insert(card_id);
-            }
-        }
-
-        let cards: Vec<serde_json::Value> = card_rows
-            .iter()
-            .filter_map(|row| {
-                let id_str: String = row.try_get("id").ok()?;
-                if archived_card_ids.contains(&id_str) {
-                    None
-                } else {
-                    all_cards_map.remove(&id_str)
-                }
-            })
-            .collect();
-
-        let edge_rows = sqlx::query(
-            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
-             FROM card_edges",
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
-
-        let graph = build_graph(&edge_rows)?;
-
-        Ok((
-            SnapshotData {
-                boards,
-                columns,
-                cards,
-                archived_cards,
-                sprints,
-                graph,
-            },
-            metadata,
-        ))
-    }
-
-    async fn sync_table<F>(
-        &self,
-        tx: &mut Transaction<'_, Sqlite>,
-        table: Table,
-        incoming: &[serde_json::Value],
-        id_extractor: F,
-    ) -> PersistenceResult<()>
-    where
-        F: Fn(&serde_json::Value) -> Option<String>,
-    {
-        let incoming_ids: Vec<String> = incoming.iter().filter_map(&id_extractor).collect();
-
-        if incoming_ids.is_empty() {
-            let sql = format!("DELETE FROM {}", table.table_name());
-            sqlx::query(&sql).execute(&mut **tx).await.map_err(db_err)?;
-        } else {
-            let placeholders: String = incoming_ids
-                .iter()
-                .map(|_| "?")
-                .collect::<Vec<_>>()
-                .join(", ");
-            let sql = format!(
-                "DELETE FROM {} WHERE {} NOT IN ({})",
-                table.table_name(),
-                table.id_column(),
-                placeholders,
-            );
-            let mut query = sqlx::query(&sql);
-            for id in &incoming_ids {
-                query = query.bind(id);
-            }
-            query.execute(&mut **tx).await.map_err(db_err)?;
+        if !has_card_counter_col {
+            sqlx::raw_sql("ALTER TABLE boards ADD COLUMN card_counter INTEGER NOT NULL DEFAULT 1")
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
         }
 
         Ok(())
     }
 
-    async fn lock_metadata(&self) -> tokio::sync::MutexGuard<'_, Option<PersistenceMetadata>> {
-        self.last_known_metadata.lock().await
-    }
-}
-
-async fn migrate(pool: &Pool<Sqlite>) -> PersistenceResult<()> {
-    // Fetch the stored schema version, if the metadata row exists.
-    // None means the database was just created and is already at the current schema.
-    let stored_version: Option<i32> =
-        sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
-            .fetch_optional(pool)
-            .await
-            .map_err(db_err)?;
-
-    let version = match stored_version {
-        // Row not yet present → brand-new database, already at current schema
-        None => return Ok(()),
-        Some(v) => v,
-    };
-
-    if version > CURRENT_SCHEMA_VERSION {
-        return Err(PersistenceError::Database(format!(
-            "database schema version ({version}) is newer than supported ({CURRENT_SCHEMA_VERSION})"
-        )));
+    pub fn pool(&self) -> &Pool<Sqlite> {
+        &self.pool
     }
 
-    // Version 0 → 1: initial schema (handled by CREATE IF NOT EXISTS above)
-
-    if version < 2 {
-        // Add card_counter column to boards if it doesn't already exist
-        // (new databases already have it from schema.sql; existing v1 databases do not)
-        let _ =
-            sqlx::query("ALTER TABLE boards ADD COLUMN card_counter INTEGER NOT NULL DEFAULT 1")
-                .execute(pool)
-                .await;
-
-        // Populate card_counter from board_prefix_counters for boards that have a card_prefix
-        let boards: Vec<(String, Option<String>)> =
-            sqlx::query_as("SELECT id, card_prefix FROM boards")
-                .fetch_all(pool)
+    async fn fetch_board_aux(
+        &self,
+        board_id: &str,
+    ) -> KanbanResult<(Vec<String>, HashMap<String, u32>)> {
+        let name_rows =
+            sqlx::query("SELECT name FROM board_sprint_names WHERE board_id = ? ORDER BY position")
+                .bind(board_id)
+                .fetch_all(&self.pool)
                 .await
                 .map_err(db_err)?;
-
-        for (board_id, card_prefix) in &boards {
-            // Try to get the counter from board_prefix_counters matching card_prefix
-            let counter: Option<i32> = if let Some(prefix) = card_prefix {
-                sqlx::query_scalar(
-                    "SELECT counter FROM board_prefix_counters WHERE board_id = ? AND prefix = ?",
-                )
-                .bind(board_id)
-                .bind(prefix)
-                .fetch_optional(pool)
-                .await
-                .map_err(db_err)?
-            } else {
-                None
-            };
-
-            // Fall back to deriving from max card_number of cards in this board's columns
-            let card_counter: i32 = if let Some(c) = counter {
-                c
-            } else {
-                let max: Option<i32> = sqlx::query_scalar(
-                    "SELECT COALESCE(MAX(c.card_number) + 1, 1) FROM cards c \
-                     JOIN columns col ON c.column_id = col.id WHERE col.board_id = ?",
-                )
-                .bind(board_id)
-                .fetch_optional(pool)
-                .await
-                .map_err(db_err)?
-                .flatten();
-                max.unwrap_or(1)
-            };
-
-            sqlx::query("UPDATE boards SET card_counter = ? WHERE id = ?")
-                .bind(card_counter)
-                .bind(board_id)
-                .execute(pool)
-                .await
-                .map_err(db_err)?;
-        }
-
-        // Drop old columns from cards (SQLite 3.35+)
-        let _ = sqlx::query("ALTER TABLE cards DROP COLUMN assigned_prefix")
-            .execute(pool)
-            .await;
-        let _ = sqlx::query("ALTER TABLE cards DROP COLUMN card_prefix")
-            .execute(pool)
-            .await;
-
-        // Drop the now-unused board_prefix_counters table
-        sqlx::query("DROP TABLE IF EXISTS board_prefix_counters")
-            .execute(pool)
-            .await
-            .map_err(db_err)?;
-
-        // Bump schema version
-        sqlx::query("UPDATE metadata SET schema_version = 2 WHERE id = 1")
-            .execute(pool)
-            .await
-            .map_err(db_err)?;
-    }
-
-    Ok(())
-}
-
-#[async_trait]
-impl PersistenceStore for SqliteStore {
-    async fn save(&self, mut snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
-        let pool = self.get_pool().await?;
-
-        snapshot.metadata.instance_id = self.instance_id;
-        snapshot.metadata.saved_at = chrono::Utc::now();
-
-        let data: SnapshotData = serde_json::from_slice(&snapshot.data).map_err(ser_err)?;
-
-        let mut tx = pool.begin().await.map_err(db_err)?;
-
-        // Conflict detection inside transaction
-        let existing_meta: Option<(String, String)> =
-            sqlx::query_as("SELECT instance_id, saved_at FROM metadata WHERE id = 1")
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(db_err)?;
-
-        if let Some((db_instance_id, db_saved_at)) = existing_meta {
-            let last_known = {
-                let guard = self.lock_metadata().await;
-                guard.clone()
-            };
-            if let Some(ref last_known) = last_known {
-                let db_instance = parse_uuid(&db_instance_id)?;
-                let db_time = parse_datetime(&db_saved_at)?;
-
-                if db_instance != last_known.instance_id || db_time != last_known.saved_at {
-                    return Err(PersistenceError::ConflictDetected {
-                        path: self.path.to_string_lossy().to_string(),
-                        source: None,
-                    });
-                }
-            }
-        }
-
-        // Sync deletions (reverse FK order)
-        self.sync_table(&mut tx, Table::ArchivedCards, &data.archived_cards, |v| {
-            v["card"]["id"].as_str().map(String::from)
-        })
-        .await?;
-
-        let mut all_card_refs: Vec<serde_json::Value> = data
-            .cards
+        let sprint_names: Vec<String> = name_rows
             .iter()
-            .map(|c| serde_json::json!({"id": c["id"]}))
-            .collect();
-        for archived in &data.archived_cards {
-            if let Some(id) = archived.get("card").and_then(|c| c.get("id")) {
-                all_card_refs.push(serde_json::json!({"id": id}));
-            }
-        }
-        self.sync_table(&mut tx, Table::Cards, &all_card_refs, |v| {
-            v["id"].as_str().map(String::from)
-        })
-        .await?;
+            .map(|r| r.try_get("name").map_err(db_err))
+            .collect::<KanbanResult<_>>()?;
 
-        self.sync_table(&mut tx, Table::Sprints, &data.sprints, |v| {
-            v["id"].as_str().map(String::from)
-        })
-        .await?;
-        self.sync_table(&mut tx, Table::Columns, &data.columns, |v| {
-            v["id"].as_str().map(String::from)
-        })
-        .await?;
-        self.sync_table(&mut tx, Table::Boards, &data.boards, |v| {
-            v["id"].as_str().map(String::from)
-        })
-        .await?;
-
-        // Upserts (parent-first FK order)
-        for board in &data.boards {
-            upserts::upsert_board(&mut tx, board).await?;
-        }
-        for column in &data.columns {
-            upserts::upsert_column(&mut tx, column).await?;
-        }
-        for sprint in &data.sprints {
-            upserts::upsert_sprint(&mut tx, sprint).await?;
-        }
-        for card in &data.cards {
-            upserts::upsert_card(&mut tx, card).await?;
-        }
-        for archived in &data.archived_cards {
-            upserts::upsert_archived_card(&mut tx, archived).await?;
+        let counter_rows =
+            sqlx::query("SELECT prefix, counter FROM board_sprint_counters WHERE board_id = ?")
+                .bind(board_id)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(db_err)?;
+        let mut sprint_counters = HashMap::new();
+        for row in &counter_rows {
+            let prefix: String = row.try_get("prefix").map_err(db_err)?;
+            let counter: i32 = row.try_get("counter").map_err(db_err)?;
+            sprint_counters.insert(prefix, counter as u32);
         }
 
-        upserts::upsert_edges(&mut tx, &data.graph).await?;
+        Ok((sprint_names, sprint_counters))
+    }
 
-        // Update metadata
-        let saved_at_str = snapshot.metadata.saved_at.to_rfc3339();
+    async fn write_board_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        board: &Board,
+    ) -> KanbanResult<()> {
+        let id = board.id.to_string();
+
         sqlx::query(
-            "INSERT INTO metadata (id, instance_id, saved_at, schema_version)
-             VALUES (1, ?, ?, ?)
+            "INSERT INTO boards (id, name, description, sprint_prefix, card_prefix,
+                task_sort_field, task_sort_order, sprint_duration_days,
+                sprint_name_used_count, next_sprint_number, active_sprint_id,
+                task_list_view, card_counter, completion_column_id, position,
+                created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
-                instance_id = excluded.instance_id,
-                saved_at = excluded.saved_at",
+                name=excluded.name, description=excluded.description,
+                sprint_prefix=excluded.sprint_prefix, card_prefix=excluded.card_prefix,
+                task_sort_field=excluded.task_sort_field, task_sort_order=excluded.task_sort_order,
+                sprint_duration_days=excluded.sprint_duration_days,
+                sprint_name_used_count=excluded.sprint_name_used_count,
+                next_sprint_number=excluded.next_sprint_number,
+                active_sprint_id=excluded.active_sprint_id,
+                task_list_view=excluded.task_list_view, card_counter=excluded.card_counter,
+                completion_column_id=excluded.completion_column_id,
+                position=excluded.position,
+                updated_at=excluded.updated_at",
         )
-        .bind(self.instance_id.to_string())
-        .bind(&saved_at_str)
-        .bind(CURRENT_SCHEMA_VERSION)
-        .execute(&mut *tx)
+        .bind(&id)
+        .bind(&board.name)
+        .bind(&board.description)
+        .bind(&board.sprint_prefix)
+        .bind(&board.card_prefix)
+        .bind(format!("{:?}", board.task_sort_field))
+        .bind(format!("{:?}", board.task_sort_order))
+        .bind(board.sprint_duration_days.map(|v| v as i32))
+        .bind(board.sprint_name_used_count as i32)
+        .bind(board.next_sprint_number as i32)
+        .bind(board.active_sprint_id.map(|id| id.to_string()))
+        .bind(format!("{:?}", board.task_list_view))
+        .bind(board.card_counter as i32)
+        .bind(board.completion_column_id.map(|id| id.to_string()))
+        .bind(board.position)
+        .bind(fmt_dt(&board.created_at))
+        .bind(fmt_dt(&board.updated_at))
+        .execute(&mut *conn)
         .await
         .map_err(db_err)?;
 
+        sqlx::query("DELETE FROM board_sprint_names WHERE board_id = ?")
+            .bind(&id)
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        for (i, name) in board.sprint_names.iter().enumerate() {
+            sqlx::query(
+                "INSERT INTO board_sprint_names (board_id, position, name) VALUES (?, ?, ?)",
+            )
+            .bind(&id)
+            .bind(i as i32)
+            .bind(name)
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        }
+
+        sqlx::query("DELETE FROM board_sprint_counters WHERE board_id = ?")
+            .bind(&id)
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        for (prefix, counter) in &board.sprint_counters {
+            sqlx::query(
+                "INSERT INTO board_sprint_counters (board_id, prefix, counter) VALUES (?, ?, ?)",
+            )
+            .bind(&id)
+            .bind(prefix)
+            .bind(*counter as i32)
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        }
+
+        Ok(())
+    }
+
+    async fn write_board_async(&self, board: &Board) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        Self::write_board_with_conn(&mut tx, board).await?;
         tx.commit().await.map_err(db_err)?;
+        Ok(())
+    }
 
-        // If the process dies between tx.commit() and this cache update,
-        // the in-memory metadata goes stale. This self-heals on next app
-        // start because load() re-reads metadata from the database.
-        {
-            let mut guard = self.lock_metadata().await;
-            *guard = Some(snapshot.metadata.clone());
+    async fn fetch_sprint_logs_for_card(&self, card_id: &str) -> KanbanResult<Vec<SprintLog>> {
+        let rows = sqlx::query(
+            "SELECT sprint_id, sprint_number, sprint_name, started_at, ended_at, status
+             FROM sprint_logs WHERE card_id = ? ORDER BY id",
+        )
+        .bind(card_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
+        rows.iter().map(row_to_sprint_log).collect()
+    }
+
+    async fn write_card_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        card: &Card,
+    ) -> KanbanResult<()> {
+        let id = card.id.to_string();
+
+        sqlx::query(
+            "INSERT INTO cards (id, column_id, title, description, priority, status, position,
+                due_date, points, card_number, sprint_id, created_at, updated_at, completed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                column_id=excluded.column_id, title=excluded.title,
+                description=excluded.description, priority=excluded.priority,
+                status=excluded.status, position=excluded.position,
+                due_date=excluded.due_date, points=excluded.points,
+                card_number=excluded.card_number, sprint_id=excluded.sprint_id,
+                updated_at=excluded.updated_at, completed_at=excluded.completed_at",
+        )
+        .bind(&id)
+        .bind(card.column_id.to_string())
+        .bind(&card.title)
+        .bind(&card.description)
+        .bind(format!("{:?}", card.priority))
+        .bind(format!("{:?}", card.status))
+        .bind(card.position)
+        .bind(opt_dt(&card.due_date))
+        .bind(card.points.map(|v| v as i32))
+        .bind(card.card_number as i32)
+        .bind(card.sprint_id.map(|id| id.to_string()))
+        .bind(fmt_dt(&card.created_at))
+        .bind(fmt_dt(&card.updated_at))
+        .bind(opt_dt(&card.completed_at))
+        .execute(&mut *conn)
+        .await
+        .map_err(db_err)?;
+
+        sqlx::query("DELETE FROM sprint_logs WHERE card_id = ?")
+            .bind(&id)
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        for log in &card.sprint_logs {
+            sqlx::query(
+                "INSERT INTO sprint_logs (card_id, sprint_id, sprint_number, sprint_name,
+                    started_at, ended_at, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&id)
+            .bind(log.sprint_id.to_string())
+            .bind(log.sprint_number as i32)
+            .bind(&log.sprint_name)
+            .bind(fmt_dt(&log.started_at))
+            .bind(opt_dt(&log.ended_at))
+            .bind(&log.status)
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
         }
 
-        tracing::info!("Saved to SQLite database at {}", self.path.display());
-
-        Ok(snapshot.metadata)
+        Ok(())
     }
 
-    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
-        let pool = self.get_pool().await?;
+    async fn write_card_async(&self, card: &Card) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        Self::write_card_with_conn(&mut tx, card).await?;
+        tx.commit().await.map_err(db_err)?;
+        Ok(())
+    }
 
-        let (data, metadata) = self.load_current_state(pool).await?;
-        let data_bytes = serde_json::to_vec(&data).map_err(ser_err)?;
+    async fn fetch_sprint_logs_batch(
+        &self,
+        card_ids: &[String],
+    ) -> KanbanResult<HashMap<String, Vec<SprintLog>>> {
+        if card_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let placeholders = card_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT card_id, sprint_id, sprint_number, sprint_name, started_at, ended_at, status
+             FROM sprint_logs WHERE card_id IN ({placeholders}) ORDER BY id"
+        );
+        let mut query = sqlx::query(&sql);
+        for id in card_ids {
+            query = query.bind(id);
+        }
+        let rows = query.fetch_all(&self.pool).await.map_err(db_err)?;
+        let mut map: HashMap<String, Vec<SprintLog>> = HashMap::new();
+        for row in &rows {
+            let card_id: String = row.try_get("card_id").map_err(db_err)?;
+            let log = row_to_sprint_log(row)?;
+            map.entry(card_id).or_default().push(log);
+        }
+        Ok(map)
+    }
 
-        let snapshot = StoreSnapshot {
-            data: data_bytes,
-            metadata: metadata.clone(),
-        };
+    async fn fetch_cards_with_filter(
+        &self,
+        where_clause: &str,
+        binds: &[String],
+    ) -> KanbanResult<Vec<Card>> {
+        let sql = format!(
+            "SELECT id, column_id, title, description, priority, status, position,
+                    due_date, points, card_number, sprint_id, created_at, updated_at, completed_at
+             FROM cards WHERE id NOT IN (SELECT card_id FROM archived_cards) {}
+             ORDER BY position ASC, created_at ASC",
+            where_clause
+        );
+        let mut query = sqlx::query(&sql);
+        for b in binds {
+            query = query.bind(b);
+        }
+        let rows = query.fetch_all(&self.pool).await.map_err(db_err)?;
 
-        {
-            let mut guard = self.lock_metadata().await;
-            *guard = Some(metadata.clone());
+        let card_ids: Vec<String> = rows
+            .iter()
+            .map(|r| r.try_get("id").map_err(db_err))
+            .collect::<KanbanResult<_>>()?;
+        let mut logs_map = self.fetch_sprint_logs_batch(&card_ids).await?;
+
+        let mut cards = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let id_str: String = row.try_get("id").map_err(db_err)?;
+            let logs = logs_map.remove(&id_str).unwrap_or_default();
+            cards.push(row_to_card(row, logs)?);
+        }
+        Ok(cards)
+    }
+
+    async fn get_graph_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+    ) -> KanbanResult<DependencyGraph> {
+        let rows = sqlx::query(
+            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
+             FROM card_edges",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db_err)?;
+        rows_to_graph(&rows)
+    }
+
+    async fn modify_graph_async(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        let mut graph = Self::get_graph_with_conn(&mut tx).await?;
+        f(&mut graph)?;
+        Self::write_graph_with_conn(&mut tx, &graph).await?;
+        tx.commit().await.map_err(db_err)?;
+        Ok(())
+    }
+
+    async fn write_graph_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        graph: &DependencyGraph,
+    ) -> KanbanResult<()> {
+        sqlx::query("DELETE FROM card_edges")
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+
+        for edge in graph.cards.edges() {
+            sqlx::query(
+                "INSERT INTO card_edges
+                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(edge.source.to_string())
+            .bind(edge.target.to_string())
+            .bind(format!("{:?}", edge.edge_type))
+            .bind(format!("{:?}", edge.direction))
+            .bind(edge.weight.map(|w| w as f64))
+            .bind(fmt_dt(&edge.created_at))
+            .bind(opt_dt(&edge.archived_at))
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
         }
 
-        tracing::info!("Loaded from SQLite database at {}", self.path.display());
-
-        Ok((snapshot, metadata))
+        Ok(())
     }
 
-    async fn exists(&self) -> bool {
-        self.path.exists()
+    async fn write_graph_async(&self, graph: &DependencyGraph) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        Self::write_graph_with_conn(&mut tx, graph).await?;
+        tx.commit().await.map_err(db_err)?;
+        Ok(())
     }
 
-    fn path(&self) -> &Path {
-        &self.path
+    async fn snapshot_async(&self) -> KanbanResult<Snapshot> {
+        let boards = self.list_boards_async().await?;
+        let columns = self.list_all_columns_async().await?;
+        let cards = self.fetch_cards_with_filter("", &[]).await?;
+        let archived_cards = self.list_archived_cards_async().await?;
+        let sprints = self.list_all_sprints_async().await?;
+        let graph = self.get_graph_async().await?;
+        Ok(Snapshot::from_data(
+            boards,
+            columns,
+            cards,
+            archived_cards,
+            sprints,
+            graph,
+        ))
     }
 
-    fn instance_id(&self) -> Uuid {
-        self.instance_id
+    async fn apply_snapshot_async(&self, snapshot: Snapshot) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+
+        sqlx::query("PRAGMA defer_foreign_keys = ON")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+
+        sqlx::query("DELETE FROM card_edges")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM archived_cards")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM sprint_logs")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM cards")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM sprints")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM board_sprint_names")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM board_sprint_counters")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM columns")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM boards")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+
+        for board in &snapshot.boards {
+            Self::write_board_with_conn(&mut tx, board).await?;
+        }
+        for column in &snapshot.columns {
+            Self::write_column_with_conn(&mut tx, column).await?;
+        }
+        for sprint in &snapshot.sprints {
+            Self::write_sprint_with_conn(&mut tx, sprint).await?;
+        }
+        for card in &snapshot.cards {
+            Self::write_card_with_conn(&mut tx, card).await?;
+        }
+        for ac in &snapshot.archived_cards {
+            Self::write_archived_card_with_conn(&mut tx, ac).await?;
+        }
+        Self::write_graph_with_conn(&mut tx, &snapshot.graph).await?;
+
+        tx.commit().await.map_err(db_err)?;
+        Ok(())
+    }
+
+    async fn fetch_all_board_aux(
+        &self,
+    ) -> KanbanResult<(
+        HashMap<String, Vec<String>>,
+        HashMap<String, HashMap<String, u32>>,
+    )> {
+        let name_rows = sqlx::query(
+            "SELECT board_id, name FROM board_sprint_names ORDER BY board_id, position",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
+        let mut names_map: HashMap<String, Vec<String>> = HashMap::new();
+        for row in &name_rows {
+            let board_id: String = row.try_get("board_id").map_err(db_err)?;
+            let name: String = row.try_get("name").map_err(db_err)?;
+            names_map.entry(board_id).or_default().push(name);
+        }
+
+        let counter_rows =
+            sqlx::query("SELECT board_id, prefix, counter FROM board_sprint_counters")
+                .fetch_all(&self.pool)
+                .await
+                .map_err(db_err)?;
+        let mut counters_map: HashMap<String, HashMap<String, u32>> = HashMap::new();
+        for row in &counter_rows {
+            let board_id: String = row.try_get("board_id").map_err(db_err)?;
+            let prefix: String = row.try_get("prefix").map_err(db_err)?;
+            let counter: i32 = row.try_get("counter").map_err(db_err)?;
+            counters_map
+                .entry(board_id)
+                .or_default()
+                .insert(prefix, counter as u32);
+        }
+
+        Ok((names_map, counters_map))
+    }
+
+    async fn list_boards_async(&self) -> KanbanResult<Vec<Board>> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, sprint_prefix, card_prefix, task_sort_field,
+                    task_sort_order, sprint_duration_days, sprint_name_used_count,
+                    next_sprint_number, active_sprint_id, task_list_view,
+                    COALESCE(card_counter, 1) as card_counter,
+                    completion_column_id, position, created_at, updated_at
+             FROM boards ORDER BY position ASC",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
+
+        let (mut names_map, mut counters_map) = self.fetch_all_board_aux().await?;
+
+        let mut boards = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let id_str: String = row.try_get("id").map_err(db_err)?;
+            let names = names_map.remove(&id_str).unwrap_or_default();
+            let counters = counters_map.remove(&id_str).unwrap_or_default();
+            boards.push(row_to_board(row, names, counters)?);
+        }
+        Ok(boards)
+    }
+
+    async fn list_all_columns_async(&self) -> KanbanResult<Vec<Column>> {
+        let rows = sqlx::query(
+            "SELECT id, board_id, name, position, wip_limit, created_at, updated_at
+             FROM columns ORDER BY position",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
+        rows.iter().map(row_to_column).collect()
+    }
+
+    async fn list_all_sprints_async(&self) -> KanbanResult<Vec<Sprint>> {
+        let rows = sqlx::query(
+            "SELECT id, board_id, sprint_number, name_index, prefix, card_prefix,
+                    status, start_date, end_date, created_at, updated_at
+             FROM sprints ORDER BY sprint_number",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
+        rows.iter().map(row_to_sprint).collect()
+    }
+
+    async fn list_archived_cards_async(&self) -> KanbanResult<Vec<ArchivedCard>> {
+        let rows = sqlx::query(
+            "SELECT c.id, c.column_id, c.title, c.description, c.priority, c.status,
+                    c.position, c.due_date, c.points, c.card_number, c.sprint_id,
+                    c.created_at, c.updated_at, c.completed_at,
+                    ac.archived_at, ac.original_column_id, ac.original_position
+             FROM archived_cards ac
+             JOIN cards c ON ac.card_id = c.id
+             ORDER BY ac.archived_at",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
+
+        let card_ids: Vec<String> = rows
+            .iter()
+            .map(|r| r.try_get("id").map_err(db_err))
+            .collect::<KanbanResult<_>>()?;
+        let mut logs_map = self.fetch_sprint_logs_batch(&card_ids).await?;
+
+        let mut result = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let id_str: String = row.try_get("id").map_err(db_err)?;
+            let logs = logs_map.remove(&id_str).unwrap_or_default();
+            let card = row_to_card(row, logs)?;
+            let archived_at_str: String = row.try_get("archived_at").map_err(db_err)?;
+            let orig_col_str: String = row.try_get("original_column_id").map_err(db_err)?;
+            result.push(ArchivedCard {
+                card,
+                archived_at: p_dt(&archived_at_str)?,
+                original_column_id: p_uuid(&orig_col_str)?,
+                original_position: row.try_get("original_position").map_err(db_err)?,
+            });
+        }
+        Ok(result)
+    }
+
+    async fn get_graph_async(&self) -> KanbanResult<DependencyGraph> {
+        let rows = sqlx::query(
+            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
+             FROM card_edges",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
+        rows_to_graph(&rows)
+    }
+
+    async fn write_column_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        column: &Column,
+    ) -> KanbanResult<()> {
+        sqlx::query(
+            "INSERT INTO columns (id, board_id, name, position, wip_limit, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                board_id=excluded.board_id, name=excluded.name,
+                position=excluded.position, wip_limit=excluded.wip_limit,
+                updated_at=excluded.updated_at",
+        )
+        .bind(column.id.to_string())
+        .bind(column.board_id.to_string())
+        .bind(&column.name)
+        .bind(column.position)
+        .bind(column.wip_limit)
+        .bind(fmt_dt(&column.created_at))
+        .bind(fmt_dt(&column.updated_at))
+        .execute(&mut *conn)
+        .await
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    async fn write_column_async(&self, column: &Column) -> KanbanResult<()> {
+        Self::write_column_with_conn(&mut *self.pool.acquire().await.map_err(db_err)?, column).await
+    }
+
+    async fn write_sprint_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        sprint: &Sprint,
+    ) -> KanbanResult<()> {
+        sqlx::query(
+            "INSERT INTO sprints (id, board_id, sprint_number, name_index, prefix, card_prefix,
+                status, start_date, end_date, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                board_id=excluded.board_id, sprint_number=excluded.sprint_number,
+                name_index=excluded.name_index, prefix=excluded.prefix,
+                card_prefix=excluded.card_prefix, status=excluded.status,
+                start_date=excluded.start_date, end_date=excluded.end_date,
+                updated_at=excluded.updated_at",
+        )
+        .bind(sprint.id.to_string())
+        .bind(sprint.board_id.to_string())
+        .bind(sprint.sprint_number as i32)
+        .bind(sprint.name_index.map(|v| v as i32))
+        .bind(&sprint.prefix)
+        .bind(&sprint.card_prefix)
+        .bind(format!("{:?}", sprint.status))
+        .bind(opt_dt(&sprint.start_date))
+        .bind(opt_dt(&sprint.end_date))
+        .bind(fmt_dt(&sprint.created_at))
+        .bind(fmt_dt(&sprint.updated_at))
+        .execute(&mut *conn)
+        .await
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    async fn write_sprint_async(&self, sprint: &Sprint) -> KanbanResult<()> {
+        Self::write_sprint_with_conn(&mut *self.pool.acquire().await.map_err(db_err)?, sprint).await
+    }
+
+    async fn write_archived_card_with_conn(
+        conn: &mut sqlx::SqliteConnection,
+        ac: &ArchivedCard,
+    ) -> KanbanResult<()> {
+        Self::write_card_with_conn(conn, &ac.card).await?;
+        sqlx::query(
+            "INSERT INTO archived_cards (card_id, archived_at, original_column_id, original_position)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(card_id) DO UPDATE SET
+                archived_at=excluded.archived_at,
+                original_column_id=excluded.original_column_id,
+                original_position=excluded.original_position",
+        )
+        .bind(ac.card.id.to_string())
+        .bind(fmt_dt(&ac.archived_at))
+        .bind(ac.original_column_id.to_string())
+        .bind(ac.original_position)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    async fn write_archived_card_async(&self, ac: &ArchivedCard) -> KanbanResult<()> {
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        Self::write_archived_card_with_conn(&mut tx, ac).await?;
+        tx.commit().await.map_err(db_err)?;
+        Ok(())
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
+impl DataStore for SqliteStore {
+    // Board
 
-    #[tokio::test]
-    async fn test_save_and_load() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
-
-        let data = serde_json::json!({
-            "boards": [],
-            "columns": [],
-            "cards": [],
-            "archived_cards": [],
-            "sprints": []
-        });
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-
-        let _metadata = store.save(snapshot).await.unwrap();
-        assert!(db_path.exists());
-
-        let (loaded_snapshot, _) = store.load().await.unwrap();
-        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded_snapshot.data).unwrap();
-        assert!(loaded_data["boards"].is_array());
-    }
-
-    #[tokio::test]
-    async fn test_exists() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("nonexistent.db");
-        let store = SqliteStore::new(&db_path);
-
-        assert!(!store.exists().await);
-
-        let data = serde_json::json!({
-            "boards": [],
-            "columns": [],
-            "cards": [],
-            "archived_cards": [],
-            "sprints": []
-        });
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-        store.save(snapshot).await.unwrap();
-
-        assert!(store.exists().await);
-    }
-
-    #[tokio::test]
-    async fn test_path_with_spaces_roundtrip() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("path with spaces/test board.db");
-        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
-        let store = SqliteStore::new(&db_path);
-
-        let data = serde_json::json!({
-            "boards": [],
-            "columns": [],
-            "cards": [],
-            "archived_cards": [],
-            "sprints": []
-        });
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-
-        store.save(snapshot).await.unwrap();
-        let (loaded, _) = store.load().await.unwrap();
-        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
-        assert!(loaded_data["boards"].is_array());
-    }
-
-    #[tokio::test]
-    async fn test_cards_loaded_in_position_order() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("order.db");
-        let store = SqliteStore::new(&db_path);
-
-        let board_id = uuid::Uuid::new_v4().to_string();
-        let col_id = uuid::Uuid::new_v4().to_string();
-        let now = chrono::Utc::now().to_rfc3339();
-        let cards: Vec<serde_json::Value> = [2, 0, 1]
-            .iter()
-            .map(|pos| {
-                serde_json::json!({
-                    "id": uuid::Uuid::new_v4().to_string(),
-                    "column_id": col_id,
-                    "title": format!("Card pos {pos}"),
-                    "priority": "Medium",
-                    "status": "Todo",
-                    "position": pos,
-                    "card_number": pos,
-                    "created_at": now,
-                    "updated_at": now,
-                    "sprint_logs": []
-                })
-            })
-            .collect();
-
-        let data = serde_json::json!({
-            "boards": [{
-                "id": board_id,
-                "name": "B",
-                "task_sort_field": "Default",
-                "task_sort_order": "Ascending",
-                "sprint_name_used_count": 0,
-                "next_sprint_number": 1,
-                "task_list_view": "Flat",
-                "card_counter": 1,
-                "sprint_counters": {},
-                "created_at": now,
-                "updated_at": now
-            }],
-            "columns": [{
-                "id": col_id,
-                "board_id": board_id,
-                "name": "Col",
-                "position": 0,
-                "created_at": now,
-                "updated_at": now
-            }],
-            "cards": cards,
-            "archived_cards": [],
-            "sprints": []
-        });
-
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-        store.save(snapshot).await.unwrap();
-
-        let (loaded, _) = store.load().await.unwrap();
-        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
-        let loaded_cards = loaded_data["cards"].as_array().unwrap();
-        let positions: Vec<i64> = loaded_cards
-            .iter()
-            .map(|c| c["position"].as_i64().unwrap())
-            .collect();
-        assert_eq!(positions, vec![0, 1, 2]);
-    }
-
-    #[tokio::test]
-    async fn test_upsert_board_missing_name_returns_error() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
-
-        let data = SnapshotData {
-            boards: vec![serde_json::json!({
-                "id": uuid::Uuid::new_v4().to_string(),
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            })],
-            columns: vec![],
-            cards: vec![],
-            archived_cards: vec![],
-            sprints: vec![],
-            graph: serde_json::json!({}),
-        };
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-
-        let result = store.save(snapshot).await;
-        assert!(
-            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("name")),
-            "Expected Serialization error about 'name', got: {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_upsert_card_missing_title_returns_error() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
-
-        let board_id = uuid::Uuid::new_v4().to_string();
-        let col_id = uuid::Uuid::new_v4().to_string();
-        let now = "2024-01-01T00:00:00Z";
-        let data = SnapshotData {
-            boards: vec![serde_json::json!({
-                "id": board_id, "name": "B",
-                "task_sort_field": "Default", "task_sort_order": "Ascending",
-                "sprint_name_used_count": 0, "next_sprint_number": 1,
-                "task_list_view": "Flat", "card_counter": 1, "sprint_counters": {},
-                "created_at": now, "updated_at": now
-            })],
-            columns: vec![serde_json::json!({
-                "id": col_id, "board_id": board_id, "name": "Col", "position": 0,
-                "created_at": now, "updated_at": now
-            })],
-            cards: vec![serde_json::json!({
-                "id": uuid::Uuid::new_v4().to_string(),
-                "column_id": col_id,
-                "position": 0, "card_number": 0,
-                "created_at": now, "updated_at": now
-            })],
-            archived_cards: vec![],
-            sprints: vec![],
-            graph: serde_json::json!({}),
-        };
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-
-        let result = store.save(snapshot).await;
-        assert!(
-            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("title")),
-            "Expected Serialization error about 'title', got: {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_upsert_card_missing_timestamps_returns_error() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
-
-        let board_id = uuid::Uuid::new_v4().to_string();
-        let col_id = uuid::Uuid::new_v4().to_string();
-        let now = "2024-01-01T00:00:00Z";
-        let data = SnapshotData {
-            boards: vec![serde_json::json!({
-                "id": board_id, "name": "B",
-                "task_sort_field": "Default", "task_sort_order": "Ascending",
-                "sprint_name_used_count": 0, "next_sprint_number": 1,
-                "task_list_view": "Flat", "card_counter": 1, "sprint_counters": {},
-                "created_at": now, "updated_at": now
-            })],
-            columns: vec![serde_json::json!({
-                "id": col_id, "board_id": board_id, "name": "Col", "position": 0,
-                "created_at": now, "updated_at": now
-            })],
-            cards: vec![serde_json::json!({
-                "id": uuid::Uuid::new_v4().to_string(),
-                "column_id": col_id,
-                "title": "Test",
-                "priority": "Medium",
-                "status": "Todo",
-                "position": 0, "card_number": 0
-            })],
-            archived_cards: vec![],
-            sprints: vec![],
-            graph: serde_json::json!({}),
-        };
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-
-        let result = store.save(snapshot).await;
-        assert!(
-            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("created_at")),
-            "Expected Serialization error about 'created_at', got: {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_unknown_priority_returns_error() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
-        let pool = store.get_pool().await.unwrap();
-
-        let bid = Uuid::new_v4().to_string();
-        let cid = Uuid::new_v4().to_string();
-        let kid = Uuid::new_v4().to_string();
-        let ts = "2024-01-01T00:00:00Z";
-        sqlx::query("INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)")
-            .bind(&bid)
-            .bind("B")
-            .bind(ts)
-            .bind(ts)
-            .execute(pool)
-            .await
-            .unwrap();
-        sqlx::query("INSERT INTO columns (id, board_id, name, position, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)")
-            .bind(&cid).bind(&bid).bind("Col").bind(ts).bind(ts)
-            .execute(pool).await.unwrap();
-        sqlx::query("INSERT INTO cards (id, column_id, title, priority, status, position, card_number, created_at, updated_at) VALUES (?, ?, ?, 'InvalidPriority', 'Todo', 0, 0, ?, ?)")
-            .bind(&kid).bind(&cid).bind("T").bind(ts).bind(ts)
-            .execute(pool).await.unwrap();
-
-        let result = store.load().await;
-        assert!(
-            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("priority")),
-            "Expected Serialization error about 'priority', got: {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_unknown_sprint_status_returns_error() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
-        let pool = store.get_pool().await.unwrap();
-
-        let bid = Uuid::new_v4().to_string();
-        let sid = Uuid::new_v4().to_string();
-        let ts = "2024-01-01T00:00:00Z";
-        sqlx::query("INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)")
-            .bind(&bid)
-            .bind("B")
-            .bind(ts)
-            .bind(ts)
-            .execute(pool)
-            .await
-            .unwrap();
-        sqlx::query("INSERT INTO sprints (id, board_id, sprint_number, status, created_at, updated_at) VALUES (?, ?, 1, 'BadStatus', ?, ?)")
-            .bind(&sid).bind(&bid).bind(ts).bind(ts)
-            .execute(pool).await.unwrap();
-
-        let result = store.load().await;
-        assert!(
-            matches!(result, Err(PersistenceError::Serialization(ref msg)) if msg.contains("sprint status")),
-            "Expected Serialization error about 'sprint status', got: {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_upsert_edges_removes_stale_edges() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
-
-        let board_id = uuid::Uuid::new_v4().to_string();
-        let col_id = uuid::Uuid::new_v4().to_string();
-        let card1_id = uuid::Uuid::new_v4().to_string();
-        let card2_id = uuid::Uuid::new_v4().to_string();
-        let now = chrono::Utc::now().to_rfc3339();
-
-        let make_data = |edges: serde_json::Value| -> serde_json::Value {
-            serde_json::json!({
-                "boards": [{"id": board_id, "name": "B", "task_sort_field": "Default",
-                    "task_sort_order": "Ascending", "sprint_name_used_count": 0,
-                    "next_sprint_number": 1, "task_list_view": "Flat",
-                    "card_counter": 1, "sprint_counters": {},
-                    "created_at": now, "updated_at": now}],
-                "columns": [{"id": col_id, "board_id": board_id, "name": "C", "position": 0,
-                    "created_at": now, "updated_at": now}],
-                "cards": [
-                    {"id": card1_id, "column_id": col_id, "title": "A", "priority": "Medium",
-                     "status": "Todo", "position": 0, "card_number": 0,
-                     "created_at": now, "updated_at": now, "sprint_logs": []},
-                    {"id": card2_id, "column_id": col_id, "title": "B", "priority": "Medium",
-                     "status": "Todo", "position": 1, "card_number": 1,
-                     "created_at": now, "updated_at": now, "sprint_logs": []}
-                ],
-                "archived_cards": [],
-                "sprints": [],
-                "graph": edges
-            })
-        };
-
-        let two_edges = serde_json::json!({"cards": {"edges": [
-            {"source": card1_id, "target": card2_id, "edge_type": "Blocks",
-             "direction": "Directed", "created_at": now},
-            {"source": card1_id, "target": card2_id, "edge_type": "RelatesTo",
-             "direction": "Bidirectional", "created_at": now}
-        ]}});
-
-        let data1 = make_data(two_edges);
-        let snap1 = StoreSnapshot {
-            data: serde_json::to_vec(&data1).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-        store.save(snap1).await.unwrap();
-
-        let one_edge = serde_json::json!({"cards": {"edges": [
-            {"source": card1_id, "target": card2_id, "edge_type": "Blocks",
-             "direction": "Directed", "created_at": now}
-        ]}});
-
-        let data2 = make_data(one_edge);
-        let snap2 = StoreSnapshot {
-            data: serde_json::to_vec(&data2).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-        store.save(snap2).await.unwrap();
-
-        let (loaded, _) = store.load().await.unwrap();
-        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
-        let edges = loaded_data["graph"]["cards"]["edges"].as_array().unwrap();
-        assert_eq!(edges.len(), 1, "Stale edge should have been removed");
-        assert_eq!(edges[0]["edge_type"], "Blocks");
-    }
-
-    #[tokio::test]
-    async fn test_upsert_board_missing_id_returns_serialization_error() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let store = SqliteStore::new(&db_path);
-
-        let data = SnapshotData {
-            boards: vec![serde_json::json!({
-                "name": "No ID Board",
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            })],
-            columns: vec![],
-            cards: vec![],
-            archived_cards: vec![],
-            sprints: vec![],
-            graph: serde_json::json!({}),
-        };
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-
-        let result = store.save(snapshot).await;
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(
-            matches!(err, PersistenceError::Serialization(ref msg) if msg.contains("missing required field")),
-            "Expected Serialization error with 'missing required field', got: {err:?}"
-        );
-    }
-
-    // ── V1 → V2 schema migration tests ───────────────────────────────────────
-
-    /// Open a raw pool on `path` and apply the V1 schema (old column layout).
-    async fn open_v1_pool(path: &std::path::Path) -> Pool<Sqlite> {
-        let opts = SqliteConnectOptions::new()
-            .filename(path)
-            .create_if_missing(true)
-            .foreign_keys(false);
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect_with(opts)
-            .await
-            .unwrap();
-
-        sqlx::raw_sql(
-            "CREATE TABLE IF NOT EXISTS metadata (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                instance_id TEXT NOT NULL,
-                saved_at TEXT NOT NULL,
-                schema_version INTEGER NOT NULL DEFAULT 1
-            );
-            CREATE TABLE IF NOT EXISTS boards (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT,
-                sprint_prefix TEXT,
-                card_prefix TEXT,
-                task_sort_field TEXT NOT NULL DEFAULT 'Default',
-                task_sort_order TEXT NOT NULL DEFAULT 'Ascending',
-                sprint_duration_days INTEGER,
-                sprint_name_used_count INTEGER NOT NULL DEFAULT 0,
-                next_sprint_number INTEGER NOT NULL DEFAULT 1,
-                active_sprint_id TEXT,
-                task_list_view TEXT NOT NULL DEFAULT 'Flat',
-                completion_column_id TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS board_prefix_counters (
-                board_id TEXT NOT NULL,
-                prefix TEXT NOT NULL,
-                counter INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY (board_id, prefix)
-            );
-            CREATE TABLE IF NOT EXISTS board_sprint_counters (
-                board_id TEXT NOT NULL,
-                prefix TEXT NOT NULL,
-                counter INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY (board_id, prefix)
-            );
-            CREATE TABLE IF NOT EXISTS board_sprint_names (
-                board_id TEXT NOT NULL,
-                position INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                PRIMARY KEY (board_id, position)
-            );
-            CREATE TABLE IF NOT EXISTS columns (
-                id TEXT PRIMARY KEY,
-                board_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                position INTEGER NOT NULL,
-                wip_limit INTEGER,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS sprints (
-                id TEXT PRIMARY KEY,
-                board_id TEXT NOT NULL,
-                sprint_number INTEGER NOT NULL,
-                name_index INTEGER,
-                prefix TEXT,
-                card_prefix TEXT,
-                status TEXT NOT NULL DEFAULT 'Planning',
-                start_date TEXT,
-                end_date TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS cards (
-                id TEXT PRIMARY KEY,
-                column_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT,
-                priority TEXT NOT NULL DEFAULT 'Medium',
-                status TEXT NOT NULL DEFAULT 'Todo',
-                position INTEGER NOT NULL,
-                due_date TEXT,
-                points INTEGER,
-                card_number INTEGER NOT NULL DEFAULT 0,
-                sprint_id TEXT,
-                assigned_prefix TEXT,
-                card_prefix TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                completed_at TEXT
-            );
-            CREATE TABLE IF NOT EXISTS sprint_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                card_id TEXT NOT NULL,
-                sprint_id TEXT NOT NULL,
-                sprint_number INTEGER NOT NULL,
-                sprint_name TEXT,
-                started_at TEXT NOT NULL,
-                ended_at TEXT,
-                status TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS archived_cards (
-                card_id TEXT PRIMARY KEY,
-                archived_at TEXT NOT NULL,
-                original_column_id TEXT NOT NULL,
-                original_position INTEGER NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS card_edges (
-                source_id TEXT NOT NULL,
-                target_id TEXT NOT NULL,
-                edge_type TEXT NOT NULL,
-                direction TEXT NOT NULL,
-                weight REAL,
-                created_at TEXT NOT NULL,
-                archived_at TEXT,
-                PRIMARY KEY (source_id, target_id, edge_type)
-            );",
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-
-        pool
-    }
-
-    #[tokio::test]
-    async fn test_schema_migration_v1_to_v2_populates_card_counter_from_prefix_counters() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("v1.db");
-        let ts = "2024-01-01T00:00:00Z";
-        let board_id = uuid::Uuid::new_v4().to_string();
-        let iid = uuid::Uuid::new_v4().to_string();
-
-        let pool = open_v1_pool(&db_path).await;
-        sqlx::query(
-            "INSERT INTO boards (id, name, card_prefix, created_at, updated_at)
-             VALUES (?, 'B', 'TASK', ?, ?)",
-        )
-        .bind(&board_id)
-        .bind(ts)
-        .bind(ts)
-        .execute(&pool)
-        .await
-        .unwrap();
-        sqlx::query(
-            "INSERT INTO board_prefix_counters (board_id, prefix, counter) VALUES (?, 'TASK', 7)",
-        )
-        .bind(&board_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-        sqlx::query(
-            "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
-        )
-        .bind(&iid)
-        .bind(ts)
-        .execute(&pool)
-        .await
-        .unwrap();
-        drop(pool);
-
-        // Load through SqliteStore — triggers migration
-        let store = SqliteStore::new(&db_path);
-        store.load().await.unwrap();
-
-        // Verify card_counter was set from prefix_counters
-        let pool2 = store.get_pool().await.unwrap();
-        let counter: i32 = sqlx::query_scalar("SELECT card_counter FROM boards WHERE id = ?")
-            .bind(&board_id)
-            .fetch_one(pool2)
-            .await
-            .unwrap();
-        assert_eq!(
-            counter, 7,
-            "card_counter should equal prefix_counters entry for TASK"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_schema_migration_v1_to_v2_populates_card_counter_from_max_card_number() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("v1b.db");
-        let ts = "2024-01-01T00:00:00Z";
-        let board_id = uuid::Uuid::new_v4().to_string();
-        let col_id = uuid::Uuid::new_v4().to_string();
-        let iid = uuid::Uuid::new_v4().to_string();
-
-        let pool = open_v1_pool(&db_path).await;
-        // Board with no prefix_counters entry
-        sqlx::query("INSERT INTO boards (id, name, created_at, updated_at) VALUES (?, 'B2', ?, ?)")
-            .bind(&board_id)
-            .bind(ts)
-            .bind(ts)
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query(
-            "INSERT INTO columns (id, board_id, name, position, created_at, updated_at)
-             VALUES (?, ?, 'Col', 0, ?, ?)",
-        )
-        .bind(&col_id)
-        .bind(&board_id)
-        .bind(ts)
-        .bind(ts)
-        .execute(&pool)
-        .await
-        .unwrap();
-        for (i, n) in [1i32, 2, 3].iter().enumerate() {
-            sqlx::query(
-                "INSERT INTO cards (id, column_id, title, position, card_number, created_at, updated_at)
-                 VALUES (?, ?, 'C', ?, ?, ?, ?)",
+    fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
+        run(async {
+            let id_str = id.to_string();
+            let row = sqlx::query(
+                "SELECT id, name, description, sprint_prefix, card_prefix, task_sort_field,
+                        task_sort_order, sprint_duration_days, sprint_name_used_count,
+                        next_sprint_number, active_sprint_id, task_list_view,
+                        COALESCE(card_counter, 1) as card_counter,
+                        completion_column_id, position, created_at, updated_at
+                 FROM boards WHERE id = ?",
             )
-            .bind(uuid::Uuid::new_v4().to_string())
-            .bind(&col_id)
-            .bind(i as i32)
-            .bind(n)
-            .bind(ts)
-            .bind(ts)
-            .execute(&pool)
+            .bind(&id_str)
+            .fetch_optional(&self.pool)
             .await
-            .unwrap();
+            .map_err(db_err)?;
+
+            match row {
+                Some(row) => {
+                    let (names, counters) = self.fetch_board_aux(&id_str).await?;
+                    Ok(Some(row_to_board(&row, names, counters)?))
+                }
+                None => Ok(None),
+            }
+        })
+    }
+
+    fn list_boards(&self) -> KanbanResult<Vec<Board>> {
+        run(self.list_boards_async())
+    }
+
+    fn upsert_board(&self, board: Board) -> KanbanResult<()> {
+        run(self.write_board_async(&board))
+    }
+
+    fn delete_board(&self, id: Uuid) -> KanbanResult<()> {
+        run(async {
+            sqlx::query("DELETE FROM boards WHERE id = ?")
+                .bind(id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    // Column
+
+    fn get_column(&self, id: Uuid) -> KanbanResult<Option<Column>> {
+        run(async {
+            let row = sqlx::query(
+                "SELECT id, board_id, name, position, wip_limit, created_at, updated_at
+                 FROM columns WHERE id = ?",
+            )
+            .bind(id.to_string())
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db_err)?;
+            row.as_ref().map(row_to_column).transpose()
+        })
+    }
+
+    fn list_columns_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
+        run(async {
+            let rows = sqlx::query(
+                "SELECT id, board_id, name, position, wip_limit, created_at, updated_at
+                 FROM columns WHERE board_id = ? ORDER BY position",
+            )
+            .bind(board_id.to_string())
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db_err)?;
+            rows.iter().map(row_to_column).collect()
+        })
+    }
+
+    fn list_all_columns(&self) -> KanbanResult<Vec<Column>> {
+        run(self.list_all_columns_async())
+    }
+
+    fn upsert_column(&self, column: Column) -> KanbanResult<()> {
+        run(self.write_column_async(&column))
+    }
+
+    fn delete_column(&self, id: Uuid) -> KanbanResult<()> {
+        run(async {
+            sqlx::query("DELETE FROM columns WHERE id = ?")
+                .bind(id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    fn delete_columns_by_board(&self, board_id: Uuid) -> KanbanResult<()> {
+        run(async {
+            sqlx::query("DELETE FROM columns WHERE board_id = ?")
+                .bind(board_id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    // Card
+
+    fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>> {
+        run(async {
+            let id_str = id.to_string();
+            let row = sqlx::query(
+                "SELECT id, column_id, title, description, priority, status, position,
+                        due_date, points, card_number, sprint_id, created_at, updated_at,
+                        completed_at
+                 FROM cards
+                 WHERE id = ? AND id NOT IN (SELECT card_id FROM archived_cards)",
+            )
+            .bind(&id_str)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db_err)?;
+
+            match row {
+                Some(row) => {
+                    let logs = self.fetch_sprint_logs_for_card(&id_str).await?;
+                    Ok(Some(row_to_card(&row, logs)?))
+                }
+                None => Ok(None),
+            }
+        })
+    }
+
+    fn list_all_cards(&self) -> KanbanResult<Vec<Card>> {
+        run(self.fetch_cards_with_filter("", &[]))
+    }
+
+    fn list_cards_by_column(&self, column_id: Uuid) -> KanbanResult<Vec<Card>> {
+        run(self.fetch_cards_with_filter("AND column_id = ?", &[column_id.to_string()]))
+    }
+
+    fn list_cards_by_sprint(&self, sprint_id: Uuid) -> KanbanResult<Vec<Card>> {
+        run(self.fetch_cards_with_filter("AND sprint_id = ?", &[sprint_id.to_string()]))
+    }
+
+    fn count_cards_in_column(&self, column_id: Uuid) -> KanbanResult<usize> {
+        run(async {
+            let row = sqlx::query(
+                "SELECT COUNT(*) as cnt FROM cards
+                 WHERE column_id = ? AND id NOT IN (SELECT card_id FROM archived_cards)",
+            )
+            .bind(column_id.to_string())
+            .fetch_one(&self.pool)
+            .await
+            .map_err(db_err)?;
+            Ok(row.try_get::<i32, _>("cnt").map_err(db_err)? as usize)
+        })
+    }
+
+    fn count_cards_in_column_excluding(
+        &self,
+        column_id: Uuid,
+        exclude: &[Uuid],
+    ) -> KanbanResult<usize> {
+        run(async {
+            if exclude.is_empty() {
+                return self.count_cards_in_column(column_id);
+            }
+            let placeholders = exclude.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let sql = format!(
+                "SELECT COUNT(*) as cnt FROM cards
+                 WHERE column_id = ?
+                   AND id NOT IN (SELECT card_id FROM archived_cards)
+                   AND id NOT IN ({placeholders})"
+            );
+            let mut query = sqlx::query(&sql).bind(column_id.to_string());
+            for id in exclude {
+                query = query.bind(id.to_string());
+            }
+            let row = query.fetch_one(&self.pool).await.map_err(db_err)?;
+            Ok(row.try_get::<i32, _>("cnt").map_err(db_err)? as usize)
+        })
+    }
+
+    fn upsert_card(&self, card: Card) -> KanbanResult<()> {
+        run(self.write_card_async(&card))
+    }
+
+    fn delete_card(&self, id: Uuid) -> KanbanResult<()> {
+        run(async {
+            sqlx::query(
+                "DELETE FROM cards
+                 WHERE id = ? AND id NOT IN (SELECT card_id FROM archived_cards)",
+            )
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    fn delete_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<()> {
+        run(async {
+            if column_ids.is_empty() {
+                return Ok(());
+            }
+            let placeholders = column_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let sql = format!(
+                "DELETE FROM cards
+                 WHERE column_id IN ({placeholders})
+                   AND id NOT IN (SELECT card_id FROM archived_cards)"
+            );
+            let mut query = sqlx::query(&sql);
+            for id in column_ids {
+                query = query.bind(id.to_string());
+            }
+            query.execute(&self.pool).await.map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    fn clear_sprint_from_cards(
+        &self,
+        sprint_id: Uuid,
+        timestamp: DateTime<Utc>,
+    ) -> KanbanResult<()> {
+        run(async {
+            let now = fmt_dt(&timestamp);
+            sqlx::query(
+                "UPDATE cards SET sprint_id = NULL, updated_at = ?
+                 WHERE sprint_id = ?
+                   AND id NOT IN (SELECT card_id FROM archived_cards)",
+            )
+            .bind(&now)
+            .bind(sprint_id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    // Archived card
+
+    fn get_archived_card(&self, card_id: Uuid) -> KanbanResult<Option<ArchivedCard>> {
+        run(async {
+            let id_str = card_id.to_string();
+            let row = sqlx::query(
+                "SELECT c.id, c.column_id, c.title, c.description, c.priority, c.status,
+                        c.position, c.due_date, c.points, c.card_number, c.sprint_id,
+                        c.created_at, c.updated_at, c.completed_at,
+                        ac.archived_at, ac.original_column_id, ac.original_position
+                 FROM archived_cards ac
+                 JOIN cards c ON ac.card_id = c.id
+                 WHERE ac.card_id = ?",
+            )
+            .bind(&id_str)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db_err)?;
+
+            match row {
+                Some(row) => {
+                    let logs = self.fetch_sprint_logs_for_card(&id_str).await?;
+                    let card = row_to_card(&row, logs)?;
+                    let archived_at_str: String = row.try_get("archived_at").map_err(db_err)?;
+                    let orig_col_str: String = row.try_get("original_column_id").map_err(db_err)?;
+                    Ok(Some(ArchivedCard {
+                        card,
+                        archived_at: p_dt(&archived_at_str)?,
+                        original_column_id: p_uuid(&orig_col_str)?,
+                        original_position: row.try_get("original_position").map_err(db_err)?,
+                    }))
+                }
+                None => Ok(None),
+            }
+        })
+    }
+
+    fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
+        run(self.list_archived_cards_async())
+    }
+
+    fn insert_archived_card(&self, ac: ArchivedCard) -> KanbanResult<()> {
+        run(self.write_archived_card_async(&ac))
+    }
+
+    fn delete_archived_card(&self, card_id: Uuid) -> KanbanResult<()> {
+        run(async {
+            sqlx::query("DELETE FROM archived_cards WHERE card_id = ?")
+                .bind(card_id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    fn list_archived_cards_by_columns(
+        &self,
+        column_ids: &[Uuid],
+    ) -> KanbanResult<Vec<ArchivedCard>> {
+        if column_ids.is_empty() {
+            return Ok(Vec::new());
         }
-        sqlx::query(
-            "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
-        )
-        .bind(&iid)
-        .bind(ts)
-        .execute(&pool)
-        .await
-        .unwrap();
-        drop(pool);
+        run(async {
+            let placeholders: Vec<&str> = column_ids.iter().map(|_| "?").collect();
+            let sql = format!(
+                "SELECT c.id, c.column_id, c.title, c.description, c.priority, c.status,
+                        c.position, c.due_date, c.points, c.card_number, c.sprint_id,
+                        c.created_at, c.updated_at, c.completed_at,
+                        ac.archived_at, ac.original_column_id, ac.original_position
+                 FROM archived_cards ac
+                 JOIN cards c ON ac.card_id = c.id
+                 WHERE ac.original_column_id IN ({})
+                 ORDER BY ac.archived_at",
+                placeholders.join(", ")
+            );
+            let mut query = sqlx::query(&sql);
+            for id in column_ids {
+                query = query.bind(id.to_string());
+            }
+            let rows = query.fetch_all(&self.pool).await.map_err(db_err)?;
 
-        let store = SqliteStore::new(&db_path);
-        store.load().await.unwrap();
+            let card_ids: Vec<String> = rows
+                .iter()
+                .map(|r| r.try_get("id").map_err(db_err))
+                .collect::<KanbanResult<_>>()?;
+            let mut logs_map = self.fetch_sprint_logs_batch(&card_ids).await?;
 
-        let pool2 = store.get_pool().await.unwrap();
-        let counter: i32 = sqlx::query_scalar("SELECT card_counter FROM boards WHERE id = ?")
-            .bind(&board_id)
-            .fetch_one(pool2)
+            let mut result = Vec::with_capacity(rows.len());
+            for row in &rows {
+                let id_str: String = row.try_get("id").map_err(db_err)?;
+                let logs = logs_map.remove(&id_str).unwrap_or_default();
+                let card = row_to_card(row, logs)?;
+                let archived_at_str: String = row.try_get("archived_at").map_err(db_err)?;
+                let orig_col_str: String = row.try_get("original_column_id").map_err(db_err)?;
+                result.push(ArchivedCard {
+                    card,
+                    archived_at: p_dt(&archived_at_str)?,
+                    original_column_id: p_uuid(&orig_col_str)?,
+                    original_position: row.try_get("original_position").map_err(db_err)?,
+                });
+            }
+            Ok(result)
+        })
+    }
+
+    fn clear_sprint_from_archived_cards(
+        &self,
+        sprint_id: Uuid,
+        timestamp: DateTime<Utc>,
+    ) -> KanbanResult<()> {
+        run(async {
+            let now = fmt_dt(&timestamp);
+            sqlx::query(
+                "UPDATE cards SET sprint_id = NULL, updated_at = ?
+                 WHERE sprint_id = ?
+                   AND id IN (SELECT card_id FROM archived_cards)",
+            )
+            .bind(&now)
+            .bind(sprint_id.to_string())
+            .execute(&self.pool)
             .await
-            .unwrap();
-        assert_eq!(counter, 4, "card_counter should be max(card_number)+1 = 4");
+            .map_err(db_err)?;
+            Ok(())
+        })
     }
 
-    #[tokio::test]
-    async fn test_schema_migration_v1_to_v2_drops_assigned_prefix_and_card_prefix_columns() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("v1c.db");
-        let ts = "2024-01-01T00:00:00Z";
-        let iid = uuid::Uuid::new_v4().to_string();
+    // Sprint
 
-        let pool = open_v1_pool(&db_path).await;
-        sqlx::query(
-            "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
-        )
-        .bind(&iid)
-        .bind(ts)
-        .execute(&pool)
-        .await
-        .unwrap();
-        drop(pool);
-
-        let store = SqliteStore::new(&db_path);
-        store.load().await.unwrap();
-
-        // After migration, assigned_prefix and card_prefix must not exist on cards
-        let pool2 = store.get_pool().await.unwrap();
-        let assigned_err = sqlx::query("SELECT assigned_prefix FROM cards LIMIT 1")
-            .fetch_optional(pool2)
-            .await;
-        assert!(
-            assigned_err.is_err(),
-            "assigned_prefix column should no longer exist after migration"
-        );
-
-        let card_prefix_err = sqlx::query("SELECT card_prefix FROM cards LIMIT 1")
-            .fetch_optional(pool2)
-            .await;
-        assert!(
-            card_prefix_err.is_err(),
-            "card_prefix column should no longer exist after migration"
-        );
+    fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>> {
+        run(async {
+            let row = sqlx::query(
+                "SELECT id, board_id, sprint_number, name_index, prefix, card_prefix,
+                        status, start_date, end_date, created_at, updated_at
+                 FROM sprints WHERE id = ?",
+            )
+            .bind(id.to_string())
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db_err)?;
+            row.as_ref().map(row_to_sprint).transpose()
+        })
     }
 
-    #[tokio::test]
-    async fn test_schema_migration_v1_to_v2_drops_board_prefix_counters_table() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("v1d.db");
-        let ts = "2024-01-01T00:00:00Z";
-        let iid = uuid::Uuid::new_v4().to_string();
-
-        let pool = open_v1_pool(&db_path).await;
-        sqlx::query(
-            "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
-        )
-        .bind(&iid)
-        .bind(ts)
-        .execute(&pool)
-        .await
-        .unwrap();
-        drop(pool);
-
-        let store = SqliteStore::new(&db_path);
-        store.load().await.unwrap();
-
-        let pool2 = store.get_pool().await.unwrap();
-        let table_err = sqlx::query("SELECT 1 FROM board_prefix_counters LIMIT 1")
-            .fetch_optional(pool2)
-            .await;
-        assert!(
-            table_err.is_err(),
-            "board_prefix_counters table should have been dropped by migration"
-        );
+    fn list_sprints_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
+        run(async {
+            let rows = sqlx::query(
+                "SELECT id, board_id, sprint_number, name_index, prefix, card_prefix,
+                        status, start_date, end_date, created_at, updated_at
+                 FROM sprints WHERE board_id = ? ORDER BY sprint_number",
+            )
+            .bind(board_id.to_string())
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db_err)?;
+            rows.iter().map(row_to_sprint).collect()
+        })
     }
 
-    #[tokio::test]
-    async fn test_card_counter_roundtrip_save_and_load() {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("counter.db");
-        let store = SqliteStore::new(&db_path);
-        let ts = "2024-01-01T00:00:00Z";
-        let board_id = uuid::Uuid::new_v4().to_string();
+    fn list_all_sprints(&self) -> KanbanResult<Vec<Sprint>> {
+        run(self.list_all_sprints_async())
+    }
 
-        let data = serde_json::json!({
-            "boards": [{
-                "id": board_id,
-                "name": "Counter Board",
-                "task_sort_field": "Default",
-                "task_sort_order": "Ascending",
-                "sprint_name_used_count": 0,
-                "next_sprint_number": 1,
-                "task_list_view": "Flat",
-                "card_counter": 42,
-                "sprint_counters": {},
-                "created_at": ts,
-                "updated_at": ts
-            }],
-            "columns": [],
-            "cards": [],
-            "archived_cards": [],
-            "sprints": []
-        });
-        let snapshot = StoreSnapshot {
-            data: serde_json::to_vec(&data).unwrap(),
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-        store.save(snapshot).await.unwrap();
+    fn upsert_sprint(&self, sprint: Sprint) -> KanbanResult<()> {
+        run(self.write_sprint_async(&sprint))
+    }
 
-        let (loaded, _) = store.load().await.unwrap();
-        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded.data).unwrap();
-        let counter = loaded_data["boards"][0]["card_counter"].as_u64().unwrap();
-        assert_eq!(counter, 42, "card_counter should round-trip through SQLite");
+    fn delete_sprint(&self, id: Uuid) -> KanbanResult<()> {
+        run(async {
+            sqlx::query("DELETE FROM sprints WHERE id = ?")
+                .bind(id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    fn delete_sprints_by_board(&self, board_id: Uuid) -> KanbanResult<()> {
+        run(async {
+            sqlx::query("DELETE FROM sprints WHERE board_id = ?")
+                .bind(board_id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    // Graph
+
+    fn get_graph(&self) -> KanbanResult<DependencyGraph> {
+        run(self.get_graph_async())
+    }
+
+    fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()> {
+        run(self.write_graph_async(&graph))
+    }
+
+    fn modify_graph(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
+        run(self.modify_graph_async(f))
+    }
+
+    // Snapshot
+
+    fn snapshot(&self) -> KanbanResult<Snapshot> {
+        run(self.snapshot_async())
+    }
+
+    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
+        run(self.apply_snapshot_async(snapshot))
+    }
+}
+
+impl CommandStore for SqliteStore {
+    fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
+        let batch_json = serde_json::to_string(cmds).map_err(ser_err)?;
+        let count: i64 = run(async {
+            let mut tx = self.pool.begin().await.map_err(db_err)?;
+            sqlx::query("INSERT INTO command_log (cmd_json) VALUES (?)")
+                .bind(&batch_json)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
+            let c: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(db_err)?;
+            tx.commit().await.map_err(db_err)?;
+            Ok::<i64, KanbanError>(c)
+        })?;
+        Ok(count as u64)
+    }
+
+    fn command_count(&self) -> KanbanResult<u64> {
+        let count: i64 = run(async {
+            sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
+        Ok(count as u64)
+    }
+
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
+        let rows: Vec<String> = run(async {
+            sqlx::query_scalar(
+                "SELECT cmd_json FROM command_log WHERE idx > ? AND idx <= ? ORDER BY idx",
+            )
+            .bind(from as i64)
+            .bind(to as i64)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db_err)
+        })?;
+        rows.iter()
+            .map(|json| serde_json::from_str::<Vec<Command>>(json).map_err(ser_err))
+            .collect()
+    }
+
+    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
+        run(async {
+            let mut tx = self.pool.begin().await.map_err(db_err)?;
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(db_err)?;
+            let rows: Vec<String> =
+                sqlx::query_scalar("SELECT cmd_json FROM command_log ORDER BY idx")
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+            tx.commit().await.map_err(db_err)?;
+            let batches = rows
+                .iter()
+                .map(|json| serde_json::from_str::<Vec<Command>>(json).map_err(ser_err))
+                .collect::<KanbanResult<Vec<Vec<Command>>>>()?;
+            Ok((batches, count as u64))
+        })
+    }
+
+    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
+        run(async {
+            sqlx::query("DELETE FROM command_log WHERE idx > ?")
+                .bind(after as i64)
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
+        Ok(())
+    }
+
+    fn supports_indexed_snapshots(&self) -> bool {
+        true
+    }
+
+    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
+        use flate2::write::DeflateEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+
+        let json = serde_json::to_vec(snapshot).map_err(ser_err)?;
+        let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
+        encoder
+            .write_all(&json)
+            .map_err(|e| KanbanError::Database(e.to_string()))?;
+        let compressed = encoder
+            .finish()
+            .map_err(|e| KanbanError::Database(e.to_string()))?;
+
+        run(async {
+            sqlx::query("UPDATE command_log SET snapshot_data = ? WHERE idx = ?")
+                .bind(&compressed)
+                .bind(idx as i64)
+                .execute(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
+        Ok(())
+    }
+
+    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
+        run(async {
+            let mut tx = self.pool.begin().await.map_err(db_err)?;
+
+            // Get the idx values to keep (ordered), skip the first drop_count
+            let kept_ids: Vec<i64> =
+                sqlx::query_scalar("SELECT idx FROM command_log ORDER BY idx LIMIT -1 OFFSET ?")
+                    .bind(drop_count as i64)
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+
+            if kept_ids.is_empty() {
+                sqlx::query("DELETE FROM command_log")
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+            } else {
+                // Delete the oldest drop_count rows
+                sqlx::query("DELETE FROM command_log WHERE idx < ?")
+                    .bind(kept_ids[0])
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+
+                // Renumber remaining rows to be 1-based contiguous
+                for (new_idx, &old_idx) in kept_ids.iter().enumerate() {
+                    let new_val = (new_idx + 1) as i64;
+                    if new_val != old_idx {
+                        sqlx::query("UPDATE command_log SET idx = -? WHERE idx = ?")
+                            .bind(new_val)
+                            .bind(old_idx)
+                            .execute(&mut *tx)
+                            .await
+                            .map_err(db_err)?;
+                    }
+                }
+                // Fix negative indices (used to avoid conflicts during renumbering)
+                sqlx::query("UPDATE command_log SET idx = -idx WHERE idx < 0")
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+            }
+
+            tx.commit().await.map_err(db_err)?;
+            Ok(())
+        })
+    }
+
+    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
+        use flate2::read::DeflateDecoder;
+        use std::io::Read;
+
+        let blob: Option<Vec<u8>> = run(async {
+            sqlx::query_scalar("SELECT snapshot_data FROM command_log WHERE idx = ?")
+                .bind(idx as i64)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(db_err)
+        })?;
+
+        match blob {
+            Some(compressed) => {
+                let mut decoder = DeflateDecoder::new(&compressed[..]);
+                let mut json = Vec::new();
+                decoder
+                    .read_to_end(&mut json)
+                    .map_err(|e| KanbanError::Database(e.to_string()))?;
+                let snapshot: Snapshot = serde_json::from_slice(&json).map_err(ser_err)?;
+                Ok(Some(snapshot))
+            }
+            None => Ok(None),
+        }
     }
 }

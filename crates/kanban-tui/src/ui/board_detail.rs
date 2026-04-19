@@ -12,7 +12,7 @@ use ratatui::{
 
 pub(super) fn render_board_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(board_idx) = app.selection.board.get() {
-        if let Some(board) = app.ctx.boards().get(board_idx) {
+        if let Some(board) = app.view.boards.get(board_idx) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -99,7 +99,7 @@ fn render_board_settings_section(
     ];
 
     if let Some(sprint_prefix) =
-        kanban_domain::get_active_sprint_card_prefix_override(board, app.ctx.sprints())
+        kanban_domain::get_active_sprint_card_prefix_override(board, &app.view.sprints)
     {
         settings_lines.push(metadata_line_styled(
             "Active Sprint Card Prefix",
@@ -145,8 +145,8 @@ fn render_board_sprints_list(
         .focused(app.focus.board_focus == BoardFocus::Sprints);
 
     let board_sprints: Vec<&Sprint> = app
-        .ctx
-        .sprints()
+        .view
+        .sprints
         .iter()
         .filter(|s| s.board_id == board.id)
         .collect();
@@ -159,6 +159,7 @@ fn render_board_sprints_list(
             label_text(),
         )));
     } else {
+        let all_cards: Vec<&kanban_domain::Card> = app.view.cards_by_id.values().collect();
         for (sprint_idx, sprint) in board_sprints.iter().enumerate() {
             let is_selected = app.selection.sprint.get() == Some(sprint_idx);
             let is_focused = app.focus.board_focus == BoardFocus::Sprints;
@@ -172,9 +173,7 @@ fn render_board_sprints_list(
 
             let sprint_name = sprint.formatted_name(board, "sprint");
 
-            let card_count = app
-                .ctx
-                .cards()
+            let card_count = all_cards
                 .iter()
                 .filter(|c| c.sprint_id == Some(sprint.id))
                 .count();
@@ -233,8 +232,8 @@ fn render_board_columns_list(
         .focused(app.focus.board_focus == BoardFocus::Columns);
 
     let mut board_columns: Vec<_> = app
-        .ctx
-        .columns()
+        .view
+        .columns
         .iter()
         .filter(|col| col.board_id == board.id)
         .collect();
@@ -248,13 +247,12 @@ fn render_board_columns_list(
             label_text(),
         )));
     } else {
+        let all_cards: Vec<&kanban_domain::Card> = app.view.cards_by_id.values().collect();
         for (column_idx, column) in board_columns.iter().enumerate() {
             let is_selected = app.dialog_input.column_selection.get() == Some(column_idx);
             let is_focused = app.focus.board_focus == BoardFocus::Columns;
 
-            let card_count = app
-                .ctx
-                .cards()
+            let card_count = all_cards
                 .iter()
                 .filter(|c| c.column_id == column.id)
                 .count();

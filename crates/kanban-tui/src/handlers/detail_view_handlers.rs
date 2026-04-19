@@ -240,11 +240,13 @@ impl App {
                                 Ok(Some(new_content)) => {
                                     match serde_json::from_str::<CardMetadataDto>(&new_content) {
                                         Ok(new_dto) => {
-                                            let cmd = Box::new(
-                                                kanban_domain::commands::ApplyCardMetadata {
-                                                    card_id,
-                                                    dto: new_dto,
-                                                },
+                                            let cmd = kanban_domain::commands::Command::Card(
+                                                kanban_domain::commands::CardCommand::ApplyMetadata(
+                                                    kanban_domain::commands::ApplyCardMetadata {
+                                                        card_id,
+                                                        dto: new_dto,
+                                                    },
+                                                ),
                                             );
                                             if let Err(e) = self.ctx.execute_command(cmd) {
                                                 tracing::error!("Failed to apply metadata: {}", e);
@@ -417,11 +419,11 @@ impl App {
                                 Ok(Some(new_content)) => {
                                     match serde_json::from_str::<BoardSettingsDto>(&new_content) {
                                         Ok(new_dto) => {
-                                            let cmd = Box::new(
-                                                kanban_domain::commands::ApplyBoardSettings {
+                                            let cmd = kanban_domain::commands::Command::Board(
+                                                kanban_domain::commands::BoardCommand::ApplySettings(kanban_domain::commands::ApplyBoardSettings {
                                                     board_id,
                                                     dto: new_dto,
-                                                },
+                                                }),
                                             );
                                             if let Err(e) = self.ctx.execute_command(cmd) {
                                                 tracing::error!(
@@ -556,13 +558,15 @@ impl App {
                             .selection
                             .board
                             .get()
-                            .and_then(|idx| self.ctx.boards().get(idx))
-                            .map(|board| {
-                                self.ctx
-                                    .sprints()
-                                    .iter()
-                                    .filter(|s| s.board_id == board.id)
-                                    .count()
+                            .and_then(|idx| {
+                                let boards = self.ctx.boards();
+                                boards.get(idx).map(|board| {
+                                    self.ctx
+                                        .sprints()
+                                        .iter()
+                                        .filter(|s| s.board_id == board.id)
+                                        .count()
+                                })
                             })
                             .unwrap_or(0);
                         if sprint_count == 0 {
@@ -592,10 +596,10 @@ impl App {
                 if self.focus.board_focus == BoardFocus::Sprints {
                     if let Some(sprint_idx) = self.selection.sprint.get() {
                         if let Some(board_idx) = self.selection.board.get() {
-                            if let Some(board) = self.ctx.boards().get(board_idx) {
-                                let board_sprints: Vec<_> = self
-                                    .ctx
-                                    .sprints()
+                            let boards = self.ctx.boards();
+                            if let Some(board) = boards.get(board_idx) {
+                                let sprints = self.ctx.sprints();
+                                let board_sprints: Vec<_> = sprints
                                     .iter()
                                     .enumerate()
                                     .filter(|(_, s)| s.board_id == board.id)
@@ -603,7 +607,7 @@ impl App {
                                 if let Some((actual_idx, _)) = board_sprints.get(sprint_idx) {
                                     self.selection.active_sprint_index = Some(*actual_idx);
                                     self.selection.active_board_index = Some(board_idx);
-                                    if let Some(sprint) = self.ctx.sprints().get(*actual_idx) {
+                                    if let Some(sprint) = sprints.get(*actual_idx) {
                                         self.populate_sprint_task_lists(sprint.id);
                                     }
                                     self.push_mode(AppMode::SprintDetail);
@@ -790,14 +794,17 @@ impl App {
                                     CardStatus::Done
                                 };
 
+                                let boards = self.ctx.boards();
+                                let columns = self.ctx.columns();
+                                let cards = self.ctx.cards();
                                 let toggle_result =
                                     self.selection.active_board_index.and_then(|idx| {
-                                        self.ctx.boards().get(idx).and_then(|board| {
+                                        boards.get(idx).and_then(|board| {
                                         kanban_domain::card_lifecycle::compute_completion_toggle(
                                             card,
                                             board,
-                                            self.ctx.columns(),
-                                            self.ctx.cards(),
+                                            &columns,
+                                            &cards,
                                         )
                                     })
                                     });
@@ -813,10 +820,11 @@ impl App {
                                     updates.status = Some(result.new_status);
                                 }
 
-                                let cmd = Box::new(kanban_domain::commands::UpdateCard {
-                                    card_id,
-                                    updates,
-                                });
+                                let cmd = kanban_domain::commands::Command::Card(
+                                    kanban_domain::commands::CardCommand::Update(
+                                        kanban_domain::commands::UpdateCard { card_id, updates },
+                                    ),
+                                );
                                 if let Err(e) = self.execute_command(cmd) {
                                     tracing::error!("Failed to toggle card completion: {}", e);
                                     self.set_error(format!(
@@ -919,25 +927,28 @@ impl App {
                                     kanban_domain::card_lifecycle::MoveDirection::Left
                                 };
 
+                                let boards = self.ctx.boards();
+                                let columns = self.ctx.columns();
+                                let cards = self.ctx.cards();
                                 let move_result =
                                     self.selection.active_board_index.and_then(|idx| {
-                                        self.ctx.boards().get(idx).and_then(|board| {
+                                        boards.get(idx).and_then(|board| {
                                             kanban_domain::card_lifecycle::compute_card_column_move(
-                                                &card,
-                                                board,
-                                                self.ctx.columns(),
-                                                self.ctx.cards(),
-                                                direction,
+                                                &card, board, &columns, &cards, direction,
                                             )
                                         })
                                     });
 
                                 if let Some(result) = move_result {
-                                    let move_cmd = Box::new(kanban_domain::commands::MoveCard {
-                                        card_id,
-                                        new_column_id: result.target_column_id,
-                                        new_position: result.new_position,
-                                    });
+                                    let move_cmd = kanban_domain::commands::Command::Card(
+                                        kanban_domain::commands::CardCommand::Move(
+                                            kanban_domain::commands::MoveCard {
+                                                card_id,
+                                                new_column_id: result.target_column_id,
+                                                new_position: result.new_position,
+                                            },
+                                        ),
+                                    );
                                     if let Err(e) = self.execute_command(move_cmd) {
                                         tracing::error!("Failed to move card: {}", e);
                                         self.set_error(format!("Failed to move card: {}", e));
@@ -945,14 +956,17 @@ impl App {
                                     }
 
                                     if let Some(new_status) = result.new_status {
-                                        let status_cmd =
-                                            Box::new(kanban_domain::commands::UpdateCard {
-                                                card_id,
-                                                updates: kanban_domain::CardUpdate {
-                                                    status: Some(new_status),
-                                                    ..Default::default()
+                                        let status_cmd = kanban_domain::commands::Command::Card(
+                                            kanban_domain::commands::CardCommand::Update(
+                                                kanban_domain::commands::UpdateCard {
+                                                    card_id,
+                                                    updates: kanban_domain::CardUpdate {
+                                                        status: Some(new_status),
+                                                        ..Default::default()
+                                                    },
                                                 },
-                                            });
+                                            ),
+                                        );
                                         if let Err(e) = self.execute_command(status_cmd) {
                                             tracing::error!("Failed to update card status: {}", e);
                                             self.set_error(format!(
@@ -1256,21 +1270,22 @@ impl App {
         use kanban_domain::commands::UpdateCard;
         use kanban_domain::{CardStatus, CardUpdate};
 
-        let mut update_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+        let mut update_commands: Vec<kanban_domain::commands::Command> = Vec::new();
 
         for card_id in &ids {
-            let card = match self.ctx.cards().iter().find(|c| c.id == *card_id) {
+            let all_cards = self.ctx.cards();
+            let card = match all_cards.iter().find(|c| c.id == *card_id) {
                 Some(c) => c.clone(),
                 None => continue,
             };
 
+            let boards = self.ctx.boards();
+            let columns = self.ctx.columns();
+            let cards = self.ctx.cards();
             let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                self.ctx.boards().get(idx).and_then(|board| {
+                boards.get(idx).and_then(|board| {
                     kanban_domain::card_lifecycle::compute_completion_toggle(
-                        &card,
-                        board,
-                        self.ctx.columns(),
-                        self.ctx.cards(),
+                        &card, board, &columns, &cards,
                     )
                 })
             });
@@ -1294,20 +1309,19 @@ impl App {
                 }
             };
 
-            update_commands.push(Box::new(UpdateCard {
-                card_id: *card_id,
-                updates,
-            }) as Box<dyn kanban_domain::commands::Command>);
+            update_commands.push(kanban_domain::commands::Command::Card(
+                kanban_domain::commands::CardCommand::Update(UpdateCard {
+                    card_id: *card_id,
+                    updates,
+                }),
+            ));
         }
 
         if !update_commands.is_empty() {
             if let Err(e) = self.execute_commands_batch(update_commands) {
                 tracing::error!("Failed to toggle card completion: {}", e);
                 self.set_error(format!("Failed to toggle card completion: {}", e));
-                return;
             }
         }
-
-        self.refresh_view();
     }
 }

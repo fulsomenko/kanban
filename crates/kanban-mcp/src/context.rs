@@ -17,6 +17,20 @@ impl McpContext {
         data_file: &str,
         mut config: AppConfig,
     ) -> KanbanResult<Self> {
+        if store_manager.is_sqlite(data_file) {
+            #[cfg(feature = "sqlite")]
+            {
+                return Ok(Self {
+                    inner: KanbanContext::open_sqlite(data_file, config).await?,
+                });
+            }
+            #[cfg(not(feature = "sqlite"))]
+            {
+                return Err(kanban_domain::KanbanError::validation(
+                    "File appears to be SQLite but the sqlite feature is not compiled in",
+                ));
+            }
+        }
         if store_manager.sync_backend_with_file(data_file, &mut config) {
             tracing::warn!(
                 "Storage backend auto-corrected to '{}' based on file content.",
@@ -34,15 +48,15 @@ impl McpContext {
         self.inner.reload().await
     }
 
-    pub fn clear_history(&mut self) {
-        self.inner.clear_history();
+    pub fn clear_history(&mut self) -> KanbanResult<()> {
+        self.inner.clear_history()
     }
 
-    pub fn undo(&mut self) -> bool {
+    pub fn undo(&mut self) -> KanbanResult<bool> {
         self.inner.undo()
     }
 
-    pub fn redo(&mut self) -> bool {
+    pub fn redo(&mut self) -> KanbanResult<bool> {
         self.inner.redo()
     }
 

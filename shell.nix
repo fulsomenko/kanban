@@ -36,8 +36,7 @@ pkgs.mkShell {
     # Development utilities
     bacon
 
-    asciinema_3
-    asciinema-agg
+    sqlite
   ] ++ lib.optionals stdenv.isLinux [
     # Clipboard support
     wayland

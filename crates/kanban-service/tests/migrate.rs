@@ -1,9 +1,9 @@
-use kanban_persistence::{PersistenceStore, StoreRegistry};
-use kanban_service::StoreManager;
+use kanban_core::AppConfig;
+use kanban_persistence::StoreRegistry;
+use kanban_service::{KanbanContext, StoreManager};
 
 fn manager() -> StoreManager {
     let mut registry = StoreRegistry::new();
-    registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
     registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
     StoreManager::new(registry)
 }
@@ -47,7 +47,8 @@ async fn test_migrate_store_json_to_json_round_trip() {
     assert!(to.exists());
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_json_to_sqlite() {
     let dir = tempfile::tempdir().unwrap();
     let from = create_test_json(dir.path(), "source.json");
@@ -87,7 +88,8 @@ async fn test_migrate_store_fails_if_source_missing() {
     assert!(err.to_string().contains("not found"));
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_repairs_dangling_sprint_id() {
     let dir = tempfile::tempdir().unwrap();
     let board_id = uuid::Uuid::new_v4().to_string();
@@ -122,19 +124,19 @@ async fn test_migrate_store_repairs_dangling_sprint_id() {
         .await
         .unwrap();
 
-    let store = kanban_persistence_sqlite::SqliteStore::new(&to);
-    let (snap, _) = store.load().await.unwrap();
-    let data: serde_json::Value = serde_json::from_slice(&snap.data).unwrap();
-    let card = &data["cards"][0];
-    assert_eq!(card["id"], card_id, "card should be present");
+    let ctx = KanbanContext::open_sqlite(to.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    let cards = ctx.cards().unwrap();
+    assert_eq!(cards.len(), 1, "card should be present");
     assert!(
-        card["sprint_id"].is_null(),
-        "dangling sprint_id should be nulled out, got: {}",
-        card["sprint_id"]
+        cards[0].sprint_id.is_none(),
+        "dangling sprint_id should be nulled out"
     );
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_repairs_orphaned_column_id() {
     let dir = tempfile::tempdir().unwrap();
     let board_id = uuid::Uuid::new_v4().to_string();
@@ -168,18 +170,132 @@ async fn test_migrate_store_repairs_orphaned_column_id() {
         .await
         .unwrap();
 
-    let store = kanban_persistence_sqlite::SqliteStore::new(&to);
-    let (snap, _) = store.load().await.unwrap();
-    let data: serde_json::Value = serde_json::from_slice(&snap.data).unwrap();
-    let card = &data["cards"][0];
-    assert_eq!(card["id"], card_id, "card should be present");
+    let ctx = KanbanContext::open_sqlite(to.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    let cards = ctx.cards().unwrap();
+    assert_eq!(cards.len(), 1, "card should be present");
+    let expected_col_id = uuid::Uuid::parse_str(&valid_col_id).unwrap();
     assert_eq!(
-        card["column_id"], valid_col_id,
+        cards[0].column_id, expected_col_id,
         "orphaned card should be moved to the first valid column"
     );
 }
 
-#[tokio::test]
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_migrate_json_to_sqlite_preserves_command_log() {
+    use kanban_domain::commands::{
+        BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn,
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let source_path = dir.path().join("source.json");
+    let source_str = source_path.to_str().unwrap();
+
+    // Create a JSON context, execute two commands (board + column), and save
+    let mut ctx = KanbanContext::open_json(source_str, AppConfig::default())
+        .await
+        .unwrap();
+    let board_id = uuid::Uuid::new_v4();
+    ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: board_id,
+        name: "Test Board".into(),
+        card_prefix: None,
+        position: 0,
+    }))])
+    .unwrap();
+    let col_id = uuid::Uuid::new_v4();
+    ctx.execute(vec![Command::Column(ColumnCommand::Create(CreateColumn {
+        id: col_id,
+        board_id,
+        name: "TODO".into(),
+        position: 0,
+    }))])
+    .unwrap();
+    assert_eq!(ctx.undo_depth(), 2, "should have 2 undo steps");
+    ctx.save().await.unwrap();
+
+    // Migrate JSON → SQLite
+    let target_path = dir.path().join("target.sqlite");
+    let target_str = target_path.to_str().unwrap();
+    manager()
+        .migrate_store("json", source_str, "sqlite", target_str)
+        .await
+        .unwrap();
+
+    // Open migrated SQLite and verify undo history is preserved
+    let mut ctx2 = KanbanContext::open_sqlite(target_str, AppConfig::default())
+        .await
+        .unwrap();
+    assert_eq!(ctx2.undo_depth(), 2, "undo depth should survive migration");
+
+    // Verify undo restores previous state (undoes column creation)
+    assert!(ctx2.undo().unwrap(), "undo should succeed");
+    let columns = ctx2.columns().unwrap();
+    assert!(
+        columns.is_empty(),
+        "undo should remove the column created by the second command"
+    );
+    let boards = ctx2.boards().unwrap();
+    assert_eq!(
+        boards.len(),
+        1,
+        "board from first command should still exist"
+    );
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_migrate_sqlite_to_json_preserves_command_log() {
+    use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+
+    let dir = tempfile::tempdir().unwrap();
+    let source_path = dir.path().join("source.sqlite");
+    let source_str = source_path.to_str().unwrap();
+
+    // Create a SQLite context, execute commands
+    let mut ctx = KanbanContext::open_sqlite(source_str, AppConfig::default())
+        .await
+        .unwrap();
+    let board_id = uuid::Uuid::new_v4();
+    ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: board_id,
+        name: "Test Board".into(),
+        card_prefix: None,
+        position: 0,
+    }))])
+    .unwrap();
+    assert!(ctx.can_undo(), "should have undo history");
+    drop(ctx);
+
+    // Migrate SQLite → JSON
+    let target_path = dir.path().join("target.json");
+    let target_str = target_path.to_str().unwrap();
+    manager()
+        .migrate_store("sqlite", source_str, "json", target_str)
+        .await
+        .unwrap();
+
+    // Open migrated JSON and verify undo history is preserved
+    let mut ctx2 = KanbanContext::open_json(target_str, AppConfig::default())
+        .await
+        .unwrap();
+    assert!(ctx2.can_undo(), "undo history should survive migration");
+
+    // Verify undo actually restores previous state
+    let boards_before_undo = ctx2.boards().unwrap();
+    assert_eq!(boards_before_undo.len(), 1);
+    assert!(ctx2.undo().unwrap(), "undo should succeed");
+    let boards_after_undo = ctx2.boards().unwrap();
+    assert!(
+        boards_after_undo.is_empty(),
+        "undo should restore to empty state"
+    );
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_cleans_up_destination_on_failure() {
     let dir = tempfile::tempdir().unwrap();
     let ghost_col_id = uuid::Uuid::new_v4().to_string();

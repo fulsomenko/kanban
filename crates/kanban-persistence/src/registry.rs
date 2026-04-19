@@ -75,7 +75,7 @@ impl StoreRegistry {
             .map(|f| f.name().to_string())
             .collect();
         Err(PersistenceError::UnsupportedLocator {
-            locator: locator.to_string(),
+            locator: backend.to_string(),
             supported,
         })
     }

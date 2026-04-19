@@ -243,48 +243,56 @@ impl App {
             kanban_service::config::resolve_storage_location(&self.app_config);
         let new_backend = self.app_config.effective_storage_backend().to_string();
 
-        match self
+        let new_store: Option<
+            std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>,
+        > = match self
             .store_manager
             .make_store(&new_backend, &new_storage_location)
         {
-            Ok(new_store) => {
-                self.ctx.replace_store(new_store);
-                let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
-                use crate::state::snapshot::TuiSnapshot;
-                snapshot.apply_to_app(self);
-                self.ctx.mark_clean();
-                self.ctx.clear_history();
-
-                self.selection.active_board_index = if self.ctx.boards().is_empty() {
-                    None
-                } else {
-                    Some(0)
-                };
-                self.selection.board.set(if self.ctx.boards().is_empty() {
-                    None
-                } else {
-                    Some(0)
-                });
-                self.selection.active_card_index = None;
-                self.selection.card_navigation_history.clear();
-
-                self.persistence.save_file = Some(new_storage_location.clone());
-                self.persistence.save_completion_rx = Some(completion_rx);
-                self.spawn_save_worker(save_rx, None);
-                self.cli_file_override = false;
-                self.cli_file_provided = false;
-                let msg = if file_existed {
-                    format!("Loaded from {}", new_storage_location)
-                } else {
-                    format!("Migrated to {}", new_storage_location)
-                };
-                self.set_success(msg);
-            }
+            Ok(s) => Some(s),
+            Err(_) if matches!(new_backend.as_str(), "sqlite" | "sqlite3" | "db") => None,
             Err(e) => {
                 self.app_config = old_config;
                 self.set_error(format!("Store swap failed: {}", e));
+                return;
             }
+        };
+
+        self.ctx.replace_store(new_store);
+        let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
+        use crate::state::snapshot::TuiSnapshot;
+        if let Err(e) = snapshot.apply_to_app(self) {
+            tracing::error!("Failed to apply snapshot: {}", e);
         }
+        self.ctx.mark_clean();
+        if let Err(e) = self.ctx.clear_history() {
+            tracing::error!("Failed to clear history: {}", e);
+        }
+
+        self.selection.active_board_index = if self.ctx.boards().is_empty() {
+            None
+        } else {
+            Some(0)
+        };
+        self.selection.board.set(if self.ctx.boards().is_empty() {
+            None
+        } else {
+            Some(0)
+        });
+        self.selection.active_card_index = None;
+        self.selection.card_navigation_history.clear();
+
+        self.persistence.save_file = Some(new_storage_location.clone());
+        self.persistence.save_completion_rx = Some(completion_rx);
+        self.spawn_save_worker(save_rx, None);
+        self.cli_file_override = false;
+        self.cli_file_provided = false;
+        let msg = if file_existed {
+            format!("Loaded from {}", new_storage_location)
+        } else {
+            format!("Migrated to {}", new_storage_location)
+        };
+        self.set_success(msg);
     }
 
     pub async fn await_migration(&mut self) {
@@ -625,18 +633,15 @@ impl App {
             return;
         }
 
+        let boards = self.ctx.boards();
+        let columns = self.ctx.columns();
+        let cards = self.ctx.cards();
+        let archived = self.ctx.archived_cards();
+        let sprints = self.ctx.sprints();
         let board_exports: Vec<_> = selected_indices
             .iter()
-            .filter_map(|&i| self.ctx.boards().get(i))
-            .map(|board| {
-                BoardExporter::export_board(
-                    board,
-                    self.ctx.columns(),
-                    self.ctx.cards(),
-                    self.ctx.archived_cards(),
-                    self.ctx.sprints(),
-                )
-            })
+            .filter_map(|&i| boards.get(i))
+            .map(|board| BoardExporter::export_board(board, &columns, &cards, &archived, &sprints))
             .collect();
 
         let export = AllBoardsExport::from_boards(board_exports);

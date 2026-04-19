@@ -436,7 +436,7 @@ async fn test_mcp_undo_reverses_create_board() {
     ctx.create_board("Board".into(), None).unwrap();
     assert_eq!(ctx.list_boards().unwrap().len(), 1);
 
-    assert!(ctx.undo());
+    assert!(ctx.undo().unwrap());
     assert!(ctx.list_boards().unwrap().is_empty());
 }
 
@@ -444,10 +444,10 @@ async fn test_mcp_undo_reverses_create_board() {
 async fn test_mcp_redo_restores_undone_board() {
     let (mut ctx, _tmp) = setup().await;
     ctx.create_board("Board".into(), None).unwrap();
-    ctx.undo();
+    ctx.undo().unwrap();
     assert!(ctx.list_boards().unwrap().is_empty());
 
-    assert!(ctx.redo());
+    assert!(ctx.redo().unwrap());
     assert_eq!(ctx.list_boards().unwrap().len(), 1);
 }
 
@@ -455,7 +455,7 @@ async fn test_mcp_redo_restores_undone_board() {
 async fn test_mcp_undo_on_empty_returns_false() {
     let (mut ctx, _tmp) = setup().await;
     assert!(!ctx.can_undo());
-    assert!(!ctx.undo());
+    assert!(!ctx.undo().unwrap());
 }
 
 #[tokio::test]

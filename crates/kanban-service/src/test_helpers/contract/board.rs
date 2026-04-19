@@ -55,6 +55,7 @@ pub async fn test_board_update_all_optional_fields_roundtrip(factory: &StoreFact
             task_list_view: Some(TaskListView::GroupedByColumn),
             active_sprint_id: FieldUpdate::Set(sprint.id),
             completion_column_id: FieldUpdate::Set(col.id),
+            position: None,
         },
     )
     .unwrap();
@@ -85,13 +86,10 @@ pub async fn test_board_sprint_names_roundtrip(factory: &StoreFactory) {
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
 
-    let b = ctx
-        .boards_mut()
-        .iter_mut()
-        .find(|b| b.id == board.id)
-        .unwrap();
+    let mut b = ctx.data_store().get_board(board.id).unwrap().unwrap();
     b.sprint_names = vec!["Alpha".into(), "Beta".into(), "Gamma".into()];
     b.sprint_name_used_count = 1;
+    ctx.data_store().upsert_board(b).unwrap();
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load_with_defaults(factory(&path))
@@ -113,14 +111,11 @@ pub async fn test_board_card_counter_roundtrip(factory: &StoreFactory) {
         .create_board("Board".into(), Some("PFX".into()))
         .unwrap();
 
-    let b = ctx
-        .boards_mut()
-        .iter_mut()
-        .find(|b| b.id == board.id)
-        .unwrap();
+    let mut b = ctx.data_store().get_board(board.id).unwrap().unwrap();
     b.card_counter = 10;
     b.sprint_counters.insert("SP".into(), 3);
     b.sprint_counters.insert("SPRINT".into(), 7);
+    ctx.data_store().upsert_board(b).unwrap();
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load_with_defaults(factory(&path))
@@ -141,12 +136,9 @@ pub async fn test_board_next_sprint_number_roundtrip(factory: &StoreFactory) {
 
     let board = ctx.create_board("Board".into(), None).unwrap();
 
-    let b = ctx
-        .boards_mut()
-        .iter_mut()
-        .find(|b| b.id == board.id)
-        .unwrap();
+    let mut b = ctx.data_store().get_board(board.id).unwrap().unwrap();
     b.next_sprint_number = 42;
+    ctx.data_store().upsert_board(b).unwrap();
 
     ctx.save().await.unwrap();
     let ctx = KanbanContext::load_with_defaults(factory(&path))

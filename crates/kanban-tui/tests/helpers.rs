@@ -69,7 +69,7 @@ pub fn render_to_string_with_colors(app: &App) -> Vec<(String, Option<ratatui::s
 }
 
 pub fn setup_settings_app() -> App {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     app.handle_open_settings();
     app
@@ -77,7 +77,7 @@ pub fn setup_settings_app() -> App {
 
 pub fn setup_app_with_export_dialog(board_count: usize) -> App {
     use kanban_domain::KanbanOperations;
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     app.push_mode(AppMode::Settings);
     for i in 0..board_count {
@@ -120,11 +120,13 @@ pub async fn create_test_json_file(dir: &std::path::Path, name: &str, boards: &[
 }
 
 pub async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
-    use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+    use kanban_domain::DataStore;
 
     let path = dir.join(name);
     let path_str = path.to_str().unwrap().to_string();
-    let store = kanban_persistence_sqlite::SqliteStore::new(&path_str);
+    let store = kanban_persistence_sqlite::SqliteStore::open(&path_str)
+        .await
+        .unwrap();
 
     let domain_boards: Vec<kanban_domain::Board> = boards
         .iter()
@@ -138,12 +140,7 @@ pub async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: 
         sprints: vec![],
         graph: Default::default(),
     };
-
-    let store_snapshot = StoreSnapshot {
-        data: serde_json::to_vec(&snapshot).unwrap(),
-        metadata: PersistenceMetadata::new(store.instance_id()),
-    };
-    store.save(store_snapshot).await.unwrap();
+    store.apply_snapshot(snapshot).unwrap();
 
     path_str
 }

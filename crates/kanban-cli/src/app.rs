@@ -45,11 +45,18 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    let backend_names: Vec<String> = store_manager
+    let mut backend_names: Vec<String> = store_manager
         .backend_names()
         .into_iter()
         .map(str::to_owned)
         .collect();
+    // SQLite is handled directly by KanbanContext::open_sqlite, not via the
+    // StoreRegistry, so it never appears in backend_names(). Add it here so
+    // the `migrate` subcommand accepts "sqlite" as a valid target.
+    #[cfg(feature = "sqlite")]
+    if !backend_names.contains(&"sqlite".to_string()) {
+        backend_names.push("sqlite".to_string());
+    }
     let mut cmd = Cli::command().mut_subcommand("migrate", |sub| {
         sub.mut_arg("backend", |arg| {
             arg.value_parser(clap::builder::PossibleValuesParser::new(
@@ -215,12 +222,31 @@ impl CliApp {
             None => None,
         };
 
+        let effective_file = validated_file
+            .clone()
+            .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
+        let is_sqlite = store_manager.is_sqlite(&effective_file)
+            || config.effective_storage_backend() == "sqlite";
+
         match command {
             None => {
                 #[cfg(feature = "tui")]
                 {
-                    let (mut app, save_rx) = App::new_with_store(store_manager, validated_file)?;
-                    app.run(save_rx).await?;
+                    if is_sqlite {
+                        #[cfg(feature = "sqlite")]
+                        {
+                            let mut app = App::open_sqlite(&effective_file, config).await?;
+                            app.run(None).await?;
+                        }
+                        #[cfg(not(feature = "sqlite"))]
+                        anyhow::bail!(
+                            "File appears to be SQLite but the sqlite feature is not compiled in"
+                        );
+                    } else {
+                        let (mut app, save_rx) =
+                            App::new_with_store(store_manager, validated_file)?;
+                        app.run(save_rx).await?;
+                    }
                 }
                 #[cfg(not(feature = "tui"))]
                 anyhow::bail!(
@@ -232,14 +258,7 @@ impl CliApp {
                 handlers::migrate::handle(&store_manager, args).await?;
             }
             Some(cmd) => {
-                let file_path = match validated_file {
-                    Some(f) => f,
-                    None => {
-                        let store = store_manager.make_store_with_config(None, &config)?;
-                        store.path().to_string_lossy().to_string()
-                    }
-                };
-                let mut ctx = CliContext::load(&store_manager, &file_path, config).await?;
+                let mut ctx = CliContext::load(&store_manager, &effective_file, config).await?;
                 dispatch_subcommand(&mut ctx, cmd).await?;
             }
         }

@@ -27,12 +27,7 @@ impl TuiContext {
         Option<mpsc::Receiver<Snapshot>>,
         Option<mpsc::UnboundedReceiver<()>>,
     )> {
-        let inner = KanbanContext::empty(
-            store
-                .clone()
-                .unwrap_or_else(|| Arc::new(kanban_persistence::NullStore::new())),
-            kanban_core::AppConfig::default(),
-        );
+        let inner = KanbanContext::empty(store.clone(), kanban_core::AppConfig::default());
 
         let (save_coordinator, save_rx, completion_rx) = SaveCoordinator::new(store.is_some());
 
@@ -44,35 +39,54 @@ impl TuiContext {
         Ok((ctx, save_rx, completion_rx))
     }
 
-    pub fn execute_command(&mut self, command: Box<dyn Command>) -> KanbanResult<()> {
+    /// Wrap a pre-built `KanbanContext` (e.g. from `KanbanContext::open_sqlite`).
+    /// No blob-write save coordinator is created — persistence is handled
+    /// inline by the context's backend.
+    #[allow(clippy::type_complexity)]
+    pub fn from_context(
+        ctx: KanbanContext,
+    ) -> (
+        Self,
+        Option<mpsc::Receiver<Snapshot>>,
+        Option<mpsc::UnboundedReceiver<()>>,
+    ) {
+        let (save_coordinator, save_rx, completion_rx) = SaveCoordinator::new(false);
+        let tui_ctx = Self {
+            inner: ctx,
+            save_coordinator,
+        };
+        (tui_ctx, save_rx, completion_rx)
+    }
+
+    pub fn execute_command(&mut self, command: Command) -> KanbanResult<()> {
         self.execute_commands_batch(vec![command])
     }
 
-    pub fn execute_commands_batch(&mut self, commands: Vec<Box<dyn Command>>) -> KanbanResult<()> {
+    pub fn execute_commands_batch(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         self.inner.execute(commands)?;
-        let snapshot = self.inner.snapshot();
+        let snapshot = self.inner.snapshot()?;
         self.save_coordinator.queue_snapshot(snapshot);
         Ok(())
     }
 
     // --- Delegation: state methods ---
 
-    pub fn undo(&mut self) -> bool {
-        let result = self.inner.undo();
+    pub fn undo(&mut self) -> KanbanResult<bool> {
+        let result = self.inner.undo()?;
         if result {
-            let snapshot = self.inner.snapshot();
+            let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
-        result
+        Ok(result)
     }
 
-    pub fn redo(&mut self) -> bool {
-        let result = self.inner.redo();
+    pub fn redo(&mut self) -> KanbanResult<bool> {
+        let result = self.inner.redo()?;
         if result {
-            let snapshot = self.inner.snapshot();
+            let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
-        result
+        Ok(result)
     }
 
     pub fn can_undo(&self) -> bool {
@@ -83,11 +97,11 @@ impl TuiContext {
         self.inner.can_redo()
     }
 
-    pub fn snapshot(&self) -> Snapshot {
+    pub fn snapshot(&self) -> KanbanResult<Snapshot> {
         self.inner.snapshot()
     }
 
-    pub fn apply_snapshot(&mut self, s: Snapshot) {
+    pub fn apply_snapshot(&mut self, s: Snapshot) -> KanbanResult<()> {
         self.inner.apply_snapshot(s)
     }
 
@@ -103,7 +117,7 @@ impl TuiContext {
         self.inner.is_dirty()
     }
 
-    pub fn clear_history(&mut self) {
+    pub fn clear_history(&mut self) -> KanbanResult<()> {
         self.inner.clear_history()
     }
 
@@ -115,11 +129,11 @@ impl TuiContext {
         self.inner.has_conflict()
     }
 
-    pub fn store(&self) -> Arc<dyn PersistenceStore + Send + Sync> {
-        self.inner.store().clone()
+    pub fn store(&self) -> Option<Arc<dyn PersistenceStore + Send + Sync>> {
+        self.inner.store().cloned()
     }
 
-    pub fn replace_store(&mut self, s: Arc<dyn PersistenceStore + Send + Sync>) {
+    pub fn replace_store(&mut self, s: Option<Arc<dyn PersistenceStore + Send + Sync>>) {
         self.inner.replace_store(s)
     }
 
@@ -129,28 +143,50 @@ impl TuiContext {
 
     // --- Delegation: field accessors ---
 
-    pub fn boards(&self) -> &[Board] {
-        self.inner.boards()
+    pub fn boards(&self) -> Vec<Board> {
+        self.inner.boards().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load boards: {e}");
+            Default::default()
+        })
     }
 
-    pub fn columns(&self) -> &[Column] {
-        self.inner.columns()
+    pub fn columns(&self) -> Vec<Column> {
+        self.inner.columns().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load columns: {e}");
+            Default::default()
+        })
     }
 
-    pub fn cards(&self) -> &[Card] {
-        self.inner.cards()
+    pub fn cards(&self) -> Vec<Card> {
+        self.inner.cards().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load cards: {e}");
+            Default::default()
+        })
     }
 
-    pub fn sprints(&self) -> &[Sprint] {
-        self.inner.sprints()
+    pub fn sprints(&self) -> Vec<Sprint> {
+        self.inner.sprints().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load sprints: {e}");
+            Default::default()
+        })
     }
 
-    pub fn archived_cards(&self) -> &[ArchivedCard] {
-        self.inner.archived_cards()
+    pub fn archived_cards(&self) -> Vec<ArchivedCard> {
+        self.inner.archived_cards().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load archived_cards: {e}");
+            Default::default()
+        })
     }
 
-    pub fn graph(&self) -> &DependencyGraph {
-        self.inner.graph()
+    pub fn graph(&self) -> DependencyGraph {
+        self.inner.graph().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load graph: {e}");
+            Default::default()
+        })
+    }
+
+    pub fn data_store(&self) -> &dyn kanban_domain::DataStore {
+        self.inner.data_store()
     }
 
     #[cfg(any(test, feature = "test-helpers"))]
@@ -160,7 +196,7 @@ impl TuiContext {
 
     fn with_snapshot<T>(&mut self, result: KanbanResult<T>) -> KanbanResult<T> {
         if result.is_ok() {
-            let snapshot = self.inner.snapshot();
+            let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
         result

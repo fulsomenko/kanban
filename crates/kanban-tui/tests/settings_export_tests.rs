@@ -42,7 +42,7 @@ fn test_export_dialog_format_default_is_json() {
 
 #[test]
 fn test_settings_x_keybinding_registered() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.push_mode(AppMode::Settings);
 
     let provider = KeybindingRegistry::get_provider(&app);
@@ -119,8 +119,10 @@ fn test_render_export_boards_select_step_shows_board_names() {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.ctx.create_board("MyTestBoard".into(), None).unwrap();
+    app.selection.active_board_index = Some(0);
+    app.refresh_view();
     app.export_dialog = Some(ExportDialogState::new(1));
     app.push_mode(AppMode::Settings);
     app.push_mode(AppMode::Dialog(DialogMode::ExportBoards));
@@ -151,7 +153,7 @@ fn test_render_export_boards_options_step_shows_filename() {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.ctx.create_board("Board1".into(), None).unwrap();
     let mut dialog = ExportDialogState::new(1);
     dialog.step = ExportStep::ExportOptions;
@@ -188,7 +190,7 @@ fn test_export_boards_json_creates_file() {
     let dir = tempfile::TempDir::new().unwrap();
     let export_path = dir.path().join("test_export.json");
 
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
     app.focus.active = Focus::Boards;
     app.push_mode(AppMode::Settings);
 

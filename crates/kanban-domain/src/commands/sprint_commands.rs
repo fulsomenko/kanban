@@ -1,32 +1,65 @@
-use super::{Command, CommandContext};
+use super::CommandContext;
 use crate::SprintUpdate;
 use crate::{KanbanError, KanbanResult};
-use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum SprintCommand {
+    Create(CreateSprint),
+    Update(UpdateSprint),
+    Activate(ActivateSprint),
+    Complete(CompleteSprint),
+    Cancel(CancelSprint),
+    Delete(DeleteSprint),
+}
+
+impl SprintCommand {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        match self {
+            SprintCommand::Create(c) => c.execute(context),
+            SprintCommand::Update(c) => c.execute(context),
+            SprintCommand::Activate(c) => c.execute(context),
+            SprintCommand::Complete(c) => c.execute(context),
+            SprintCommand::Cancel(c) => c.execute(context),
+            SprintCommand::Delete(c) => c.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            SprintCommand::Create(c) => c.description(),
+            SprintCommand::Update(c) => c.description(),
+            SprintCommand::Activate(c) => c.description(),
+            SprintCommand::Complete(c) => c.description(),
+            SprintCommand::Cancel(c) => c.description(),
+            SprintCommand::Delete(c) => c.description(),
+        }
+    }
+}
+
 /// Update sprint properties (name_index, prefix, card_prefix, status, dates)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateSprint {
     pub sprint_id: Uuid,
     pub updates: SprintUpdate,
 }
 
-impl Command for UpdateSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
+impl UpdateSprint {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let mut updates = self.updates.clone();
 
         if !matches!(updates.card_prefix, crate::FieldUpdate::NoChange) {
-            let sprint = context
-                .sprints
-                .iter()
-                .find(|s| s.id == self.sprint_id)
-                .ok_or_else(|| KanbanError::not_found("sprint", self.sprint_id))?;
+            let sprint = context.get_sprint(self.sprint_id)?;
             let board_id = sprint.board_id;
             let sprint_id = sprint.id;
 
-            // Lock check: prefix is locked if any card (active or archived) is assigned to this sprint
-            let has_cards = context.cards.iter().any(|c| c.sprint_id == Some(sprint_id))
+            // Lock check: prefix is locked if any card (active or archived) is assigned
+            let has_cards = !context.store.list_cards_by_sprint(sprint_id)?.is_empty()
                 || context
-                    .archived_cards
+                    .store
+                    .list_archived_cards()?
                     .iter()
                     .any(|ac| ac.card.sprint_id == Some(sprint_id));
             if has_cards {
@@ -39,11 +72,7 @@ impl Command for UpdateSprint {
             if let crate::FieldUpdate::Set(ref new_prefix) = updates.card_prefix {
                 let new_prefix_lower = new_prefix.to_lowercase();
 
-                let board = context
-                    .boards
-                    .iter()
-                    .find(|b| b.id == board_id)
-                    .ok_or_else(|| KanbanError::not_found("board", board_id))?;
+                let board = context.get_board(board_id)?;
 
                 if board
                     .card_prefix
@@ -58,9 +87,10 @@ impl Command for UpdateSprint {
                 }
 
                 let sibling_collision = context
-                    .sprints
+                    .store
+                    .list_sprints_by_board(board_id)?
                     .iter()
-                    .filter(|s| s.id != sprint_id && s.board_id == board_id)
+                    .filter(|s| s.id != sprint_id)
                     .any(|s| {
                         s.card_prefix
                             .as_deref()
@@ -77,24 +107,21 @@ impl Command for UpdateSprint {
         }
 
         if let Some(ref name) = updates.name {
-            let board_id = context
-                .sprints
-                .iter()
-                .find(|s| s.id == self.sprint_id)
-                .ok_or_else(|| KanbanError::not_found("sprint", self.sprint_id))?
-                .board_id;
-
-            let board = context.board_mut(board_id)?;
+            let sprint = context.get_sprint(self.sprint_id)?;
+            let board_id = sprint.board_id;
+            let mut board = context.get_board(board_id)?;
             let idx = board.add_sprint_name_at_used_index(name.clone());
             updates.name_index = crate::FieldUpdate::Set(idx);
+            context.store.upsert_board(board)?;
         }
 
-        let sprint = context.sprint_mut(self.sprint_id)?;
+        let mut sprint = context.get_sprint(self.sprint_id)?;
         sprint.update(updates);
+        context.store.upsert_sprint(sprint)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         "Update sprint".to_string()
     }
 }
@@ -107,7 +134,9 @@ impl Command for UpdateSprint {
 ///
 /// If `auto_consume_name` is true and no explicit name is provided, the next
 /// available sprint name from the board's name pool will be consumed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSprint {
+    pub id: Uuid,
     pub board_id: Uuid,
     pub name: Option<String>,
     pub default_sprint_prefix: String,
@@ -118,16 +147,11 @@ pub struct CreateSprint {
     pub auto_consume_name: bool,
 }
 
-impl Command for CreateSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let sprints_snapshot: Vec<_> = context
-            .sprints
-            .iter()
-            .filter(|s| s.board_id == self.board_id)
-            .cloned()
-            .collect();
+impl CreateSprint {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let sprints_snapshot = context.store.list_sprints_by_board(self.board_id)?;
 
-        let board = context.board_mut(self.board_id)?;
+        let mut board = context.get_board(self.board_id)?;
         let effective_prefix = self
             .explicit_prefix
             .clone()
@@ -144,100 +168,102 @@ impl Command for CreateSprint {
             _ => None,
         };
 
-        let sprint = crate::Sprint::new(
+        let mut sprint = crate::Sprint::new(
             self.board_id,
             sprint_number,
             name_index,
             Some(effective_prefix),
         );
-        context.sprints.push(sprint);
+        sprint.id = self.id;
+        context.store.upsert_board(board)?;
+        context.store.upsert_sprint(sprint)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Create sprint for board {}", self.board_id)
     }
 }
 
 /// Activate a sprint (change status to Active and set dates)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActivateSprint {
     pub sprint_id: Uuid,
     pub duration_days: u32,
 }
 
-impl Command for ActivateSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let sprint = context.sprint_mut(self.sprint_id)?;
+impl ActivateSprint {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut sprint = context.get_sprint(self.sprint_id)?;
         sprint.activate(self.duration_days);
+        context.store.upsert_sprint(sprint)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Activate sprint {}", self.sprint_id)
     }
 }
 
 /// Complete a sprint (change status to Completed)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompleteSprint {
     pub sprint_id: Uuid,
 }
 
-impl Command for CompleteSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let sprint = context.sprint_mut(self.sprint_id)?;
+impl CompleteSprint {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut sprint = context.get_sprint(self.sprint_id)?;
         sprint.complete();
+        context.store.upsert_sprint(sprint)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Complete sprint {}", self.sprint_id)
     }
 }
 
 /// Cancel a sprint (change status to Cancelled)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CancelSprint {
     pub sprint_id: Uuid,
 }
 
-impl Command for CancelSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let sprint = context.sprint_mut(self.sprint_id)?;
+impl CancelSprint {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut sprint = context.get_sprint(self.sprint_id)?;
         sprint.cancel();
+        context.store.upsert_sprint(sprint)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Cancel sprint {}", self.sprint_id)
     }
 }
 
 /// Delete a sprint
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteSprint {
     pub sprint_id: Uuid,
+    #[serde(default = "chrono::Utc::now")]
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
-impl Command for DeleteSprint {
-    fn execute(&self, context: &mut CommandContext) -> KanbanResult<()> {
-        let now = Utc::now();
-        for card in context.cards.iter_mut() {
-            if card.sprint_id == Some(self.sprint_id) {
-                card.sprint_id = None;
-                card.updated_at = now;
-            }
-        }
-
-        for archived_card in context.archived_cards.iter_mut() {
-            if archived_card.card.sprint_id == Some(self.sprint_id) {
-                archived_card.card.sprint_id = None;
-                archived_card.card.updated_at = now;
-            }
-        }
-
-        context.sprints.retain(|s| s.id != self.sprint_id);
+impl DeleteSprint {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context
+            .store
+            .clear_sprint_from_cards(self.sprint_id, self.timestamp)?;
+        context
+            .store
+            .clear_sprint_from_archived_cards(self.sprint_id, self.timestamp)?;
+        context.store.delete_sprint(self.sprint_id)?;
         Ok(())
     }
 
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         format!("Delete sprint {}", self.sprint_id)
     }
 }
@@ -246,28 +272,29 @@ impl Command for DeleteSprint {
 mod tests {
     use super::super::test_helpers::TestContext;
     use super::*;
+    use crate::DataStore;
 
     #[test]
     fn test_update_sprint_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id: Uuid::new_v4(),
             updates: SprintUpdate::default(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_update_sprint_name_with_nonexistent_board_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
         let nonexistent_board_id = Uuid::new_v4();
         let sprint = crate::Sprint::new(nonexistent_board_id, 1, None, None);
         let sprint_id = sprint.id;
-        context.sprints.push(sprint);
+        tc.store.upsert_sprint(sprint).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id,
             updates: SprintUpdate {
@@ -275,67 +302,69 @@ mod tests {
                 ..Default::default()
             },
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_activate_sprint_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = ActivateSprint {
             sprint_id: Uuid::new_v4(),
             duration_days: 14,
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_complete_sprint_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = CompleteSprint {
             sprint_id: Uuid::new_v4(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_cancel_sprint_not_found_returns_error() {
-        let mut tc = TestContext::new();
-        let mut context = tc.as_command_context();
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
         let cmd = CancelSprint {
             sprint_id: Uuid::new_v4(),
         };
-        let result = cmd.execute(&mut context);
+        let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
     }
 
     #[test]
     fn test_create_sprint_auto_consume_name_uses_name_pool() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("Test".to_string(), None);
         board.sprint_names = vec!["Alpha".to_string(), "Beta".to_string()];
         let board_id = board.id;
-        tc.boards.push(board);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = CreateSprint {
+            id: Uuid::new_v4(),
             board_id,
             name: None,
             default_sprint_prefix: "Sprint".to_string(),
             explicit_prefix: None,
             auto_consume_name: true,
         };
-        cmd.execute(&mut context).unwrap();
+        cmd.execute(&context).unwrap();
 
-        assert_eq!(context.sprints.len(), 1);
-        let sprint = &context.sprints[0];
-        let board = &context.boards[0];
+        let sprints = tc.store.list_all_sprints().unwrap();
+        assert_eq!(sprints.len(), 1);
+        let sprint = &sprints[0];
+        let board = tc.store.get_board(board_id).unwrap().unwrap();
         assert_eq!(
-            sprint.get_name(board),
+            sprint.get_name(&board),
             Some("Alpha"),
             "auto_consume_name should consume the first available sprint name"
         );
@@ -343,19 +372,19 @@ mod tests {
 
     #[test]
     fn test_update_sprint_card_prefix_locked_after_card_assigned_returns_validation_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
         let sprint_id = sprint.id;
         let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
         card.sprint_id = Some(sprint_id);
-        tc.boards.push(board);
-        tc.columns.push(col);
-        tc.sprints.push(sprint);
-        tc.cards.push(card);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+        tc.store.upsert_card(card).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id,
             updates: crate::SprintUpdate {
@@ -363,14 +392,14 @@ mod tests {
                 ..Default::default()
             },
         };
-        let err = cmd.execute(&mut context).unwrap_err();
+        let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
 
     #[test]
     fn test_update_sprint_card_prefix_locked_after_archived_card_assigned_returns_validation_error()
     {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
@@ -378,12 +407,12 @@ mod tests {
         let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
         card.sprint_id = Some(sprint_id);
         let archived = crate::ArchivedCard::new(card, col.id, 0);
-        tc.boards.push(board);
-        tc.columns.push(col);
-        tc.sprints.push(sprint);
-        tc.archived_cards.push(archived);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+        tc.store.insert_archived_card(archived).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id,
             updates: crate::SprintUpdate {
@@ -391,25 +420,25 @@ mod tests {
                 ..Default::default()
             },
         };
-        let err = cmd.execute(&mut context).unwrap_err();
+        let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
 
     #[test]
     fn test_update_sprint_clear_card_prefix_locked_after_card_assigned_returns_validation_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
         let sprint_id = sprint.id;
         let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
         card.sprint_id = Some(sprint_id);
-        tc.boards.push(board);
-        tc.columns.push(col);
-        tc.sprints.push(sprint);
-        tc.cards.push(card);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+        tc.store.upsert_card(card).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id,
             updates: crate::SprintUpdate {
@@ -417,21 +446,21 @@ mod tests {
                 ..Default::default()
             },
         };
-        let err = cmd.execute(&mut context).unwrap_err();
+        let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
 
     #[test]
     fn test_update_sprint_card_prefix_collides_with_board_prefix_returns_validation_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
         let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
         let sprint_id = sprint.id;
-        tc.boards.push(board);
-        tc.sprints.push(sprint);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id,
             updates: crate::SprintUpdate {
@@ -439,21 +468,21 @@ mod tests {
                 ..Default::default()
             },
         };
-        let err = cmd.execute(&mut context).unwrap_err();
+        let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
 
     #[test]
     fn test_update_sprint_card_prefix_case_insensitive_collision_returns_validation_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
         let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
         let sprint_id = sprint.id;
-        tc.boards.push(board);
-        tc.sprints.push(sprint);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id,
             updates: crate::SprintUpdate {
@@ -461,24 +490,24 @@ mod tests {
                 ..Default::default()
             },
         };
-        let err = cmd.execute(&mut context).unwrap_err();
+        let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
 
     #[test]
     fn test_update_sprint_card_prefix_collides_with_sibling_sprint_returns_validation_error() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
         let mut sprint1 = crate::Sprint::new(board_id, 1, None, None);
         sprint1.card_prefix = Some("SPR".to_string());
         let sprint2 = crate::Sprint::new(board_id, 2, None, None);
         let sprint2_id = sprint2.id;
-        tc.boards.push(board);
-        tc.sprints.push(sprint1);
-        tc.sprints.push(sprint2);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint1).unwrap();
+        tc.store.upsert_sprint(sprint2).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id: sprint2_id,
             updates: crate::SprintUpdate {
@@ -486,21 +515,109 @@ mod tests {
                 ..Default::default()
             },
         };
-        let err = cmd.execute(&mut context).unwrap_err();
+        let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_validation());
     }
 
     #[test]
+    fn test_delete_sprint_clears_sprint_from_cards_with_command_timestamp() {
+        use chrono::{TimeZone, Utc};
+
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let col = crate::Column::new(board_id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col.clone()).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let mut card = crate::Card::new(
+            &mut crate::Board::new("B".to_string(), Some("KAN".to_string())),
+            col.id,
+            "C".to_string(),
+            0,
+        );
+        card.sprint_id = Some(sprint_id);
+        let card_id = card.id;
+        tc.store.upsert_card(card).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let cmd = DeleteSprint {
+            sprint_id,
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(
+            card.updated_at, fixed_time,
+            "clear_sprint_from_cards should use the command's timestamp, not Utc::now()"
+        );
+        assert_eq!(card.sprint_id, None);
+    }
+
+    #[test]
+    fn test_delete_sprint_uses_embedded_timestamp() {
+        use chrono::{TimeZone, Utc};
+
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let col = crate::Column::new(board_id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col.clone()).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let card = crate::Card {
+            id: Uuid::new_v4(),
+            column_id: col.id,
+            title: "C".to_string(),
+            description: None,
+            priority: crate::CardPriority::Medium,
+            status: crate::CardStatus::Todo,
+            position: 0,
+            due_date: None,
+            points: None,
+            card_number: 1,
+            sprint_id: Some(sprint_id),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: None,
+            sprint_logs: Vec::new(),
+        };
+        let archived = crate::ArchivedCard::new(card, col.id, 0);
+        tc.store.insert_archived_card(archived).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let cmd = DeleteSprint {
+            sprint_id,
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let archived_cards = tc.store.list_archived_cards().unwrap();
+        assert_eq!(archived_cards.len(), 1);
+        assert_eq!(archived_cards[0].card.updated_at, fixed_time);
+        assert_eq!(archived_cards[0].card.sprint_id, None);
+    }
+
+    #[test]
     fn test_update_sprint_card_prefix_unique_valid_succeeds() {
-        let mut tc = TestContext::new();
+        let tc = TestContext::new();
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
         let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
         let sprint_id = sprint.id;
-        tc.boards.push(board);
-        tc.sprints.push(sprint);
-        let mut context = tc.as_command_context();
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
 
+        let context = tc.as_command_context();
         let cmd = UpdateSprint {
             sprint_id,
             updates: crate::SprintUpdate {
@@ -508,7 +625,8 @@ mod tests {
                 ..Default::default()
             },
         };
-        assert!(cmd.execute(&mut context).is_ok());
-        assert_eq!(context.sprints[0].card_prefix, Some("UNIQUE".to_string()));
+        assert!(cmd.execute(&context).is_ok());
+        let sprint = tc.store.get_sprint(sprint_id).unwrap().unwrap();
+        assert_eq!(sprint.card_prefix, Some("UNIQUE".to_string()));
     }
 }
