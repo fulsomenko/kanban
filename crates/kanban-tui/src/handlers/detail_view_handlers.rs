@@ -1321,7 +1321,6 @@ impl App {
             if let Err(e) = self.execute_commands_batch(update_commands) {
                 tracing::error!("Failed to toggle card completion: {}", e);
                 self.set_error(format!("Failed to toggle card completion: {}", e));
-                return;
             }
         }
     }
