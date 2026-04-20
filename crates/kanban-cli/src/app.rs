@@ -20,30 +20,34 @@ pub(crate) fn resolve_is_sqlite(
         || (validated_file.is_none() && config.effective_storage_backend() == "sqlite")
 }
 
-fn init_tracing_cli() {
-    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-    if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
-        if let Ok(log_file) = std::fs::OpenOptions::new()
+fn open_debug_log_file() -> Option<std::fs::File> {
+    std::env::var("KANBAN_DEBUG_LOG").ok().and_then(|log_path| {
+        std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&log_path)
-        {
-            tracing_subscriber::registry()
-                .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")))
-                .with(
-                    tracing_subscriber::fmt::layer()
-                        .with_writer(log_file)
-                        .with_ansi(false)
-                        .with_target(true)
-                        .with_thread_ids(true)
-                        .with_file(true)
-                        .with_line_number(true),
-                )
-                .try_init()
-                .ok();
-            return;
-        }
+            .ok()
+    })
+}
+
+fn init_tracing_cli() {
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+    if let Some(log_file) = open_debug_log_file() {
+        tracing_subscriber::registry()
+            .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")))
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(log_file)
+                    .with_ansi(false)
+                    .with_target(true)
+                    .with_thread_ids(true)
+                    .with_file(true)
+                    .with_line_number(true),
+            )
+            .try_init()
+            .ok();
+        return;
     }
     tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")))
@@ -59,32 +63,27 @@ fn init_tracing_tui(
     use kanban_tui::error_log::InMemoryLogLayer;
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-    if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
-        if let Ok(log_file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-        {
-            tracing_subscriber::registry()
-                .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")))
-                .with(
-                    tracing_subscriber::fmt::layer()
-                        .with_writer(log_file)
-                        .with_ansi(false)
-                        .with_target(true)
-                        .with_thread_ids(true)
-                        .with_file(true)
-                        .with_line_number(true),
-                )
-                .with(InMemoryLogLayer::new(error_log))
-                .try_init()
-                .ok();
-            return;
-        }
+    let in_memory = InMemoryLogLayer::new(error_log);
+    if let Some(log_file) = open_debug_log_file() {
+        tracing_subscriber::registry()
+            .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")))
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(log_file)
+                    .with_ansi(false)
+                    .with_target(true)
+                    .with_thread_ids(true)
+                    .with_file(true)
+                    .with_line_number(true),
+            )
+            .with(in_memory)
+            .try_init()
+            .ok();
+        return;
     }
     tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")))
-        .with(InMemoryLogLayer::new(error_log))
+        .with(in_memory)
         .try_init()
         .ok();
 }
@@ -278,11 +277,16 @@ impl CliApp {
             None => {
                 #[cfg(feature = "tui")]
                 {
+                    let error_log = std::sync::Arc::new(std::sync::Mutex::new(
+                        kanban_tui::error_log::ErrorLogState::default(),
+                    ));
+                    init_tracing_tui(std::sync::Arc::clone(&error_log));
+
                     if is_sqlite {
                         #[cfg(feature = "sqlite")]
                         {
                             let mut app = App::open_sqlite(&effective_file, config).await?;
-                            init_tracing_tui(app.error_log_arc());
+                            app.set_error_log(error_log);
                             app.run(None).await?;
                         }
                         #[cfg(not(feature = "sqlite"))]
@@ -292,7 +296,7 @@ impl CliApp {
                     } else {
                         let (mut app, save_rx) =
                             App::new_with_store(store_manager, validated_file)?;
-                        init_tracing_tui(app.error_log_arc());
+                        app.set_error_log(error_log);
                         app.run(save_rx).await?;
                     }
                 }
