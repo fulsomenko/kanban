@@ -22,10 +22,12 @@ pub struct ErrorLogState {
     pub entries: VecDeque<LogEntry>,
     pub has_unread_errors: bool,
     pub unread_count: usize,
+    pub error_count: usize,
 }
 
 impl ErrorLogState {
     pub fn push(&mut self, message: String, target: String, level: LogLevel) {
+        let is_error = matches!(level, LogLevel::Error);
         self.entries.push_back(LogEntry {
             level,
             message,
@@ -37,6 +39,9 @@ impl ErrorLogState {
         }
         self.has_unread_errors = true;
         self.unread_count += 1;
+        if is_error {
+            self.error_count += 1;
+        }
     }
 
     pub fn clear_unread(&mut self) {

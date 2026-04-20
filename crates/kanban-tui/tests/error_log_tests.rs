@@ -180,10 +180,10 @@ fn test_auto_open_does_not_reopen_after_dismiss() {
         log.push("err".to_string(), "t".to_string(), LogLevel::Error);
     });
 
-    // Simulate auto-open via the same logic the tick handler uses
-    let entry_count = app.with_error_log(|log| log.entries.len());
-    assert!(entry_count > app.auto_open_seen_count);
-    app.auto_open_seen_count = entry_count;
+    // Simulate auto-open via the same logic the tick handler uses (error_count based)
+    let error_count = app.with_error_log(|log| log.error_count);
+    assert!(error_count > app.auto_open_seen_count);
+    app.auto_open_seen_count = error_count;
     app.open_error_log();
 
     // Dismiss
@@ -191,10 +191,10 @@ fn test_auto_open_does_not_reopen_after_dismiss() {
     assert_eq!(app.mode, AppMode::Normal);
 
     // No new errors — auto-open must NOT fire again
-    let entry_count = app.with_error_log(|log| log.entries.len());
+    let error_count = app.with_error_log(|log| log.error_count);
     assert!(
-        entry_count <= app.auto_open_seen_count,
-        "no new entries means auto-open should not fire"
+        error_count <= app.auto_open_seen_count,
+        "no new errors means auto-open should not fire"
     );
 }
 
@@ -206,8 +206,8 @@ fn test_auto_open_reopens_on_new_error_after_dismiss() {
     });
 
     // Auto-open + dismiss
-    let entry_count = app.with_error_log(|log| log.entries.len());
-    app.auto_open_seen_count = entry_count;
+    let error_count = app.with_error_log(|log| log.error_count);
+    app.auto_open_seen_count = error_count;
     app.open_error_log();
     app.pop_mode();
 
@@ -216,11 +216,26 @@ fn test_auto_open_reopens_on_new_error_after_dismiss() {
         log.push("err2".to_string(), "t".to_string(), LogLevel::Error);
     });
 
-    let new_count = app.with_error_log(|log| log.entries.len());
+    let new_error_count = app.with_error_log(|log| log.error_count);
     assert!(
-        new_count > app.auto_open_seen_count,
-        "new entry should trigger auto-open"
+        new_error_count > app.auto_open_seen_count,
+        "new ERROR entry should trigger auto-open"
     );
+}
+
+#[test]
+fn test_auto_open_does_not_fire_for_warn_only() {
+    let mut app = App::test_default();
+    app.with_error_log_mut(|log| {
+        log.push("warn msg".to_string(), "t".to_string(), LogLevel::Warn);
+    });
+
+    let error_count = app.with_error_log(|log| log.error_count);
+    assert_eq!(
+        error_count, app.auto_open_seen_count,
+        "WARN must not increment error_count, so auto-open should not fire"
+    );
+    assert_eq!(app.mode, AppMode::Normal);
 }
 
 #[test]

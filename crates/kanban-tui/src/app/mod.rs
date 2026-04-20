@@ -1918,13 +1918,13 @@ impl App {
                                 }
                                 self.handle_animation_tick();
 
-                                // Auto-open error log on new unread errors
-                                let entry_count =
-                                    self.with_error_log(|log| log.entries.len());
-                                if entry_count > self.auto_open_seen_count
+                                // Auto-open error log only on new ERROR entries (not WARN)
+                                let error_count =
+                                    self.with_error_log(|log| log.error_count);
+                                if error_count > self.auto_open_seen_count
                                     && !matches!(self.mode, AppMode::ErrorLog)
                                 {
-                                    self.auto_open_seen_count = entry_count;
+                                    self.auto_open_seen_count = error_count;
                                     self.open_error_log();
                                     self.needs_redraw = true;
                                 }
