@@ -216,6 +216,7 @@ impl App {
                         self.set_error(format!("Failed to edit title: {}", e));
                     }
                     should_restart = true;
+                    self.refresh_view();
                 }
                 CardFocus::Description => {
                     if let Err(e) =
@@ -225,6 +226,7 @@ impl App {
                         self.set_error(format!("Failed to edit description: {}", e));
                     }
                     should_restart = true;
+                    self.refresh_view();
                 }
                 CardFocus::Metadata => {
                     if let Some(card_idx) = self.selection.active_card_index {
@@ -272,6 +274,7 @@ impl App {
                                 }
                             }
                             should_restart = true;
+                            self.refresh_view();
                         }
                     }
                 }
@@ -395,6 +398,7 @@ impl App {
                         self.set_error(format!("Failed to edit board name: {}", e));
                     }
                     should_restart = true;
+                    self.refresh_view();
                 }
                 BoardFocus::Description => {
                     if let Err(e) =
@@ -404,6 +408,7 @@ impl App {
                         self.set_error(format!("Failed to edit board description: {}", e));
                     }
                     should_restart = true;
+                    self.refresh_view();
                 }
                 BoardFocus::Settings => {
                     if let Some(board_idx) = self.selection.board.get() {
@@ -455,6 +460,7 @@ impl App {
                                 }
                             }
                             should_restart = true;
+                            self.refresh_view();
                         }
                     }
                 }
