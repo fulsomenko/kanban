@@ -91,10 +91,12 @@ fn test_card_description_preserved_after_edit() {
         title: Some("Updated Title".to_string()),
         ..Default::default()
     };
-    let cmd = Box::new(kanban_domain::commands::UpdateCard {
-        card_id: card.id,
-        updates,
-    });
+    let cmd = kanban_domain::commands::Command::Card(
+        kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
+            card_id: card.id,
+            updates,
+        }),
+    );
     app.ctx.execute_command(cmd).unwrap();
 
     // Verify description is still there after update
@@ -117,7 +119,7 @@ fn test_markdown_rendering_of_description() {
     let column_id = uuid::Uuid::new_v4();
 
     // Test rendering of non-empty description
-    let mut card = Card::new(&mut board, column_id, "Test".to_string(), 0, "test");
+    let mut card = Card::new(&mut board, column_id, "Test".to_string(), 0);
     card.description = Some("# Heading\n\nSome **bold** text".to_string());
 
     let lines = build_description_lines(&card);
