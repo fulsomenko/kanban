@@ -6,6 +6,7 @@ pub struct UiState {
     pub banner: Option<Banner>,
     pub help_list: ListComponent,
     pub help_pending_action: Option<(Instant, KeybindingAction)>,
+    pub error_log_list: ListComponent,
 }
 
 impl Default for UiState {
@@ -14,6 +15,7 @@ impl Default for UiState {
             banner: None,
             help_list: ListComponent::new(false),
             help_pending_action: None,
+            error_log_list: ListComponent::new(false),
         }
     }
 }

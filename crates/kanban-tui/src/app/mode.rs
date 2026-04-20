@@ -41,4 +41,5 @@ pub enum AppMode {
     Settings,
     Help(Box<AppMode>),
     Dialog(DialogMode),
+    ErrorLog,
 }

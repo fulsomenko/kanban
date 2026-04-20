@@ -159,6 +159,30 @@ impl KeybindingProvider for DeleteConfirmProvider {
     }
 }
 
+pub struct ErrorLogProvider;
+
+impl KeybindingProvider for ErrorLogProvider {
+    fn get_context(&self) -> KeybindingContext {
+        KeybindingContext::new(
+            "Error Log",
+            vec![
+                Keybinding::new(
+                    "ESC/q",
+                    "close",
+                    "Close error log",
+                    KeybindingAction::Escape,
+                ),
+                Keybinding::new(
+                    "j/k",
+                    "scroll",
+                    "Scroll up/down",
+                    KeybindingAction::NavigateDown,
+                ),
+            ],
+        )
+    }
+}
+
 pub struct FilterOptionsProvider;
 
 impl KeybindingProvider for FilterOptionsProvider {

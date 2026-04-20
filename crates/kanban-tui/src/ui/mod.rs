@@ -7,6 +7,7 @@ use ratatui::{
 mod board_detail;
 mod card_detail;
 mod dialogs;
+mod error_log;
 mod main_view;
 mod settings_view;
 mod sprint_detail;
@@ -115,6 +116,11 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         }
         app.view.last_frame_area = frame.area();
         crate::components::render_help_popup(app, frame);
+    }
+
+    // Render error log overlay on top if active
+    if matches!(app.mode, AppMode::ErrorLog) {
+        error_log::render_error_log_popup(app, frame);
     }
 
     // Render banner on top if present
