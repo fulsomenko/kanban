@@ -26,7 +26,7 @@ pub mod relationship;
 pub use relationship::RelationshipState;
 
 pub mod view;
-pub use view::ViewState;
+pub use view::{RenderData, ViewState};
 
 pub mod persistence;
 pub use persistence::PersistenceState;
@@ -92,6 +92,8 @@ pub struct App {
     pub ui_state: UiState,
     pub sprint_view: SprintViewState,
     pub view: ViewState,
+    pub render_data: RenderData,
+    pub view_dirty: bool,
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
     pub has_data_file: bool,
@@ -261,6 +263,8 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
+            render_data: RenderData::default(),
+            view_dirty: true,
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
@@ -337,6 +341,8 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
+            render_data: RenderData::default(),
+            view_dirty: true,
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
@@ -1041,20 +1047,20 @@ impl App {
         match key_code {
             KeyCode::Char(c) => {
                 self.filter.search.input.insert_char(c);
-                self.refresh_view();
+                self.mark_view_dirty();
             }
             KeyCode::Backspace => {
                 self.filter.search.input.backspace();
-                self.refresh_view();
+                self.mark_view_dirty();
             }
             KeyCode::Enter => {
                 self.mode = AppMode::Normal;
-                self.refresh_view();
+                self.mark_view_dirty();
             }
             KeyCode::Esc => {
                 self.filter.search.deactivate();
                 self.mode = AppMode::Normal;
-                self.refresh_view();
+                self.mark_view_dirty();
             }
             _ => {}
         }
@@ -1351,13 +1357,13 @@ impl App {
     }
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<Card> {
-        self.view.cards_by_id.get(&card_id).cloned()
+        self.render_data.cards_by_id.get(&card_id).cloned()
     }
 
     pub fn get_card_for_detail_view(&self) -> Option<Card> {
         self.selection
             .active_card_id
-            .and_then(|id| self.view.cards_by_id.get(&id).cloned())
+            .and_then(|id| self.render_data.cards_by_id.get(&id).cloned())
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
@@ -1427,55 +1433,56 @@ impl App {
         commands: Vec<kanban_domain::commands::Command>,
     ) -> KanbanResult<()> {
         self.ctx.execute_commands_batch(commands)?;
-        self.refresh_view();
+        self.mark_view_dirty();
         Ok(())
     }
 
-    pub fn refresh_view(&mut self) {
+    pub fn mark_view_dirty(&mut self) {
+        self.view_dirty = true;
+        self.needs_redraw = true;
+    }
+
+    pub fn populate_render_data(&mut self) {
+        let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
+            self.ctx
+                .archived_cards()
+                .iter()
+                .map(|dc| dc.card.clone())
+                .collect()
+        } else {
+            self.ctx.cards()
+        };
+        self.render_data.cards_by_id =
+            cards_for_display.into_iter().map(|c| (c.id, c)).collect();
+        self.render_data.sprints = self.ctx.sprints();
+        self.render_data.columns = self.ctx.columns();
+        self.render_data.boards = self.ctx.boards();
+        self.render_data.graph = self.ctx.graph();
+    }
+
+    pub fn refresh_strategy(&mut self) {
         let board_idx = self
             .selection
             .active_board_index
             .or(self.selection.board.get());
         if let Some(idx) = board_idx {
-            let boards = self.ctx.boards();
-            if let Some(board) = boards.get(idx) {
+            if let Some(board) = self.render_data.boards.get(idx) {
                 let search_query = if self.filter.search.is_active {
                     Some(self.filter.search.query())
                 } else {
                     None
                 };
-
-                // When in DeletedCardsView, convert deleted cards to Card objects for display
-                let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
-                    self.ctx
-                        .archived_cards()
-                        .iter()
-                        .map(|dc| dc.card.clone())
-                        .collect()
-                } else {
-                    self.ctx.cards()
-                };
-
-                let columns = self.ctx.columns();
-                let sprints = self.ctx.sprints();
+                let cards: Vec<Card> = self.render_data.cards_by_id.values().cloned().collect();
                 let ctx = ViewRefreshContext {
                     board,
-                    all_cards: &cards_for_display,
-                    all_columns: &columns,
-                    all_sprints: &sprints,
+                    all_cards: &cards,
+                    all_columns: &self.render_data.columns,
+                    all_sprints: &self.render_data.sprints,
                     active_sprint_filters: self.filter.active_sprint_filters.clone(),
                     hide_assigned_cards: self.filter.hide_assigned_cards,
                     search_query,
                 };
                 self.view.strategy.refresh_task_lists(&ctx);
-
-                // Keep the already-fetched data for rendering so the render
-                // path never re-queries the database just to display cards.
-                self.view.cards_by_id = cards_for_display.into_iter().map(|c| (c.id, c)).collect();
-                self.view.sprints = sprints;
-                self.view.columns = columns;
-                self.view.boards = boards;
-                self.view.graph = self.ctx.graph();
             }
         }
         self.sync_card_list_component();
@@ -1484,7 +1491,7 @@ impl App {
     /// Undo the last action
     pub fn undo(&mut self) -> KanbanResult<()> {
         if self.ctx.undo()? {
-            self.refresh_view();
+            self.mark_view_dirty();
         } else {
             self.set_error("Nothing to undo".to_string());
         }
@@ -1494,7 +1501,7 @@ impl App {
     /// Redo the last undone action
     pub fn redo(&mut self) -> KanbanResult<()> {
         if self.ctx.redo()? {
-            self.refresh_view();
+            self.mark_view_dirty();
         } else {
             self.set_error("Nothing to redo".to_string());
         }
@@ -1519,7 +1526,7 @@ impl App {
         };
 
         self.view.strategy = new_strategy;
-        self.refresh_view();
+        self.mark_view_dirty();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
@@ -1655,7 +1662,7 @@ impl App {
                                 kanban_domain::commands::UpdateBoard { board_id, updates },
                             ),
                         );
-                        if let Err(e) = self.ctx.execute_command(cmd) {
+                        if let Err(e) = self.execute_command(cmd) {
                             tracing::error!("Failed to update board: {}", e);
                         }
                     }
@@ -1721,7 +1728,7 @@ impl App {
                                 kanban_domain::commands::UpdateCard { card_id, updates },
                             ),
                         );
-                        if let Err(e) = self.ctx.execute_command(cmd) {
+                        if let Err(e) = self.execute_command(cmd) {
                             tracing::error!("Failed to update card: {}", e);
                         }
                     }
@@ -1809,7 +1816,8 @@ impl App {
         if self.selection.board.get().is_none() && !self.ctx.boards().is_empty() {
             self.selection.board.set(Some(0));
         }
-        self.refresh_view();
+        self.populate_render_data();
+        self.refresh_strategy();
     }
 
     pub async fn run(
@@ -1873,6 +1881,11 @@ impl App {
 
             loop {
                 if self.needs_redraw {
+                    self.populate_render_data();
+                    if self.view_dirty {
+                        self.refresh_strategy();
+                        self.view_dirty = false;
+                    }
                     terminal.draw(|frame| ui::render(self, frame))?;
                     self.needs_redraw = false;
                 }
@@ -1973,7 +1986,7 @@ impl App {
                                                                     tracing::error!("Failed to clear history: {}", e);
                                                                 }
                                                                 self.ctx.clear_conflict();
-                                                                self.refresh_view();
+                                                                self.mark_view_dirty();
                                                                 tracing::info!("Reloaded state from disk");
                                                             }
                                                         }
@@ -2228,7 +2241,7 @@ impl App {
                             }
                             self.ctx.mark_clean();
                             self.ctx.clear_conflict();
-                            self.refresh_view();
+                            self.mark_view_dirty();
                             tracing::info!("Auto-reloaded state from external file change");
                         }
                     }
@@ -2399,6 +2412,8 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
+            render_data: RenderData::default(),
+            view_dirty: true,
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,

@@ -149,7 +149,7 @@ impl App {
                 }
 
                 tracing::info!("Toggled sort order to: {:?}", new_order);
-                self.refresh_view();
+                self.mark_view_dirty();
             }
         }
     }
@@ -164,7 +164,7 @@ impl App {
             };
             tracing::info!("Hide assigned cards: {}", status);
 
-            self.refresh_view();
+            self.mark_view_dirty();
         }
     }
 
@@ -187,7 +187,7 @@ impl App {
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
 
-                        self.refresh_view();
+                        self.mark_view_dirty();
                     } else {
                         tracing::warn!("No active sprint set for filtering");
                     }
@@ -809,7 +809,8 @@ impl App {
         match self.mode {
             AppMode::Normal => {
                 self.mode = AppMode::ArchivedCardsView;
-                self.refresh_view();
+                self.populate_render_data();
+                self.refresh_strategy();
 
                 // Initialize selection in view strategy
                 if let Some(list) = self.view.strategy.get_active_task_list_mut() {
@@ -818,10 +819,12 @@ impl App {
                         list.ensure_selected_visible(self.view.viewport_height);
                     }
                 }
+                self.needs_redraw = true;
             }
             AppMode::ArchivedCardsView => {
                 self.mode = AppMode::Normal;
-                self.refresh_view();
+                self.populate_render_data();
+                self.refresh_strategy();
 
                 // Re-initialize selection when returning to normal view
                 if let Some(list) = self.view.strategy.get_active_task_list_mut() {
@@ -830,6 +833,7 @@ impl App {
                         list.ensure_selected_visible(self.view.viewport_height);
                     }
                 }
+                self.needs_redraw = true;
             }
             _ => {}
         }

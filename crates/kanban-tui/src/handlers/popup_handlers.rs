@@ -222,7 +222,7 @@ impl App {
                     if is_sprint_detail {
                         self.apply_sort_to_sprint_lists(field, order);
                     } else {
-                        self.refresh_view();
+                        self.mark_view_dirty();
                     }
                 }
                 false
