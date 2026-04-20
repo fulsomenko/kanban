@@ -106,6 +106,7 @@ pub struct App {
     pub export_result_rx: Option<tokio::sync::oneshot::Receiver<Result<String, String>>>,
     pub needs_redraw: bool,
     pub error_log: Arc<Mutex<crate::error_log::ErrorLogState>>,
+    pub auto_open_seen_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -274,6 +275,7 @@ impl App {
             export_result_rx: None,
             needs_redraw: true,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
+            auto_open_seen_count: 0,
         };
 
         Ok((app, save_rx))
@@ -349,6 +351,7 @@ impl App {
             export_result_rx: None,
             needs_redraw: true,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
+            auto_open_seen_count: 0,
         })
     }
 
@@ -508,12 +511,32 @@ impl App {
         }
     }
 
+    pub fn with_error_log<R>(&self, f: impl FnOnce(&crate::error_log::ErrorLogState) -> R) -> R {
+        let log = self.error_log.lock().unwrap_or_else(|e| e.into_inner());
+        f(&log)
+    }
+
+    pub fn with_error_log_mut<R>(
+        &mut self,
+        f: impl FnOnce(&mut crate::error_log::ErrorLogState) -> R,
+    ) -> R {
+        let mut log = self.error_log.lock().unwrap_or_else(|e| e.into_inner());
+        f(&mut log)
+    }
+
     pub fn open_error_log(&mut self) {
-        {
-            let mut log = self.error_log.lock().unwrap();
+        let entry_count = self.with_error_log_mut(|log| {
             log.has_unread_errors = false;
-        }
+            log.unread_count = 0;
+            log.entries.len()
+        });
+        self.ui_state.error_log_list.update_item_count(entry_count);
+        self.ui_state.error_log_list.set_scroll_offset(0);
         self.push_mode(AppMode::ErrorLog);
+    }
+
+    pub fn set_error_log(&mut self, error_log: Arc<Mutex<crate::error_log::ErrorLogState>>) {
+        self.error_log = error_log;
     }
 
     pub fn error_log_arc(&self) -> Arc<Mutex<crate::error_log::ErrorLogState>> {
@@ -1896,9 +1919,12 @@ impl App {
                                 self.handle_animation_tick();
 
                                 // Auto-open error log on new unread errors
-                                let has_unread =
-                                    self.error_log.lock().unwrap().has_unread_errors;
-                                if has_unread && !matches!(self.mode, AppMode::ErrorLog) {
+                                let entry_count =
+                                    self.with_error_log(|log| log.entries.len());
+                                if entry_count > self.auto_open_seen_count
+                                    && !matches!(self.mode, AppMode::ErrorLog)
+                                {
+                                    self.auto_open_seen_count = entry_count;
                                     self.open_error_log();
                                     self.needs_redraw = true;
                                 }
@@ -2387,6 +2413,7 @@ impl App {
             export_result_rx: None,
             needs_redraw: true,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
+            auto_open_seen_count: 0,
         }
     }
 }

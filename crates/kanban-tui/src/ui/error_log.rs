@@ -31,8 +31,7 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
         ])
         .split(inner);
 
-    let log = app.error_log.lock().unwrap();
-    let total = log.entries.len();
+    let total = app.with_error_log(|log| log.entries.len());
     let header = Paragraph::new(vec![
         Line::from(Span::styled(
             format!("{total} entries"),
@@ -45,31 +44,32 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
     frame.render_widget(header, chunks[0]);
 
     let viewport_height = chunks[1].height as usize;
-    let total_entries = log.entries.len();
+    let total_entries = total;
 
     let scroll_offset = app.ui_state.error_log_list.get_scroll_offset();
-    let visible: Vec<Line> = log
-        .entries
-        .iter()
-        .rev()
-        .skip(scroll_offset)
-        .take(viewport_height)
-        .map(|entry| {
-            let (label, color) = match entry.level {
-                LogLevel::Error => ("[ERROR]", Color::Red),
-                LogLevel::Warn => (" [WARN]", Color::Yellow),
-            };
-            let ts = entry.timestamp.format("%H:%M:%S").to_string();
-            Line::from(vec![
-                Span::styled(
-                    label,
-                    Style::default().fg(color).add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(format!(" {} {} ", ts, entry.target)),
-                Span::raw(entry.message.clone()),
-            ])
-        })
-        .collect();
+    let visible: Vec<Line> = app.with_error_log(|log| {
+        log.entries
+            .iter()
+            .rev()
+            .skip(scroll_offset)
+            .take(viewport_height)
+            .map(|entry| {
+                let (label, color) = match entry.level {
+                    LogLevel::Error => ("[ERROR]", Color::Red),
+                    LogLevel::Warn => (" [WARN]", Color::Yellow),
+                };
+                let ts = entry.timestamp.format("%H:%M:%S").to_string();
+                Line::from(vec![
+                    Span::styled(
+                        label,
+                        Style::default().fg(color).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(format!(" {} {} ", ts, entry.target)),
+                    Span::raw(entry.message.clone()),
+                ])
+            })
+            .collect()
+    });
 
     frame.render_widget(Paragraph::new(visible), chunks[1]);
 

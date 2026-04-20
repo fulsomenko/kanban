@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 pub const MAX_ENTRIES: usize = 200;
@@ -18,27 +19,24 @@ pub struct LogEntry {
 
 #[derive(Debug, Default)]
 pub struct ErrorLogState {
-    pub entries: Vec<LogEntry>,
+    pub entries: VecDeque<LogEntry>,
     pub has_unread_errors: bool,
     pub unread_count: usize,
 }
 
 impl ErrorLogState {
     pub fn push(&mut self, message: String, target: String, level: LogLevel) {
-        let is_error = matches!(level, LogLevel::Error);
-        self.entries.push(LogEntry {
+        self.entries.push_back(LogEntry {
             level,
             message,
             target,
             timestamp: chrono::Local::now(),
         });
         if self.entries.len() > MAX_ENTRIES {
-            self.entries.remove(0);
+            self.entries.pop_front();
         }
-        if is_error {
-            self.has_unread_errors = true;
-            self.unread_count += 1;
-        }
+        self.has_unread_errors = true;
+        self.unread_count += 1;
     }
 
     pub fn clear_unread(&mut self) {
@@ -86,7 +84,12 @@ struct MessageVisitor(String);
 impl tracing::field::Visit for MessageVisitor {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
-            self.0 = format!("{value:?}");
+            let formatted = format!("{value:?}");
+            self.0 = formatted
+                .strip_prefix('"')
+                .and_then(|s| s.strip_suffix('"'))
+                .unwrap_or(&formatted)
+                .to_string();
         }
     }
 

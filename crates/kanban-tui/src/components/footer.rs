@@ -83,9 +83,9 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     };
 
     let error_badge: String = {
-        let log = app.error_log.lock().unwrap();
-        if log.unread_count > 0 {
-            format!("  [!] {} errors  F12: error log", log.unread_count)
+        let (unread_count,) = app.with_error_log(|log| (log.unread_count,));
+        if unread_count > 0 {
+            format!("  [!] {} new  F12: error log", unread_count)
         } else {
             String::new()
         }

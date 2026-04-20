@@ -3,8 +3,8 @@ use super::{
     card_detail::CardDetailProvider,
     card_list::CardListProvider,
     dialog_modes::{
-        DeleteConfirmProvider, DialogInputProvider, DialogSelectionProvider, FilterOptionsProvider,
-        SearchModeProvider,
+        DeleteConfirmProvider, DialogInputProvider, DialogSelectionProvider, ErrorLogProvider,
+        FilterOptionsProvider, SearchModeProvider,
     },
     normal_mode::{ArchivedCardsViewProvider, NormalModeBoardsProvider},
     settings::SettingsViewProvider,
@@ -107,7 +107,7 @@ impl KeybindingRegistry {
                 }
                 DialogMode::ExportBoards => Box::new(DialogSelectionProvider::new("Export Boards")),
             },
-            AppMode::ErrorLog => Box::new(NormalModeBoardsProvider),
+            AppMode::ErrorLog => Box::new(ErrorLogProvider),
         }
     }
 }
