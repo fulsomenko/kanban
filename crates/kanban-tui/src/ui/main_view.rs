@@ -11,7 +11,7 @@ use ratatui::{
 
 pub(super) fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
     let is_kanban_view = if let Some(idx) = app.selection.active_board_index {
-        if let Some(board) = app.view.boards.get(idx) {
+        if let Some(board) = app.render_data.boards.get(idx) {
             board.task_list_view == kanban_domain::TaskListView::ColumnView
         } else {
             false
@@ -37,7 +37,7 @@ pub(super) fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
 
 pub(super) fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     let mut lines = vec![];
-    let boards = &app.view.boards;
+    let boards = &app.render_data.boards;
 
     if boards.is_empty() {
         lines.push(Line::from(Span::styled(
@@ -76,9 +76,9 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
             .active_board_index
             .or(app.selection.board.get())
         {
-            if let Some(board) = app.view.boards.get(board_idx) {
+            if let Some(board) = app.render_data.boards.get(board_idx) {
                 let mut sprint_names: Vec<String> = app
-                    .view
+                    .render_data
                     .sprints
                     .iter()
                     .filter(|s| app.filter.active_sprint_filters.contains(&s.id))
@@ -165,7 +165,8 @@ mod tests {
         let sprint_id = sprint.id;
         app.selection.active_board_index = Some(0);
         app.filter.active_sprint_filters.insert(sprint_id);
-        app.refresh_view();
+        app.populate_render_data();
+        app.refresh_strategy();
         let suffix = build_filter_title_suffix(&app);
         assert!(
             suffix.is_some(),

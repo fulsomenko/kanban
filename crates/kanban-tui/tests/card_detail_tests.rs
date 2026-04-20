@@ -17,8 +17,8 @@ fn test_active_card_detail_shows_selected_card() {
 
     let card_b_id = card_b.id;
 
-    app.view.cards_by_id.insert(card_a.id, card_a);
-    app.view.cards_by_id.insert(card_b.id, card_b);
+    app.render_data.cards_by_id.insert(card_a.id, card_a);
+    app.render_data.cards_by_id.insert(card_b.id, card_b);
 
     // Select the second card by ID — not by index into HashMap values.
     app.selection.active_card_id = Some(card_b_id);

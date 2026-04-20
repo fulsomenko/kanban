@@ -27,7 +27,7 @@ pub(crate) fn render_export_boards_popup(app: &App, frame: &mut Frame) {
                 .split(inner);
 
             let items: Vec<Line> = app
-                .view
+                .render_data
                 .boards
                 .iter()
                 .enumerate()

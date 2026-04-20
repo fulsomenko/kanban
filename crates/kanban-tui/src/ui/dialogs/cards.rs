@@ -84,8 +84,8 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     let mut lines = vec![];
 
     if let Some(board_idx) = app.selection.active_board_index {
-        if let Some(board) = app.view.boards.get(board_idx) {
-            let sprints = &app.view.sprints;
+        if let Some(board) = app.render_data.boards.get(board_idx) {
+            let sprints = &app.render_data.sprints;
             let board_sprints = Sprint::assignable(sprints, board.id);
 
             for (idx, sprint_option) in std::iter::once(None)

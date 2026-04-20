@@ -122,7 +122,8 @@ fn test_render_export_boards_select_step_shows_board_names() {
     let mut app = App::test_default();
     app.ctx.create_board("MyTestBoard".into(), None).unwrap();
     app.selection.active_board_index = Some(0);
-    app.refresh_view();
+    app.populate_render_data();
+    app.refresh_strategy();
     app.export_dialog = Some(ExportDialogState::new(1));
     app.push_mode(AppMode::Settings);
     app.push_mode(AppMode::Dialog(DialogMode::ExportBoards));

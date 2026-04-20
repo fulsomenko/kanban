@@ -12,9 +12,9 @@ use ratatui::{
 
 pub(super) fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(sprint_idx) = app.selection.active_sprint_index {
-        if let Some(sprint) = app.view.sprints.get(sprint_idx) {
+        if let Some(sprint) = app.render_data.sprints.get(sprint_idx) {
             if let Some(board_idx) = app.selection.active_board_index {
-                if let Some(board) = app.view.boards.get(board_idx) {
+                if let Some(board) = app.render_data.boards.get(board_idx) {
                     let is_completed = sprint.status == SprintStatus::Completed;
 
                     if is_completed {
@@ -100,7 +100,7 @@ fn sprint_card_assignment_lines(
     board: &kanban_domain::Board,
 ) -> Vec<Line<'static>> {
     let card_count = app
-        .view
+        .render_data
         .cards_by_id
         .values()
         .filter(|c| c.sprint_id == Some(sprint.id))
@@ -228,7 +228,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
             "Task",
         ));
 
-        let sprints = &app.view.sprints;
+        let sprints = &app.render_data.sprints;
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -262,7 +262,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
         ));
     }
 
-    let points = calculate_task_panel_points(task_list, &app.view.cards_by_id);
+    let points = calculate_task_panel_points(task_list, &app.render_data.cards_by_id);
 
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),
