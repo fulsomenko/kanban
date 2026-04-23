@@ -6,24 +6,13 @@ use ratatui::layout::Rect;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[derive(Default)]
 pub struct RenderData {
     pub boards: Vec<Board>,
     pub sprints: Vec<Sprint>,
     pub columns: Vec<Column>,
     pub cards_by_id: HashMap<Uuid, Card>,
     pub graph: DependencyGraph,
-}
-
-impl Default for RenderData {
-    fn default() -> Self {
-        Self {
-            boards: Vec::new(),
-            sprints: Vec::new(),
-            columns: Vec::new(),
-            cards_by_id: HashMap::new(),
-            graph: DependencyGraph::new(),
-        }
-    }
 }
 
 pub struct ViewState {
