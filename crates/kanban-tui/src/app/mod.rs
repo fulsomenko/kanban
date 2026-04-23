@@ -1044,20 +1044,16 @@ impl App {
         match key_code {
             KeyCode::Char(c) => {
                 self.filter.search.input.insert_char(c);
-                self.needs_redraw = true;
             }
             KeyCode::Backspace => {
                 self.filter.search.input.backspace();
-                self.needs_redraw = true;
             }
             KeyCode::Enter => {
                 self.mode = AppMode::Normal;
-                self.needs_redraw = true;
             }
             KeyCode::Esc => {
                 self.filter.search.deactivate();
                 self.mode = AppMode::Normal;
-                self.needs_redraw = true;
             }
             _ => {}
         }
@@ -1516,7 +1512,6 @@ impl App {
         };
 
         self.view.strategy = new_strategy;
-        self.needs_redraw = true;
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {

@@ -117,8 +117,6 @@ impl App {
         if let Some(dialog_state) = &self.filter.dialog_state {
             self.filter.hide_assigned_cards = dialog_state.filters.show_unassigned_sprints;
             self.filter.active_sprint_filters = dialog_state.filters.selected_sprint_ids.clone();
-
-            self.needs_redraw = true;
             tracing::info!(
                 "Applied filters: unassigned={}, sprints={}",
                 self.filter.hide_assigned_cards,

@@ -221,8 +221,6 @@ impl App {
 
                     if is_sprint_detail {
                         self.apply_sort_to_sprint_lists(field, order);
-                    } else {
-                        self.needs_redraw = true;
                     }
                 }
                 false

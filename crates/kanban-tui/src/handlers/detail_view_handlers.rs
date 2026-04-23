@@ -216,7 +216,6 @@ impl App {
                         self.set_error(format!("Failed to edit title: {}", e));
                     }
                     should_restart = true;
-                    self.needs_redraw = true;
                 }
                 CardFocus::Description => {
                     if let Err(e) =
@@ -226,7 +225,6 @@ impl App {
                         self.set_error(format!("Failed to edit description: {}", e));
                     }
                     should_restart = true;
-                    self.needs_redraw = true;
                 }
                 CardFocus::Metadata => {
                     if let Some(card_idx) = self.selection.active_card_index {
@@ -274,7 +272,6 @@ impl App {
                                 }
                             }
                             should_restart = true;
-                            self.needs_redraw = true;
                         }
                     }
                 }
@@ -290,7 +287,6 @@ impl App {
                 self.pop_mode();
                 self.selection.active_card_index = None;
                 self.focus.card_focus = CardFocus::Title;
-                self.needs_redraw = true;
             }
             KeyCode::Char('a') => {
                 if let Some(board_idx) = self.selection.active_board_index {
@@ -398,7 +394,6 @@ impl App {
                         self.set_error(format!("Failed to edit board name: {}", e));
                     }
                     should_restart = true;
-                    self.needs_redraw = true;
                 }
                 BoardFocus::Description => {
                     if let Err(e) =
@@ -408,7 +403,6 @@ impl App {
                         self.set_error(format!("Failed to edit board description: {}", e));
                     }
                     should_restart = true;
-                    self.needs_redraw = true;
                 }
                 BoardFocus::Settings => {
                     if let Some(board_idx) = self.selection.board.get() {
@@ -460,7 +454,6 @@ impl App {
                                 }
                             }
                             should_restart = true;
-                            self.needs_redraw = true;
                         }
                     }
                 }

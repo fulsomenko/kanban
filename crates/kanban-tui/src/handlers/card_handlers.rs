@@ -149,7 +149,6 @@ impl App {
                 }
 
                 tracing::info!("Toggled sort order to: {:?}", new_order);
-                self.needs_redraw = true;
             }
         }
     }
@@ -163,8 +162,6 @@ impl App {
                 "disabled"
             };
             tracing::info!("Hide assigned cards: {}", status);
-
-            self.needs_redraw = true;
         }
     }
 
@@ -186,8 +183,6 @@ impl App {
                             self.filter.active_sprint_filters.insert(active_sprint_id);
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
-
-                        self.needs_redraw = true;
                     } else {
                         tracing::warn!("No active sprint set for filtering");
                     }
