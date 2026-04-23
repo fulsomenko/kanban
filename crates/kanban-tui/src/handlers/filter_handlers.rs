@@ -33,9 +33,9 @@ impl App {
                 KeyCode::Char('j') | KeyCode::Down => match dialog_state.current_section {
                     FilterDialogSection::Sprints => {
                         if let Some(board_idx) = self.selection.active_board_index {
-                            if let Some(board) = self.ctx.boards().get(board_idx) {
+                            if let Some(board) = self.model.boards().get(board_idx) {
                                 let sprint_count = self
-                                    .ctx
+                                    .model
                                     .sprints()
                                     .iter()
                                     .filter(|s| s.board_id == board.id)
@@ -76,9 +76,9 @@ impl App {
                             );
                             self.apply_filters();
                         } else if let Some(board_idx) = self.selection.active_board_index {
-                            let boards = self.ctx.boards();
+                            let boards = self.model.boards();
                             if let Some(board) = boards.get(board_idx) {
-                                let sprints = self.ctx.sprints();
+                                let sprints = self.model.sprints();
                                 let board_sprints: Vec<_> =
                                     sprints.iter().filter(|s| s.board_id == board.id).collect();
 

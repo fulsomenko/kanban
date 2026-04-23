@@ -1190,7 +1190,7 @@ impl App {
             self.animation.animating.remove(&card_id);
             match animation_type {
                 AnimationType::Archiving => {
-                    let cards = self.ctx.cards();
+                    let cards = self.model.cards();
                     if let Some(card_pos) = cards.iter().position(|c| c.id == card_id) {
                         let card = &cards[card_pos];
                         last_archive_column = Some(card.column_id);
@@ -1252,7 +1252,7 @@ impl App {
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
         if let Some(archived_card) = self
-            .ctx
+            .model
             .archived_cards()
             .iter()
             .find(|dc| dc.card.id == card_id)
@@ -1263,8 +1263,8 @@ impl App {
     }
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
-        let columns = self.ctx.columns();
-        let board_filter = BoardFilter::new(board_id, &columns);
+        let columns = self.model.columns();
+        let board_filter = BoardFilter::new(board_id, columns);
         let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
             Some(SprintFilter::in_sprints(
                 self.filter.active_sprint_filters.iter().copied(),
@@ -1273,7 +1273,7 @@ impl App {
             None
         };
 
-        let cards = self.ctx.cards();
+        let cards = self.model.cards();
         cards
             .iter()
             .filter(|c| {
@@ -1294,10 +1294,10 @@ impl App {
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<Card> {
-        let boards = self.ctx.boards();
+        let boards = self.model.boards();
         let board = boards.iter().find(|b| b.id == board_id).unwrap();
-        let columns = self.ctx.columns();
-        let board_filter = BoardFilter::new(board_id, &columns);
+        let columns = self.model.columns();
+        let board_filter = BoardFilter::new(board_id, columns);
         let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
             Some(SprintFilter::in_sprints(
                 self.filter.active_sprint_filters.iter().copied(),
@@ -1306,7 +1306,7 @@ impl App {
             None
         };
 
-        let all_cards = self.ctx.cards();
+        let all_cards = self.model.cards();
         let mut cards: Vec<&Card> = all_cards
             .iter()
             .filter(|c| {
@@ -1365,8 +1365,8 @@ impl App {
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
-        let cards = self.ctx.cards();
-        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &cards);
+        let cards = self.model.cards();
+        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, cards);
 
         self.sprint_view
             .uncompleted_cards
@@ -1385,16 +1385,16 @@ impl App {
     }
 
     pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
-        let cards = self.ctx.cards();
+        let cards = self.model.cards();
         let sorted_uncompleted_ids = sort_card_ids(
             &self.sprint_view.uncompleted_cards.cards,
-            &cards,
+            cards,
             sort_field,
             sort_order,
         );
         let sorted_completed_ids = sort_card_ids(
             &self.sprint_view.completed_cards.cards,
-            &cards,
+            cards,
             sort_field,
             sort_order,
         );
@@ -1525,14 +1525,14 @@ impl App {
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
         if let Some(board_idx) = self.selection.board.get() {
-            let boards = self.ctx.boards();
+            let boards = self.model.boards();
             if let Some(board) = boards.get(board_idx) {
-                let columns = self.ctx.columns();
-                let cards = self.ctx.cards();
-                let archived_cards = self.ctx.archived_cards();
-                let sprints = self.ctx.sprints();
+                let columns = self.model.columns();
+                let cards = self.model.cards();
+                let archived_cards = self.model.archived_cards();
+                let sprints = self.model.sprints();
                 let board_export =
-                    BoardExporter::export_board(board, &columns, &cards, &archived_cards, &sprints);
+                    BoardExporter::export_board(board, columns, cards, archived_cards, sprints);
 
                 let export = AllBoardsExport {
                     boards: vec![board_export],
@@ -1545,30 +1545,30 @@ impl App {
     }
 
     pub fn export_all_boards_with_filename(&self) -> io::Result<()> {
-        let boards = self.ctx.boards();
-        let columns = self.ctx.columns();
-        let cards = self.ctx.cards();
-        let archived_cards = self.ctx.archived_cards();
-        let sprints = self.ctx.sprints();
+        let boards = self.model.boards();
+        let columns = self.model.columns();
+        let cards = self.model.cards();
+        let archived_cards = self.model.archived_cards();
+        let sprints = self.model.sprints();
         let export =
-            BoardExporter::export_all_boards(&boards, &columns, &cards, &archived_cards, &sprints);
+            BoardExporter::export_all_boards(boards, columns, cards, archived_cards, sprints);
         BoardExporter::export_to_file(&export, self.input.as_str())?;
         Ok(())
     }
 
     pub fn auto_save(&self) -> io::Result<()> {
         if let Some(ref filename) = self.persistence.save_file {
-            let boards = self.ctx.boards();
-            let columns = self.ctx.columns();
-            let cards = self.ctx.cards();
-            let archived_cards = self.ctx.archived_cards();
-            let sprints = self.ctx.sprints();
+            let boards = self.model.boards();
+            let columns = self.model.columns();
+            let cards = self.model.cards();
+            let archived_cards = self.model.archived_cards();
+            let sprints = self.model.sprints();
             let export = BoardExporter::export_all_boards(
-                &boards,
-                &columns,
-                &cards,
-                &archived_cards,
-                &sprints,
+                boards,
+                columns,
+                cards,
+                archived_cards,
+                sprints,
             );
             BoardExporter::export_to_file(&export, filename)?;
         }
@@ -1607,7 +1607,7 @@ impl App {
         field: BoardField,
     ) -> io::Result<()> {
         if let Some(board_idx) = self.selection.board.get() {
-            let boards = self.ctx.boards();
+            let boards = self.model.boards();
             if let Some(board) = boards.get(board_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
@@ -1673,7 +1673,7 @@ impl App {
         field: CardField,
     ) -> io::Result<()> {
         if let Some(card_idx) = self.selection.active_card_index {
-            let cards = self.ctx.cards();
+            let cards = self.model.cards();
             if let Some(card) = cards.get(card_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
@@ -2160,7 +2160,7 @@ impl App {
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         let content = std::fs::read_to_string(filename)?;
 
-        let first_new_index = self.ctx.boards().len();
+        let first_new_index = self.model.boards().len();
 
         // Try V2 format first (preserves graph)
         if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
@@ -2263,15 +2263,15 @@ impl App {
     {
         if let Some(card_idx) = self.selection.active_card_index {
             if let Some(board_idx) = self.selection.active_board_index {
-                let boards = self.ctx.boards();
+                let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
-                    let cards = self.ctx.cards();
+                    let cards = self.model.cards();
                     if let Some(card) = cards.get(card_idx) {
-                        let sprints = self.ctx.sprints();
+                        let sprints = self.model.sprints();
                         let output = get_output(
                             card,
                             board,
-                            &sprints,
+                            sprints,
                             self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&output) {
@@ -2299,7 +2299,7 @@ impl App {
 
     pub fn get_current_priority_selection_index(&self) -> usize {
         if let Some(card_idx) = self.selection.active_card_index {
-            let cards = self.ctx.cards();
+            let cards = self.model.cards();
             if let Some(card) = cards.get(card_idx) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
@@ -2315,14 +2315,14 @@ impl App {
 
     pub fn get_current_sprint_selection_index(&self) -> usize {
         if let Some(card_idx) = self.selection.active_card_index {
-            let cards = self.ctx.cards();
+            let cards = self.model.cards();
             if let Some(card) = cards.get(card_idx) {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.selection.active_board_index {
-                        let boards = self.ctx.boards();
+                        let boards = self.model.boards();
                         if let Some(board) = boards.get(board_idx) {
-                            let sprints = self.ctx.sprints();
-                            let board_sprints = Sprint::assignable(&sprints, board.id);
+                            let sprints = self.model.sprints();
+                            let board_sprints = Sprint::assignable(sprints, board.id);
                             for (idx, sprint) in board_sprints.iter().enumerate() {
                                 if sprint.id == card_sprint_id {
                                     return idx + 1;

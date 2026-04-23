@@ -134,7 +134,7 @@ impl App {
                     return false;
                 };
 
-                let cards = self.ctx.cards();
+                let cards = self.model.cards();
                 let card_id = self
                     .selection
                     .active_card_index
@@ -185,7 +185,7 @@ impl App {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.selection.board.get() {
                                 if let Some(board_id) =
-                                    self.ctx.boards().get(board_idx).map(|b| b.id)
+                                    self.model.boards().get(board_idx).map(|b| b.id)
                                 {
                                     let cmd = kanban_domain::commands::Command::Board(
                                         kanban_domain::commands::BoardCommand::Update(
@@ -213,7 +213,7 @@ impl App {
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints().get(sprint_idx).map(|s| s.id)
+                                    self.model.sprints().get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = kanban_domain::commands::Command::Sprint(
                                         kanban_domain::commands::SprintCommand::Update(
@@ -241,7 +241,7 @@ impl App {
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints().get(sprint_idx).map(|s| s.id)
+                                    self.model.sprints().get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = kanban_domain::commands::Command::Sprint(
                                         kanban_domain::commands::SprintCommand::Update(
@@ -275,7 +275,7 @@ impl App {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.selection.board.get() {
                                 if let Some(board_id) =
-                                    self.ctx.boards().get(board_idx).map(|b| b.id)
+                                    self.model.boards().get(board_idx).map(|b| b.id)
                                 {
                                     let cmd = kanban_domain::commands::Command::Board(
                                         kanban_domain::commands::BoardCommand::Update(
@@ -305,7 +305,7 @@ impl App {
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints().get(sprint_idx).map(|s| s.id)
+                                    self.model.sprints().get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = kanban_domain::commands::Command::Sprint(
                                         kanban_domain::commands::SprintCommand::Update(
@@ -333,7 +333,7 @@ impl App {
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints().get(sprint_idx).map(|s| s.id)
+                                    self.model.sprints().get(sprint_idx).map(|s| s.id)
                                 {
                                     let cmd = kanban_domain::commands::Command::Sprint(
                                         kanban_domain::commands::SprintCommand::Update(

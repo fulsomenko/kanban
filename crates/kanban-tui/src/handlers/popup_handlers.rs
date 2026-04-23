@@ -49,7 +49,7 @@ impl App {
             KeyCode::Enter => {
                 if let Some(priority_idx) = self.dialog_input.priority_selection.get() {
                     if let Some(card_idx) = self.selection.active_card_index {
-                        if let Some(card) = self.ctx.cards().get(card_idx) {
+                        if let Some(card) = self.model.cards().get(card_idx) {
                             use kanban_domain::{CardPriority, CardUpdate};
                             let priority = match priority_idx {
                                 0 => CardPriority::Low,
@@ -195,7 +195,7 @@ impl App {
                     self.filter.current_sort_order = Some(order);
 
                     if let Some(board_idx) = self.selection.active_board_index {
-                        if let Some(board) = self.ctx.boards().get(board_idx) {
+                        if let Some(board) = self.model.boards().get(board_idx) {
                             let board_id = board.id;
                             let cmd = kanban_domain::commands::Command::Board(
                                 kanban_domain::commands::BoardCommand::SetTaskSort(
@@ -237,10 +237,10 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.selection.active_board_index {
-                    let boards = self.ctx.boards();
+                    let boards = self.model.boards();
                     if let Some(board) = boards.get(board_idx) {
-                        let sprints = self.ctx.sprints();
-                        let sprint_count = Sprint::assignable(&sprints, board.id).len();
+                        let sprints = self.model.sprints();
+                        let sprint_count = Sprint::assignable(sprints, board.id).len();
                         self.dialog_input
                             .sprint_assign_selection
                             .next(sprint_count + 1);
@@ -254,7 +254,7 @@ impl App {
                 if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
                     if let Some(card_idx) = self.selection.active_card_index {
                         let card_id = {
-                            if let Some(card) = self.ctx.cards().get(card_idx) {
+                            if let Some(card) = self.model.cards().get(card_idx) {
                                 card.id
                             } else {
                                 return;
@@ -281,9 +281,9 @@ impl App {
                                 tracing::info!("Unassigned card from sprint");
                             }
                         } else if let Some(board_idx) = self.selection.active_board_index {
-                            if let Some(board_id) = self.ctx.boards().get(board_idx).map(|b| b.id) {
-                                let sprints = self.ctx.sprints();
-                                let board_sprints = Sprint::assignable(&sprints, board_id);
+                            if let Some(board_id) = self.model.boards().get(board_idx).map(|b| b.id) {
+                                let sprints = self.model.sprints();
+                                let board_sprints = Sprint::assignable(sprints, board_id);
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                     let sprint_id = sprint.id;
 
@@ -334,10 +334,10 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(board_idx) = self.selection.active_board_index {
-                    let boards = self.ctx.boards();
+                    let boards = self.model.boards();
                     if let Some(board) = boards.get(board_idx) {
-                        let sprints = self.ctx.sprints();
-                        let sprint_count = Sprint::assignable(&sprints, board.id).len();
+                        let sprints = self.model.sprints();
+                        let sprint_count = Sprint::assignable(sprints, board.id).len();
                         self.dialog_input
                             .sprint_assign_selection
                             .next(sprint_count + 1);
@@ -378,10 +378,10 @@ impl App {
                             );
                         }
                     } else if let Some(board_idx) = self.selection.active_board_index {
-                        let boards = self.ctx.boards();
+                        let boards = self.model.boards();
                         if let Some(board_id) = boards.get(board_idx).map(|b| b.id) {
-                            let sprints = self.ctx.sprints();
-                            let board_sprints = Sprint::assignable(&sprints, board_id);
+                            let sprints = self.model.sprints();
+                            let board_sprints = Sprint::assignable(sprints, board_id);
                             if let Some(sprint) = board_sprints.get(selection_idx - 1) {
                                 let sprint_id = sprint.id;
 
@@ -438,10 +438,10 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(source_id) = self.dialog_input.carry_over_source_sprint_id {
-                    if let Some(sprint) = self.ctx.sprints().iter().find(|s| s.id == source_id) {
+                    if let Some(sprint) = self.model.sprints().iter().find(|s| s.id == source_id) {
                         let board_id = sprint.board_id;
                         let count = self
-                            .ctx
+                            .model
                             .sprints()
                             .iter()
                             .filter(|s| {
@@ -459,11 +459,11 @@ impl App {
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if let Some(idx) = self.dialog_input.carry_over_sprint_selection.get() {
                     if let Some(source_id) = self.dialog_input.carry_over_source_sprint_id {
-                        if let Some(sprint) = self.ctx.sprints().iter().find(|s| s.id == source_id)
+                        if let Some(sprint) = self.model.sprints().iter().find(|s| s.id == source_id)
                         {
                             let board_id = sprint.board_id;
                             let planning_sprint_ids: Vec<uuid::Uuid> = self
-                                .ctx
+                                .model
                                 .sprints()
                                 .iter()
                                 .filter(|s| {
@@ -475,12 +475,12 @@ impl App {
 
                             if let Some(&to_sprint_id) = planning_sprint_ids.get(idx) {
                                 let sprint_label = self
-                                    .ctx
+                                    .model
                                     .sprints()
                                     .iter()
                                     .find(|s| s.id == to_sprint_id)
                                     .map(|s| {
-                                        self.ctx
+                                        self.model
                                             .boards()
                                             .iter()
                                             .find(|b| b.id == board_id)
@@ -527,7 +527,7 @@ impl App {
                 .card_ids
                 .iter()
                 .filter(|card_id| {
-                    self.ctx
+                    self.model
                         .cards()
                         .iter()
                         .find(|c| c.id == **card_id)
@@ -589,7 +589,7 @@ impl App {
                 if let Some(idx) = self.relationship.selection.get() {
                     if let Some(selected_card_id) = filtered_cards.get(idx).copied() {
                         if let Some(card_idx) = self.selection.active_card_index {
-                            if let Some(current_card) = self.ctx.cards().get(card_idx) {
+                            if let Some(current_card) = self.model.cards().get(card_idx) {
                                 let current_card_id = current_card.id;
 
                                 if self.relationship.selected.contains(&selected_card_id) {
@@ -647,7 +647,7 @@ impl App {
                 .card_ids
                 .iter()
                 .filter(|card_id| {
-                    self.ctx
+                    self.model
                         .cards()
                         .iter()
                         .find(|c| c.id == **card_id)

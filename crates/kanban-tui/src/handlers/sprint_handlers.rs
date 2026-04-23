@@ -17,12 +17,12 @@ impl App {
         if let Some(sprint_idx) = self.selection.active_sprint_index {
             // Collect sprint info before mutations
             let sprint_info = {
-                if let Some(sprint) = self.ctx.sprints().get(sprint_idx) {
+                if let Some(sprint) = self.model.sprints().get(sprint_idx) {
                     if sprint.status == SprintStatus::Planning {
                         Some((
                             sprint.id,
                             sprint.formatted_name(
-                                &self.ctx.boards()[self.selection.board.get().unwrap_or(0)],
+                                &self.model.boards()[self.selection.board.get().unwrap_or(0)],
                                 "sprint",
                             ),
                         ))
@@ -40,7 +40,7 @@ impl App {
                     .active_board_index
                     .or(self.selection.board.get());
                 if let Some(board_idx) = board_idx {
-                    if let Some(board) = self.ctx.boards().get(board_idx) {
+                    if let Some(board) = self.model.boards().get(board_idx) {
                         let duration = board.sprint_duration_days.unwrap_or(14);
                         let board_id = board.id;
 
@@ -65,10 +65,10 @@ impl App {
                             return;
                         }
 
-                        if let Some(board) = self.ctx.boards().get(board_idx) {
+                        if let Some(board) = self.model.boards().get(board_idx) {
                             tracing::info!(
                                 "Activated sprint: {}",
-                                self.ctx
+                                self.model
                                     .sprints()
                                     .get(sprint_idx)
                                     .map(|s| s.formatted_name(board, "sprint"))
@@ -85,7 +85,7 @@ impl App {
         if let Some(sprint_idx) = self.selection.active_sprint_index {
             // Collect sprint and board info before mutations
             let sprint_info = {
-                if let Some(sprint) = self.ctx.sprints().get(sprint_idx) {
+                if let Some(sprint) = self.model.sprints().get(sprint_idx) {
                     if sprint.status == SprintStatus::Active
                         || sprint.status == SprintStatus::Planning
                     {
@@ -94,7 +94,7 @@ impl App {
                             .active_board_index
                             .or(self.selection.board.get());
                         board_idx.and_then(|board_idx| {
-                            self.ctx.boards().get(board_idx).map(|board| {
+                            self.model.boards().get(board_idx).map(|board| {
                                 (sprint.id, board.id, sprint.formatted_name(board, "sprint"))
                             })
                         })
@@ -136,13 +136,13 @@ impl App {
                 {
                     use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
                     let has_planning = self
-                        .ctx
+                        .model
                         .sprints()
                         .iter()
                         .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning);
 
                     if has_planning
-                        && !get_sprint_uncompleted_cards(sprint_id, &self.ctx.cards()).is_empty()
+                        && !get_sprint_uncompleted_cards(sprint_id, self.model.cards()).is_empty()
                     {
                         self.dialog_input.carry_over_source_sprint_id = Some(sprint_id);
                         self.dialog_input.carry_over_sprint_selection.set(Some(0));
@@ -154,13 +154,13 @@ impl App {
     }
 
     pub fn handle_carry_over_for_sprint(&mut self, from_sprint_id: Uuid) {
-        let board_id = match self.ctx.sprints().iter().find(|s| s.id == from_sprint_id) {
+        let board_id = match self.model.sprints().iter().find(|s| s.id == from_sprint_id) {
             Some(sprint) => sprint.board_id,
             None => return,
         };
 
         let has_planning_sprint = self
-            .ctx
+            .model
             .sprints()
             .iter()
             .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning);
@@ -181,7 +181,7 @@ impl App {
             .or(self.selection.board.get());
         if let Some(board_idx) = board_idx {
             let (board_id, name) = {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     let input_text = self.input.as_str().trim();
                     let name = if input_text.is_empty() {
                         None
@@ -215,11 +215,11 @@ impl App {
             }
 
             // Log the newly created sprint
-            let sprints = self.ctx.sprints();
+            let sprints = self.model.sprints();
             let board_sprints: Vec<_> = sprints.iter().filter(|s| s.board_id == board_id).collect();
 
             if let Some(new_sprint) = board_sprints.last() {
-                let boards = self.ctx.boards();
+                let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
                     let effective_prefix = board
                         .sprint_prefix
