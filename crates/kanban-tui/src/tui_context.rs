@@ -1,6 +1,5 @@
 use crate::state::SaveCoordinator;
 use kanban_domain::commands::Command;
-use kanban_domain::DependencyGraph;
 use kanban_domain::KanbanResult;
 use kanban_domain::Snapshot;
 use kanban_domain::{
@@ -141,7 +140,7 @@ impl TuiContext {
         self.inner.save().await
     }
 
-    // --- Delegation: field accessors ---
+    // --- Delegation: field accessors (kept for pre-prepare_frame contexts) ---
 
     pub fn boards(&self) -> Vec<Board> {
         self.inner.boards().unwrap_or_else(|e| {
@@ -150,37 +149,9 @@ impl TuiContext {
         })
     }
 
-    pub fn columns(&self) -> Vec<Column> {
-        self.inner.columns().unwrap_or_else(|e| {
-            tracing::warn!("Failed to load columns: {e}");
-            Default::default()
-        })
-    }
-
-    pub fn cards(&self) -> Vec<Card> {
-        self.inner.cards().unwrap_or_else(|e| {
-            tracing::warn!("Failed to load cards: {e}");
-            Default::default()
-        })
-    }
-
     pub fn sprints(&self) -> Vec<Sprint> {
         self.inner.sprints().unwrap_or_else(|e| {
             tracing::warn!("Failed to load sprints: {e}");
-            Default::default()
-        })
-    }
-
-    pub fn archived_cards(&self) -> Vec<ArchivedCard> {
-        self.inner.archived_cards().unwrap_or_else(|e| {
-            tracing::warn!("Failed to load archived_cards: {e}");
-            Default::default()
-        })
-    }
-
-    pub fn graph(&self) -> DependencyGraph {
-        self.inner.graph().unwrap_or_else(|e| {
-            tracing::warn!("Failed to load graph: {e}");
             Default::default()
         })
     }

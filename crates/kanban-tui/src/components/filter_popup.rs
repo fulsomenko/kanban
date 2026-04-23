@@ -82,9 +82,9 @@ fn render_filter_sprints_section(
     )));
 
     if let Some(board_idx) = app.selection.active_board_index {
-        let boards = app.ctx.boards();
+        let boards = app.model.boards();
         if let Some(board) = boards.get(board_idx) {
-            let sprints = app.ctx.sprints();
+            let sprints = app.model.sprints();
             let board_sprints: Vec<_> = sprints.iter().filter(|s| s.board_id == board.id).collect();
 
             if board_sprints.is_empty() {
