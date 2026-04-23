@@ -165,8 +165,7 @@ mod tests {
         let sprint_id = sprint.id;
         app.selection.active_board_index = Some(0);
         app.filter.active_sprint_filters.insert(sprint_id);
-        app.populate_render_data();
-        app.refresh_strategy();
+        app.prepare_frame();
         let suffix = build_filter_title_suffix(&app);
         assert!(
             suffix.is_some(),

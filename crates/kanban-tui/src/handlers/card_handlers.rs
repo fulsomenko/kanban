@@ -809,8 +809,7 @@ impl App {
         match self.mode {
             AppMode::Normal => {
                 self.mode = AppMode::ArchivedCardsView;
-                self.populate_render_data();
-                self.refresh_strategy();
+                self.prepare_frame();
 
                 // Initialize selection in view strategy
                 if let Some(list) = self.view.strategy.get_active_task_list_mut() {
@@ -823,8 +822,7 @@ impl App {
             }
             AppMode::ArchivedCardsView => {
                 self.mode = AppMode::Normal;
-                self.populate_render_data();
-                self.refresh_strategy();
+                self.prepare_frame();
 
                 // Re-initialize selection when returning to normal view
                 if let Some(list) = self.view.strategy.get_active_task_list_mut() {

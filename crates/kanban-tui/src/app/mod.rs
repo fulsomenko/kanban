@@ -1433,7 +1433,7 @@ impl App {
         Ok(())
     }
 
-    pub fn populate_render_data(&mut self) {
+    pub fn prepare_frame(&mut self) {
         let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
             self.ctx
                 .archived_cards()
@@ -1449,9 +1449,8 @@ impl App {
         self.render_data.columns = self.ctx.columns();
         self.render_data.boards = self.ctx.boards();
         self.render_data.graph = self.ctx.graph();
-    }
 
-    pub fn refresh_strategy(&mut self) {
+
         let board_idx = self
             .selection
             .active_board_index
@@ -1807,8 +1806,7 @@ impl App {
         if self.selection.board.get().is_none() && !self.ctx.boards().is_empty() {
             self.selection.board.set(Some(0));
         }
-        self.populate_render_data();
-        self.refresh_strategy();
+        self.prepare_frame();
     }
 
     pub async fn run(
@@ -1872,8 +1870,7 @@ impl App {
 
             loop {
                 if self.needs_redraw {
-                    self.populate_render_data();
-                    self.refresh_strategy();
+                    self.prepare_frame();
                     terminal.draw(|frame| ui::render(self, frame))?;
                     self.needs_redraw = false;
                 }
