@@ -67,7 +67,7 @@ impl RenderStrategy for SinglePanelRenderer {
         let mut lines = vec![];
 
         if let Some(idx) = board_idx {
-            if let Some(board) = app.render_data.boards.get(idx) {
+            if let Some(board) = app.model.boards().get(idx) {
                 let active_task_list = app.view.strategy.get_active_task_list();
 
                 if self.show_column_headers {
@@ -150,7 +150,7 @@ impl RenderStrategy for SinglePanelRenderer {
 
                             // Render all cards with column headers interspersed
                             let mut columns_shown = std::collections::HashSet::new();
-                            let sprints = app.render_data.sprints.as_slice();
+                            let sprints = app.model.sprints();
 
                             for card_idx in &render_info.visible_card_indices {
                                 // Find which column this card belongs to
@@ -214,10 +214,10 @@ impl RenderStrategy for SinglePanelRenderer {
                                 "Task",
                             ));
                         }
-                    } else if let Some(board) = app.render_data.boards.get(board_idx.unwrap()) {
+                    } else if let Some(board) = app.model.boards().get(board_idx.unwrap()) {
                         let mut board_columns: Vec<_> = app
-                            .render_data
-                            .columns
+                            .model
+                            .columns()
                             .iter()
                             .filter(|col| col.board_id == board.id)
                             .collect();
@@ -269,7 +269,7 @@ impl RenderStrategy for SinglePanelRenderer {
                             "Task",
                         ));
 
-                        let sprints = app.render_data.sprints.as_slice();
+                        let sprints = app.model.sprints();
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -344,7 +344,7 @@ impl RenderStrategy for MultiPanelRenderer {
             .or(app.selection.board.get());
 
         if let Some(idx) = board_idx {
-            if let Some(board) = app.render_data.boards.get(idx) {
+            if let Some(board) = app.model.boards().get(idx) {
                 let task_lists = app.view.strategy.get_all_task_lists();
 
                 if task_lists.is_empty() {
@@ -378,7 +378,7 @@ impl RenderStrategy for MultiPanelRenderer {
                     .split(area);
 
                 let active_task_list = app.view.strategy.get_active_task_list();
-                let sprints = app.render_data.sprints.as_slice();
+                let sprints = app.model.sprints();
 
                 for (col_idx, task_list) in task_lists.iter().enumerate() {
                     let mut lines = vec![];
@@ -461,8 +461,8 @@ impl RenderStrategy for MultiPanelRenderer {
 
                     let column_name =
                         if let crate::card_list::CardListId::Column(column_id) = task_list.id {
-                            app.render_data
-                                .columns
+                            app.model
+                                .columns()
                                 .iter()
                                 .find(|c| c.id == column_id)
                                 .map(|c| c.name.clone())

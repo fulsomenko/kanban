@@ -69,7 +69,7 @@ pub(crate) fn render_select_task_list_view_popup(app: &App, frame: &mut Frame) {
     let current_view = app
         .selection
         .active_board_index
-        .and_then(|idx| app.render_data.boards.get(idx).map(|board| board.task_list_view));
+        .and_then(|idx| app.model.boards().get(idx).map(|board| board.task_list_view));
 
     let items: Vec<ListItem> = views
         .iter()

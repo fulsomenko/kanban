@@ -1355,13 +1355,13 @@ impl App {
     }
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<Card> {
-        self.render_data.cards_by_id.get(&card_id).cloned()
+        self.model.card(card_id).cloned()
     }
 
     pub fn get_card_for_detail_view(&self) -> Option<Card> {
         self.selection
             .active_card_id
-            .and_then(|id| self.render_data.cards_by_id.get(&id).cloned())
+            .and_then(|id| self.model.card(id).cloned())
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
@@ -1462,7 +1462,7 @@ impl App {
             .active_board_index
             .or(self.selection.board.get());
         if let Some(idx) = board_idx {
-            if let Some(board) = self.render_data.boards.get(idx) {
+            if let Some(board) = self.model.boards().get(idx) {
                 let search_query = if self.filter.search.is_active {
                     Some(self.filter.search.query())
                 } else {
@@ -1471,8 +1471,8 @@ impl App {
                 let ctx = ViewRefreshContext {
                     board,
                     all_cards: &cards_for_display,
-                    all_columns: &self.render_data.columns,
-                    all_sprints: &self.render_data.sprints,
+                    all_columns: self.model.columns(),
+                    all_sprints: self.model.sprints(),
                     active_sprint_filters: self.filter.active_sprint_filters.clone(),
                     hide_assigned_cards: self.filter.hide_assigned_cards,
                     search_query,

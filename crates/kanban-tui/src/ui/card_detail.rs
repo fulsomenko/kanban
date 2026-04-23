@@ -32,7 +32,7 @@ pub(super) fn render_relationship_boxes(
     let parents_config = FieldSectionConfig::new("Parents")
         .with_focus_indicator("Parents [4]")
         .focused(app.focus.card_focus == CardFocus::Parents);
-    let all_cards: Vec<kanban_domain::Card> = app.render_data.cards_by_id.values().cloned().collect();
+    let all_cards: Vec<kanban_domain::Card> = app.model.cards().to_vec();
     let parents_lines = render_relationship_section(
         parents,
         &all_cards,
@@ -68,13 +68,13 @@ pub(super) fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) 
     if let Some(card) = app.get_card_for_detail_view() {
         let card = &card;
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.render_data.boards.get(board_idx) {
+            if let Some(board) = app.model.boards().get(board_idx) {
                 let has_sprint_logs = card.sprint_logs.len() > 1;
                 let card_id = card.id;
 
                 // Get parent and child information
-                let parents = app.render_data.graph.cards.parents(card_id);
-                let children = app.render_data.graph.cards.children(card_id);
+                let parents = app.model.graph().cards.parents(card_id);
+                let children = app.model.graph().cards.children(card_id);
                 let child_count = children.len();
 
                 let constraints = vec![
@@ -109,7 +109,7 @@ pub(super) fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) 
                         .with_focus_indicator("Metadata [2]")
                         .focused(app.focus.card_focus == CardFocus::Metadata);
                     let meta_lines =
-                        build_metadata_lines(card, board, &app.render_data.sprints, &app.app_config);
+                        build_metadata_lines(card, board, app.model.sprints(), &app.app_config);
                     let meta = Paragraph::new(meta_lines).block(meta_config.block());
                     frame.render_widget(meta, meta_chunks[0]);
 
@@ -143,7 +143,7 @@ pub(super) fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) 
                         .with_focus_indicator("Metadata [2]")
                         .focused(app.focus.card_focus == CardFocus::Metadata);
                     let meta_lines =
-                        build_metadata_lines(card, board, &app.render_data.sprints, &app.app_config);
+                        build_metadata_lines(card, board, app.model.sprints(), &app.app_config);
                     let meta = Paragraph::new(meta_lines).block(meta_config.block());
                     frame.render_widget(meta, chunks[1]);
 
