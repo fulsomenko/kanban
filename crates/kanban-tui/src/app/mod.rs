@@ -95,6 +95,7 @@ pub struct App {
     pub sprint_view: SprintViewState,
     pub view: ViewState,
     pub render_data: RenderData,
+    pub model: model::Model,
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
     pub has_data_file: bool,
@@ -265,6 +266,7 @@ impl App {
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
             render_data: RenderData::default(),
+            model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
@@ -342,6 +344,7 @@ impl App {
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
             render_data: RenderData::default(),
+            model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
@@ -1432,6 +1435,10 @@ impl App {
     }
 
     pub fn prepare_frame(&mut self) {
+        if let Ok(snapshot) = self.ctx.snapshot() {
+            self.model.load_from_snapshot(snapshot);
+        }
+
         let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
             self.ctx
                 .archived_cards()
@@ -2395,6 +2402,7 @@ impl App {
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
             render_data: RenderData::default(),
+            model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
