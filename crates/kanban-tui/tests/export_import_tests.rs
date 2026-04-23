@@ -28,6 +28,7 @@ fn test_export_single_board() {
         .unwrap();
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
+    app.prepare_frame();
 
     app.export_board_with_filename().unwrap();
 
@@ -79,6 +80,7 @@ fn test_export_all_boards() {
         .unwrap();
 
     app.input.set(file_path.to_str().unwrap().to_string());
+    app.prepare_frame();
 
     app.export_all_boards_with_filename().unwrap();
 
@@ -99,6 +101,7 @@ fn test_export_empty_boards() {
 
     let mut app = App::test_default();
     app.persistence.save_file = Some(file_path.to_str().unwrap().to_string());
+    app.prepare_frame();
 
     app.auto_save().unwrap();
 
@@ -193,6 +196,7 @@ fn test_auto_save() {
         .create_column(board.id, "Todo".to_string(), None)
         .unwrap();
 
+    app.prepare_frame();
     app.auto_save().unwrap();
 
     let content = fs::read_to_string(&file_path).unwrap();
@@ -305,6 +309,7 @@ fn test_export_import_sprint_and_card_prefixes() {
 
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
+    app.prepare_frame();
 
     // Export
     app.export_board_with_filename().unwrap();
