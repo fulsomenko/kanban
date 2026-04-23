@@ -1439,13 +1439,14 @@ impl App {
         } else {
             self.ctx.cards()
         };
-        self.render_data.cards_by_id =
-            cards_for_display.into_iter().map(|c| (c.id, c)).collect();
+        self.render_data.cards_by_id = cards_for_display
+            .iter()
+            .map(|c| (c.id, c.clone()))
+            .collect();
         self.render_data.sprints = self.ctx.sprints();
         self.render_data.columns = self.ctx.columns();
         self.render_data.boards = self.ctx.boards();
         self.render_data.graph = self.ctx.graph();
-
 
         let board_idx = self
             .selection
@@ -1458,10 +1459,9 @@ impl App {
                 } else {
                     None
                 };
-                let cards: Vec<Card> = self.render_data.cards_by_id.values().cloned().collect();
                 let ctx = ViewRefreshContext {
                     board,
-                    all_cards: &cards,
+                    all_cards: &cards_for_display,
                     all_columns: &self.render_data.columns,
                     all_sprints: &self.render_data.sprints,
                     active_sprint_filters: self.filter.active_sprint_filters.clone(),
