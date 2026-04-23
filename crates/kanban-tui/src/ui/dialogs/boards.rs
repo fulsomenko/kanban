@@ -27,8 +27,8 @@ pub(crate) fn render_export_boards_popup(app: &App, frame: &mut Frame) {
                 .split(inner);
 
             let items: Vec<Line> = app
-                .render_data
-                .boards
+                .model
+                .boards()
                 .iter()
                 .enumerate()
                 .map(|(i, board)| {

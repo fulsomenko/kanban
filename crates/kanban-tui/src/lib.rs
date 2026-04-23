@@ -22,4 +22,4 @@ pub mod tui_context;
 pub mod ui;
 pub mod view_strategy;
 
-pub use app::{App, RenderData};
+pub use app::App;

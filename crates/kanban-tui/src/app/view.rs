@@ -1,19 +1,7 @@
 use crate::card_list::CardListId;
 use crate::card_list_component::{CardListComponent, CardListComponentConfig};
 use crate::view_strategy::{UnifiedViewStrategy, ViewStrategy};
-use kanban_domain::{Board, Card, Column, DependencyGraph, Sprint};
 use ratatui::layout::Rect;
-use std::collections::HashMap;
-use uuid::Uuid;
-
-#[derive(Default)]
-pub struct RenderData {
-    pub boards: Vec<Board>,
-    pub sprints: Vec<Sprint>,
-    pub columns: Vec<Column>,
-    pub cards_by_id: HashMap<Uuid, Card>,
-    pub graph: DependencyGraph,
-}
 
 pub struct ViewState {
     pub strategy: Box<dyn ViewStrategy>,

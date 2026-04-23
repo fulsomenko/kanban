@@ -28,7 +28,7 @@ pub use relationship::RelationshipState;
 pub mod model;
 
 pub mod view;
-pub use view::{RenderData, ViewState};
+pub use view::ViewState;
 
 pub mod persistence;
 pub use persistence::PersistenceState;
@@ -94,7 +94,6 @@ pub struct App {
     pub ui_state: UiState,
     pub sprint_view: SprintViewState,
     pub view: ViewState,
-    pub render_data: RenderData,
     pub model: model::Model,
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
@@ -265,7 +264,6 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
-            render_data: RenderData::default(),
             model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
@@ -343,7 +341,6 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
-            render_data: RenderData::default(),
             model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
@@ -1440,22 +1437,14 @@ impl App {
         }
 
         let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
-            self.ctx
+            self.model
                 .archived_cards()
                 .iter()
                 .map(|dc| dc.card.clone())
                 .collect()
         } else {
-            self.ctx.cards()
+            self.model.cards().to_vec()
         };
-        self.render_data.cards_by_id = cards_for_display
-            .iter()
-            .map(|c| (c.id, c.clone()))
-            .collect();
-        self.render_data.sprints = self.ctx.sprints();
-        self.render_data.columns = self.ctx.columns();
-        self.render_data.boards = self.ctx.boards();
-        self.render_data.graph = self.ctx.graph();
 
         let board_idx = self
             .selection
@@ -2401,7 +2390,6 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
-            render_data: RenderData::default(),
             model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
