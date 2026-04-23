@@ -93,7 +93,6 @@ pub struct App {
     pub sprint_view: SprintViewState,
     pub view: ViewState,
     pub render_data: RenderData,
-    pub view_dirty: bool,
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
     pub has_data_file: bool,
@@ -264,7 +263,6 @@ impl App {
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
             render_data: RenderData::default(),
-            view_dirty: true,
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
@@ -342,7 +340,6 @@ impl App {
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
             render_data: RenderData::default(),
-            view_dirty: true,
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
@@ -1047,20 +1044,20 @@ impl App {
         match key_code {
             KeyCode::Char(c) => {
                 self.filter.search.input.insert_char(c);
-                self.mark_view_dirty();
+                self.needs_redraw = true;
             }
             KeyCode::Backspace => {
                 self.filter.search.input.backspace();
-                self.mark_view_dirty();
+                self.needs_redraw = true;
             }
             KeyCode::Enter => {
                 self.mode = AppMode::Normal;
-                self.mark_view_dirty();
+                self.needs_redraw = true;
             }
             KeyCode::Esc => {
                 self.filter.search.deactivate();
                 self.mode = AppMode::Normal;
-                self.mark_view_dirty();
+                self.needs_redraw = true;
             }
             _ => {}
         }
@@ -1433,13 +1430,7 @@ impl App {
         commands: Vec<kanban_domain::commands::Command>,
     ) -> KanbanResult<()> {
         self.ctx.execute_commands_batch(commands)?;
-        self.mark_view_dirty();
         Ok(())
-    }
-
-    pub fn mark_view_dirty(&mut self) {
-        self.view_dirty = true;
-        self.needs_redraw = true;
     }
 
     pub fn populate_render_data(&mut self) {
@@ -1491,7 +1482,7 @@ impl App {
     /// Undo the last action
     pub fn undo(&mut self) -> KanbanResult<()> {
         if self.ctx.undo()? {
-            self.mark_view_dirty();
+            self.needs_redraw = true;
         } else {
             self.set_error("Nothing to undo".to_string());
         }
@@ -1501,7 +1492,7 @@ impl App {
     /// Redo the last undone action
     pub fn redo(&mut self) -> KanbanResult<()> {
         if self.ctx.redo()? {
-            self.mark_view_dirty();
+            self.needs_redraw = true;
         } else {
             self.set_error("Nothing to redo".to_string());
         }
@@ -1526,7 +1517,7 @@ impl App {
         };
 
         self.view.strategy = new_strategy;
-        self.mark_view_dirty();
+        self.needs_redraw = true;
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
@@ -1882,10 +1873,7 @@ impl App {
             loop {
                 if self.needs_redraw {
                     self.populate_render_data();
-                    if self.view_dirty {
-                        self.refresh_strategy();
-                        self.view_dirty = false;
-                    }
+                    self.refresh_strategy();
                     terminal.draw(|frame| ui::render(self, frame))?;
                     self.needs_redraw = false;
                 }
@@ -1986,7 +1974,7 @@ impl App {
                                                                     tracing::error!("Failed to clear history: {}", e);
                                                                 }
                                                                 self.ctx.clear_conflict();
-                                                                self.mark_view_dirty();
+                                                                self.needs_redraw = true;
                                                                 tracing::info!("Reloaded state from disk");
                                                             }
                                                         }
@@ -2241,7 +2229,7 @@ impl App {
                             }
                             self.ctx.mark_clean();
                             self.ctx.clear_conflict();
-                            self.mark_view_dirty();
+                            self.needs_redraw = true;
                             tracing::info!("Auto-reloaded state from external file change");
                         }
                     }
@@ -2413,7 +2401,6 @@ impl App {
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
             render_data: RenderData::default(),
-            view_dirty: true,
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,

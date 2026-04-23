@@ -509,7 +509,7 @@ impl App {
     pub fn handle_escape_key(&mut self) {
         if self.filter.search.is_active {
             self.filter.search.deactivate();
-            self.mark_view_dirty();
+            self.needs_redraw = true;
             return;
         }
 

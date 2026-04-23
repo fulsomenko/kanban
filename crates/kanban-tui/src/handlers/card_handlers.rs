@@ -149,7 +149,7 @@ impl App {
                 }
 
                 tracing::info!("Toggled sort order to: {:?}", new_order);
-                self.mark_view_dirty();
+                self.needs_redraw = true;
             }
         }
     }
@@ -164,7 +164,7 @@ impl App {
             };
             tracing::info!("Hide assigned cards: {}", status);
 
-            self.mark_view_dirty();
+            self.needs_redraw = true;
         }
     }
 
@@ -187,7 +187,7 @@ impl App {
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
 
-                        self.mark_view_dirty();
+                        self.needs_redraw = true;
                     } else {
                         tracing::warn!("No active sprint set for filtering");
                     }
