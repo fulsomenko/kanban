@@ -1566,17 +1566,15 @@ impl App {
     }
 
     fn check_ended_sprints(&self) {
-        let sprints = self.ctx.sprints();
-        let ended_sprints: Vec<_> = sprints.iter().filter(|s| s.is_ended()).collect();
+        let ended_sprints: Vec<_> = self.model.sprints().iter().filter(|s| s.is_ended()).collect();
 
         if !ended_sprints.is_empty() {
             tracing::warn!(
                 "Found {} ended sprint(s) that need attention:",
                 ended_sprints.len()
             );
-            let boards = self.ctx.boards();
             for sprint in &ended_sprints {
-                if let Some(board) = boards.iter().find(|b| b.id == sprint.board_id) {
+                if let Some(board) = self.model.boards().iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
                         sprint.formatted_name(board, "sprint"),
@@ -1796,11 +1794,11 @@ impl App {
             }
         }
         self.migrate_sprint_logs();
+        self.prepare_frame();
         self.check_ended_sprints();
-        if self.selection.board.get().is_none() && !self.ctx.boards().is_empty() {
+        if self.selection.board.get().is_none() && !self.model.boards().is_empty() {
             self.selection.board.set(Some(0));
         }
-        self.prepare_frame();
     }
 
     pub async fn run(
