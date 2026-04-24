@@ -82,56 +82,6 @@ fn test_card_lookup_missing_id_returns_none() {
 }
 
 #[test]
-fn test_invalidate_cards_clears_cache() {
-    let mut model = Model::default();
-
-    let mut board = Board::new("B".to_string(), None);
-    let card = make_card(&mut board, Uuid::new_v4(), "Card", 0);
-    let card_id = card.id;
-
-    model.load_from_snapshot(Snapshot {
-        cards: vec![card],
-        ..Default::default()
-    });
-
-    assert!(model.card(card_id).is_some());
-
-    model.invalidate_cards();
-
-    assert!(model.cards().is_empty());
-    assert!(model.card(card_id).is_none());
-}
-
-#[test]
-fn test_invalidate_all_clears_everything() {
-    let mut model = Model::default();
-
-    let mut board = Board::new("B".to_string(), None);
-    let column = Column::new(board.id, "C".to_string(), 0);
-    let card = make_card(&mut board, column.id, "K", 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
-
-    model.load_from_snapshot(Snapshot {
-        boards: vec![board],
-        columns: vec![column],
-        cards: vec![card],
-        archived_cards: vec![],
-        sprints: vec![sprint],
-        graph: DependencyGraph::default(),
-    });
-
-    assert!(!model.boards().is_empty());
-
-    model.invalidate_all();
-
-    assert!(model.boards().is_empty());
-    assert!(model.columns().is_empty());
-    assert!(model.cards().is_empty());
-    assert!(model.sprints().is_empty());
-    assert!(model.archived_cards().is_empty());
-}
-
-#[test]
 fn test_load_from_snapshot_rebuilds_card_index() {
     let mut model = Model::default();
 
@@ -155,35 +105,4 @@ fn test_load_from_snapshot_rebuilds_card_index() {
 
     assert!(model.card(id_a).is_none(), "old card should not be found");
     assert_eq!(model.card(id_b).unwrap().title, "B");
-}
-
-#[test]
-fn test_invalidate_individual_fields() {
-    let mut model = Model::default();
-
-    let board = Board::new("B".to_string(), None);
-    let column = Column::new(board.id, "C".to_string(), 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
-
-    model.load_from_snapshot(Snapshot {
-        boards: vec![board],
-        columns: vec![column],
-        cards: vec![],
-        archived_cards: vec![],
-        sprints: vec![sprint],
-        graph: DependencyGraph::default(),
-    });
-
-    model.invalidate_boards();
-    assert!(model.boards().is_empty());
-    assert!(
-        !model.columns().is_empty(),
-        "columns should survive board invalidation"
-    );
-
-    model.invalidate_columns();
-    assert!(model.columns().is_empty());
-
-    model.invalidate_sprints();
-    assert!(model.sprints().is_empty());
 }

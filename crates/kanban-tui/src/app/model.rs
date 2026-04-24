@@ -57,39 +57,4 @@ impl Model {
         self.archived_cards = Some(snapshot.archived_cards);
         self.graph = Some(snapshot.graph);
     }
-
-    pub fn invalidate_boards(&mut self) {
-        self.boards = None;
-    }
-
-    pub fn invalidate_columns(&mut self) {
-        self.columns = None;
-    }
-
-    pub fn invalidate_cards(&mut self) {
-        self.cards = None;
-        self.card_index.clear();
-    }
-
-    pub fn invalidate_sprints(&mut self) {
-        self.sprints = None;
-    }
-
-    pub fn invalidate_archived_cards(&mut self) {
-        self.archived_cards = None;
-    }
-
-    pub fn invalidate_graph(&mut self) {
-        self.graph = None;
-    }
-
-    pub fn invalidate_all(&mut self) {
-        self.boards = None;
-        self.columns = None;
-        self.cards = None;
-        self.card_index.clear();
-        self.sprints = None;
-        self.archived_cards = None;
-        self.graph = None;
-    }
 }
