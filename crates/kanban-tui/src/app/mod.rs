@@ -1432,8 +1432,9 @@ impl App {
     }
 
     pub fn prepare_frame(&mut self) {
-        if let Ok(snapshot) = self.ctx.snapshot() {
-            self.model.load_from_snapshot(snapshot);
+        match self.ctx.snapshot() {
+            Ok(snapshot) => self.model.load_from_snapshot(snapshot),
+            Err(e) => tracing::warn!("Failed to load snapshot for frame: {e}"),
         }
 
         let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
