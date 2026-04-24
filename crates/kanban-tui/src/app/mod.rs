@@ -1798,6 +1798,7 @@ impl App {
         self.check_ended_sprints();
         if self.selection.board.get().is_none() && !self.model.boards().is_empty() {
             self.selection.board.set(Some(0));
+            self.prepare_frame();
         }
     }
 
