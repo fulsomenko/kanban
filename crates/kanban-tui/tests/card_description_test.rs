@@ -93,12 +93,12 @@ fn test_card_description_preserved_after_edit() {
         title: Some("Updated Title".to_string()),
         ..Default::default()
     };
-    let cmd = kanban_domain::commands::Command::Card(
-        kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
+    let cmd = kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(
+        kanban_domain::commands::UpdateCard {
             card_id: card.id,
             updates,
-        }),
-    );
+        },
+    ));
     app.ctx.execute_command(cmd).unwrap();
 
     // Verify description is still there after update
@@ -133,14 +133,24 @@ fn test_markdown_rendering_of_description() {
     card.description = Some("".to_string());
     let lines = build_description_lines(&card);
     println!("Description lines (empty string): {:?}", lines);
-    assert!(!lines.is_empty(), "Empty string should still render 'No description' text");
-    assert_eq!(lines[0].to_string(), "No description", "Empty description should show placeholder text");
+    assert!(
+        !lines.is_empty(),
+        "Empty string should still render 'No description' text"
+    );
+    assert_eq!(
+        lines[0].to_string(),
+        "No description",
+        "Empty description should show placeholder text"
+    );
 
     // Test rendering of None
     card.description = None;
     let lines = build_description_lines(&card);
     println!("Description lines (None): {:?}", lines);
-    assert!(!lines.is_empty(), "None description should render 'No description' text");
+    assert!(
+        !lines.is_empty(),
+        "None description should render 'No description' text"
+    );
 }
 
 #[test]
@@ -182,6 +192,9 @@ fn test_card_with_empty_string_description_displays_placeholder() {
 
     // Verify rendering shows placeholder text instead of blank
     let lines = build_description_lines(&cards[0]);
-    assert!(!lines.is_empty(), "Empty string description should show 'No description' placeholder");
+    assert!(
+        !lines.is_empty(),
+        "Empty string description should show 'No description' placeholder"
+    );
     assert_eq!(lines[0].to_string(), "No description");
 }

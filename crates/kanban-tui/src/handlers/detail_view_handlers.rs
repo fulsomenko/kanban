@@ -785,7 +785,8 @@ impl App {
                             }
                         }
                         CardListAction::Complete(card_id) => {
-                            if let Some(card) = self.model.cards().iter().find(|c| c.id == card_id) {
+                            if let Some(card) = self.model.cards().iter().find(|c| c.id == card_id)
+                            {
                                 use kanban_domain::{CardStatus, CardUpdate};
                                 let new_status = if card.status == CardStatus::Done {
                                     CardStatus::Todo
@@ -1171,7 +1172,8 @@ impl App {
         let parents = self.get_current_card_parents();
         if let Some(selected_idx) = self.relationship.parents_list.selection.get() {
             if let Some(&parent_id) = parents.get(selected_idx) {
-                if let Some(parent_idx) = self.model.cards().iter().position(|c| c.id == parent_id) {
+                if let Some(parent_idx) = self.model.cards().iter().position(|c| c.id == parent_id)
+                {
                     // Push current card to history
                     self.selection
                         .card_navigation_history

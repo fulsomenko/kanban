@@ -413,7 +413,10 @@ fn test_backward_compat_old_export_format() {
     app.prepare_frame();
     assert_eq!(app.model.boards().len(), 1);
     assert_eq!(app.model.boards()[0].name, "Old Board");
-    assert_eq!(app.model.boards()[0].sprint_prefix, Some("FEAT".to_string()));
+    assert_eq!(
+        app.model.boards()[0].sprint_prefix,
+        Some("FEAT".to_string())
+    );
     // card_prefix should be None since old format didn't have it
     assert_eq!(app.model.boards()[0].card_prefix, None);
 

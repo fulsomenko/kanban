@@ -5,10 +5,7 @@ use kanban_tui::App;
 fn test_prepare_frame_populates_model_from_snapshot() {
     let (mut app, _rx) = App::new(None).unwrap();
 
-    let board = app
-        .ctx
-        .create_board("Board".to_string(), None)
-        .unwrap();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
     let column = app
         .ctx
         .create_column(board.id, "Todo".to_string(), None)
@@ -37,10 +34,7 @@ fn test_prepare_frame_populates_model_from_snapshot() {
 fn test_model_reflects_mutation_after_prepare_frame() {
     let (mut app, _rx) = App::new(None).unwrap();
 
-    let board = app
-        .ctx
-        .create_board("Board".to_string(), None)
-        .unwrap();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
     let column = app
         .ctx
         .create_column(board.id, "Todo".to_string(), None)
@@ -60,15 +54,15 @@ fn test_model_reflects_mutation_after_prepare_frame() {
 
     assert_eq!(app.model.card(card.id).unwrap().title, "Original");
 
-    let cmd = kanban_domain::commands::Command::Card(
-        kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
+    let cmd = kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(
+        kanban_domain::commands::UpdateCard {
             card_id: card.id,
             updates: CardUpdate {
                 title: Some("Updated".to_string()),
                 ..Default::default()
             },
-        }),
-    );
+        },
+    ));
     app.ctx.execute_command(cmd).unwrap();
     app.prepare_frame();
 
@@ -83,10 +77,7 @@ fn test_model_reflects_mutation_after_prepare_frame() {
 fn test_model_description_reflects_mutation() {
     let (mut app, _rx) = App::new(None).unwrap();
 
-    let board = app
-        .ctx
-        .create_board("Board".to_string(), None)
-        .unwrap();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
     let column = app
         .ctx
         .create_column(board.id, "Todo".to_string(), None)
@@ -112,15 +103,15 @@ fn test_model_description_reflects_mutation() {
         Some("Initial desc".to_string())
     );
 
-    let cmd = kanban_domain::commands::Command::Card(
-        kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
+    let cmd = kanban_domain::commands::Command::Card(kanban_domain::commands::CardCommand::Update(
+        kanban_domain::commands::UpdateCard {
             card_id: card.id,
             updates: CardUpdate {
                 description: FieldUpdate::Set("Updated desc".to_string()),
                 ..Default::default()
             },
-        }),
-    );
+        },
+    ));
     app.ctx.execute_command(cmd).unwrap();
     app.prepare_frame();
 

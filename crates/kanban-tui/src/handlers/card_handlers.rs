@@ -98,7 +98,8 @@ impl App {
                     if sprint_count > 0 {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
                             let card_id = selected_card.id;
-                            let actual_idx = self.model.cards().iter().position(|c| c.id == card_id);
+                            let actual_idx =
+                                self.model.cards().iter().position(|c| c.id == card_id);
                             self.selection.active_card_index = actual_idx;
                         }
                         let selection_idx = self.get_current_sprint_selection_index();

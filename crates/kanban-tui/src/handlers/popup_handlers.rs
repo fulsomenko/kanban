@@ -281,7 +281,8 @@ impl App {
                                 tracing::info!("Unassigned card from sprint");
                             }
                         } else if let Some(board_idx) = self.selection.active_board_index {
-                            if let Some(board_id) = self.model.boards().get(board_idx).map(|b| b.id) {
+                            if let Some(board_id) = self.model.boards().get(board_idx).map(|b| b.id)
+                            {
                                 let sprints = self.model.sprints();
                                 let board_sprints = Sprint::assignable(sprints, board_id);
                                 if let Some(sprint) = board_sprints.get(selection_idx - 1) {
@@ -459,7 +460,8 @@ impl App {
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if let Some(idx) = self.dialog_input.carry_over_sprint_selection.get() {
                     if let Some(source_id) = self.dialog_input.carry_over_source_sprint_id {
-                        if let Some(sprint) = self.model.sprints().iter().find(|s| s.id == source_id)
+                        if let Some(sprint) =
+                            self.model.sprints().iter().find(|s| s.id == source_id)
                         {
                             let board_id = sprint.board_id;
                             let planning_sprint_ids: Vec<uuid::Uuid> = self

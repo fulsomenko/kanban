@@ -1553,20 +1553,20 @@ impl App {
             let cards = self.model.cards();
             let archived_cards = self.model.archived_cards();
             let sprints = self.model.sprints();
-            let export = BoardExporter::export_all_boards(
-                boards,
-                columns,
-                cards,
-                archived_cards,
-                sprints,
-            );
+            let export =
+                BoardExporter::export_all_boards(boards, columns, cards, archived_cards, sprints);
             BoardExporter::export_to_file(&export, filename)?;
         }
         Ok(())
     }
 
     fn check_ended_sprints(&self) {
-        let ended_sprints: Vec<_> = self.model.sprints().iter().filter(|s| s.is_ended()).collect();
+        let ended_sprints: Vec<_> = self
+            .model
+            .sprints()
+            .iter()
+            .filter(|s| s.is_ended())
+            .collect();
 
         if !ended_sprints.is_empty() {
             tracing::warn!(
