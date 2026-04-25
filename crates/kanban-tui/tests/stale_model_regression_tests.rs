@@ -174,6 +174,104 @@ fn test_create_column_selects_new_column() {
 }
 
 #[test]
+fn test_complete_sole_planning_sprint_does_not_show_carry_over() {
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let _col = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), Some(0))
+        .unwrap();
+    app.prepare_frame();
+    app.selection.board.set(Some(0));
+    app.selection.active_board_index = Some(0);
+
+    // Create a single sprint (Planning status by default)
+    app.push_mode(AppMode::BoardDetail);
+    app.focus.board_focus = BoardFocus::Sprints;
+    app.input.set("".to_string());
+    app.create_sprint();
+    app.prepare_frame();
+
+    let sprint_id = app.model.sprints()[0].id;
+
+    // Create a card and assign it to the sprint
+    app.focus.active = Focus::Cards;
+    app.input.set("Task".to_string());
+    app.create_card();
+    app.prepare_frame();
+
+    let card_id = app.model.cards().iter().find(|c| c.title == "Task").unwrap().id;
+    app.ctx.assign_card_to_sprint(card_id, sprint_id).unwrap();
+    app.prepare_frame();
+
+    // Navigate to sprint detail and complete it
+    app.selection.active_sprint_index = Some(0);
+    app.handle_complete_sprint_key();
+    app.prepare_frame();
+
+    // The sole planning sprint was just completed — no other planning sprint exists,
+    // so carry-over dialog must NOT open. Before the s.id != sprint_id fix, the stale
+    // model still showed the completed sprint as Planning, falsely triggering carry-over.
+    assert_eq!(
+        app.dialog_input.carry_over_source_sprint_id, None,
+        "carry-over dialog should not open when completing the only planning sprint"
+    );
+}
+
+#[test]
+fn test_complete_sprint_with_other_planning_sprint_shows_carry_over() {
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let _col = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), Some(0))
+        .unwrap();
+    app.prepare_frame();
+    app.selection.board.set(Some(0));
+    app.selection.active_board_index = Some(0);
+
+    // Create two sprints (both start as Planning)
+    app.push_mode(AppMode::BoardDetail);
+    app.focus.board_focus = BoardFocus::Sprints;
+    app.input.set("".to_string());
+    app.create_sprint();
+    app.prepare_frame();
+    app.input.set("".to_string());
+    app.create_sprint();
+    app.prepare_frame();
+
+    assert_eq!(app.model.sprints().len(), 2, "should have two sprints");
+    let sprint1_id = app.model.sprints()[0].id;
+
+    // Activate sprint 1 so it can be completed
+    app.selection.active_sprint_index = Some(0);
+    app.handle_activate_sprint_key();
+    app.prepare_frame();
+
+    // Create a card and assign it to sprint 1
+    app.focus.active = Focus::Cards;
+    app.input.set("Task".to_string());
+    app.create_card();
+    app.prepare_frame();
+
+    let card_id = app.model.cards().iter().find(|c| c.title == "Task").unwrap().id;
+    app.ctx.assign_card_to_sprint(card_id, sprint1_id).unwrap();
+    app.prepare_frame();
+
+    // Complete sprint 1 — sprint 2 is still Planning
+    app.selection.active_sprint_index = Some(0);
+    app.handle_complete_sprint_key();
+    app.prepare_frame();
+
+    // Carry-over dialog should open because sprint 2 is Planning and sprint 1 has uncompleted cards
+    assert_eq!(
+        app.dialog_input.carry_over_source_sprint_id,
+        Some(sprint1_id),
+        "carry-over dialog should open with sprint 1 as source"
+    );
+}
+
+#[test]
 fn test_delete_column_adjusts_selection() {
     let mut app = App::test_default();
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();
