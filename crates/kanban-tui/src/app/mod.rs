@@ -1061,7 +1061,7 @@ impl App {
         }
     }
 
-    fn handle_archived_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
+    pub fn handle_archived_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
         use crossterm::event::KeyCode;
         if self.focus.active != Focus::Cards {
             self.focus.active = Focus::Cards;
@@ -1165,7 +1165,7 @@ impl App {
         }
     }
 
-    fn handle_animation_tick(&mut self) {
+    pub fn handle_animation_tick(&mut self) {
         let now = Instant::now();
         let mut completed_animations = Vec::new();
 
