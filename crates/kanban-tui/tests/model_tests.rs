@@ -1,4 +1,4 @@
-use kanban_domain::{Board, Card, Column, DependencyGraph, Snapshot, Sprint};
+use kanban_domain::{ArchivedCard, Board, Card, Column, DependencyGraph, Snapshot, Sprint};
 use kanban_tui::app::model::Model;
 use uuid::Uuid;
 
@@ -105,4 +105,57 @@ fn test_load_from_snapshot_rebuilds_card_index() {
 
     assert!(model.card(id_a).is_none(), "old card should not be found");
     assert_eq!(model.card(id_b).unwrap().title, "B");
+}
+
+#[test]
+fn test_archived_cards_flat_returns_card_data() {
+    let mut model = Model::default();
+
+    let mut board = Board::new("B".to_string(), None);
+    let column_id = Uuid::new_v4();
+    let card1 = make_card(&mut board, column_id, "Archived1", 0);
+    let card2 = make_card(&mut board, column_id, "Archived2", 1);
+    let ac1 = ArchivedCard::new(card1.clone(), column_id, 0);
+    let ac2 = ArchivedCard::new(card2.clone(), column_id, 1);
+
+    model.load_from_snapshot(Snapshot {
+        archived_cards: vec![ac1, ac2],
+        ..Default::default()
+    });
+
+    let flat = model.archived_cards_flat();
+    assert_eq!(flat.len(), 2);
+    assert_eq!(flat[0].title, "Archived1");
+    assert_eq!(flat[1].title, "Archived2");
+}
+
+#[test]
+fn test_archived_cards_flat_rebuilds_on_reload() {
+    let mut model = Model::default();
+
+    let mut board = Board::new("B".to_string(), None);
+    let column_id = Uuid::new_v4();
+
+    let card1 = make_card(&mut board, column_id, "First", 0);
+    let ac1 = ArchivedCard::new(card1.clone(), column_id, 0);
+    model.load_from_snapshot(Snapshot {
+        archived_cards: vec![ac1],
+        ..Default::default()
+    });
+    assert_eq!(model.archived_cards_flat().len(), 1);
+    assert_eq!(model.archived_cards_flat()[0].title, "First");
+
+    let card2 = make_card(&mut board, column_id, "Second", 0);
+    let card3 = make_card(&mut board, column_id, "Third", 1);
+    let ac2 = ArchivedCard::new(card2.clone(), column_id, 0);
+    let ac3 = ArchivedCard::new(card3.clone(), column_id, 1);
+    model.load_from_snapshot(Snapshot {
+        archived_cards: vec![ac2, ac3],
+        ..Default::default()
+    });
+
+    let flat = model.archived_cards_flat();
+    assert_eq!(flat.len(), 2, "should reflect second snapshot");
+    assert_eq!(flat[0].title, "Second");
+    assert_eq!(flat[1].title, "Third");
 }
