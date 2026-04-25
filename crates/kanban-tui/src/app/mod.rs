@@ -738,7 +738,10 @@ impl App {
                 | AppMode::Dialog(DialogMode::SetSprintCardPrefix)
         );
 
-        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
+        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q'))
+            && !is_input_mode
+            && !matches!(self.mode, AppMode::ArchivedCardsView)
+        {
             self.handle_quit_key();
             return false;
         }
