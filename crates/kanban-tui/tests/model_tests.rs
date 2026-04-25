@@ -159,3 +159,42 @@ fn test_archived_cards_flat_rebuilds_on_reload() {
     assert_eq!(flat[0].title, "Second");
     assert_eq!(flat[1].title, "Third");
 }
+
+#[test]
+fn test_archived_card_lookup_by_id() {
+    let mut model = Model::default();
+
+    let mut board = Board::new("B".to_string(), None);
+    let column_id = Uuid::new_v4();
+    let card1 = make_card(&mut board, column_id, "Archived1", 0);
+    let card2 = make_card(&mut board, column_id, "Archived2", 1);
+    let id1 = card1.id;
+    let id2 = card2.id;
+    let ac1 = ArchivedCard::new(card1, column_id, 0);
+    let ac2 = ArchivedCard::new(card2, column_id, 1);
+
+    model.load_from_snapshot(Snapshot {
+        archived_cards: vec![ac1, ac2],
+        ..Default::default()
+    });
+
+    assert_eq!(model.archived_card(id1).unwrap().title, "Archived1");
+    assert_eq!(model.archived_card(id2).unwrap().title, "Archived2");
+}
+
+#[test]
+fn test_archived_card_lookup_missing_returns_none() {
+    let mut model = Model::default();
+
+    let mut board = Board::new("B".to_string(), None);
+    let column_id = Uuid::new_v4();
+    let card = make_card(&mut board, column_id, "Archived", 0);
+    let ac = ArchivedCard::new(card, column_id, 0);
+
+    model.load_from_snapshot(Snapshot {
+        archived_cards: vec![ac],
+        ..Default::default()
+    });
+
+    assert!(model.archived_card(Uuid::new_v4()).is_none());
+}
