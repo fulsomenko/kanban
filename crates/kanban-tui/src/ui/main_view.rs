@@ -98,10 +98,16 @@ pub fn build_filter_title_suffix(app: &App) -> Option<String> {
 }
 
 pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
+    let count = app
+        .view
+        .strategy
+        .get_active_task_list()
+        .map(|l| l.len())
+        .unwrap_or(0);
     let mut title = if app.mode == AppMode::ArchivedCardsView {
-        "Archive".to_string()
+        format!("Archive [{}]", count)
     } else if app.focus.active == Focus::Cards {
-        "Tasks [2]".to_string()
+        format!("Tasks [{}]", count)
     } else {
         "Tasks".to_string()
     };
@@ -189,15 +195,20 @@ mod tests {
     fn test_build_tasks_panel_title_archived_view() {
         let mut app = App::test_default();
         app.mode = AppMode::ArchivedCardsView;
-        assert_eq!(build_tasks_panel_title(&app, false), "Archive");
+        assert_eq!(build_tasks_panel_title(&app, false), "Archive [0]");
     }
 
     #[test]
     fn test_build_tasks_panel_title_cards_focus() {
         let mut app = App::test_default();
         app.focus.active = Focus::Cards;
-        assert_eq!(build_tasks_panel_title(&app, false), "Tasks [2]");
+        assert_eq!(
+            build_tasks_panel_title(&app, false),
+            "Tasks [0]",
+            "empty board should show count 0"
+        );
     }
+
 
     #[test]
     fn test_build_tasks_panel_title_with_filter_suffix() {
@@ -216,6 +227,6 @@ mod tests {
         let mut app = App::test_default();
         app.mode = AppMode::ArchivedCardsView;
         app.filter.hide_assigned_cards = true;
-        assert_eq!(build_tasks_panel_title(&app, true), "Archive");
+        assert_eq!(build_tasks_panel_title(&app, true), "Archive [0]");
     }
 }
