@@ -99,7 +99,7 @@ fn test_card_description_preserved_after_edit() {
             updates,
         },
     ));
-    app.ctx.execute_command(cmd).unwrap();
+    app.execute_command(cmd).unwrap();
 
     // Verify description is still there after update
     app.prepare_frame();

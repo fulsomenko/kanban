@@ -63,7 +63,7 @@ fn test_model_reflects_mutation_after_prepare_frame() {
             },
         },
     ));
-    app.ctx.execute_command(cmd).unwrap();
+    app.execute_command(cmd).unwrap();
     app.prepare_frame();
 
     assert_eq!(
@@ -112,7 +112,7 @@ fn test_model_description_reflects_mutation() {
             },
         },
     ));
-    app.ctx.execute_command(cmd).unwrap();
+    app.execute_command(cmd).unwrap();
     app.prepare_frame();
 
     assert_eq!(
