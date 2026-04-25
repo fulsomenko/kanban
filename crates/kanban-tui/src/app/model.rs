@@ -11,6 +11,7 @@ pub struct Model {
     sprints: Option<Vec<Sprint>>,
     archived_cards: Option<Vec<ArchivedCard>>,
     archived_cards_flat: Option<Vec<Card>>,
+    archived_card_index: HashMap<Uuid, usize>,
     graph: Option<DependencyGraph>,
 }
 
@@ -44,6 +45,11 @@ impl Model {
         self.archived_cards_flat.as_deref().unwrap_or(&[])
     }
 
+    pub fn archived_card(&self, id: Uuid) -> Option<&Card> {
+        let &idx = self.archived_card_index.get(&id)?;
+        self.archived_cards_flat.as_ref()?.get(idx)
+    }
+
     pub fn graph(&self) -> &DependencyGraph {
         static DEFAULT: std::sync::LazyLock<DependencyGraph> =
             std::sync::LazyLock::new(DependencyGraph::default);
@@ -64,6 +70,10 @@ impl Model {
             .iter()
             .map(|ac| ac.card.clone())
             .collect();
+        self.archived_card_index.clear();
+        for (i, card) in flat.iter().enumerate() {
+            self.archived_card_index.insert(card.id, i);
+        }
         self.archived_cards = Some(snapshot.archived_cards);
         self.archived_cards_flat = Some(flat);
         self.graph = Some(snapshot.graph);

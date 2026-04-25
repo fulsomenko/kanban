@@ -1352,7 +1352,10 @@ impl App {
     }
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<Card> {
-        self.model.card(card_id).cloned()
+        self.model
+            .card(card_id)
+            .or_else(|| self.model.archived_card(card_id))
+            .cloned()
     }
 
     pub fn get_card_for_detail_view(&self) -> Option<Card> {
