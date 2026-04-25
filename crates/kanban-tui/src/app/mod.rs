@@ -1437,14 +1437,10 @@ impl App {
             Err(e) => tracing::warn!("Failed to load snapshot for frame: {e}"),
         }
 
-        let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
-            self.model
-                .archived_cards()
-                .iter()
-                .map(|dc| dc.card.clone())
-                .collect()
+        let cards_for_display: &[Card] = if self.mode == AppMode::ArchivedCardsView {
+            self.model.archived_cards_flat()
         } else {
-            self.model.cards().to_vec()
+            self.model.cards()
         };
 
         let board_idx = self
@@ -1460,7 +1456,7 @@ impl App {
                 };
                 let ctx = ViewRefreshContext {
                     board,
-                    all_cards: &cards_for_display,
+                    all_cards: cards_for_display,
                     all_columns: self.model.columns(),
                     all_sprints: self.model.sprints(),
                     active_sprint_filters: self.filter.active_sprint_filters.clone(),
