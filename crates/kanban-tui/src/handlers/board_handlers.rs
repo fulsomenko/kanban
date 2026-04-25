@@ -70,10 +70,12 @@ impl App {
     pub fn create_board(&mut self) {
         let board_name = self.input.as_str().to_string();
 
-        // Execute CreateBoard command first to get the board ID
+        let board_id = uuid::Uuid::new_v4();
         let position = self.model.boards().len() as i32;
+        let new_index = position as usize;
+
         let create_board_cmd = Command::Board(BoardCommand::Create(CreateBoard {
-            id: uuid::Uuid::new_v4(),
+            id: board_id,
             name: board_name.clone(),
             card_prefix: None,
             position,
@@ -84,13 +86,6 @@ impl App {
             self.set_error(format!("Failed to create board: {}", e));
             return;
         }
-
-        // Get the board ID from the newly created board
-        let board_id = if let Some(board) = self.model.boards().last() {
-            board.id
-        } else {
-            return;
-        };
 
         // Now batch the column creation commands
         let mut column_commands: Vec<Command> = Vec::new();
@@ -118,7 +113,6 @@ impl App {
         tracing::info!("Created board: {} (id: {})", board_name, board_id);
         tracing::info!("Created default columns: TODO, Doing, Complete");
 
-        let new_index = self.model.boards().len() - 1;
         self.selection.board.set(Some(new_index));
         self.switch_view_strategy(task_list_view);
     }

@@ -34,7 +34,7 @@ impl App {
                 }
             };
 
-            if let Some((sprint_id, _)) = sprint_info {
+            if let Some((sprint_id, sprint_name)) = sprint_info {
                 let board_idx = self
                     .selection
                     .active_board_index
@@ -65,16 +65,7 @@ impl App {
                             return;
                         }
 
-                        if let Some(board) = self.model.boards().get(board_idx) {
-                            tracing::info!(
-                                "Activated sprint: {}",
-                                self.model
-                                    .sprints()
-                                    .get(sprint_idx)
-                                    .map(|s| s.formatted_name(board, "sprint"))
-                                    .unwrap_or_default()
-                            );
-                        }
+                        tracing::info!("Activated sprint: {}", sprint_name);
                     }
                 }
             }
@@ -135,11 +126,11 @@ impl App {
 
                 {
                     use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
-                    let has_planning = self
-                        .model
-                        .sprints()
-                        .iter()
-                        .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning);
+                    let has_planning = self.model.sprints().iter().any(|s| {
+                        s.board_id == board_id
+                            && s.status == SprintStatus::Planning
+                            && s.id != sprint_id
+                    });
 
                     if has_planning
                         && !get_sprint_uncompleted_cards(sprint_id, self.model.cards()).is_empty()
@@ -199,8 +190,16 @@ impl App {
                 .effective_default_sprint_prefix()
                 .to_string();
 
+            let sprint_id = uuid::Uuid::new_v4();
+            let prior_sprint_count = self
+                .model
+                .sprints()
+                .iter()
+                .filter(|s| s.board_id == board_id)
+                .count();
+
             let cmd = Command::Sprint(SprintCommand::Create(CreateSprint {
-                id: uuid::Uuid::new_v4(),
+                id: sprint_id,
                 board_id,
                 name,
                 default_sprint_prefix: default_sprint_prefix.clone(),
@@ -214,27 +213,9 @@ impl App {
                 return;
             }
 
-            // Log the newly created sprint
-            let sprints = self.model.sprints();
-            let board_sprints: Vec<_> = sprints.iter().filter(|s| s.board_id == board_id).collect();
+            tracing::info!("Created sprint (id: {})", sprint_id);
 
-            if let Some(new_sprint) = board_sprints.last() {
-                let boards = self.model.boards();
-                if let Some(board) = boards.get(board_idx) {
-                    let effective_prefix = board
-                        .sprint_prefix
-                        .as_deref()
-                        .unwrap_or(&default_sprint_prefix);
-                    tracing::info!(
-                        "Creating sprint: {} (id: {})",
-                        new_sprint.formatted_name(board, effective_prefix),
-                        new_sprint.id
-                    );
-                }
-            }
-
-            let new_index = board_sprints.len() - 1;
-            self.selection.sprint.set(Some(new_index));
+            self.selection.sprint.set(Some(prior_sprint_count));
         }
     }
 }

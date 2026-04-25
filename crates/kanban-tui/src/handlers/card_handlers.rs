@@ -374,8 +374,9 @@ impl App {
                     })
                     .unwrap_or(false);
 
+                let card_id = uuid::Uuid::new_v4();
                 let create_cmd = Command::Card(CardCommand::Create(CreateCard {
-                    id: uuid::Uuid::new_v4(),
+                    id: card_id,
                     card_number,
                     board_id: bid,
                     column_id: column.id,
@@ -392,39 +393,21 @@ impl App {
                 }
 
                 if mark_as_complete {
-                    if let Some(card) = self
-                        .model
-                        .cards()
-                        .iter()
-                        .rev()
-                        .find(|c| c.column_id == column.id)
-                    {
-                        let card_id = card.id;
-                        let update_cmd = Command::Card(CardCommand::Update(UpdateCard {
-                            card_id,
-                            updates: CardUpdate {
-                                status: Some(CardStatus::Done),
-                                ..Default::default()
-                            },
-                        }));
+                    let update_cmd = Command::Card(CardCommand::Update(UpdateCard {
+                        card_id,
+                        updates: CardUpdate {
+                            status: Some(CardStatus::Done),
+                            ..Default::default()
+                        },
+                    }));
 
-                        if let Err(e) = self.execute_command(update_cmd) {
-                            tracing::error!("Failed to update card status: {}", e);
-                            self.set_error(format!("Failed to update card status: {}", e));
-                        }
+                    if let Err(e) = self.execute_command(update_cmd) {
+                        tracing::error!("Failed to update card status: {}", e);
+                        self.set_error(format!("Failed to update card status: {}", e));
                     }
                 }
 
-                // Select the most recently created card
-                if let Some(card) = self
-                    .model
-                    .cards()
-                    .iter()
-                    .rev()
-                    .find(|c| c.column_id == column.id)
-                {
-                    self.select_card_by_id(card.id);
-                }
+                self.select_card_by_id(card_id);
             }
         }
     }

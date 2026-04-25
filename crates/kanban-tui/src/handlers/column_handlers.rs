@@ -228,6 +228,13 @@ impl App {
                     position,
                 }));
 
+                let prior_column_count = self
+                    .model
+                    .columns()
+                    .iter()
+                    .filter(|col| col.board_id == board_id)
+                    .count();
+
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to create column: {}", e);
                     self.set_error(format!("Failed to create column: {}", e));
@@ -236,16 +243,9 @@ impl App {
 
                 tracing::info!("Created column: {} (position: {})", column_name, position);
 
-                let board_column_count = self
-                    .model
-                    .columns()
-                    .iter()
-                    .filter(|col| col.board_id == board_id)
-                    .count();
-                let new_column_index = board_column_count.saturating_sub(1);
                 self.dialog_input
                     .column_selection
-                    .set(Some(new_column_index));
+                    .set(Some(prior_column_count));
             }
         }
     }
@@ -350,6 +350,19 @@ impl App {
             if let Some((column_id, column_name, first_column_id, cards_to_move, column_idx)) =
                 delete_info
             {
+                let remaining_after_delete = {
+                    let columns = self.model.columns();
+                    let board = self.model.boards().get(board_idx);
+                    board
+                        .map(|b| {
+                            columns
+                                .iter()
+                                .filter(|c| c.board_id == b.id && c.id != column_id)
+                                .count()
+                        })
+                        .unwrap_or(0)
+                };
+
                 tracing::warn!("Cannot delete the last column");
 
                 if let Some(target_column_id) = first_column_id {
@@ -386,24 +399,11 @@ impl App {
 
                 tracing::info!("Deleted column: {}", column_name);
 
-                let remaining_columns = self
-                    .model
-                    .columns()
-                    .iter()
-                    .filter(|col| {
-                        if let Some(board) = self.model.boards().get(board_idx) {
-                            col.board_id == board.id
-                        } else {
-                            false
-                        }
-                    })
-                    .count();
-
-                if remaining_columns > 0 {
-                    if column_idx >= remaining_columns {
+                if remaining_after_delete > 0 {
+                    if column_idx >= remaining_after_delete {
                         self.dialog_input
                             .column_selection
-                            .set(Some(remaining_columns - 1));
+                            .set(Some(remaining_after_delete - 1));
                     } else {
                         self.dialog_input.column_selection.set(Some(column_idx));
                     }
