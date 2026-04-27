@@ -1,6 +1,30 @@
-use kanban_domain::{CardListFilter, KanbanOperations};
+use kanban_domain::{CardListFilter, KanbanOperations, Snapshot};
 use kanban_service::{AppConfig, KanbanContext};
 use tempfile::TempDir;
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_import_board_checkpoints_wal_on_sqlite_path() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    let snapshot = Snapshot {
+        boards: vec![kanban_domain::Board::new("Imported".to_string(), None)],
+        columns: vec![],
+        cards: vec![],
+        archived_cards: vec![],
+        sprints: vec![],
+        graph: Default::default(),
+    };
+    let json = serde_json::to_string(&snapshot).unwrap();
+    ctx.import_board(&json).unwrap();
+    // No save() call — import_board() itself must checkpoint the WAL
+    let wal = path.with_extension("sqlite3-wal");
+    let wal_len = if wal.exists() { wal.metadata().unwrap().len() } else { 0 };
+    assert_eq!(wal_len, 0, "import_board() must checkpoint the WAL on SQLite path");
+}
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
