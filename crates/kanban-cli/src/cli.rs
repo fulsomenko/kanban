@@ -1,15 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use uuid::Uuid;
 
-#[cfg(has_git_commit)]
-const VERSION: &str = concat!(
-    env!("CARGO_PKG_VERSION"),
-    "\ncommit: ",
-    env!("GIT_COMMIT_HASH")
-);
-
-#[cfg(not(has_git_commit))]
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+use crate::VERSION;
 
 #[derive(Parser)]
 #[command(name = "kanban")]
