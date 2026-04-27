@@ -27,3 +27,41 @@ impl StoreFactory for SqliteStoreFactory {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kanban_persistence::StoreFactory;
+
+    #[test]
+    fn test_sqlite_factory_matches_content_sqlite_magic_bytes() {
+        let header = b"SQLite format 3\0extra";
+        assert!(SqliteStoreFactory.matches_content(header));
+    }
+
+    #[test]
+    fn test_sqlite_factory_matches_content_rejects_json() {
+        let header = b"{\"boards\": []}";
+        assert!(!SqliteStoreFactory.matches_content(header));
+    }
+
+    #[test]
+    fn test_sqlite_factory_matches_content_rejects_empty() {
+        assert!(!SqliteStoreFactory.matches_content(b""));
+    }
+
+    #[test]
+    fn test_sqlite_factory_name_is_sqlite() {
+        assert_eq!(SqliteStoreFactory.name(), "sqlite");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_sqlite_factory_create_returns_persistence_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let store = SqliteStoreFactory
+            .create(path.to_str().unwrap())
+            .unwrap();
+        assert!(store.exists().await);
+    }
+}
+
