@@ -1295,7 +1295,7 @@ impl DataStore for SqliteStore {
                 .await
                 .map_err(db_err)?;
             tx.commit().await.map_err(db_err)?;
-            Ok(())
+            self.checkpoint().await
         })
     }
 
