@@ -14,13 +14,6 @@ pub mod test_helpers;
 
 pub use kanban_core::AppConfig;
 
-// Re-export the full KanbanOperations surface so callers only need kanban_service::*
-pub use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardPriority, CardStatus, CardSummary,
-    CardUpdate, Column, ColumnUpdate, CreateCardOptions, DependencyGraph, FieldUpdate, KanbanError,
-    KanbanOperations, KanbanResult, Snapshot, Sprint, SprintStatus, SprintUpdate,
-};
-
 #[cfg(feature = "json")]
 pub use kanban_persistence_json::JsonStoreFactory;
 #[cfg(feature = "sqlite")]
