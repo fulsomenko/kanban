@@ -1179,6 +1179,7 @@ impl KanbanOperations for KanbanContext {
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
+        self.backend.flush()?;
         self.dirty = true;
 
         Ok(board)
