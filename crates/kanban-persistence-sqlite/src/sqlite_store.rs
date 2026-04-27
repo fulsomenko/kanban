@@ -1294,8 +1294,7 @@ impl DataStore for SqliteStore {
                 .execute(&mut *tx)
                 .await
                 .map_err(db_err)?;
-            tx.commit().await.map_err(db_err)?;
-            self.checkpoint().await
+            tx.commit().await.map_err(db_err)
         })
     }
 
@@ -1796,15 +1795,6 @@ mod tests {
         });
     }
 
-    fn assert_wal_empty(db_path: &std::path::Path) {
-        let wal = db_path.with_extension("sqlite3-wal");
-        let len = if wal.exists() {
-            wal.metadata().unwrap().len()
-        } else {
-            0
-        };
-        assert_eq!(len, 0, "WAL should be empty at {}", wal.display());
-    }
 
     #[test]
     fn test_delete_archived_card_orphaned_cards_row_is_still_cleaned_up() {
@@ -1884,7 +1874,7 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_archived_card_checkpoints_wal() {
+    fn test_delete_archived_card_removes_both_rows() {
         use kanban_domain::data_store::DataStore;
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.sqlite3");
@@ -1905,7 +1895,14 @@ mod tests {
 
             store.delete_archived_card(card_id).unwrap();
 
-            assert_wal_empty(&path);
+            assert!(
+                store.list_archived_cards().unwrap().is_empty(),
+                "archived_cards row must be deleted"
+            );
+            assert!(
+                store.get_card(card_id).unwrap().is_none(),
+                "cards row must be deleted"
+            );
         });
     }
 }
