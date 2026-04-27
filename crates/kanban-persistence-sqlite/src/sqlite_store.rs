@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use kanban_core::graph::{Edge, Graph};
@@ -10,6 +10,7 @@ use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
     Snapshot, Sprint, SprintLog,
 };
+use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use sqlx::{Pool, Row, Sqlite};
 use uuid::Uuid;
@@ -19,6 +20,8 @@ const SCHEMA: &str = include_str!("schema.sql");
 /// SQLite-backed persistence store using sqlx connection pool.
 pub struct SqliteStore {
     pool: Pool<Sqlite>,
+    path: PathBuf,
+    instance_id: Uuid,
 }
 
 fn run<F: std::future::Future<Output = T>, T>(f: F) -> T {
@@ -240,8 +243,10 @@ impl SqliteStore {
             ));
         }
 
+        let path_buf = path.as_ref().to_path_buf();
+
         let options = SqliteConnectOptions::new()
-            .filename(path)
+            .filename(&path_buf)
             .create_if_missing(true)
             .foreign_keys(true)
             .pragma("journal_mode", "wal");
@@ -259,7 +264,33 @@ impl SqliteStore {
 
         Self::migrate(&pool).await?;
 
-        Ok(Self { pool })
+        let instance_id = Self::load_or_create_instance_id(&pool).await?;
+
+        Ok(Self { pool, path: path_buf, instance_id })
+    }
+
+    async fn load_or_create_instance_id(pool: &Pool<Sqlite>) -> KanbanResult<Uuid> {
+        let row: Option<String> =
+            sqlx::query_scalar("SELECT instance_id FROM metadata WHERE id = 1")
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?;
+        match row {
+            Some(s) => p_uuid(&s),
+            None => {
+                let id = Uuid::new_v4();
+                let now = Utc::now().to_rfc3339();
+                sqlx::query(
+                    "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+                )
+                .bind(id.to_string())
+                .bind(&now)
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
+                Ok(id)
+            }
+        }
     }
 
     async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
@@ -1587,3 +1618,39 @@ impl CommandStore for SqliteStore {
         }
     }
 }
+
+#[async_trait::async_trait]
+impl PersistenceStore for SqliteStore {
+    async fn save(&self, snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
+        let domain_snapshot: Snapshot = serde_json::from_slice(&snapshot.data)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        self.apply_snapshot_async(domain_snapshot)
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        Ok(PersistenceMetadata::new(self.instance_id))
+    }
+
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
+        let domain_snapshot = self
+            .snapshot_async()
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        let data = serde_json::to_vec(&domain_snapshot)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let meta = PersistenceMetadata::new(self.instance_id);
+        Ok((StoreSnapshot { data, metadata: meta.clone() }, meta))
+    }
+
+    async fn exists(&self) -> bool {
+        self.path.exists()
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    fn instance_id(&self) -> Uuid {
+        self.instance_id
+    }
+}
+
