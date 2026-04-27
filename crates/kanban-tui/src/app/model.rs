@@ -12,7 +12,7 @@ pub struct Model {
     archived_cards: Option<Vec<ArchivedCard>>,
     archived_cards_flat: Option<Vec<Card>>,
     archived_card_index: HashMap<Uuid, usize>,
-    graph: Option<DependencyGraph>,
+    graph: DependencyGraph,
 }
 
 impl Model {
@@ -51,9 +51,7 @@ impl Model {
     }
 
     pub fn graph(&self) -> &DependencyGraph {
-        static DEFAULT: std::sync::LazyLock<DependencyGraph> =
-            std::sync::LazyLock::new(DependencyGraph::default);
-        self.graph.as_ref().unwrap_or(&DEFAULT)
+        &self.graph
     }
 
     pub fn load_from_snapshot(&mut self, snapshot: Snapshot) {
@@ -76,6 +74,6 @@ impl Model {
         }
         self.archived_cards = Some(snapshot.archived_cards);
         self.archived_cards_flat = Some(flat);
-        self.graph = Some(snapshot.graph);
+        self.graph = snapshot.graph;
     }
 }
