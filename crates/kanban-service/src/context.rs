@@ -251,6 +251,9 @@ impl KanbanContext {
             self.command_count = MAX_UNDO_DEPTH;
         }
 
+        if let Err(e) = self.backend.flush() {
+            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
+        }
         self.dirty = true;
         Ok(())
     }
@@ -289,6 +292,9 @@ impl KanbanContext {
             }
         }
 
+        if let Err(e) = self.backend.flush() {
+            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
+        }
         self.dirty = true;
         Ok(true)
     }
@@ -303,20 +309,19 @@ impl KanbanContext {
             return Ok(false);
         }
 
+        let mut applied = false;
         if self.backend.supports_indexed_snapshots() {
             let target = self.undo_cursor as u64 + 1;
             if let Some(snap) = self.backend.load_snapshot_at(target)? {
                 self.backend.apply_snapshot(snap)?;
-                self.undo_cursor += 1;
-                self.dirty = true;
-                return Ok(true);
+                applied = true;
             }
         }
 
-        let batches = self
-            .backend
-            .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
-        {
+        if !applied {
+            let batches = self
+                .backend
+                .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
             for batch in &batches {
@@ -325,7 +330,11 @@ impl KanbanContext {
                 }
             }
         }
+
         self.undo_cursor += 1;
+        if let Err(e) = self.backend.flush() {
+            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
+        }
         self.dirty = true;
         Ok(true)
     }
@@ -400,8 +409,16 @@ impl KanbanContext {
         Ok(())
     }
 
-    /// JSON-only: serialises the full snapshot to the persistence store.
-    /// On the SQLite path `self.store` is `None`, so this is a no-op.
+    /// Explicitly checkpoint the WAL. Unlike the eager, warn-and-continue flush
+    /// that runs automatically after each mutation, this propagates errors to the caller.
+    pub fn flush(&self) -> KanbanResult<()> {
+        self.backend.flush()
+    }
+
+    /// Serialises the full snapshot to the persistence store (JSON path).
+    ///
+    /// On the SQLite path (`self.store` is `None`) this is a no-op — checkpointing
+    /// happens eagerly in `execute()`, `undo()`, `redo()`, and `import_board()`.
     pub async fn save(&self) -> KanbanResult<()> {
         let Some(store) = &self.store else {
             return Ok(());
@@ -1171,6 +1188,9 @@ impl KanbanOperations for KanbanContext {
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
+        if let Err(e) = self.backend.flush() {
+            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
+        }
         self.dirty = true;
 
         Ok(board)

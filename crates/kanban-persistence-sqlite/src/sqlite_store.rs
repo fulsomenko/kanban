@@ -1283,12 +1283,18 @@ impl DataStore for SqliteStore {
 
     fn delete_archived_card(&self, card_id: Uuid) -> KanbanResult<()> {
         run(async {
+            let mut tx = self.pool.begin().await.map_err(db_err)?;
             sqlx::query("DELETE FROM archived_cards WHERE card_id = ?")
                 .bind(card_id.to_string())
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await
                 .map_err(db_err)?;
-            Ok(())
+            sqlx::query("DELETE FROM cards WHERE id = ?")
+                .bind(card_id.to_string())
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
+            tx.commit().await.map_err(db_err)
         })
     }
 
@@ -1447,6 +1453,10 @@ impl DataStore for SqliteStore {
 
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
         run(self.apply_snapshot_async(snapshot))
+    }
+
+    fn flush(&self) -> KanbanResult<()> {
+        run(self.checkpoint())
     }
 }
 
@@ -1782,6 +1792,83 @@ mod tests {
                     "WAL file should be minimal after save+checkpoint"
                 );
             }
+        });
+    }
+
+    #[test]
+    fn test_delete_archived_card_orphaned_cards_row_is_still_cleaned_up() {
+        use kanban_domain::data_store::DataStore;
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            let mut board = kanban_domain::Board::new("B".to_string(), None);
+            let column = kanban_domain::Column::new(board.id, "Col".to_string(), 0);
+            let card = kanban_domain::Card::new(&mut board, column.id, "Task".to_string(), 0);
+            let card_id = card.id;
+            let column_id = column.id;
+            store.upsert_board(board).unwrap();
+            store.upsert_column(column).unwrap();
+            store.upsert_card(card.clone()).unwrap();
+
+            // Insert into archived_cards WITHOUT calling delete_card first,
+            // leaving an orphaned row in the cards table.
+            let archived = kanban_domain::ArchivedCard::new(card, column_id, 0);
+            store.insert_archived_card(archived).unwrap();
+
+            store.delete_archived_card(card_id).unwrap();
+
+            assert!(
+                store.list_archived_cards().unwrap().is_empty(),
+                "card should be gone from archived_cards"
+            );
+            assert!(
+                store.list_all_cards().unwrap().is_empty(),
+                "orphaned cards row should also be removed by delete_archived_card"
+            );
+        });
+    }
+
+    #[test]
+    fn test_delete_archived_card_removes_from_cards_table() {
+        use kanban_domain::data_store::DataStore;
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            let mut board = kanban_domain::Board::new("B".to_string(), None);
+            let column = kanban_domain::Column::new(board.id, "Col".to_string(), 0);
+            let card = kanban_domain::Card::new(&mut board, column.id, "Task".to_string(), 0);
+            let card_id = card.id;
+            let column_id = column.id;
+            store.upsert_board(board).unwrap();
+            store.upsert_column(column).unwrap();
+            store.upsert_card(card.clone()).unwrap();
+
+            let archived = kanban_domain::ArchivedCard::new(card, column_id, 0);
+            store.insert_archived_card(archived).unwrap();
+            store.delete_card(card_id).unwrap();
+
+            assert_eq!(store.list_archived_cards().unwrap().len(), 1);
+
+            store.delete_archived_card(card_id).unwrap();
+
+            assert!(
+                store.list_archived_cards().unwrap().is_empty(),
+                "card should be gone from archived_cards"
+            );
+            assert!(
+                store.list_all_cards().unwrap().is_empty(),
+                "card should also be gone from cards table, not restored as active"
+            );
+            assert!(
+                store.get_card(card_id).unwrap().is_none(),
+                "get_card should return None for permanently deleted card"
+            );
         });
     }
 }

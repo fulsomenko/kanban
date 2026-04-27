@@ -63,8 +63,10 @@ impl TuiContext {
 
     pub fn execute_commands_batch(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         self.inner.execute(commands)?;
-        let snapshot = self.inner.snapshot()?;
-        self.save_coordinator.queue_snapshot(snapshot);
+        if self.save_coordinator.has_save_channel() {
+            let snapshot = self.inner.snapshot()?;
+            self.save_coordinator.queue_snapshot(snapshot);
+        }
         Ok(())
     }
 
@@ -72,7 +74,7 @@ impl TuiContext {
 
     pub fn undo(&mut self) -> KanbanResult<bool> {
         let result = self.inner.undo()?;
-        if result {
+        if result && self.save_coordinator.has_save_channel() {
             let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
@@ -81,7 +83,7 @@ impl TuiContext {
 
     pub fn redo(&mut self) -> KanbanResult<bool> {
         let result = self.inner.redo()?;
-        if result {
+        if result && self.save_coordinator.has_save_channel() {
             let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
@@ -150,7 +152,7 @@ impl TuiContext {
     }
 
     fn with_snapshot<T>(&mut self, result: KanbanResult<T>) -> KanbanResult<T> {
-        if result.is_ok() {
+        if result.is_ok() && self.save_coordinator.has_save_channel() {
             let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
         }
