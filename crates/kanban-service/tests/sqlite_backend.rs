@@ -2,6 +2,21 @@ use kanban_domain::{CardListFilter, KanbanOperations};
 use kanban_service::{AppConfig, KanbanContext};
 use tempfile::TempDir;
 
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_save_checkpoints_wal_on_sqlite_path() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    ctx.create_board("B".to_string(), None).unwrap();
+    ctx.save().await.unwrap();
+    let wal = path.with_extension("sqlite3-wal");
+    let wal_len = if wal.exists() { wal.metadata().unwrap().len() } else { 0 };
+    assert_eq!(wal_len, 0, "save() must checkpoint the WAL on SQLite path");
+}
+
 async fn open_sqlite_ctx(dir: &TempDir) -> KanbanContext {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
     KanbanContext::open_sqlite(&path, AppConfig::default())
