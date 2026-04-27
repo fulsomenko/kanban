@@ -251,6 +251,7 @@ impl KanbanContext {
             self.command_count = MAX_UNDO_DEPTH;
         }
 
+        self.backend.flush()?;
         self.dirty = true;
         Ok(())
     }
@@ -289,6 +290,7 @@ impl KanbanContext {
             }
         }
 
+        self.backend.flush()?;
         self.dirty = true;
         Ok(true)
     }
@@ -308,6 +310,7 @@ impl KanbanContext {
             if let Some(snap) = self.backend.load_snapshot_at(target)? {
                 self.backend.apply_snapshot(snap)?;
                 self.undo_cursor += 1;
+                self.backend.flush()?;
                 self.dirty = true;
                 return Ok(true);
             }
@@ -326,6 +329,7 @@ impl KanbanContext {
             }
         }
         self.undo_cursor += 1;
+        self.backend.flush()?;
         self.dirty = true;
         Ok(true)
     }
