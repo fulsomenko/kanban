@@ -58,10 +58,7 @@ mod tests {
     async fn test_sqlite_factory_create_returns_persistence_store() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.db");
-        let store = SqliteStoreFactory
-            .create(path.to_str().unwrap())
-            .unwrap();
+        let store = SqliteStoreFactory.create(path.to_str().unwrap()).unwrap();
         assert!(store.exists().await);
     }
 }
-

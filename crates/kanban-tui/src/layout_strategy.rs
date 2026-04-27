@@ -187,8 +187,7 @@ impl LayoutStrategy for ColumnListsLayout {
                 .iter()
                 .find(|list| list.id == CardListId::Column(column.id));
 
-            let (prev_selected_card, prev_scroll_offset) = if let Some(existing) = existing_list
-            {
+            let (prev_selected_card, prev_scroll_offset) = if let Some(existing) = existing_list {
                 (
                     existing.get_selected_card_id(),
                     existing.get_scroll_offset(),

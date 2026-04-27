@@ -209,7 +209,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn test_build_tasks_panel_title_with_filter_suffix() {
         let mut app = App::test_default();

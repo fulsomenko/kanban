@@ -10,7 +10,9 @@ use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
     Snapshot, Sprint, SprintLog,
 };
-use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot};
+use kanban_persistence::{
+    PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot,
+};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use sqlx::{Pool, Row, Sqlite};
 use uuid::Uuid;
@@ -266,7 +268,11 @@ impl SqliteStore {
 
         let instance_id = Self::load_or_create_instance_id(&pool).await?;
 
-        Ok(Self { pool, path: path_buf, instance_id })
+        Ok(Self {
+            pool,
+            path: path_buf,
+            instance_id,
+        })
     }
 
     async fn load_or_create_instance_id(pool: &Pool<Sqlite>) -> KanbanResult<Uuid> {
@@ -1638,7 +1644,13 @@ impl PersistenceStore for SqliteStore {
         let data = serde_json::to_vec(&domain_snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let meta = PersistenceMetadata::new(self.instance_id);
-        Ok((StoreSnapshot { data, metadata: meta.clone() }, meta))
+        Ok((
+            StoreSnapshot {
+                data,
+                metadata: meta.clone(),
+            },
+            meta,
+        ))
     }
 
     async fn exists(&self) -> bool {
@@ -1707,7 +1719,10 @@ mod tests {
             );
             let data = snapshot_to_json_bytes(&snapshot).unwrap();
             let meta = PersistenceMetadata::new(store.instance_id());
-            let store_snap = StoreSnapshot { data, metadata: meta };
+            let store_snap = StoreSnapshot {
+                data,
+                metadata: meta,
+            };
 
             PersistenceStore::save(&store, store_snap).await.unwrap();
 
@@ -1729,4 +1744,3 @@ mod tests {
         });
     }
 }
-

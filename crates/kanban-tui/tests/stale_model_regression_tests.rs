@@ -200,7 +200,13 @@ fn test_complete_sole_planning_sprint_does_not_show_carry_over() {
     app.create_card();
     app.prepare_frame();
 
-    let card_id = app.model.cards().iter().find(|c| c.title == "Task").unwrap().id;
+    let card_id = app
+        .model
+        .cards()
+        .iter()
+        .find(|c| c.title == "Task")
+        .unwrap()
+        .id;
     app.ctx.assign_card_to_sprint(card_id, sprint_id).unwrap();
     app.prepare_frame();
 
@@ -254,7 +260,13 @@ fn test_complete_sprint_with_other_planning_sprint_shows_carry_over() {
     app.create_card();
     app.prepare_frame();
 
-    let card_id = app.model.cards().iter().find(|c| c.title == "Task").unwrap().id;
+    let card_id = app
+        .model
+        .cards()
+        .iter()
+        .find(|c| c.title == "Task")
+        .unwrap()
+        .id;
     app.ctx.assign_card_to_sprint(card_id, sprint1_id).unwrap();
     app.prepare_frame();
 

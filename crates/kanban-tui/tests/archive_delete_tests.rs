@@ -120,10 +120,7 @@ fn test_permanent_delete_removes_archived_card() {
         "archived cards should be empty after permanent delete"
     );
     assert!(
-        app.model
-            .cards()
-            .iter()
-            .all(|c| c.id != card_id),
+        app.model.cards().iter().all(|c| c.id != card_id),
         "card should not be restored to active cards"
     );
     assert!(
