@@ -5,6 +5,7 @@
 //! [`CliApp::register_backend`] and call [`CliApp::run`] from their own
 //! `main.rs`, owning the entrypoint while reusing all CLI plumbing.
 
+pub mod version;
 pub(crate) mod app;
 pub(crate) mod cli;
 pub(crate) mod context;
@@ -14,3 +15,4 @@ pub(crate) mod output;
 pub use app::CliApp;
 pub use kanban_persistence::{StoreFactory, StoreRegistry};
 pub use kanban_service::StoreManager;
+pub use version::VERSION;
