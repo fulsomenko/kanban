@@ -21,8 +21,15 @@ async fn test_import_board_checkpoints_wal_on_sqlite_path() {
     ctx.import_board(&json).unwrap();
     // No save() call — import_board() itself must checkpoint the WAL
     let wal = path.with_extension("sqlite3-wal");
-    let wal_len = if wal.exists() { wal.metadata().unwrap().len() } else { 0 };
-    assert_eq!(wal_len, 0, "import_board() must checkpoint the WAL on SQLite path");
+    let wal_len = if wal.exists() {
+        wal.metadata().unwrap().len()
+    } else {
+        0
+    };
+    assert_eq!(
+        wal_len, 0,
+        "import_board() must checkpoint the WAL on SQLite path"
+    );
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
@@ -36,8 +43,15 @@ async fn test_execute_checkpoints_wal_without_save() {
     ctx.create_board("B".to_string(), None).unwrap();
     // No save() call — execute() itself must checkpoint the WAL
     let wal = path.with_extension("sqlite3-wal");
-    let wal_len = if wal.exists() { wal.metadata().unwrap().len() } else { 0 };
-    assert_eq!(wal_len, 0, "execute() must checkpoint the WAL without an explicit save()");
+    let wal_len = if wal.exists() {
+        wal.metadata().unwrap().len()
+    } else {
+        0
+    };
+    assert_eq!(
+        wal_len, 0,
+        "execute() must checkpoint the WAL without an explicit save()"
+    );
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
@@ -51,7 +65,11 @@ async fn test_save_checkpoints_wal_on_sqlite_path() {
     ctx.create_board("B".to_string(), None).unwrap();
     ctx.save().await.unwrap();
     let wal = path.with_extension("sqlite3-wal");
-    let wal_len = if wal.exists() { wal.metadata().unwrap().len() } else { 0 };
+    let wal_len = if wal.exists() {
+        wal.metadata().unwrap().len()
+    } else {
+        0
+    };
     assert_eq!(wal_len, 0, "save() must checkpoint the WAL on SQLite path");
 }
 
