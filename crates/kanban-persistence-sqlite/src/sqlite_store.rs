@@ -1283,11 +1283,18 @@ impl DataStore for SqliteStore {
 
     fn delete_archived_card(&self, card_id: Uuid) -> KanbanResult<()> {
         run(async {
+            let mut tx = self.pool.begin().await.map_err(db_err)?;
             sqlx::query("DELETE FROM archived_cards WHERE card_id = ?")
                 .bind(card_id.to_string())
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await
                 .map_err(db_err)?;
+            sqlx::query("DELETE FROM cards WHERE id = ?")
+                .bind(card_id.to_string())
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
+            tx.commit().await.map_err(db_err)?;
             Ok(())
         })
     }
