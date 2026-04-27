@@ -1,4 +1,4 @@
-use kanban_domain::{CardListFilter, KanbanOperations, Snapshot};
+use kanban_domain::{Board, CardListFilter, KanbanOperations, Snapshot};
 use kanban_service::{AppConfig, KanbanContext};
 use tempfile::TempDir;
 
@@ -21,7 +21,7 @@ async fn test_import_board_checkpoints_wal_on_sqlite_path() {
         .await
         .unwrap();
     let snapshot = Snapshot {
-        boards: vec![kanban_domain::Board::new("Imported".to_string(), None)],
+        boards: vec![Board::new("Imported".to_string(), None)],
         columns: vec![],
         cards: vec![],
         archived_cards: vec![],
@@ -57,6 +57,35 @@ async fn test_save_checkpoints_wal_on_sqlite_path() {
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
     ctx.save().await.unwrap();
+    assert_wal_empty(&path);
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_undo_checkpoints_wal_without_save() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    ctx.create_board("B".to_string(), None).unwrap();
+    ctx.undo().unwrap();
+    // No save() call — undo() itself must checkpoint the WAL
+    assert_wal_empty(&path);
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_redo_checkpoints_wal_without_save() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    ctx.create_board("B".to_string(), None).unwrap();
+    ctx.undo().unwrap();
+    ctx.redo().unwrap();
+    // No save() call — redo() itself must checkpoint the WAL
     assert_wal_empty(&path);
 }
 
