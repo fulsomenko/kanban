@@ -107,7 +107,7 @@ pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
     let mut title = if app.mode == AppMode::ArchivedCardsView {
         format!("Archive [{}]", count)
     } else if app.focus.active == Focus::Cards {
-        format!("Tasks [{}]", count)
+        format!("Tasks [2] ({})", count)
     } else {
         "Tasks".to_string()
     };
@@ -204,8 +204,8 @@ mod tests {
         app.focus.active = Focus::Cards;
         assert_eq!(
             build_tasks_panel_title(&app, false),
-            "Tasks [0]",
-            "empty board should show count 0"
+            "Tasks [2] (0)",
+            "empty board should show shortcut hint [2] and count (0)"
         );
     }
 

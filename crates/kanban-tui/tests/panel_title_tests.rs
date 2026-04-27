@@ -27,8 +27,8 @@ fn test_build_tasks_panel_title_cards_focus_with_cards() {
     app.prepare_frame();
     assert_eq!(
         build_tasks_panel_title(&app, false),
-        "Tasks [3]",
-        "should show actual card count"
+        "Tasks [2] (3)",
+        "should show keyboard shortcut [2] and actual card count"
     );
 }
 
