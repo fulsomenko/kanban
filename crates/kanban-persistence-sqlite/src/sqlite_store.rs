@@ -1654,3 +1654,79 @@ impl PersistenceStore for SqliteStore {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn make_rt() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_sqlitestore_path_is_preserved() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let rt = make_rt();
+        let store = rt.block_on(SqliteStore::open(&path)).unwrap();
+        assert_eq!(store.path(), path.as_path());
+    }
+
+    #[test]
+    fn test_sqlitestore_instance_id_persists_across_reopen() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let rt = make_rt();
+        let id1 = rt.block_on(SqliteStore::open(&path)).unwrap().instance_id();
+        let id2 = rt.block_on(SqliteStore::open(&path)).unwrap().instance_id();
+        assert_eq!(id1, id2, "instance_id must be stable across reopens");
+    }
+
+    #[test]
+    fn test_sqlitestore_persistence_save_load_roundtrip() {
+        use kanban_domain::{Board, DependencyGraph};
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let rt = make_rt();
+
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let board = Board::new("Test Board".to_string(), None);
+            let snapshot = Snapshot::from_data(
+                vec![board],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            let meta = PersistenceMetadata::new(store.instance_id());
+            let store_snap = StoreSnapshot { data, metadata: meta };
+
+            PersistenceStore::save(&store, store_snap).await.unwrap();
+
+            let (loaded_snap, _meta) = PersistenceStore::load(&store).await.unwrap();
+            let loaded: Snapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
+            assert_eq!(loaded.boards.len(), 1);
+            assert_eq!(loaded.boards[0].name, "Test Board");
+        });
+    }
+
+    #[test]
+    fn test_sqlitestore_exists_returns_true_after_open() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            assert!(PersistenceStore::exists(&store).await);
+        });
+    }
+}
+
