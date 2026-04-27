@@ -49,7 +49,10 @@ async fn test_execute_checkpoints_wal_without_save() {
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_save_checkpoints_wal_on_sqlite_path() {
+async fn test_save_is_noop_on_sqlite_path() {
+    // On the SQLite path save() returns Ok(()) immediately — checkpointing happens
+    // eagerly in execute(). The WAL is already empty from create_board(); save() is
+    // just a confirmed no-op that must not error.
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
     let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())

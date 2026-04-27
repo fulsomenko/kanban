@@ -409,6 +409,8 @@ impl KanbanContext {
         Ok(())
     }
 
+    /// Explicitly checkpoint the WAL. Unlike the eager, warn-and-continue flush
+    /// that runs automatically after each mutation, this propagates errors to the caller.
     pub fn flush(&self) -> KanbanResult<()> {
         self.backend.flush()
     }
