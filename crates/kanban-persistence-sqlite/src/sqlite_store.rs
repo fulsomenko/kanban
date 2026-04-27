@@ -1796,6 +1796,52 @@ mod tests {
         });
     }
 
+    fn assert_wal_empty(db_path: &std::path::Path) {
+        let wal = db_path.with_extension("sqlite3-wal");
+        let len = if wal.exists() {
+            wal.metadata().unwrap().len()
+        } else {
+            0
+        };
+        assert_eq!(len, 0, "WAL should be empty at {}", wal.display());
+    }
+
+    #[test]
+    fn test_delete_archived_card_orphaned_cards_row_is_still_cleaned_up() {
+        use kanban_domain::data_store::DataStore;
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            let mut board = kanban_domain::Board::new("B".to_string(), None);
+            let column = kanban_domain::Column::new(board.id, "Col".to_string(), 0);
+            let card = kanban_domain::Card::new(&mut board, column.id, "Task".to_string(), 0);
+            let card_id = card.id;
+            let column_id = column.id;
+            store.upsert_board(board).unwrap();
+            store.upsert_column(column).unwrap();
+            store.upsert_card(card.clone()).unwrap();
+
+            // Insert into archived_cards WITHOUT calling delete_card first,
+            // leaving an orphaned row in the cards table.
+            let archived = kanban_domain::ArchivedCard::new(card, column_id, 0);
+            store.insert_archived_card(archived).unwrap();
+
+            store.delete_archived_card(card_id).unwrap();
+
+            assert!(
+                store.list_archived_cards().unwrap().is_empty(),
+                "card should be gone from archived_cards"
+            );
+            assert!(
+                store.list_all_cards().unwrap().is_empty(),
+                "orphaned cards row should also be removed by delete_archived_card"
+            );
+        });
+    }
+
     #[test]
     fn test_delete_archived_card_removes_from_cards_table() {
         use kanban_domain::data_store::DataStore;
@@ -1859,16 +1905,7 @@ mod tests {
 
             store.delete_archived_card(card_id).unwrap();
 
-            let wal_path = path.with_extension("sqlite3-wal");
-            let wal_len = if wal_path.exists() {
-                wal_path.metadata().unwrap().len()
-            } else {
-                0
-            };
-            assert_eq!(
-                wal_len, 0,
-                "WAL should be truncated to zero after delete_archived_card"
-            );
+            assert_wal_empty(&path);
         });
     }
 }
