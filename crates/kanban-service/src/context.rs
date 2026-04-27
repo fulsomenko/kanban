@@ -251,7 +251,9 @@ impl KanbanContext {
             self.command_count = MAX_UNDO_DEPTH;
         }
 
-        self.backend.flush()?;
+        if let Err(e) = self.backend.flush() {
+            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
+        }
         self.dirty = true;
         Ok(())
     }
@@ -290,7 +292,9 @@ impl KanbanContext {
             }
         }
 
-        self.backend.flush()?;
+        if let Err(e) = self.backend.flush() {
+            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
+        }
         self.dirty = true;
         Ok(true)
     }
@@ -328,7 +332,9 @@ impl KanbanContext {
         }
 
         self.undo_cursor += 1;
-        self.backend.flush()?;
+        if let Err(e) = self.backend.flush() {
+            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
+        }
         self.dirty = true;
         Ok(true)
     }
@@ -407,11 +413,13 @@ impl KanbanContext {
         self.backend.flush()
     }
 
-    /// Serialises the full snapshot to the persistence store (JSON path),
-    /// or checkpoints the WAL (SQLite path where `self.store` is `None`).
+    /// Serialises the full snapshot to the persistence store (JSON path).
+    ///
+    /// On the SQLite path (`self.store` is `None`) this is a no-op — checkpointing
+    /// happens eagerly in `execute()`, `undo()`, `redo()`, and `import_board()`.
     pub async fn save(&self) -> KanbanResult<()> {
         let Some(store) = &self.store else {
-            return self.flush();
+            return Ok(());
         };
         // Sync command log from in-memory backend to persistence store
         let (batches, _cmd_count) = self.backend.load_all_commands()?;
@@ -1178,7 +1186,9 @@ impl KanbanOperations for KanbanContext {
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
-        self.backend.flush()?;
+        if let Err(e) = self.backend.flush() {
+            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
+        }
         self.dirty = true;
 
         Ok(board)
