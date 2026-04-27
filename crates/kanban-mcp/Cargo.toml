@@ -22,6 +22,7 @@ sqlite = ["kanban-service/sqlite"]
 [dependencies]
 # Workspace crates
 kanban-core = { path = "../kanban-core", version = "^0.3" }
+kanban-cli = { path = "../kanban-cli", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
 kanban-service = { path = "../kanban-service", version = "^0.3" }
@@ -44,6 +45,9 @@ chrono.workspace = true
 
 # Error handling (for main.rs only)
 anyhow.workspace = true
+
+# CLI arguments
+clap.workspace = true
 
 # Logging
 tracing.workspace = true
