@@ -66,8 +66,6 @@ impl TuiContext {
         if self.save_coordinator.has_save_channel() {
             let snapshot = self.inner.snapshot()?;
             self.save_coordinator.queue_snapshot(snapshot);
-        } else {
-            self.inner.flush()?;
         }
         Ok(())
     }
@@ -76,26 +74,18 @@ impl TuiContext {
 
     pub fn undo(&mut self) -> KanbanResult<bool> {
         let result = self.inner.undo()?;
-        if result {
-            if self.save_coordinator.has_save_channel() {
-                let snapshot = self.inner.snapshot()?;
-                self.save_coordinator.queue_snapshot(snapshot);
-            } else {
-                self.inner.flush()?;
-            }
+        if result && self.save_coordinator.has_save_channel() {
+            let snapshot = self.inner.snapshot()?;
+            self.save_coordinator.queue_snapshot(snapshot);
         }
         Ok(result)
     }
 
     pub fn redo(&mut self) -> KanbanResult<bool> {
         let result = self.inner.redo()?;
-        if result {
-            if self.save_coordinator.has_save_channel() {
-                let snapshot = self.inner.snapshot()?;
-                self.save_coordinator.queue_snapshot(snapshot);
-            } else {
-                self.inner.flush()?;
-            }
+        if result && self.save_coordinator.has_save_channel() {
+            let snapshot = self.inner.snapshot()?;
+            self.save_coordinator.queue_snapshot(snapshot);
         }
         Ok(result)
     }
@@ -162,13 +152,9 @@ impl TuiContext {
     }
 
     fn with_snapshot<T>(&mut self, result: KanbanResult<T>) -> KanbanResult<T> {
-        if result.is_ok() {
-            if self.save_coordinator.has_save_channel() {
-                let snapshot = self.inner.snapshot()?;
-                self.save_coordinator.queue_snapshot(snapshot);
-            } else {
-                self.inner.flush()?;
-            }
+        if result.is_ok() && self.save_coordinator.has_save_channel() {
+            let snapshot = self.inner.snapshot()?;
+            self.save_coordinator.queue_snapshot(snapshot);
         }
         result
     }
