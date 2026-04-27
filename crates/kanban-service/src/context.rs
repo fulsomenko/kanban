@@ -400,11 +400,15 @@ impl KanbanContext {
         Ok(())
     }
 
-    /// JSON-only: serialises the full snapshot to the persistence store.
-    /// On the SQLite path `self.store` is `None`, so this is a no-op.
+    pub fn flush(&self) -> KanbanResult<()> {
+        self.backend.flush()
+    }
+
+    /// Serialises the full snapshot to the persistence store (JSON path),
+    /// or checkpoints the WAL (SQLite path where `self.store` is `None`).
     pub async fn save(&self) -> KanbanResult<()> {
         let Some(store) = &self.store else {
-            return Ok(());
+            return self.flush();
         };
         // Sync command log from in-memory backend to persistence store
         let (batches, _cmd_count) = self.backend.load_all_commands()?;
