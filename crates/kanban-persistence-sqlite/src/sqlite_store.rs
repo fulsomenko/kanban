@@ -1641,7 +1641,9 @@ impl PersistenceStore for SqliteStore {
         self.apply_snapshot_async(domain_snapshot)
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
-        self.checkpoint().await.ok();
+        self.checkpoint()
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
         Ok(PersistenceMetadata::new(self.instance_id))
     }
 
