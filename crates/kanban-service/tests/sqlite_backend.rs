@@ -4,6 +4,21 @@ use tempfile::TempDir;
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
+async fn test_execute_checkpoints_wal_without_save() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    ctx.create_board("B".to_string(), None).unwrap();
+    // No save() call — execute() itself must checkpoint the WAL
+    let wal = path.with_extension("sqlite3-wal");
+    let wal_len = if wal.exists() { wal.metadata().unwrap().len() } else { 0 };
+    assert_eq!(wal_len, 0, "execute() must checkpoint the WAL without an explicit save()");
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
 async fn test_save_checkpoints_wal_on_sqlite_path() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
