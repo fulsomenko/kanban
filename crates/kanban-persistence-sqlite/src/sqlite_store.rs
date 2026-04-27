@@ -1795,7 +1795,6 @@ mod tests {
         });
     }
 
-
     #[test]
     fn test_delete_archived_card_orphaned_cards_row_is_still_cleaned_up() {
         use kanban_domain::data_store::DataStore;
@@ -1872,5 +1871,4 @@ mod tests {
             );
         });
     }
-
 }
