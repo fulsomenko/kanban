@@ -1438,6 +1438,9 @@ impl App {
     }
 
     pub fn prepare_frame(&mut self) {
+        // TODO: ctx.snapshot() is a full clone of in-memory state on every frame. For the
+        // InMemoryStore backend this is cheap. If SQLite is ever used as the live TUI backend
+        // this needs a dirty-flag or event-based invalidation strategy instead of polling.
         match self.ctx.snapshot() {
             Ok(snapshot) => self.model.load_from_snapshot(snapshot),
             Err(e) => tracing::warn!("Failed to load snapshot for frame: {e}"),
