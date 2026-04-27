@@ -1255,6 +1255,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "clap",
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",

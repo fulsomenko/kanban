@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use kanban_core::graph::{Edge, Graph};
@@ -10,6 +10,9 @@ use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
     Snapshot, Sprint, SprintLog,
 };
+use kanban_persistence::{
+    PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot,
+};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use sqlx::{Pool, Row, Sqlite};
 use uuid::Uuid;
@@ -19,6 +22,8 @@ const SCHEMA: &str = include_str!("schema.sql");
 /// SQLite-backed persistence store using sqlx connection pool.
 pub struct SqliteStore {
     pool: Pool<Sqlite>,
+    path: PathBuf,
+    instance_id: Uuid,
 }
 
 fn run<F: std::future::Future<Output = T>, T>(f: F) -> T {
@@ -240,8 +245,10 @@ impl SqliteStore {
             ));
         }
 
+        let path_buf = path.as_ref().to_path_buf();
+
         let options = SqliteConnectOptions::new()
-            .filename(path)
+            .filename(&path_buf)
             .create_if_missing(true)
             .foreign_keys(true)
             .pragma("journal_mode", "wal");
@@ -259,7 +266,37 @@ impl SqliteStore {
 
         Self::migrate(&pool).await?;
 
-        Ok(Self { pool })
+        let instance_id = Self::load_or_create_instance_id(&pool).await?;
+
+        Ok(Self {
+            pool,
+            path: path_buf,
+            instance_id,
+        })
+    }
+
+    async fn load_or_create_instance_id(pool: &Pool<Sqlite>) -> KanbanResult<Uuid> {
+        let row: Option<String> =
+            sqlx::query_scalar("SELECT instance_id FROM metadata WHERE id = 1")
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?;
+        match row {
+            Some(s) => p_uuid(&s),
+            None => {
+                let id = Uuid::new_v4();
+                let now = Utc::now().to_rfc3339();
+                sqlx::query(
+                    "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+                )
+                .bind(id.to_string())
+                .bind(&now)
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
+                Ok(id)
+            }
+        }
     }
 
     async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
@@ -1585,5 +1622,125 @@ impl CommandStore for SqliteStore {
             }
             None => Ok(None),
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl PersistenceStore for SqliteStore {
+    async fn save(&self, snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
+        let domain_snapshot: Snapshot = serde_json::from_slice(&snapshot.data)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        self.apply_snapshot_async(domain_snapshot)
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        Ok(PersistenceMetadata::new(self.instance_id))
+    }
+
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
+        let domain_snapshot = self
+            .snapshot_async()
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        let data = serde_json::to_vec(&domain_snapshot)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let meta = PersistenceMetadata::new(self.instance_id);
+        Ok((
+            StoreSnapshot {
+                data,
+                metadata: meta.clone(),
+            },
+            meta,
+        ))
+    }
+
+    async fn exists(&self) -> bool {
+        self.path.exists()
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    fn instance_id(&self) -> Uuid {
+        self.instance_id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn make_rt() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_sqlitestore_path_is_preserved() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let rt = make_rt();
+        let store = rt.block_on(SqliteStore::open(&path)).unwrap();
+        assert_eq!(store.path(), path.as_path());
+    }
+
+    #[test]
+    fn test_sqlitestore_instance_id_persists_across_reopen() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let rt = make_rt();
+        let id1 = rt.block_on(SqliteStore::open(&path)).unwrap().instance_id();
+        let id2 = rt.block_on(SqliteStore::open(&path)).unwrap().instance_id();
+        assert_eq!(id1, id2, "instance_id must be stable across reopens");
+    }
+
+    #[test]
+    fn test_sqlitestore_persistence_save_load_roundtrip() {
+        use kanban_domain::{Board, DependencyGraph};
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let rt = make_rt();
+
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let board = Board::new("Test Board".to_string(), None);
+            let snapshot = Snapshot::from_data(
+                vec![board],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            let meta = PersistenceMetadata::new(store.instance_id());
+            let store_snap = StoreSnapshot {
+                data,
+                metadata: meta,
+            };
+
+            PersistenceStore::save(&store, store_snap).await.unwrap();
+
+            let (loaded_snap, _meta) = PersistenceStore::load(&store).await.unwrap();
+            let loaded: Snapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
+            assert_eq!(loaded.boards.len(), 1);
+            assert_eq!(loaded.boards[0].name, "Test Board");
+        });
+    }
+
+    #[test]
+    fn test_sqlitestore_exists_returns_true_after_open() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            assert!(PersistenceStore::exists(&store).await);
+        });
     }
 }

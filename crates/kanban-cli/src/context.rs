@@ -19,20 +19,6 @@ impl CliContext {
         file_path: &str,
         mut config: AppConfig,
     ) -> KanbanResult<Self> {
-        if store_manager.is_sqlite(file_path) {
-            #[cfg(feature = "sqlite")]
-            {
-                return Ok(Self {
-                    inner: KanbanContext::open_sqlite(file_path, config).await?,
-                });
-            }
-            #[cfg(not(feature = "sqlite"))]
-            {
-                return Err(kanban_domain::KanbanError::validation(
-                    "File appears to be SQLite but the sqlite feature is not compiled in",
-                ));
-            }
-        }
         if store_manager.sync_backend_with_file(file_path, &mut config) {
             eprintln!(
                 "Warning: storage backend auto-corrected from config value to '{}' based on file content.",

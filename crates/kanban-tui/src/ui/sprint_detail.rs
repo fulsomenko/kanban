@@ -12,9 +12,9 @@ use ratatui::{
 
 pub(super) fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(sprint_idx) = app.selection.active_sprint_index {
-        if let Some(sprint) = app.view.sprints.get(sprint_idx) {
+        if let Some(sprint) = app.model.sprints().get(sprint_idx) {
             if let Some(board_idx) = app.selection.active_board_index {
-                if let Some(board) = app.view.boards.get(board_idx) {
+                if let Some(board) = app.model.boards().get(board_idx) {
                     let is_completed = sprint.status == SprintStatus::Completed;
 
                     if is_completed {
@@ -100,9 +100,9 @@ fn sprint_card_assignment_lines(
     board: &kanban_domain::Board,
 ) -> Vec<Line<'static>> {
     let card_count = app
-        .view
-        .cards_by_id
-        .values()
+        .model
+        .cards()
+        .iter()
         .filter(|c| c.sprint_id == Some(sprint.id))
         .count();
     let mut lines = vec![metadata_line_styled(
@@ -192,12 +192,12 @@ pub(super) fn render_sprint_detail_with_tasks(
 
 fn calculate_task_panel_points(
     task_list: &crate::card_list::CardList,
-    cards_by_id: &std::collections::HashMap<uuid::Uuid, kanban_domain::Card>,
+    model: &crate::app::model::Model,
 ) -> u32 {
     let filtered: Vec<&kanban_domain::Card> = task_list
         .cards
         .iter()
-        .filter_map(|card_id| cards_by_id.get(card_id))
+        .filter_map(|card_id| model.card(*card_id))
         .collect();
     kanban_domain::calculate_points(&filtered)
 }
@@ -228,7 +228,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
             "Task",
         ));
 
-        let sprints = &app.view.sprints;
+        let sprints = &app.model.sprints();
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -262,7 +262,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
         ));
     }
 
-    let points = calculate_task_panel_points(task_list, &app.view.cards_by_id);
+    let points = calculate_task_panel_points(task_list, &app.model);
 
     lines.push(Line::from(Span::styled(
         format!("Points: {}", points),

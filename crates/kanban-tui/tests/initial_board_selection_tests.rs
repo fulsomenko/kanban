@@ -45,6 +45,7 @@ async fn test_load_initial_state_with_boards_refreshes_card_view() -> KanbanResu
 
     let (mut app, _rx) = kanban_tui::App::new(Some(path_str))?;
     app.load_initial_state().await;
+    app.prepare_frame();
 
     let task_list = app.view.strategy.get_active_task_list();
     assert!(

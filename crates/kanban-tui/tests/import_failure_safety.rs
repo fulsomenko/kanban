@@ -44,12 +44,13 @@ async fn test_import_failure_prevents_empty_state_save() {
     app.load_initial_state().await;
 
     // App should load the board from V2 format
+    app.prepare_frame();
     assert_eq!(
-        app.ctx.boards().len(),
+        app.model.boards().len(),
         1,
         "V2 format should be imported successfully"
     );
-    assert_eq!(app.ctx.boards()[0].name, "Test Board");
+    assert_eq!(app.model.boards()[0].name, "Test Board");
     assert!(
         app.persistence.save_file.is_some(),
         "save_file should still be enabled after successful V2 import"
@@ -75,7 +76,8 @@ async fn test_import_failure_disables_save_file() {
     );
 
     // App should have empty state
-    assert_eq!(app.ctx.boards().len(), 0);
+    app.prepare_frame();
+    assert_eq!(app.model.boards().len(), 0);
 }
 
 #[tokio::test]
@@ -121,11 +123,12 @@ async fn test_v2_format_is_imported_correctly() {
     app.load_initial_state().await;
 
     // Should successfully import the board with its column and card
-    assert_eq!(app.ctx.boards().len(), 1);
-    assert_eq!(app.ctx.boards()[0].name, "My Project");
-    assert_eq!(app.ctx.columns().len(), 1);
-    assert_eq!(app.ctx.cards().len(), 1);
-    assert_eq!(app.ctx.cards()[0].title, "Important Task");
+    app.prepare_frame();
+    assert_eq!(app.model.boards().len(), 1);
+    assert_eq!(app.model.boards()[0].name, "My Project");
+    assert_eq!(app.model.columns().len(), 1);
+    assert_eq!(app.model.cards().len(), 1);
+    assert_eq!(app.model.cards()[0].title, "Important Task");
     assert!(
         app.persistence.save_file.is_some(),
         "save_file should remain enabled after successful V2 import"

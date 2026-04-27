@@ -187,17 +187,21 @@ impl LayoutStrategy for ColumnListsLayout {
                 .iter()
                 .find(|list| list.id == CardListId::Column(column.id));
 
-            let mut task_list = if let Some(existing) = existing_list {
-                let mut list = CardList::new(CardListId::Column(column.id));
-                if let Some(selected_idx) = existing.get_selected_index() {
-                    list.set_selected_index(Some(selected_idx));
-                }
-                list
+            let (prev_selected_card, prev_scroll_offset) = if let Some(existing) = existing_list {
+                (
+                    existing.get_selected_card_id(),
+                    existing.get_scroll_offset(),
+                )
             } else {
-                CardList::new(CardListId::Column(column.id))
+                (None, 0)
             };
 
+            let mut task_list = CardList::new(CardListId::Column(column.id));
             task_list.update_cards(card_ids);
+            if let Some(card_id) = prev_selected_card {
+                task_list.select_card(card_id);
+            }
+            task_list.set_scroll_offset(prev_scroll_offset);
             new_column_lists.push(task_list);
         }
 

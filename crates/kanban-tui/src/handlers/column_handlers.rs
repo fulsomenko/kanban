@@ -10,7 +10,7 @@ impl App {
     pub fn handle_create_column_key(&mut self) {
         if self.focus.board_focus == BoardFocus::Columns {
             if let Some(board_idx) = self.selection.board.get() {
-                if self.ctx.boards().get(board_idx).is_some() {
+                if self.model.boards().get(board_idx).is_some() {
                     self.open_dialog(DialogMode::CreateColumn);
                     self.input.clear();
                 }
@@ -23,9 +23,9 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                let boards = self.ctx.boards();
+                let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
-                    let columns = self.ctx.columns();
+                    let columns = self.model.columns();
                     let board_columns: Vec<_> = columns
                         .iter()
                         .filter(|col| col.board_id == board.id)
@@ -47,9 +47,9 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     let column_count = self
-                        .ctx
+                        .model
                         .columns()
                         .iter()
                         .filter(|col| col.board_id == board.id)
@@ -70,10 +70,10 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     // Collect and sort column data before mutating
                     let mut board_columns: Vec<_> = self
-                        .ctx
+                        .model
                         .columns()
                         .iter()
                         .filter(|col| col.board_id == board.id)
@@ -126,10 +126,10 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     // Collect and sort column data before mutating
                     let mut board_columns: Vec<_> = self
-                        .ctx
+                        .model
                         .columns()
                         .iter()
                         .filter(|col| col.board_id == board.id)
@@ -184,7 +184,7 @@ impl App {
         }
 
         if let Some(board_idx) = self.selection.active_board_index {
-            if let Some(board) = self.ctx.boards().get(board_idx) {
+            if let Some(board) = self.model.boards().get(board_idx) {
                 let current_view_idx = match board.task_list_view {
                     TaskListView::Flat => 0,
                     TaskListView::GroupedByColumn => 1,
@@ -201,7 +201,7 @@ impl App {
     pub fn create_column(&mut self) {
         if let Some(board_idx) = self.selection.board.get() {
             // Collect board_id before command execution
-            let board_id = self.ctx.boards().get(board_idx).map(|board| board.id);
+            let board_id = self.model.boards().get(board_idx).map(|board| board.id);
 
             if let Some(board_id) = board_id {
                 let column_name = self.input.as_str().trim().to_string();
@@ -212,7 +212,7 @@ impl App {
                 }
 
                 let position = self
-                    .ctx
+                    .model
                     .columns()
                     .iter()
                     .filter(|col| col.board_id == board_id)
@@ -228,6 +228,13 @@ impl App {
                     position,
                 }));
 
+                let prior_column_count = self
+                    .model
+                    .columns()
+                    .iter()
+                    .filter(|col| col.board_id == board_id)
+                    .count();
+
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to create column: {}", e);
                     self.set_error(format!("Failed to create column: {}", e));
@@ -236,16 +243,9 @@ impl App {
 
                 tracing::info!("Created column: {} (position: {})", column_name, position);
 
-                let board_column_count = self
-                    .ctx
-                    .columns()
-                    .iter()
-                    .filter(|col| col.board_id == board_id)
-                    .count();
-                let new_column_index = board_column_count.saturating_sub(1);
                 self.dialog_input
                     .column_selection
-                    .set(Some(new_column_index));
+                    .set(Some(prior_column_count));
             }
         }
     }
@@ -254,10 +254,10 @@ impl App {
         if let Some(board_idx) = self.selection.board.get() {
             // Collect column ID before mutable borrow
             let column_info = {
-                let boards = self.ctx.boards();
+                let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
                     if let Some(column_idx) = self.dialog_input.column_selection.get() {
-                        let columns = self.ctx.columns();
+                        let columns = self.model.columns();
                         let board_columns: Vec<_> = columns
                             .iter()
                             .filter(|col| col.board_id == board.id)
@@ -303,10 +303,10 @@ impl App {
         if let Some(board_idx) = self.selection.board.get() {
             // Collect all necessary data before mutating
             let delete_info = {
-                if let Some(board) = self.ctx.boards().get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     if let Some(column_idx) = self.dialog_input.column_selection.get() {
                         let board_columns: Vec<_> = self
-                            .ctx
+                            .model
                             .columns()
                             .iter()
                             .filter(|col| col.board_id == board.id)
@@ -322,7 +322,7 @@ impl App {
 
                         if let Some((column_id, column_name)) = column_to_delete {
                             let cards_to_move: Vec<(uuid::Uuid, i32)> = self
-                                .ctx
+                                .model
                                 .cards()
                                 .iter()
                                 .filter(|card| card.column_id == column_id)
@@ -350,6 +350,19 @@ impl App {
             if let Some((column_id, column_name, first_column_id, cards_to_move, column_idx)) =
                 delete_info
             {
+                let remaining_after_delete = {
+                    let columns = self.model.columns();
+                    let board = self.model.boards().get(board_idx);
+                    board
+                        .map(|b| {
+                            columns
+                                .iter()
+                                .filter(|c| c.board_id == b.id && c.id != column_id)
+                                .count()
+                        })
+                        .unwrap_or(0)
+                };
+
                 tracing::warn!("Cannot delete the last column");
 
                 if let Some(target_column_id) = first_column_id {
@@ -386,24 +399,11 @@ impl App {
 
                 tracing::info!("Deleted column: {}", column_name);
 
-                let remaining_columns = self
-                    .ctx
-                    .columns()
-                    .iter()
-                    .filter(|col| {
-                        if let Some(board) = self.ctx.boards().get(board_idx) {
-                            col.board_id == board.id
-                        } else {
-                            false
-                        }
-                    })
-                    .count();
-
-                if remaining_columns > 0 {
-                    if column_idx >= remaining_columns {
+                if remaining_after_delete > 0 {
+                    if column_idx >= remaining_after_delete {
                         self.dialog_input
                             .column_selection
-                            .set(Some(remaining_columns - 1));
+                            .set(Some(remaining_after_delete - 1));
                     } else {
                         self.dialog_input.column_selection.set(Some(column_idx));
                     }
@@ -515,7 +515,7 @@ impl App {
                     let selected_card_id = self.get_selected_card_id();
 
                     if let Some(board_idx) = self.selection.active_board_index {
-                        if let Some(board) = self.ctx.boards().get(board_idx) {
+                        if let Some(board) = self.model.boards().get(board_idx) {
                             let cmd = Command::Board(BoardCommand::SetTaskListView(
                                 SetBoardTaskListView {
                                     board_id: board.id,

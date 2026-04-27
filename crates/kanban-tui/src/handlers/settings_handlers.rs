@@ -270,12 +270,12 @@ impl App {
             tracing::error!("Failed to clear history: {}", e);
         }
 
-        self.selection.active_board_index = if self.ctx.boards().is_empty() {
+        self.selection.active_board_index = if self.model.boards().is_empty() {
             None
         } else {
             Some(0)
         };
-        self.selection.board.set(if self.ctx.boards().is_empty() {
+        self.selection.board.set(if self.model.boards().is_empty() {
             None
         } else {
             Some(0)
@@ -379,7 +379,7 @@ impl App {
             | KeyCode::Enter => self.handle_settings_key_nav(key),
             KeyCode::Char('e') => self.open_config_editor(terminal, event_handler),
             KeyCode::Char('x') => {
-                let board_count = self.ctx.boards().len();
+                let board_count = self.model.boards().len();
                 if board_count == 0 {
                     self.set_error("No boards to export".to_string());
                     return false;
@@ -530,7 +530,7 @@ impl App {
     }
 
     fn trigger_export(&mut self) -> bool {
-        let board_count = self.ctx.boards().len();
+        let board_count = self.model.boards().len();
         if board_count == 0 {
             self.set_error("No boards to export".to_string());
             return false;
@@ -634,15 +634,15 @@ impl App {
             return;
         }
 
-        let boards = self.ctx.boards();
-        let columns = self.ctx.columns();
-        let cards = self.ctx.cards();
-        let archived = self.ctx.archived_cards();
-        let sprints = self.ctx.sprints();
+        let boards = self.model.boards();
+        let columns = self.model.columns();
+        let cards = self.model.cards();
+        let archived = self.model.archived_cards();
+        let sprints = self.model.sprints();
         let board_exports: Vec<_> = selected_indices
             .iter()
             .filter_map(|&i| boards.get(i))
-            .map(|board| BoardExporter::export_board(board, &columns, &cards, &archived, &sprints))
+            .map(|board| BoardExporter::export_board(board, columns, cards, archived, sprints))
             .collect();
 
         let export = AllBoardsExport::from_boards(board_exports);

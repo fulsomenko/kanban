@@ -45,6 +45,9 @@ chrono.workspace = true
 # Error handling (for main.rs only)
 anyhow.workspace = true
 
+# CLI arguments
+clap.workspace = true
+
 # Logging
 tracing.workspace = true
 tracing-subscriber.workspace = true

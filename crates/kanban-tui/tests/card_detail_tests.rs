@@ -1,11 +1,7 @@
-use kanban_domain::{Board, Card, Column};
+use kanban_domain::{Board, Card, Column, Snapshot};
 
 /// Verify that `get_card_for_detail_view` resolves to the card whose UUID is
-/// stored in `active_card_id`, regardless of HashMap iteration order.
-///
-/// If the detail view were using an index into `cards_by_id.values()`, it
-/// could silently return the wrong card because HashMap order is
-/// non-deterministic.
+/// stored in `active_card_id`, regardless of iteration order.
 #[test]
 fn test_active_card_detail_shows_selected_card() {
     let mut app = kanban_tui::App::test_default();
@@ -17,10 +13,12 @@ fn test_active_card_detail_shows_selected_card() {
 
     let card_b_id = card_b.id;
 
-    app.view.cards_by_id.insert(card_a.id, card_a);
-    app.view.cards_by_id.insert(card_b.id, card_b);
+    app.model.load_from_snapshot(Snapshot {
+        cards: vec![card_a, card_b],
+        ..Default::default()
+    });
 
-    // Select the second card by ID — not by index into HashMap values.
+    // Select the second card by ID.
     app.selection.active_card_id = Some(card_b_id);
 
     let detail_card = app
@@ -29,7 +27,7 @@ fn test_active_card_detail_shows_selected_card() {
 
     assert_eq!(
         detail_card.id, card_b_id,
-        "detail view must show the card whose UUID matches active_card_id, not an arbitrary HashMap entry"
+        "detail view must show the card whose UUID matches active_card_id"
     );
 }
 

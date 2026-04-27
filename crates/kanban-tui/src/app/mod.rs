@@ -25,6 +25,8 @@ pub use dialog_input::DialogInputState;
 pub mod relationship;
 pub use relationship::RelationshipState;
 
+pub mod model;
+
 pub mod view;
 pub use view::ViewState;
 
@@ -92,6 +94,7 @@ pub struct App {
     pub ui_state: UiState,
     pub sprint_view: SprintViewState,
     pub view: ViewState,
+    pub model: model::Model,
     pub relationship: RelationshipState,
     pub pending_key: Option<char>,
     pub has_data_file: bool,
@@ -261,6 +264,7 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
+            model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
@@ -337,6 +341,7 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
+            model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,
@@ -733,7 +738,10 @@ impl App {
                 | AppMode::Dialog(DialogMode::SetSprintCardPrefix)
         );
 
-        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) && !is_input_mode {
+        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q'))
+            && !is_input_mode
+            && !matches!(self.mode, AppMode::ArchivedCardsView)
+        {
             self.handle_quit_key();
             return false;
         }
@@ -1041,26 +1049,22 @@ impl App {
         match key_code {
             KeyCode::Char(c) => {
                 self.filter.search.input.insert_char(c);
-                self.refresh_view();
             }
             KeyCode::Backspace => {
                 self.filter.search.input.backspace();
-                self.refresh_view();
             }
             KeyCode::Enter => {
                 self.mode = AppMode::Normal;
-                self.refresh_view();
             }
             KeyCode::Esc => {
                 self.filter.search.deactivate();
                 self.mode = AppMode::Normal;
-                self.refresh_view();
             }
             _ => {}
         }
     }
 
-    fn handle_archived_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
+    pub fn handle_archived_cards_view_mode(&mut self, key_code: crossterm::event::KeyCode) {
         use crossterm::event::KeyCode;
         if self.focus.active != Focus::Cards {
             self.focus.active = Focus::Cards;
@@ -1164,7 +1168,7 @@ impl App {
         }
     }
 
-    fn handle_animation_tick(&mut self) {
+    pub fn handle_animation_tick(&mut self) {
         let now = Instant::now();
         let mut completed_animations = Vec::new();
 
@@ -1186,7 +1190,7 @@ impl App {
             self.animation.animating.remove(&card_id);
             match animation_type {
                 AnimationType::Archiving => {
-                    let cards = self.ctx.cards();
+                    let cards = self.model.cards();
                     if let Some(card_pos) = cards.iter().position(|c| c.id == card_id) {
                         let card = &cards[card_pos];
                         last_archive_column = Some(card.column_id);
@@ -1248,7 +1252,7 @@ impl App {
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) {
         if let Some(archived_card) = self
-            .ctx
+            .model
             .archived_cards()
             .iter()
             .find(|dc| dc.card.id == card_id)
@@ -1259,8 +1263,8 @@ impl App {
     }
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
-        let columns = self.ctx.columns();
-        let board_filter = BoardFilter::new(board_id, &columns);
+        let columns = self.model.columns();
+        let board_filter = BoardFilter::new(board_id, columns);
         let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
             Some(SprintFilter::in_sprints(
                 self.filter.active_sprint_filters.iter().copied(),
@@ -1269,7 +1273,7 @@ impl App {
             None
         };
 
-        let cards = self.ctx.cards();
+        let cards = self.model.cards();
         cards
             .iter()
             .filter(|c| {
@@ -1290,10 +1294,10 @@ impl App {
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<Card> {
-        let boards = self.ctx.boards();
+        let boards = self.model.boards();
         let board = boards.iter().find(|b| b.id == board_id).unwrap();
-        let columns = self.ctx.columns();
-        let board_filter = BoardFilter::new(board_id, &columns);
+        let columns = self.model.columns();
+        let board_filter = BoardFilter::new(board_id, columns);
         let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
             Some(SprintFilter::in_sprints(
                 self.filter.active_sprint_filters.iter().copied(),
@@ -1302,7 +1306,7 @@ impl App {
             None
         };
 
-        let all_cards = self.ctx.cards();
+        let all_cards = self.model.cards();
         let mut cards: Vec<&Card> = all_cards
             .iter()
             .filter(|c| {
@@ -1351,18 +1355,21 @@ impl App {
     }
 
     pub fn get_card_by_id(&self, card_id: uuid::Uuid) -> Option<Card> {
-        self.view.cards_by_id.get(&card_id).cloned()
+        self.model
+            .card(card_id)
+            .or_else(|| self.model.archived_card(card_id))
+            .cloned()
     }
 
     pub fn get_card_for_detail_view(&self) -> Option<Card> {
         self.selection
             .active_card_id
-            .and_then(|id| self.view.cards_by_id.get(&id).cloned())
+            .and_then(|id| self.model.card(id).cloned())
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
-        let cards = self.ctx.cards();
-        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, &cards);
+        let cards = self.model.cards();
+        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, cards);
 
         self.sprint_view
             .uncompleted_cards
@@ -1381,16 +1388,16 @@ impl App {
     }
 
     pub fn apply_sort_to_sprint_lists(&mut self, sort_field: SortField, sort_order: SortOrder) {
-        let cards = self.ctx.cards();
+        let cards = self.model.cards();
         let sorted_uncompleted_ids = sort_card_ids(
             &self.sprint_view.uncompleted_cards.cards,
-            &cards,
+            cards,
             sort_field,
             sort_order,
         );
         let sorted_completed_ids = sort_card_ids(
             &self.sprint_view.completed_cards.cards,
-            &cards,
+            cards,
             sort_field,
             sort_order,
         );
@@ -1427,55 +1434,45 @@ impl App {
         commands: Vec<kanban_domain::commands::Command>,
     ) -> KanbanResult<()> {
         self.ctx.execute_commands_batch(commands)?;
-        self.refresh_view();
         Ok(())
     }
 
-    pub fn refresh_view(&mut self) {
+    pub fn prepare_frame(&mut self) {
+        // TODO: ctx.snapshot() is a full clone of in-memory state on every frame. For the
+        // InMemoryStore backend this is cheap. If SQLite is ever used as the live TUI backend
+        // this needs a dirty-flag or event-based invalidation strategy instead of polling.
+        match self.ctx.snapshot() {
+            Ok(snapshot) => self.model.load_from_snapshot(snapshot),
+            Err(e) => tracing::warn!("Failed to load snapshot for frame: {e}"),
+        }
+
+        let cards_for_display: &[Card] = if self.mode == AppMode::ArchivedCardsView {
+            self.model.archived_cards_flat()
+        } else {
+            self.model.cards()
+        };
+
         let board_idx = self
             .selection
             .active_board_index
             .or(self.selection.board.get());
         if let Some(idx) = board_idx {
-            let boards = self.ctx.boards();
-            if let Some(board) = boards.get(idx) {
+            if let Some(board) = self.model.boards().get(idx) {
                 let search_query = if self.filter.search.is_active {
                     Some(self.filter.search.query())
                 } else {
                     None
                 };
-
-                // When in DeletedCardsView, convert deleted cards to Card objects for display
-                let cards_for_display: Vec<Card> = if self.mode == AppMode::ArchivedCardsView {
-                    self.ctx
-                        .archived_cards()
-                        .iter()
-                        .map(|dc| dc.card.clone())
-                        .collect()
-                } else {
-                    self.ctx.cards()
-                };
-
-                let columns = self.ctx.columns();
-                let sprints = self.ctx.sprints();
                 let ctx = ViewRefreshContext {
                     board,
-                    all_cards: &cards_for_display,
-                    all_columns: &columns,
-                    all_sprints: &sprints,
+                    all_cards: cards_for_display,
+                    all_columns: self.model.columns(),
+                    all_sprints: self.model.sprints(),
                     active_sprint_filters: self.filter.active_sprint_filters.clone(),
                     hide_assigned_cards: self.filter.hide_assigned_cards,
                     search_query,
                 };
                 self.view.strategy.refresh_task_lists(&ctx);
-
-                // Keep the already-fetched data for rendering so the render
-                // path never re-queries the database just to display cards.
-                self.view.cards_by_id = cards_for_display.into_iter().map(|c| (c.id, c)).collect();
-                self.view.sprints = sprints;
-                self.view.columns = columns;
-                self.view.boards = boards;
-                self.view.graph = self.ctx.graph();
             }
         }
         self.sync_card_list_component();
@@ -1484,7 +1481,7 @@ impl App {
     /// Undo the last action
     pub fn undo(&mut self) -> KanbanResult<()> {
         if self.ctx.undo()? {
-            self.refresh_view();
+            self.needs_redraw = true;
         } else {
             self.set_error("Nothing to undo".to_string());
         }
@@ -1494,7 +1491,7 @@ impl App {
     /// Redo the last undone action
     pub fn redo(&mut self) -> KanbanResult<()> {
         if self.ctx.redo()? {
-            self.refresh_view();
+            self.needs_redraw = true;
         } else {
             self.set_error("Nothing to redo".to_string());
         }
@@ -1519,19 +1516,18 @@ impl App {
         };
 
         self.view.strategy = new_strategy;
-        self.refresh_view();
     }
 
     pub fn export_board_with_filename(&self) -> io::Result<()> {
         if let Some(board_idx) = self.selection.board.get() {
-            let boards = self.ctx.boards();
+            let boards = self.model.boards();
             if let Some(board) = boards.get(board_idx) {
-                let columns = self.ctx.columns();
-                let cards = self.ctx.cards();
-                let archived_cards = self.ctx.archived_cards();
-                let sprints = self.ctx.sprints();
+                let columns = self.model.columns();
+                let cards = self.model.cards();
+                let archived_cards = self.model.archived_cards();
+                let sprints = self.model.sprints();
                 let board_export =
-                    BoardExporter::export_board(board, &columns, &cards, &archived_cards, &sprints);
+                    BoardExporter::export_board(board, columns, cards, archived_cards, sprints);
 
                 let export = AllBoardsExport {
                     boards: vec![board_export],
@@ -1544,48 +1540,46 @@ impl App {
     }
 
     pub fn export_all_boards_with_filename(&self) -> io::Result<()> {
-        let boards = self.ctx.boards();
-        let columns = self.ctx.columns();
-        let cards = self.ctx.cards();
-        let archived_cards = self.ctx.archived_cards();
-        let sprints = self.ctx.sprints();
+        let boards = self.model.boards();
+        let columns = self.model.columns();
+        let cards = self.model.cards();
+        let archived_cards = self.model.archived_cards();
+        let sprints = self.model.sprints();
         let export =
-            BoardExporter::export_all_boards(&boards, &columns, &cards, &archived_cards, &sprints);
+            BoardExporter::export_all_boards(boards, columns, cards, archived_cards, sprints);
         BoardExporter::export_to_file(&export, self.input.as_str())?;
         Ok(())
     }
 
     pub fn auto_save(&self) -> io::Result<()> {
         if let Some(ref filename) = self.persistence.save_file {
-            let boards = self.ctx.boards();
-            let columns = self.ctx.columns();
-            let cards = self.ctx.cards();
-            let archived_cards = self.ctx.archived_cards();
-            let sprints = self.ctx.sprints();
-            let export = BoardExporter::export_all_boards(
-                &boards,
-                &columns,
-                &cards,
-                &archived_cards,
-                &sprints,
-            );
+            let boards = self.model.boards();
+            let columns = self.model.columns();
+            let cards = self.model.cards();
+            let archived_cards = self.model.archived_cards();
+            let sprints = self.model.sprints();
+            let export =
+                BoardExporter::export_all_boards(boards, columns, cards, archived_cards, sprints);
             BoardExporter::export_to_file(&export, filename)?;
         }
         Ok(())
     }
 
     fn check_ended_sprints(&self) {
-        let sprints = self.ctx.sprints();
-        let ended_sprints: Vec<_> = sprints.iter().filter(|s| s.is_ended()).collect();
+        let ended_sprints: Vec<_> = self
+            .model
+            .sprints()
+            .iter()
+            .filter(|s| s.is_ended())
+            .collect();
 
         if !ended_sprints.is_empty() {
             tracing::warn!(
                 "Found {} ended sprint(s) that need attention:",
                 ended_sprints.len()
             );
-            let boards = self.ctx.boards();
             for sprint in &ended_sprints {
-                if let Some(board) = boards.iter().find(|b| b.id == sprint.board_id) {
+                if let Some(board) = self.model.boards().iter().find(|b| b.id == sprint.board_id) {
                     tracing::warn!(
                         "  - {} (ended: {})",
                         sprint.formatted_name(board, "sprint"),
@@ -1606,7 +1600,7 @@ impl App {
         field: BoardField,
     ) -> io::Result<()> {
         if let Some(board_idx) = self.selection.board.get() {
-            let boards = self.ctx.boards();
+            let boards = self.model.boards();
             if let Some(board) = boards.get(board_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
@@ -1655,7 +1649,7 @@ impl App {
                                 kanban_domain::commands::UpdateBoard { board_id, updates },
                             ),
                         );
-                        if let Err(e) = self.ctx.execute_command(cmd) {
+                        if let Err(e) = self.execute_command(cmd) {
                             tracing::error!("Failed to update board: {}", e);
                         }
                     }
@@ -1672,7 +1666,7 @@ impl App {
         field: CardField,
     ) -> io::Result<()> {
         if let Some(card_idx) = self.selection.active_card_index {
-            let cards = self.ctx.cards();
+            let cards = self.model.cards();
             if let Some(card) = cards.get(card_idx) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
@@ -1721,7 +1715,7 @@ impl App {
                                 kanban_domain::commands::UpdateCard { card_id, updates },
                             ),
                         );
-                        if let Err(e) = self.ctx.execute_command(cmd) {
+                        if let Err(e) = self.execute_command(cmd) {
                             tracing::error!("Failed to update card: {}", e);
                         }
                     }
@@ -1805,11 +1799,11 @@ impl App {
             }
         }
         self.migrate_sprint_logs();
+        self.prepare_frame();
         self.check_ended_sprints();
-        if self.selection.board.get().is_none() && !self.ctx.boards().is_empty() {
+        if self.selection.board.get().is_none() && !self.model.boards().is_empty() {
             self.selection.board.set(Some(0));
         }
-        self.refresh_view();
     }
 
     pub async fn run(
@@ -1873,6 +1867,7 @@ impl App {
 
             loop {
                 if self.needs_redraw {
+                    self.prepare_frame();
                     terminal.draw(|frame| ui::render(self, frame))?;
                     self.needs_redraw = false;
                 }
@@ -1973,7 +1968,7 @@ impl App {
                                                                     tracing::error!("Failed to clear history: {}", e);
                                                                 }
                                                                 self.ctx.clear_conflict();
-                                                                self.refresh_view();
+                                                                self.needs_redraw = true;
                                                                 tracing::info!("Reloaded state from disk");
                                                             }
                                                         }
@@ -2158,7 +2153,7 @@ impl App {
     pub fn import_board_from_file(&mut self, filename: &str) -> io::Result<()> {
         let content = std::fs::read_to_string(filename)?;
 
-        let first_new_index = self.ctx.boards().len();
+        let first_new_index = self.model.boards().len();
 
         // Try V2 format first (preserves graph)
         if let Some(snapshot) = BoardImporter::try_load_snapshot(&content) {
@@ -2228,7 +2223,7 @@ impl App {
                             }
                             self.ctx.mark_clean();
                             self.ctx.clear_conflict();
-                            self.refresh_view();
+                            self.needs_redraw = true;
                             tracing::info!("Auto-reloaded state from external file change");
                         }
                     }
@@ -2261,15 +2256,15 @@ impl App {
     {
         if let Some(card_idx) = self.selection.active_card_index {
             if let Some(board_idx) = self.selection.active_board_index {
-                let boards = self.ctx.boards();
+                let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
-                    let cards = self.ctx.cards();
+                    let cards = self.model.cards();
                     if let Some(card) = cards.get(card_idx) {
-                        let sprints = self.ctx.sprints();
+                        let sprints = self.model.sprints();
                         let output = get_output(
                             card,
                             board,
-                            &sprints,
+                            sprints,
                             self.app_config.effective_default_card_prefix(),
                         );
                         if let Err(e) = clipboard::copy_to_clipboard(&output) {
@@ -2297,7 +2292,7 @@ impl App {
 
     pub fn get_current_priority_selection_index(&self) -> usize {
         if let Some(card_idx) = self.selection.active_card_index {
-            let cards = self.ctx.cards();
+            let cards = self.model.cards();
             if let Some(card) = cards.get(card_idx) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
@@ -2313,14 +2308,14 @@ impl App {
 
     pub fn get_current_sprint_selection_index(&self) -> usize {
         if let Some(card_idx) = self.selection.active_card_index {
-            let cards = self.ctx.cards();
+            let cards = self.model.cards();
             if let Some(card) = cards.get(card_idx) {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.selection.active_board_index {
-                        let boards = self.ctx.boards();
+                        let boards = self.model.boards();
                         if let Some(board) = boards.get(board_idx) {
-                            let sprints = self.ctx.sprints();
-                            let board_sprints = Sprint::assignable(&sprints, board.id);
+                            let sprints = self.model.sprints();
+                            let board_sprints = Sprint::assignable(sprints, board.id);
                             for (idx, sprint) in board_sprints.iter().enumerate() {
                                 if sprint.id == card_sprint_id {
                                     return idx + 1;
@@ -2399,6 +2394,7 @@ impl App {
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
             view: ViewState::default(),
+            model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
             has_data_file: true,

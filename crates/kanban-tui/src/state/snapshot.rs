@@ -29,7 +29,7 @@ impl TuiSnapshot for Snapshot {
 
         // Sync sort field/order from active board to preserve user's selection after reload
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards().get(board_idx) {
+            if let Some(board) = self.boards.get(board_idx) {
                 app.filter.current_sort_field = Some(board.task_sort_field);
                 app.filter.current_sort_order = Some(board.task_sort_order);
             }

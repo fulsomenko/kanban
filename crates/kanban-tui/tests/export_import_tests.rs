@@ -28,6 +28,7 @@ fn test_export_single_board() {
         .unwrap();
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
+    app.prepare_frame();
 
     app.export_board_with_filename().unwrap();
 
@@ -79,6 +80,7 @@ fn test_export_all_boards() {
         .unwrap();
 
     app.input.set(file_path.to_str().unwrap().to_string());
+    app.prepare_frame();
 
     app.export_all_boards_with_filename().unwrap();
 
@@ -99,6 +101,7 @@ fn test_export_empty_boards() {
 
     let mut app = App::test_default();
     app.persistence.save_file = Some(file_path.to_str().unwrap().to_string());
+    app.prepare_frame();
 
     app.auto_save().unwrap();
 
@@ -157,11 +160,12 @@ fn test_import_valid_format() {
     app.import_board_from_file(file_path.to_str().unwrap())
         .unwrap();
 
-    assert_eq!(app.ctx.boards().len(), 1);
-    assert_eq!(app.ctx.boards()[0].name, "Imported Board");
-    assert_eq!(app.ctx.columns().len(), 1);
-    assert_eq!(app.ctx.cards().len(), 1);
-    assert_eq!(app.ctx.cards()[0].title, "Imported Task");
+    app.prepare_frame();
+    assert_eq!(app.model.boards().len(), 1);
+    assert_eq!(app.model.boards()[0].name, "Imported Board");
+    assert_eq!(app.model.columns().len(), 1);
+    assert_eq!(app.model.cards().len(), 1);
+    assert_eq!(app.model.cards()[0].title, "Imported Task");
 }
 
 #[test]
@@ -193,6 +197,7 @@ fn test_auto_save() {
         .create_column(board.id, "Todo".to_string(), None)
         .unwrap();
 
+    app.prepare_frame();
     app.auto_save().unwrap();
 
     let content = fs::read_to_string(&file_path).unwrap();
@@ -245,14 +250,15 @@ async fn test_async_load_initial_state_sqlite() {
     drop(store);
 
     // Load via App::open_sqlite (SQLite is no longer registry-backed)
-    let app = App::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
+    let mut app = App::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
 
-    assert_eq!(app.ctx.boards().len(), 1);
-    assert_eq!(app.ctx.boards()[0].name, "SQLite Board");
-    assert_eq!(app.ctx.columns().len(), 1);
-    assert_eq!(app.ctx.columns()[0].name, "Backlog");
+    app.prepare_frame();
+    assert_eq!(app.model.boards().len(), 1);
+    assert_eq!(app.model.boards()[0].name, "SQLite Board");
+    assert_eq!(app.model.columns().len(), 1);
+    assert_eq!(app.model.columns()[0].name, "Backlog");
 }
 
 #[test]
@@ -305,6 +311,7 @@ fn test_export_import_sprint_and_card_prefixes() {
 
     app.selection.board.set(Some(0));
     app.input.set(file_path.to_str().unwrap().to_string());
+    app.prepare_frame();
 
     // Export
     app.export_board_with_filename().unwrap();
@@ -322,15 +329,16 @@ fn test_export_import_sprint_and_card_prefixes() {
         .unwrap();
 
     // Verify prefixes preserved after import
-    assert_eq!(app2.ctx.boards().len(), 1);
+    app2.prepare_frame();
+    assert_eq!(app2.model.boards().len(), 1);
     assert_eq!(
-        app2.ctx.boards()[0].sprint_prefix,
+        app2.model.boards()[0].sprint_prefix,
         Some("sprint".to_string())
     );
-    assert_eq!(app2.ctx.boards()[0].card_prefix, Some("task".to_string()));
-    assert_eq!(app2.ctx.sprints().len(), 1);
+    assert_eq!(app2.model.boards()[0].card_prefix, Some("task".to_string()));
+    assert_eq!(app2.model.sprints().len(), 1);
     assert_eq!(
-        app2.ctx.sprints()[0].card_prefix,
+        app2.model.sprints()[0].card_prefix,
         Some("hotfix".to_string())
     );
 }
@@ -402,13 +410,17 @@ fn test_backward_compat_old_export_format() {
         .unwrap();
 
     // Verify board imported and old branch_prefix is mapped to sprint_prefix
-    assert_eq!(app.ctx.boards().len(), 1);
-    assert_eq!(app.ctx.boards()[0].name, "Old Board");
-    assert_eq!(app.ctx.boards()[0].sprint_prefix, Some("FEAT".to_string()));
+    app.prepare_frame();
+    assert_eq!(app.model.boards().len(), 1);
+    assert_eq!(app.model.boards()[0].name, "Old Board");
+    assert_eq!(
+        app.model.boards()[0].sprint_prefix,
+        Some("FEAT".to_string())
+    );
     // card_prefix should be None since old format didn't have it
-    assert_eq!(app.ctx.boards()[0].card_prefix, None);
+    assert_eq!(app.model.boards()[0].card_prefix, None);
 
     // Verify cards still work
-    assert_eq!(app.ctx.cards().len(), 1);
-    assert_eq!(app.ctx.cards()[0].title, "Old Card");
+    assert_eq!(app.model.cards().len(), 1);
+    assert_eq!(app.model.cards()[0].title, "Old Card");
 }

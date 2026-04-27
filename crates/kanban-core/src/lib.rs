@@ -7,6 +7,7 @@ pub mod paginated_list;
 pub mod pagination;
 pub mod selection;
 pub mod traits;
+pub mod version;
 
 pub use config::{
     validate_branch_prefix, AppConfig, DEFAULT_JSON_FILENAME, DEFAULT_SQLITE_FILENAME,
@@ -22,3 +23,4 @@ pub use paginated_list::{
 pub use pagination::{Page, PageInfo};
 pub use selection::SelectionState;
 pub use traits::Editable;
+pub use version::VERSION;
