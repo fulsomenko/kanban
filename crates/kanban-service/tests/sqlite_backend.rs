@@ -1,5 +1,4 @@
-use kanban_domain::{CardListFilter, KanbanOperations, Snapshot};
-use kanban_service::{AppConfig, KanbanContext};
+use kanban_service::{AppConfig, CardListFilter, KanbanContext, KanbanOperations, Snapshot};
 use tempfile::TempDir;
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
