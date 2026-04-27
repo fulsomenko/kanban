@@ -1752,4 +1752,34 @@ mod tests {
             assert!(PersistenceStore::exists(&store).await);
         });
     }
+
+    #[test]
+    fn test_checkpoint_executes_without_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            store.checkpoint().await.unwrap();
+        });
+    }
+
+    #[test]
+    fn test_save_checkpoints_wal_file_stays_minimal() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let (snapshot, _) = PersistenceStore::load(&store).await.unwrap();
+            PersistenceStore::save(&store, snapshot).await.unwrap();
+            let wal_path = path.with_extension("sqlite3-wal");
+            if wal_path.exists() {
+                assert!(
+                    wal_path.metadata().unwrap().len() < 32 * 1024,
+                    "WAL file should be minimal after save+checkpoint"
+                );
+            }
+        });
+    }
 }
