@@ -21,6 +21,14 @@ impl StoreFactory for SqliteStoreFactory {
         locator: &str,
     ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
         let handle = tokio::runtime::Handle::current();
+        if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::CurrentThread {
+            return Err(PersistenceError::Database(
+                "SqliteStoreFactory::create requires a multi-thread Tokio runtime; \
+                 block_in_place is unavailable on a current_thread runtime. \
+                 Use #[tokio::test(flavor = \"multi_thread\")] in tests."
+                    .to_string(),
+            ));
+        }
         let store = tokio::task::block_in_place(|| handle.block_on(SqliteStore::open(locator)))
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
         Ok(Arc::new(store))
