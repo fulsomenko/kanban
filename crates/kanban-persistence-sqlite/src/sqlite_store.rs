@@ -349,6 +349,14 @@ impl SqliteStore {
         &self.pool
     }
 
+    pub async fn checkpoint(&self) -> KanbanResult<()> {
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(&self.pool)
+            .await
+            .map_err(|e| KanbanError::Database(e.to_string()))?;
+        Ok(())
+    }
+
     async fn fetch_board_aux(
         &self,
         board_id: &str,
@@ -1633,6 +1641,9 @@ impl PersistenceStore for SqliteStore {
         self.apply_snapshot_async(domain_snapshot)
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        self.checkpoint()
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
         Ok(PersistenceMetadata::new(self.instance_id))
     }
 
@@ -1741,6 +1752,36 @@ mod tests {
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
             assert!(PersistenceStore::exists(&store).await);
+        });
+    }
+
+    #[test]
+    fn test_checkpoint_executes_without_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            store.checkpoint().await.unwrap();
+        });
+    }
+
+    #[test]
+    fn test_save_checkpoints_wal_file_stays_minimal() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let (snapshot, _) = PersistenceStore::load(&store).await.unwrap();
+            PersistenceStore::save(&store, snapshot).await.unwrap();
+            let wal_path = path.with_extension("sqlite3-wal");
+            if wal_path.exists() {
+                assert!(
+                    wal_path.metadata().unwrap().len() < 32 * 1024,
+                    "WAL file should be minimal after save+checkpoint"
+                );
+            }
         });
     }
 }
