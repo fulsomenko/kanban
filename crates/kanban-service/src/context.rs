@@ -305,21 +305,19 @@ impl KanbanContext {
             return Ok(false);
         }
 
+        let mut applied = false;
         if self.backend.supports_indexed_snapshots() {
             let target = self.undo_cursor as u64 + 1;
             if let Some(snap) = self.backend.load_snapshot_at(target)? {
                 self.backend.apply_snapshot(snap)?;
-                self.undo_cursor += 1;
-                self.backend.flush()?;
-                self.dirty = true;
-                return Ok(true);
+                applied = true;
             }
         }
 
-        let batches = self
-            .backend
-            .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
-        {
+        if !applied {
+            let batches = self
+                .backend
+                .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
             for batch in &batches {
@@ -328,6 +326,7 @@ impl KanbanContext {
                 }
             }
         }
+
         self.undo_cursor += 1;
         self.backend.flush()?;
         self.dirty = true;
