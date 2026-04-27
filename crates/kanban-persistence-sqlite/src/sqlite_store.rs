@@ -349,6 +349,14 @@ impl SqliteStore {
         &self.pool
     }
 
+    pub async fn checkpoint(&self) -> KanbanResult<()> {
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(&self.pool)
+            .await
+            .map_err(|e| KanbanError::Database(e.to_string()))?;
+        Ok(())
+    }
+
     async fn fetch_board_aux(
         &self,
         board_id: &str,
@@ -1633,6 +1641,7 @@ impl PersistenceStore for SqliteStore {
         self.apply_snapshot_async(domain_snapshot)
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        self.checkpoint().await.ok();
         Ok(PersistenceMetadata::new(self.instance_id))
     }
 
