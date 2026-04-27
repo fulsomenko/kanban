@@ -6,6 +6,11 @@ pub trait StoreFactory: Send + Sync {
     fn matches_content(&self, _header: &[u8]) -> bool {
         false
     }
+    /// Open or create a store at the given locator path.
+    ///
+    /// Implementations that perform async work (e.g. SQLite) must call this from
+    /// a multi-thread tokio runtime — `block_in_place` will panic on a
+    /// `current_thread` runtime.
     fn create(
         &self,
         locator: &str,
