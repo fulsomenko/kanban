@@ -14,6 +14,15 @@ pub mod test_helpers;
 
 pub use kanban_core::AppConfig;
 
+pub use kanban_domain::{
+    ArchivedCard, Board, BoardId, BoardUpdate,
+    Card, CardId, CardListFilter, CardPriority, CardStatus, CardSummary, CardUpdate,
+    Column, ColumnId, ColumnUpdate,
+    CreateCardOptions, DependencyGraph, FieldUpdate,
+    KanbanError, KanbanOperations, KanbanResult,
+    Snapshot, Sprint, SprintId, SprintStatus, SprintUpdate,
+};
+
 #[cfg(feature = "json")]
 pub use kanban_persistence_json::JsonStoreFactory;
 #[cfg(feature = "sqlite")]
