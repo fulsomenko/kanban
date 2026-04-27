@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use uuid::Uuid;
 
-use crate::VERSION;
+use kanban_core::VERSION;
 
 #[derive(Parser)]
 #[command(name = "kanban")]
