@@ -63,14 +63,11 @@ impl Model {
         self.columns = Some(snapshot.columns);
         self.cards = Some(snapshot.cards);
         self.sprints = Some(snapshot.sprints);
-        let flat: Vec<Card> = snapshot
-            .archived_cards
-            .iter()
-            .map(|ac| ac.card.clone())
-            .collect();
         self.archived_card_index.clear();
-        for (i, card) in flat.iter().enumerate() {
-            self.archived_card_index.insert(card.id, i);
+        let mut flat = Vec::with_capacity(snapshot.archived_cards.len());
+        for (i, ac) in snapshot.archived_cards.iter().enumerate() {
+            self.archived_card_index.insert(ac.card.id, i);
+            flat.push(ac.card.clone());
         }
         self.archived_cards = Some(snapshot.archived_cards);
         self.archived_cards_flat = Some(flat);
