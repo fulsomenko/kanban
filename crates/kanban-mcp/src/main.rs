@@ -3,7 +3,7 @@ compile_error!("kanban-mcp binary requires at least one backend feature: `json` 
 
 use anyhow::Result;
 use clap::Parser;
-use kanban_cli::VERSION;
+use kanban_core::VERSION;
 use kanban_mcp::McpServer;
 
 #[derive(Parser)]
@@ -19,12 +19,6 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.contains(&"-V".to_string()) || args.contains(&"--version".to_string()) {
-        println!("{}", VERSION);
-        return Ok(());
-    }
-
     let args = Args::parse();
     let mut server = McpServer::with_defaults();
     if let Some(path) = args.data_file {

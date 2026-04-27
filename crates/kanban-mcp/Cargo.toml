@@ -22,7 +22,6 @@ sqlite = ["kanban-service/sqlite"]
 [dependencies]
 # Workspace crates
 kanban-core = { path = "../kanban-core", version = "^0.3" }
-kanban-cli = { path = "../kanban-cli", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
 kanban-service = { path = "../kanban-service", version = "^0.3" }

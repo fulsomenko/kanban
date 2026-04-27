@@ -1256,7 +1256,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "clap",
- "kanban-cli",
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
