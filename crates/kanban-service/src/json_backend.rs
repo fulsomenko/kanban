@@ -542,4 +542,30 @@ mod tests {
         assert_eq!(*jds.undo_cursor.lock().unwrap(), 42);
         assert!(jds.baseline_snapshot.lock().unwrap().is_some());
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_command_log_round_trip() {
+        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cmd_log.json");
+        let jds = make_store(&path);
+
+        // Append 3 batches (one command each) to the command log.
+        for (i, name) in ["B1", "B2", "B3"].iter().enumerate() {
+            jds.append_commands(&[Command::Board(BoardCommand::Create(CreateBoard {
+                id: uuid::Uuid::new_v4(),
+                name: name.to_string(),
+                card_prefix: None,
+                position: i as i32,
+            }))])
+            .unwrap();
+        }
+
+        jds.flush().await.unwrap();
+
+        // A second store at the same path must see the same command count.
+        let jds2 = make_store(&path);
+        assert_eq!(jds2.command_count().unwrap(), 3);
+    }
 }
