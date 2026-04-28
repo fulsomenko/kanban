@@ -466,6 +466,104 @@ fn repair_snapshot_fks(snapshot: &mut StoreSnapshot) -> Result<(), KanbanError> 
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kanban_persistence::StoreRegistry;
+    use tempfile::tempdir;
+
+    fn make_sm() -> StoreManager {
+        let mut registry = StoreRegistry::new();
+        #[cfg(feature = "sqlite")]
+        registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
+        #[cfg(feature = "json")]
+        registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+        StoreManager::new(registry)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_make_backend_json_path_returns_json_data_store() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        let sm = make_sm();
+        let cfg = AppConfig::default();
+        let backend = sm.make_backend(path.to_str().unwrap(), &cfg).await.unwrap();
+        assert!(!backend.needs_flush(), "new JSON backend starts clean");
+        assert!(
+            backend.needs_save_worker(),
+            "JSON backend requires a background flush worker"
+        );
+    }
+
+    #[cfg(feature = "sqlite")]
+    mod sqlite_backend_tests {
+        use super::*;
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_make_backend_sqlite_path_returns_sqlite_store() {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("test.sqlite");
+            let sm = make_sm();
+            let cfg = AppConfig::default();
+            let backend = sm.make_backend(path.to_str().unwrap(), &cfg).await.unwrap();
+            assert!(!backend.needs_flush(), "new SQLite backend starts clean");
+            assert!(
+                !backend.needs_save_worker(),
+                "SQLite backend is write-through and does not need a save worker"
+            );
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_make_backend_detects_sqlite_by_magic_bytes() {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("noext");
+
+            // Create a real SQLite file with no extension so the registry can
+            // detect it via magic bytes.
+            kanban_persistence_sqlite::SqliteStore::open(path.to_str().unwrap())
+                .await
+                .unwrap();
+
+            let sm = make_sm();
+            let cfg = AppConfig::default();
+            let backend = sm.make_backend(path.to_str().unwrap(), &cfg).await.unwrap();
+            assert!(
+                !backend.needs_save_worker(),
+                "magic-byte SQLite detection should yield a write-through backend"
+            );
+            let boards = backend.list_boards().unwrap();
+            assert!(boards.is_empty());
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_make_backend_detects_json_by_content() {
+            use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("noext");
+
+            // Write a valid JSON envelope file with no extension so the registry
+            // detects it as JSON via content sniffing (first byte is '{').
+            {
+                let jfs = kanban_persistence_json::JsonFileStore::new(&path);
+                let snap = kanban_domain::Snapshot::new();
+                let data = kanban_persistence::snapshot_to_json_bytes(&snap).unwrap();
+                let meta = PersistenceMetadata::new(uuid::Uuid::new_v4());
+                jfs.save(StoreSnapshot { data, metadata: meta }).await.unwrap();
+            }
+
+            let sm = make_sm();
+            let cfg = AppConfig::default();
+            let backend = sm.make_backend(path.to_str().unwrap(), &cfg).await.unwrap();
+            assert!(
+                backend.needs_save_worker(),
+                "content-sniffed JSON backend requires a save worker"
+            );
+            let boards = backend.list_boards().unwrap();
+            assert!(boards.is_empty());
+        }
+    }
+}
+
 fn fix_card_fks(
     card: &mut serde_json::Value,
     valid_columns: &HashSet<String>,
