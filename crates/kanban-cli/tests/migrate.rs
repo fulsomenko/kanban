@@ -95,7 +95,8 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     assert_eq!(orig_board.name, loaded_board.name);
 }
 
-#[tokio::test]
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_json_to_json_roundtrip() {
     let dir = TempDir::new().unwrap();
     let src_path = dir.path().join("source.json");
@@ -176,7 +177,8 @@ async fn test_migrate_rejects_missing_source() {
     );
 }
 
-#[tokio::test]
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_rejects_existing_target() {
     use assert_cmd::cargo_bin_cmd;
 
@@ -282,7 +284,8 @@ async fn test_migrate_cli_explicit_output_path() {
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
 }
 
-#[tokio::test]
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_cli_default_output_path() {
     use assert_cmd::cargo_bin_cmd;
 
@@ -310,7 +313,8 @@ async fn test_migrate_cli_default_output_path() {
     );
 }
 
-#[tokio::test]
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_rejects_unknown_backend() {
     use assert_cmd::cargo_bin_cmd;
 
