@@ -104,9 +104,9 @@ pub trait DataStore: Send + Sync {
     fn snapshot(&self) -> KanbanResult<Snapshot>;
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()>;
 
-    /// Flush any pending writes to durable storage (e.g. checkpoint a WAL).
-    /// Default implementation is a no-op for in-memory and JSON-file backends.
-    fn flush(&self) -> KanbanResult<()> {
+    /// Checkpoint the WAL to the main database file. SQLite-specific optimisation;
+    /// default is a no-op for in-memory and JSON-file backends.
+    fn wal_checkpoint(&self) -> KanbanResult<()> {
         Ok(())
     }
 }
