@@ -73,7 +73,7 @@ impl KanbanContext {
             let jds = JsonDataStore::new(store);
             let mut ctx = Self::open(Arc::new(jds), config);
             ctx.ensure_undo_state_initialized()?;
-            return Ok(ctx);
+            Ok(ctx)
         }
         #[cfg(not(feature = "json"))]
         {
@@ -94,7 +94,7 @@ impl KanbanContext {
         let store = SqliteStore::open(path).await?;
         let command_count = store.command_count()? as usize;
         let baseline_snapshot = if command_count > 0 {
-            Some(store.load_snapshot_at(0)?.unwrap_or_else(Snapshot::new))
+            Some(store.load_snapshot_at(0)?.unwrap_or_default())
         } else {
             Some(store.snapshot()?)
         };
@@ -202,7 +202,7 @@ impl KanbanContext {
             let baseline = if count > 0 {
                 self.backend
                     .load_snapshot_at(0)?
-                    .unwrap_or_else(Snapshot::new)
+                    .unwrap_or_default()
             } else {
                 self.backend.snapshot()?
             };
@@ -243,9 +243,9 @@ impl KanbanContext {
             } else if self.undo_cursor > 0 {
                 self.backend
                     .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new))
+                    .unwrap_or_else(|| self.baseline_snapshot.clone().unwrap_or_default())
             } else {
-                self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
+                self.baseline_snapshot.clone().unwrap_or_default()
             };
             if let Err(rollback_err) = self.backend.apply_snapshot(rollback_snap) {
                 return Err(KanbanError::Internal(format!(
@@ -293,16 +293,16 @@ impl KanbanContext {
 
         if self.backend.supports_indexed_snapshots() {
             let snap = if self.undo_cursor == 0 {
-                self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
+                self.baseline_snapshot.clone().unwrap_or_default()
             } else {
                 self.backend
                     .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new))
+                    .unwrap_or_else(|| self.baseline_snapshot.clone().unwrap_or_default())
             };
             self.backend.apply_snapshot(snap)?;
         } else {
             self.backend
-                .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new))?;
+                .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_default())?;
             let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };

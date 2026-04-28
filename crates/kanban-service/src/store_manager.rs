@@ -468,6 +468,26 @@ fn repair_snapshot_fks(snapshot: &mut StoreSnapshot) -> Result<(), KanbanError> 
     Ok(())
 }
 
+fn fix_card_fks(
+    card: &mut serde_json::Value,
+    valid_columns: &HashSet<String>,
+    valid_sprints: &HashSet<String>,
+    fallback_column: Option<&str>,
+) {
+    if let Some(sprint_id) = card["sprint_id"].as_str() {
+        if !valid_sprints.contains(sprint_id) {
+            card["sprint_id"] = serde_json::Value::Null;
+        }
+    }
+    if let Some(col_id) = card["column_id"].as_str() {
+        if !valid_columns.contains(col_id) {
+            if let Some(fb) = fallback_column {
+                card["column_id"] = serde_json::Value::String(fb.to_string());
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -567,26 +587,6 @@ mod tests {
             );
             let boards = backend.list_boards().unwrap();
             assert!(boards.is_empty());
-        }
-    }
-}
-
-fn fix_card_fks(
-    card: &mut serde_json::Value,
-    valid_columns: &HashSet<String>,
-    valid_sprints: &HashSet<String>,
-    fallback_column: Option<&str>,
-) {
-    if let Some(sprint_id) = card["sprint_id"].as_str() {
-        if !valid_sprints.contains(sprint_id) {
-            card["sprint_id"] = serde_json::Value::Null;
-        }
-    }
-    if let Some(col_id) = card["column_id"].as_str() {
-        if !valid_columns.contains(col_id) {
-            if let Some(fb) = fallback_column {
-                card["column_id"] = serde_json::Value::String(fb.to_string());
-            }
         }
     }
 }
