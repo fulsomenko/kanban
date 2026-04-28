@@ -47,7 +47,7 @@ fn test_mcp_server_register_backend_adds_custom_factory() {
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_mcp_server_with_config_build_uses_override() {
     let dir = tempfile::tempdir().unwrap();
     let json_path = dir.path().join("test.json");
@@ -63,7 +63,7 @@ async fn test_mcp_server_with_config_build_uses_override() {
         .expect("build must succeed with a valid json config override");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_mcp_server_default_build_returns_no_backends_error() {
     match McpServer::default().build().await {
         Ok(_) => panic!("build with no backends must return Err"),
@@ -77,7 +77,7 @@ async fn test_mcp_server_default_build_returns_no_backends_error() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_mcp_server_build_no_data_file_uses_config_location() {
     let dir = tempfile::tempdir().unwrap();
     let json_path = dir.path().join("test.json");
