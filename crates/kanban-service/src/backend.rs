@@ -139,4 +139,42 @@ mod tests {
         let store = InMemoryStore::new();
         store.reload().await.expect("reload should be a no-op");
     }
+
+    // Step 1 — SQLite KanbanBackend lifecycle tests
+    #[cfg(feature = "sqlite")]
+    mod sqlite_backend_tests {
+        use kanban_domain::{Board, DataStore};
+        use kanban_persistence_sqlite::SqliteStore;
+
+        use crate::backend::KanbanBackend;
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_sqlite_backend_needs_flush_returns_false() {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("t.sqlite3");
+            let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
+            assert!(!store.needs_flush());
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_sqlite_backend_flush_executes_wal_checkpoint() {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("t.sqlite3");
+            let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
+            store.upsert_board(Board::new("B".into(), None)).unwrap();
+            store.flush().await.expect("WAL checkpoint should not error");
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_sqlite_backend_reload_is_noop() {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("t.sqlite3");
+            let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
+            store.upsert_board(Board::new("A".into(), None)).unwrap();
+            store.reload().await.unwrap();
+            let boards = store.list_boards().unwrap();
+            assert_eq!(boards.len(), 1);
+            assert_eq!(boards[0].name, "A");
+        }
+    }
 }
