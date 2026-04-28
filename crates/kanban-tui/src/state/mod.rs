@@ -1,6 +1,5 @@
 pub mod snapshot;
 
-use kanban_domain::Snapshot;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -27,7 +26,7 @@ const SAVE_QUEUE_CAPACITY: usize = 100;
 /// ctx.execute_commands_batch(commands)?;
 /// ```
 pub struct SaveCoordinator {
-    save_tx: Option<mpsc::Sender<Snapshot>>,
+    save_tx: Option<mpsc::Sender<()>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
     file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
@@ -46,7 +45,7 @@ impl SaveCoordinator {
         has_persistence: bool,
     ) -> (
         Self,
-        Option<mpsc::Receiver<Snapshot>>,
+        Option<mpsc::Receiver<()>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
         let (save_tx, save_rx) = if has_persistence {
@@ -79,29 +78,28 @@ impl SaveCoordinator {
         self.save_tx.is_some()
     }
 
-    /// Queue a snapshot for async saving
-    /// Used by App::execute_command to ensure snapshots are queued
-    /// Increments pending_saves to track unsaved changes
+    /// Queue a flush signal for async saving.
+    /// Increments pending_saves to track unsaved changes.
     ///
     /// Pauses file watcher before queueing to prevent detecting our own writes as external changes.
     /// The save worker will resume the watcher after the save completes.
     ///
-    /// Uses try_send to handle bounded channel capacity (100 snapshots).
-    /// If channel is full, logs warning and skips save to prevent blocking UI.
-    pub fn queue_snapshot(&mut self, snapshot: Snapshot) {
+    /// Uses try_send to handle bounded channel capacity (100 slots).
+    /// If channel is full, logs warning and skips to prevent blocking UI.
+    pub fn queue_flush(&mut self) {
         // Pause file watching before queuing save to prevent detecting our own writes
         if let Some(ref watcher) = self.file_watcher {
             watcher.pause();
-            tracing::debug!("File watcher paused before queuing snapshot");
+            tracing::debug!("File watcher paused before queuing flush");
         }
 
         if let Some(ref tx) = self.save_tx {
             tracing::debug!(
-                "Queueing snapshot for async save (pending: {} -> {})",
+                "Queueing flush signal (pending: {} -> {})",
                 self.pending_saves,
                 self.pending_saves + 1
             );
-            match tx.try_send(snapshot) {
+            match tx.try_send(()) {
                 Ok(_) => {
                     self.pending_saves += 1;
                     tracing::debug!("Snapshot queued successfully");
@@ -179,7 +177,7 @@ impl SaveCoordinator {
     #[allow(clippy::type_complexity)]
     pub fn reset_save_channels(
         &mut self,
-    ) -> (mpsc::Receiver<Snapshot>, mpsc::UnboundedReceiver<()>) {
+    ) -> (mpsc::Receiver<()>, mpsc::UnboundedReceiver<()>) {
         self.file_watcher = None;
         self.pending_saves = 0;
 
