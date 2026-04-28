@@ -1,6 +1,8 @@
 pub mod backend;
 pub mod config;
 mod context;
+#[cfg(feature = "json")]
+pub mod json_backend;
 mod path;
 mod store_manager;
 pub use backend::KanbanBackend;
@@ -25,6 +27,18 @@ pub use kanban_domain::{
 pub use kanban_persistence_json::JsonStoreFactory;
 #[cfg(feature = "sqlite")]
 pub use kanban_persistence_sqlite::SqliteStoreFactory;
+
+/// Open a [`KanbanContext`] from a file locator with zero I/O.
+/// The backend (JSON or SQLite) is detected automatically.
+/// Data is loaded lazily on the first [`DataStore`] or [`CommandStore`] call.
+#[cfg(any(feature = "json", feature = "sqlite"))]
+pub async fn open_context(locator: &str, config: AppConfig) -> KanbanResult<KanbanContext> {
+    let mut config = config;
+    let sm = StoreManager::new(default_registry());
+    sm.sync_backend_with_file(locator, &mut config);
+    let backend = sm.make_backend(locator, &config).await?;
+    Ok(KanbanContext::open(backend, config))
+}
 
 /// Returns a `StoreRegistry` pre-populated with available backends.
 /// SQLite is registered first so its magic-byte check takes priority.

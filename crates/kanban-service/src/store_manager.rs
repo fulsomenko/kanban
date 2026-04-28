@@ -101,6 +101,43 @@ impl StoreManager {
         false
     }
 
+    /// Creates a [`KanbanBackend`] for `locator`, selecting SQLite or JSON
+    /// automatically from the file content / extension.
+    pub async fn make_backend(
+        &self,
+        locator: &str,
+        config: &AppConfig,
+    ) -> Result<std::sync::Arc<dyn crate::backend::KanbanBackend>, KanbanError> {
+        if self.is_sqlite(locator) {
+            #[cfg(feature = "sqlite")]
+            {
+                let store = kanban_persistence_sqlite::SqliteStore::open(locator)
+                    .await
+                    .map_err(|e| KanbanError::Database(e.to_string()))?;
+                return Ok(std::sync::Arc::new(store));
+            }
+            #[cfg(not(feature = "sqlite"))]
+            return Err(KanbanError::Internal("SQLite feature not enabled".into()));
+        }
+        let store = self.make_store(config.effective_storage_backend(), locator)?;
+        #[cfg(feature = "json")]
+        return Ok(std::sync::Arc::new(crate::json_backend::JsonDataStore::new(store)));
+        #[cfg(not(feature = "json"))]
+        Err(KanbanError::Internal("JSON feature not enabled".into()))
+    }
+
+    /// Blocking wrapper for [`make_backend`][Self::make_backend].
+    /// Uses `block_in_place`; requires a multi-threaded Tokio runtime.
+    pub fn make_backend_sync(
+        &self,
+        locator: &str,
+        config: &AppConfig,
+    ) -> Result<std::sync::Arc<dyn crate::backend::KanbanBackend>, KanbanError> {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.make_backend(locator, config))
+        })
+    }
+
     /// Creates a `PersistenceStore` for the named `backend` at `locator`.
     /// Returns an error if `backend` is not registered in this manager.
     pub fn make_store(

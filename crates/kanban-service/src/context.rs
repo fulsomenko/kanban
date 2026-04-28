@@ -1,14 +1,3 @@
-/// Two-tier persistence architecture:
-///
-/// **JSON path** — `InMemoryStore` + `JsonFileStore`:
-///   All state lives in memory (`InMemoryStore`). A `JsonFileStore` periodically
-///   serialises the full snapshot to disk. The `dirty` flag and `save()` method
-///   are meaningful only on this path.
-///
-/// **SQLite path** — `SqliteStore` only:
-///   `SqliteStore` implements both `DataStore` and `CommandStore`; every write
-///   goes straight to the database. `store` is `None` on this path, so
-///   `dirty` / `save()` / `reload()` are no-ops.
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
@@ -20,7 +9,7 @@ use kanban_domain::{
     KanbanOperations, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
-use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::PersistenceError;
 use serde::Serialize;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -39,67 +28,62 @@ pub struct BatchOperationFailure {
 
 pub const MAX_UNDO_DEPTH: usize = 200;
 
+/// Service layer: wraps a pluggable [`KanbanBackend`] with undo/redo history
+/// and a unified async `save()` / `reload()` interface.
+///
+/// Construction is always zero-I/O — data is fetched lazily on the first
+/// read, either directly (SQLite, reads are always live) or via a one-time
+/// cache-fill on first access (JSON).
 pub struct KanbanContext {
-    backend: Arc<dyn KanbanBackend>,
+    pub(crate) backend: Arc<dyn KanbanBackend>,
     app_config: AppConfig,
-    store: Option<Arc<dyn PersistenceStore + Send + Sync>>,
-    baseline_snapshot: Snapshot,
+    /// `None` until the first `execute()` call (lazy baseline capture).
+    baseline_snapshot: Option<Snapshot>,
     undo_cursor: usize,
     command_count: usize,
-    dirty: bool, // JSON-only: None means no file persistence store
+    dirty: bool,
     conflict_pending: bool,
 }
 
 impl KanbanContext {
-    pub async fn load(
-        store: Arc<dyn PersistenceStore + Send + Sync>,
-        config: AppConfig,
-    ) -> KanbanResult<Self> {
-        if !store.exists().await {
-            return Ok(Self::empty(Some(store), config));
-        }
-
-        let (snapshot, _metadata) = store.load().await?;
-        let data: Snapshot = serde_json::from_slice(&snapshot.data)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        let backend = InMemoryStore::new();
-        backend.apply_snapshot(data.clone())?;
-
-        // Restore command log from persistence store (JSON path only;
-        // SQLite's default returns empty and manages its own log).
-        let (batches, cursor, baseline_bytes) = store.get_command_log()?;
-        for batch in &batches {
-            backend.append_commands(batch)?;
-        }
-        let undo_cursor = cursor as usize;
-
-        // If the persistence store saved a baseline snapshot, use it so that
-        // undo can replay commands from the correct starting point.
-        // Otherwise fall back to the loaded data as baseline (no cross-restart undo).
-        let baseline_snapshot = if let Some(ref bytes) = baseline_bytes {
-            serde_json::from_slice(bytes)
-                .map_err(|e| PersistenceError::Serialization(e.to_string()))?
-        } else {
-            data
-        };
-
-        let command_count = batches.len();
-
-        Ok(Self {
-            backend: Arc::new(backend),
+    /// Zero-I/O constructor. Wraps `backend` without reading any data.
+    /// The baseline snapshot and command count are restored lazily on first
+    /// `execute()` or `undo()` / `redo()` call.
+    pub fn open(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> Self {
+        Self {
+            backend,
             app_config: config,
-            store: Some(store),
-            baseline_snapshot,
-            undo_cursor,
-            command_count,
+            baseline_snapshot: None,
+            undo_cursor: 0,
+            command_count: 0,
             dirty: false,
             conflict_pending: false,
-        })
+        }
+    }
+
+    // ── Backward-compat constructors (kept for existing callers) ─────────────
+
+    pub async fn load(
+        store: Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>,
+        config: AppConfig,
+    ) -> KanbanResult<Self> {
+        #[cfg(feature = "json")]
+        {
+            use crate::json_backend::JsonDataStore;
+            let jds = JsonDataStore::new(store);
+            let mut ctx = Self::open(Arc::new(jds), config);
+            ctx.ensure_undo_state_initialized()?;
+            return Ok(ctx);
+        }
+        #[cfg(not(feature = "json"))]
+        {
+            let _ = store;
+            Err(KanbanError::Internal("json feature not enabled".into()))
+        }
     }
 
     pub async fn load_with_defaults(
-        store: Arc<dyn PersistenceStore + Send + Sync>,
+        store: Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>,
     ) -> KanbanResult<Self> {
         Self::load(store, AppConfig::default()).await
     }
@@ -108,14 +92,17 @@ impl KanbanContext {
     pub async fn open_sqlite(path: &str, config: AppConfig) -> KanbanResult<Self> {
         use kanban_persistence_sqlite::SqliteStore;
         let store = SqliteStore::open(path).await?;
-        let baseline = store.snapshot()?;
         let command_count = store.command_count()? as usize;
+        let baseline_snapshot = if command_count > 0 {
+            Some(store.load_snapshot_at(0)?.unwrap_or_else(Snapshot::new))
+        } else {
+            Some(store.snapshot()?)
+        };
         let undo_cursor = command_count;
         Ok(Self {
             backend: Arc::new(store),
             app_config: config,
-            store: None,
-            baseline_snapshot: baseline,
+            baseline_snapshot,
             undo_cursor,
             command_count,
             dirty: false,
@@ -125,26 +112,34 @@ impl KanbanContext {
 
     #[cfg(feature = "json")]
     pub async fn open_json(path: &str, config: AppConfig) -> KanbanResult<Self> {
+        use crate::json_backend::JsonDataStore;
         use kanban_persistence_json::JsonFileStore;
         let persistence_store = Arc::new(JsonFileStore::new(path));
-        Self::load(persistence_store, config).await
+        let jds = JsonDataStore::new(persistence_store);
+        let mut ctx = Self::open(Arc::new(jds), config);
+        // Eagerly initialize undo state so can_undo/can_redo work immediately,
+        // consistent with open_sqlite().
+        ctx.ensure_undo_state_initialized()?;
+        Ok(ctx)
     }
 
     pub fn empty(
-        store: Option<Arc<dyn PersistenceStore + Send + Sync>>,
+        store: Option<Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>>,
         config: AppConfig,
     ) -> Self {
-        Self {
-            backend: Arc::new(InMemoryStore::new()),
-            app_config: config,
-            store,
-            baseline_snapshot: Snapshot::new(),
-            undo_cursor: 0,
-            command_count: 0,
-            dirty: false,
-            conflict_pending: false,
+        if let Some(s) = store {
+            #[cfg(feature = "json")]
+            {
+                use crate::json_backend::JsonDataStore;
+                return Self::open(Arc::new(JsonDataStore::new(s)), config);
+            }
+            #[cfg(not(feature = "json"))]
+            let _ = s;
         }
+        Self::open(Arc::new(InMemoryStore::new()), config)
     }
+
+    // ── Accessors ─────────────────────────────────────────────────────────────
 
     pub fn app_config(&self) -> &AppConfig {
         &self.app_config
@@ -152,6 +147,18 @@ impl KanbanContext {
 
     pub fn data_store(&self) -> &dyn DataStore {
         self.backend.as_data_store()
+    }
+
+    pub fn backend(&self) -> Arc<dyn KanbanBackend> {
+        Arc::clone(&self.backend)
+    }
+
+    pub fn replace_backend(&mut self, backend: Arc<dyn KanbanBackend>) {
+        self.backend = backend;
+        self.baseline_snapshot = None;
+        self.undo_cursor = 0;
+        self.command_count = 0;
+        self.dirty = false;
     }
 
     pub fn boards(&self) -> KanbanResult<Vec<Board>> {
@@ -182,21 +189,41 @@ impl KanbanContext {
         self.backend.snapshot()
     }
 
-    /// Replaces the in-memory state with the given snapshot.
-    ///
-    /// Returns an error if the backend rejects the snapshot (e.g. database I/O failure).
     pub fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
         self.backend.apply_snapshot(snapshot)
     }
 
+    // ── Undo / Redo ───────────────────────────────────────────────────────────
+
+    /// Ensure baseline and command count are loaded before first mutation.
+    fn ensure_undo_state_initialized(&mut self) -> KanbanResult<()> {
+        if self.baseline_snapshot.is_none() {
+            let count = self.backend.command_count()? as usize;
+            let baseline = if count > 0 {
+                self.backend
+                    .load_snapshot_at(0)?
+                    .unwrap_or_else(Snapshot::new)
+            } else {
+                self.backend.snapshot()?
+            };
+            self.baseline_snapshot = Some(baseline);
+            self.command_count = count;
+            self.undo_cursor = count;
+        }
+        Ok(())
+    }
+
+    fn notify_undo_state(&self) {
+        self.backend.on_undo_state_changed(
+            self.undo_cursor as u64,
+            self.baseline_snapshot.clone(),
+        );
+    }
+
     /// Execute a batch of commands as a single undo unit.
-    ///
-    /// Truncates any redo tail (commands after `undo_cursor`), takes a pre-execution
-    /// snapshot, runs all commands, and appends the batch to the command log.
-    /// On failure, rolls back to the pre-execution snapshot.
-    ///
-    /// After success: `undo_cursor` is incremented by 1 (pointing past the new batch).
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
+        self.ensure_undo_state_initialized()?;
+
         if self.undo_cursor < self.command_count {
             self.backend
                 .truncate_commands_after(self.undo_cursor as u64)?;
@@ -218,9 +245,11 @@ impl KanbanContext {
             } else if self.undo_cursor > 0 {
                 self.backend
                     .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| self.baseline_snapshot.clone())
+                    .unwrap_or_else(|| {
+                        self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
+                    })
             } else {
-                self.baseline_snapshot.clone()
+                self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
             };
             if let Err(rollback_err) = self.backend.apply_snapshot(rollback_snap) {
                 return Err(KanbanError::Internal(format!(
@@ -240,31 +269,27 @@ impl KanbanContext {
                 .store_snapshot_at(self.undo_cursor as u64, &snap)?;
         }
 
-        // Prune old commands if undo depth exceeds the limit
         if self.undo_cursor > MAX_UNDO_DEPTH {
             let excess = self.undo_cursor - MAX_UNDO_DEPTH;
             if let Some(new_baseline) = self.backend.load_snapshot_at(excess as u64)? {
-                self.baseline_snapshot = new_baseline;
+                self.baseline_snapshot = Some(new_baseline);
             }
             self.backend.shift_commands(excess as u64)?;
             self.undo_cursor = MAX_UNDO_DEPTH;
             self.command_count = MAX_UNDO_DEPTH;
         }
 
-        if let Err(e) = self.backend.flush() {
+        if let Err(e) = self.backend.wal_checkpoint() {
             tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
         }
         self.dirty = true;
+        self.notify_undo_state();
         Ok(())
     }
 
-    /// Undo the most recent batch by decrementing `undo_cursor` and replaying
-    /// batches `0..undo_cursor` from `baseline_snapshot`.
-    ///
-    /// Returns `false` if already at the baseline (cursor == 0).
-    /// With indexed snapshots, loads the snapshot at `undo_cursor` directly
-    /// instead of replaying.
+    /// Undo the most recent batch.
     pub fn undo(&mut self) -> KanbanResult<bool> {
+        self.ensure_undo_state_initialized()?;
         if self.undo_cursor == 0 {
             return Ok(false);
         }
@@ -272,16 +297,18 @@ impl KanbanContext {
 
         if self.backend.supports_indexed_snapshots() {
             let snap = if self.undo_cursor == 0 {
-                self.baseline_snapshot.clone()
+                self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
             } else {
                 self.backend
                     .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| self.baseline_snapshot.clone())
+                    .unwrap_or_else(|| {
+                        self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
+                    })
             };
             self.backend.apply_snapshot(snap)?;
         } else {
             self.backend
-                .apply_snapshot(self.baseline_snapshot.clone())?;
+                .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new))?;
             let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
@@ -292,19 +319,17 @@ impl KanbanContext {
             }
         }
 
-        if let Err(e) = self.backend.flush() {
+        if let Err(e) = self.backend.wal_checkpoint() {
             tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
         }
         self.dirty = true;
+        self.notify_undo_state();
         Ok(true)
     }
 
-    /// Redo the next undone batch by executing `command_log[undo_cursor]` and
-    /// incrementing `undo_cursor`.
-    ///
-    /// Returns `false` if `undo_cursor` is already at the tip (no redo available).
-    /// `load_commands(from, to)` uses half-open range `[from, to)`.
+    /// Redo the next undone batch.
     pub fn redo(&mut self) -> KanbanResult<bool> {
+        self.ensure_undo_state_initialized()?;
         if self.undo_cursor >= self.command_count {
             return Ok(false);
         }
@@ -332,10 +357,11 @@ impl KanbanContext {
         }
 
         self.undo_cursor += 1;
-        if let Err(e) = self.backend.flush() {
+        if let Err(e) = self.backend.wal_checkpoint() {
             tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
         }
         self.dirty = true;
+        self.notify_undo_state();
         Ok(true)
     }
 
@@ -348,10 +374,11 @@ impl KanbanContext {
     }
 
     pub fn clear_history(&mut self) -> KanbanResult<()> {
-        self.baseline_snapshot = self.backend.snapshot()?;
+        self.baseline_snapshot = Some(self.backend.snapshot()?);
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
+        self.notify_undo_state();
         Ok(())
     }
 
@@ -387,62 +414,36 @@ impl KanbanContext {
         self.conflict_pending = false;
     }
 
-    pub fn replace_store(&mut self, store: Option<Arc<dyn PersistenceStore + Send + Sync>>) {
-        self.store = store;
+    pub fn set_conflict_pending(&mut self, v: bool) {
+        self.conflict_pending = v;
     }
 
-    pub fn store(&self) -> Option<&Arc<dyn PersistenceStore + Send + Sync>> {
-        self.store.as_ref()
-    }
+    // ── Persistence ───────────────────────────────────────────────────────────
 
+    /// Reload state from durable storage, discarding any uncommitted data cache.
+    /// Undo/redo history (cursor and command count) is preserved in memory;
+    /// the baseline snapshot is cleared so it is re-read lazily on the next
+    /// mutation if needed. To fully reset history after an external change,
+    /// call `clear_history()` after `reload()`.
     pub async fn reload(&mut self) -> KanbanResult<()> {
-        let Some(store) = &self.store else {
-            return Ok(());
-        };
-        if !store.exists().await {
-            return Ok(());
-        }
-        let (snapshot, _metadata) = store.load().await?;
-        let data: Snapshot = serde_json::from_slice(&snapshot.data)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        self.backend.apply_snapshot(data)?;
+        self.backend.reload().await?;
+        self.baseline_snapshot = None;
+        self.dirty = false;
         Ok(())
     }
 
-    /// Explicitly checkpoint the WAL. Unlike the eager, warn-and-continue flush
-    /// that runs automatically after each mutation, this propagates errors to the caller.
-    pub fn flush(&self) -> KanbanResult<()> {
-        self.backend.flush()
-    }
-
-    /// Serialises the full snapshot to the persistence store (JSON path).
-    ///
-    /// On the SQLite path (`self.store` is `None`) this is a no-op — checkpointing
-    /// happens eagerly in `execute()`, `undo()`, `redo()`, and `import_board()`.
+    /// Persist any dirty state to durable storage.
+    /// For SQLite this is a WAL checkpoint; for JSON this flushes the cache.
     pub async fn save(&self) -> KanbanResult<()> {
-        let Some(store) = &self.store else {
-            return Ok(());
-        };
-        // Sync command log from in-memory backend to persistence store
-        let (batches, _cmd_count) = self.backend.load_all_commands()?;
-        let baseline_bytes = serde_json::to_vec(&self.baseline_snapshot)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        store
-            .sync_command_log(&batches, self.undo_cursor as u64, Some(&baseline_bytes))
-            .await?;
-
-        let snapshot = self.snapshot()?;
-        let bytes = serde_json::to_vec_pretty(&snapshot)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        let store_snapshot = StoreSnapshot {
-            data: bytes,
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        };
-
-        store.save(store_snapshot).await?;
-        Ok(())
+        self.backend.flush().await
     }
+
+    /// Synchronous WAL checkpoint — propagates errors.
+    pub fn flush(&self) -> KanbanResult<()> {
+        self.backend.wal_checkpoint()
+    }
+
+    // ── Batch ops ─────────────────────────────────────────────────────────────
 
     pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BatchOperationResult {
         use kanban_domain::commands::ArchiveCards;
@@ -647,6 +648,8 @@ impl KanbanContext {
         }
     }
 }
+
+// ── KanbanOperations impl ─────────────────────────────────────────────────────
 
 impl KanbanOperations for KanbanContext {
     fn create_board(&mut self, name: String, card_prefix: Option<String>) -> KanbanResult<Board> {
@@ -1184,14 +1187,15 @@ impl KanbanOperations for KanbanContext {
             }
         }
 
-        self.baseline_snapshot = self.backend.snapshot()?;
+        self.baseline_snapshot = Some(self.backend.snapshot()?);
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
-        if let Err(e) = self.backend.flush() {
+        if let Err(e) = self.backend.wal_checkpoint() {
             tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
         }
         self.dirty = true;
+        self.notify_undo_state();
 
         Ok(board)
     }
