@@ -3,7 +3,7 @@ use kanban_tui::App;
 
 #[test]
 fn test_prepare_frame_populates_model_from_snapshot() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();
     let column = app
@@ -32,7 +32,7 @@ fn test_prepare_frame_populates_model_from_snapshot() {
 
 #[test]
 fn test_model_reflects_mutation_after_prepare_frame() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();
     let column = app
@@ -75,7 +75,7 @@ fn test_model_reflects_mutation_after_prepare_frame() {
 
 #[test]
 fn test_model_description_reflects_mutation() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();
     let column = app

@@ -182,8 +182,9 @@ fn test_import_invalid_format_fails() {
     assert!(result.is_err());
 }
 
-#[test]
-fn test_auto_save() {
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
+async fn test_auto_save() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_autosave.json");
 
@@ -207,7 +208,8 @@ fn test_auto_save() {
     assert_eq!(parsed["boards"][0]["board"]["name"], "Auto Save Board");
 }
 
-#[tokio::test]
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
 async fn test_failed_import_clears_save_file() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_bad.json");

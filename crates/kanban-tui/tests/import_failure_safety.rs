@@ -3,7 +3,7 @@ use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_import_failure_prevents_empty_state_save() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -57,7 +57,7 @@ async fn test_import_failure_prevents_empty_state_save() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_import_failure_disables_save_file() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -80,7 +80,7 @@ async fn test_import_failure_disables_save_file() {
     assert_eq!(app.model.boards().len(), 0);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_v2_format_is_imported_correctly() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");

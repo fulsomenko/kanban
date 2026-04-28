@@ -1,66 +1,74 @@
 use kanban_domain::KanbanOperations;
 use kanban_persistence_json::JsonFileStore;
+use kanban_service::json_backend::JsonDataStore;
+use kanban_service::{AppConfig, KanbanContext};
 use kanban_tui::tui_context::TuiContext;
 use std::sync::Arc;
 use tempfile::TempDir;
 
 fn make_ctx_with_persistence() -> (
     TuiContext,
-    tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>,
+    tokio::sync::mpsc::Receiver<()>,
     TempDir,
 ) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.json");
-    let store = Arc::new(JsonFileStore::new(&path));
-    let (ctx, save_rx, _) = TuiContext::new(Some(store)).unwrap();
-    (ctx, save_rx.unwrap(), dir)
+    let store: Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> =
+        Arc::new(JsonFileStore::new(path.to_str().unwrap()));
+    let backend = Arc::new(JsonDataStore::new(store));
+    let ctx = KanbanContext::open(backend, AppConfig::default());
+    let (tui_ctx, save_rx, _) = TuiContext::new(ctx).unwrap();
+    (tui_ctx, save_rx.unwrap(), dir)
 }
 
-#[test]
-fn test_undo_queues_snapshot_to_save_coordinator() {
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
+async fn test_undo_queues_flush_signal_to_save_coordinator() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
 
     ctx.create_board("Board".into(), None).unwrap();
-    // drain the post-create snapshot
+    // drain the post-create flush signal
     save_rx.try_recv().ok();
 
     assert!(ctx.undo().unwrap());
-    let snapshot = save_rx
+    save_rx
         .try_recv()
-        .expect("undo should queue a snapshot to the save coordinator");
+        .expect("undo should queue a flush signal to the save coordinator");
     assert!(
-        snapshot.boards.is_empty(),
-        "snapshot after undo should reflect the rolled-back state"
+        ctx.list_boards().unwrap().is_empty(),
+        "state after undo should reflect the rolled-back board list"
     );
 }
 
-#[test]
-fn test_redo_queues_snapshot_to_save_coordinator() {
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
+async fn test_redo_queues_flush_signal_to_save_coordinator() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
 
     ctx.create_board("Board".into(), None).unwrap();
     assert!(ctx.undo().unwrap());
-    // drain setup snapshots (create + undo)
+    // drain setup flush signals (create + undo)
     while save_rx.try_recv().is_ok() {}
 
     assert!(ctx.redo().unwrap());
-    let snapshot = save_rx
+    save_rx
         .try_recv()
-        .expect("redo should queue a snapshot to the save coordinator");
+        .expect("redo should queue a flush signal to the save coordinator");
     assert_eq!(
-        snapshot.boards.len(),
+        ctx.list_boards().unwrap().len(),
         1,
-        "snapshot after redo should reflect the re-applied state"
+        "state after redo should reflect the re-applied board"
     );
 }
 
-#[test]
-fn test_undo_when_nothing_to_undo_does_not_queue_snapshot() {
+// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
+#[tokio::test(flavor = "multi_thread")]
+async fn test_undo_when_nothing_to_undo_does_not_queue_flush_signal() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
 
     assert!(!ctx.undo().unwrap());
     assert!(
         save_rx.try_recv().is_err(),
-        "failed undo should not queue a snapshot"
+        "failed undo should not queue a flush signal"
     );
 }
