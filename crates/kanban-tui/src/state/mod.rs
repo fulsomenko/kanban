@@ -175,9 +175,7 @@ impl SaveCoordinator {
     /// creates new channels. Returns receivers so the caller can spawn a new save worker.
     /// The store itself lives on KanbanContext.
     #[allow(clippy::type_complexity)]
-    pub fn reset_save_channels(
-        &mut self,
-    ) -> (mpsc::Receiver<()>, mpsc::UnboundedReceiver<()>) {
+    pub fn reset_save_channels(&mut self) -> (mpsc::Receiver<()>, mpsc::UnboundedReceiver<()>) {
         self.file_watcher = None;
         self.pending_saves = 0;
 

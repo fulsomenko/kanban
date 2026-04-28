@@ -121,7 +121,9 @@ impl StoreManager {
         }
         let store = self.make_store(config.effective_storage_backend(), locator)?;
         #[cfg(feature = "json")]
-        return Ok(std::sync::Arc::new(crate::json_backend::JsonDataStore::new(store)));
+        return Ok(std::sync::Arc::new(
+            crate::json_backend::JsonDataStore::new(store),
+        ));
         #[cfg(not(feature = "json"))]
         Err(KanbanError::Internal("JSON feature not enabled".into()))
     }
@@ -548,7 +550,12 @@ mod tests {
                 let snap = kanban_domain::Snapshot::new();
                 let data = kanban_persistence::snapshot_to_json_bytes(&snap).unwrap();
                 let meta = PersistenceMetadata::new(uuid::Uuid::new_v4());
-                jfs.save(StoreSnapshot { data, metadata: meta }).await.unwrap();
+                jfs.save(StoreSnapshot {
+                    data,
+                    metadata: meta,
+                })
+                .await
+                .unwrap();
             }
 
             let sm = make_sm();

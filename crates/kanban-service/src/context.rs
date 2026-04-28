@@ -214,10 +214,8 @@ impl KanbanContext {
     }
 
     fn notify_undo_state(&self) {
-        self.backend.on_undo_state_changed(
-            self.undo_cursor as u64,
-            self.baseline_snapshot.clone(),
-        );
+        self.backend
+            .on_undo_state_changed(self.undo_cursor as u64, self.baseline_snapshot.clone());
     }
 
     /// Execute a batch of commands as a single undo unit.
@@ -245,9 +243,7 @@ impl KanbanContext {
             } else if self.undo_cursor > 0 {
                 self.backend
                     .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| {
-                        self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
-                    })
+                    .unwrap_or_else(|| self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new))
             } else {
                 self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
             };
@@ -301,9 +297,7 @@ impl KanbanContext {
             } else {
                 self.backend
                     .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| {
-                        self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new)
-                    })
+                    .unwrap_or_else(|| self.baseline_snapshot.clone().unwrap_or_else(Snapshot::new))
             };
             self.backend.apply_snapshot(snap)?;
         } else {

@@ -58,7 +58,12 @@ async fn test_open_context_first_list_boards_triggers_load() -> KanbanResult<()>
         let data = snapshot_to_json_bytes(&snap).unwrap();
         let meta = PersistenceMetadata::new(uuid::Uuid::new_v4());
         let jfs = JsonFileStore::new(&path);
-        jfs.save(StoreSnapshot { data, metadata: meta }).await.unwrap();
+        jfs.save(StoreSnapshot {
+            data,
+            metadata: meta,
+        })
+        .await
+        .unwrap();
     }
 
     let ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default());
@@ -94,7 +99,10 @@ async fn test_open_context_undo_works_after_execute() -> KanbanResult<()> {
     assert_eq!(ctx.boards()?.len(), 1);
 
     assert!(ctx.undo()?);
-    assert!(ctx.boards()?.is_empty(), "undo must revert the board creation");
+    assert!(
+        ctx.boards()?.is_empty(),
+        "undo must revert the board creation"
+    );
     Ok(())
 }
 

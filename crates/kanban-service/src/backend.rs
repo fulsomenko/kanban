@@ -162,7 +162,10 @@ mod tests {
             let path = dir.path().join("t.sqlite3");
             let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
             store.upsert_board(Board::new("B".into(), None)).unwrap();
-            store.flush().await.expect("WAL checkpoint should not error");
+            store
+                .flush()
+                .await
+                .expect("WAL checkpoint should not error");
         }
 
         #[tokio::test(flavor = "multi_thread")]

@@ -6,11 +6,7 @@ use kanban_tui::tui_context::TuiContext;
 use std::sync::Arc;
 use tempfile::TempDir;
 
-fn make_ctx_with_persistence() -> (
-    TuiContext,
-    tokio::sync::mpsc::Receiver<()>,
-    TempDir,
-) {
+fn make_ctx_with_persistence() -> (TuiContext, tokio::sync::mpsc::Receiver<()>, TempDir) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.json");
     let store: Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> =

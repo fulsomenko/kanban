@@ -243,7 +243,10 @@ impl App {
         let new_storage_location =
             kanban_service::config::resolve_storage_location(&self.app_config);
 
-        let new_backend = match self.store_manager.make_backend_sync(&new_storage_location, &self.app_config) {
+        let new_backend = match self
+            .store_manager
+            .make_backend_sync(&new_storage_location, &self.app_config)
+        {
             Ok(b) => b,
             Err(e) => {
                 self.app_config = old_config;

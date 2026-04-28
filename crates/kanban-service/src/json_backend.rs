@@ -84,10 +84,8 @@ impl JsonDataStore {
                 .map_err(|e| KanbanError::Internal(format!("json_backend: parse failed: {e}")))?;
             store.apply_snapshot(snapshot)?;
 
-            let (batches, file_cursor, file_baseline_bytes) = self
-                .file_store
-                .get_command_log()
-                .map_err(|e| {
+            let (batches, file_cursor, file_baseline_bytes) =
+                self.file_store.get_command_log().map_err(|e| {
                     KanbanError::Internal(format!("json_backend: get_command_log failed: {e}"))
                 })?;
 
@@ -446,7 +444,13 @@ mod tests {
             };
             let data = snapshot_to_json_bytes(&snap).unwrap();
             let meta = PersistenceMetadata::new(Uuid::new_v4());
-            store.save(StoreSnapshot { data, metadata: meta }).await.unwrap();
+            store
+                .save(StoreSnapshot {
+                    data,
+                    metadata: meta,
+                })
+                .await
+                .unwrap();
             (snap.boards, ())
         };
 
@@ -488,7 +492,8 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("flush.json");
         let jds = make_store(&path);
-        jds.upsert_board(Board::new("Flushed".into(), None)).unwrap();
+        jds.upsert_board(Board::new("Flushed".into(), None))
+            .unwrap();
         jds.flush().await.unwrap();
         assert!(!jds.needs_flush(), "dirty flag cleared after flush");
 
@@ -505,7 +510,9 @@ mod tests {
 
         // Write initial data via a separate store.
         let writer = make_store(&path);
-        writer.upsert_board(Board::new("Initial".into(), None)).unwrap();
+        writer
+            .upsert_board(Board::new("Initial".into(), None))
+            .unwrap();
         writer.flush().await.unwrap();
 
         // Open the same file in a second store and load it.
@@ -514,7 +521,9 @@ mod tests {
         assert_eq!(boards[0].name, "Initial");
 
         // Externally update the file by flushing a new board through the writer.
-        writer.upsert_board(Board::new("Updated".into(), None)).unwrap();
+        writer
+            .upsert_board(Board::new("Updated".into(), None))
+            .unwrap();
         writer.flush().await.unwrap();
 
         // Before reload, reader still sees stale data.

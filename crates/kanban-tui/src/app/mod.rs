@@ -187,20 +187,14 @@ impl App {
     /// third-party binary that registers its own [`StoreFactory`].
     pub fn new(
         save_file: Option<String>,
-    ) -> kanban_domain::KanbanResult<(
-        Self,
-        Option<tokio::sync::mpsc::Receiver<()>>,
-    )> {
+    ) -> kanban_domain::KanbanResult<(Self, Option<tokio::sync::mpsc::Receiver<()>>)> {
         Self::new_with_store(default_store_manager(), save_file)
     }
 
     pub fn new_with_store(
         store_manager: StoreManager,
         save_file: Option<String>,
-    ) -> kanban_domain::KanbanResult<(
-        Self,
-        Option<tokio::sync::mpsc::Receiver<()>>,
-    )> {
+    ) -> kanban_domain::KanbanResult<(Self, Option<tokio::sync::mpsc::Receiver<()>>)> {
         let mut app_config = kanban_service::config::load();
         let config_resolved = kanban_service::config::resolve_storage_location(&app_config);
         let config_storage_backend = app_config.effective_storage_backend().to_string();
@@ -319,8 +313,7 @@ impl App {
         let inner =
             kanban_service::KanbanContext::open_sqlite(&effective_file, app_config.clone()).await?;
 
-        let (ctx, _save_rx, save_completion_rx) =
-            crate::tui_context::TuiContext::new(inner)?;
+        let (ctx, _save_rx, save_completion_rx) = crate::tui_context::TuiContext::new(inner)?;
         let store_manager = Arc::new(default_store_manager());
 
         Ok(Self {
