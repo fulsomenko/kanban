@@ -4,7 +4,7 @@ use kanban_service::KanbanContext;
 use std::sync::Arc;
 use tempfile::TempDir;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn carry_over_skips_done_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
@@ -84,7 +84,7 @@ async fn carry_over_skips_done_cards() {
     assert_eq!(done_card.sprint_id, Some(from_sprint.id));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn carry_over_returns_zero_when_sprint_has_no_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
@@ -107,7 +107,7 @@ async fn carry_over_returns_zero_when_sprint_has_no_cards() {
     assert_eq!(count, 0);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn carry_over_returns_zero_when_all_cards_are_done() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();
@@ -173,7 +173,7 @@ async fn carry_over_returns_zero_when_all_cards_are_done() {
     assert_eq!(c2.sprint_id, Some(from_sprint.id));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn carry_over_includes_blocked_cards() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.kanban").to_string_lossy().to_string();

@@ -21,7 +21,7 @@ async fn make_ctx() -> KanbanContext {
     KanbanContext::empty(None, kanban_core::AppConfig::default())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_snapshot_roundtrip_preserves_all_fields() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.create_board("B".into(), None)?;
@@ -39,7 +39,7 @@ async fn test_snapshot_roundtrip_preserves_all_fields() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_execute_enables_undo() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
@@ -53,7 +53,7 @@ async fn test_execute_enables_undo() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_undo_restores_previous_state() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
@@ -70,7 +70,7 @@ async fn test_undo_restores_previous_state() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_redo_restores_undone_state() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let cmd = Command::Board(BoardCommand::Create(CreateBoard {
@@ -88,13 +88,13 @@ async fn test_redo_restores_undone_state() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_undo_on_empty_returns_false() {
     let ctx = make_ctx().await;
     assert!(!ctx.can_undo());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_new_action_after_undo_clears_redo() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
@@ -116,7 +116,7 @@ async fn test_new_action_after_undo_clears_redo() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_reload_no_longer_clears_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
@@ -144,7 +144,7 @@ async fn test_reload_no_longer_clears_history() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_dirty_flag_lifecycle() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     assert!(!ctx.is_dirty());
@@ -162,7 +162,7 @@ async fn test_dirty_flag_lifecycle() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_operations_create_board_captures_history() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.create_board("B".into(), None)?;
@@ -173,7 +173,7 @@ async fn test_operations_create_board_captures_history() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_operations_update_card_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -194,7 +194,7 @@ async fn test_operations_update_card_is_undoable() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_archive_cards_creates_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -216,7 +216,7 @@ async fn test_archive_cards_creates_single_undo_entry() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_create_sprint_undo_restores_board_counters() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -230,7 +230,7 @@ async fn test_create_sprint_undo_restores_board_counters() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_import_board_clears_history() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("Export".into(), None)?;
@@ -247,7 +247,7 @@ async fn test_import_board_clears_history() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_import_board_includes_archived_cards() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("Export".into(), None)?;
@@ -269,7 +269,7 @@ async fn test_import_board_includes_archived_cards() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_conflict_flag_lifecycle() {
     let mut ctx = make_ctx().await;
     assert!(!ctx.has_conflict());
@@ -279,7 +279,7 @@ async fn test_conflict_flag_lifecycle() {
     assert!(!ctx.has_conflict());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_reload_preserves_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
@@ -297,7 +297,7 @@ async fn test_reload_preserves_history() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_undo_pops_before_pushing_to_redo() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
@@ -321,7 +321,7 @@ async fn test_undo_pops_before_pushing_to_redo() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_redo_pops_before_pushing_to_undo() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
@@ -338,7 +338,7 @@ async fn test_redo_pops_before_pushing_to_undo() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_undo_on_empty_history_does_not_corrupt() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     assert!(!ctx.undo()?);
@@ -347,7 +347,7 @@ async fn test_undo_on_empty_history_does_not_corrupt() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_execute_batch_partial_failure_rollback_leaves_clean_undo_stack() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.create_board("B1".into(), None)?;
@@ -374,7 +374,7 @@ async fn test_execute_batch_partial_failure_rollback_leaves_clean_undo_stack() -
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_move_cards_returns_actual_moved_count() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -389,7 +389,7 @@ async fn test_move_cards_returns_actual_moved_count() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_assign_cards_to_sprint_returns_actual_assigned_count() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -405,7 +405,7 @@ async fn test_assign_cards_to_sprint_returns_actual_assigned_count() -> KanbanRe
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_null_store_context_loads_empty() -> KanbanResult<()> {
     let ctx = make_ctx().await;
     assert!(ctx.boards()?.is_empty());
@@ -414,7 +414,7 @@ async fn test_null_store_context_loads_empty() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_move_cards_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -433,7 +433,7 @@ async fn test_move_cards_single_undo_entry() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_assign_cards_to_sprint_renamed_trait_method() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -447,7 +447,7 @@ async fn test_assign_cards_to_sprint_renamed_trait_method() -> KanbanResult<()> 
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_assign_cards_to_sprint_creates_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -472,7 +472,7 @@ async fn test_assign_cards_to_sprint_creates_single_undo_entry() -> KanbanResult
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_execute_batch_partial_failure_rolls_back() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.create_board("B1".into(), None)?;
@@ -502,7 +502,7 @@ async fn test_execute_batch_partial_failure_rolls_back() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_execute_batch_success_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.create_board("B1".into(), None)?;
@@ -531,7 +531,7 @@ async fn test_execute_batch_success_is_undoable() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_import_entities_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.create_board("B1".into(), None)?;
@@ -556,7 +556,7 @@ async fn test_import_entities_is_undoable() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_archive_card_not_found_returns_error() {
     let mut ctx = make_ctx().await;
     let result = ctx.archive_card(uuid::Uuid::new_v4());
@@ -564,7 +564,7 @@ async fn test_archive_card_not_found_returns_error() {
     assert!(result.unwrap_err().is_not_found());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -590,7 +590,7 @@ async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() -> Ka
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
@@ -607,7 +607,7 @@ async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_detailed_archive_partial_success_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -628,7 +628,7 @@ async fn test_detailed_archive_partial_success_is_undoable() -> KanbanResult<()>
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -654,7 +654,7 @@ async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() -> Kanba
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_move_cards_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
@@ -674,7 +674,7 @@ async fn test_move_cards_detailed_all_fail_does_not_set_dirty() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_move_cards_detailed_partial_success_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -695,7 +695,7 @@ async fn test_move_cards_detailed_partial_success_is_undoable() -> KanbanResult<
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entry(
 ) -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
@@ -724,7 +724,7 @@ async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entr
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_assign_cards_to_sprint_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
@@ -744,7 +744,7 @@ async fn test_assign_cards_to_sprint_detailed_all_fail_does_not_set_dirty() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -766,7 +766,7 @@ async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() -> K
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_compact_column_positions_is_undoable() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), Some("TST".into()))?;
@@ -831,7 +831,7 @@ async fn test_compact_column_positions_is_undoable() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_undo_cursor_tracks_command_count() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     assert_eq!(ctx.undo_depth(), 0);
@@ -855,7 +855,7 @@ async fn test_undo_cursor_tracks_command_count() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_redo_uses_stored_commands() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
@@ -874,7 +874,7 @@ async fn test_redo_uses_stored_commands() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_clear_history_resets_baseline() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.create_board("B".into(), None)?;
@@ -894,7 +894,7 @@ async fn test_clear_history_resets_baseline() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multi_step_undo_redo_full_cycle() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
 
@@ -924,7 +924,7 @@ async fn test_multi_step_undo_redo_full_cycle() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_redo_past_end_returns_false() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     assert!(!ctx.redo()?);
@@ -938,7 +938,7 @@ async fn test_redo_past_end_returns_false() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_save_and_reload_preserves_undo_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("history.json");
@@ -962,7 +962,7 @@ async fn test_save_and_reload_preserves_undo_history() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_undo_depth_limit_prunes_old_commands() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
 
@@ -995,7 +995,7 @@ async fn test_undo_depth_limit_prunes_old_commands() -> KanbanResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_can_redo_uses_cached_count() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {

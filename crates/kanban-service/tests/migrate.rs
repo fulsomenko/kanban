@@ -33,7 +33,7 @@ fn create_test_json(dir: &std::path::Path, name: &str) -> String {
     )
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_json_to_json_round_trip() {
     let dir = tempfile::tempdir().unwrap();
     let from = create_test_json(dir.path(), "source.json");
@@ -62,7 +62,7 @@ async fn test_migrate_store_json_to_sqlite() {
     assert!(to.exists());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_fails_if_target_exists() {
     let dir = tempfile::tempdir().unwrap();
     let from = create_test_json(dir.path(), "source.json");
@@ -75,7 +75,7 @@ async fn test_migrate_store_fails_if_target_exists() {
     assert!(err.to_string().contains("already exists"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_fails_if_source_missing() {
     let dir = tempfile::tempdir().unwrap();
     let from = dir.path().join("nonexistent.json");
