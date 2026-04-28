@@ -242,16 +242,9 @@ impl App {
 
         let new_storage_location =
             kanban_service::config::resolve_storage_location(&self.app_config);
-        let new_backend = self.app_config.effective_storage_backend().to_string();
 
-        let new_store: Option<
-            std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>,
-        > = match self
-            .store_manager
-            .make_store(&new_backend, &new_storage_location)
-        {
-            Ok(s) => Some(s),
-            Err(_) if matches!(new_backend.as_str(), "sqlite" | "sqlite3" | "db") => None,
+        let new_backend = match self.store_manager.make_backend_sync(&new_storage_location, &self.app_config) {
+            Ok(b) => b,
             Err(e) => {
                 self.app_config = old_config;
                 self.set_error(format!("Store swap failed: {}", e));
@@ -259,7 +252,7 @@ impl App {
             }
         };
 
-        self.ctx.replace_store(new_store);
+        self.ctx.replace_backend(new_backend);
         let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
         use crate::state::snapshot::TuiSnapshot;
         if let Err(e) = snapshot.apply_to_app(self) {

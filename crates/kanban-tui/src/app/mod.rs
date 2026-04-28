@@ -41,7 +41,6 @@ use crate::{
     components::Banner,
     editor::edit_in_external_editor,
     events::{Event, EventHandler},
-    state::TuiSnapshot,
     tui_context::TuiContext,
     ui,
     view_strategy::{UnifiedViewStrategy, ViewRefreshContext, ViewStrategy},
@@ -190,7 +189,7 @@ impl App {
         save_file: Option<String>,
     ) -> kanban_domain::KanbanResult<(
         Self,
-        Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
+        Option<tokio::sync::mpsc::Receiver<()>>,
     )> {
         Self::new_with_store(default_store_manager(), save_file)
     }
@@ -200,7 +199,7 @@ impl App {
         save_file: Option<String>,
     ) -> kanban_domain::KanbanResult<(
         Self,
-        Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
+        Option<tokio::sync::mpsc::Receiver<()>>,
     )> {
         let mut app_config = kanban_service::config::load();
         let config_resolved = kanban_service::config::resolve_storage_location(&app_config);
@@ -240,9 +239,12 @@ impl App {
         if save_file.is_some() && !cli_file_override && original_storage_location.is_none() {
             app_config.storage_location = None;
         }
-        let backend = app_config.effective_storage_backend().to_string();
-        let store = store_manager.make_store(&backend, &effective_file)?;
-        let (ctx, save_rx, save_completion_rx) = TuiContext::new(Some(store))?;
+        let backend_name = app_config.effective_storage_backend().to_string();
+        let store = store_manager.make_store(&backend_name, &effective_file)?;
+        let kanban_backend: std::sync::Arc<dyn kanban_service::KanbanBackend> =
+            std::sync::Arc::new(kanban_service::json_backend::JsonDataStore::new(store));
+        let inner_ctx = kanban_service::KanbanContext::open(kanban_backend, app_config.clone());
+        let (ctx, save_rx, save_completion_rx) = TuiContext::new(inner_ctx)?;
         let store_manager = Arc::new(store_manager);
         let app = Self {
             store_manager,
@@ -318,7 +320,7 @@ impl App {
             kanban_service::KanbanContext::open_sqlite(&effective_file, app_config.clone()).await?;
 
         let (ctx, _save_rx, save_completion_rx) =
-            crate::tui_context::TuiContext::from_context(inner);
+            crate::tui_context::TuiContext::new(inner)?;
         let store_manager = Arc::new(default_store_manager());
 
         Ok(Self {
@@ -398,101 +400,66 @@ impl App {
 
     pub fn spawn_save_worker(
         &mut self,
-        mut rx: tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>,
+        mut rx: tokio::sync::mpsc::Receiver<()>,
         deferred_watch_path: Option<std::path::PathBuf>,
     ) {
-        use kanban_domain::KanbanError;
-        use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
+        if !self.ctx.save_coordinator.has_save_channel() {
+            return;
+        }
 
-        if let Some(store) = self.ctx.store() {
-            let instance_id = store.instance_id();
-            let file_watcher = self.persistence.file_watcher.clone();
-            let save_completion_tx = self.ctx.save_coordinator.save_completion_tx().cloned();
+        let backend = self.ctx.backend();
+        let file_watcher = self.persistence.file_watcher.clone();
+        let save_completion_tx = self.ctx.save_coordinator.save_completion_tx().cloned();
 
-            tracing::info!("Spawning save worker to process snapshots");
-            let handle = tokio::spawn(async move {
-                use kanban_persistence::ChangeDetector;
-                tracing::info!("Save worker task started, waiting for snapshots");
-                let mut watching_started = deferred_watch_path.is_none();
-                while let Some(snapshot) = rx.recv().await {
-                    tracing::debug!("Save worker received snapshot, starting save operation");
+        tracing::info!("Spawning save worker");
+        let handle = tokio::spawn(async move {
+            use kanban_persistence::ChangeDetector;
+            tracing::info!("Save worker task started");
+            let mut watching_started = deferred_watch_path.is_none();
+            while rx.recv().await.is_some() {
+                tracing::debug!("Save worker received flush signal");
 
-                    let data = match kanban_persistence::snapshot_to_json_bytes(&snapshot) {
-                        Ok(d) => d,
-                        Err(e) => {
-                            tracing::error!("Failed to serialize snapshot: {}", e);
-                            if let Some(ref watcher) = file_watcher {
-                                watcher.resume();
-                            }
-                            continue;
-                        }
-                    };
-
-                    let persistence_snapshot = StoreSnapshot {
-                        data,
-                        metadata: PersistenceMetadata::new(instance_id),
-                    };
-
-                    match store
-                        .save(persistence_snapshot)
-                        .await
-                        .map_err(KanbanError::from)
-                    {
-                        Ok(_) => {
-                            tracing::debug!("Save worker completed save");
-                            if !watching_started {
-                                if let (Some(ref watcher), Some(ref p)) =
-                                    (&file_watcher, &deferred_watch_path)
-                                {
-                                    match watcher.start_watching(p.clone()).await {
-                                        Ok(()) => {
-                                            tracing::info!(
-                                                "Deferred file watching started for: {}",
-                                                p.display()
-                                            );
-                                            watching_started = true;
-                                        }
-                                        Err(e) => tracing::warn!(
-                                            "Failed to start deferred file watching: {}",
-                                            e
-                                        ),
+                match backend.flush().await {
+                    Ok(()) => {
+                        tracing::debug!("Save worker completed flush");
+                        if !watching_started {
+                            if let (Some(ref watcher), Some(ref p)) =
+                                (&file_watcher, &deferred_watch_path)
+                            {
+                                match watcher.start_watching(p.clone()).await {
+                                    Ok(()) => {
+                                        tracing::info!(
+                                            "Deferred file watching started for: {}",
+                                            p.display()
+                                        );
+                                        watching_started = true;
                                     }
-                                }
-                            }
-                            if let Some(ref tx) = save_completion_tx {
-                                if let Err(e) = tx.send(()) {
-                                    tracing::error!("Failed to send save completion signal: {}", e);
-                                }
-                            }
-                        }
-                        Err(KanbanError::ConflictDetected { path, .. }) => {
-                            tracing::warn!("Save worker detected conflict at {}", path);
-                            if let Some(ref tx) = save_completion_tx {
-                                if let Err(e) = tx.send(()) {
-                                    tracing::error!("Failed to send save completion signal: {}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Save worker failed: {}", e);
-                            if let Some(ref tx) = save_completion_tx {
-                                if let Err(e) = tx.send(()) {
-                                    tracing::error!("Failed to send save completion signal: {}", e);
+                                    Err(e) => tracing::warn!(
+                                        "Failed to start deferred file watching: {}",
+                                        e
+                                    ),
                                 }
                             }
                         }
                     }
-
-                    if let Some(ref watcher) = file_watcher {
-                        watcher.resume();
+                    Err(e) => {
+                        tracing::error!("Save worker flush failed: {}", e);
                     }
                 }
-                tracing::info!("Save worker exited recv loop (channel closed)");
-            });
-            self.persistence.save_worker_handle = Some(handle);
-        } else {
-            tracing::warn!("Could not spawn save worker: no store available");
-        }
+
+                if let Some(ref tx) = save_completion_tx {
+                    if let Err(e) = tx.send(()) {
+                        tracing::error!("Failed to send save completion signal: {}", e);
+                    }
+                }
+
+                if let Some(ref watcher) = file_watcher {
+                    watcher.resume();
+                }
+            }
+            tracing::info!("Save worker exited (channel closed)");
+        });
+        self.persistence.save_worker_handle = Some(handle);
     }
 
     pub fn push_mode(&mut self, new_mode: AppMode) {
@@ -1769,34 +1736,13 @@ impl App {
 
     #[doc(hidden)]
     pub async fn load_initial_state(&mut self) {
-        if let Some(store) = self.ctx.store() {
-            if store.exists().await {
-                match store.load().await {
-                    Ok((snapshot, _metadata)) => {
-                        match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
-                            Ok(data) => {
-                                if let Err(e) = data.apply_to_app(self) {
-                                    tracing::error!("Failed to apply snapshot: {}", e);
-                                } else {
-                                    self.ctx.mark_clean();
-                                    if let Err(e) = self.ctx.clear_history() {
-                                        tracing::error!("Failed to clear history: {}", e);
-                                    }
-                                    tracing::info!("Loaded initial state from store");
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!("Failed to deserialize store data: {}", e);
-                                self.persistence.save_file = None;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to load from store: {}", e);
-                        self.persistence.save_file = None;
-                    }
-                }
-            }
+        // Trigger the lazy data load eagerly so file errors are caught here.
+        // On error, clear save_file to avoid writing back to a broken file.
+        if let Err(e) = self.ctx.snapshot() {
+            tracing::warn!("Failed to load initial state from file: {e}");
+            self.persistence.save_file = None;
+            self.set_error(format!("Failed to read data file: {e}"));
+            return;
         }
         self.migrate_sprint_logs();
         self.prepare_frame();
@@ -1808,7 +1754,7 @@ impl App {
 
     pub async fn run(
         &mut self,
-        save_rx: Option<tokio::sync::mpsc::Receiver<kanban_domain::Snapshot>>,
+        save_rx: Option<tokio::sync::mpsc::Receiver<()>>,
     ) -> KanbanResult<()> {
         self.load_initial_state().await;
 
@@ -1955,31 +1901,19 @@ impl App {
                                     Some('t') => {
                                         self.pending_key = None;
                                         self.needs_redraw = true;
-                                        // Reload from disk
-                                        if let Some(store) = self.ctx.store() {
-                                            match store.load().await {
-                                                Ok((snapshot, _metadata)) => {
-                                                    match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
-                                                        Ok(data) => {
-                                                            if let Err(e) = data.apply_to_app(self) {
-                                                                tracing::error!("Failed to apply snapshot: {}", e);
-                                                            } else {
-                                                                if let Err(e) = self.ctx.clear_history() {
-                                                                    tracing::error!("Failed to clear history: {}", e);
-                                                                }
-                                                                self.ctx.clear_conflict();
-                                                                self.needs_redraw = true;
-                                                                tracing::info!("Reloaded state from disk");
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            tracing::error!("Failed to deserialize reloaded state: {}", e);
-                                                        }
-                                                    }
+                                        // Reload from disk via backend
+                                        match self.ctx.reload().await {
+                                            Ok(()) => {
+                                                if let Err(e) = self.ctx.clear_history() {
+                                                    tracing::error!("Failed to clear history: {}", e);
                                                 }
-                                                Err(e) => {
-                                                    tracing::error!("Failed to reload from disk: {}", e);
-                                                }
+                                                self.ctx.clear_conflict();
+                                                self.prepare_frame();
+                                                self.needs_redraw = true;
+                                                tracing::info!("Reloaded state from disk");
+                                            }
+                                            Err(e) => {
+                                                tracing::error!("Failed to reload from disk: {}", e);
                                             }
                                         }
                                     }
@@ -2087,26 +2021,8 @@ impl App {
                         }
                     } => {
                         self.needs_redraw = true;
-                        // Check if this is our own write by comparing instance IDs
-                        if let Some(store) = self.ctx.store() {
-                            match store.load().await {
-                                Ok((_snapshot, metadata)) => {
-                                    // Compare instance IDs
-                                    if metadata.instance_id == store.instance_id() {
-                                        tracing::debug!(
-                                            "File change from own instance ({}), ignoring",
-                                            metadata.instance_id
-                                        );
-                                        continue; // Skip reload entirely
-                                    }
-                                    // It's external - proceed with existing logic below
-                                }
-                                Err(e) => {
-                                    tracing::warn!("Failed to load metadata for instance check: {}", e);
-                                    // Fall through to existing logic (safer default)
-                                }
-                            }
-                        }
+                        // Own writes pause the watcher before flushing, so any event
+                        // that arrives here is from an external writer.
 
                         // External file change detected - handle smart reload
                         if !self.ctx.is_dirty() {
@@ -2208,29 +2124,16 @@ impl App {
     }
 
     async fn auto_reload_from_external_change(&mut self) {
-        let Some(store) = self.ctx.store() else {
-            return;
-        };
-        match store.load().await {
-            Ok((snapshot, _metadata)) => {
-                match serde_json::from_slice::<kanban_domain::Snapshot>(&snapshot.data) {
-                    Ok(data) => {
-                        if let Err(e) = data.apply_to_app(self) {
-                            tracing::error!("Failed to apply snapshot: {}", e);
-                        } else {
-                            if let Err(e) = self.ctx.clear_history() {
-                                tracing::error!("Failed to clear history: {}", e);
-                            }
-                            self.ctx.mark_clean();
-                            self.ctx.clear_conflict();
-                            self.needs_redraw = true;
-                            tracing::info!("Auto-reloaded state from external file change");
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to deserialize reloaded state: {}", e);
-                    }
+        match self.ctx.reload().await {
+            Ok(()) => {
+                if let Err(e) = self.ctx.clear_history() {
+                    tracing::error!("Failed to clear history: {}", e);
                 }
+                self.ctx.mark_clean();
+                self.ctx.clear_conflict();
+                self.prepare_frame();
+                self.needs_redraw = true;
+                tracing::info!("Auto-reloaded state from external file change");
             }
             Err(e) => {
                 tracing::error!("Failed to reload from disk: {}", e);
@@ -2372,8 +2275,10 @@ impl Default for App {
 impl App {
     #[doc(hidden)]
     pub fn test_default() -> Self {
+        let backend = std::sync::Arc::new(kanban_domain::InMemoryStore::new());
+        let inner = kanban_service::KanbanContext::open(backend, kanban_core::AppConfig::default());
         let (ctx, _save_rx, save_completion_rx) =
-            crate::tui_context::TuiContext::new(None).expect("TuiContext::new(None) failed");
+            crate::tui_context::TuiContext::new(inner).expect("TuiContext::new failed");
         Self {
             store_manager: Arc::new(default_store_manager()),
             should_quit: false,
