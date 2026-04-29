@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 ## Description
