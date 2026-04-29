@@ -1,8 +1,9 @@
 /// Integration tests for `KanbanContext::open_deferred` (Steps 3 + 6 of the
 /// "Unified Backends via True Deferred Reads" architecture).
 ///
-/// All tests use real TempDir files and `#[tokio::test(flavor = "multi_thread")]`
-/// because JSON's `ensure_loaded()` uses `block_in_place`.
+/// SQLite tests use `#[tokio::test(flavor = "multi_thread")]` because sqlx
+/// connection pools spawn background tasks that deadlock on single-threaded
+/// runtimes. JSON tests no longer require `multi_thread`.
 use kanban_domain::DataStore;
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_json::JsonFileStore;
@@ -24,6 +25,23 @@ fn make_json_data_store(path: &std::path::Path) -> JsonDataStore {
 }
 
 // ─── Step 3: KanbanContext::open_deferred ────────────────────────────────────
+
+/// A deferred context without `initialize_undo_state()` must report `can_undo() == false`,
+/// regardless of what the backing store contains.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_can_undo_returns_false_on_deferred_context_without_initialize() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("deferred.json");
+    let ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
+    assert!(
+        !ctx.can_undo(),
+        "can_undo must be false before initialize_undo_state is called"
+    );
+    assert!(
+        !ctx.can_redo(),
+        "can_redo must be false before initialize_undo_state is called"
+    );
+}
 
 /// `KanbanContext::open_deferred` with a JSON backend must not touch the filesystem.
 #[tokio::test(flavor = "multi_thread")]
