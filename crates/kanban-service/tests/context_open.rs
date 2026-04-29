@@ -269,3 +269,68 @@ mod sqlite_tests {
         Ok(())
     }
 }
+
+// ─── replace_backend ─────────────────────────────────────────────────────────
+
+/// `replace_backend` resets undo history — `can_undo()` returns `false` after the swap.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_replace_backend_resets_undo_history() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let mut ctx = KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default());
+    ctx.create_board("A".into(), None)?;
+    assert!(ctx.can_undo());
+
+    ctx.replace_backend(make_json_backend(&dir.path().join("b.json")));
+    assert!(!ctx.can_undo(), "replace_backend must reset undo history");
+    Ok(())
+}
+
+/// `replace_backend` resets redo history — `can_redo()` returns `false` after the swap.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_replace_backend_resets_redo_history() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let mut ctx = KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default());
+    ctx.create_board("A".into(), None)?;
+    ctx.undo()?;
+    assert!(ctx.can_redo());
+
+    ctx.replace_backend(make_json_backend(&dir.path().join("b.json")));
+    assert!(!ctx.can_redo(), "replace_backend must reset redo history");
+    Ok(())
+}
+
+/// After `replace_backend`, reads are served from the new backend.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_replace_backend_reads_go_to_new_backend() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let path_b = dir.path().join("b.json");
+
+    // Pre-populate backend B with one board.
+    let writer = make_json_data_store(&path_b);
+    writer.upsert_board(kanban_domain::Board::new("B".into(), None))?;
+    writer.flush().await?;
+
+    let mut ctx = KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default());
+    ctx.create_board("A".into(), None)?;
+    assert_eq!(ctx.boards()?.len(), 1);
+    assert_eq!(ctx.boards()?[0].name, "A");
+
+    ctx.replace_backend(make_json_backend(&path_b));
+    let boards = ctx.boards()?;
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].name, "B", "reads must come from the new backend");
+    Ok(())
+}
+
+/// After `replace_backend`, `is_dirty()` returns `false`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_replace_backend_clears_dirty_flag() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let mut ctx = KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default());
+    ctx.create_board("A".into(), None)?;
+    assert!(ctx.is_dirty());
+
+    ctx.replace_backend(make_json_backend(&dir.path().join("b.json")));
+    assert!(!ctx.is_dirty(), "replace_backend must clear the dirty flag");
+    Ok(())
+}
