@@ -225,9 +225,6 @@ impl KanbanContext {
             self.command_count = MAX_UNDO_DEPTH;
         }
 
-        if let Err(e) = self.backend.checkpoint_sync() {
-            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
-        }
         self.dirty = true;
         self.notify_undo_state()?;
         Ok(())
@@ -265,9 +262,6 @@ impl KanbanContext {
             }
         }
 
-        if let Err(e) = self.backend.checkpoint_sync() {
-            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
-        }
         self.dirty = true;
         self.notify_undo_state()?;
         Ok(true)
@@ -305,20 +299,17 @@ impl KanbanContext {
         }
 
         self.undo_cursor += 1;
-        if let Err(e) = self.backend.checkpoint_sync() {
-            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
-        }
         self.dirty = true;
         self.notify_undo_state()?;
         Ok(true)
     }
 
     pub fn can_undo(&self) -> bool {
-        self.undo_cursor > 0
+        self.baseline_snapshot.is_some() && self.undo_cursor > 0
     }
 
     pub fn can_redo(&self) -> bool {
-        self.undo_cursor < self.command_count
+        self.baseline_snapshot.is_some() && self.undo_cursor < self.command_count
     }
 
     pub fn clear_history(&mut self) -> KanbanResult<()> {
@@ -384,11 +375,6 @@ impl KanbanContext {
     /// For SQLite this is a WAL checkpoint; for JSON this flushes the cache.
     pub async fn save(&self) -> KanbanResult<()> {
         self.backend.flush().await
-    }
-
-    /// Synchronous WAL checkpoint — propagates errors.
-    pub fn flush(&self) -> KanbanResult<()> {
-        self.backend.checkpoint_sync()
     }
 
     // ── Batch ops ─────────────────────────────────────────────────────────────
@@ -1139,9 +1125,6 @@ impl KanbanOperations for KanbanContext {
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
-        if let Err(e) = self.backend.checkpoint_sync() {
-            tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
-        }
         self.dirty = true;
         self.notify_undo_state()?;
 

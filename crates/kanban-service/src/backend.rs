@@ -10,7 +10,9 @@ use uuid::Uuid;
 /// # Lifecycle methods
 ///
 /// - `flush()`: persist in-memory state to durable storage. For SQLite this
-///   is a WAL checkpoint; for JSON this serialises the cache to disk.
+///   runs an explicit WAL checkpoint (TRUNCATE); for JSON this serialises the
+///   cache to disk. SQLite also auto-checkpoints after every page write via
+///   `wal_autocheckpoint=1`, so explicit flushes are only needed for `save()`.
 /// - `reload()`: discard cached state so the next read re-fetches from
 ///   durable storage. For SQLite this is a no-op (reads are always live).
 /// - `needs_flush()`: returns `true` when there are uncommitted writes that
@@ -58,12 +60,6 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
         Ok(())
     }
 
-    /// Synchronous WAL checkpoint. For SQLite, flushes the WAL to the main
-    /// database file. No-op (returns `Ok(())`) for all other backends.
-    fn checkpoint_sync(&self) -> KanbanResult<()> {
-        Ok(())
-    }
-
     /// Stable instance UUID used for own-write detection in file watchers.
     fn instance_id(&self) -> Uuid {
         Uuid::nil()
@@ -105,12 +101,6 @@ impl KanbanBackend for kanban_persistence_sqlite::SqliteStore {
 
     fn needs_save_worker(&self) -> bool {
         false
-    }
-
-    fn checkpoint_sync(&self) -> KanbanResult<()> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.checkpoint())
-        })
     }
 
     fn instance_id(&self) -> Uuid {
@@ -158,29 +148,6 @@ mod tests {
     async fn test_in_memory_store_reload_is_noop() {
         let store = InMemoryStore::new();
         store.reload().await.expect("reload should be a no-op");
-    }
-
-    #[test]
-    fn test_checkpoint_sync_is_noop_for_in_memory() {
-        let store = InMemoryStore::new();
-        store
-            .checkpoint_sync()
-            .expect("checkpoint_sync must be a no-op for InMemoryStore");
-    }
-
-    #[cfg(feature = "json")]
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_checkpoint_sync_is_noop_for_json_backend() {
-        use crate::json_backend::JsonDataStore;
-        use kanban_persistence_json::JsonFileStore;
-        use std::sync::Arc;
-        let dir = tempfile::tempdir().unwrap();
-        let store = JsonDataStore::new(Arc::new(JsonFileStore::new(
-            dir.path().join("t.json").to_str().unwrap(),
-        )));
-        store
-            .checkpoint_sync()
-            .expect("checkpoint_sync must be a no-op for JsonDataStore");
     }
 
     #[test]
