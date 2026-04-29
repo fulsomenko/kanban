@@ -7,7 +7,7 @@ use tempfile::TempDir;
 pub async fn test_card_sprint_logs_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -52,7 +52,7 @@ pub async fn test_card_sprint_logs_roundtrip(factory: &BackendFactory) {
 pub async fn test_sprint_log_with_name_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();

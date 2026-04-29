@@ -13,7 +13,7 @@ fn add_edge(ctx: &KanbanContext, edge: Edge<CardEdgeType>) {
 pub async fn test_blocks_edge_roundtrip(factory: &BackendFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -68,7 +68,7 @@ pub async fn test_blocks_edge_roundtrip(factory: &BackendFactory) -> KanbanResul
 pub async fn test_relates_to_edge_roundtrip(factory: &BackendFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -110,7 +110,7 @@ pub async fn test_relates_to_edge_roundtrip(factory: &BackendFactory) -> KanbanR
 pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -159,7 +159,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
 pub async fn test_archived_edge_roundtrip(factory: &BackendFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -199,7 +199,7 @@ pub async fn test_archived_edge_roundtrip(factory: &BackendFactory) -> KanbanRes
 pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -262,7 +262,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
 pub async fn test_empty_graph_roundtrip(factory: &BackendFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     ctx.create_board("Board".into(), None).unwrap();
     ctx.save().await.unwrap();

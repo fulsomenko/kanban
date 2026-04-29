@@ -7,7 +7,7 @@ use tempfile::TempDir;
 pub async fn test_column_all_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Backlog".into(), None).unwrap();
@@ -36,7 +36,7 @@ pub async fn test_column_all_fields_roundtrip(factory: &BackendFactory) {
 pub async fn test_column_without_wip_limit_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Open".into(), None).unwrap();
@@ -52,7 +52,7 @@ pub async fn test_column_without_wip_limit_roundtrip(factory: &BackendFactory) {
 pub async fn test_multiple_columns_preserve_positions(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col1 = ctx.create_column(board.id, "Todo".into(), Some(0)).unwrap();

@@ -8,7 +8,9 @@ use kanban_service::{open_context, KanbanContext};
 use std::sync::Arc;
 
 async fn make_ctx() -> KanbanContext {
-    KanbanContext::open(Arc::new(InMemoryStore::new()), kanban_core::AppConfig::default())
+    KanbanContext::open_initialized(Arc::new(InMemoryStore::new()), kanban_core::AppConfig::default())
+        .await
+        .unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]
