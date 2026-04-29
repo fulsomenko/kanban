@@ -6,19 +6,24 @@ use kanban_service::{AppConfig, KanbanContext};
 use kanban_tui::tui_context::TuiContext;
 use tempfile::TempDir;
 
-fn make_ctx_with_persistence() -> (TuiContext, tokio::sync::mpsc::Receiver<()>, TempDir) {
+async fn make_ctx_with_persistence() -> (TuiContext, tokio::sync::mpsc::Receiver<()>, TempDir) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.json");
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
-    let backend = sm.make_backend_sync(path.to_str().unwrap(), &AppConfig::default()).unwrap();
-    let ctx = KanbanContext::open(backend, AppConfig::default());
+    let backend = sm
+        .make_backend(path.to_str().unwrap(), &AppConfig::default())
+        .await
+        .unwrap();
+    let ctx = KanbanContext::open_initialized(backend, AppConfig::default())
+        .await
+        .unwrap();
     let (tui_ctx, save_rx, _) = TuiContext::new(ctx).unwrap();
     (tui_ctx, save_rx.unwrap(), dir)
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_undo_queues_flush_signal_to_save_coordinator() {
-    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
+    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence().await;
 
     ctx.create_board("Board".into(), None).unwrap();
     // drain the post-create flush signal
@@ -36,7 +41,7 @@ async fn test_undo_queues_flush_signal_to_save_coordinator() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_redo_queues_flush_signal_to_save_coordinator() {
-    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
+    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence().await;
 
     ctx.create_board("Board".into(), None).unwrap();
     assert!(ctx.undo().unwrap());
@@ -56,7 +61,7 @@ async fn test_redo_queues_flush_signal_to_save_coordinator() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_undo_when_nothing_to_undo_does_not_queue_flush_signal() {
-    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence();
+    let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence().await;
 
     assert!(!ctx.undo().unwrap());
     assert!(

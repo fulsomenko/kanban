@@ -18,8 +18,13 @@ async fn test_tui_execute_queues_flush_signal_on_json_path() {
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().join("test.json");
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
-    let backend = sm.make_backend_sync(path.to_str().unwrap(), &AppConfig::default()).unwrap();
-    let ctx = KanbanContext::open(backend, AppConfig::default());
+    let backend = sm
+        .make_backend(path.to_str().unwrap(), &AppConfig::default())
+        .await
+        .unwrap();
+    let ctx = KanbanContext::open_initialized(backend, AppConfig::default())
+        .await
+        .unwrap();
     let (mut tui_ctx, save_rx, _completion_rx) = TuiContext::new(ctx).unwrap();
     let mut save_rx = save_rx.unwrap();
 
