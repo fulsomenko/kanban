@@ -406,15 +406,18 @@ impl KanbanBackend for JsonDataStore {
         true
     }
 
-    fn on_undo_state_changed(&self, cursor: u64, baseline: Option<Snapshot>) {
-        *self
-            .undo_cursor
-            .lock()
-            .expect("json_backend: undo_cursor mutex poisoned") = cursor;
-        *self
-            .baseline_snapshot
-            .lock()
-            .expect("json_backend: baseline_snapshot mutex poisoned") = baseline;
+    fn on_undo_state_changed(
+        &self,
+        cursor: u64,
+        baseline: Option<Snapshot>,
+    ) -> KanbanResult<()> {
+        *self.undo_cursor.lock().map_err(|_| {
+            KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
+        })? = cursor;
+        *self.baseline_snapshot.lock().map_err(|_| {
+            KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
+        })? = baseline;
+        Ok(())
     }
 
     fn instance_id(&self) -> Uuid {
@@ -560,7 +563,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let jds = make_store(&dir.path().join("t.json"));
         let snap = Snapshot::new();
-        jds.on_undo_state_changed(42, Some(snap));
+        jds.on_undo_state_changed(42, Some(snap)).unwrap();
         assert_eq!(*jds.undo_cursor.lock().unwrap(), 42);
         assert!(jds.baseline_snapshot.lock().unwrap().is_some());
     }
