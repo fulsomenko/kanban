@@ -20,7 +20,8 @@ use uuid::Uuid;
 /// [`InMemoryStore`] cache. The file is not read until the first [`DataStore`]
 /// or [`CommandStore`] method call.
 ///
-/// Construction is always zero-I/O — calling `new()` never touches the file.
+/// Construction is always zero-I/O — `new()` never reads the file.
+/// The file is read on the first [`DataStore`] or [`CommandStore`] method call.
 pub struct JsonDataStore {
     file_store: Arc<dyn PersistenceStore + Send + Sync>,
     /// `None` until first access. Populated by `ensure_loaded()`.
@@ -135,8 +136,10 @@ impl JsonDataStore {
 
     /// Delegates a mutating operation to the inner [`InMemoryStore`], then marks the backend dirty.
     ///
-    /// A shared (`read`) lock on the outer `RwLock` is sufficient because [`InMemoryStore`] uses
-    /// interior mutability for all its mutating operations.
+    /// A shared (read) lock on the outer `RwLock` is sufficient here because:
+    /// - The write lock is only ever taken in `ensure_loaded()` to swap `inner` from `None` → `Some`.
+    /// - Once `Some`, the inner value is **never replaced**, so concurrent mutation via
+    ///   `InMemoryStore`'s own interior `RwLock`s is safe under a shared outer lock.
     fn with_mutate<T>(&self, f: impl FnOnce(&InMemoryStore) -> KanbanResult<T>) -> KanbanResult<T> {
         self.ensure_loaded()?;
         let guard = self
