@@ -44,8 +44,7 @@ impl JsonDataStore {
     }
 
     /// Ensures the inner store is populated, loading from file if needed.
-    /// Uses `block_in_place` to drive the async file load from a sync context.
-    /// This is safe when called from within a multi-threaded Tokio runtime.
+    /// Uses `file_store.load_sync()` — pure blocking I/O, no Tokio runtime dependency.
     fn ensure_loaded(&self) -> KanbanResult<()> {
         // Fast path: already loaded.
         {
@@ -62,15 +61,10 @@ impl JsonDataStore {
         // Perform all I/O and build the store outside any lock.
         let store = InMemoryStore::new();
 
-        let loaded = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                if !self.file_store.exists().await {
-                    return Ok(None);
-                }
-                self.file_store.load().await.map(Some)
-            })
-        })
-        .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
+        let loaded = self
+            .file_store
+            .load_sync()
+            .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
 
         let mut file_cursor = 0u64;
         let mut baseline: Option<kanban_domain::Snapshot> = None;
