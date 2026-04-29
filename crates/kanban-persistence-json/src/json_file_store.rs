@@ -1,6 +1,6 @@
 use crate::atomic_writer::AtomicWriter;
 use crate::conflict::FileMetadata;
-use crate::migration::Migrator;
+use crate::migration::{transform_v2_to_v3_value, Migrator};
 use kanban_persistence::{
     FormatVersion, PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore,
     StoreSnapshot,
@@ -117,6 +117,57 @@ impl JsonEnvelope {
     }
 }
 
+// ─── Sync migration helpers ───────────────────────────────────────────────────
+
+fn detect_version_sync(value: &serde_json::Value) -> FormatVersion {
+    if let Some(v) = value.get("version").and_then(|v| v.as_u64()) {
+        return FormatVersion::from_u32(v as u32).unwrap_or(FormatVersion::V2);
+    }
+    if value.get("boards").is_some() {
+        return FormatVersion::V1;
+    }
+    FormatVersion::V2
+}
+
+fn migrate_to_v3_sync(from: FormatVersion, path: &Path) -> PersistenceResult<()> {
+    if from == FormatVersion::V1 {
+        migrate_v1_to_v2_sync(path)?;
+    }
+    migrate_v2_to_v3_sync(path)
+}
+
+fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<()> {
+    let content = std::fs::read_to_string(path)?;
+    let v1_data: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let backup_path = path.with_extension("v1.backup");
+    std::fs::copy(path, &backup_path)?;
+    let v2_envelope = JsonEnvelope::new(v1_data);
+    let json_str = v2_envelope
+        .to_json_string()
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    std::fs::write(path, json_str)?;
+    let _ = std::fs::remove_file(&backup_path);
+    tracing::info!("Migrated {} from V1 to V2 (sync)", path.display());
+    Ok(())
+}
+
+fn migrate_v2_to_v3_sync(path: &Path) -> PersistenceResult<()> {
+    let content = std::fs::read_to_string(path)?;
+    let mut envelope: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    transform_v2_to_v3_value(&mut envelope)?;
+    let json_str = serde_json::to_string_pretty(&envelope)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, json_str.as_bytes())?;
+    std::fs::rename(&tmp_path, path)?;
+    tracing::info!("Migrated {} from V2 to V3 (sync)", path.display());
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 impl JsonFileStore {
     /// Create a new JSON file store
     pub fn new(path: impl AsRef<Path>) -> Self {
@@ -154,6 +205,51 @@ impl JsonFileStore {
         self.command_log_state.lock().map_err(|e| {
             PersistenceError::Serialization(format!("Command log state mutex poisoned: {e}"))
         })
+    }
+
+    /// Parse already-read file bytes into a snapshot + metadata, and populate
+    /// the command-log state cache. Shared by `load()` (async) and `load_sync()`.
+    fn parse_envelope_bytes(
+        &self,
+        file_bytes: &[u8],
+    ) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
+        let envelope: JsonEnvelope = serde_json::from_slice(file_bytes)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+
+        if envelope.version < 2 || envelope.version > 5 {
+            return Err(PersistenceError::Serialization(format!(
+                "Unsupported format version: {}",
+                envelope.version
+            )));
+        }
+
+        if envelope.command_schema_version > kanban_domain::COMMAND_SCHEMA_VERSION {
+            return Err(PersistenceError::Serialization(format!(
+                "Unsupported command schema version {}. This build supports up to {}. Please upgrade.",
+                envelope.command_schema_version,
+                kanban_domain::COMMAND_SCHEMA_VERSION
+            )));
+        }
+
+        let batches = envelope
+            .parse_batches()
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+
+        {
+            let mut cls = self.lock_command_log()?;
+            cls.batches = batches;
+            cls.undo_cursor = envelope.undo_cursor;
+            cls.baseline_data = envelope.baseline_data;
+        }
+
+        let data = serde_json::to_vec(&envelope.data)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let snapshot = StoreSnapshot {
+            data,
+            metadata: envelope.metadata.clone(),
+        };
+
+        Ok((snapshot, envelope.metadata))
     }
 }
 
@@ -223,10 +319,8 @@ impl PersistenceStore for JsonFileStore {
     }
 
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
-        // Detect current file version
         let current_version = Migrator::detect_version(&self.path).await?;
 
-        // Migrate if necessary (v4 is backward-compatible via serde defaults)
         if current_version < FormatVersion::V3 {
             tracing::info!(
                 "Detected {:?} format at {}. Migrating to V3...",
@@ -237,50 +331,9 @@ impl PersistenceStore for JsonFileStore {
             tracing::info!("Migration to V3 completed successfully");
         }
 
-        // Read file
         let file_bytes = tokio::fs::read(&self.path).await?;
+        let result = self.parse_envelope_bytes(&file_bytes)?;
 
-        // Parse JSON envelope
-        let envelope: JsonEnvelope = serde_json::from_slice(&file_bytes)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        // Validate version (accept V2, V3, V4, V5)
-        if envelope.version < 2 || envelope.version > 5 {
-            return Err(PersistenceError::Serialization(format!(
-                "Unsupported format version: {}",
-                envelope.version
-            )));
-        }
-
-        if envelope.command_schema_version > kanban_domain::COMMAND_SCHEMA_VERSION {
-            return Err(PersistenceError::Serialization(format!(
-                "Unsupported command schema version {}. This build supports up to {}. Please upgrade.",
-                envelope.command_schema_version, kanban_domain::COMMAND_SCHEMA_VERSION
-            )));
-        }
-
-        // Parse command log: V5 = batched Vec<Vec<Command>>, V4 = flat Vec<Command>
-        let batches = envelope
-            .parse_batches()
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        // Populate command log state from envelope
-        {
-            let mut cls = self.lock_command_log()?;
-            cls.batches = batches;
-            cls.undo_cursor = envelope.undo_cursor;
-            cls.baseline_data = envelope.baseline_data;
-        }
-
-        // Reconstruct snapshot
-        let data = serde_json::to_vec(&envelope.data)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        let snapshot = StoreSnapshot {
-            data,
-            metadata: envelope.metadata.clone(),
-        };
-
-        // Track file metadata after successful load for conflict detection
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
             *guard = Some(file_metadata);
@@ -292,7 +345,44 @@ impl PersistenceStore for JsonFileStore {
             self.path.display()
         );
 
-        Ok((snapshot, envelope.metadata))
+        Ok(result)
+    }
+
+    fn load_sync(&self) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
+        if !self.path.exists() {
+            return Ok(None);
+        }
+
+        let raw = std::fs::read_to_string(&self.path)?;
+        let value: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+
+        let current_version = detect_version_sync(&value);
+
+        if current_version < FormatVersion::V3 {
+            tracing::info!(
+                "Detected {:?} format at {}. Migrating to V3 (sync)...",
+                current_version,
+                self.path.display()
+            );
+            migrate_to_v3_sync(current_version, &self.path)?;
+        }
+
+        let file_bytes = std::fs::read(&self.path)?;
+        let result = self.parse_envelope_bytes(&file_bytes)?;
+
+        if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
+            let mut guard = self.lock_metadata()?;
+            *guard = Some(file_metadata);
+        }
+
+        tracing::info!(
+            "Loaded {} bytes from {} (sync)",
+            file_bytes.len(),
+            self.path.display()
+        );
+
+        Ok(Some(result))
     }
 
     async fn exists(&self) -> bool {

@@ -90,6 +90,20 @@ pub trait PersistenceStore: Send + Sync {
     )> {
         Ok((vec![], 0, None))
     }
+
+    /// Load the store synchronously (no async runtime required).
+    /// Returns `Ok(None)` when the backing file does not exist.
+    ///
+    /// The default implementation returns an error; backends that support
+    /// synchronous loading (e.g. `JsonFileStore`) override this.
+    #[allow(clippy::type_complexity)]
+    fn load_sync(
+        &self,
+    ) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
+        Err(crate::PersistenceError::Serialization(
+            "load_sync not supported by this backend".into(),
+        ))
+    }
 }
 
 /// Trait for detecting changes to the storage file
