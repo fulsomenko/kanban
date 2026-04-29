@@ -136,8 +136,8 @@ impl JsonDataStore {
     /// Delegates a mutating operation to the inner [`InMemoryStore`], then marks the backend dirty.
     ///
     /// A shared (`read`) lock on the outer `RwLock` is sufficient because [`InMemoryStore`] uses
-    /// interior mutability for all its write operations.
-    fn with_write<T>(&self, f: impl FnOnce(&InMemoryStore) -> KanbanResult<T>) -> KanbanResult<T> {
+    /// interior mutability for all its mutating operations.
+    fn with_mutate<T>(&self, f: impl FnOnce(&InMemoryStore) -> KanbanResult<T>) -> KanbanResult<T> {
         self.ensure_loaded()?;
         let guard = self
             .inner
@@ -160,10 +160,10 @@ impl DataStore for JsonDataStore {
         self.with_read(|s| s.list_boards())
     }
     fn upsert_board(&self, board: Board) -> KanbanResult<()> {
-        self.with_write(|s| s.upsert_board(board))
+        self.with_mutate(|s| s.upsert_board(board))
     }
     fn delete_board(&self, id: Uuid) -> KanbanResult<()> {
-        self.with_write(|s| s.delete_board(id))
+        self.with_mutate(|s| s.delete_board(id))
     }
 
     // Column
@@ -177,13 +177,13 @@ impl DataStore for JsonDataStore {
         self.with_read(|s| s.list_all_columns())
     }
     fn upsert_column(&self, column: Column) -> KanbanResult<()> {
-        self.with_write(|s| s.upsert_column(column))
+        self.with_mutate(|s| s.upsert_column(column))
     }
     fn delete_column(&self, id: Uuid) -> KanbanResult<()> {
-        self.with_write(|s| s.delete_column(id))
+        self.with_mutate(|s| s.delete_column(id))
     }
     fn delete_columns_by_board(&self, board_id: Uuid) -> KanbanResult<()> {
-        self.with_write(|s| s.delete_columns_by_board(board_id))
+        self.with_mutate(|s| s.delete_columns_by_board(board_id))
     }
 
     // Card
@@ -210,20 +210,20 @@ impl DataStore for JsonDataStore {
         self.with_read(|s| s.count_cards_in_column_excluding(column_id, exclude))
     }
     fn upsert_card(&self, card: Card) -> KanbanResult<()> {
-        self.with_write(|s| s.upsert_card(card))
+        self.with_mutate(|s| s.upsert_card(card))
     }
     fn delete_card(&self, id: Uuid) -> KanbanResult<()> {
-        self.with_write(|s| s.delete_card(id))
+        self.with_mutate(|s| s.delete_card(id))
     }
     fn delete_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<()> {
-        self.with_write(|s| s.delete_cards_by_columns(column_ids))
+        self.with_mutate(|s| s.delete_cards_by_columns(column_ids))
     }
     fn clear_sprint_from_cards(
         &self,
         sprint_id: Uuid,
         timestamp: chrono::DateTime<chrono::Utc>,
     ) -> KanbanResult<()> {
-        self.with_write(|s| s.clear_sprint_from_cards(sprint_id, timestamp))
+        self.with_mutate(|s| s.clear_sprint_from_cards(sprint_id, timestamp))
     }
 
     // Archived card
@@ -234,17 +234,17 @@ impl DataStore for JsonDataStore {
         self.with_read(|s| s.list_archived_cards())
     }
     fn insert_archived_card(&self, ac: ArchivedCard) -> KanbanResult<()> {
-        self.with_write(|s| s.insert_archived_card(ac))
+        self.with_mutate(|s| s.insert_archived_card(ac))
     }
     fn delete_archived_card(&self, card_id: Uuid) -> KanbanResult<()> {
-        self.with_write(|s| s.delete_archived_card(card_id))
+        self.with_mutate(|s| s.delete_archived_card(card_id))
     }
     fn clear_sprint_from_archived_cards(
         &self,
         sprint_id: Uuid,
         timestamp: chrono::DateTime<chrono::Utc>,
     ) -> KanbanResult<()> {
-        self.with_write(|s| s.clear_sprint_from_archived_cards(sprint_id, timestamp))
+        self.with_mutate(|s| s.clear_sprint_from_archived_cards(sprint_id, timestamp))
     }
 
     // Sprint
@@ -258,13 +258,13 @@ impl DataStore for JsonDataStore {
         self.with_read(|s| s.list_all_sprints())
     }
     fn upsert_sprint(&self, sprint: Sprint) -> KanbanResult<()> {
-        self.with_write(|s| s.upsert_sprint(sprint))
+        self.with_mutate(|s| s.upsert_sprint(sprint))
     }
     fn delete_sprint(&self, id: Uuid) -> KanbanResult<()> {
-        self.with_write(|s| s.delete_sprint(id))
+        self.with_mutate(|s| s.delete_sprint(id))
     }
     fn delete_sprints_by_board(&self, board_id: Uuid) -> KanbanResult<()> {
-        self.with_write(|s| s.delete_sprints_by_board(board_id))
+        self.with_mutate(|s| s.delete_sprints_by_board(board_id))
     }
 
     // Graph
@@ -272,10 +272,10 @@ impl DataStore for JsonDataStore {
         self.with_read(|s| s.get_graph())
     }
     fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()> {
-        self.with_write(|s| s.set_graph(graph))
+        self.with_mutate(|s| s.set_graph(graph))
     }
     fn modify_graph(&self, f: GraphMutFn) -> KanbanResult<()> {
-        self.with_write(|s| s.modify_graph(f))
+        self.with_mutate(|s| s.modify_graph(f))
     }
 
     // Snapshot
@@ -283,7 +283,7 @@ impl DataStore for JsonDataStore {
         self.with_read(|s| s.snapshot())
     }
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.with_write(|s| s.apply_snapshot(snapshot))
+        self.with_mutate(|s| s.apply_snapshot(snapshot))
     }
 }
 
@@ -291,7 +291,7 @@ impl DataStore for JsonDataStore {
 
 impl CommandStore for JsonDataStore {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
-        self.with_write(|s| s.append_commands(cmds))
+        self.with_mutate(|s| s.append_commands(cmds))
     }
     fn command_count(&self) -> KanbanResult<u64> {
         self.with_read(|s| s.command_count())
@@ -300,7 +300,7 @@ impl CommandStore for JsonDataStore {
         self.with_read(|s| s.load_commands(from, to))
     }
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        self.with_write(|s| s.truncate_commands_after(after))
+        self.with_mutate(|s| s.truncate_commands_after(after))
     }
     fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
         self.with_read(|s| s.load_all_commands())
@@ -309,13 +309,13 @@ impl CommandStore for JsonDataStore {
         false
     }
     fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.with_write(|s| s.store_snapshot_at(idx, snapshot))
+        self.with_mutate(|s| s.store_snapshot_at(idx, snapshot))
     }
     fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
         self.with_read(|s| s.load_snapshot_at(idx))
     }
     fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        self.with_write(|s| s.shift_commands(drop_count))
+        self.with_mutate(|s| s.shift_commands(drop_count))
     }
 }
 
