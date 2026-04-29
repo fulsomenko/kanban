@@ -233,10 +233,7 @@ impl App {
         if save_file.is_some() && !cli_file_override && original_storage_location.is_none() {
             app_config.storage_location = None;
         }
-        let backend_name = app_config.effective_storage_backend().to_string();
-        let store = store_manager.make_store(&backend_name, &effective_file)?;
-        let kanban_backend: std::sync::Arc<dyn kanban_service::KanbanBackend> =
-            std::sync::Arc::new(kanban_service::json_backend::JsonDataStore::new(store));
+        let kanban_backend = store_manager.make_backend_sync(&effective_file, &app_config)?;
         let inner_ctx = kanban_service::KanbanContext::open(kanban_backend, app_config.clone());
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(inner_ctx)?;
         let store_manager = Arc::new(store_manager);
