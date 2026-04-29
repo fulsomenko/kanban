@@ -4,7 +4,12 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub use snapshot::TuiSnapshot;
-const SAVE_QUEUE_CAPACITY: usize = 100;
+/// Capacity of the bounded flush-signal channel between the UI and the save worker.
+///
+/// A capacity of 1 would cause data loss on slow disks when flush signals arrive
+/// faster than the worker drains them. 100 slots allow bursts of rapid mutations
+/// (e.g. undo/redo sprees) to queue without blocking the UI thread.
+const FLUSH_QUEUE_CAPACITY: usize = 100;
 
 /// Coordinates persistence with immediate auto-saving
 ///
@@ -37,7 +42,7 @@ impl SaveCoordinator {
     ///
     /// Returns a tuple of:
     /// - SaveCoordinator instance
-    /// - Optional receiver for async save processing (snapshots to save)
+    /// - Optional receiver for async save processing (flush signals)
     /// - Optional receiver for save completion notifications
     ///
     #[allow(clippy::type_complexity)]
@@ -49,7 +54,7 @@ impl SaveCoordinator {
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
         let (save_tx, save_rx) = if has_persistence {
-            let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
+            let (tx, rx) = mpsc::channel(FLUSH_QUEUE_CAPACITY);
             (Some(tx), Some(rx))
         } else {
             (None, None)
@@ -81,7 +86,7 @@ impl SaveCoordinator {
     /// Queue a flush signal for async saving.
     /// Increments pending_saves to track unsaved changes.
     ///
-    /// Pauses file watcher before queueing to prevent detecting our own writes as external changes.
+    /// Pauses file watcher before sending to prevent detecting our own writes as external changes.
     /// The save worker will resume the watcher after the save completes.
     ///
     /// Uses try_send to handle bounded channel capacity (100 slots).
@@ -102,22 +107,22 @@ impl SaveCoordinator {
             match tx.try_send(()) {
                 Ok(_) => {
                     self.pending_saves += 1;
-                    tracing::debug!("Snapshot queued successfully");
+                    tracing::debug!("Flush signal queued successfully");
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                     tracing::warn!(
-                        "Save queue is full ({} pending), skipping this save. \
+                        "Save queue is full ({} pending), skipping this flush signal. \
                         This may indicate the disk is slow or the save worker is overloaded.",
                         self.pending_saves
                     );
-                    // Resume watcher if we couldn't queue the snapshot
+                    // Resume watcher if we couldn't queue the flush signal
                     if let Some(ref watcher) = self.file_watcher {
                         watcher.resume();
                         tracing::debug!("File watcher resumed (save queue full)");
                     }
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    tracing::error!("Failed to queue save: channel closed");
+                    tracing::error!("Failed to queue flush signal: channel closed");
                     // Resume watcher if channel is closed
                     if let Some(ref watcher) = self.file_watcher {
                         watcher.resume();
@@ -179,7 +184,7 @@ impl SaveCoordinator {
         self.file_watcher = None;
         self.pending_saves = 0;
 
-        let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
+        let (tx, rx) = mpsc::channel(FLUSH_QUEUE_CAPACITY);
         self.save_tx = Some(tx);
 
         let (completion_tx, completion_rx) = mpsc::unbounded_channel();
