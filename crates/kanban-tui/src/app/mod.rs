@@ -1827,9 +1827,6 @@ impl App {
                                         // Reload from disk via backend
                                         match self.ctx.reload().await {
                                             Ok(()) => {
-                                                if let Err(e) = self.ctx.clear_history() {
-                                                    tracing::error!("Failed to clear history: {}", e);
-                                                }
                                                 self.ctx.clear_conflict();
                                                 self.prepare_frame();
                                                 self.needs_redraw = true;
@@ -2049,9 +2046,6 @@ impl App {
     async fn auto_reload_from_external_change(&mut self) {
         match self.ctx.reload().await {
             Ok(()) => {
-                if let Err(e) = self.ctx.clear_history() {
-                    tracing::error!("Failed to clear history: {}", e);
-                }
                 self.ctx.mark_clean();
                 self.ctx.clear_conflict();
                 self.prepare_frame();
