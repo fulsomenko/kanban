@@ -37,7 +37,7 @@ pub async fn open_context(locator: &str, config: AppConfig) -> KanbanResult<Kanb
     let sm = StoreManager::new(default_registry());
     sm.sync_backend_with_file(locator, &mut config);
     let backend = sm.make_backend(locator, &config).await?;
-    Ok(KanbanContext::open(backend, config))
+    KanbanContext::open_initialized(backend, config).await
 }
 
 /// Returns a `StoreRegistry` pre-populated with available backends.

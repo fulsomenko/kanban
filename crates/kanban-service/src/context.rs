@@ -5,7 +5,7 @@ use kanban_domain::commands::{
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, CommandStore, DataStore, DependencyGraph, FieldUpdate, InMemoryStore,
+    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate,
     KanbanOperations, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
@@ -61,82 +61,17 @@ impl KanbanContext {
         }
     }
 
-    // ── Backward-compat constructors (kept for existing callers) ─────────────
-
-    pub async fn load(
-        store: Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>,
+    /// Wraps `backend` and eagerly initializes the undo cursor so that
+    /// `can_undo()` / `can_redo()` return correct values before the first
+    /// mutation. Use this instead of [`open`][Self::open] wherever the caller
+    /// needs undo state to be populated immediately (CLI, MCP, TUI startup).
+    pub async fn open_initialized(
+        backend: Arc<dyn KanbanBackend>,
         config: AppConfig,
     ) -> KanbanResult<Self> {
-        #[cfg(feature = "json")]
-        {
-            use crate::json_backend::JsonDataStore;
-            let jds = JsonDataStore::new(store);
-            let mut ctx = Self::open(Arc::new(jds), config);
-            ctx.ensure_undo_state_initialized()?;
-            Ok(ctx)
-        }
-        #[cfg(not(feature = "json"))]
-        {
-            let _ = store;
-            Err(KanbanError::Internal("json feature not enabled".into()))
-        }
-    }
-
-    pub async fn load_with_defaults(
-        store: Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>,
-    ) -> KanbanResult<Self> {
-        Self::load(store, AppConfig::default()).await
-    }
-
-    #[cfg(feature = "sqlite")]
-    pub async fn open_sqlite(path: &str, config: AppConfig) -> KanbanResult<Self> {
-        use kanban_persistence_sqlite::SqliteStore;
-        let store = SqliteStore::open(path).await?;
-        let command_count = store.command_count()? as usize;
-        let baseline_snapshot = if command_count > 0 {
-            Some(store.load_snapshot_at(0)?.unwrap_or_default())
-        } else {
-            Some(store.snapshot()?)
-        };
-        let undo_cursor = command_count;
-        Ok(Self {
-            backend: Arc::new(store),
-            app_config: config,
-            baseline_snapshot,
-            undo_cursor,
-            command_count,
-            dirty: false,
-            conflict_pending: false,
-        })
-    }
-
-    #[cfg(feature = "json")]
-    pub async fn open_json(path: &str, config: AppConfig) -> KanbanResult<Self> {
-        use crate::json_backend::JsonDataStore;
-        use kanban_persistence_json::JsonFileStore;
-        let persistence_store = Arc::new(JsonFileStore::new(path));
-        let jds = JsonDataStore::new(persistence_store);
-        let mut ctx = Self::open(Arc::new(jds), config);
-        // Eagerly initialize undo state so can_undo/can_redo work immediately,
-        // consistent with open_sqlite().
+        let mut ctx = Self::open(backend, config);
         ctx.ensure_undo_state_initialized()?;
         Ok(ctx)
-    }
-
-    pub fn empty(
-        store: Option<Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>>,
-        config: AppConfig,
-    ) -> Self {
-        if let Some(s) = store {
-            #[cfg(feature = "json")]
-            {
-                use crate::json_backend::JsonDataStore;
-                return Self::open(Arc::new(JsonDataStore::new(s)), config);
-            }
-            #[cfg(not(feature = "json"))]
-            let _ = s;
-        }
-        Self::open(Arc::new(InMemoryStore::new()), config)
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────────
