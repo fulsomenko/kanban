@@ -68,18 +68,25 @@ impl JsonDataStore {
             return Ok(());
         }
 
+        // NOTE: The write lock on `self.inner` is held for the duration of the I/O below.
+        // The proper fix is to load outside the lock and re-acquire under write lock to swap in
+        // the result (double-checked locking). This is deferred because:
+        //   - The TUI is single-threaded: `ensure_loaded` is never called concurrently.
+        //   - MCP serializes all tool calls through `Arc<Mutex<McpContext>>`.
+        // If MCP ever gets truly concurrent per-request backends, revisit this.
         let store = InMemoryStore::new();
 
-        let exists = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.file_store.exists())
-        });
-
-        if exists {
-            let (ss, _meta) = tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(self.file_store.load())
+        let loaded = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                if !self.file_store.exists().await {
+                    return Ok(None);
+                }
+                self.file_store.load().await.map(Some)
             })
-            .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
+        })
+        .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
 
+        if let Some((ss, _meta)) = loaded {
             let snapshot = snapshot_from_json_bytes(&ss.data)
                 .map_err(|e| KanbanError::Internal(format!("json_backend: parse failed: {e}")))?;
             store.apply_snapshot(snapshot)?;
@@ -123,6 +130,10 @@ impl JsonDataStore {
         f(guard.as_ref().expect("ensure_loaded guarantees Some"))
     }
 
+    /// Delegates a mutating operation to the inner [`InMemoryStore`], then marks the backend dirty.
+    ///
+    /// A shared (`read`) lock on the outer `RwLock` is sufficient because [`InMemoryStore`] uses
+    /// interior mutability for all its write operations.
     fn with_write<T>(&self, f: impl FnOnce(&InMemoryStore) -> KanbanResult<T>) -> KanbanResult<T> {
         self.ensure_loaded()?;
         let guard = self
@@ -396,12 +407,14 @@ impl KanbanBackend for JsonDataStore {
     }
 
     fn on_undo_state_changed(&self, cursor: u64, baseline: Option<Snapshot>) {
-        if let Ok(mut c) = self.undo_cursor.lock() {
-            *c = cursor;
-        }
-        if let Ok(mut b) = self.baseline_snapshot.lock() {
-            *b = baseline;
-        }
+        *self
+            .undo_cursor
+            .lock()
+            .expect("json_backend: undo_cursor mutex poisoned") = cursor;
+        *self
+            .baseline_snapshot
+            .lock()
+            .expect("json_backend: baseline_snapshot mutex poisoned") = baseline;
     }
 
     fn instance_id(&self) -> Uuid {
