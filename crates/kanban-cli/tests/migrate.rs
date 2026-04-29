@@ -1,3 +1,6 @@
+//! These integration tests require `flavor = "multi_thread"` because
+//! `JsonDataStore::ensure_loaded` uses `tokio::task::block_in_place`.
+
 use kanban_core::AppConfig;
 use kanban_domain::{DataStore, KanbanOperations};
 use kanban_persistence::PersistenceStore;
@@ -95,7 +98,6 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     assert_eq!(orig_board.name, loaded_board.name);
 }
 
-// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_json_to_json_roundtrip() {
     let dir = TempDir::new().unwrap();
@@ -177,7 +179,6 @@ async fn test_migrate_rejects_missing_source() {
     );
 }
 
-// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_rejects_existing_target() {
     use assert_cmd::cargo_bin_cmd;
@@ -284,7 +285,6 @@ async fn test_migrate_cli_explicit_output_path() {
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
 }
 
-// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_cli_default_output_path() {
     use assert_cmd::cargo_bin_cmd;
@@ -313,7 +313,6 @@ async fn test_migrate_cli_default_output_path() {
     );
 }
 
-// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_rejects_unknown_backend() {
     use assert_cmd::cargo_bin_cmd;

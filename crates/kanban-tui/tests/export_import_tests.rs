@@ -1,3 +1,6 @@
+//! These integration tests require `flavor = "multi_thread"` because
+//! `JsonDataStore::ensure_loaded` uses `tokio::task::block_in_place`.
+
 use kanban_domain::KanbanOperations;
 use kanban_tui::App;
 use std::fs;
@@ -182,7 +185,6 @@ fn test_import_invalid_format_fails() {
     assert!(result.is_err());
 }
 
-// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
 #[tokio::test(flavor = "multi_thread")]
 async fn test_auto_save() {
     let dir = tempdir().unwrap();
@@ -208,7 +210,6 @@ async fn test_auto_save() {
     assert_eq!(parsed["boards"][0]["board"]["name"], "Auto Save Board");
 }
 
-// multi_thread: JsonDataStore::ensure_loaded uses block_in_place
 #[tokio::test(flavor = "multi_thread")]
 async fn test_failed_import_clears_save_file() {
     let dir = tempdir().unwrap();
