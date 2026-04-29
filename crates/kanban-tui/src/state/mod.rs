@@ -92,12 +92,6 @@ impl SaveCoordinator {
     /// Uses try_send to handle bounded channel capacity (100 slots).
     /// If channel is full, logs warning and skips to prevent blocking UI.
     pub fn queue_flush(&mut self) {
-        // Pause file watching before queuing save to prevent detecting our own writes
-        if let Some(ref watcher) = self.file_watcher {
-            watcher.pause();
-            tracing::debug!("File watcher paused before queuing flush");
-        }
-
         if let Some(ref tx) = self.save_tx {
             tracing::debug!(
                 "Queueing flush signal (pending: {} -> {})",
@@ -107,6 +101,12 @@ impl SaveCoordinator {
             match tx.try_send(()) {
                 Ok(_) => {
                     self.pending_saves += 1;
+                    // Suppress the rename event our atomic save will produce.
+                    // The token is consumed atomically in the notify callback,
+                    // so this is race-free regardless of OS event delivery timing.
+                    if let Some(ref watcher) = self.file_watcher {
+                        watcher.suppress_next_event();
+                    }
                     tracing::debug!("Flush signal queued successfully");
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
@@ -115,28 +115,13 @@ impl SaveCoordinator {
                         This may indicate the disk is slow or the save worker is overloaded.",
                         self.pending_saves
                     );
-                    // Resume watcher if we couldn't queue the flush signal
-                    if let Some(ref watcher) = self.file_watcher {
-                        watcher.resume();
-                        tracing::debug!("File watcher resumed (save queue full)");
-                    }
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                     tracing::error!("Failed to queue flush signal: channel closed");
-                    // Resume watcher if channel is closed
-                    if let Some(ref watcher) = self.file_watcher {
-                        watcher.resume();
-                        tracing::debug!("File watcher resumed (channel closed)");
-                    }
                 }
             }
         } else {
             tracing::debug!("No save channel available - skipping save");
-            // Resume watcher if no save channel
-            if let Some(ref watcher) = self.file_watcher {
-                watcher.resume();
-                tracing::debug!("File watcher resumed (no save channel)");
-            }
         }
     }
 

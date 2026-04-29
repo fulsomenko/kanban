@@ -377,10 +377,6 @@ impl App {
                         tracing::error!("Failed to send save completion signal: {}", e);
                     }
                 }
-
-                if let Some(ref watcher) = file_watcher {
-                    watcher.resume();
-                }
             }
             tracing::info!("Save worker exited (channel closed)");
         });
@@ -1670,6 +1666,9 @@ impl App {
             tracing::warn!("Failed to initialize undo state: {e}");
         }
         self.migrate_sprint_logs();
+        // Migration is a transparent startup operation, not a user change.
+        // mark_clean so the startup flush doesn't trigger the conflict popup.
+        self.ctx.mark_clean();
         self.prepare_frame();
         self.check_ended_sprints();
         if self.selection.board.get().is_none() && !self.model.boards().is_empty() {
@@ -1810,17 +1809,12 @@ impl App {
                                     Some('o') => {
                                         self.pending_key = None;
                                         self.needs_redraw = true;
-                                        // Pause file watcher to avoid conflict detection for our own save
                                         if let Some(ref watcher) = self.persistence.file_watcher {
-                                            watcher.pause();
+                                            watcher.suppress_next_event();
                                         }
                                         self.ctx.clear_conflict();
                                         if let Err(e) = self.ctx.save().await {
                                             tracing::error!("Failed to force overwrite: {}", e);
-                                        }
-                                        // Resume file watcher after save completes
-                                        if let Some(ref watcher) = self.persistence.file_watcher {
-                                            watcher.resume();
                                         }
                                     }
                                     Some('t') => {

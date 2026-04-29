@@ -3,7 +3,7 @@ use crate::PersistenceResult;
 use chrono::Utc;
 use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex as TokioMutex;
@@ -34,7 +34,7 @@ use tokio::sync::Mutex as TokioMutex;
 pub struct FileWatcher {
     tx: broadcast::Sender<ChangeEvent>,
     task_handle: Arc<TokioMutex<Option<tokio::task::JoinHandle<()>>>>,
-    paused: Arc<AtomicBool>,
+    suppress_count: Arc<AtomicUsize>,
 }
 
 impl FileWatcher {
@@ -45,20 +45,18 @@ impl FileWatcher {
         Self {
             tx,
             task_handle: Arc::new(TokioMutex::new(None)),
-            paused: Arc::new(AtomicBool::new(false)),
+            suppress_count: Arc::new(AtomicUsize::new(0)),
         }
     }
 
-    /// Pause file watching - events will be ignored until resumed
-    pub fn pause(&self) {
-        self.paused.store(true, Ordering::SeqCst);
-        tracing::debug!("File watcher paused");
-    }
-
-    /// Resume file watching - events will be processed normally
-    pub fn resume(&self) {
-        self.paused.store(false, Ordering::SeqCst);
-        tracing::debug!("File watcher resumed");
+    /// Suppress the next own-write event for the watched file.
+    ///
+    /// Call once before each atomic save. The counter is decremented atomically
+    /// inside the notify callback when the rename event for our file arrives,
+    /// so the suppression is race-free regardless of when the OS delivers the event.
+    pub fn suppress_next_event(&self) {
+        self.suppress_count.fetch_add(1, Ordering::SeqCst);
+        tracing::debug!("File watcher suppress_count incremented");
     }
 }
 
@@ -73,7 +71,7 @@ impl ChangeDetector for FileWatcher {
     async fn start_watching(&self, path: PathBuf) -> PersistenceResult<()> {
         let tx = self.tx.clone();
         let task_handle = self.task_handle.clone();
-        let paused = self.paused.clone();
+        let suppress_count = self.suppress_count.clone();
 
         // Canonicalize to absolute path so it matches OS event paths
         let canonical_path = tokio::fs::canonicalize(&path).await?;
@@ -85,7 +83,7 @@ impl ChangeDetector for FileWatcher {
                 .expect("Canonicalized path should always have parent")
                 .to_path_buf();
             let watch_path = canonical_path.clone();
-            let paused_clone = paused.clone();
+            let suppress_count_clone = suppress_count.clone();
 
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
@@ -113,11 +111,18 @@ impl ChangeDetector for FileWatcher {
                         }
 
                         if is_relevant_event && has_our_file {
-                            // Check if file watching is paused (e.g., during our own save operation)
-                            // Pause/resume is the only mechanism for filtering own-write events
-                            if paused_clone.load(Ordering::SeqCst) {
+                            // Atomically consume one suppress token if available.
+                            // suppress_next_event() is called before each of our own saves;
+                            // the token is consumed by the rename event that the save produces,
+                            // so own-write events are suppressed without any timing dependency.
+                            let suppressed = suppress_count_clone.fetch_update(
+                                Ordering::SeqCst,
+                                Ordering::SeqCst,
+                                |n| if n > 0 { Some(n - 1) } else { None },
+                            );
+                            if suppressed.is_ok() {
                                 tracing::debug!(
-                                    "File event ignored (watcher paused): kind={:?}, path={}",
+                                    "Own-write event suppressed: kind={:?}, path={}",
                                     event.kind,
                                     watch_path.display()
                                 );
