@@ -82,11 +82,11 @@ impl KanbanBackend for kanban_persistence_sqlite::SqliteStore {
     }
 
     async fn reload(&self) -> KanbanResult<()> {
-        Ok(()) // SQLite reads are always live against the DB
+        Ok(())
     }
 
     fn needs_flush(&self) -> bool {
-        false // write-through: every mutation is already in the DB
+        false
     }
 
     fn needs_save_worker(&self) -> bool {
