@@ -68,6 +68,33 @@ mod sqlite_tests {
     }
 }
 
+/// `open_initialized` populates the undo cursor from persisted commands so
+/// that `can_undo()` returns true on a fresh context without any mutation.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_open_initialized_populates_undo_cursor_from_prior_commands() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("board.json");
+
+    {
+        let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default()).await?;
+        ctx.create_board("Board1".into(), None)?;
+        ctx.save().await?;
+    }
+
+    let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+    let backend = sm
+        .make_backend(path.to_str().unwrap(), &AppConfig::default())
+        .await?;
+    let ctx =
+        kanban_service::KanbanContext::open_initialized(backend, AppConfig::default()).await?;
+    assert!(
+        ctx.can_undo(),
+        "open_initialized must restore undo cursor from persisted command log"
+    );
+    assert_eq!(ctx.undo_depth(), 1);
+    Ok(())
+}
+
 /// A non-existent path produces an empty context (no boards).
 #[tokio::test(flavor = "multi_thread")]
 async fn test_open_context_new_file_starts_empty() -> KanbanResult<()> {
