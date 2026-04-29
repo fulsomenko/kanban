@@ -23,10 +23,9 @@ impl McpContext {
                 config.effective_storage_backend()
             );
         }
-        let backend = config.effective_storage_backend().to_string();
+        let backend = store_manager.make_backend(data_file, &config).await?;
         Ok(Self {
-            inner: KanbanContext::load(store_manager.make_store(&backend, data_file)?, config)
-                .await?,
+            inner: KanbanContext::open_initialized(backend, config).await?,
         })
     }
 
