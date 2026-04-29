@@ -30,29 +30,13 @@ async fn test_import_board_checkpoints_wal_on_sqlite_path() {
     };
     let json = serde_json::to_string(&snapshot).unwrap();
     ctx.import_board(&json).unwrap();
-    // No save() call — import_board() itself must checkpoint the WAL
+    ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_execute_checkpoints_wal_without_save() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.sqlite3");
-    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
-        .await
-        .unwrap();
-    ctx.create_board("B".to_string(), None).unwrap();
-    // No save() call — execute() itself must checkpoint the WAL
-    assert_wal_empty(&path);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_save_is_noop_on_sqlite_path() {
-    // On the SQLite path save() returns Ok(()) immediately — checkpointing happens
-    // eagerly in execute(). The WAL is already empty from create_board(); save() is
-    // just a confirmed no-op that must not error.
+async fn test_execute_checkpoints_wal_after_save() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
     let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
@@ -65,7 +49,20 @@ async fn test_save_is_noop_on_sqlite_path() {
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_undo_checkpoints_wal_without_save() {
+async fn test_save_checkpoints_wal_on_sqlite_path() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    ctx.create_board("B".to_string(), None).unwrap();
+    ctx.save().await.unwrap();
+    assert_wal_empty(&path);
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_undo_checkpoints_wal_after_save() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
     let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
@@ -73,13 +70,13 @@ async fn test_undo_checkpoints_wal_without_save() {
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
     ctx.undo().unwrap();
-    // No save() call — undo() itself must checkpoint the WAL
+    ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_redo_checkpoints_wal_without_save() {
+async fn test_redo_checkpoints_wal_after_save() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
     let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
@@ -88,7 +85,7 @@ async fn test_redo_checkpoints_wal_without_save() {
     ctx.create_board("B".to_string(), None).unwrap();
     ctx.undo().unwrap();
     ctx.redo().unwrap();
-    // No save() call — redo() itself must checkpoint the WAL
+    ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
 

@@ -47,6 +47,7 @@ async fn test_tui_execute_checkpoints_wal_on_sqlite_path() {
         .unwrap();
     let (mut tui_ctx, _, _) = TuiContext::new(ctx).unwrap();
     tui_ctx.create_board("B".to_string(), None).unwrap();
+    tui_ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
 
@@ -61,6 +62,7 @@ async fn test_tui_undo_checkpoints_wal_on_sqlite_path() {
     let (mut tui_ctx, _, _) = TuiContext::new(ctx).unwrap();
     tui_ctx.create_board("B".to_string(), None).unwrap();
     assert!(tui_ctx.undo().unwrap());
+    tui_ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
 
@@ -76,5 +78,6 @@ async fn test_tui_redo_checkpoints_wal_on_sqlite_path() {
     tui_ctx.create_board("B".to_string(), None).unwrap();
     assert!(tui_ctx.undo().unwrap());
     assert!(tui_ctx.redo().unwrap());
+    tui_ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
