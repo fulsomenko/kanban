@@ -90,15 +90,14 @@ impl ChangeDetector for FileWatcher {
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
                     Ok(event) => {
-                        // Detect changes from any write strategy:
-                        // - Modify(Data(Content)): direct writes
-                        // - Create(_): atomic writes (rename operation creating new file)
-                        // - Remove(_): atomic writes (old file removed during rename)
                         let is_relevant_event = matches!(
                             event.kind,
                             notify::EventKind::Modify(notify::event::ModifyKind::Data(
                                 notify::event::DataChange::Content,
-                            )) | notify::EventKind::Create(_)
+                            )) | notify::EventKind::Modify(
+                                notify::event::ModifyKind::Name(_),
+                            )
+                                | notify::EventKind::Create(_)
                                 | notify::EventKind::Remove(_)
                         );
 
@@ -113,9 +112,7 @@ impl ChangeDetector for FileWatcher {
                             );
                         }
 
-                        // For parent directory watching, trigger on any relevant event
-                        // (atomic writes show as temp file events, but the target file exists and changed)
-                        if is_relevant_event && (has_our_file || watch_path.exists()) {
+                        if is_relevant_event && has_our_file {
                             // Check if file watching is paused (e.g., during our own save operation)
                             // Pause/resume is the only mechanism for filtering own-write events
                             if paused_clone.load(Ordering::SeqCst) {
