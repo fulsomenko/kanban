@@ -1,5 +1,5 @@
 use kanban_domain::{Board, CardListFilter, KanbanOperations, Snapshot};
-use kanban_service::{AppConfig, KanbanContext};
+use kanban_service::{open_context, AppConfig, KanbanContext};
 use tempfile::TempDir;
 
 fn assert_wal_empty(db_path: &std::path::Path) {
@@ -17,7 +17,7 @@ fn assert_wal_empty(db_path: &std::path::Path) {
 async fn test_import_board_checkpoints_wal_on_sqlite_path() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let snapshot = Snapshot {
@@ -39,7 +39,7 @@ async fn test_import_board_checkpoints_wal_on_sqlite_path() {
 async fn test_execute_checkpoints_wal_without_save() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
@@ -55,7 +55,7 @@ async fn test_save_is_noop_on_sqlite_path() {
     // just a confirmed no-op that must not error.
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
@@ -68,7 +68,7 @@ async fn test_save_is_noop_on_sqlite_path() {
 async fn test_undo_checkpoints_wal_without_save() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
@@ -82,7 +82,7 @@ async fn test_undo_checkpoints_wal_without_save() {
 async fn test_redo_checkpoints_wal_without_save() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
@@ -94,9 +94,9 @@ async fn test_redo_checkpoints_wal_without_save() {
 
 async fn open_sqlite_ctx(dir: &TempDir) -> KanbanContext {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
-    KanbanContext::open_sqlite(&path, AppConfig::default())
+    open_context(&path, AppConfig::default())
         .await
-        .expect("open_sqlite must succeed")
+        .expect("open_context must succeed")
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
@@ -158,7 +158,7 @@ async fn test_sqlite_backend_undo_cursor_restored_after_reopen() {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
 
     {
-        let mut ctx = KanbanContext::open_sqlite(&path, AppConfig::default())
+        let mut ctx = open_context(&path, AppConfig::default())
             .await
             .unwrap();
         ctx.create_board("Board 1".to_string(), None).unwrap();
@@ -166,7 +166,7 @@ async fn test_sqlite_backend_undo_cursor_restored_after_reopen() {
         assert_eq!(ctx.undo_depth(), 2);
     }
 
-    let ctx2 = KanbanContext::open_sqlite(&path, AppConfig::default())
+    let ctx2 = open_context(&path, AppConfig::default())
         .await
         .unwrap();
     assert_eq!(
@@ -185,14 +185,14 @@ async fn test_sqlite_backend_data_persists_across_opens() {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
 
     {
-        let mut ctx = KanbanContext::open_sqlite(&path, AppConfig::default())
+        let mut ctx = open_context(&path, AppConfig::default())
             .await
             .unwrap();
         ctx.create_board("Persistent Board".to_string(), None)
             .unwrap();
     }
 
-    let ctx2 = KanbanContext::open_sqlite(&path, AppConfig::default())
+    let ctx2 = open_context(&path, AppConfig::default())
         .await
         .unwrap();
     let boards = ctx2.list_boards().unwrap();

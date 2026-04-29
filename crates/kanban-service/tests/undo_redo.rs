@@ -3,22 +3,12 @@ use kanban_domain::commands::{
     UpdateBoard,
 };
 use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, KanbanResult, Snapshot};
-use kanban_persistence::StoreRegistry;
-use kanban_service::{KanbanContext, StoreManager};
+use kanban_domain::InMemoryStore;
+use kanban_service::{open_context, KanbanContext};
 use std::sync::Arc;
 
-fn make_json_store(
-    path: &std::path::Path,
-) -> Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> {
-    let mut registry = StoreRegistry::new();
-    registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
-    StoreManager::new(registry)
-        .make_store("json", path.to_str().unwrap())
-        .unwrap()
-}
-
 async fn make_ctx() -> KanbanContext {
-    KanbanContext::empty(None, kanban_core::AppConfig::default())
+    KanbanContext::open(Arc::new(InMemoryStore::new()), kanban_core::AppConfig::default())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -120,8 +110,7 @@ async fn test_new_action_after_undo_clears_redo() -> KanbanResult<()> {
 async fn test_reload_clears_undo_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
-    let store = make_json_store(&path);
-    let mut ctx = KanbanContext::empty(Some(store), kanban_core::AppConfig::default());
+    let mut ctx = open_context(path.to_str().unwrap(), kanban_core::AppConfig::default()).await?;
 
     ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
         id: uuid::Uuid::new_v4(),
@@ -283,8 +272,7 @@ async fn test_conflict_flag_lifecycle() {
 async fn test_reload_resets_undo_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
-    let store = make_json_store(&path);
-    let mut ctx = KanbanContext::empty(Some(store), kanban_core::AppConfig::default());
+    let mut ctx = open_context(path.to_str().unwrap(), kanban_core::AppConfig::default()).await?;
 
     ctx.create_board("B".into(), None)?;
     ctx.save().await?;
@@ -942,8 +930,7 @@ async fn test_redo_past_end_returns_false() -> KanbanResult<()> {
 async fn test_save_and_reload_preserves_undo_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("history.json");
-    let store = make_json_store(&path);
-    let mut ctx = KanbanContext::empty(Some(store.clone()), kanban_core::AppConfig::default());
+    let mut ctx = open_context(path.to_str().unwrap(), kanban_core::AppConfig::default()).await?;
 
     ctx.create_board("B1".into(), None)?;
     ctx.create_board("B2".into(), None)?;
@@ -952,7 +939,7 @@ async fn test_save_and_reload_preserves_undo_history() -> KanbanResult<()> {
 
     ctx.save().await?;
 
-    let ctx2 = KanbanContext::load(store, kanban_core::AppConfig::default()).await?;
+    let ctx2 = open_context(path.to_str().unwrap(), kanban_core::AppConfig::default()).await?;
     assert_eq!(ctx2.boards()?.len(), 2);
     assert!(
         ctx2.can_undo(),
