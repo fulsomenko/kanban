@@ -442,6 +442,66 @@ mod tests {
         JsonDataStore::new(Arc::new(JsonFileStore::new(path)))
     }
 
+    /// Verifies that `ensure_loaded` no longer relies on `block_in_place`, so
+    /// it works from a current-thread (single-threaded) Tokio runtime.
+    #[tokio::test]
+    async fn test_ensure_loaded_works_in_single_thread_runtime() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("single_thread.json");
+        let jds = make_store(&path);
+        // Must not panic — block_in_place panics on single-threaded runtimes.
+        let boards = jds.list_boards().unwrap();
+        assert!(boards.is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_flush_restores_dirty_flag_on_io_failure() {
+        use async_trait::async_trait;
+        use kanban_persistence::{
+            PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore,
+            StoreSnapshot,
+        };
+
+        struct FailingStore;
+
+        #[async_trait]
+        impl PersistenceStore for FailingStore {
+            async fn save(&self, _: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
+                Err(PersistenceError::Io(std::io::Error::other(
+                    "injected save failure",
+                )))
+            }
+            async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
+                Err(PersistenceError::Serialization("not implemented".into()))
+            }
+            async fn exists(&self) -> bool {
+                false
+            }
+            fn path(&self) -> &std::path::Path {
+                std::path::Path::new("")
+            }
+            fn instance_id(&self) -> uuid::Uuid {
+                uuid::Uuid::nil()
+            }
+            fn load_sync(
+                &self,
+            ) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
+                Ok(None)
+            }
+        }
+
+        let jds = JsonDataStore::new(Arc::new(FailingStore));
+        jds.upsert_board(Board::new("B".into(), None)).unwrap();
+        assert!(jds.needs_flush(), "must be dirty before flush attempt");
+
+        let result = jds.flush().await;
+        assert!(result.is_err(), "flush should propagate the I/O failure");
+        assert!(
+            jds.needs_flush(),
+            "dirty flag must be restored after a failed flush"
+        );
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_construction_does_no_io() {
         let dir = tempdir().unwrap();
