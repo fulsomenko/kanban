@@ -16,10 +16,10 @@ async fn make_tui_ctx(path: &std::path::Path) -> TuiContext {
     tui_ctx
 }
 
-/// After `reload()`, `can_undo()` must return `false` and `create_board` must
-/// return an error until `initialize_undo_state()` is called again.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_tui_reload_invalidates_undo_state() {
+/// After `reload()`, undo history is cleared and the context is immediately
+/// ready for mutations — no call to `initialize_undo_state` required.
+#[tokio::test]
+async fn test_tui_reload_clears_history_and_re_arms() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("reload.json");
     let mut tui_ctx = make_tui_ctx(&path).await;
@@ -32,31 +32,22 @@ async fn test_tui_reload_invalidates_undo_state() {
 
     assert!(
         !tui_ctx.can_undo(),
-        "undo history must be invalidated after reload"
+        "undo history must be cleared after reload"
     );
 
-    // Mutations must fail until undo state is re-initialized.
-    let err = tui_ctx
-        .create_board("After-no-init".to_string(), None)
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("undo state not initialized"),
-        "expected 'undo state not initialized' error, got: {err}"
-    );
-
-    tui_ctx.initialize_undo_state().unwrap();
+    // Context must be immediately usable — no initialize_undo_state needed.
     tui_ctx
-        .create_board("After-with-init".to_string(), None)
-        .unwrap();
+        .create_board("After".to_string(), None)
+        .expect("context must accept mutations immediately after reload");
     assert!(
         tui_ctx.can_undo(),
-        "must be undoable after re-initialization"
+        "must be undoable after a post-reload mutation"
     );
 }
 
-/// `reload()` followed by `initialize_undo_state()` must expose the data that
-/// was present on disk at the time of the reload.
-#[tokio::test(flavor = "multi_thread")]
+/// `reload()` must expose the data that was present on disk at the time of
+/// the reload.
+#[tokio::test]
 async fn test_tui_reload_then_save_preserves_data() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("preserve.json");
@@ -66,7 +57,6 @@ async fn test_tui_reload_then_save_preserves_data() {
     tui_ctx.save().await.unwrap();
 
     tui_ctx.reload().await.unwrap();
-    tui_ctx.initialize_undo_state().unwrap();
 
     let boards = tui_ctx.list_boards().unwrap();
     assert_eq!(boards.len(), 1);
