@@ -117,7 +117,10 @@ impl StoreManager {
                 return Ok(std::sync::Arc::new(store));
             }
             #[cfg(not(feature = "sqlite"))]
-            return Err(KanbanError::Internal("SQLite feature not enabled".into()));
+            return Err(KanbanError::Internal(format!(
+                "path '{}' requires the sqlite feature which is not compiled in",
+                locator
+            )));
         }
         let store = self.make_store(config.effective_storage_backend(), locator)?;
         #[cfg(feature = "json")]
@@ -125,7 +128,10 @@ impl StoreManager {
             crate::json_backend::JsonDataStore::new(store),
         ));
         #[cfg(not(feature = "json"))]
-        Err(KanbanError::Internal("JSON feature not enabled".into()))
+        Err(KanbanError::Internal(format!(
+            "path '{}' requires the json feature which is not compiled in",
+            locator
+        )))
     }
 
     /// Blocking wrapper for [`make_backend`][Self::make_backend].
