@@ -1,6 +1,3 @@
-//! These integration tests require `flavor = "multi_thread"` because
-//! `JsonDataStore::ensure_loaded` uses `tokio::task::block_in_place`.
-
 use kanban_core::AppConfig;
 use kanban_domain::{DataStore, KanbanOperations};
 use kanban_persistence::PersistenceStore;

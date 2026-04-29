@@ -1,6 +1,3 @@
-//! These integration tests require `flavor = "multi_thread"` because
-//! `JsonDataStore::ensure_loaded` uses `tokio::task::block_in_place`.
-
 use kanban_core::AppConfig;
 use kanban_domain::KanbanOperations;
 use kanban_mcp::context::McpContext;
@@ -24,7 +21,7 @@ async fn setup() -> (McpContext, TempDir) {
 
 // Board round-trips
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn board_create_list_get() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx
@@ -40,7 +37,7 @@ async fn board_create_list_get() {
     assert_eq!(fetched.name, "Test Board");
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn board_get_nonexistent() {
     let (ctx, _tmp) = setup().await;
     let id = uuid::Uuid::new_v4();
@@ -50,7 +47,7 @@ async fn board_get_nonexistent() {
 
 // Column round-trips
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn column_create_list_update() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -73,7 +70,7 @@ async fn column_create_list_update() {
     assert_eq!(updated.name, "Done");
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn column_reorder() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -89,7 +86,7 @@ async fn column_reorder() {
 
 // Card round-trips
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn card_create_get_move_archive_restore() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -115,7 +112,7 @@ async fn card_create_get_move_archive_restore() {
     assert_eq!(restored.id, card.id);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn create_card_then_update_with_all_fields() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -148,7 +145,7 @@ async fn create_card_then_update_with_all_fields() {
 
 // Sprint round-trips
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn sprint_create_list_activate_complete() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -165,7 +162,7 @@ async fn sprint_create_list_activate_complete() {
     assert_eq!(completed.id, sprint.id);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn sprint_update_via_trait() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -200,7 +197,7 @@ async fn sprint_update_via_trait() {
     assert_eq!(updated.id, sprint.id);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn sprint_cancel() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -212,7 +209,7 @@ async fn sprint_cancel() {
 
 // Card-sprint assignment
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn card_assign_unassign_sprint() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -231,7 +228,7 @@ async fn card_assign_unassign_sprint() {
 
 // Multi-card operations
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn archive_cards() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -247,7 +244,7 @@ async fn archive_cards() {
     assert_eq!(count, 2);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn move_cards() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
@@ -266,7 +263,7 @@ async fn move_cards() {
 
 // Export/Import round-trip
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn export_import_roundtrip() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Export Board".into(), None).unwrap();
@@ -283,7 +280,7 @@ async fn export_import_roundtrip() {
 
 // Persistence round-trips
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_create_board_persists() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.json");
@@ -306,7 +303,7 @@ async fn test_create_board_persists() {
     assert_eq!(boards[0].name, "Persistent Board");
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_mutation_sequence_persists() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.json");
@@ -339,7 +336,7 @@ async fn test_mutation_sequence_persists() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_delete_persists() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.json");
@@ -363,7 +360,7 @@ async fn test_delete_persists() {
 
 // find_cards_by_identifier
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn find_cards_by_identifier_single_match() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx
@@ -379,7 +376,7 @@ async fn find_cards_by_identifier_single_match() {
     assert_eq!(results[0].id, card.id);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn find_cards_by_identifier_multiple_matches() {
     let (mut ctx, _tmp) = setup().await;
 
@@ -406,7 +403,7 @@ async fn find_cards_by_identifier_multiple_matches() {
     assert!(ids.contains(&card_b.id));
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn find_cards_by_identifier_not_found() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx
@@ -422,7 +419,7 @@ async fn find_cards_by_identifier_not_found() {
 
 // Undo/Redo
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_mcp_undo_reverses_create_board() {
     let (mut ctx, _tmp) = setup().await;
     ctx.create_board("Board".into(), None).unwrap();
@@ -432,7 +429,7 @@ async fn test_mcp_undo_reverses_create_board() {
     assert!(ctx.list_boards().unwrap().is_empty());
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_mcp_redo_restores_undone_board() {
     let (mut ctx, _tmp) = setup().await;
     ctx.create_board("Board".into(), None).unwrap();
@@ -443,14 +440,14 @@ async fn test_mcp_redo_restores_undone_board() {
     assert_eq!(ctx.list_boards().unwrap().len(), 1);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_mcp_undo_on_empty_returns_false() {
     let (mut ctx, _tmp) = setup().await;
     assert!(!ctx.can_undo());
     assert!(!ctx.undo().unwrap());
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_mcp_reload_resets_undo_history() {
     // reload() semantics: "pick up external changes". The previous undo history
     // was computed against a different file state and is no longer valid.

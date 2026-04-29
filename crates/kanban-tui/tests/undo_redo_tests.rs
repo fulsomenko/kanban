@@ -1,6 +1,3 @@
-//! These integration tests require `flavor = "multi_thread"` because
-//! `JsonDataStore::ensure_loaded` uses `tokio::task::block_in_place`.
-
 use kanban_domain::KanbanOperations;
 use kanban_service::{AppConfig, KanbanContext};
 use kanban_tui::tui_context::TuiContext;
@@ -21,7 +18,7 @@ async fn make_ctx_with_persistence() -> (TuiContext, tokio::sync::mpsc::Receiver
     (tui_ctx, save_rx.unwrap(), dir)
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_undo_queues_flush_signal_to_save_coordinator() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence().await;
 
@@ -39,7 +36,7 @@ async fn test_undo_queues_flush_signal_to_save_coordinator() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_redo_queues_flush_signal_to_save_coordinator() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence().await;
 
@@ -59,7 +56,7 @@ async fn test_redo_queues_flush_signal_to_save_coordinator() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_undo_when_nothing_to_undo_does_not_queue_flush_signal() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence().await;
 
