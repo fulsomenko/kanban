@@ -432,6 +432,12 @@ impl App {
                             }
                         }
                     }
+                    Err(kanban_domain::KanbanError::ConflictDetected { path, .. }) => {
+                        tracing::warn!(
+                            "Save worker detected conflict at {}: external write wins",
+                            path
+                        );
+                    }
                     Err(e) => {
                         tracing::error!("Save worker flush failed: {}", e);
                     }
