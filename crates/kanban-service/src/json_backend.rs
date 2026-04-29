@@ -566,6 +566,14 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_apply_snapshot_sets_dirty_flag() {
+        let dir = tempdir().unwrap();
+        let jds = make_store(&dir.path().join("t.json"));
+        jds.apply_snapshot(Snapshot::new()).unwrap();
+        assert!(jds.needs_flush(), "apply_snapshot must mark backend dirty");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_command_log_round_trip() {
         use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
 
