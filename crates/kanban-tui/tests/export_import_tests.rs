@@ -1,6 +1,3 @@
-//! These integration tests require `flavor = "multi_thread"` because
-//! `JsonDataStore::ensure_loaded` uses `tokio::task::block_in_place`.
-
 use kanban_domain::KanbanOperations;
 use kanban_tui::App;
 use std::fs;
@@ -185,13 +182,12 @@ fn test_import_invalid_format_fails() {
     assert!(result.is_err());
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_auto_save() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_autosave.json");
 
-    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
-    app.ctx.initialize_undo_state().unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).await.unwrap();
 
     let board = app
         .ctx
@@ -211,18 +207,18 @@ async fn test_auto_save() {
     assert_eq!(parsed["boards"][0]["board"]["name"], "Auto Save Board");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_failed_import_clears_save_file() {
+#[tokio::test]
+async fn test_failed_import_returns_error() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_bad.json");
 
     let json = r#"{"boards": [{"invalid": true}]}"#;
     fs::write(&file_path, json).unwrap();
 
-    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
-    app.load_initial_state().await;
-
-    assert!(app.persistence.save_file.is_none());
+    // An invalid JSON file causes App::new to fail before the TUI starts,
+    // preventing any risk of overwriting the file with empty data.
+    let result = App::new(Some(file_path.to_str().unwrap().to_string())).await;
+    assert!(result.is_err(), "App::new should fail for a JSON file with invalid board data");
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
@@ -254,7 +250,7 @@ async fn test_async_load_initial_state_sqlite() {
 
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
     let (mut app, _rx) =
-        App::new_with_store(sm, Some(db_path.to_str().unwrap().to_string())).unwrap();
+        App::new_with_store(sm, Some(db_path.to_str().unwrap().to_string())).await.unwrap();
 
     app.load_initial_state().await;
     app.prepare_frame();

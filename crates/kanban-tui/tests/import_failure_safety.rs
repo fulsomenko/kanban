@@ -3,7 +3,7 @@ use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_import_failure_prevents_empty_state_save() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -40,7 +40,7 @@ async fn test_import_failure_prevents_empty_state_save() {
     .unwrap();
 
     // Create app with the V2 format file - should handle it gracefully now
-    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).await.unwrap();
     app.load_initial_state().await;
 
     // App should load the board from V2 format
@@ -57,7 +57,7 @@ async fn test_import_failure_prevents_empty_state_save() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_import_failure_disables_save_file() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -65,22 +65,16 @@ async fn test_import_failure_disables_save_file() {
     // Create an invalid JSON file
     fs::write(&file_path, "{ invalid json }").unwrap();
 
-    // Create app with invalid file
-    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
-    app.load_initial_state().await;
-
-    // save_file should be None due to import failure
+    // An invalid JSON file causes App::new to fail before the TUI starts,
+    // preventing any risk of overwriting the file with empty data.
+    let result = App::new(Some(file_path.to_str().unwrap().to_string())).await;
     assert!(
-        app.persistence.save_file.is_none(),
-        "save_file should be None when import fails"
+        result.is_err(),
+        "App::new should fail for an invalid JSON file"
     );
-
-    // App should have empty state
-    app.prepare_frame();
-    assert_eq!(app.model.boards().len(), 0);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_v2_format_is_imported_correctly() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -119,7 +113,7 @@ async fn test_v2_format_is_imported_correctly() {
     .unwrap();
 
     // Create app with V2 format file
-    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).await.unwrap();
     app.load_initial_state().await;
 
     // Should successfully import the board with its column and card

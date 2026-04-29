@@ -134,18 +134,6 @@ impl StoreManager {
         )))
     }
 
-    /// Blocking wrapper for [`make_backend`][Self::make_backend].
-    /// Uses `block_in_place`; requires a multi-threaded Tokio runtime.
-    pub fn make_backend_sync(
-        &self,
-        locator: &str,
-        config: &AppConfig,
-    ) -> Result<std::sync::Arc<dyn crate::backend::KanbanBackend>, KanbanError> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.make_backend(locator, config))
-        })
-    }
-
     /// Creates a `PersistenceStore` for the named `backend` at `locator`.
     /// Returns an error if `backend` is not registered in this manager.
     pub fn make_store(

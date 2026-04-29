@@ -1,6 +1,4 @@
-//! These integration tests require `flavor = "multi_thread"` because
-//! `JsonDataStore::ensure_loaded` uses `tokio::task::block_in_place`.
-
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_new_with_store_sqlite_path_yields_no_save_worker() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -13,7 +11,7 @@ async fn test_new_with_store_sqlite_path_yields_no_save_worker() {
 
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
     let (app, save_rx) =
-        kanban_tui::App::new_with_store(sm, Some(path.to_str().unwrap().to_string())).unwrap();
+        kanban_tui::App::new_with_store(sm, Some(path.to_str().unwrap().to_string())).await.unwrap();
 
     assert!(
         !app.ctx.backend().needs_save_worker(),
@@ -25,14 +23,14 @@ async fn test_new_with_store_sqlite_path_yields_no_save_worker() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_new_with_store_json_path_yields_save_worker() {
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().join("board.json");
 
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
     let (app, save_rx) =
-        kanban_tui::App::new_with_store(sm, Some(path.to_str().unwrap().to_string())).unwrap();
+        kanban_tui::App::new_with_store(sm, Some(path.to_str().unwrap().to_string())).await.unwrap();
 
     assert!(
         app.ctx.backend().needs_save_worker(),

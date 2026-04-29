@@ -223,7 +223,7 @@ impl App {
         self.set_success("Migrating storage...".to_string());
     }
 
-    pub fn handle_migration_complete(
+    pub async fn handle_migration_complete(
         &mut self,
         old_config: kanban_core::AppConfig,
         result: Result<(kanban_domain::Snapshot, bool), String>,
@@ -245,7 +245,8 @@ impl App {
 
         let new_backend = match self
             .store_manager
-            .make_backend_sync(&new_storage_location, &self.app_config)
+            .make_backend(&new_storage_location, &self.app_config)
+            .await
         {
             Ok(b) => b,
             Err(e) => {
@@ -304,7 +305,7 @@ impl App {
                 MigrationState::Idle => return,
             };
         if let Ok(result) = rx.await {
-            self.handle_migration_complete(old_config, result);
+            self.handle_migration_complete(old_config, result).await;
         }
     }
 

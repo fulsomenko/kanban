@@ -333,15 +333,16 @@ fn test_quit_twice_while_migrating_quits() {
     assert!(app.should_quit, "second q during migration must quit");
 }
 
-#[test]
-fn test_migration_complete_resets_quit_with_migration_flag() {
+#[tokio::test]
+async fn test_migration_complete_resets_quit_with_migration_flag() {
     let mut app = App::test_default();
     app.quit_with_migration = true;
 
     app.handle_migration_complete(
         kanban_core::AppConfig::default(),
         Err("simulated error".to_string()),
-    );
+    )
+    .await;
 
     assert!(
         !app.quit_with_migration,

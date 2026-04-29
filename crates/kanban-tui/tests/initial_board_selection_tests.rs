@@ -3,11 +3,11 @@ mod helpers;
 use kanban_domain::{Board, Card, Column, KanbanError, KanbanResult, Snapshot};
 use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_load_initial_state_with_boards_selects_first_board() -> KanbanResult<()> {
     let dir = tempfile::tempdir()?;
     let path = helpers::create_test_json_file(dir.path(), "test.json", &["Alpha", "Beta"]).await;
-    let (mut app, _rx) = kanban_tui::App::new(Some(path))?;
+    let (mut app, _rx) = kanban_tui::App::new(Some(path)).await?;
     app.load_initial_state().await;
 
     assert_eq!(
@@ -18,7 +18,7 @@ async fn test_load_initial_state_with_boards_selects_first_board() -> KanbanResu
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_load_initial_state_with_boards_refreshes_card_view() -> KanbanResult<()> {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("with_cards.json");
@@ -43,7 +43,7 @@ async fn test_load_initial_state_with_boards_refreshes_card_view() -> KanbanResu
     };
     store.save(store_snapshot).await?;
 
-    let (mut app, _rx) = kanban_tui::App::new(Some(path_str))?;
+    let (mut app, _rx) = kanban_tui::App::new(Some(path_str)).await?;
     app.load_initial_state().await;
     app.prepare_frame();
 
@@ -55,11 +55,11 @@ async fn test_load_initial_state_with_boards_refreshes_card_view() -> KanbanResu
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_load_initial_state_with_no_boards_leaves_selection_none() -> KanbanResult<()> {
     let dir = tempfile::tempdir()?;
     let path = helpers::create_test_json_file(dir.path(), "empty.json", &[]).await;
-    let (mut app, _rx) = kanban_tui::App::new(Some(path))?;
+    let (mut app, _rx) = kanban_tui::App::new(Some(path)).await?;
     app.load_initial_state().await;
 
     assert_eq!(
@@ -70,7 +70,7 @@ async fn test_load_initial_state_with_no_boards_leaves_selection_none() -> Kanba
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_load_initial_state_with_no_file_leaves_selection_none() -> KanbanResult<()> {
     let mut app = kanban_tui::App::test_default();
     app.load_initial_state().await;
@@ -83,11 +83,11 @@ async fn test_load_initial_state_with_no_file_leaves_selection_none() -> KanbanR
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_load_initial_state_does_not_clobber_existing_board_selection() -> KanbanResult<()> {
     let dir = tempfile::tempdir()?;
     let path = helpers::create_test_json_file(dir.path(), "test.json", &["Alpha", "Beta"]).await;
-    let (mut app, _rx) = kanban_tui::App::new(Some(path))?;
+    let (mut app, _rx) = kanban_tui::App::new(Some(path)).await?;
     app.selection.board.set(Some(1));
     app.load_initial_state().await;
 

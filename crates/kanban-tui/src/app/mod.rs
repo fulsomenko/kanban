@@ -185,13 +185,13 @@ impl App {
     /// Convenience constructor using the default built-in backends (SQLite +
     /// JSON). Prefer [`App::new_with_store`] when embedding the TUI in a
     /// third-party binary that registers its own [`StoreFactory`].
-    pub fn new(
+    pub async fn new(
         save_file: Option<String>,
     ) -> kanban_domain::KanbanResult<(Self, Option<tokio::sync::mpsc::Receiver<()>>)> {
-        Self::new_with_store(default_store_manager(), save_file)
+        Self::new_with_store(default_store_manager(), save_file).await
     }
 
-    pub fn new_with_store(
+    pub async fn new_with_store(
         store_manager: StoreManager,
         save_file: Option<String>,
     ) -> kanban_domain::KanbanResult<(Self, Option<tokio::sync::mpsc::Receiver<()>>)> {
@@ -233,9 +233,11 @@ impl App {
         if save_file.is_some() && !cli_file_override && original_storage_location.is_none() {
             app_config.storage_location = None;
         }
-        let kanban_backend = store_manager.make_backend_sync(&effective_file, &app_config)?;
+        let kanban_backend = store_manager
+            .make_backend(&effective_file, &app_config)
+            .await?;
         let inner_ctx =
-            kanban_service::KanbanContext::open_deferred(kanban_backend, app_config.clone());
+            kanban_service::KanbanContext::open(kanban_backend, app_config.clone()).await?;
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(inner_ctx)?;
         let store_manager = Arc::new(store_manager);
         let app = Self {
@@ -1879,7 +1881,7 @@ impl App {
                             MigrationState::Idle => unreachable!(),
                         };
                         if let Some(result) = result {
-                            self.handle_migration_complete(old_config, result);
+                            self.handle_migration_complete(old_config, result).await;
                         }
                     }
                     export_result = async {
@@ -2184,8 +2186,7 @@ fn restore_terminal(
 
 impl Default for App {
     fn default() -> Self {
-        let (app, _rx) = Self::new(None).expect("App::new(None) should never fail");
-        app
+        Self::test_default()
     }
 }
 
