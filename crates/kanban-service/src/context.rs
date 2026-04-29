@@ -273,7 +273,7 @@ impl KanbanContext {
             self.command_count = MAX_UNDO_DEPTH;
         }
 
-        if let Err(e) = self.backend.wal_checkpoint() {
+        if let Err(e) = self.backend.checkpoint_sync() {
             tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
         }
         self.dirty = true;
@@ -311,7 +311,7 @@ impl KanbanContext {
             }
         }
 
-        if let Err(e) = self.backend.wal_checkpoint() {
+        if let Err(e) = self.backend.checkpoint_sync() {
             tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
         }
         self.dirty = true;
@@ -349,7 +349,7 @@ impl KanbanContext {
         }
 
         self.undo_cursor += 1;
-        if let Err(e) = self.backend.wal_checkpoint() {
+        if let Err(e) = self.backend.checkpoint_sync() {
             tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
         }
         self.dirty = true;
@@ -432,7 +432,7 @@ impl KanbanContext {
 
     /// Synchronous WAL checkpoint — propagates errors.
     pub fn flush(&self) -> KanbanResult<()> {
-        self.backend.wal_checkpoint()
+        self.backend.checkpoint_sync()
     }
 
     // ── Batch ops ─────────────────────────────────────────────────────────────
@@ -1183,7 +1183,7 @@ impl KanbanOperations for KanbanContext {
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
-        if let Err(e) = self.backend.wal_checkpoint() {
+        if let Err(e) = self.backend.checkpoint_sync() {
             tracing::warn!("WAL checkpoint failed (data safe in WAL): {e}");
         }
         self.dirty = true;

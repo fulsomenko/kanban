@@ -103,12 +103,6 @@ pub trait DataStore: Send + Sync {
     // Snapshot (import/export, JSON file I/O, migration)
     fn snapshot(&self) -> KanbanResult<Snapshot>;
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()>;
-
-    /// Checkpoint the WAL to the main database file. SQLite-specific optimisation;
-    /// default is a no-op for in-memory and JSON-file backends.
-    fn wal_checkpoint(&self) -> KanbanResult<()> {
-        Ok(())
-    }
 }
 
 #[cfg(test)]
