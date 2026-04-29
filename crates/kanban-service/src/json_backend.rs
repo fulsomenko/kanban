@@ -56,24 +56,9 @@ impl JsonDataStore {
                 return Ok(());
             }
         }
+        // Read lock released here — no lock held during I/O below.
 
-        // Slow path: acquire write lock and load from file.
-        let mut guard = self
-            .inner
-            .write()
-            .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
-
-        // Another thread may have loaded between the two lock acquisitions.
-        if guard.is_some() {
-            return Ok(());
-        }
-
-        // NOTE: The write lock on `self.inner` is held for the duration of the I/O below.
-        // The proper fix is to load outside the lock and re-acquire under write lock to swap in
-        // the result (double-checked locking). This is deferred because:
-        //   - The TUI is single-threaded: `ensure_loaded` is never called concurrently.
-        //   - MCP serializes all tool calls through `Arc<Mutex<McpContext>>`.
-        // If MCP ever gets truly concurrent per-request backends, revisit this.
+        // Perform all I/O and build the store outside any lock.
         let store = InMemoryStore::new();
 
         let loaded = tokio::task::block_in_place(|| {
@@ -86,12 +71,15 @@ impl JsonDataStore {
         })
         .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
 
+        let mut file_cursor = 0u64;
+        let mut baseline: Option<kanban_domain::Snapshot> = None;
+
         if let Some((ss, _meta)) = loaded {
             let snapshot = snapshot_from_json_bytes(&ss.data)
                 .map_err(|e| KanbanError::Internal(format!("json_backend: parse failed: {e}")))?;
             store.apply_snapshot(snapshot)?;
 
-            let (batches, file_cursor, file_baseline_bytes) =
+            let (batches, cursor, file_baseline_bytes) =
                 self.file_store.get_command_log().map_err(|e| {
                     KanbanError::Internal(format!("json_backend: get_command_log failed: {e}"))
                 })?;
@@ -100,24 +88,39 @@ impl JsonDataStore {
                 store.append_commands(batch)?;
             }
 
-            // Initialise undo state caches from what was persisted.
-            *self.undo_cursor.lock().map_err(|_| {
-                KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-            })? = file_cursor;
-
-            let baseline = file_baseline_bytes
+            file_cursor = cursor;
+            baseline = file_baseline_bytes
                 .as_deref()
                 .map(snapshot_from_json_bytes)
                 .transpose()
                 .map_err(|e| {
                     KanbanError::Internal(format!("json_backend: baseline parse failed: {e}"))
                 })?;
-            *self.baseline_snapshot.lock().map_err(|_| {
-                KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-            })? = baseline;
+        }
+
+        // Acquire write lock only to swap in the built store.
+        let mut guard = self
+            .inner
+            .write()
+            .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
+
+        // Another thread may have loaded while we were doing I/O — idempotent.
+        if guard.is_some() {
+            return Ok(());
         }
 
         *guard = Some(store);
+        drop(guard);
+
+        // Update undo-state caches after releasing the write lock — these are
+        // independent Mutexes and do not need to be held atomically with `inner`.
+        *self.undo_cursor.lock().map_err(|_| {
+            KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
+        })? = file_cursor;
+        *self.baseline_snapshot.lock().map_err(|_| {
+            KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
+        })? = baseline;
+
         Ok(())
     }
 
@@ -600,5 +603,46 @@ mod tests {
         // A second store at the same path must see the same command count.
         let jds2 = make_store(&path);
         assert_eq!(jds2.command_count().unwrap(), 3);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_ensure_loaded_is_idempotent_under_concurrent_access() {
+        use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("concurrent.json");
+
+        // Pre-populate the file with one board.
+        {
+            let store = Arc::new(JsonFileStore::new(&path));
+            let board = Board::new("ConcurrentBoard".into(), None);
+            let snap = kanban_domain::Snapshot {
+                boards: vec![board],
+                ..kanban_domain::Snapshot::new()
+            };
+            let data = snapshot_to_json_bytes(&snap).unwrap();
+            store
+                .save(StoreSnapshot {
+                    data,
+                    metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
+                })
+                .await
+                .unwrap();
+        }
+
+        let jds = Arc::new(make_store(&path));
+        let jds2 = Arc::clone(&jds);
+
+        let t1 = tokio::task::spawn_blocking(move || jds.list_boards());
+        let t2 = tokio::task::spawn_blocking(move || jds2.list_boards());
+
+        let (r1, r2) = tokio::join!(t1, t2);
+        let boards1 = r1.unwrap().unwrap();
+        let boards2 = r2.unwrap().unwrap();
+
+        assert_eq!(boards1.len(), 1);
+        assert_eq!(boards2.len(), 1);
+        assert_eq!(boards1[0].name, "ConcurrentBoard");
+        assert_eq!(boards2[0].name, "ConcurrentBoard");
     }
 }
