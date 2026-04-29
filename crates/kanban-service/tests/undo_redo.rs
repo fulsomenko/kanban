@@ -117,7 +117,7 @@ async fn test_new_action_after_undo_clears_redo() -> KanbanResult<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_reload_no_longer_clears_history() -> KanbanResult<()> {
+async fn test_reload_clears_undo_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
     let store = make_json_store(&path);
@@ -140,7 +140,7 @@ async fn test_reload_no_longer_clears_history() -> KanbanResult<()> {
     assert!(ctx.can_undo());
 
     ctx.reload().await?;
-    assert!(ctx.can_undo());
+    assert!(!ctx.can_undo(), "reload must reset undo history");
     Ok(())
 }
 
@@ -280,7 +280,7 @@ async fn test_conflict_flag_lifecycle() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_reload_preserves_history() -> KanbanResult<()> {
+async fn test_reload_resets_undo_history() -> KanbanResult<()> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
     let store = make_json_store(&path);
@@ -293,7 +293,7 @@ async fn test_reload_preserves_history() -> KanbanResult<()> {
     assert!(ctx.can_undo());
 
     ctx.reload().await?;
-    assert!(ctx.can_undo(), "reload should preserve history");
+    assert!(!ctx.can_undo(), "reload must reset undo history");
     Ok(())
 }
 
