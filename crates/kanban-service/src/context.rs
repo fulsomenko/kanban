@@ -193,8 +193,18 @@ impl KanbanContext {
             } else if self.undo_cursor > 0 {
                 self.backend
                     .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| self.baseline_snapshot.clone().unwrap_or_default())
+                    .unwrap_or_else(|| {
+                        debug_assert!(
+                            self.baseline_snapshot.is_some(),
+                            "baseline must be Some after guard"
+                        );
+                        self.baseline_snapshot.clone().unwrap_or_default()
+                    })
             } else {
+                debug_assert!(
+                    self.baseline_snapshot.is_some(),
+                    "baseline must be Some after guard"
+                );
                 self.baseline_snapshot.clone().unwrap_or_default()
             };
             if let Err(rollback_err) = self.backend.apply_snapshot(rollback_snap) {
@@ -242,14 +252,28 @@ impl KanbanContext {
 
         if self.backend.supports_indexed_snapshots() {
             let snap = if self.undo_cursor == 0 {
+                debug_assert!(
+                    self.baseline_snapshot.is_some(),
+                    "baseline must be Some after guard"
+                );
                 self.baseline_snapshot.clone().unwrap_or_default()
             } else {
                 self.backend
                     .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| self.baseline_snapshot.clone().unwrap_or_default())
+                    .unwrap_or_else(|| {
+                        debug_assert!(
+                            self.baseline_snapshot.is_some(),
+                            "baseline must be Some after guard"
+                        );
+                        self.baseline_snapshot.clone().unwrap_or_default()
+                    })
             };
             self.backend.apply_snapshot(snap)?;
         } else {
+            debug_assert!(
+                self.baseline_snapshot.is_some(),
+                "baseline must be Some after guard"
+            );
             self.backend
                 .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_default())?;
             let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
