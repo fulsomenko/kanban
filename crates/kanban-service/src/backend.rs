@@ -94,6 +94,8 @@ impl KanbanBackend for kanban_persistence_sqlite::SqliteStore {
     }
 
     async fn reload(&self) -> KanbanResult<()> {
+        // SQLite reads are always live against the WAL; there is no in-memory
+        // cache to invalidate, so this is a deliberate no-op.
         Ok(())
     }
 
