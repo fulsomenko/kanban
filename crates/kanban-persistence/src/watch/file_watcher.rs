@@ -294,4 +294,40 @@ mod tests {
             assert_eq!(event_path, expected_path);
         }
     }
+
+    #[tokio::test]
+    async fn test_file_watcher_does_not_fire_for_unrelated_temp_file() {
+        use tempfile::NamedTempFile;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.json");
+
+        // Create the watched file
+        tokio::fs::write(&file_path, b"initial content")
+            .await
+            .unwrap();
+
+        let watcher = FileWatcher::new();
+        let mut rx = watcher.subscribe();
+
+        watcher.start_watching(file_path.clone()).await.unwrap();
+
+        // Give watcher time to start
+        sleep(Duration::from_millis(100)).await;
+
+        // Create a temp file in the SAME directory but do NOT rename it to test.json
+        let temp_file = NamedTempFile::new_in(dir.path()).unwrap();
+        std::fs::write(temp_file.path(), b"unrelated content").unwrap();
+
+        // No event should be emitted — the temp file is not our watched path
+        let result = tokio::time::timeout(Duration::from_millis(500), rx.recv()).await;
+
+        watcher.stop_watching().await.unwrap();
+
+        assert!(
+            result.is_err(),
+            "Expected timeout (no event), but got: {:?}",
+            result
+        );
+    }
 }
