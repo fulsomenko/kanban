@@ -35,9 +35,9 @@ pub const MAX_UNDO_DEPTH: usize = 200;
 /// read, either directly (SQLite, reads are always live) or via a one-time
 /// cache-fill on first access (JSON).
 pub struct KanbanContext {
-    pub(crate) backend: Arc<dyn KanbanBackend>,
+    backend: Arc<dyn KanbanBackend>,
     app_config: AppConfig,
-    /// `None` until the first `execute()` call (lazy baseline capture).
+    /// `None` until [`initialize_undo_state`][Self::initialize_undo_state] is called.
     baseline_snapshot: Option<Snapshot>,
     undo_cursor: usize,
     command_count: usize,
@@ -47,8 +47,10 @@ pub struct KanbanContext {
 
 impl KanbanContext {
     /// Zero-I/O constructor. Wraps `backend` without reading any data.
-    /// The baseline snapshot and command count are restored lazily on first
-    /// `execute()` or `undo()` / `redo()` call.
+    /// Call [`initialize_undo_state`][Self::initialize_undo_state] before the
+    /// first [`execute`][Self::execute], [`undo`][Self::undo], or
+    /// [`redo`][Self::redo], or use [`open_initialized`][Self::open_initialized]
+    /// which calls it automatically.
     pub fn open(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> Self {
         Self {
             backend,
@@ -70,7 +72,7 @@ impl KanbanContext {
         config: AppConfig,
     ) -> KanbanResult<Self> {
         let mut ctx = Self::open(backend, config);
-        ctx.ensure_undo_state_initialized()?;
+        ctx.initialize_undo_state()?;
         Ok(ctx)
     }
 
@@ -88,7 +90,13 @@ impl KanbanContext {
         Arc::clone(&self.backend)
     }
 
+    /// Replace the active backend, discarding all undo/redo history.
+    ///
+    /// **Destructive**: resets `baseline_snapshot`, `undo_cursor`, `command_count`,
+    /// and `dirty`. The caller is responsible for re-initialising undo state via
+    /// [`initialize_undo_state`][Self::initialize_undo_state] if needed.
     pub fn replace_backend(&mut self, backend: Arc<dyn KanbanBackend>) {
+        tracing::info!("Replacing backend; undo/redo history discarded");
         self.backend = backend;
         self.baseline_snapshot = None;
         self.undo_cursor = 0;
@@ -130,8 +138,11 @@ impl KanbanContext {
 
     // ── Undo / Redo ───────────────────────────────────────────────────────────
 
-    /// Ensure baseline and command count are loaded before first mutation.
-    fn ensure_undo_state_initialized(&mut self) -> KanbanResult<()> {
+    /// Loads the pre-existing command count and baseline snapshot from the backend.
+    /// Must be called once after [`open`][Self::open] before any call to
+    /// [`execute`], [`undo`], or [`redo`].  [`open_initialized`][Self::open_initialized]
+    /// calls this automatically.  Idempotent if called more than once.
+    pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
             let count = self.backend.command_count()? as usize;
             let baseline = if count > 0 {
@@ -153,7 +164,12 @@ impl KanbanContext {
 
     /// Execute a batch of commands as a single undo unit.
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
-        self.ensure_undo_state_initialized()?;
+        if self.baseline_snapshot.is_none() {
+            return Err(KanbanError::Internal(
+                "undo state not initialized — call initialize_undo_state() or open_initialized()"
+                    .into(),
+            ));
+        }
 
         if self.undo_cursor < self.command_count {
             self.backend
@@ -218,7 +234,9 @@ impl KanbanContext {
 
     /// Undo the most recent batch.
     pub fn undo(&mut self) -> KanbanResult<bool> {
-        self.ensure_undo_state_initialized()?;
+        if self.baseline_snapshot.is_none() {
+            return Ok(false); // nothing to undo in an uninitialized context
+        }
         if self.undo_cursor == 0 {
             return Ok(false);
         }
@@ -256,7 +274,9 @@ impl KanbanContext {
 
     /// Redo the next undone batch.
     pub fn redo(&mut self) -> KanbanResult<bool> {
-        self.ensure_undo_state_initialized()?;
+        if self.baseline_snapshot.is_none() {
+            return Ok(false); // nothing to redo in an uninitialized context
+        }
         if self.undo_cursor >= self.command_count {
             return Ok(false);
         }
