@@ -175,6 +175,23 @@ async fn test_undo_redo_still_work_after_lazy_baseline() -> KanbanResult<()> {
     Ok(())
 }
 
+/// After `reload()`, undo history is invalidated — `can_undo()` must return `false`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_can_undo_returns_false_after_reload() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("reload_undo.json");
+    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default());
+
+    ctx.create_board("B".into(), None)?;
+    assert!(ctx.can_undo(), "must be undoable before reload");
+
+    ctx.save().await?;
+    ctx.reload().await?;
+
+    assert!(!ctx.can_undo(), "undo history must be invalid after reload");
+    Ok(())
+}
+
 // ─── Step 6: Reload behaviour (service layer) ────────────────────────────────
 
 /// Writing to the JSON file externally (bypassing the context) and then calling
