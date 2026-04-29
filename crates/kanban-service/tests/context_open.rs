@@ -110,8 +110,7 @@ async fn test_open_context_undo_before_any_execute_is_noop() -> KanbanResult<()>
 async fn test_open_context_undo_works_after_execute() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("undo.json");
-    let mut ctx =
-        KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
+    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
 
     ctx.create_board("B".into(), None)?;
     assert_eq!(ctx.boards()?.len(), 1);
@@ -132,8 +131,7 @@ async fn test_open_context_save_flushes_json_backend() -> KanbanResult<()> {
     let path = dir.path().join("save.json");
 
     {
-        let mut ctx =
-            KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
+        let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
         ctx.create_board("Saved".into(), None)?;
         ctx.save().await?;
     }
@@ -177,8 +175,7 @@ async fn test_open_context_reload_delegates_to_backend() -> KanbanResult<()> {
 async fn test_undo_redo_still_work_after_lazy_baseline() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("lazy.json");
-    let mut ctx =
-        KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
+    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
 
     ctx.create_board("A".into(), None)?;
     ctx.create_board("B".into(), None)?;
@@ -199,8 +196,7 @@ async fn test_undo_redo_still_work_after_lazy_baseline() -> KanbanResult<()> {
 async fn test_can_undo_returns_false_after_reload() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("reload_undo.json");
-    let mut ctx =
-        KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
+    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
 
     ctx.create_board("B".into(), None)?;
     assert!(ctx.can_undo(), "must be undoable before reload");
@@ -296,8 +292,11 @@ mod sqlite_tests {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_replace_backend_resets_undo_history() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
-    let mut ctx =
-        KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
+    let mut ctx = KanbanContext::open(
+        make_json_backend(&dir.path().join("a.json")),
+        AppConfig::default(),
+    )
+    .await?;
     ctx.create_board("A".into(), None)?;
     assert!(ctx.can_undo());
 
@@ -310,8 +309,11 @@ async fn test_replace_backend_resets_undo_history() -> KanbanResult<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_replace_backend_resets_redo_history() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
-    let mut ctx =
-        KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
+    let mut ctx = KanbanContext::open(
+        make_json_backend(&dir.path().join("a.json")),
+        AppConfig::default(),
+    )
+    .await?;
     ctx.create_board("A".into(), None)?;
     ctx.undo()?;
     assert!(ctx.can_redo());
@@ -332,8 +334,11 @@ async fn test_replace_backend_reads_go_to_new_backend() -> KanbanResult<()> {
     writer.upsert_board(kanban_domain::Board::new("B".into(), None))?;
     writer.flush().await?;
 
-    let mut ctx =
-        KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
+    let mut ctx = KanbanContext::open(
+        make_json_backend(&dir.path().join("a.json")),
+        AppConfig::default(),
+    )
+    .await?;
     ctx.create_board("A".into(), None)?;
     assert_eq!(ctx.boards()?.len(), 1);
     assert_eq!(ctx.boards()?[0].name, "A");
@@ -349,8 +354,11 @@ async fn test_replace_backend_reads_go_to_new_backend() -> KanbanResult<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_replace_backend_clears_dirty_flag() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
-    let mut ctx =
-        KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
+    let mut ctx = KanbanContext::open(
+        make_json_backend(&dir.path().join("a.json")),
+        AppConfig::default(),
+    )
+    .await?;
     ctx.create_board("A".into(), None)?;
     assert!(ctx.is_dirty());
 

@@ -52,11 +52,7 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
 
     /// Called by `KanbanContext` whenever `undo_cursor` or `baseline_snapshot`
     /// change, so file-backed backends can include that state in the next flush.
-    fn on_undo_state_changed(
-        &self,
-        _cursor: u64,
-        _baseline: Option<Snapshot>,
-    ) -> KanbanResult<()> {
+    fn on_undo_state_changed(&self, _cursor: u64, _baseline: Option<Snapshot>) -> KanbanResult<()> {
         Ok(())
     }
 

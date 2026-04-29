@@ -85,8 +85,7 @@ async fn test_open_populates_undo_cursor_from_prior_commands() -> KanbanResult<(
     let backend = sm
         .make_backend(path.to_str().unwrap(), &AppConfig::default())
         .await?;
-    let ctx =
-        kanban_service::KanbanContext::open(backend, AppConfig::default()).await?;
+    let ctx = kanban_service::KanbanContext::open(backend, AppConfig::default()).await?;
     assert!(
         ctx.can_undo(),
         "open must restore undo cursor from persisted command log"

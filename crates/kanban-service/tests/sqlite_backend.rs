@@ -155,17 +155,13 @@ async fn test_sqlite_backend_undo_cursor_restored_after_reopen() {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
 
     {
-        let mut ctx = open_context(&path, AppConfig::default())
-            .await
-            .unwrap();
+        let mut ctx = open_context(&path, AppConfig::default()).await.unwrap();
         ctx.create_board("Board 1".to_string(), None).unwrap();
         ctx.create_board("Board 2".to_string(), None).unwrap();
         assert_eq!(ctx.undo_depth(), 2);
     }
 
-    let ctx2 = open_context(&path, AppConfig::default())
-        .await
-        .unwrap();
+    let ctx2 = open_context(&path, AppConfig::default()).await.unwrap();
     assert_eq!(
         ctx2.undo_depth(),
         2,
@@ -182,16 +178,12 @@ async fn test_sqlite_backend_data_persists_across_opens() {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
 
     {
-        let mut ctx = open_context(&path, AppConfig::default())
-            .await
-            .unwrap();
+        let mut ctx = open_context(&path, AppConfig::default()).await.unwrap();
         ctx.create_board("Persistent Board".to_string(), None)
             .unwrap();
     }
 
-    let ctx2 = open_context(&path, AppConfig::default())
-        .await
-        .unwrap();
+    let ctx2 = open_context(&path, AppConfig::default()).await.unwrap();
     let boards = ctx2.list_boards().unwrap();
     assert_eq!(boards.len(), 1);
     assert_eq!(boards[0].name, "Persistent Board");

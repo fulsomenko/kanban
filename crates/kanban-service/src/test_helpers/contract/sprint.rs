@@ -8,7 +8,9 @@ use tempfile::TempDir;
 pub async fn test_sprint_planning_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx
@@ -34,7 +36,9 @@ pub async fn test_sprint_planning_fields_roundtrip(factory: &BackendFactory) {
 pub async fn test_sprint_active_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
@@ -52,7 +56,9 @@ pub async fn test_sprint_active_fields_roundtrip(factory: &BackendFactory) {
 pub async fn test_sprint_completed_status_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
@@ -69,7 +75,9 @@ pub async fn test_sprint_completed_status_roundtrip(factory: &BackendFactory) {
 pub async fn test_sprint_cancelled_status_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
@@ -161,7 +169,9 @@ pub async fn test_sprint_explicit_prefix_overrides_all_defaults(factory: &Backen
 pub async fn test_sprint_with_card_prefix_override_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let sprint = ctx

@@ -8,7 +8,6 @@ use kanban_service::StoreManager;
 #[cfg(feature = "tui")]
 use kanban_tui::App;
 
-
 fn open_debug_log_file() -> Option<std::fs::File> {
     std::env::var("KANBAN_DEBUG_LOG").ok().and_then(|log_path| {
         std::fs::OpenOptions::new()
@@ -262,8 +261,7 @@ impl CliApp {
                     ));
                     init_tracing_tui(std::sync::Arc::clone(&error_log));
 
-                    let (mut app, save_rx) =
-                        App::new_with_store(store_manager, validated_file)?;
+                    let (mut app, save_rx) = App::new_with_store(store_manager, validated_file)?;
                     app.set_error_log(error_log);
                     app.run(save_rx).await?;
                 }
@@ -287,4 +285,3 @@ impl CliApp {
         Ok(())
     }
 }
-

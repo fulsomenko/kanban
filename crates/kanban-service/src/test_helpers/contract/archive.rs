@@ -8,7 +8,9 @@ use tempfile::TempDir;
 pub async fn test_archive_card_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -49,7 +51,9 @@ pub async fn test_archive_card_roundtrip(factory: &BackendFactory) {
 pub async fn test_archive_card_with_sprint_logs_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -78,7 +82,9 @@ pub async fn test_archive_card_with_sprint_logs_roundtrip(factory: &BackendFacto
 pub async fn test_restore_archived_card_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();

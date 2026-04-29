@@ -62,9 +62,10 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     let db_path = dir.path().join("source.db");
     let json_path = dir.path().join("dest.json");
 
-    let mut original = kanban_service::open_context(db_path.to_str().unwrap(), AppConfig::default())
-        .await
-        .unwrap();
+    let mut original =
+        kanban_service::open_context(db_path.to_str().unwrap(), AppConfig::default())
+            .await
+            .unwrap();
     let board = original
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
@@ -126,9 +127,10 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     let src_path = dir.path().join("source.db");
     let dst_path = dir.path().join("dest.db");
 
-    let mut original = kanban_service::open_context(src_path.to_str().unwrap(), AppConfig::default())
-        .await
-        .unwrap();
+    let mut original =
+        kanban_service::open_context(src_path.to_str().unwrap(), AppConfig::default())
+            .await
+            .unwrap();
     let board = original
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();

@@ -48,7 +48,10 @@ async fn test_tui_reload_invalidates_undo_state() {
     tui_ctx
         .create_board("After-with-init".to_string(), None)
         .unwrap();
-    assert!(tui_ctx.can_undo(), "must be undoable after re-initialization");
+    assert!(
+        tui_ctx.can_undo(),
+        "must be undoable after re-initialization"
+    );
 }
 
 /// `reload()` followed by `initialize_undo_state()` must expose the data that

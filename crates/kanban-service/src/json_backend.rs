@@ -416,11 +416,7 @@ impl KanbanBackend for JsonDataStore {
         true
     }
 
-    fn on_undo_state_changed(
-        &self,
-        cursor: u64,
-        baseline: Option<Snapshot>,
-    ) -> KanbanResult<()> {
+    fn on_undo_state_changed(&self, cursor: u64, baseline: Option<Snapshot>) -> KanbanResult<()> {
         *self.undo_cursor.lock().map_err(|_| {
             KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
         })? = cursor;
@@ -487,9 +483,7 @@ mod tests {
             fn instance_id(&self) -> uuid::Uuid {
                 uuid::Uuid::nil()
             }
-            fn load_sync(
-                &self,
-            ) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
+            fn load_sync(&self) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
                 Ok(None)
             }
         }

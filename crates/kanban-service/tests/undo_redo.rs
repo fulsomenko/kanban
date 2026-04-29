@@ -2,15 +2,18 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, Command, CompactColumnPositions, CreateBoard, ImportEntities,
     UpdateBoard,
 };
-use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, KanbanResult, Snapshot};
 use kanban_domain::InMemoryStore;
+use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, KanbanResult, Snapshot};
 use kanban_service::{open_context, KanbanContext};
 use std::sync::Arc;
 
 async fn make_ctx() -> KanbanContext {
-    KanbanContext::open(Arc::new(InMemoryStore::new()), kanban_core::AppConfig::default())
-        .await
-        .unwrap()
+    KanbanContext::open(
+        Arc::new(InMemoryStore::new()),
+        kanban_core::AppConfig::default(),
+    )
+    .await
+    .unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1028,7 +1031,10 @@ impl kanban_domain::DataStore for FailingNotifyBackend {
     fn get_column(&self, id: uuid::Uuid) -> KanbanResult<Option<kanban_domain::Column>> {
         self.0.get_column(id)
     }
-    fn list_columns_by_board(&self, board_id: uuid::Uuid) -> KanbanResult<Vec<kanban_domain::Column>> {
+    fn list_columns_by_board(
+        &self,
+        board_id: uuid::Uuid,
+    ) -> KanbanResult<Vec<kanban_domain::Column>> {
         self.0.list_columns_by_board(board_id)
     }
     fn list_all_columns(&self) -> KanbanResult<Vec<kanban_domain::Column>> {
@@ -1049,16 +1055,26 @@ impl kanban_domain::DataStore for FailingNotifyBackend {
     fn list_all_cards(&self) -> KanbanResult<Vec<kanban_domain::Card>> {
         self.0.list_all_cards()
     }
-    fn list_cards_by_column(&self, column_id: uuid::Uuid) -> KanbanResult<Vec<kanban_domain::Card>> {
+    fn list_cards_by_column(
+        &self,
+        column_id: uuid::Uuid,
+    ) -> KanbanResult<Vec<kanban_domain::Card>> {
         self.0.list_cards_by_column(column_id)
     }
-    fn list_cards_by_sprint(&self, sprint_id: uuid::Uuid) -> KanbanResult<Vec<kanban_domain::Card>> {
+    fn list_cards_by_sprint(
+        &self,
+        sprint_id: uuid::Uuid,
+    ) -> KanbanResult<Vec<kanban_domain::Card>> {
         self.0.list_cards_by_sprint(sprint_id)
     }
     fn count_cards_in_column(&self, column_id: uuid::Uuid) -> KanbanResult<usize> {
         self.0.count_cards_in_column(column_id)
     }
-    fn count_cards_in_column_excluding(&self, column_id: uuid::Uuid, exclude: &[uuid::Uuid]) -> KanbanResult<usize> {
+    fn count_cards_in_column_excluding(
+        &self,
+        column_id: uuid::Uuid,
+        exclude: &[uuid::Uuid],
+    ) -> KanbanResult<usize> {
         self.0.count_cards_in_column_excluding(column_id, exclude)
     }
     fn upsert_card(&self, card: kanban_domain::Card) -> KanbanResult<()> {
@@ -1070,10 +1086,17 @@ impl kanban_domain::DataStore for FailingNotifyBackend {
     fn delete_cards_by_columns(&self, column_ids: &[uuid::Uuid]) -> KanbanResult<()> {
         self.0.delete_cards_by_columns(column_ids)
     }
-    fn clear_sprint_from_cards(&self, sprint_id: uuid::Uuid, timestamp: chrono::DateTime<chrono::Utc>) -> KanbanResult<()> {
+    fn clear_sprint_from_cards(
+        &self,
+        sprint_id: uuid::Uuid,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> KanbanResult<()> {
         self.0.clear_sprint_from_cards(sprint_id, timestamp)
     }
-    fn get_archived_card(&self, card_id: uuid::Uuid) -> KanbanResult<Option<kanban_domain::ArchivedCard>> {
+    fn get_archived_card(
+        &self,
+        card_id: uuid::Uuid,
+    ) -> KanbanResult<Option<kanban_domain::ArchivedCard>> {
         self.0.get_archived_card(card_id)
     }
     fn list_archived_cards(&self) -> KanbanResult<Vec<kanban_domain::ArchivedCard>> {
@@ -1088,7 +1111,10 @@ impl kanban_domain::DataStore for FailingNotifyBackend {
     fn get_sprint(&self, id: uuid::Uuid) -> KanbanResult<Option<kanban_domain::Sprint>> {
         self.0.get_sprint(id)
     }
-    fn list_sprints_by_board(&self, board_id: uuid::Uuid) -> KanbanResult<Vec<kanban_domain::Sprint>> {
+    fn list_sprints_by_board(
+        &self,
+        board_id: uuid::Uuid,
+    ) -> KanbanResult<Vec<kanban_domain::Sprint>> {
         self.0.list_sprints_by_board(board_id)
     }
     fn list_all_sprints(&self) -> KanbanResult<Vec<kanban_domain::Sprint>> {
@@ -1124,7 +1150,11 @@ impl kanban_domain::CommandStore for FailingNotifyBackend {
     fn command_count(&self) -> KanbanResult<u64> {
         self.0.command_count()
     }
-    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<kanban_domain::commands::Command>>> {
+    fn load_commands(
+        &self,
+        from: u64,
+        to: u64,
+    ) -> KanbanResult<Vec<Vec<kanban_domain::commands::Command>>> {
         self.0.load_commands(from, to)
     }
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
@@ -1170,7 +1200,10 @@ async fn test_execute_propagates_on_undo_state_changed_error() {
         result.is_err(),
         "execute must propagate on_undo_state_changed error"
     );
-    assert!(result.unwrap_err().to_string().contains("on_undo_state_changed"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("on_undo_state_changed"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1192,7 +1225,10 @@ async fn test_undo_propagates_on_undo_state_changed_error() {
         result.is_err(),
         "undo must propagate on_undo_state_changed error"
     );
-    assert!(result.unwrap_err().to_string().contains("on_undo_state_changed"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("on_undo_state_changed"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1216,5 +1252,8 @@ async fn test_redo_propagates_on_undo_state_changed_error() {
         result.is_err(),
         "redo must propagate on_undo_state_changed error"
     );
-    assert!(result.unwrap_err().to_string().contains("on_undo_state_changed"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("on_undo_state_changed"));
 }

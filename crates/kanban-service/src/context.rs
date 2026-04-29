@@ -5,8 +5,8 @@ use kanban_domain::commands::{
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate,
-    KanbanOperations, Snapshot, Sprint, SprintUpdate,
+    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot, Sprint,
+    SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -68,10 +68,7 @@ impl KanbanContext {
     /// mutation. Use this instead of [`open_deferred`][Self::open_deferred]
     /// wherever the caller needs undo state to be populated immediately
     /// (CLI, MCP, TUI startup).
-    pub async fn open(
-        backend: Arc<dyn KanbanBackend>,
-        config: AppConfig,
-    ) -> KanbanResult<Self> {
+    pub async fn open(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> KanbanResult<Self> {
         let mut ctx = Self::open_deferred(backend, config);
         ctx.initialize_undo_state()?;
         Ok(ctx)
@@ -167,8 +164,7 @@ impl KanbanContext {
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
             return Err(KanbanError::Internal(
-                "undo state not initialized — call initialize_undo_state() or open()"
-                    .into(),
+                "undo state not initialized — call initialize_undo_state() or open()".into(),
             ));
         }
 

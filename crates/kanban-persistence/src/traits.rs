@@ -97,9 +97,7 @@ pub trait PersistenceStore: Send + Sync {
     /// The default implementation returns an error; backends that support
     /// synchronous loading (e.g. `JsonFileStore`) override this.
     #[allow(clippy::type_complexity)]
-    fn load_sync(
-        &self,
-    ) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
+    fn load_sync(&self) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
         Err(crate::PersistenceError::Serialization(
             "load_sync not supported by this backend".into(),
         ))

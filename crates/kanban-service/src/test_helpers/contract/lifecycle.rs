@@ -15,7 +15,9 @@ use tempfile::TempDir;
 pub async fn test_multiple_boards_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board1 = ctx
         .create_board("Board One".into(), Some("B1".into()))
@@ -60,7 +62,9 @@ pub async fn test_multiple_boards_roundtrip(factory: &BackendFactory) {
 pub async fn test_incremental_save_preserves_prior_data(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -86,7 +90,9 @@ pub async fn test_incremental_save_preserves_prior_data(factory: &BackendFactory
 pub async fn test_delete_archived_card_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -114,7 +120,9 @@ pub async fn test_delete_archived_card_roundtrip(factory: &BackendFactory) {
 pub async fn test_delete_column_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -130,7 +138,9 @@ pub async fn test_delete_column_roundtrip(factory: &BackendFactory) {
 pub async fn test_delete_sprint_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let sprint = ctx.create_sprint(board.id, None, None).unwrap();
@@ -146,7 +156,9 @@ pub async fn test_delete_sprint_roundtrip(factory: &BackendFactory) {
 pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx
         .create_board("Full Board".into(), Some("FB".into()))
@@ -378,7 +390,9 @@ pub async fn test_full_roundtrip_preserves_all_fields(factory: &BackendFactory) 
 pub async fn test_load_save_reload_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     ctx.create_board("My Board".into(), Some("MB".into()))
         .unwrap();
@@ -393,7 +407,9 @@ pub async fn test_load_save_reload_roundtrip(factory: &BackendFactory) {
 pub async fn test_save_overwrites_correctly(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     ctx.create_board("Board One".into(), None).unwrap();
     ctx.save().await.unwrap();
@@ -412,11 +428,15 @@ pub async fn test_reload_picks_up_external_changes(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
 
-    let mut ctx_a = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx_a = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
     ctx_a.create_board("Board A".into(), None).unwrap();
     ctx_a.save().await.unwrap();
 
-    let mut ctx_b = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx_b = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
     ctx_b.create_board("Board B".into(), None).unwrap();
     ctx_b.save().await.unwrap();
 
@@ -431,12 +451,16 @@ pub async fn test_save_with_stale_metadata_returns_conflict(factory: &BackendFac
     let path = dir.path().join("test.store");
 
     // Store A saves a board
-    let mut ctx_a = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx_a = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
     ctx_a.create_board("Board A".into(), None).unwrap();
     ctx_a.save().await.unwrap();
 
     // Store B loads, modifies, and saves — updates metadata
-    let mut ctx_b = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx_b = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
     ctx_b.create_board("Board B".into(), None).unwrap();
     ctx_b.save().await.unwrap();
 
