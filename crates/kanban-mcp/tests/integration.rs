@@ -482,17 +482,16 @@ async fn test_mcp_undo_on_empty_returns_false() {
 
 // multi_thread: JsonDataStore::ensure_loaded uses block_in_place
 #[tokio::test(flavor = "multi_thread")]
-async fn test_mcp_reload_preserves_undo_history() {
-    // MCP reload is a pre-mutation freshness check, not a response to an external
-    // change. History remains valid across reloads so tool_undo can span multiple
-    // prior tool calls.
+async fn test_mcp_reload_resets_undo_history() {
+    // reload() semantics: "pick up external changes". The previous undo history
+    // was computed against a different file state and is no longer valid.
     let (mut ctx, _tmp) = setup().await;
     ctx.create_board("Board".into(), None).unwrap();
     assert!(ctx.can_undo(), "should have undo entry after create");
     ctx.save().await.unwrap();
     ctx.reload().await.unwrap();
     assert!(
-        ctx.can_undo(),
-        "reload should NOT clear history — undo must span multiple tool calls"
+        !ctx.can_undo(),
+        "reload must reset undo history — cursor is invalid after external change"
     );
 }
