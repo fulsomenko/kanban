@@ -128,6 +128,61 @@ impl JsonDataStore {
         f(guard.as_ref().expect("ensure_loaded guarantees Some"))
     }
 
+    /// Performs the actual flush I/O. Called by `flush()` after the dirty flag
+    /// has been cleared; `flush()` restores it if this returns an error.
+    async fn do_flush(&self) -> KanbanResult<()> {
+        // Collect everything we need from the inner store before any await.
+        let (snapshot, batches, cursor, baseline_bytes) = {
+            let guard = self
+                .inner
+                .read()
+                .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
+
+            let store = match guard.as_ref() {
+                Some(s) => s,
+                None => return Ok(()), // Never loaded — nothing to flush.
+            };
+
+            let snapshot = store.snapshot()?;
+            let (batches, _count) = store.load_all_commands()?;
+
+            let cursor = *self.undo_cursor.lock().map_err(|_| {
+                KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
+            })?;
+
+            let baseline_bytes = {
+                let bl = self.baseline_snapshot.lock().map_err(|_| {
+                    KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
+                })?;
+                bl.as_ref()
+                    .map(snapshot_to_json_bytes)
+                    .transpose()
+                    .map_err(|e| {
+                        KanbanError::Internal(format!("json_backend: baseline serialise: {e}"))
+                    })?
+            };
+
+            (snapshot, batches, cursor, baseline_bytes)
+            // `guard` is dropped here, before any await.
+        };
+
+        self.file_store
+            .sync_command_log(&batches, cursor, baseline_bytes.as_deref())
+            .await
+            .map_err(KanbanError::from)?;
+
+        let data = snapshot_to_json_bytes(&snapshot)
+            .map_err(|e| KanbanError::Internal(format!("json_backend: snapshot serialise: {e}")))?;
+        let metadata = PersistenceMetadata::new(self.file_store.instance_id());
+
+        self.file_store
+            .save(StoreSnapshot { data, metadata })
+            .await
+            .map_err(KanbanError::from)?;
+
+        Ok(())
+    }
+
     /// Delegates a mutating operation to the inner [`InMemoryStore`], then marks the backend dirty.
     ///
     /// A shared (read) lock on the outer `RwLock` is sufficient here because:
@@ -325,69 +380,24 @@ impl KanbanBackend for JsonDataStore {
     }
 
     async fn flush(&self) -> KanbanResult<()> {
-        if !self.dirty.load(Ordering::Acquire) {
+        if !self.dirty.swap(false, Ordering::AcqRel) {
             return Ok(());
         }
-
-        // Collect everything we need from the inner store before any await.
-        let (snapshot, batches, cursor, baseline_bytes) = {
-            let guard = self
-                .inner
-                .read()
-                .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
-
-            let store = match guard.as_ref() {
-                Some(s) => s,
-                None => return Ok(()), // Never loaded — nothing to flush.
-            };
-
-            let snapshot = store.snapshot()?;
-            let (batches, _count) = store.load_all_commands()?;
-
-            let cursor = *self.undo_cursor.lock().map_err(|_| {
-                KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-            })?;
-
-            let baseline_bytes = {
-                let bl = self.baseline_snapshot.lock().map_err(|_| {
-                    KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-                })?;
-                bl.as_ref()
-                    .map(snapshot_to_json_bytes)
-                    .transpose()
-                    .map_err(|e| {
-                        KanbanError::Internal(format!("json_backend: baseline serialise: {e}"))
-                    })?
-            };
-
-            (snapshot, batches, cursor, baseline_bytes)
-            // `guard` is dropped here, before any await.
-        };
-
-        self.file_store
-            .sync_command_log(&batches, cursor, baseline_bytes.as_deref())
-            .await
-            .map_err(KanbanError::from)?;
-
-        let data = snapshot_to_json_bytes(&snapshot)
-            .map_err(|e| KanbanError::Internal(format!("json_backend: snapshot serialise: {e}")))?;
-        let metadata = PersistenceMetadata::new(self.file_store.instance_id());
-
-        self.file_store
-            .save(StoreSnapshot { data, metadata })
-            .await
-            .map_err(KanbanError::from)?;
-
-        self.dirty.store(false, Ordering::Release);
-        Ok(())
+        let result = self.do_flush().await;
+        if result.is_err() {
+            self.dirty.store(true, Ordering::Release);
+        }
+        result
     }
 
     async fn reload(&self) -> KanbanResult<()> {
-        let mut guard = self
-            .inner
-            .write()
-            .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
-        *guard = None;
+        {
+            let mut guard = self
+                .inner
+                .write()
+                .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
+            *guard = None;
+        } // inner write lock released — mirrors ensure_loaded's ordering
         self.dirty.store(false, Ordering::Release);
         *self.undo_cursor.lock().map_err(|_| {
             KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
