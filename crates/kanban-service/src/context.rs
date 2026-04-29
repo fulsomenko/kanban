@@ -200,9 +200,7 @@ impl KanbanContext {
         if self.baseline_snapshot.is_none() {
             let count = self.backend.command_count()? as usize;
             let baseline = if count > 0 {
-                self.backend
-                    .load_snapshot_at(0)?
-                    .unwrap_or_default()
+                self.backend.load_snapshot_at(0)?.unwrap_or_default()
             } else {
                 self.backend.snapshot()?
             };
