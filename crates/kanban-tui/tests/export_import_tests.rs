@@ -191,6 +191,7 @@ async fn test_auto_save() {
     let file_path = dir.path().join("test_autosave.json");
 
     let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).unwrap();
+    app.ctx.initialize_undo_state().unwrap();
 
     let board = app
         .ctx

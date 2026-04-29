@@ -1663,6 +1663,9 @@ impl App {
             self.set_error(format!("Failed to read data file: {e}"));
             return;
         }
+        if let Err(e) = self.ctx.initialize_undo_state() {
+            tracing::warn!("Failed to initialize undo state: {e}");
+        }
         self.migrate_sprint_logs();
         self.prepare_frame();
         self.check_ended_sprints();
@@ -1711,7 +1714,7 @@ impl App {
 
             // Store the watcher to keep the background task alive
             self.persistence.file_watcher = Some(watcher.clone());
-            // Also set it on the state manager (wrapped in Arc) so queue_snapshot can pause it
+            // Also set it on the state manager (wrapped in Arc) so queue_flush can pause it
             let watcher_arc = std::sync::Arc::new(watcher);
             self.ctx.save_coordinator.set_file_watcher(watcher_arc);
 
@@ -2195,7 +2198,11 @@ impl App {
     #[doc(hidden)]
     pub fn test_default() -> Self {
         let backend = std::sync::Arc::new(kanban_domain::InMemoryStore::new());
-        let inner = kanban_service::KanbanContext::open(backend, kanban_core::AppConfig::default());
+        let mut inner =
+            kanban_service::KanbanContext::open(backend, kanban_core::AppConfig::default());
+        inner
+            .initialize_undo_state()
+            .expect("initialize_undo_state failed in test_default");
         let (ctx, _save_rx, save_completion_rx) =
             crate::tui_context::TuiContext::new(inner).expect("TuiContext::new failed");
         Self {
