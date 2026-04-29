@@ -50,7 +50,13 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
 
     /// Called by `KanbanContext` whenever `undo_cursor` or `baseline_snapshot`
     /// change, so file-backed backends can include that state in the next flush.
-    fn on_undo_state_changed(&self, _cursor: u64, _baseline: Option<Snapshot>) {}
+    fn on_undo_state_changed(
+        &self,
+        _cursor: u64,
+        _baseline: Option<Snapshot>,
+    ) -> KanbanResult<()> {
+        Ok(())
+    }
 
     /// Synchronous WAL checkpoint. For SQLite, flushes the WAL to the main
     /// database file. No-op (returns `Ok(())`) for all other backends.
@@ -173,6 +179,14 @@ mod tests {
         store
             .checkpoint_sync()
             .expect("checkpoint_sync must be a no-op for JsonDataStore");
+    }
+
+    #[test]
+    fn test_on_undo_state_changed_returns_ok_for_in_memory() {
+        let store = InMemoryStore::new();
+        store
+            .on_undo_state_changed(0, None)
+            .expect("on_undo_state_changed must return Ok(()) for InMemoryStore");
     }
 
     // Step 1 — SQLite KanbanBackend lifecycle tests
