@@ -95,6 +95,31 @@ async fn test_open_initialized_populates_undo_cursor_from_prior_commands() -> Ka
     Ok(())
 }
 
+/// `KanbanContext::open` without `initialize_undo_state` must return an error
+/// on the first `execute()` call.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_execute_without_initialize_returns_error() {
+    use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+    use kanban_domain::InMemoryStore;
+    use std::sync::Arc;
+
+    let mut ctx = kanban_service::KanbanContext::open(
+        Arc::new(InMemoryStore::new()),
+        kanban_service::AppConfig::default(),
+    );
+    let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+        id: uuid::Uuid::new_v4(),
+        name: "Test".into(),
+        card_prefix: None,
+        position: 0,
+    }));
+    let result = ctx.execute(vec![cmd]);
+    assert!(
+        result.is_err(),
+        "execute() without initialize_undo_state() must return an error"
+    );
+}
+
 /// A non-existent path produces an empty context (no boards).
 #[tokio::test(flavor = "multi_thread")]
 async fn test_open_context_new_file_starts_empty() -> KanbanResult<()> {
