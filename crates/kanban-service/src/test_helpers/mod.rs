@@ -1,7 +1,8 @@
 pub mod contract;
 pub mod helpers;
 
-pub use kanban_persistence::test_helpers::StoreFactory;
+pub type BackendFactory =
+    Box<dyn Fn(&std::path::Path) -> std::sync::Arc<dyn crate::KanbanBackend> + Send + Sync>;
 
 #[macro_export]
 macro_rules! context_contract_tests {
