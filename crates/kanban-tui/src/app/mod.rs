@@ -278,80 +278,6 @@ impl App {
         Ok((app, save_rx))
     }
 
-    /// Open a SQLite file using the relational `SqliteStore` backend.
-    ///
-    /// Unlike [`App::new_with_store`], this constructor is async and uses
-    /// `KanbanContext::open_sqlite` so every CRUD operation writes directly to
-    /// the database. No debounced blob-write save worker is started.
-    pub async fn open_sqlite(
-        path: &str,
-        config: kanban_core::AppConfig,
-    ) -> kanban_domain::KanbanResult<Self> {
-        let mut app_config = config;
-        let config_storage_backend = app_config.effective_storage_backend().to_string();
-        let config_storage_location = kanban_service::config::resolve_storage_location(&app_config);
-        let original_storage_backend = app_config.storage_backend.clone();
-        let original_storage_location = app_config.storage_location.clone();
-
-        let resolved = {
-            let p = std::path::Path::new(path);
-            if p.is_absolute() {
-                p.to_path_buf()
-            } else {
-                std::env::current_dir()
-                    .map(|cwd| cwd.join(p))
-                    .unwrap_or_else(|_| p.to_path_buf())
-            }
-        };
-        let effective_file = resolved.to_string_lossy().to_string();
-        app_config.storage_location = Some(effective_file.clone());
-        app_config.storage_backend = Some("sqlite".to_string());
-
-        let inner =
-            kanban_service::KanbanContext::open_sqlite(&effective_file, app_config.clone()).await?;
-
-        let (ctx, _save_rx, save_completion_rx) = crate::tui_context::TuiContext::new(inner)?;
-        let store_manager = Arc::new(default_store_manager());
-
-        Ok(Self {
-            store_manager,
-            should_quit: false,
-            quit_with_pending: false,
-            quit_with_migration: false,
-            mode: AppMode::Normal,
-            mode_stack: Vec::new(),
-            input: kanban_core::InputState::new(),
-            ctx,
-            app_config,
-            selection: SelectionHub::default(),
-            animation: AnimationState::default(),
-            filter: FilterState::default(),
-            dialog_input: DialogInputState::default(),
-            focus: FocusState::default(),
-            persistence: PersistenceState::new(Some(effective_file), save_completion_rx),
-            multi_select: MultiSelectState::default(),
-            ui_state: UiState::default(),
-            sprint_view: SprintViewState::default(),
-            view: ViewState::default(),
-            model: model::Model::default(),
-            relationship: RelationshipState::default(),
-            pending_key: None,
-            has_data_file: true,
-            cli_file_provided: true,
-            cli_file_override: true,
-            config_storage_backend,
-            config_storage_location,
-            original_storage_backend,
-            original_storage_location,
-            export_dialog: None,
-            migration_state: MigrationState::Idle,
-            export_result_rx: None,
-            needs_redraw: true,
-            error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
-            auto_open_seen_count: 0,
-        })
-    }
-
     pub fn quit(&mut self) {
         self.should_quit = true;
     }
@@ -1401,9 +1327,6 @@ impl App {
     }
 
     pub fn prepare_frame(&mut self) {
-        // TODO: ctx.snapshot() is a full clone of in-memory state on every frame. For the
-        // InMemoryStore backend this is cheap. If SQLite is ever used as the live TUI backend
-        // this needs a dirty-flag or event-based invalidation strategy instead of polling.
         match self.ctx.snapshot() {
             Ok(snapshot) => self.model.load_from_snapshot(snapshot),
             Err(e) => tracing::warn!("Failed to load snapshot for frame: {e}"),
