@@ -7,7 +7,7 @@ use tempfile::TempDir;
 pub async fn test_card_sprint_logs_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -31,7 +31,7 @@ pub async fn test_card_sprint_logs_roundtrip(factory: &BackendFactory) {
     ctx.carry_over_sprint_cards(sprint1.id, sprint2.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.sprint_id, Some(sprint2.id));
@@ -52,7 +52,7 @@ pub async fn test_card_sprint_logs_roundtrip(factory: &BackendFactory) {
 pub async fn test_sprint_log_with_name_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -79,7 +79,7 @@ pub async fn test_sprint_log_with_name_roundtrip(factory: &BackendFactory) {
     ctx.assign_card_to_sprint(card.id, sprint.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert!(!c.sprint_logs.is_empty());

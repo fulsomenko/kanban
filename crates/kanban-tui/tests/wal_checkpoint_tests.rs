@@ -22,7 +22,7 @@ async fn test_tui_execute_queues_flush_signal_on_json_path() {
         .make_backend(path.to_str().unwrap(), &AppConfig::default())
         .await
         .unwrap();
-    let ctx = KanbanContext::open_initialized(backend, AppConfig::default())
+    let ctx = KanbanContext::open(backend, AppConfig::default())
         .await
         .unwrap();
     let (mut tui_ctx, save_rx, _completion_rx) = TuiContext::new(ctx).unwrap();

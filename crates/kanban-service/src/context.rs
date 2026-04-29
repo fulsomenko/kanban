@@ -49,9 +49,9 @@ impl KanbanContext {
     /// Zero-I/O constructor. Wraps `backend` without reading any data.
     /// Call [`initialize_undo_state`][Self::initialize_undo_state] before the
     /// first [`execute`][Self::execute], [`undo`][Self::undo], or
-    /// [`redo`][Self::redo], or use [`open_initialized`][Self::open_initialized]
+    /// [`redo`][Self::redo], or use [`open`][Self::open]
     /// which calls it automatically.
-    pub fn open(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> Self {
+    pub fn open_deferred(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> Self {
         Self {
             backend,
             app_config: config,
@@ -65,13 +65,14 @@ impl KanbanContext {
 
     /// Wraps `backend` and eagerly initializes the undo cursor so that
     /// `can_undo()` / `can_redo()` return correct values before the first
-    /// mutation. Use this instead of [`open`][Self::open] wherever the caller
-    /// needs undo state to be populated immediately (CLI, MCP, TUI startup).
-    pub async fn open_initialized(
+    /// mutation. Use this instead of [`open_deferred`][Self::open_deferred]
+    /// wherever the caller needs undo state to be populated immediately
+    /// (CLI, MCP, TUI startup).
+    pub async fn open(
         backend: Arc<dyn KanbanBackend>,
         config: AppConfig,
     ) -> KanbanResult<Self> {
-        let mut ctx = Self::open(backend, config);
+        let mut ctx = Self::open_deferred(backend, config);
         ctx.initialize_undo_state()?;
         Ok(ctx)
     }
@@ -139,8 +140,8 @@ impl KanbanContext {
     // ── Undo / Redo ───────────────────────────────────────────────────────────
 
     /// Loads the pre-existing command count and baseline snapshot from the backend.
-    /// Must be called once after [`open`][Self::open] before any call to
-    /// [`execute`], [`undo`], or [`redo`].  [`open_initialized`][Self::open_initialized]
+    /// Must be called once after [`open_deferred`][Self::open_deferred] before any call to
+    /// [`execute`], [`undo`], or [`redo`].  [`open`][Self::open]
     /// calls this automatically.  Idempotent if called more than once.
     pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
@@ -166,7 +167,7 @@ impl KanbanContext {
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
             return Err(KanbanError::Internal(
-                "undo state not initialized — call initialize_undo_state() or open_initialized()"
+                "undo state not initialized — call initialize_undo_state() or open()"
                     .into(),
             ));
         }

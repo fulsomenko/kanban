@@ -14,7 +14,7 @@ async fn make_ctx_with_persistence() -> (TuiContext, tokio::sync::mpsc::Receiver
         .make_backend(path.to_str().unwrap(), &AppConfig::default())
         .await
         .unwrap();
-    let ctx = KanbanContext::open_initialized(backend, AppConfig::default())
+    let ctx = KanbanContext::open(backend, AppConfig::default())
         .await
         .unwrap();
     let (tui_ctx, save_rx, _) = TuiContext::new(ctx).unwrap();

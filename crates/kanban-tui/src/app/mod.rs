@@ -234,7 +234,7 @@ impl App {
             app_config.storage_location = None;
         }
         let kanban_backend = store_manager.make_backend_sync(&effective_file, &app_config)?;
-        let inner_ctx = kanban_service::KanbanContext::open(kanban_backend, app_config.clone());
+        let inner_ctx = kanban_service::KanbanContext::open_deferred(kanban_backend, app_config.clone());
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(inner_ctx)?;
         let store_manager = Arc::new(store_manager);
         let app = Self {
@@ -2199,7 +2199,7 @@ impl App {
     pub fn test_default() -> Self {
         let backend = std::sync::Arc::new(kanban_domain::InMemoryStore::new());
         let mut inner =
-            kanban_service::KanbanContext::open(backend, kanban_core::AppConfig::default());
+            kanban_service::KanbanContext::open_deferred(backend, kanban_core::AppConfig::default());
         inner
             .initialize_undo_state()
             .expect("initialize_undo_state failed in test_default");

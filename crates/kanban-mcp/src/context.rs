@@ -25,7 +25,7 @@ impl McpContext {
         }
         let backend = store_manager.make_backend(data_file, &config).await?;
         Ok(Self {
-            inner: KanbanContext::open_initialized(backend, config).await?,
+            inner: KanbanContext::open(backend, config).await?,
         })
     }
 

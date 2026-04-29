@@ -1,4 +1,4 @@
-/// Integration tests for `KanbanContext::open` (Steps 3 + 6 of the
+/// Integration tests for `KanbanContext::open_deferred` (Steps 3 + 6 of the
 /// "Unified Backends via True Deferred Reads" architecture).
 ///
 /// All tests use real TempDir files and `#[tokio::test(flavor = "multi_thread")]`
@@ -23,20 +23,20 @@ fn make_json_data_store(path: &std::path::Path) -> JsonDataStore {
     JsonDataStore::new(Arc::new(JsonFileStore::new(path)))
 }
 
-// ─── Step 3: KanbanContext::open ─────────────────────────────────────────────
+// ─── Step 3: KanbanContext::open_deferred ────────────────────────────────────
 
-/// `KanbanContext::open` with a JSON backend must not touch the filesystem.
+/// `KanbanContext::open_deferred` with a JSON backend must not touch the filesystem.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_open_context_json_does_no_io_at_construction() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("nonexistent.json");
     assert!(!path.exists(), "file should not exist before construction");
 
-    let _ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default());
+    let _ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
 
     assert!(
         !path.exists(),
-        "KanbanContext::open must not create the file (zero-I/O construction)"
+        "KanbanContext::open_deferred must not create the file (zero-I/O construction)"
     );
 }
 
@@ -66,7 +66,7 @@ async fn test_open_context_first_list_boards_triggers_load() -> KanbanResult<()>
         .unwrap();
     }
 
-    let ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default());
+    let ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
     let boards = ctx.boards()?;
     assert_eq!(boards.len(), 1);
     assert_eq!(boards[0].name, "Alpha");
@@ -78,7 +78,7 @@ async fn test_open_context_first_list_boards_triggers_load() -> KanbanResult<()>
 async fn test_open_context_undo_before_any_execute_is_noop() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("empty.json");
-    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
 
     assert!(
         !ctx.undo()?,
@@ -93,7 +93,7 @@ async fn test_open_context_undo_works_after_execute() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("undo.json");
     let mut ctx =
-        KanbanContext::open_initialized(make_json_backend(&path), AppConfig::default()).await?;
+        KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
 
     ctx.create_board("B".into(), None)?;
     assert_eq!(ctx.boards()?.len(), 1);
@@ -115,7 +115,7 @@ async fn test_open_context_save_flushes_json_backend() -> KanbanResult<()> {
 
     {
         let mut ctx =
-            KanbanContext::open_initialized(make_json_backend(&path), AppConfig::default()).await?;
+            KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
         ctx.create_board("Saved".into(), None)?;
         ctx.save().await?;
     }
@@ -135,7 +135,7 @@ async fn test_open_context_reload_delegates_to_backend() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("reload.json");
 
-    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
     // Trigger initial load (empty file → empty in-memory cache).
     assert!(ctx.boards()?.is_empty());
 
@@ -160,7 +160,7 @@ async fn test_undo_redo_still_work_after_lazy_baseline() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("lazy.json");
     let mut ctx =
-        KanbanContext::open_initialized(make_json_backend(&path), AppConfig::default()).await?;
+        KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
 
     ctx.create_board("A".into(), None)?;
     ctx.create_board("B".into(), None)?;
@@ -182,7 +182,7 @@ async fn test_can_undo_returns_false_after_reload() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("reload_undo.json");
     let mut ctx =
-        KanbanContext::open_initialized(make_json_backend(&path), AppConfig::default()).await?;
+        KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
 
     ctx.create_board("B".into(), None)?;
     assert!(ctx.can_undo(), "must be undoable before reload");
@@ -203,7 +203,7 @@ async fn test_reload_after_external_json_change_returns_updated_data() -> Kanban
     let dir = tempdir().unwrap();
     let path = dir.path().join("ext_change.json");
 
-    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default());
+    let mut ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
 
     // External writer adds a board, bypassing ctx.
     let external = make_json_data_store(&path);
@@ -226,14 +226,14 @@ mod sqlite_tests {
     use kanban_domain::DataStore;
     use kanban_persistence_sqlite::SqliteStore;
 
-    /// `KanbanContext::open` with a SQLite backend wraps the store without
+    /// `KanbanContext::open_deferred` with a SQLite backend wraps the store without
     /// querying the DB — construction must not error or trigger any DB access.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_open_context_sqlite_does_no_io_at_construction() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.sqlite3");
         let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
-        let ctx = KanbanContext::open(Arc::new(store), AppConfig::default());
+        let ctx = KanbanContext::open_deferred(Arc::new(store), AppConfig::default());
         // No DB queries were triggered at construction.
         assert!(!ctx.can_undo());
     }
@@ -245,7 +245,7 @@ mod sqlite_tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("noop.sqlite3");
         let store = SqliteStore::open(path.to_str().unwrap()).await?;
-        let ctx = KanbanContext::open(Arc::new(store), AppConfig::default());
+        let ctx = KanbanContext::open_deferred(Arc::new(store), AppConfig::default());
         ctx.save().await?;
         Ok(())
     }
@@ -258,7 +258,7 @@ mod sqlite_tests {
         let path = dir.path().join("live.sqlite3");
 
         let store1 = SqliteStore::open(path.to_str().unwrap()).await?;
-        let ctx = KanbanContext::open(Arc::new(store1), AppConfig::default());
+        let ctx = KanbanContext::open_deferred(Arc::new(store1), AppConfig::default());
 
         // Second instance writes a board directly to the DB.
         let store2 = SqliteStore::open(path.to_str().unwrap()).await?;
@@ -279,7 +279,7 @@ mod sqlite_tests {
 async fn test_replace_backend_resets_undo_history() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let mut ctx =
-        KanbanContext::open_initialized(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
+        KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
     ctx.create_board("A".into(), None)?;
     assert!(ctx.can_undo());
 
@@ -293,7 +293,7 @@ async fn test_replace_backend_resets_undo_history() -> KanbanResult<()> {
 async fn test_replace_backend_resets_redo_history() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let mut ctx =
-        KanbanContext::open_initialized(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
+        KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
     ctx.create_board("A".into(), None)?;
     ctx.undo()?;
     assert!(ctx.can_redo());
@@ -315,7 +315,7 @@ async fn test_replace_backend_reads_go_to_new_backend() -> KanbanResult<()> {
     writer.flush().await?;
 
     let mut ctx =
-        KanbanContext::open_initialized(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
+        KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
     ctx.create_board("A".into(), None)?;
     assert_eq!(ctx.boards()?.len(), 1);
     assert_eq!(ctx.boards()?[0].name, "A");
@@ -332,7 +332,7 @@ async fn test_replace_backend_reads_go_to_new_backend() -> KanbanResult<()> {
 async fn test_replace_backend_clears_dirty_flag() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let mut ctx =
-        KanbanContext::open_initialized(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
+        KanbanContext::open(make_json_backend(&dir.path().join("a.json")), AppConfig::default()).await?;
     ctx.create_board("A".into(), None)?;
     assert!(ctx.is_dirty());
 

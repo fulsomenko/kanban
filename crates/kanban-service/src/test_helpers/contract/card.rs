@@ -8,7 +8,7 @@ use tempfile::TempDir;
 pub async fn test_card_all_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), Some("FB".into())).unwrap();
     let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
@@ -39,7 +39,7 @@ pub async fn test_card_all_fields_roundtrip(factory: &BackendFactory) {
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.title, "Full Card");
@@ -57,7 +57,7 @@ pub async fn test_card_all_fields_roundtrip(factory: &BackendFactory) {
 pub async fn test_card_minimal_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -72,7 +72,7 @@ pub async fn test_card_minimal_fields_roundtrip(factory: &BackendFactory) {
         .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.title, "Minimal");
@@ -89,7 +89,7 @@ pub async fn test_card_minimal_fields_roundtrip(factory: &BackendFactory) {
 pub async fn test_card_all_priority_variants_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -118,7 +118,7 @@ pub async fn test_card_all_priority_variants_roundtrip(factory: &BackendFactory)
     }
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     for (id, expected) in card_ids.iter().zip(priorities.iter()) {
         let c = ctx.get_card(*id).unwrap().unwrap();
@@ -129,7 +129,7 @@ pub async fn test_card_all_priority_variants_roundtrip(factory: &BackendFactory)
 pub async fn test_card_all_status_variants_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -163,7 +163,7 @@ pub async fn test_card_all_status_variants_roundtrip(factory: &BackendFactory) {
     }
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     for (id, expected) in card_ids.iter().zip(statuses.iter()) {
         let c = ctx.get_card(*id).unwrap().unwrap();
@@ -174,7 +174,7 @@ pub async fn test_card_all_status_variants_roundtrip(factory: &BackendFactory) {
 pub async fn test_card_completed_at_set_on_done_status(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::open_initialized(factory(&path), AppConfig::default()).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default()).await.unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -198,7 +198,7 @@ pub async fn test_card_completed_at_set_on_done_status(factory: &BackendFactory)
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::open(factory(&path), AppConfig::default());
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.status, CardStatus::Done);

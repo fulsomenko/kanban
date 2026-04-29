@@ -68,10 +68,10 @@ mod sqlite_tests {
     }
 }
 
-/// `open_initialized` populates the undo cursor from persisted commands so
+/// `open` populates the undo cursor from persisted commands so
 /// that `can_undo()` returns true on a fresh context without any mutation.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_open_initialized_populates_undo_cursor_from_prior_commands() -> KanbanResult<()> {
+async fn test_open_populates_undo_cursor_from_prior_commands() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
     let path = dir.path().join("board.json");
 
@@ -86,16 +86,16 @@ async fn test_open_initialized_populates_undo_cursor_from_prior_commands() -> Ka
         .make_backend(path.to_str().unwrap(), &AppConfig::default())
         .await?;
     let ctx =
-        kanban_service::KanbanContext::open_initialized(backend, AppConfig::default()).await?;
+        kanban_service::KanbanContext::open(backend, AppConfig::default()).await?;
     assert!(
         ctx.can_undo(),
-        "open_initialized must restore undo cursor from persisted command log"
+        "open must restore undo cursor from persisted command log"
     );
     assert_eq!(ctx.undo_depth(), 1);
     Ok(())
 }
 
-/// `KanbanContext::open` without `initialize_undo_state` must return an error
+/// `KanbanContext::open_deferred` without `initialize_undo_state` must return an error
 /// on the first `execute()` call.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_execute_without_initialize_returns_error() {
@@ -103,7 +103,7 @@ async fn test_execute_without_initialize_returns_error() {
     use kanban_domain::InMemoryStore;
     use std::sync::Arc;
 
-    let mut ctx = kanban_service::KanbanContext::open(
+    let mut ctx = kanban_service::KanbanContext::open_deferred(
         Arc::new(InMemoryStore::new()),
         kanban_service::AppConfig::default(),
     );
