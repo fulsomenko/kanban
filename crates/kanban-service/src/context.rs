@@ -413,13 +413,13 @@ impl KanbanContext {
     // ── Persistence ───────────────────────────────────────────────────────────
 
     /// Reload state from durable storage, discarding any uncommitted data cache.
-    /// Undo/redo history (cursor and command count) is preserved in memory;
-    /// the baseline snapshot is cleared so it is re-read lazily on the next
-    /// mutation if needed. To fully reset history after an external change,
-    /// call `clear_history()` after `reload()`.
+    /// Undo/redo history is reset because the file may have been rewritten by an
+    /// external process; the previous cursor and command count are no longer valid.
     pub async fn reload(&mut self) -> KanbanResult<()> {
         self.backend.reload().await?;
         self.baseline_snapshot = None;
+        self.undo_cursor = 0;
+        self.command_count = 0;
         self.dirty = false;
         Ok(())
     }
