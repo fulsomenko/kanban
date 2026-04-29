@@ -2,19 +2,15 @@
 //! `JsonDataStore::ensure_loaded` uses `tokio::task::block_in_place`.
 
 use kanban_domain::KanbanOperations;
-use kanban_persistence_json::JsonFileStore;
-use kanban_service::json_backend::JsonDataStore;
 use kanban_service::{AppConfig, KanbanContext};
 use kanban_tui::tui_context::TuiContext;
-use std::sync::Arc;
 use tempfile::TempDir;
 
 fn make_ctx_with_persistence() -> (TuiContext, tokio::sync::mpsc::Receiver<()>, TempDir) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.json");
-    let store: Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> =
-        Arc::new(JsonFileStore::new(path.to_str().unwrap()));
-    let backend = Arc::new(JsonDataStore::new(store));
+    let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+    let backend = sm.make_backend_sync(path.to_str().unwrap(), &AppConfig::default()).unwrap();
     let ctx = KanbanContext::open(backend, AppConfig::default());
     let (tui_ctx, save_rx, _) = TuiContext::new(ctx).unwrap();
     (tui_ctx, save_rx.unwrap(), dir)

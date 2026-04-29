@@ -15,16 +15,10 @@ fn assert_wal_empty(db_path: &std::path::Path) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_tui_execute_queues_flush_signal_on_json_path() {
-    use kanban_service::json_backend::JsonDataStore;
-    use std::sync::Arc;
-
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().join("test.json");
-    let store = Arc::new(kanban_persistence_json::JsonFileStore::new(
-        path.to_str().unwrap(),
-    ));
-    let store: Arc<dyn kanban_persistence::PersistenceStore + Send + Sync> = store;
-    let backend = Arc::new(JsonDataStore::new(store));
+    let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+    let backend = sm.make_backend_sync(path.to_str().unwrap(), &AppConfig::default()).unwrap();
     let ctx = KanbanContext::open(backend, AppConfig::default());
     let (mut tui_ctx, save_rx, _completion_rx) = TuiContext::new(ctx).unwrap();
     let mut save_rx = save_rx.unwrap();
@@ -43,7 +37,7 @@ async fn test_tui_execute_queues_flush_signal_on_json_path() {
 async fn test_tui_execute_checkpoints_wal_on_sqlite_path() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let ctx = kanban_service::open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let (mut tui_ctx, _, _) = TuiContext::new(ctx).unwrap();
@@ -56,7 +50,7 @@ async fn test_tui_execute_checkpoints_wal_on_sqlite_path() {
 async fn test_tui_undo_checkpoints_wal_on_sqlite_path() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let ctx = kanban_service::open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let (mut tui_ctx, _, _) = TuiContext::new(ctx).unwrap();
@@ -70,7 +64,7 @@ async fn test_tui_undo_checkpoints_wal_on_sqlite_path() {
 async fn test_tui_redo_checkpoints_wal_on_sqlite_path() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let ctx = kanban_service::open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let (mut tui_ctx, _, _) = TuiContext::new(ctx).unwrap();

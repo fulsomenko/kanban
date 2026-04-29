@@ -10,10 +10,10 @@ use kanban_service::KanbanContext;
 use std::sync::Arc;
 use tempfile::TempDir;
 
-async fn create_populated_json_context(
-    store: Arc<dyn PersistenceStore + Send + Sync>,
-) -> KanbanContext {
-    let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
+async fn create_populated_json_context(path: &std::path::Path) -> KanbanContext {
+    let mut ctx = kanban_service::open_context(path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
         .unwrap();
@@ -32,7 +32,7 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
     let db_path = dir.path().join("dest.db");
 
     let json_store = Arc::new(JsonFileStore::new(&json_path));
-    let original = create_populated_json_context(json_store.clone()).await;
+    let original = create_populated_json_context(&json_path).await;
 
     // Migrate snapshot from JSON to SQLite
     let (snap, _) = json_store.load().await.unwrap();
@@ -41,7 +41,7 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
     sqlite.apply_snapshot(snapshot).unwrap();
     drop(sqlite);
 
-    let loaded = KanbanContext::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
+    let loaded = kanban_service::open_context(db_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
 
@@ -62,7 +62,7 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     let db_path = dir.path().join("source.db");
     let json_path = dir.path().join("dest.json");
 
-    let mut original = KanbanContext::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
+    let mut original = kanban_service::open_context(db_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let board = original
@@ -85,7 +85,7 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
     };
     json_store.save(store_snap).await.unwrap();
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&json_path)))
+    let loaded = kanban_service::open_context(json_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
 
@@ -105,13 +105,13 @@ async fn test_migrate_json_to_json_roundtrip() {
     let dst_path = dir.path().join("dest.json");
 
     let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_json_context(src_store.clone()).await;
+    create_populated_json_context(&src_path).await;
 
     let (snapshot, _) = src_store.load().await.unwrap();
     let dst_store = Arc::new(JsonFileStore::new(&dst_path));
     dst_store.save(snapshot).await.unwrap();
 
-    let loaded = KanbanContext::load_with_defaults(Arc::new(JsonFileStore::new(&dst_path)))
+    let loaded = kanban_service::open_context(dst_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
 
@@ -126,7 +126,7 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     let src_path = dir.path().join("source.db");
     let dst_path = dir.path().join("dest.db");
 
-    let mut original = KanbanContext::open_sqlite(src_path.to_str().unwrap(), AppConfig::default())
+    let mut original = kanban_service::open_context(src_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let board = original
@@ -145,7 +145,7 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
     dst.apply_snapshot(snapshot).unwrap();
     drop(dst);
 
-    let loaded = KanbanContext::open_sqlite(dst_path.to_str().unwrap(), AppConfig::default())
+    let loaded = kanban_service::open_context(dst_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
 
@@ -187,8 +187,7 @@ async fn test_migrate_rejects_existing_target() {
     let src_path = dir.path().join("source.json");
     let dst_path = dir.path().join("dest.db");
 
-    let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_json_context(src_store).await;
+    create_populated_json_context(&src_path).await;
 
     std::fs::write(&dst_path, "existing").unwrap();
 
@@ -217,8 +216,7 @@ async fn test_migrate_cli_with_explicit_output() {
     let src_path = dir.path().join("source.json");
     let dst_path = dir.path().join("custom_output.db");
 
-    let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_json_context(src_store).await;
+    create_populated_json_context(&src_path).await;
 
     let output = cargo_bin_cmd!("kanban")
         .args([
@@ -238,7 +236,7 @@ async fn test_migrate_cli_with_explicit_output() {
     );
     assert!(dst_path.exists());
 
-    let loaded = KanbanContext::open_sqlite(dst_path.to_str().unwrap(), AppConfig::default())
+    let loaded = kanban_service::open_context(dst_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
@@ -253,8 +251,7 @@ async fn test_migrate_cli_explicit_output_path() {
     let src_path = dir.path().join("myboard.json");
     let dst_path = dir.path().join("myboard.db");
 
-    let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_json_context(src_store).await;
+    create_populated_json_context(&src_path).await;
 
     let output = cargo_bin_cmd!("kanban")
         .args([
@@ -279,7 +276,7 @@ async fn test_migrate_cli_explicit_output_path() {
         dst_path.display()
     );
 
-    let loaded = KanbanContext::open_sqlite(dst_path.to_str().unwrap(), AppConfig::default())
+    let loaded = kanban_service::open_context(dst_path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     assert_eq!(loaded.list_boards().unwrap().len(), 1);
@@ -293,8 +290,7 @@ async fn test_migrate_cli_default_output_path() {
     let src_path = dir.path().join("myboard.json");
     let expected_output = dir.path().join("myboard.sqlite");
 
-    let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_json_context(src_store).await;
+    create_populated_json_context(&src_path).await;
 
     let output = cargo_bin_cmd!("kanban")
         .args(["migrate", src_path.to_str().unwrap(), "sqlite"])
@@ -320,8 +316,7 @@ async fn test_migrate_rejects_unknown_backend() {
     let dir = TempDir::new().unwrap();
     let src_path = dir.path().join("source.json");
 
-    let src_store = Arc::new(JsonFileStore::new(&src_path));
-    create_populated_json_context(src_store).await;
+    create_populated_json_context(&src_path).await;
 
     let output = cargo_bin_cmd!("kanban")
         .args([

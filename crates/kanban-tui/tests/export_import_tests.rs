@@ -227,7 +227,6 @@ async fn test_failed_import_clears_save_file() {
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_async_load_initial_state_sqlite() {
-    use kanban_core::AppConfig;
     use kanban_domain::{Board, Column, DataStore};
 
     let dir = tempdir().unwrap();
@@ -252,11 +251,11 @@ async fn test_async_load_initial_state_sqlite() {
     store.apply_snapshot(snapshot).unwrap();
     drop(store);
 
-    // Load via App::open_sqlite (SQLite is no longer registry-backed)
-    let mut app = App::open_sqlite(db_path.to_str().unwrap(), AppConfig::default())
-        .await
-        .unwrap();
+    let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+    let (mut app, _rx) =
+        App::new_with_store(sm, Some(db_path.to_str().unwrap().to_string())).unwrap();
 
+    app.load_initial_state().await;
     app.prepare_frame();
     assert_eq!(app.model.boards().len(), 1);
     assert_eq!(app.model.boards()[0].name, "SQLite Board");
