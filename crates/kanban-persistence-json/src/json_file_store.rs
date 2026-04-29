@@ -353,23 +353,25 @@ impl PersistenceStore for JsonFileStore {
             return Ok(None);
         }
 
-        let raw = std::fs::read_to_string(&self.path)?;
-        let value: serde_json::Value = serde_json::from_str(&raw)
+        let file_bytes = std::fs::read(&self.path)?;
+        let value: serde_json::Value = serde_json::from_slice(&file_bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         let current_version = detect_version_sync(&value);
 
-        if current_version < FormatVersion::V3 {
+        let final_bytes = if current_version < FormatVersion::V3 {
             tracing::info!(
                 "Detected {:?} format at {}. Migrating to V3 (sync)...",
                 current_version,
                 self.path.display()
             );
             migrate_to_v3_sync(current_version, &self.path)?;
-        }
+            std::fs::read(&self.path)?
+        } else {
+            file_bytes
+        };
 
-        let file_bytes = std::fs::read(&self.path)?;
-        let result = self.parse_envelope_bytes(&file_bytes)?;
+        let result = self.parse_envelope_bytes(&final_bytes)?;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
@@ -378,7 +380,7 @@ impl PersistenceStore for JsonFileStore {
 
         tracing::info!(
             "Loaded {} bytes from {} (sync)",
-            file_bytes.len(),
+            final_bytes.len(),
             self.path.display()
         );
 
