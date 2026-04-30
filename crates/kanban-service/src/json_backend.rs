@@ -364,6 +364,21 @@ impl CommandStore for JsonDataStore {
         self.with_mutate(|s| s.store_snapshot_at(idx, snapshot))
     }
     fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
+        if idx == 0 {
+            // Ensure the file has been loaded so baseline_snapshot is populated.
+            self.ensure_loaded()?;
+            let guard = self.baseline_snapshot.lock().map_err(|_| {
+                KanbanError::Internal(
+                    "json_backend: baseline_snapshot mutex poisoned".into(),
+                )
+            })?;
+            if guard.is_some() {
+                return Ok(guard.clone());
+            }
+            // baseline_snapshot is None after loading — file had no stored
+            // baseline (e.g. freshly created). Fall through; InMemoryStore
+            // will also return None, matching the existing behaviour.
+        }
         self.with_read(|s| s.load_snapshot_at(idx))
     }
     fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
