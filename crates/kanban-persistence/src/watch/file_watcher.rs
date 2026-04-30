@@ -49,6 +49,15 @@ impl FileWatcher {
         }
     }
 
+    /// Returns the Unix-epoch millisecond timestamp until which events are
+    /// suppressed, or `0` when no window is active.
+    ///
+    /// Intended for tests only; not part of the stable API.
+    #[doc(hidden)]
+    pub fn suppress_deadline_ms(&self) -> u64 {
+        self.suppress_until_ms.load(Ordering::SeqCst)
+    }
+
     /// Suppress own-write events for the next 200 ms.
     ///
     /// Call before each atomic save. Any rename/modify events that arrive within
@@ -325,6 +334,44 @@ mod tests {
         let result = tokio::time::timeout(Duration::from_millis(500), rx.recv()).await;
         watcher.stop_watching().await.unwrap();
         assert!(result.is_err(), "Expected no event, got: {:?}", result);
+    }
+
+    /// The suppression window must self-expire after 200 ms so that a
+    /// legitimate external write arriving after the window is not silently
+    /// dropped.  A bug setting `suppress_until_ms = u64::MAX` would cause
+    /// all future external writes to be permanently ignored — this test
+    /// catches that class of regression.
+    #[tokio::test]
+    async fn test_suppress_window_expires_and_external_write_is_detected() {
+        use std::fs;
+        use tempfile::NamedTempFile;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("expire.json");
+        tokio::fs::write(&file_path, b"initial").await.unwrap();
+
+        let watcher = FileWatcher::new();
+        let mut rx = watcher.subscribe();
+        watcher.start_watching(file_path.clone()).await.unwrap();
+        sleep(Duration::from_millis(100)).await;
+
+        // Open the suppression window then wait for it to expire.
+        watcher.suppress_next_event();
+        sleep(Duration::from_millis(250)).await; // > 200 ms window
+
+        // An external atomic write arriving AFTER the window must be delivered.
+        let temp = NamedTempFile::new_in(dir.path()).unwrap();
+        std::fs::write(temp.path(), b"external after expiry").unwrap();
+        fs::rename(temp.path(), &file_path).unwrap();
+
+        let result = tokio::time::timeout(Duration::from_millis(500), rx.recv()).await;
+        watcher.stop_watching().await.unwrap();
+
+        assert!(
+            result.is_ok(),
+            "external write after window expiry must fire an event, got: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
