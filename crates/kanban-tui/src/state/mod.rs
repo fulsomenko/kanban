@@ -86,8 +86,10 @@ impl SaveCoordinator {
     /// Queue a flush signal for async saving.
     /// Increments pending_saves to track unsaved changes.
     ///
-    /// Opens a 200 ms suppression window on the file watcher so the rename event
-    /// produced by our own atomic write is not mistaken for an external change.
+    /// The suppression window on the file watcher is opened by the save worker
+    /// immediately before it calls `backend.flush()`, not here. Opening it at
+    /// queue-time would allow the 200 ms window to expire before the actual
+    /// atomic rename occurs when the worker is delayed.
     ///
     /// Uses try_send to handle bounded channel capacity (100 slots).
     /// If channel is full, logs warning and skips to prevent blocking UI.
@@ -101,9 +103,6 @@ impl SaveCoordinator {
             match tx.try_send(()) {
                 Ok(_) => {
                     self.pending_saves += 1;
-                    if let Some(ref watcher) = self.file_watcher {
-                        watcher.suppress_next_event();
-                    }
                     tracing::debug!("Flush signal queued successfully");
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
@@ -179,6 +178,31 @@ impl SaveCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `queue_flush()` must NOT open the file-watcher suppression window.
+    /// The window must be opened by the save worker immediately before
+    /// `backend.flush()` to avoid expiring before the atomic rename occurs.
+    #[test]
+    fn test_queue_flush_does_not_open_suppress_window() {
+        let (mut coordinator, _rx, _crx) = SaveCoordinator::new(true);
+        let watcher = Arc::new(kanban_persistence::FileWatcher::new());
+        coordinator.set_file_watcher(Arc::clone(&watcher));
+
+        let before_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        coordinator.queue_flush();
+
+        assert!(
+            watcher.suppress_deadline_ms() <= before_ms,
+            "queue_flush must not open the suppress window \
+             (deadline={}, before={})",
+            watcher.suppress_deadline_ms(),
+            before_ms,
+        );
+    }
 
     #[test]
     fn test_save_coordinator_creation_no_persistence() {
