@@ -240,22 +240,22 @@ mod sqlite_tests {
     use kanban_domain::DataStore;
     use kanban_persistence_sqlite::SqliteStore;
 
-    /// `KanbanContext::open_deferred` with a SQLite backend wraps the store without
-    /// querying the DB — construction must not error or trigger any DB access.
+    /// Verifies that `open_deferred` with a SQLite backend does not issue any
+    /// DB queries at construction time — `can_undo()` is `false` because
+    /// `initialize_undo_state` has not been called yet.
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_open_context_sqlite_does_no_io_at_construction() {
+    async fn test_open_context_sqlite_open_deferred_has_no_undo_history() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.sqlite3");
         let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
         let ctx = KanbanContext::open_deferred(Arc::new(store), AppConfig::default());
-        // No DB queries were triggered at construction.
         assert!(!ctx.can_undo());
     }
 
-    /// `save()` on a SQLite-backed context returns `Ok(())` — SQLite is
-    /// write-through so there is nothing to flush.
+    /// `save()` on a SQLite-backed context runs a WAL checkpoint and returns
+    /// `Ok(())` — it succeeds even on a freshly-opened empty database.
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_open_context_save_is_noop_for_sqlite() -> KanbanResult<()> {
+    async fn test_open_context_sqlite_save_succeeds() -> KanbanResult<()> {
         let dir = tempdir().unwrap();
         let path = dir.path().join("noop.sqlite3");
         let store = SqliteStore::open(path.to_str().unwrap()).await?;
@@ -365,4 +365,112 @@ async fn test_replace_backend_clears_dirty_flag() -> KanbanResult<()> {
     ctx.replace_backend(make_json_backend(&dir.path().join("b.json")));
     assert!(!ctx.is_dirty(), "replace_backend must clear the dirty flag");
     Ok(())
+}
+
+// ─── Bug A: initialize_undo_state uses empty baseline for JSON after restart ──
+
+/// When a JSON file was previously saved with a non-empty baseline snapshot,
+/// `initialize_undo_state` must restore that baseline — not fall back to an
+/// empty `Snapshot::default()`.
+///
+/// Failure mode before the fix: undo reverts to `[B1]` instead of `[B0, B1]`
+/// because `load_snapshot_at(0)` returned `None` and the empty default was used.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_initialize_undo_state_restores_correct_baseline_after_restart() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("restart.json");
+
+    // Session 0: pre-populate the file with B0 directly (no command log).
+    // This simulates an imported board or a board created before command logging.
+    {
+        let jds = make_json_data_store(&path);
+        jds.upsert_board(kanban_domain::Board::new("B0".into(), None))?;
+        jds.flush().await?;
+    }
+
+    // Session 1: open the pre-populated file, create B1, and save.
+    // After initialize_undo_state: count=0, baseline = backend.snapshot() = {B0}.
+    // After create_board("B1"): command log = [CreateBoard(B1)], baseline = {B0}.
+    {
+        let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
+        assert_eq!(ctx.boards()?.len(), 1, "pre-condition: B0 must be present");
+        ctx.create_board("B1".into(), None)?;
+        ctx.save().await?;
+    }
+    // File now: snapshot={B0,B1}, command_log=[CreateBoard(B1)], baseline={B0}.
+
+    // Session 2: open_deferred + initialize_undo_state.
+    // Before fix: load_snapshot_at(0) → None → baseline = empty.
+    // After fix:  load_snapshot_at(0) → Some({B0}) → baseline = {B0}.
+    let mut ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
+    ctx.initialize_undo_state()?;
+
+    ctx.create_board("B2".into(), None)?;
+    assert_eq!(ctx.boards()?.len(), 3, "B0, B1, B2 must all be present");
+
+    assert!(ctx.undo()?);
+    let boards = ctx.boards()?;
+    // Before fix: baseline=empty → apply empty → []; replay [CreateBoard(B1)] → [B1]. Missing B0!
+    // After fix:  baseline={B0} → apply {B0} → [B0]; replay [CreateBoard(B1)] → [B0, B1].
+    assert_eq!(boards.len(), 2, "undo must restore {{B0, B1}}, not just {{B1}}");
+    let names: Vec<&str> = boards.iter().map(|b| b.name.as_str()).collect();
+    assert!(names.contains(&"B0"), "B0 must survive undo");
+    assert!(names.contains(&"B1"), "B1 must survive undo");
+    Ok(())
+}
+
+// ─── Gap E: replace_backend + execute contract ───────────────────────────────
+
+/// `execute()` must return an error when `baseline_snapshot` is `None` —
+/// i.e. after `replace_backend` without a subsequent `initialize_undo_state`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_replace_backend_then_execute_fails_without_reinit() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let mut ctx = KanbanContext::open(
+        make_json_backend(&dir.path().join("a.json")),
+        AppConfig::default(),
+    )
+    .await?;
+
+    ctx.replace_backend(make_json_backend(&dir.path().join("b.json")));
+
+    let result = ctx.create_board("B".into(), None);
+    assert!(
+        result.is_err(),
+        "execute must fail after replace_backend without calling initialize_undo_state"
+    );
+    Ok(())
+}
+
+/// After `replace_backend` + `initialize_undo_state`, `execute()` must succeed.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_replace_backend_then_reinit_then_execute_succeeds() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let mut ctx = KanbanContext::open(
+        make_json_backend(&dir.path().join("a.json")),
+        AppConfig::default(),
+    )
+    .await?;
+
+    ctx.replace_backend(make_json_backend(&dir.path().join("b.json")));
+    ctx.initialize_undo_state()?;
+
+    ctx.create_board("B".into(), None)?;
+    assert_eq!(ctx.boards()?.len(), 1);
+    Ok(())
+}
+
+// ─── Gap F: open_context with corrupt file ────────────────────────────────────
+
+/// Opening a context backed by a corrupt JSON file must return an error on the
+/// first read — not silently produce an empty board list.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_open_context_with_corrupt_json_returns_error_on_first_read() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("corrupt.json");
+    std::fs::write(&path, b"NOT VALID JSON {{{").unwrap();
+
+    let ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
+    let result = ctx.boards();
+    assert!(result.is_err(), "reading a corrupt JSON file must return an error");
 }
