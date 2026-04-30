@@ -298,6 +298,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_suppress_next_event_prevents_own_atomic_write() {
+        use std::fs;
+        use tempfile::NamedTempFile;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.json");
+        tokio::fs::write(&file_path, b"initial").await.unwrap();
+
+        let watcher = FileWatcher::new();
+        let mut rx = watcher.subscribe();
+        watcher.start_watching(file_path.clone()).await.unwrap();
+        sleep(Duration::from_millis(100)).await;
+
+        // Simulate what the save coordinator does: suppress before the save
+        watcher.suppress_next_event();
+
+        // Atomic write (same pattern as AtomicWriter)
+        let temp = NamedTempFile::new_in(dir.path()).unwrap();
+        std::fs::write(temp.path(), b"own write").unwrap();
+        fs::rename(temp.path(), &file_path).unwrap();
+
+        // Must timeout — no event should reach the channel
+        let result = tokio::time::timeout(Duration::from_millis(500), rx.recv()).await;
+        watcher.stop_watching().await.unwrap();
+        assert!(result.is_err(), "Expected no event, got: {:?}", result);
+    }
+
+    #[tokio::test]
     async fn test_file_watcher_does_not_fire_for_unrelated_temp_file() {
         use tempfile::NamedTempFile;
 
