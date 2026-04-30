@@ -1305,9 +1305,8 @@ impl App {
             .update_cards(self.sprint_view.completed_cards.cards.clone());
     }
 
-    /// Execute multiple commands as a batch with a single pause/resume cycle
-    /// This is the preferred method as it prevents race conditions where rapid successive saves
-    /// detect previous writes as external. For single commands, this still works efficiently.
+    /// Execute a single command and queue a flush.
+    /// For multiple commands, prefer `execute_commands_batch` to produce only one flush signal.
     pub fn execute_command(
         &mut self,
         command: kanban_domain::commands::Command,
@@ -1315,8 +1314,7 @@ impl App {
         self.execute_commands_batch(vec![command])
     }
 
-    /// Execute multiple commands as a batch with a single pause/resume cycle
-    /// This prevents race conditions where rapid successive saves detect previous writes as external
+    /// Execute multiple commands as a batch, producing a single flush signal.
     pub fn execute_commands_batch(
         &mut self,
         commands: Vec<kanban_domain::commands::Command>,
@@ -1685,7 +1683,6 @@ impl App {
         let mut terminal = setup_terminal()?;
 
         // Initialize file watching if a save file is configured
-        // (Done before spawning save worker so worker can pause/resume it)
         if let Some(ref save_file) = self.persistence.save_file {
             use kanban_persistence::ChangeDetector;
             tracing::info!("Initializing file watcher for: {}", save_file);
@@ -1716,7 +1713,6 @@ impl App {
 
             // Store the watcher to keep the background task alive
             self.persistence.file_watcher = Some(watcher.clone());
-            // Also set it on the state manager (wrapped in Arc) so queue_flush can pause it
             let watcher_arc = std::sync::Arc::new(watcher);
             self.ctx.save_coordinator.set_file_watcher(watcher_arc);
 

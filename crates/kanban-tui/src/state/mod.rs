@@ -86,8 +86,8 @@ impl SaveCoordinator {
     /// Queue a flush signal for async saving.
     /// Increments pending_saves to track unsaved changes.
     ///
-    /// Pauses file watcher before sending to prevent detecting our own writes as external changes.
-    /// The save worker will resume the watcher after the save completes.
+    /// Opens a 200 ms suppression window on the file watcher so the rename event
+    /// produced by our own atomic write is not mistaken for an external change.
     ///
     /// Uses try_send to handle bounded channel capacity (100 slots).
     /// If channel is full, logs warning and skips to prevent blocking UI.
@@ -101,9 +101,6 @@ impl SaveCoordinator {
             match tx.try_send(()) {
                 Ok(_) => {
                     self.pending_saves += 1;
-                    // Suppress the rename event our atomic save will produce.
-                    // The token is consumed atomically in the notify callback,
-                    // so this is race-free regardless of OS event delivery timing.
                     if let Some(ref watcher) = self.file_watcher {
                         watcher.suppress_next_event();
                     }
