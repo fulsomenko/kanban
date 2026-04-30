@@ -3,7 +3,7 @@ use crate::PersistenceResult;
 use chrono::Utc;
 use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex as TokioMutex;
@@ -34,7 +34,7 @@ use tokio::sync::Mutex as TokioMutex;
 pub struct FileWatcher {
     tx: broadcast::Sender<ChangeEvent>,
     task_handle: Arc<TokioMutex<Option<tokio::task::JoinHandle<()>>>>,
-    suppress_count: Arc<AtomicUsize>,
+    suppress_until_ms: Arc<AtomicU64>,
 }
 
 impl FileWatcher {
@@ -45,18 +45,24 @@ impl FileWatcher {
         Self {
             tx,
             task_handle: Arc::new(TokioMutex::new(None)),
-            suppress_count: Arc::new(AtomicUsize::new(0)),
+            suppress_until_ms: Arc::new(AtomicU64::new(0)),
         }
     }
 
-    /// Suppress the next own-write event for the watched file.
+    /// Suppress own-write events for the next 200 ms.
     ///
-    /// Call once before each atomic save. The counter is decremented atomically
-    /// inside the notify callback when the rename event for our file arrives,
-    /// so the suppression is race-free regardless of when the OS delivers the event.
+    /// Call before each atomic save. Any rename/modify events that arrive within
+    /// the window are silently dropped. The window self-expires, so a missed
+    /// decrement can never permanently suppress legitimate external events.
     pub fn suppress_next_event(&self) {
-        self.suppress_count.fetch_add(1, Ordering::SeqCst);
-        tracing::debug!("File watcher suppress_count incremented");
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let until = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+            + 200;
+        self.suppress_until_ms.store(until, Ordering::SeqCst);
+        tracing::debug!("File watcher suppress window set (200 ms)");
     }
 }
 
@@ -71,7 +77,7 @@ impl ChangeDetector for FileWatcher {
     async fn start_watching(&self, path: PathBuf) -> PersistenceResult<()> {
         let tx = self.tx.clone();
         let task_handle = self.task_handle.clone();
-        let suppress_count = self.suppress_count.clone();
+        let suppress_until_ms = self.suppress_until_ms.clone();
 
         // Canonicalize to absolute path so it matches OS event paths
         let canonical_path = tokio::fs::canonicalize(&path).await?;
@@ -83,7 +89,7 @@ impl ChangeDetector for FileWatcher {
                 .expect("Canonicalized path should always have parent")
                 .to_path_buf();
             let watch_path = canonical_path.clone();
-            let suppress_count_clone = suppress_count.clone();
+            let suppress_until_ms_clone = suppress_until_ms.clone();
 
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
@@ -111,18 +117,14 @@ impl ChangeDetector for FileWatcher {
                         }
 
                         if is_relevant_event && has_our_file {
-                            // Atomically consume one suppress token if available.
-                            // suppress_next_event() is called before each of our own saves;
-                            // the token is consumed by the rename event that the save produces,
-                            // so own-write events are suppressed without any timing dependency.
-                            let suppressed = suppress_count_clone.fetch_update(
-                                Ordering::SeqCst,
-                                Ordering::SeqCst,
-                                |n| if n > 0 { Some(n - 1) } else { None },
-                            );
-                            if suppressed.is_ok() {
+                            use std::time::{SystemTime, UNIX_EPOCH};
+                            let now_ms = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_millis() as u64;
+                            if now_ms < suppress_until_ms_clone.load(Ordering::SeqCst) {
                                 tracing::debug!(
-                                    "Own-write event suppressed: kind={:?}, path={}",
+                                    "Own-write event suppressed (in window): kind={:?}, path={}",
                                     event.kind,
                                     watch_path.display()
                                 );

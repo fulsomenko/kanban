@@ -1937,19 +1937,15 @@ impl App {
                         }
                     } => {
                         self.needs_redraw = true;
-                        // Own writes pause the watcher before flushing, so any event
-                        // that arrives here is from an external writer.
-
-                        // External file change detected - handle smart reload
-                        if !self.ctx.is_dirty() {
-                            // No local changes, auto-reload silently
+                        if self.ctx.save_coordinator.has_pending_saves() {
+                            tracing::debug!("File change event ignored: own save in flight");
+                        } else if !self.ctx.is_dirty() {
                             tracing::info!("External change detected, auto-reloading");
                             self.auto_reload_from_external_change().await;
                             tracing::info!("Auto-reloaded due to external file change");
                         } else if self.mode != AppMode::Dialog(DialogMode::ConflictResolution)
                             && self.mode != AppMode::Dialog(DialogMode::ExternalChangeDetected)
                         {
-                            // Local changes exist, prompt user
                             tracing::warn!("External file change detected with local changes");
                             self.open_dialog(DialogMode::ExternalChangeDetected);
                         }
