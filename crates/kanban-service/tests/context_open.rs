@@ -474,3 +474,26 @@ async fn test_open_context_with_corrupt_json_returns_error_on_first_read() {
     let result = ctx.boards();
     assert!(result.is_err(), "reading a corrupt JSON file must return an error");
 }
+
+/// After `reload()`, the backend must not be marked dirty. With the unfixed
+/// code, `truncate_commands_after(0)` routes through `with_mutate` which sets
+/// `dirty = true`, causing a spurious save after every external-change reload.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_reload_does_not_mark_backend_dirty() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("reload.json");
+    let backend = make_json_backend(&path);
+    let mut ctx = KanbanContext::open(backend.clone(), AppConfig::default())
+        .await
+        .unwrap();
+
+    ctx.create_board("B".into(), None).unwrap();
+    ctx.save().await.unwrap();
+
+    ctx.reload().await.unwrap();
+
+    assert!(
+        !backend.needs_flush(),
+        "backend must not be dirty after reload()"
+    );
+}
