@@ -752,4 +752,33 @@ mod tests {
             "snapshot data should roundtrip"
         );
     }
+
+    #[test]
+    fn test_migrate_v1_to_v2_sync_produces_valid_v2_and_leaves_no_artifacts() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let v1_content = json!({ "boards": [] });
+        std::fs::write(&path, v1_content.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let result = store.load_sync().unwrap();
+        assert!(result.is_some(), "load_sync must return a snapshot");
+
+        let on_disk: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let version = on_disk.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
+        assert!(version >= 2, "file on disk must be V2+ envelope after migration");
+
+        let backup_path = path.with_extension("v1.backup");
+        assert!(
+            !backup_path.exists(),
+            ".v1.backup must not remain after successful migration"
+        );
+
+        let tmp_path = path.with_extension("tmp");
+        assert!(
+            !tmp_path.exists(),
+            ".tmp must not remain after successful migration"
+        );
+    }
 }
