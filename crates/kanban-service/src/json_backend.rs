@@ -105,16 +105,16 @@ impl JsonDataStore {
         }
 
         *guard = Some(store);
-        drop(guard);
-
-        // Update undo-state caches after releasing the write lock — these are
-        // independent Mutexes and do not need to be held atomically with `inner`.
+        // Hold the write lock while updating caches — ensures any concurrent
+        // fast-path thread that acquires the read lock sees consistent
+        // (inner=Some, cursor, baseline) rather than a partially-updated state.
         *self.undo_cursor.lock().map_err(|_| {
             KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
         })? = file_cursor;
         *self.baseline_snapshot.lock().map_err(|_| {
             KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
         })? = baseline;
+        drop(guard);
 
         Ok(())
     }
@@ -732,20 +732,22 @@ mod tests {
         let path = dir.path().join("concurrent_baseline.json");
 
         // Pre-populate the file with a stored baseline snapshot.
+        // sync_command_log must be called before save() so that save()
+        // includes baseline_data in the JSON envelope it writes to disk.
         {
             let file_store = Arc::new(JsonFileStore::new(&path));
             let snap = kanban_domain::Snapshot::new();
+            let baseline_bytes = snapshot_to_json_bytes(&snap).unwrap();
+            file_store
+                .sync_command_log(&[], 0, Some(&baseline_bytes))
+                .await
+                .unwrap();
             let data = snapshot_to_json_bytes(&snap).unwrap();
             file_store
                 .save(StoreSnapshot {
                     data,
                     metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
                 })
-                .await
-                .unwrap();
-            let baseline_bytes = snapshot_to_json_bytes(&snap).unwrap();
-            file_store
-                .sync_command_log(&[], 0, Some(&baseline_bytes))
                 .await
                 .unwrap();
         }
