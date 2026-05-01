@@ -441,6 +441,10 @@ impl KanbanBackend for JsonDataStore {
         Ok(())
     }
 
+    fn clear_dirty(&self) {
+        self.dirty.store(false, Ordering::Release);
+    }
+
     fn instance_id(&self) -> Uuid {
         self.file_store.instance_id()
     }
