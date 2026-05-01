@@ -721,4 +721,55 @@ mod tests {
         assert_eq!(boards1[0].name, "ConcurrentBoard");
         assert_eq!(boards2[0].name, "ConcurrentBoard");
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_concurrent_load_snapshot_at_0_never_returns_stale_none() {
+        use kanban_domain::CommandStore;
+        use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+        use std::sync::Barrier;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("concurrent_baseline.json");
+
+        // Pre-populate the file with a stored baseline snapshot.
+        {
+            let file_store = Arc::new(JsonFileStore::new(&path));
+            let snap = kanban_domain::Snapshot::new();
+            let data = snapshot_to_json_bytes(&snap).unwrap();
+            file_store
+                .save(StoreSnapshot {
+                    data,
+                    metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
+                })
+                .await
+                .unwrap();
+            let baseline_bytes = snapshot_to_json_bytes(&snap).unwrap();
+            file_store
+                .sync_command_log(&[], 0, Some(&baseline_bytes))
+                .await
+                .unwrap();
+        }
+
+        const N: usize = 8;
+        let barrier = Arc::new(Barrier::new(N));
+        let jds = Arc::new(make_store(&path));
+
+        let mut handles = Vec::new();
+        for _ in 0..N {
+            let jds_clone = Arc::clone(&jds);
+            let barrier_clone = Arc::clone(&barrier);
+            handles.push(tokio::task::spawn_blocking(move || {
+                barrier_clone.wait();
+                jds_clone.load_snapshot_at(0)
+            }));
+        }
+
+        for handle in handles {
+            let result = handle.await.unwrap().unwrap();
+            assert!(
+                result.is_some(),
+                "load_snapshot_at(0) must never return None when file has a stored baseline"
+            );
+        }
+    }
 }
