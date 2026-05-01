@@ -11,8 +11,7 @@ use uuid::Uuid;
 ///
 /// - `flush()`: persist in-memory state to durable storage. For SQLite this
 ///   runs an explicit WAL checkpoint (TRUNCATE); for JSON this serialises the
-///   cache to disk. SQLite also auto-checkpoints after every page write via
-///   `wal_autocheckpoint=1`, so explicit flushes are only needed for `save()`.
+///   cache to disk.
 /// - `reload()`: discard cached state so the next read re-fetches from
 ///   durable storage. For SQLite this is a no-op (reads are always live).
 /// - `needs_flush()`: returns `true` when there are uncommitted writes that

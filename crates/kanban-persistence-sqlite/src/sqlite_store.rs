@@ -251,8 +251,7 @@ impl SqliteStore {
             .filename(&path_buf)
             .create_if_missing(true)
             .foreign_keys(true)
-            .pragma("journal_mode", "wal")
-            .pragma("wal_autocheckpoint", "1");
+            .pragma("journal_mode", "wal");
 
         let pool = SqlitePoolOptions::new()
             .max_connections(2)
