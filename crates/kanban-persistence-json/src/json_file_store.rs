@@ -146,7 +146,9 @@ fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<()> {
     let json_str = v2_envelope
         .to_json_string()
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-    std::fs::write(path, json_str)?;
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, json_str.as_bytes())?;
+    std::fs::rename(&tmp_path, path)?;
     let _ = std::fs::remove_file(&backup_path);
     tracing::info!("Migrated {} from V1 to V2 (sync)", path.display());
     Ok(())
