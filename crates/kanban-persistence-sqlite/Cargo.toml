@@ -11,9 +11,9 @@ keywords = ["kanban", "persistence", "sqlite", "storage"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
-kanban-core = { path = "../kanban-core", version = "^0.3" }
-kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.4" }
+kanban-core = { path = "../kanban-core", version = "^0.4" }
+kanban-domain = { path = "../kanban-domain", version = "^0.4" }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
 tokio.workspace = true
 async-trait.workspace = true
@@ -25,6 +25,6 @@ tracing.workspace = true
 flate2 = "1"
 
 [dev-dependencies]
-kanban-service = { path = "../kanban-service", version = "^0.3", features = ["test-helpers"] }
+kanban-service = { path = "../kanban-service", version = "^0.4", features = ["test-helpers"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
