@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mapfile -t CRATES < <(list-crates --paths)
-[ "${#CRATES[@]}" -gt 0 ] || { echo "❌ list-crates returned empty"; exit 1; }
+crates_out=$(list-crates --paths) || { echo "❌ list-crates failed"; exit 1; }
+mapfile -t CRATES <<< "$crates_out"
 
 echo "🔍 Validating release build..."
 echo ""
@@ -31,7 +31,8 @@ echo "✓ Version consistency verified"
 
 echo ""
 echo "Step 3: Checking cross-crate dependencies..."
-mapfile -t INTERNAL_DEPS < <(list-crates --names)
+deps_out=$(list-crates --names) || { echo "❌ list-crates failed"; exit 1; }
+mapfile -t INTERNAL_DEPS <<< "$deps_out"
 for crate in "${CRATES[@]}"; do
   for dep in "${INTERNAL_DEPS[@]}"; do
     if grep -q "$dep = { path = " "$crate/Cargo.toml" 2>/dev/null; then

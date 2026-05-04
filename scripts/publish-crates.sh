@@ -2,8 +2,8 @@
 set -uo pipefail
 
 # Crates published in topological dependency order via list-crates.
-mapfile -t CRATES < <(list-crates --paths)
-[ "${#CRATES[@]}" -gt 0 ] || { echo "❌ list-crates returned empty"; exit 1; }
+crates_out=$(list-crates --paths) || { echo "❌ list-crates failed"; exit 1; }
+mapfile -t CRATES <<< "$crates_out"
 
 check_version_exists() {
   local crate_name=$1
