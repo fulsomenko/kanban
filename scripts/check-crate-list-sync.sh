@@ -7,7 +7,7 @@ set -euo pipefail
 
 failed=0
 for f in scripts/validate-release.sh scripts/publish-crates.sh; do
-  if grep -qE '^\s*"crates/' "$f"; then
+  if grep -qE '"crates/[a-z][a-z0-9-]*"' "$f"; then
     echo "❌ $f contains a hardcoded crates/ array literal — use list-crates"
     failed=1
   fi
