@@ -4,6 +4,11 @@ set -euo pipefail
 # Drift-prevention invariant: fail if either release script regressed to
 # a hardcoded crate list array. The dynamic helper (list-crates) is the
 # single source of truth.
+#
+# Scope: only validate-release.sh and publish-crates.sh are checked. The
+# other release scripts (bump-version.sh, aggregate-changelog.sh) already
+# iterate crates/*/Cargo.toml via filesystem glob — they have no array
+# literal to drift, so the invariant doesn't apply to them.
 
 failed=0
 for f in scripts/validate-release.sh scripts/publish-crates.sh; do
