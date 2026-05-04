@@ -3,6 +3,12 @@ name: Publish to AUR
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g., v0.4.0)'
+        required: true
+        type: string
 
 jobs:
   aur-publish:
@@ -17,7 +23,7 @@ jobs:
 
       - name: Update PKGBUILD version and sha256
         env:
-          RAW_TAG: ${{ github.event.release.tag_name }}
+          RAW_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
           VERSION="${RAW_TAG#v}"
@@ -36,7 +42,12 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Generate .SRCINFO
-        run: nix shell nixpkgs#pacman -c sh -c "cd aur && makepkg --printsrcinfo > .SRCINFO"
+        run: |
+          nix shell nixpkgs#pacman -c sh -c '
+            PACMAN_ROOT="$(dirname "$(dirname "$(command -v makepkg)")")"
+            export MAKEPKG_CONF="$PACMAN_ROOT/etc/makepkg.conf"
+            cd aur && makepkg --printsrcinfo > .SRCINFO
+          '
 
       - name: Commit updated AUR files
         run: |
