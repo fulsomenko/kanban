@@ -770,7 +770,10 @@ mod tests {
         let on_disk: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         let version = on_disk.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
-        assert!(version >= 2, "file on disk must be V2+ envelope after migration");
+        assert!(
+            version >= 2,
+            "file on disk must be V2+ envelope after migration"
+        );
 
         let backup_path = path.with_extension("v1.backup");
         assert!(

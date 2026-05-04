@@ -378,9 +378,7 @@ impl CommandStore for JsonDataStore {
             // Ensure the file has been loaded so baseline_snapshot is populated.
             self.ensure_loaded()?;
             let guard = self.baseline_snapshot.lock().map_err(|_| {
-                KanbanError::Internal(
-                    "json_backend: baseline_snapshot mutex poisoned".into(),
-                )
+                KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
             })?;
             if guard.is_some() {
                 return Ok(guard.clone());

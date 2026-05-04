@@ -11,7 +11,9 @@ async fn test_new_with_store_sqlite_path_yields_no_save_worker() {
 
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
     let (app, save_rx) =
-        kanban_tui::App::new_with_store(sm, Some(path.to_str().unwrap().to_string())).await.unwrap();
+        kanban_tui::App::new_with_store(sm, Some(path.to_str().unwrap().to_string()))
+            .await
+            .unwrap();
 
     assert!(
         !app.ctx.backend().needs_save_worker(),
@@ -30,7 +32,9 @@ async fn test_new_with_store_json_path_yields_save_worker() {
 
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
     let (app, save_rx) =
-        kanban_tui::App::new_with_store(sm, Some(path.to_str().unwrap().to_string())).await.unwrap();
+        kanban_tui::App::new_with_store(sm, Some(path.to_str().unwrap().to_string()))
+            .await
+            .unwrap();
 
     assert!(
         app.ctx.backend().needs_save_worker(),

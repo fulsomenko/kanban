@@ -95,72 +95,66 @@ impl ChangeDetector for FileWatcher {
             let watch_path = canonical_path.clone();
             let suppress_remaining_clone = suppress_remaining.clone();
 
-            match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-                match res {
-                    Ok(event) => {
-                        let is_relevant_event = matches!(
+            match notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
+                Ok(event) => {
+                    let is_relevant_event = matches!(
+                        event.kind,
+                        notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                            notify::event::DataChange::Content,
+                        )) | notify::EventKind::Modify(notify::event::ModifyKind::Name(_),)
+                            | notify::EventKind::Create(_)
+                            | notify::EventKind::Remove(_)
+                    );
+
+                    let has_our_file = event.paths.iter().any(|p| p == &watch_path);
+
+                    if is_relevant_event {
+                        tracing::debug!(
+                            "File system event detected: kind={:?}, paths={:?}, has_our_file={}",
                             event.kind,
-                            notify::EventKind::Modify(notify::event::ModifyKind::Data(
-                                notify::event::DataChange::Content,
-                            )) | notify::EventKind::Modify(
-                                notify::event::ModifyKind::Name(_),
-                            )
-                                | notify::EventKind::Create(_)
-                                | notify::EventKind::Remove(_)
+                            event.paths,
+                            has_our_file
                         );
+                    }
 
-                        let has_our_file = event.paths.iter().any(|p| p == &watch_path);
-
-                        if is_relevant_event {
+                    if is_relevant_event && has_our_file {
+                        let suppressed = suppress_remaining_clone
+                            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+                            .is_ok();
+                        if suppressed {
                             tracing::debug!(
-                                "File system event detected: kind={:?}, paths={:?}, has_our_file={}",
+                                "Own-write event suppressed (counter): kind={:?}, path={}",
                                 event.kind,
-                                event.paths,
-                                has_our_file
+                                watch_path.display()
                             );
+                            return;
                         }
 
-                        if is_relevant_event && has_our_file {
-                            let suppressed = suppress_remaining_clone
-                                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
-                                    n.checked_sub(1)
-                                })
-                                .is_ok();
-                            if suppressed {
+                        tracing::debug!(
+                            "File event detected: kind={:?}, path={}, our_file_exists={}",
+                            event.kind,
+                            watch_path.display(),
+                            watch_path.exists()
+                        );
+                        let change = ChangeEvent {
+                            path: watch_path.clone(),
+                            detected_at: Utc::now(),
+                        };
+                        match tx.send(change) {
+                            Ok(receiver_count) => {
                                 tracing::debug!(
-                                    "Own-write event suppressed (counter): kind={:?}, path={}",
-                                    event.kind,
-                                    watch_path.display()
+                                    "File change event sent to {} receivers",
+                                    receiver_count
                                 );
-                                return;
                             }
-
-                            tracing::debug!(
-                                "File event detected: kind={:?}, path={}, our_file_exists={}",
-                                event.kind,
-                                watch_path.display(),
-                                watch_path.exists()
-                            );
-                            let change = ChangeEvent {
-                                path: watch_path.clone(),
-                                detected_at: Utc::now(),
-                            };
-                            match tx.send(change) {
-                                Ok(receiver_count) => {
-                                    tracing::debug!(
-                                        "File change event sent to {} receivers",
-                                        receiver_count
-                                    );
-                                }
-                                Err(e) => {
-                                    tracing::warn!("Failed to send file change event: {}", e);
-                                }
+                            Err(e) => {
+                                tracing::warn!("Failed to send file change event: {}", e);
                             }
                         }
                     }
-                    Err(e) => {
-                        tracing::warn!("File watcher error: {}", e);
-                    }
+                }
+                Err(e) => {
+                    tracing::warn!("File watcher error: {}", e);
                 }
             }) {
                 Ok(mut watcher) => {

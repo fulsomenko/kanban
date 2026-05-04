@@ -412,7 +412,11 @@ async fn test_initialize_undo_state_restores_correct_baseline_after_restart() ->
     let boards = ctx.boards()?;
     // Before fix: baseline=empty → apply empty → []; replay [CreateBoard(B1)] → [B1]. Missing B0!
     // After fix:  baseline={B0} → apply {B0} → [B0]; replay [CreateBoard(B1)] → [B0, B1].
-    assert_eq!(boards.len(), 2, "undo must restore {{B0, B1}}, not just {{B1}}");
+    assert_eq!(
+        boards.len(),
+        2,
+        "undo must restore {{B0, B1}}, not just {{B1}}"
+    );
     let names: Vec<&str> = boards.iter().map(|b| b.name.as_str()).collect();
     assert!(names.contains(&"B0"), "B0 must survive undo");
     assert!(names.contains(&"B1"), "B1 must survive undo");
@@ -434,9 +438,11 @@ async fn test_initialize_undo_state_restores_correct_baseline_after_restart() ->
 #[tokio::test(flavor = "multi_thread")]
 async fn test_initialize_undo_state_no_stored_baseline_falls_back_to_current_snapshot(
 ) -> KanbanResult<()> {
-    use kanban_domain::{Board, Snapshot};
     use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
-    use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+    use kanban_domain::{Board, Snapshot};
+    use kanban_persistence::{
+        snapshot_to_json_bytes, PersistenceMetadata, PersistenceStore, StoreSnapshot,
+    };
 
     let dir = tempdir().unwrap();
     let path = dir.path().join("no_baseline.json");
@@ -539,7 +545,10 @@ async fn test_open_context_with_corrupt_json_returns_error_on_first_read() {
 
     let ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
     let result = ctx.boards();
-    assert!(result.is_err(), "reading a corrupt JSON file must return an error");
+    assert!(
+        result.is_err(),
+        "reading a corrupt JSON file must return an error"
+    );
 }
 
 /// After `reload()`, the backend must not be marked dirty. With the unfixed

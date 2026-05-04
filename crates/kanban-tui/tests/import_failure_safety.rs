@@ -40,7 +40,9 @@ async fn test_import_failure_prevents_empty_state_save() {
     .unwrap();
 
     // Create app with the V2 format file - should handle it gracefully now
-    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).await.unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()))
+        .await
+        .unwrap();
     app.load_initial_state().await;
 
     // App should load the board from V2 format
@@ -113,7 +115,9 @@ async fn test_v2_format_is_imported_correctly() {
     .unwrap();
 
     // Create app with V2 format file
-    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).await.unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()))
+        .await
+        .unwrap();
     app.load_initial_state().await;
 
     // Should successfully import the board with its column and card

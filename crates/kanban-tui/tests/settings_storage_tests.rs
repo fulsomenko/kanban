@@ -27,7 +27,9 @@ async fn test_file_arg_new_file_defaults_to_json() {
     let path = dir.path().join("brand_new.myext");
     assert!(!path.exists());
 
-    let (app, _rx) = App::new(Some(path.to_str().unwrap().to_string())).await.unwrap();
+    let (app, _rx) = App::new(Some(path.to_str().unwrap().to_string()))
+        .await
+        .unwrap();
     assert_eq!(app.app_config.effective_storage_backend(), "json");
 }
 

@@ -187,7 +187,9 @@ async fn test_auto_save() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_autosave.json");
 
-    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string())).await.unwrap();
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()))
+        .await
+        .unwrap();
 
     let board = app
         .ctx
@@ -218,7 +220,10 @@ async fn test_failed_import_returns_error() {
     // An invalid JSON file causes App::new to fail before the TUI starts,
     // preventing any risk of overwriting the file with empty data.
     let result = App::new(Some(file_path.to_str().unwrap().to_string())).await;
-    assert!(result.is_err(), "App::new should fail for a JSON file with invalid board data");
+    assert!(
+        result.is_err(),
+        "App::new should fail for a JSON file with invalid board data"
+    );
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
@@ -249,8 +254,9 @@ async fn test_async_load_initial_state_sqlite() {
     drop(store);
 
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
-    let (mut app, _rx) =
-        App::new_with_store(sm, Some(db_path.to_str().unwrap().to_string())).await.unwrap();
+    let (mut app, _rx) = App::new_with_store(sm, Some(db_path.to_str().unwrap().to_string()))
+        .await
+        .unwrap();
 
     app.load_initial_state().await;
     app.prepare_frame();

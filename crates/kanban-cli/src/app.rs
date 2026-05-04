@@ -261,7 +261,8 @@ impl CliApp {
                     ));
                     init_tracing_tui(std::sync::Arc::clone(&error_log));
 
-                    let (mut app, save_rx) = App::new_with_store(store_manager, validated_file).await?;
+                    let (mut app, save_rx) =
+                        App::new_with_store(store_manager, validated_file).await?;
                     app.set_error_log(error_log);
                     app.run(save_rx).await?;
                 }

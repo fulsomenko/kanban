@@ -2275,9 +2275,7 @@ mod tests {
                     source: None,
                 })
             }
-            async fn load(
-                &self,
-            ) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
+            async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
                 Err(PersistenceError::Serialization("noop".into()))
             }
             async fn exists(&self) -> bool {
@@ -2289,10 +2287,7 @@ mod tests {
             fn instance_id(&self) -> uuid::Uuid {
                 uuid::Uuid::nil()
             }
-            fn load_sync(
-                &self,
-            ) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>>
-            {
+            fn load_sync(&self) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
                 Ok(None)
             }
         }
