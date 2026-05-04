@@ -1,5 +1,7 @@
 use crate::app::{App, AppMode, BoardFocus, DialogMode, Focus};
-use kanban_domain::commands::{CreateBoard, CreateColumn, UpdateBoard};
+use kanban_domain::commands::{
+    BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn, UpdateBoard,
+};
 use kanban_domain::{BoardUpdate, TaskListView};
 
 impl App {
@@ -13,7 +15,7 @@ impl App {
     pub fn handle_rename_board_key(&mut self) {
         if self.focus.active == Focus::Boards && self.selection.board.get().is_some() {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     self.input.set(board.name.clone());
                     self.open_dialog(DialogMode::RenameBoard);
                 }
@@ -31,7 +33,7 @@ impl App {
     pub fn handle_export_board_key(&mut self) {
         if self.focus.active == Focus::Boards && self.selection.board.get().is_some() {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     let filename = format!(
                         "{}-{}.json",
                         board.name.replace(" ", "-").to_lowercase(),
@@ -45,7 +47,7 @@ impl App {
     }
 
     pub fn handle_export_all_key(&mut self) {
-        if self.focus.active == Focus::Boards && !self.ctx.boards.is_empty() {
+        if self.focus.active == Focus::Boards && !self.model.boards().is_empty() {
             let filename = format!(
                 "kanban-all-{}.json",
                 chrono::Utc::now().format("%Y%m%d-%H%M%S")
@@ -68,40 +70,41 @@ impl App {
     pub fn create_board(&mut self) {
         let board_name = self.input.as_str().to_string();
 
-        // Execute CreateBoard command first to get the board ID
-        let create_board_cmd = Box::new(CreateBoard {
+        let board_id = uuid::Uuid::new_v4();
+        let position = self.model.boards().len() as i32;
+        let new_index = position as usize;
+
+        let create_board_cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: board_id,
             name: board_name.clone(),
             card_prefix: None,
-        });
+            position,
+        }));
 
         if let Err(e) = self.execute_command(create_board_cmd) {
             tracing::error!("Failed to create board: {}", e);
+            self.set_error(format!("Failed to create board: {}", e));
             return;
         }
 
-        // Get the board ID from the newly created board
-        let board_id = if let Some(board) = self.ctx.boards.last() {
-            board.id
-        } else {
-            return;
-        };
-
         // Now batch the column creation commands
-        let mut column_commands: Vec<Box<dyn kanban_domain::commands::Command>> = Vec::new();
+        let mut column_commands: Vec<Command> = Vec::new();
         let default_columns = vec![("TODO", 0i32), ("Doing", 1i32), ("Complete", 2i32)];
 
         for (name, position) in default_columns {
-            let create_col_cmd = Box::new(CreateColumn {
+            let create_col_cmd = Command::Column(ColumnCommand::Create(CreateColumn {
+                id: uuid::Uuid::new_v4(),
                 board_id,
                 name: name.to_string(),
                 position,
-            }) as Box<dyn kanban_domain::commands::Command>;
+            }));
             column_commands.push(create_col_cmd);
         }
 
         // Execute all column creation commands as a batch (single pause/resume cycle)
         if let Err(e) = self.execute_commands_batch(column_commands) {
             tracing::error!("Failed to create default columns: {}", e);
+            self.set_error(format!("Failed to create default columns: {}", e));
             return;
         }
 
@@ -110,28 +113,28 @@ impl App {
         tracing::info!("Created board: {} (id: {})", board_name, board_id);
         tracing::info!("Created default columns: TODO, Doing, Complete");
 
-        let new_index = self.ctx.boards.len() - 1;
         self.selection.board.set(Some(new_index));
         self.switch_view_strategy(task_list_view);
     }
 
     pub fn rename_board(&mut self) {
         if let Some(idx) = self.selection.board.get() {
-            if let Some(board) = self.ctx.boards.get(idx) {
+            if let Some(board) = self.model.boards().get(idx) {
                 let board_id = board.id;
                 let new_name = self.input.as_str().to_string();
 
                 // Execute UpdateBoard command
-                let cmd = Box::new(UpdateBoard {
+                let cmd = Command::Board(BoardCommand::Update(UpdateBoard {
                     board_id,
                     updates: BoardUpdate {
                         name: Some(new_name.clone()),
                         ..Default::default()
                     },
-                });
+                }));
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to rename board: {}", e);
+                    self.set_error(format!("Failed to rename board: {}", e));
                     return;
                 }
 

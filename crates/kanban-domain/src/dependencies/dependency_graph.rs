@@ -6,7 +6,7 @@ use super::card_graph::CardDependencyGraph;
 ///
 /// Currently contains only card dependencies (MVP).
 /// Designed to be extended with sprint and board graphs in the future.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DependencyGraph {
     /// Card dependency graph
     #[serde(default)]

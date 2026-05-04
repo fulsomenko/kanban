@@ -15,7 +15,7 @@ pub enum EdgeDirection {
 ///
 /// Generic over edge type `E` to support different relationship types
 /// (e.g., CardEdgeType::Blocks, CardEdgeType::RelatesTo, etc.)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge<E> {
     /// Source node identifier
     pub source: Uuid,

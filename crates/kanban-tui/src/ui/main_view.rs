@@ -1,0 +1,231 @@
+use crate::app::{App, AppMode, Focus};
+use crate::components::*;
+use crate::theme::*;
+use crate::view_strategy::UnifiedViewStrategy;
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    text::{Line, Span},
+    widgets::Paragraph,
+    Frame,
+};
+
+pub(super) fn render_main(app: &mut App, frame: &mut Frame, area: Rect) {
+    let is_kanban_view = if let Some(idx) = app.selection.active_board_index {
+        if let Some(board) = app.model.boards().get(idx) {
+            board.task_list_view == kanban_domain::TaskListView::ColumnView
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if is_kanban_view {
+        app.view.viewport_height = area.height.saturating_sub(2) as usize;
+        render_tasks(app, frame, area);
+    } else {
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+            .split(area);
+
+        app.view.viewport_height = chunks[1].height.saturating_sub(2) as usize;
+        render_projects_panel(app, frame, chunks[0]);
+        render_tasks(app, frame, chunks[1]);
+    }
+}
+
+pub(super) fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
+    let mut lines = vec![];
+    let boards = app.model.boards();
+
+    if boards.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No projects yet. Press 'n' to create one!",
+            label_text(),
+        )));
+    } else {
+        for (idx, board) in boards.iter().enumerate() {
+            let config = ListItemConfig::new()
+                .selected(app.selection.board.get() == Some(idx))
+                .focused(app.focus.active == Focus::Boards)
+                .active(app.selection.active_board_index == Some(idx));
+
+            lines.push(styled_list_item(&board.name, &config));
+        }
+    }
+
+    let panel_config = PanelConfig::new("Projects")
+        .with_focus_indicator("Projects [1]")
+        .focused(app.focus.active == Focus::Boards);
+
+    let content = Paragraph::new(lines);
+    render_panel(frame, area, &panel_config, content);
+}
+
+pub fn build_filter_title_suffix(app: &App) -> Option<String> {
+    let mut filters = vec![];
+
+    if app.filter.hide_assigned_cards {
+        filters.push("Unassigned Cards".to_string());
+    }
+
+    if !app.filter.active_sprint_filters.is_empty() {
+        if let Some(board_idx) = app
+            .selection
+            .active_board_index
+            .or(app.selection.board.get())
+        {
+            if let Some(board) = app.model.boards().get(board_idx) {
+                let mut sprint_names: Vec<String> = app
+                    .model
+                    .sprints()
+                    .iter()
+                    .filter(|s| app.filter.active_sprint_filters.contains(&s.id))
+                    .map(|s| s.formatted_name(board, "sprint"))
+                    .collect();
+                sprint_names.sort();
+                filters.extend(sprint_names);
+            }
+        }
+    }
+
+    if filters.is_empty() {
+        None
+    } else {
+        Some(format!(" - {}", filters.join(" + ")))
+    }
+}
+
+pub fn build_tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
+    let count = app
+        .view
+        .strategy
+        .get_active_task_list()
+        .map(|l| l.len())
+        .unwrap_or(0);
+    let mut title = if app.mode == AppMode::ArchivedCardsView {
+        format!("Archive [{}]", count)
+    } else if app.focus.active == Focus::Cards {
+        format!("Tasks [2] ({})", count)
+    } else {
+        "Tasks".to_string()
+    };
+
+    if with_filter_suffix && app.mode != AppMode::ArchivedCardsView {
+        if let Some(suffix) = build_filter_title_suffix(app) {
+            title.push_str(&suffix);
+        }
+    }
+
+    title
+}
+
+pub(super) fn render_tasks(app: &App, frame: &mut Frame, area: Rect) {
+    if let Some(unified_strategy) = app
+        .view
+        .strategy
+        .as_any()
+        .downcast_ref::<UnifiedViewStrategy>()
+    {
+        unified_strategy
+            .get_render_strategy()
+            .render(app, frame, area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_filter_title_suffix_no_filters_returns_none() {
+        let app = App::test_default();
+        assert_eq!(build_filter_title_suffix(&app), None);
+    }
+
+    #[test]
+    fn test_build_filter_title_suffix_unassigned_cards_flag() {
+        let mut app = App::test_default();
+        app.filter.hide_assigned_cards = true;
+        assert_eq!(
+            build_filter_title_suffix(&app),
+            Some(" - Unassigned Cards".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_filter_title_suffix_sprint_filter_formats_sprint_name() {
+        use kanban_domain::KanbanOperations;
+        let mut app = App::test_default();
+        let board = app
+            .ctx
+            .inner_mut()
+            .create_board("Test Board".to_string(), None)
+            .unwrap();
+        let sprint = app
+            .ctx
+            .inner_mut()
+            .create_sprint(board.id, None, Some("Sprint".to_string()))
+            .unwrap();
+        let sprint_id = sprint.id;
+        app.selection.active_board_index = Some(0);
+        app.filter.active_sprint_filters.insert(sprint_id);
+        app.prepare_frame();
+        let suffix = build_filter_title_suffix(&app);
+        assert!(
+            suffix.is_some(),
+            "Expected Some suffix with active sprint filter"
+        );
+        let suffix = suffix.unwrap();
+        assert!(suffix.starts_with(" - "), "Suffix should start with ' - '");
+        assert!(
+            suffix.contains("Sprint"),
+            "Suffix should contain sprint name"
+        );
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_default() {
+        let app = App::test_default();
+        assert_eq!(build_tasks_panel_title(&app, false), "Tasks");
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_archived_view() {
+        let mut app = App::test_default();
+        app.mode = AppMode::ArchivedCardsView;
+        assert_eq!(build_tasks_panel_title(&app, false), "Archive [0]");
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_cards_focus() {
+        let mut app = App::test_default();
+        app.focus.active = Focus::Cards;
+        assert_eq!(
+            build_tasks_panel_title(&app, false),
+            "Tasks [2] (0)",
+            "empty board should show shortcut hint [2] and count (0)"
+        );
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_with_filter_suffix() {
+        let mut app = App::test_default();
+        app.filter.hide_assigned_cards = true;
+        let title = build_tasks_panel_title(&app, true);
+        assert!(
+            title.ends_with(" - Unassigned Cards"),
+            "Expected title to end with filter suffix, got: {}",
+            title
+        );
+    }
+
+    #[test]
+    fn test_build_tasks_panel_title_archived_ignores_filter_suffix() {
+        let mut app = App::test_default();
+        app.mode = AppMode::ArchivedCardsView;
+        app.filter.hide_assigned_cards = true;
+        assert_eq!(build_tasks_panel_title(&app, true), "Archive [0]");
+    }
+}

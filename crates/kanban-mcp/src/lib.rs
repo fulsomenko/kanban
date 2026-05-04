@@ -1,12 +1,17 @@
 pub mod context;
+pub mod server;
+
+pub use server::McpServer;
 
 use context::McpContext;
-use kanban_core::KanbanError;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate,
-    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    format_ambiguous_matches, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
+    CardStatus, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
+    SprintUpdate,
 };
+use kanban_domain::{KanbanError, KanbanResult};
+use kanban_service::StoreManager;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
@@ -38,13 +43,13 @@ fn to_call_tool_result_json(value: serde_json::Value) -> Result<CallToolResult, 
 
 fn kanban_err_to_mcp(e: KanbanError) -> McpError {
     match &e {
-        KanbanError::NotFound(_)
-        | KanbanError::Validation(_)
-        | KanbanError::CycleDetected
-        | KanbanError::SelfReference
-        | KanbanError::EdgeNotFound => McpError::invalid_params(e.to_string(), None),
+        KanbanError::Domain(_) => McpError::invalid_params(e.to_string(), None),
         _ => McpError::internal_error(e.to_string(), None),
     }
+}
+
+fn core_err_to_mcp(e: kanban_core::CoreError) -> McpError {
+    kanban_err_to_mcp(KanbanError::from(e))
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, McpError> {
@@ -109,17 +114,39 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
     if let Ok(id) = Uuid::parse_str(s) {
         return Ok(id);
     }
-    let card = {
+    let matches = {
         let guard = ctx.lock().await;
         guard
-            .find_card_by_identifier(s)
+            .find_cards_by_identifier(s)
             .map_err(kanban_err_to_mcp)?
     };
-    card.map(|c| c.id)
-        .ok_or_else(|| McpError::invalid_params(format!("Card not found: '{}'", s), None))
+    match matches.as_slice() {
+        [] => Err(McpError::invalid_params(
+            format!("Card not found: '{}'", s),
+            None,
+        )),
+        [card] => Ok(card.id),
+        cards => Err(McpError::invalid_params(
+            format_ambiguous_matches(s, cards),
+            None,
+        )),
+    }
 }
 
-/// Lock, mutate, save.
+/// Lock the context, reload from disk, execute a mutating operation, then save.
+///
+/// # Reload semantics and undo limitations
+///
+/// Every invocation begins with `guard.reload()`, which fully discards the
+/// in-memory cache and resets undo history to the current on-disk state.
+/// Consequently, within-session undo history from earlier API calls is always
+/// wiped before each mutation: `tool_undo` can only undo the operation
+/// recorded during the **current** tool call, not operations from prior calls.
+///
+/// **Future work**: a `reload_if_changed()` method that compares file metadata
+/// (mtime / instance_id) and skips the full reload when no external write has
+/// occurred would allow undo history to persist across calls in the same
+/// session. Track as `KanbanBackend::reload_if_changed()`.
 macro_rules! mutating_op {
     ($ctx:expr, $method:ident $(, $arg:expr)*) => {{
         async {
@@ -370,16 +397,16 @@ pub struct GetCardGitCheckoutRequest {
     pub card_id: String,
 }
 
-// Bulk Operations
+// Multi-card operations
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkArchiveCardsRequest {
+pub struct ArchiveCardsRequest {
     #[schemars(description = "Comma-separated card IDs to archive")]
     pub ids: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkMoveCardsRequest {
+pub struct MoveCardsRequest {
     #[schemars(description = "Comma-separated card IDs to move")]
     pub ids: String,
     #[schemars(description = "ID of the destination column")]
@@ -387,7 +414,7 @@ pub struct BulkMoveCardsRequest {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct BulkAssignSprintRequest {
+pub struct AssignCardsToSprintRequest {
     #[schemars(description = "Comma-separated card IDs")]
     pub ids: String,
     #[schemars(description = "ID of the sprint to assign to")]
@@ -464,6 +491,16 @@ pub struct DeleteSprintRequest {
     pub sprint_id: String,
 }
 
+// Carry-over
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CarryOverSprintCardsRequest {
+    #[schemars(description = "ID of the completed or cancelled sprint to carry cards from")]
+    pub from_sprint_id: String,
+    #[schemars(description = "ID of the planning sprint to carry cards to")]
+    pub to_sprint_id: String,
+}
+
 // Export/Import
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -489,9 +526,15 @@ pub struct KanbanMcpServer {
 }
 
 impl KanbanMcpServer {
-    pub async fn new(data_file: &str) -> kanban_core::KanbanResult<Self> {
+    pub async fn new(
+        store_manager: &StoreManager,
+        data_file: &str,
+        config: kanban_core::AppConfig,
+    ) -> KanbanResult<Self> {
         Ok(Self {
-            ctx: Arc::new(Mutex::new(McpContext::new(data_file).await?)),
+            ctx: Arc::new(Mutex::new(
+                McpContext::new(store_manager, data_file, config).await?,
+            )),
             tool_router: Self::tool_router(),
         })
     }
@@ -690,19 +733,36 @@ impl KanbanMcpServer {
             status,
         };
         let (page, page_size) =
-            resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
+            resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let result = read_op!(self.ctx, list_cards_paged, filter, page, page_size)?;
         to_call_tool_result(&result)
     }
 
-    #[tool(description = "Get a specific card by UUID or identifier (e.g. KAN-5)")]
+    #[tool(
+        description = "Get a specific card by UUID or identifier (e.g. KAN-5). Returns a single card for UUID or unambiguous identifier, or a list of all matching cards if the identifier is ambiguous."
+    )]
     async fn tool_get_card(
         &self,
         Parameters(req): Parameters<GetCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        let card = read_op!(self.ctx, get_card, id)?;
-        to_call_tool_result(&card)
+        if let Ok(uuid) = uuid::Uuid::parse_str(&req.card_id) {
+            let card = read_op!(self.ctx, get_card, uuid)?;
+            return to_call_tool_result(&card);
+        }
+        let cards = {
+            let guard = self.ctx.lock().await;
+            guard
+                .find_cards_by_identifier(&req.card_id)
+                .map_err(kanban_err_to_mcp)?
+        };
+        match cards.as_slice() {
+            [] => Err(McpError::invalid_params(
+                format!("Card not found: '{}'", req.card_id),
+                None,
+            )),
+            [card] => to_call_tool_result(card),
+            _ => to_call_tool_result(&cards),
+        }
     }
 
     #[tool(
@@ -739,8 +799,6 @@ impl KanbanMcpServer {
                 }
             },
             sprint_id: FieldUpdate::NoChange,
-            assigned_prefix: FieldUpdate::NoChange,
-            card_prefix: FieldUpdate::NoChange,
         };
         let card = mutating_op!(self.ctx, update_card, id, updates)?;
         to_call_tool_result(&card)
@@ -797,11 +855,11 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let cards = read_op!(self.ctx, list_archived_cards)?;
         let (page, page_size) =
-            resolve_page_params(req.page, req.page_size).map_err(kanban_err_to_mcp)?;
+            resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let summaries: Vec<ArchivedCardSummary> =
             cards.iter().map(ArchivedCardSummary::from).collect();
         to_call_tool_result(
-            &PaginatedList::paginate(summaries, page, page_size).map_err(kanban_err_to_mcp)?,
+            &PaginatedList::paginate(summaries, page, page_size).map_err(core_err_to_mcp)?,
         )
     }
 
@@ -850,37 +908,37 @@ impl KanbanMcpServer {
         to_call_tool_result_json(serde_json::json!({"command": command}))
     }
 
-    // Bulk Operations
+    // Multi-card operations
 
     #[tool(description = "Archive multiple cards at once")]
-    async fn tool_bulk_archive_cards(
+    async fn tool_archive_cards(
         &self,
-        Parameters(req): Parameters<BulkArchiveCardsRequest>,
+        Parameters(req): Parameters<ArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
-        let count = mutating_op!(self.ctx, bulk_archive_cards, ids)?;
+        let count = mutating_op!(self.ctx, archive_cards, ids)?;
         to_call_tool_result_json(serde_json::json!({"archived_count": count}))
     }
 
     #[tool(description = "Move multiple cards to a column")]
-    async fn tool_bulk_move_cards(
+    async fn tool_move_cards(
         &self,
-        Parameters(req): Parameters<BulkMoveCardsRequest>,
+        Parameters(req): Parameters<MoveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let column_id = parse_uuid(&req.column_id)?;
-        let count = mutating_op!(self.ctx, bulk_move_cards, ids, column_id)?;
+        let count = mutating_op!(self.ctx, move_cards, ids, column_id)?;
         to_call_tool_result_json(serde_json::json!({"moved_count": count}))
     }
 
     #[tool(description = "Assign multiple cards to a sprint")]
-    async fn tool_bulk_assign_sprint(
+    async fn tool_assign_cards_to_sprint(
         &self,
-        Parameters(req): Parameters<BulkAssignSprintRequest>,
+        Parameters(req): Parameters<AssignCardsToSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
         let ids = parse_uuids_csv(&req.ids)?;
         let sprint_id = parse_uuid(&req.sprint_id)?;
-        let count = mutating_op!(self.ctx, bulk_assign_sprint, ids, sprint_id)?;
+        let count = mutating_op!(self.ctx, assign_cards_to_sprint, ids, sprint_id)?;
         to_call_tool_result_json(serde_json::json!({"assigned_count": count}))
     }
 
@@ -1003,6 +1061,20 @@ impl KanbanMcpServer {
         to_call_tool_result_json(serde_json::json!({"deleted": req.sprint_id}))
     }
 
+    #[tool(
+        description = "Carry over uncompleted cards from a completed/cancelled sprint to a planning sprint"
+    )]
+    async fn tool_carry_over_sprint_cards(
+        &self,
+        Parameters(req): Parameters<CarryOverSprintCardsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let from_id = parse_uuid(&req.from_sprint_id)?;
+        let to_id = parse_uuid(&req.to_sprint_id)?;
+
+        let count = mutating_op!(self.ctx, carry_over_sprint_cards, from_id, to_id)?;
+        to_call_tool_result_json(serde_json::json!({ "carried_over_count": count }))
+    }
+
     // Export/Import
 
     #[tool(description = "Export board data as JSON")]
@@ -1023,6 +1095,36 @@ impl KanbanMcpServer {
         let data = req.data;
         let board = mutating_op!(self.ctx, import_board, &data)?;
         to_call_tool_result(&board)
+    }
+
+    #[tool(description = "Undo the last operation")]
+    async fn tool_undo(&self) -> Result<CallToolResult, McpError> {
+        let mut guard = self.ctx.lock().await;
+        if guard.undo().map_err(kanban_err_to_mcp)? {
+            guard.save().await.map_err(kanban_err_to_mcp)?;
+            Ok(CallToolResult::success(vec![Content::text(
+                "Undo successful",
+            )]))
+        } else {
+            Ok(CallToolResult::success(vec![Content::text(
+                "Nothing to undo",
+            )]))
+        }
+    }
+
+    #[tool(description = "Redo the last undone operation")]
+    async fn tool_redo(&self) -> Result<CallToolResult, McpError> {
+        let mut guard = self.ctx.lock().await;
+        if guard.redo().map_err(kanban_err_to_mcp)? {
+            guard.save().await.map_err(kanban_err_to_mcp)?;
+            Ok(CallToolResult::success(vec![Content::text(
+                "Redo successful",
+            )]))
+        } else {
+            Ok(CallToolResult::success(vec![Content::text(
+                "Nothing to redo",
+            )]))
+        }
     }
 }
 
@@ -1233,36 +1335,39 @@ mod tests {
     #[test]
     fn err_not_found_maps_to_invalid_params() {
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::NotFound("board xyz".into()));
+        let err = kanban_err_to_mcp(KanbanError::not_found("board", uuid::Uuid::new_v4()));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("board xyz"));
+        assert!(err.message.contains("board"));
     }
 
     #[test]
     fn err_validation_maps_to_invalid_params() {
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::Validation("bad input".into()));
+        let err = kanban_err_to_mcp(KanbanError::validation("bad input"));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn err_cycle_maps_to_invalid_params() {
+        use kanban_domain::DependencyError;
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::CycleDetected);
+        let err = kanban_err_to_mcp(KanbanError::from(DependencyError::CycleDetected));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn err_self_ref_maps_to_invalid_params() {
+        use kanban_domain::DependencyError;
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::SelfReference);
+        let err = kanban_err_to_mcp(KanbanError::from(DependencyError::SelfReference));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn err_edge_not_found_maps_to_invalid_params() {
+        use kanban_domain::DependencyError;
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::EdgeNotFound);
+        let err = kanban_err_to_mcp(KanbanError::from(DependencyError::EdgeNotFound));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 

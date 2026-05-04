@@ -14,6 +14,7 @@ categories = ["command-line-utilities"]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
 kanban-domain = { path = "../kanban-domain", version = "^0.3" }
 kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
+kanban-service = { path = "../kanban-service", version = "^0.3" }
 ratatui.workspace = true
 crossterm.workspace = true
 anyhow.workspace = true
@@ -25,8 +26,15 @@ uuid.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 arboard = { version = "3.4", features = ["wayland-data-control"] }
 pulldown-cmark = "0.13"
+toml = "0.8"
+
+[features]
+test-helpers = []
 
 [dev-dependencies]
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.3" }
+kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.3" }
 tempfile = "3.13"

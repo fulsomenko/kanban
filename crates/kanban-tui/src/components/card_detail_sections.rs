@@ -49,7 +49,11 @@ pub fn build_metadata_lines(
 
 pub fn build_description_lines(card: &Card) -> Vec<Line<'static>> {
     if let Some(desc_text) = &card.description {
-        crate::markdown_renderer::render_markdown(desc_text)
+        if desc_text.trim().is_empty() {
+            vec![Line::from(Span::styled("No description", label_text()))]
+        } else {
+            crate::markdown_renderer::render_markdown(desc_text)
+        }
     } else {
         vec![Line::from(Span::styled("No description", label_text()))]
     }

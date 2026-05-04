@@ -1,101 +1,12 @@
-mod cli;
-mod context;
-mod handlers;
-mod output;
+#[cfg(not(any(feature = "json", feature = "sqlite")))]
+compile_error!("kanban binary requires at least one backend feature: `json` or `sqlite`.");
 
-use clap::{CommandFactory, Parser};
-use cli::{Cli, Commands};
-use context::CliContext;
-#[cfg(feature = "tui")]
-use kanban_tui::App;
+use kanban_cli::CliApp;
 
 #[tokio::main]
 async fn main() {
-    if let Err(e) = run().await {
+    if let Err(e) = CliApp::with_defaults().run().await {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
-}
-
-async fn run() -> anyhow::Result<()> {
-    if let Ok(log_path) = std::env::var("KANBAN_DEBUG_LOG") {
-        let log_file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)?;
-
-        tracing_subscriber::fmt()
-            .with_writer(log_file)
-            .with_max_level(tracing::Level::DEBUG)
-            .with_target(true)
-            .with_thread_ids(true)
-            .with_file(true)
-            .with_line_number(true)
-            .with_ansi(false)
-            .init();
-    } else {
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::WARN)
-            .init();
-    }
-
-    let cli = Cli::parse();
-
-    match cli.command {
-        None => {
-            #[cfg(feature = "tui")]
-            {
-                if let Some(ref file_path) = cli.file {
-                    if !std::path::Path::new(file_path).exists() {
-                        let empty_state =
-                            kanban_persistence::JsonEnvelope::empty().to_json_string()?;
-                        std::fs::write(file_path, empty_state)?;
-                        tracing::info!("Created new board file: {}", file_path);
-                    }
-                }
-                let (mut app, save_rx) = App::new(cli.file);
-                app.run(save_rx).await?;
-            }
-            #[cfg(not(feature = "tui"))]
-            anyhow::bail!(
-                "TUI not available in this build. Run `kanban --help` for available subcommands."
-            );
-        }
-        Some(Commands::Completions { shell }) => {
-            clap_complete::generate(shell, &mut Cli::command(), "kanban", &mut std::io::stdout());
-        }
-        Some(cmd) => {
-            let file_path = cli.file.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "File path required for CLI operations. Provide as argument or set KANBAN_FILE env var."
-                )
-            })?;
-
-            let mut ctx = CliContext::load(&file_path).await?;
-
-            match cmd {
-                Commands::Board(board_cmd) => {
-                    handlers::board::handle(&mut ctx, board_cmd.action).await?;
-                }
-                Commands::Column(column_cmd) => {
-                    handlers::column::handle(&mut ctx, column_cmd.action).await?;
-                }
-                Commands::Card(card_cmd) => {
-                    handlers::card::handle(&mut ctx, card_cmd.action).await?;
-                }
-                Commands::Sprint(sprint_cmd) => {
-                    handlers::sprint::handle(&mut ctx, sprint_cmd.action).await?;
-                }
-                Commands::Export(args) => {
-                    handlers::export::handle_export(&ctx, args).await?;
-                }
-                Commands::Import(args) => {
-                    handlers::export::handle_import(&mut ctx, args).await?;
-                }
-                Commands::Completions { .. } => unreachable!(),
-            }
-        }
-    }
-
-    Ok(())
 }

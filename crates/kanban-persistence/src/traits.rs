@@ -1,6 +1,6 @@
+use crate::PersistenceResult;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use kanban_core::KanbanResult;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -53,16 +53,55 @@ pub enum PersistenceEvent {
 #[async_trait]
 pub trait PersistenceStore: Send + Sync {
     /// Save a snapshot to the store
-    async fn save(&self, snapshot: StoreSnapshot) -> KanbanResult<PersistenceMetadata>;
+    async fn save(&self, snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata>;
 
     /// Load the current snapshot from the store
-    async fn load(&self) -> KanbanResult<(StoreSnapshot, PersistenceMetadata)>;
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)>;
 
     /// Check if the store file exists
     async fn exists(&self) -> bool;
 
     /// Get the path to the store file
     fn path(&self) -> &Path;
+
+    /// Get the unique instance ID for this store
+    fn instance_id(&self) -> uuid::Uuid;
+
+    /// Sync the command log from the in-memory backend to persistent storage.
+    /// Default implementation is a no-op (SQLite backend writes directly).
+    async fn sync_command_log(
+        &self,
+        _batches: &[Vec<kanban_domain::commands::Command>],
+        _cursor: u64,
+        _baseline: Option<&[u8]>,
+    ) -> PersistenceResult<()> {
+        Ok(())
+    }
+
+    /// Retrieve the command log, undo cursor, and optional baseline snapshot.
+    /// Returns `(batches, cursor, baseline_bytes)`. Default returns empty.
+    #[allow(clippy::type_complexity)]
+    fn get_command_log(
+        &self,
+    ) -> PersistenceResult<(
+        Vec<Vec<kanban_domain::commands::Command>>,
+        u64,
+        Option<Vec<u8>>,
+    )> {
+        Ok((vec![], 0, None))
+    }
+
+    /// Load the store synchronously (no async runtime required).
+    /// Returns `Ok(None)` when the backing file does not exist.
+    ///
+    /// The default implementation returns an error; backends that support
+    /// synchronous loading (e.g. `JsonFileStore`) override this.
+    #[allow(clippy::type_complexity)]
+    fn load_sync(&self) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
+        Err(crate::PersistenceError::Unsupported(
+            "load_sync not supported by this backend".into(),
+        ))
+    }
 }
 
 /// Trait for detecting changes to the storage file
@@ -70,10 +109,10 @@ pub trait PersistenceStore: Send + Sync {
 #[async_trait]
 pub trait ChangeDetector: Send + Sync {
     /// Start watching the file for changes
-    async fn start_watching(&self, path: PathBuf) -> KanbanResult<()>;
+    async fn start_watching(&self, path: PathBuf) -> PersistenceResult<()>;
 
     /// Stop watching the file
-    async fn stop_watching(&self) -> KanbanResult<()>;
+    async fn stop_watching(&self) -> PersistenceResult<()>;
 
     /// Subscribe to change events
     /// Returns a broadcast receiver that yields `ChangeEvent` when the file changes
@@ -96,10 +135,10 @@ pub struct ChangeEvent {
 /// Allows swapping JSON for binary formats, databases, etc.
 pub trait Serializer<T: Send + Sync>: Send + Sync {
     /// Serialize data to bytes
-    fn serialize(&self, data: &T) -> KanbanResult<Vec<u8>>;
+    fn serialize(&self, data: &T) -> PersistenceResult<Vec<u8>>;
 
     /// Deserialize data from bytes
-    fn deserialize(&self, bytes: &[u8]) -> KanbanResult<T>;
+    fn deserialize(&self, bytes: &[u8]) -> PersistenceResult<T>;
 }
 
 /// Format versions for migration tracking
@@ -107,6 +146,9 @@ pub trait Serializer<T: Send + Sync>: Send + Sync {
 pub enum FormatVersion {
     V1,
     V2,
+    V3,
+    V4,
+    V5,
 }
 
 impl FormatVersion {
@@ -114,6 +156,9 @@ impl FormatVersion {
         match self {
             Self::V1 => 1,
             Self::V2 => 2,
+            Self::V3 => 3,
+            Self::V4 => 4,
+            Self::V5 => 5,
         }
     }
 
@@ -121,6 +166,9 @@ impl FormatVersion {
         match v {
             1 => Some(Self::V1),
             2 => Some(Self::V2),
+            3 => Some(Self::V3),
+            4 => Some(Self::V4),
+            5 => Some(Self::V5),
             _ => None,
         }
     }
@@ -130,7 +178,7 @@ impl FormatVersion {
 #[async_trait]
 pub trait MigrationStrategy: Send + Sync {
     /// Detect the version of a file on disk
-    async fn detect_version(&self, path: &Path) -> KanbanResult<FormatVersion>;
+    async fn detect_version(&self, path: &Path) -> PersistenceResult<FormatVersion>;
 
     /// Migrate from one version to another
     /// Returns the path to the migrated file
@@ -139,7 +187,7 @@ pub trait MigrationStrategy: Send + Sync {
         from: FormatVersion,
         to: FormatVersion,
         path: &Path,
-    ) -> KanbanResult<PathBuf>;
+    ) -> PersistenceResult<PathBuf>;
 }
 
 /// Trait for conflict resolution between local and external changes

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Fast, terminal-based kanban board written in Rust. Vim-like navigation, MCP integration, local-first data storage.">
-  <meta name="keywords" content="kanban, project management, terminal, rust, vim, developer tools">
+  <meta name="description" content="Keyboard-first kanban for the terminal. hjkl navigation, git integration, 40-tool MCP server, local-first JSON and SQLite storage. Written in Rust.">
+  <meta name="keywords" content="kanban, project management, terminal, rust, vim, developer tools, mcp, llm, git">
   <title>kanban</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -12,12 +12,80 @@
   <main class="container">
     <!-- Hero Section -->
     <section class="hero">
-      <h1 class="hero-title">kanban</h1>
-      <p class="hero-tagline">Keyboard-driven project management</p>
+      <p class="hero-brand">kanban</p>
+      <h1 class="hero-title">Keyboard-first kanban<br>for the terminal.</h1>
+      <p class="hero-tagline">Intuitive TUI. Powerful CLI. 40-tool MCP server.<br>Your data lives in a file on your disk — private, offline, always yours.</p>
+      <div class="hero-cta">
+        <pre><code class="code-block nohighlight"><span class="prompt">$</span> cargo install kanban-cli</code></pre>
+      </div>
       <nav class="hero-links">
         <a href="https://github.com/fulsomenko/kanban" class="link">GitHub</a>
         <a href="https://crates.io/crates/kanban-cli" class="link">Crates.io</a>
       </nav>
+    </section>
+
+    <!-- Demo -->
+    <section class="demo">
+      <video src="demo/demo.webm" class="demo-terminal" autoplay loop muted playsinline></video>
+    </section>
+
+    <!-- Why Section -->
+    <section class="why">
+      <ul class="why-list">
+        <li><strong>Zero latency</strong> — pure keyboard flow, hjkl navigation, no mouse required</li>
+        <li><strong>Your data, your disk</strong> — JSON or SQLite file, private, offline, always accessible</li>
+        <li><strong>Git-native</strong> — generate branch names and <code>git checkout</code> commands from any card</li>
+        <li><strong>LLM-native</strong> — 40-tool MCP server works with Claude Code, Cursor, and any MCP client</li>
+        <li><strong>Offline-first</strong> — atomic writes, live conflict detection, works anywhere</li>
+      </ul>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+      <h2>Features</h2>
+      <div class="features-grid">
+        <div class="card">
+          <h3 class="card-title">Keyboard-driven</h3>
+          <p class="card-description">
+            hjkl navigation, vim-style <code>/</code> search, jump motions with <code>gg</code>/<code>G</code>, half-page scroll with <code>{</code>/<code>}</code>, context-aware shortcuts, and 100-level undo/redo.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Three interfaces</h3>
+          <p class="card-description">
+            <strong>TUI</strong> for interactive work. <strong>CLI</strong> for scripting — all operations, JSON output, pagination. <strong>MCP server</strong> with 40 tools for LLM integration with Claude Code and Cursor.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Git-native workflow</h3>
+          <p class="card-description">
+            Press <code>y</code> to copy a git branch name, <code>Y</code> to copy the full <code>git checkout</code> command. Card prefixes map to branch names — <code>KAN-42/fix-the-bug</code>.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Sprint planning</h3>
+          <p class="card-description">
+            Full sprint lifecycle: Planning &rarr; Active &rarr; Completed. Carry uncompleted cards forward with one key. Per-sprint card prefix overrides, assignment history tracked per card.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Rich cards</h3>
+          <p class="card-description">
+            Priority levels, status, story points, due dates, markdown descriptions, parent/child dependencies with cycle detection, bulk operations, archive and restore.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Local-first storage</h3>
+          <p class="card-description">
+            JSON (default) or SQLite — switch by file extension. Atomic writes, live file watching, conflict detection when multiple instances write concurrently. No cloud, no account.
+          </p>
+        </div>
+      </div>
     </section>
 
     <!-- Installation Section -->
@@ -38,59 +106,15 @@
         </div>
 
         <div class="install-method">
+          <h3>Arch Linux (AUR)</h3>
+          <pre><code class="code-block nohighlight"><span class="prompt">$</span> yay -S kanban</code></pre>
+        </div>
+
+        <div class="install-method">
           <h3>From Source</h3>
           <pre><code class="code-block nohighlight"><span class="prompt">$</span> git clone https://github.com/fulsomenko/kanban
 <span class="prompt">$</span> cd kanban
 <span class="prompt">$</span> cargo install --path crates/kanban-cli</code></pre>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- Features Section -->
-    <section class="features">
-      <h2>Features</h2>
-      <div class="features-grid">
-        <div class="card">
-          <h3 class="card-title">⌨️ Vim-Like Power</h3>
-          <p class="card-description">
-            Keyboard-driven with hjkl navigation, vim search with <code>/</code>, jump motions with <code>gg</code>/<code>G</code>, context-aware shortcuts, and full undo/redo support.
-          </p>
-        </div>
-
-        <div class="card">
-          <h3 class="card-title">🚀 Blazing Fast</h3>
-          <p class="card-description">
-            Written in Rust for native performance. Instant saves with debouncing, multi-instance safe with conflict detection, and zero browser overhead.
-          </p>
-        </div>
-
-        <div class="card">
-          <h3 class="card-title">🔌 Three Interfaces</h3>
-          <p class="card-description">
-            <strong>TUI</strong> for interactive work, <strong>CLI</strong> for scripting and automation, and <strong>MCP Server</strong> for LLM integration with Claude and Cursor.
-          </p>
-        </div>
-
-        <div class="card">
-          <h3 class="card-title">📋 Rich Task Management</h3>
-          <p class="card-description">
-            Card dependencies (parent-child, blocking), sprint planning with history, story points with color coding, priority levels, due dates, and markdown descriptions.
-          </p>
-        </div>
-
-        <div class="card">
-          <h3 class="card-title">🛠️ Developer Workflow</h3>
-          <p class="card-description">
-            Automatic git branch names from cards, sprint-based card prefixes (e.g., KAN-123), external editor support (vim, nvim, emacs), and JSON import/export.
-          </p>
-        </div>
-
-        <div class="card">
-          <h3 class="card-title">🔒 Local-First</h3>
-          <p class="card-description">
-            All data stored locally in JSON format. No cloud dependencies, full privacy and control, atomic saves with crash protection.
-          </p>
         </div>
       </div>
     </section>
@@ -98,7 +122,7 @@
     <!-- Roadmap Section -->
     <section class="roadmap">
       <h2>Roadmap</h2>
-      <p class="roadmap-status">Version 0.2.0</p>
+      <p class="roadmap-status">Version @VERSION@</p>
 
       <div class="roadmap-categories">
         <div class="roadmap-category">
@@ -107,18 +131,19 @@
             <li><span class="status-badge completed">[x]</span> Progressive auto-save</li>
             <li><span class="status-badge completed">[x]</span> Full CLI interface matching TUI operations</li>
             <li><span class="status-badge completed">[x]</span> Card dependencies (parent-child and blocking)</li>
-            <li><span class="status-badge completed">[x]</span> Undo/redo support (<code>u</code>/<code>U</code>)</li>
+            <li><span class="status-badge completed">[x]</span> Undo/redo support</li>
             <li><span class="status-badge completed">[x]</span> MCP server for LLM integration</li>
+            <li><span class="status-badge completed">[x]</span> Multiple storage backends (JSON, SQLite)</li>
           </ul>
         </div>
 
         <div class="roadmap-category">
           <h3 class="roadmap-title">Planned</h3>
           <ul class="roadmap-list">
+            <li><span class="status-badge planned">[ ]</span> Attachments, adding files to cards</li>
             <li><span class="status-badge planned">[ ]</span> HTTP API for remote board access</li>
             <li><span class="status-badge planned">[ ]</span> Collaborative features (multi-user, sync)</li>
             <li><span class="status-badge planned">[ ]</span> Web UI to complement TUI and CLI</li>
-            <li><span class="status-badge planned">[ ]</span> Multiple storage backends (markdown, SQL)</li>
             <li><span class="status-badge planned">[ ]</span> Configurable keybindings</li>
             <li><span class="status-badge planned">[ ]</span> Audit log for compliance tracking</li>
           </ul>

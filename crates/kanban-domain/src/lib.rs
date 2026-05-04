@@ -1,15 +1,19 @@
+pub mod error;
+
 pub mod archived_card;
 pub mod board;
 pub mod card;
 pub mod card_lifecycle;
 pub mod column;
+pub mod command_store;
 pub mod commands;
+pub mod data_store;
 pub mod dependencies;
 pub mod editable;
 pub mod export;
 pub mod field_update;
 pub mod filter;
-pub mod history;
+pub mod in_memory_store;
 pub mod operations;
 pub mod query;
 pub mod search;
@@ -35,7 +39,6 @@ pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, ImportedEntities};
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
-pub use history::HistoryManager;
 pub use operations::{CardListFilter, KanbanOperations};
 pub use query::{
     sprint::{
@@ -44,10 +47,21 @@ pub use query::{
     },
     CardQueryBuilder,
 };
-pub use search::{BranchNameSearcher, CardSearcher, CompositeSearcher, SearchBy, TitleSearcher};
+pub use search::{
+    format_ambiguous_matches, BranchNameSearcher, CardSearcher, CompositeSearcher, SearchBy,
+    TitleSearcher,
+};
 pub use snapshot::Snapshot;
 pub use sort::{get_sorter_for_field, OrderedSorter, SortBy};
 pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
 pub use task_list_view::TaskListView;
+
+pub use command_store::CommandStore;
+pub use data_store::{DataStore, GraphMutFn};
+pub use in_memory_store::InMemoryStore;
+
+pub use error::{DependencyError, DomainError, KanbanError, KanbanResult};
+
+pub const COMMAND_SCHEMA_VERSION: u32 = 1;

@@ -1,13 +1,21 @@
+use kanban_core::AppConfig;
 use kanban_domain::KanbanOperations;
 use kanban_mcp::context::McpContext;
-use kanban_service::KanbanContext;
+use kanban_service::StoreManager;
 use tempfile::TempDir;
+
+fn default_store_manager() -> StoreManager {
+    StoreManager::new(kanban_service::default_registry())
+}
 
 async fn setup() -> (McpContext, TempDir) {
     let dir = TempDir::new().expect("failed to create temp dir");
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
-    let ctx = McpContext::new(&path_str).await.unwrap();
+    let store_manager = default_store_manager();
+    let ctx = McpContext::new(&store_manager, &path_str, AppConfig::default())
+        .await
+        .unwrap();
     (ctx, dir)
 }
 
@@ -128,8 +136,6 @@ async fn create_card_then_update_with_all_fields() {
                 points: kanban_domain::FieldUpdate::Set(5),
                 due_date: kanban_domain::FieldUpdate::NoChange,
                 sprint_id: kanban_domain::FieldUpdate::NoChange,
-                assigned_prefix: kanban_domain::FieldUpdate::NoChange,
-                card_prefix: kanban_domain::FieldUpdate::NoChange,
             },
         )
         .unwrap();
@@ -220,10 +226,10 @@ async fn card_assign_unassign_sprint() {
     assert_eq!(unassigned.sprint_id, None);
 }
 
-// Bulk operations
+// Multi-card operations
 
 #[tokio::test]
-async fn bulk_archive() {
+async fn archive_cards() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
@@ -234,12 +240,12 @@ async fn bulk_archive() {
         .create_card(board.id, col.id, "Card 2".into(), Default::default())
         .unwrap();
 
-    let count = ctx.bulk_archive_cards(vec![c1.id, c2.id]).unwrap();
+    let count = ctx.archive_cards(vec![c1.id, c2.id]).unwrap();
     assert_eq!(count, 2);
 }
 
 #[tokio::test]
-async fn bulk_move() {
+async fn move_cards() {
     let (mut ctx, _tmp) = setup().await;
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col1 = ctx.create_column(board.id, "From".into(), None).unwrap();
@@ -251,7 +257,7 @@ async fn bulk_move() {
         .create_card(board.id, col1.id, "Card 2".into(), Default::default())
         .unwrap();
 
-    let count = ctx.bulk_move_cards(vec![c1.id, c2.id], col2.id).unwrap();
+    let count = ctx.move_cards(vec![c1.id, c2.id], col2.id).unwrap();
     assert_eq!(count, 2);
 }
 
@@ -266,7 +272,10 @@ async fn export_import_roundtrip() {
     let json = ctx.export_board(Some(board.id)).unwrap();
     assert!(json.contains("Export Board"));
 
-    ctx.import_board(&json).unwrap();
+    // Import into a fresh context to avoid duplicate UUID errors
+    let (mut ctx2, _tmp2) = setup().await;
+    let imported = ctx2.import_board(&json).unwrap();
+    assert_eq!(imported.name, "Export Board");
 }
 
 // Persistence round-trips
@@ -274,16 +283,21 @@ async fn export_import_roundtrip() {
 #[tokio::test]
 async fn test_create_board_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
-    let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
+    let store_manager = default_store_manager();
+    let mut mcp_ctx = McpContext::new(&store_manager, &path_str, AppConfig::default())
+        .await
+        .unwrap();
     mcp_ctx
         .create_board("Persistent Board".into(), None)
         .unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    let fresh = kanban_service::open_context(&path_str, AppConfig::default())
+        .await
+        .unwrap();
     let boards = fresh.list_boards().unwrap();
     assert_eq!(boards.len(), 1);
     assert_eq!(boards[0].name, "Persistent Board");
@@ -292,10 +306,13 @@ async fn test_create_board_persists() {
 #[tokio::test]
 async fn test_mutation_sequence_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
-    let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
+    let store_manager = default_store_manager();
+    let mut mcp_ctx = McpContext::new(&store_manager, &path_str, AppConfig::default())
+        .await
+        .unwrap();
     let board = mcp_ctx.create_board("Board".into(), None).unwrap();
     let col = mcp_ctx
         .create_column(board.id, "Todo".into(), None)
@@ -305,7 +322,9 @@ async fn test_mutation_sequence_persists() {
         .unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    let fresh = kanban_service::open_context(&path_str, AppConfig::default())
+        .await
+        .unwrap();
     assert_eq!(fresh.list_boards().unwrap().len(), 1);
     assert_eq!(fresh.list_columns(board.id).unwrap().len(), 1);
     assert_eq!(
@@ -320,16 +339,125 @@ async fn test_mutation_sequence_persists() {
 #[tokio::test]
 async fn test_delete_persists() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.kanban");
+    let path = dir.path().join("test.json");
     let path_str = path.to_string_lossy().to_string();
 
-    let mut mcp_ctx = McpContext::new(&path_str).await.unwrap();
+    let store_manager = default_store_manager();
+    let mut mcp_ctx = McpContext::new(&store_manager, &path_str, AppConfig::default())
+        .await
+        .unwrap();
     let board = mcp_ctx.create_board("Temp Board".into(), None).unwrap();
     mcp_ctx.save().await.unwrap();
 
     mcp_ctx.delete_board(board.id).unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load_json(&path_str).await.unwrap();
+    let fresh = kanban_service::open_context(&path_str, AppConfig::default())
+        .await
+        .unwrap();
     assert!(fresh.list_boards().unwrap().is_empty());
+}
+
+// find_cards_by_identifier
+
+#[tokio::test]
+async fn find_cards_by_identifier_single_match() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx
+        .create_board("Project".into(), Some("KAN".into()))
+        .unwrap();
+    let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "My Task".into(), Default::default())
+        .unwrap();
+
+    let results = ctx.find_cards_by_identifier("KAN-1").unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, card.id);
+}
+
+#[tokio::test]
+async fn find_cards_by_identifier_multiple_matches() {
+    let (mut ctx, _tmp) = setup().await;
+
+    let board_a = ctx
+        .create_board("Board A".into(), Some("KAN".into()))
+        .unwrap();
+    let col_a = ctx.create_column(board_a.id, "Todo".into(), None).unwrap();
+    let card_a = ctx
+        .create_card(board_a.id, col_a.id, "Card on A".into(), Default::default())
+        .unwrap();
+
+    let board_b = ctx
+        .create_board("Board B".into(), Some("KAN".into()))
+        .unwrap();
+    let col_b = ctx.create_column(board_b.id, "Todo".into(), None).unwrap();
+    let card_b = ctx
+        .create_card(board_b.id, col_b.id, "Card on B".into(), Default::default())
+        .unwrap();
+
+    let results = ctx.find_cards_by_identifier("KAN-1").unwrap();
+    assert_eq!(results.len(), 2);
+    let ids: Vec<_> = results.iter().map(|c| c.id).collect();
+    assert!(ids.contains(&card_a.id));
+    assert!(ids.contains(&card_b.id));
+}
+
+#[tokio::test]
+async fn find_cards_by_identifier_not_found() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx
+        .create_board("Project".into(), Some("KAN".into()))
+        .unwrap();
+    let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    ctx.create_card(board.id, col.id, "My Task".into(), Default::default())
+        .unwrap();
+
+    let results = ctx.find_cards_by_identifier("KAN-99").unwrap();
+    assert!(results.is_empty());
+}
+
+// Undo/Redo
+
+#[tokio::test]
+async fn test_mcp_undo_reverses_create_board() {
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+
+    assert!(ctx.undo().unwrap());
+    assert!(ctx.list_boards().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_mcp_redo_restores_undone_board() {
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    ctx.undo().unwrap();
+    assert!(ctx.list_boards().unwrap().is_empty());
+
+    assert!(ctx.redo().unwrap());
+    assert_eq!(ctx.list_boards().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_mcp_undo_on_empty_returns_false() {
+    let (mut ctx, _tmp) = setup().await;
+    assert!(!ctx.can_undo());
+    assert!(!ctx.undo().unwrap());
+}
+
+#[tokio::test]
+async fn test_mcp_reload_resets_undo_history() {
+    // reload() semantics: "pick up external changes". The previous undo history
+    // was computed against a different file state and is no longer valid.
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Board".into(), None).unwrap();
+    assert!(ctx.can_undo(), "should have undo entry after create");
+    ctx.save().await.unwrap();
+    ctx.reload().await.unwrap();
+    assert!(
+        !ctx.can_undo(),
+        "reload must reset undo history — cursor is invalid after external change"
+    );
 }

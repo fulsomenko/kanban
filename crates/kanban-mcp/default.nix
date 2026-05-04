@@ -1,5 +1,6 @@
 { lib
 , rustPlatform
+, src
 }:
 
 let
@@ -9,7 +10,7 @@ rustPlatform.buildRustPackage {
   inherit (cargoToml.workspace.package) version;
   pname = "kanban-mcp";
 
-  src = lib.cleanSource ../..;
+  inherit src;
 
   cargoLock = {
     lockFile = ../../Cargo.lock;

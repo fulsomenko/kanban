@@ -33,10 +33,10 @@ impl App {
                 KeyCode::Char('j') | KeyCode::Down => match dialog_state.current_section {
                     FilterDialogSection::Sprints => {
                         if let Some(board_idx) = self.selection.active_board_index {
-                            if let Some(board) = self.ctx.boards.get(board_idx) {
+                            if let Some(board) = self.model.boards().get(board_idx) {
                                 let sprint_count = self
-                                    .ctx
-                                    .sprints
+                                    .model
+                                    .sprints()
                                     .iter()
                                     .filter(|s| s.board_id == board.id)
                                     .count();
@@ -76,13 +76,11 @@ impl App {
                             );
                             self.apply_filters();
                         } else if let Some(board_idx) = self.selection.active_board_index {
-                            if let Some(board) = self.ctx.boards.get(board_idx) {
-                                let board_sprints: Vec<_> = self
-                                    .ctx
-                                    .sprints
-                                    .iter()
-                                    .filter(|s| s.board_id == board.id)
-                                    .collect();
+                            let boards = self.model.boards();
+                            if let Some(board) = boards.get(board_idx) {
+                                let sprints = self.model.sprints();
+                                let board_sprints: Vec<_> =
+                                    sprints.iter().filter(|s| s.board_id == board.id).collect();
 
                                 let sprint_idx = dialog_state.item_selection - 1;
                                 if let Some(sprint) = board_sprints.get(sprint_idx) {
@@ -119,8 +117,6 @@ impl App {
         if let Some(dialog_state) = &self.filter.dialog_state {
             self.filter.hide_assigned_cards = dialog_state.filters.show_unassigned_sprints;
             self.filter.active_sprint_filters = dialog_state.filters.selected_sprint_ids.clone();
-
-            self.refresh_view();
             tracing::info!(
                 "Applied filters: unassigned={}, sprints={}",
                 self.filter.hide_assigned_cards,

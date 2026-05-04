@@ -6,9 +6,12 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Persistence layer for the kanban project management tool with progressive saving and multi-instance support"
+description = "Persistence traits and shared types for the kanban project management tool"
 keywords = ["kanban", "persistence", "storage", "file-watching"]
 categories = ["command-line-utilities", "development-tools"]
+
+[features]
+test-helpers = ["dep:tempfile"]
 
 [dependencies]
 kanban-core = { path = "../kanban-core", version = "^0.3" }
@@ -30,10 +33,19 @@ chrono.workspace = true
 
 # File operations
 notify.workspace = true
-tempfile.workspace = true
 
 # Logging
 tracing.workspace = true
 
+# Optional: test-helpers feature pulls this in
+tempfile = { workspace = true, optional = true }
+
 [dev-dependencies]
 mockall.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[[test]]
+name = "store_contract_smoke"
+path = "tests/store_contract_smoke.rs"
+required-features = ["test-helpers"]

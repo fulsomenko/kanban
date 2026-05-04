@@ -3,46 +3,77 @@
 [![Crates.io](https://img.shields.io/crates/v/kanban-cli.svg)](https://crates.io/crates/kanban-cli)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
 
-A **fast, keyboard-driven kanban tool**
+**Keyboard-first kanban for the terminal.**
 
-![Kanban Demo](demo.gif)
+![Kanban Demo](demo/demo.gif)
 
-**Inspired by**: [lazygit](https://github.com/jesseduffield/lazygit)
+*Inspired by [lazygit](https://github.com/jesseduffield/lazygit) · Built on [ratatui](https://ratatui.rs)*
 
-**Made possible** by: [ratatui](https://ratatui.rs)
+---
 
-## Features
+## Why Kanban?
 
-### 🎯 Core
-- **Board Management**: Create, edit, and organize multiple boards
-- **Custom Columns**: Define your own columns to match your workflow (e.g., **Todo**, **In Progress**, **Blocked**, **Done**)
-- **Rich Cards**: Cards with metadata including priority, story points, due dates, and more
-- **Card Dependencies**: Parent-child and blocking relationships between cards
-- **Keyboard-Driven**: Vim-like navigation with hjkl and context-aware shortcuts
+- **Zero latency** — pure keyboard flow — hjkl, never reach for the mouse
+- **Your data is a file on your disk** — private, offline, always yours
+- **Git-native** — generate branch names and `git checkout` commands from any card
+- **LLM-native** — full MCP server (40 tools) works with Claude Code, Cursor, and any MCP client
+- **Offline-first** — works anywhere; JSON and SQLite backends, atomic writes, live conflict detection
 
-### 🚀 Productivity
-- **Search**: Find cards instantly with vim-style `/` search
-- **Undo / Redo**: Undo (`u`) and redo (`U`) any action
-- **Multiple Views**: Switch between flat list, grouped by column, or kanban board layout with `V`
-- **External Editor**: Edit in your preferred editor (emacs, nano, vim, etc.)
+---
 
-### 📊 Organization
-- **Sprint Planning**: Plan, start and complete sprints
-- **Story Points**: Assign 1-5 point estimates with color-coded display
-- **Sorting**: Sort cards by points, priority, date, status, or position
-- **Filtering**: Filter by sprint, status, or search results
-- **Card Archiving**: Archive and restore tasks
-- **Metadata**: Organize with due dates, priority levels, and timestamps
+## Quick Start
+
+### TUI
+
+```bash
+kanban                  # launch with default kanban.json
+kanban myboard.json     # load a specific file
+kanban myboard.sqlite   # load a SQLite file
+```
+
+Press `?` at any time to see context-sensitive help.
+
+### CLI
+
+```bash
+export KANBAN_FILE=kanban.json
+
+kanban board create --name "My Project"
+kanban board list
+kanban card create --board-id <ID> --column-id <ID> --title "Fix the bug" --priority high
+kanban card list --board-id <ID>
+kanban sprint create --board-id <ID>
+kanban sprint activate <SPRINT_ID> --duration-days 14
+kanban card assign-sprint <CARD_ID> --sprint-id <SPRINT_ID>
+```
+
+All commands output JSON. Use `kanban --help` for full reference.
+
+### MCP Server
+
+**Claude Code**
+
+```json
+{
+  "mcpServers": {
+    "kanban": {
+      "command": "kanban-mcp",
+      "args": ["kanban.json"]
+    }
+  }
+}
+```
+
+---
 
 ## Installation
 
 ### From crates.io
 ```bash
 cargo install kanban-cli
-kanban
 ```
 
-### From Source
+### From source
 ```bash
 git clone https://github.com/fulsomenko/kanban
 cd kanban
@@ -54,101 +85,198 @@ cargo install --path crates/kanban-cli
 nix run github:fulsomenko/kanban
 ```
 
+### Arch Linux (AUR)
+```bash
+yay -S kanban
+```
+
 ### Linux Clipboard Support
 
-For clipboard operations (`y`/`Y` to copy branch names) to persist after exiting, you need a clipboard manager running:
+For `y`/`Y` clipboard operations to persist after the app exits, you need a clipboard manager:
 
 - **Wayland**: `wl-clip-persist`, `cliphist`, `clipman`, or your DE's built-in manager
 - **X11**: Most desktop environments include one by default
 
-Without a clipboard manager, copied content is lost when the app exits (this is a Linux platform limitation, not a bug).
+---
 
-## Quick Start
+## Features
 
-### TUI
+### Boards & Cards
+- Multiple boards, each with custom columns and WIP limits
+- Rich cards: title, description, priority (Low/Medium/High/Critical), status (Todo/InProgress/Blocked/Done), story points, due dates
+- Card numbering with configurable prefix (e.g. `KAN-42`)
+- Card dependencies: parent/child relationships with cycle detection
+- Archive and restore cards
 
-```bash
-kanban                 # Launch the app
-kanban myboard.json    # Load a board from file
-```
+### Sprint Planning
+- Full sprint lifecycle: Planning → Active → Completed / Cancelled
+- Carry uncompleted cards to the next sprint with one key
+- Per-sprint card prefix overrides
+- Sprint logs track assignment history per card
 
-**First time?**
-1. Press `n` to create a new board
-2. Press `Enter` to activate it
-3. Add cards with `n` and organize them
-4. Press `x` to export as JSON
+### Views & Navigation
+- **3 view modes**: Flat list / Grouped by column / Kanban board — toggle with `V`
+- Real-time `/` search
+- Sort by priority, points, status, or position
+- Filter by sprint, status, or search result
+- Multi-select for bulk archive / move / sprint-assign
 
-### MCP Server
+### Productivity
+- Undo/redo (`u`/`U`, up to 100 levels)
+- External editor for descriptions (respects `$EDITOR`)
+- Clipboard: `y` copies git branch name, `Y` copies `git checkout` command
+- Import/export boards as JSON
 
-```bash
-nix run github:fulsomenko/kanban#kanban-mcp
-```
+### Storage & Sync
+- JSON and SQLite storage backends
+- Atomic writes (temp file → rename) prevent corruption
+- Live file watching: auto-reload when another instance writes
+- Conflict detection with user prompt when local edits clash
 
-Provides full read/write access to your boards, cards, columns, and sprints over the [Model Context Protocol](https://modelcontextprotocol.io) for use with LLM tools like Claude Code, Cursor, etc.
+### Interfaces
+- **TUI** — full keyboard-driven terminal UI
+- **CLI** — scriptable; all operations, JSON output, pagination
+- **MCP server** — 40 tools for LLM integration
 
-### CLI
+---
 
-```bash
-export KANBAN_FILE=myboard.json   # Set data file
+## Key Bindings
 
-# Boards
-kanban board list
-kanban board create --name "My Project"
+Press `?` in the app to see bindings for the current context.
 
-# Cards
-kanban card list --board-id <ID>
-kanban card create --board-id <ID> --column-id <ID> --title "New task"
-kanban card update <CARD_ID> --status done --priority high
+### Boards Panel
 
-# Sprints
-kanban sprint create --board-id <ID>
-kanban sprint activate <SPRINT_ID>
-kanban card assign-sprint <CARD_ID> --sprint-id <SPRINT_ID>
-```
+| Key | Action |
+|-----|--------|
+| `j`/`↓` | Navigate down |
+| `k`/`↑` | Navigate up |
+| `gg` | Jump to top |
+| `G` | Jump to bottom |
+| `Enter`/`Space` | Open board detail |
+| `n` | New board |
+| `r` | Rename board |
+| `e` | Edit board |
+| `x` | Export board |
+| `X` | Export all boards |
+| `i` | Import board from file |
+| `u` | Undo |
+| `U` | Redo |
+| `S` | Open settings |
+| `1`/`2` | Focus boards/cards panel |
+| `q` | Quit |
+| `?` | Help |
 
-All commands output JSON. See `kanban --help` for full reference.
+### Cards Panel
 
-## Multiple Views
+| Key | Action |
+|-----|--------|
+| `j`/`↓`, `k`/`↑` | Navigate down/up |
+| `gg` / `G` | Jump to top/bottom |
+| `{` / `}` | Half-page up/down |
+| `h`/`l` | Previous/next column |
+| `H`/`L` | Move card left/right column |
+| `Enter`/`Space` | Open card detail |
+| `n` | New card |
+| `e` | Edit card |
+| `c` | Toggle done |
+| `p` | Set priority |
+| `d` | Archive card(s) |
+| `D` | View archived cards |
+| `v` | Toggle card selection |
+| `Ctrl+a` | Select all visible cards |
+| `Esc` | Clear selection |
+| `P` | Set priority (bulk) |
+| `a` | Assign to sprint |
+| `o` | Sort cards |
+| `O` | Toggle sort order |
+| `t` | Toggle sprint filter |
+| `T` | Filter options |
+| `/` | Search |
+| `s` | Manage child cards |
+| `V` | Toggle view mode |
+| `u` / `U` | Undo / Redo |
+| `1`/`2` | Focus boards/cards panel |
+| `q` | Quit |
+| `?` | Help |
 
-Switch between view modes with `V`:
-- **Flat List**: See all cards in a simple list with details
-- **Grouped by Column**: Cards organized under their respective columns
-- **Kanban Board**: Classic columnar board layout for visual workflow
+### Card Detail View
 
-## Usage
+| Key | Action |
+|-----|--------|
+| `1`–`5` | Focus Title / Metadata / Description / Parents / Children panel |
+| `e` | Edit current panel |
+| `r` | Manage parent cards |
+| `R` | Manage child cards |
+| `y` | Copy git branch name to clipboard |
+| `Y` | Copy `git checkout` command to clipboard |
+| `a` | Assign to sprint |
+| `d` | Delete card |
+| `u` / `U` | Undo / Redo |
+| `q`/`Esc` | Back |
+| `?` | Help |
 
-> **Tip:** Press `?` at any time to view the help menu with all available bindings for your current context.
+### Board Detail View
 
-**Navigation**
-- `j`/`k` - Up/down, `h`/`l` - Previous/next column
-- `Enter` - Open card
+| Key | Action |
+|-----|--------|
+| `1`–`5` | Focus Name / Description / Settings / Sprints / Columns panel |
+| `e` | Edit current panel |
+| `p` | Set branch prefix |
+| `n` | New sprint (Sprints panel) / New column (Columns panel) |
+| `r` | Rename column (Columns panel) |
+| `d` | Delete column (Columns panel) |
+| `J`/`K` | Reorder column up/down (Columns panel) |
+| `j`/`k` | Navigate within panel |
+| `Enter`/`Space` | Open sprint detail (Sprints panel) |
+| `u` / `U` | Undo / Redo |
+| `q`/`Esc` | Back |
+| `?` | Help |
 
-**Card list**
-- `n` - New card, `e` - Edit, `r` - Rename
-- `d` - Archive, `c` - Toggle done, `p` - Set priority
-- `v` - Toggle selection mode, `Ctrl+a` - Select all
+### Sprint Detail View
 
-**Views & Search**
-- `V` - Toggle view mode, `/` - Search
-- `t` - Sprint filter, `D` - Archived cards
+| Key | Action |
+|-----|--------|
+| `h`/`l` | Switch between uncompleted/completed panels |
+| `j`/`k` | Navigate cards |
+| `a` | Activate sprint |
+| `c` | Complete sprint |
+| `p` | Set sprint prefix |
+| `C` | Set card prefix override |
+| `o`/`O` | Sort / Toggle sort order |
+| `v` | Select card(s) |
+| `u` / `U` | Undo / Redo |
+| `q`/`Esc` | Back |
+| `?` | Help |
 
-**Undo & Other**
-- `u` - Undo, `U` - Redo
-- `y` - Copy to clipboard, `H`/`L` - Move card left/right, `q` - Quit
+### Archived Cards View
+
+| Key | Action |
+|-----|--------|
+| `j`/`k` | Navigate |
+| `gg`/`G` | Jump to top/bottom |
+| `{`/`}` | Half-page up/down |
+| `r` | Restore card(s) |
+| `x` | Delete card(s) permanently |
+| `v` | Select for bulk operation |
+| `V` | Toggle view mode |
+| `u` / `U` | Undo / Redo |
+| `q`/`Esc` | Back |
+
+---
 
 ## Architecture
 
-Built with **Rust** for speed and reliability:
-
 ```
 crates/
-├── kanban-core        → Shared traits, error handling & reusable state primitives
-├── kanban-domain      → Domain models, business logic, filtering & sorting
-├── kanban-persistence → JSON storage, versioning & migrations
-├── kanban-service     → Service layer: KanbanContext, persistence orchestration
-├── kanban-tui         → Terminal UI with ratatui
-├── kanban-cli         → CLI entry point
-└── kanban-mcp         → Model Context Protocol server for LLM integration
+├── kanban-core               → Shared types, error handling, config, reusable state primitives
+├── kanban-domain             → Domain models, business logic, filtering & sorting
+├── kanban-persistence        → Persistence trait layer — pure trait definitions, all I/O lives in backend crates
+├── kanban-persistence-json   → JSON file storage backend
+├── kanban-persistence-sqlite → SQLite storage backend
+├── kanban-service            → KanbanContext, persistence orchestration, undo/redo
+├── kanban-tui                → Terminal UI with ratatui
+├── kanban-cli                → CLI entry point (clap)
+└── kanban-mcp                → Model Context Protocol server
 ```
 
 ```mermaid
@@ -158,41 +286,70 @@ graph LR
     MCP[kanban-mcp] --> SVC
     TUI --> SVC
     SVC --> PER[kanban-persistence]
+    SVC -.-> JSON[kanban-persistence-json]
+    SVC -.-> SQL[kanban-persistence-sqlite]
+    JSON --> PER
+    SQL --> PER
     PER --> DOM[kanban-domain]
     DOM --> CORE[kanban-core]
 ```
 
-**Key Design Patterns:**
-- **Command Pattern**: All mutations flow through domain commands for persistent tracking
-- **Immediate Saving**: Changes auto-save after each action
-- **Format Versioning**: Automatic V1→V2 migration with backup on first load
-- **Multi-Instance Support**: Last-write-wins conflict resolution for concurrent edits
+| Crate | Description | README |
+|-------|-------------|--------|
+| `kanban-core` | Shared types, config, errors, graph, pagination | [→](crates/kanban-core/README.md) |
+| `kanban-domain` | Domain models, business logic | [→](crates/kanban-domain/README.md) |
+| `kanban-persistence` | Persistence trait layer | [→](crates/kanban-persistence/README.md) |
+| `kanban-persistence-json` | JSON file backend | [→](crates/kanban-persistence-json/README.md) |
+| `kanban-persistence-sqlite` | SQLite backend | [→](crates/kanban-persistence-sqlite/README.md) |
+| `kanban-service` | Service layer, KanbanContext, undo/redo | [→](crates/kanban-service/README.md) |
+| `kanban-tui` | Terminal UI | [→](crates/kanban-tui/README.md) |
+| `kanban-cli` | CLI entry point | [→](crates/kanban-cli/README.md) |
+| `kanban-mcp` | MCP server | [→](crates/kanban-mcp/README.md) |
+
+---
 
 ## Data & Persistence
 
-- **Format**: JSON-based import/export
-- **Automatic Migration**: V1 data files are automatically upgraded to V2 format on load with backup creation
-- **Multi-Instance Support**:
-  - Real-time file watching detects changes from other running instances
-  - Automatic reload when no local changes exist
-  - User prompt when local edits conflict with external changes
-  - Last-write-wins conflict resolution for concurrent edits
-- **Atomic Writes**: Crash-safe write pattern (temp file → atomic rename) prevents data corruption
-- **External Editor**: Automatically detects vim, nvim, nano, or your `$EDITOR` for editing descriptions
-- **Rich Metadata**: Timestamps, priority levels, story points, custom tags
-- **Bounded Save Queue**: Maintains a queue of up to 100 pending snapshots
+### JSON Backend (default)
+
+- **V2 envelope format**: `{ "version": 2, "metadata": {...}, "data": {...} }`
+- **Atomic writes**: crash-safe — every write is atomic (temp file → rename)
+- **Debounced saving**: 500ms minimum interval between saves
+- Default for any plain file path
+
+### SQLite Backend
+
+- **WAL mode** with foreign key enforcement
+- **Connection pool**: max 2 connections
+- **Relational schema**: boards, columns, cards, archived cards, sprints, sprint logs, dependency graph edges, and more
+- Schema versioning with migration skeleton for future upgrades
+- File selected by `.sqlite`, `.sqlite3`, or `.db` extension
+
+### Multi-Instance Support
+
+- **File watching**: detects changes written by other TUI or MCP instances
+- **Auto-reload**: applies external changes automatically when the local state is clean
+- **Conflict prompt**: when local edits clash with an external write, you choose to reload or keep
+
+---
 
 ## Roadmap
 
-- [x] Progressive auto-save (save changes to board as you make them, not just on exit)
-- [x] Full CLI interface matching TUI operations (scriptable kanban commands)
-- [x] Card dependencies
-- [ ] Attachments, adding files to cards
+- [x] Progressive auto-save
+- [x] Full CLI interface
+- [x] Card dependencies (parent/child)
+- [x] Multiple storage backends (JSON + SQLite)
+- [x] MCP server for LLM integration
+- [x] Full undo/redo
+- [x] Sprint planning lifecycle
+- [x] Bulk operations
 - [ ] Configurable keybindings
+- [ ] Attachments (files on cards)
 - [ ] Audit log
-- [ ] Multiple storage backends (.md archive, SQL, MongoDB) with pluggable architecture
-- [ ] HTTP API for remote board access and programmatic control
-- [ ] Collaborative features (multi-user, sync)
+- [ ] HTTP API for remote access
+- [ ] Collaborative / sync features
+
+---
 
 ## Contributing
 
@@ -200,4 +357,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, code style, and
 
 ## License
 
-Apache 2.0 - See [LICENSE.md](LICENSE.md) for details
+Apache 2.0 — see [LICENSE.md](LICENSE.md)

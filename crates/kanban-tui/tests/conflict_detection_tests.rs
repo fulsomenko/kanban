@@ -1,11 +1,12 @@
-use kanban_core::KanbanError;
 use kanban_domain::{Board, Card, Column, Snapshot};
-use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence::PersistenceError;
+use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+use kanban_persistence_json::JsonFileStore;
 use std::fs;
 use std::time::Duration;
 use tempfile::tempdir;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_conflict_detection_on_concurrent_modification() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -13,7 +14,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     // Create initial data and save via first instance
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot1 = Snapshot {
         boards: vec![board.clone()],
@@ -26,7 +27,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
 
     let store_id = uuid::Uuid::new_v4();
     let store = JsonFileStore::with_instance_id(&file_path, store_id);
-    let data1 = snapshot1.to_json_bytes().unwrap();
+    let data1 = kanban_persistence::snapshot_to_json_bytes(&snapshot1).unwrap();
     let persist_snapshot1 = StoreSnapshot {
         data: data1,
         metadata: PersistenceMetadata::new(store_id),
@@ -53,7 +54,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Same instance tries to save and should detect conflict
-    let data2 = snapshot1.to_json_bytes().unwrap();
+    let data2 = kanban_persistence::snapshot_to_json_bytes(&snapshot1).unwrap();
     let persist_snapshot2 = StoreSnapshot {
         data: data2,
         metadata: PersistenceMetadata::new(store_id),
@@ -63,7 +64,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     assert!(result.is_err(), "Should detect conflict on second save");
 
     match result {
-        Err(KanbanError::ConflictDetected { path, .. }) => {
+        Err(PersistenceError::ConflictDetected { path, .. }) => {
             assert!(
                 path.contains("kanban.json"),
                 "Error should contain file path"
@@ -73,7 +74,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_no_conflict_when_file_unchanged() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -81,7 +82,7 @@ async fn test_no_conflict_when_file_unchanged() {
     // Create and save initial data
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot = Snapshot {
         boards: vec![board.clone()],
@@ -93,7 +94,7 @@ async fn test_no_conflict_when_file_unchanged() {
     };
 
     let store = JsonFileStore::new(&file_path);
-    let data = snapshot.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot).unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
         metadata: PersistenceMetadata::new(store.instance_id()),
@@ -108,7 +109,7 @@ async fn test_no_conflict_when_file_unchanged() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_conflict_detection_tracks_file_metadata() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -116,7 +117,7 @@ async fn test_conflict_detection_tracks_file_metadata() {
     // Create and save initial data
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let _card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let _card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot = Snapshot {
         boards: vec![board.clone()],
@@ -128,7 +129,7 @@ async fn test_conflict_detection_tracks_file_metadata() {
     };
 
     let store = JsonFileStore::new(&file_path);
-    let data = snapshot.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot).unwrap();
     let persist_snapshot = StoreSnapshot {
         data,
         metadata: PersistenceMetadata::new(store.instance_id()),
@@ -167,14 +168,14 @@ async fn test_conflict_detection_tracks_file_metadata() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multiple_instances_with_different_ids() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
 
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot = Snapshot {
         boards: vec![board.clone()],
@@ -188,7 +189,7 @@ async fn test_multiple_instances_with_different_ids() {
     // First instance saves
     let store1_id = uuid::Uuid::new_v4();
     let store1 = JsonFileStore::with_instance_id(&file_path, store1_id);
-    let data = snapshot.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot).unwrap();
     let persist_snapshot1 = StoreSnapshot {
         data: data.clone(),
         metadata: PersistenceMetadata::new(store1_id),
@@ -211,14 +212,14 @@ async fn test_multiple_instances_with_different_ids() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_conflict_resolution_with_force_overwrite() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
 
     let mut board = Board::new("Test Board".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
-    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0, "task");
+    let card = Card::new(&mut board, column.id, "Test Task".to_string(), 0);
 
     let snapshot = Snapshot {
         boards: vec![board.clone()],
@@ -232,7 +233,7 @@ async fn test_conflict_resolution_with_force_overwrite() {
     let store = JsonFileStore::new(&file_path);
 
     // Save initial state
-    let data = snapshot.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot).unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
         metadata: PersistenceMetadata::new(store.instance_id()),
@@ -261,7 +262,7 @@ async fn test_conflict_resolution_with_force_overwrite() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multi_instance_concurrent_editing_3_instances() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("shared_board.json");
@@ -274,8 +275,8 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     let column1 = Column::new(board1.id, "Todo".to_string(), 0);
     let column2 = Column::new(board1.id, "In Progress".to_string(), 1);
 
-    let card1 = Card::new(&mut board1, column1.id, "Task A".to_string(), 0, "feature");
-    let card2 = Card::new(&mut board1, column2.id, "Task B".to_string(), 0, "bug");
+    let card1 = Card::new(&mut board1, column1.id, "Task A".to_string(), 0);
+    let card2 = Card::new(&mut board1, column2.id, "Task B".to_string(), 0);
 
     let snapshot1 = Snapshot {
         boards: vec![board1.clone()],
@@ -286,7 +287,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
         archived_cards: vec![],
     };
 
-    let data = snapshot1.to_json_bytes().unwrap();
+    let data = kanban_persistence::snapshot_to_json_bytes(&snapshot1).unwrap();
     let persist_snapshot = StoreSnapshot {
         data: data.clone(),
         metadata: PersistenceMetadata::new(instance1_id),
@@ -305,11 +306,10 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
         snapshot2.columns[0].id,
         "Task C (from Instance 2)".to_string(),
         0,
-        "chore",
     );
     snapshot2.cards.push(new_card);
 
-    let data2 = snapshot2.to_json_bytes().unwrap();
+    let data2 = kanban_persistence::snapshot_to_json_bytes(&snapshot2).unwrap();
     let persist_snapshot2 = StoreSnapshot {
         data: data2,
         metadata: PersistenceMetadata::new(instance2_id),
@@ -334,7 +334,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     // Rename the first card
     snapshot3.cards[0].title = "Task A - Updated by Instance 3".to_string();
 
-    let data3 = snapshot3.to_json_bytes().unwrap();
+    let data3 = kanban_persistence::snapshot_to_json_bytes(&snapshot3).unwrap();
     let persist_snapshot3 = StoreSnapshot {
         data: data3,
         metadata: PersistenceMetadata::new(instance3_id),
@@ -361,7 +361,7 @@ async fn test_multi_instance_concurrent_editing_3_instances() {
     );
 
     match result1_retry {
-        Err(KanbanError::ConflictDetected { path, .. }) => {
+        Err(PersistenceError::ConflictDetected { path, .. }) => {
             assert!(path.contains("shared_board.json"));
         }
         _ => panic!("Expected ConflictDetected error"),

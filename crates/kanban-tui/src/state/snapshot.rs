@@ -16,47 +16,37 @@ pub trait TuiSnapshot {
     fn from_app(app: &App) -> Self;
 
     /// Apply snapshot to app state (overwrites).
-    fn apply_to_app(&self, app: &mut App);
+    fn apply_to_app(&self, app: &mut App) -> kanban_domain::KanbanResult<()>;
 }
 
 impl TuiSnapshot for Snapshot {
     fn from_app(app: &App) -> Self {
-        Self {
-            boards: app.ctx.boards.clone(),
-            columns: app.ctx.columns.clone(),
-            cards: app.ctx.cards.clone(),
-            archived_cards: app.ctx.archived_cards.clone(),
-            sprints: app.ctx.sprints.clone(),
-            graph: app.ctx.graph.clone(),
-        }
+        app.ctx.snapshot().unwrap_or_default()
     }
 
-    fn apply_to_app(&self, app: &mut App) {
-        app.ctx.boards = self.boards.clone();
-        app.ctx.columns = self.columns.clone();
-        app.ctx.cards = self.cards.clone();
-        app.ctx.archived_cards = self.archived_cards.clone();
-        app.ctx.sprints = self.sprints.clone();
-        app.ctx.graph = self.graph.clone();
+    fn apply_to_app(&self, app: &mut App) -> kanban_domain::KanbanResult<()> {
+        app.ctx.apply_snapshot(self.clone())?;
 
         // Sync sort field/order from active board to preserve user's selection after reload
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
+            if let Some(board) = self.boards.get(board_idx) {
                 app.filter.current_sort_field = Some(board.task_sort_field);
                 app.filter.current_sort_order = Some(board.task_sort_order);
             }
         }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{FilterState, SelectionHub};
     use kanban_domain::{Board, DependencyGraph, SortField};
 
     #[test]
     fn test_snapshot_serialization() {
+        use kanban_persistence::{snapshot_from_json_bytes, snapshot_to_json_bytes};
+
         let snapshot = Snapshot {
             boards: vec![],
             columns: vec![],
@@ -66,8 +56,8 @@ mod tests {
             graph: DependencyGraph::new(),
         };
 
-        let bytes = snapshot.to_json_bytes().unwrap();
-        let restored = Snapshot::from_json_bytes(&bytes).unwrap();
+        let bytes = snapshot_to_json_bytes(&snapshot).unwrap();
+        let restored = snapshot_from_json_bytes(&bytes).unwrap();
 
         assert_eq!(restored.boards.len(), 0);
     }
@@ -88,21 +78,12 @@ mod tests {
         };
 
         // Create a minimal app with active_board_index set
-        let app = App {
-            selection: SelectionHub {
-                active_board_index: Some(0),
-                ..SelectionHub::default()
-            },
-            filter: FilterState {
-                current_sort_field: Some(SortField::Default),
-                ..FilterState::default()
-            },
-            ..Default::default()
-        };
-        let mut app = app;
+        let mut app = App::test_default();
+        app.selection.active_board_index = Some(0);
+        app.filter.current_sort_field = Some(SortField::Default);
 
         // Apply snapshot - should sync sort field from board
-        snapshot.apply_to_app(&mut app);
+        snapshot.apply_to_app(&mut app).unwrap();
 
         // After apply, current_sort_field should match the board's task_sort_field
         assert_eq!(

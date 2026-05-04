@@ -1,15 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use uuid::Uuid;
 
-#[cfg(has_git_commit)]
-const VERSION: &str = concat!(
-    env!("CARGO_PKG_VERSION"),
-    "\ncommit: ",
-    env!("GIT_COMMIT_HASH")
-);
-
-#[cfg(not(has_git_commit))]
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+use kanban_core::VERSION;
 
 #[derive(Parser)]
 #[command(name = "kanban")]
@@ -43,6 +35,8 @@ pub enum Commands {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Migrate data between storage backends
+    Migrate(MigrateArgs),
 }
 
 // Board commands
@@ -227,19 +221,22 @@ pub enum CardAction {
         id: String,
     },
     /// Archive multiple cards
-    BulkArchive {
+    #[command(name = "archive-cards")]
+    ArchiveCards {
         #[arg(long, value_delimiter = ',')]
         ids: Vec<Uuid>,
     },
     /// Move multiple cards to a column
-    BulkMove {
+    #[command(name = "move-cards")]
+    MoveCards {
         #[arg(long, value_delimiter = ',')]
         ids: Vec<Uuid>,
         #[arg(long)]
         column_id: Uuid,
     },
     /// Assign multiple cards to a sprint
-    BulkAssignSprint {
+    #[command(name = "assign-cards-to-sprint")]
+    AssignCardsToSprint {
         #[arg(long, value_delimiter = ',')]
         ids: Vec<Uuid>,
         #[arg(long)]
@@ -359,6 +356,15 @@ pub enum SprintAction {
         /// Sprint ID
         id: Uuid,
     },
+    /// Carry over uncompleted cards from a completed sprint to a planning sprint
+    CarryOver {
+        /// ID of the completed sprint to carry cards from
+        #[arg(long)]
+        from: Uuid,
+        /// ID of the planning sprint to carry cards to
+        #[arg(long)]
+        to: Uuid,
+    },
 }
 
 #[derive(Args)]
@@ -379,6 +385,26 @@ pub struct SprintUpdateArgs {
     pub clear_start_date: bool,
     #[arg(long)]
     pub clear_end_date: bool,
+}
+
+// Migrate command
+#[derive(Args)]
+#[command(after_help = "EXAMPLES:
+    kanban migrate kanban.json sqlite
+    kanban migrate kanban.json sqlite -o /path/to/output.sqlite
+    kanban migrate kanban.sqlite json -o kanban.json
+    kanban migrate data.bin json --source-backend sqlite")]
+pub struct MigrateArgs {
+    /// Path to source file
+    pub source: String,
+    /// Target backend name
+    pub backend: String,
+    /// Output path (default: derived from source filename and target backend)
+    #[arg(long, short)]
+    pub output: Option<String>,
+    /// Override source backend auto-detection
+    #[arg(long)]
+    pub source_backend: Option<String>,
 }
 
 // Export/Import commands

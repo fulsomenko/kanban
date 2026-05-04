@@ -1,5 +1,5 @@
 use crate::app::App;
-use kanban_domain::Sprint;
+use kanban_domain::{Sprint, SprintStatus};
 use ratatui::Frame;
 
 pub trait SelectionDialog {
@@ -175,6 +175,106 @@ impl SelectionDialog for SortFieldDialog {
     }
 }
 
+pub struct CarryOverSprintDialog {
+    pub card_count: usize,
+}
+
+impl SelectionDialog for CarryOverSprintDialog {
+    fn title(&self) -> &str {
+        "Carry Over to Sprint"
+    }
+
+    fn get_current_selection(&self, app: &App) -> usize {
+        app.dialog_input
+            .carry_over_sprint_selection
+            .get()
+            .unwrap_or(0)
+    }
+
+    fn options_count(&self, app: &App) -> usize {
+        if let Some(board_idx) = app.selection.active_board_index {
+            if let Some(board) = app.model.boards().get(board_idx) {
+                app.model
+                    .sprints()
+                    .iter()
+                    .filter(|s| s.board_id == board.id && s.status == SprintStatus::Planning)
+                    .count()
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+
+    fn render(&self, app: &App, frame: &mut Frame) {
+        use crate::components::centered_rect;
+        use ratatui::{
+            layout::{Constraint, Direction, Layout},
+            style::{Color, Style},
+            text::{Line, Span},
+            widgets::{Block, Borders, Clear, Paragraph},
+        };
+
+        let area = centered_rect(60, 50, frame.area());
+        frame.render_widget(Clear, area);
+
+        let title = format!("Carry Over to Sprint ({} cards)", self.card_count);
+        let block = Block::default()
+            .title(title.as_str())
+            .borders(Borders::ALL)
+            .style(Style::default().bg(Color::Black));
+
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(2)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(inner);
+
+        let label =
+            Paragraph::new("Select target sprint:").style(Style::default().fg(Color::Yellow));
+        frame.render_widget(label, chunks[0]);
+
+        let mut lines = vec![];
+
+        if let Some(board_idx) = app.selection.active_board_index {
+            let boards = app.model.boards();
+            if let Some(board) = boards.get(board_idx) {
+                let sprints = app.model.sprints();
+                let planning_sprints: Vec<_> = sprints
+                    .iter()
+                    .filter(|s| s.board_id == board.id && s.status == SprintStatus::Planning)
+                    .collect();
+
+                for (idx, sprint) in planning_sprints.iter().enumerate() {
+                    let is_selected =
+                        app.dialog_input.carry_over_sprint_selection.get() == Some(idx);
+
+                    let style = if is_selected {
+                        Style::default().fg(Color::White).bg(Color::Blue)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+
+                    let prefix = if is_selected { "> " } else { "  " };
+                    let sprint_name = sprint.formatted_name(board, "sprint");
+
+                    lines.push(Line::from(Span::styled(
+                        format!("{}{}", prefix, sprint_name),
+                        style,
+                    )));
+                }
+            }
+        }
+
+        let list = Paragraph::new(lines);
+        frame.render_widget(list, chunks[1]);
+    }
+}
+
 pub struct SprintAssignDialog;
 
 impl SelectionDialog for SprintAssignDialog {
@@ -188,8 +288,10 @@ impl SelectionDialog for SprintAssignDialog {
 
     fn options_count(&self, app: &App) -> usize {
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
-                let sprint_count = Sprint::assignable(&app.ctx.sprints, board.id).len();
+            let boards = app.model.boards();
+            if let Some(board) = boards.get(board_idx) {
+                let sprints = app.model.sprints();
+                let sprint_count = Sprint::assignable(sprints, board.id).len();
                 sprint_count + 1 // +1 for None option
             } else {
                 1
@@ -231,11 +333,14 @@ impl SelectionDialog for SprintAssignDialog {
         let mut lines = vec![];
 
         if let Some(board_idx) = app.selection.active_board_index {
-            if let Some(board) = app.ctx.boards.get(board_idx) {
-                let board_sprints = Sprint::assignable(&app.ctx.sprints, board.id);
+            let boards = app.model.boards();
+            if let Some(board) = boards.get(board_idx) {
+                let sprints = app.model.sprints();
+                let board_sprints = Sprint::assignable(sprints, board.id);
 
+                let cards = app.model.cards();
                 let current_sprint_id = if let Some(card_idx) = app.selection.active_card_index {
-                    app.ctx.cards.get(card_idx).and_then(|c| c.sprint_id)
+                    cards.get(card_idx).and_then(|c| c.sprint_id)
                 } else {
                     None
                 };

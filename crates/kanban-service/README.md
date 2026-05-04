@@ -1,147 +1,236 @@
 # kanban-service
 
-Service layer for the kanban tool. Bridges domain commands with persistence.
+Service layer for the kanban workspace. Provides `KanbanContext` — the single in-memory state machine for all board data — along with persistence orchestration, undo/redo, and utility functions.
 
-## Installation
+## `KanbanContext`
 
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-kanban-service = { path = "../kanban-service" }
-```
-
-## Overview
-
-`KanbanContext` is the central runtime object that owns all in-memory board state. It implements
-`KanbanOperations` from `kanban-domain`, providing the full set of board, column, card, sprint,
-and bulk operations. Internally it wraps a `PersistenceStore` to load, save, and reload state
-from disk.
-
-## Usage
+The central type. Holds all domain data in memory and delegates to a `PersistenceStore` for load/save operations.
 
 ```rust
-use kanban_service::KanbanContext;
-use kanban_domain::KanbanOperations;
-
-let mut ctx = KanbanContext::load_json("board.json").await?;
-let board = ctx.create_board("My Board".into(), None)?;
-ctx.save().await?;
-
-// Pick up changes written by another process
-ctx.reload().await?;
+pub struct KanbanContext {
+    // private fields:
+    boards: Vec<Board>,
+    columns: Vec<Column>,
+    cards: Vec<Card>,
+    sprints: Vec<Sprint>,
+    archived_cards: Vec<ArchivedCard>,
+    graph: DependencyGraph,
+    app_config: AppConfig,
+    store: Arc<dyn PersistenceStore + Send + Sync>,
+    history: HistoryManager,
+    dirty: bool,
+    conflict_pending: bool,
+}
 ```
 
-## API Reference
+### Construction
 
-### `KanbanContext`
+```rust
+KanbanContext::load(store, config) -> KanbanResult<Self>
+KanbanContext::load_with_defaults(store) -> KanbanResult<Self>
+KanbanContext::empty(store, config) -> Self
+```
 
-The central runtime object. Holds all board state in memory and delegates persistence to a
-`PersistenceStore`.
+### State Accessors
 
-**Lifecycle methods:**
+```rust
+ctx.boards() -> &[Board]
+ctx.columns() -> &[Column]
+ctx.cards() -> &[Card]
+ctx.sprints() -> &[Sprint]
+ctx.archived_cards() -> &[ArchivedCard]
+ctx.graph() -> &DependencyGraph
+ctx.app_config() -> &AppConfig
+ctx.is_dirty() -> bool
+ctx.has_conflict() -> bool
+ctx.set_conflict(bool)
+ctx.clear_conflict()
+```
+
+### Persistence
+
+```rust
+ctx.save() -> KanbanResult<()>
+ctx.reload() -> KanbanResult<()>
+ctx.replace_store(store)
+ctx.snapshot() -> Snapshot
+ctx.apply_snapshot(snapshot)
+```
+
+### Undo / Redo
+
+```rust
+ctx.undo() -> bool        // Returns true if there was something to undo
+ctx.redo() -> bool        // Returns true if there was something to redo
+ctx.can_undo() -> bool
+ctx.can_redo() -> bool
+ctx.undo_depth() -> usize
+ctx.redo_depth() -> usize
+ctx.clear_history()
+```
+
+History is captured before every mutating operation. Stacks are capped at 100 entries.
+
+### Board Operations
 
 | Method | Description |
 |--------|-------------|
-| `KanbanContext::load(store)` | Load from a `PersistenceStore` instance |
-| `KanbanContext::load_json(path)` | Convenience: create a `JsonFileStore` and load |
-| `ctx.reload()` | Re-read state from disk, discarding in-memory state |
-| `ctx.save()` | Serialize current state and write to the store |
-| `ctx.execute(command)` | Execute any `Command` against the in-memory state |
+| `create_board(name, card_prefix)` | Create a new board |
+| `list_boards()` | List all boards |
+| `get_board(id)` | Get a board by ID |
+| `update_board(id, updates)` | Partially update a board |
+| `delete_board(id)` | Delete board and all its data |
 
-**`KanbanOperations` impl** (boards, columns, cards, sprints, import/export):
+### Column Operations
 
-Boards: `create_board`, `list_boards`, `get_board`, `update_board`, `delete_board`
+| Method | Description |
+|--------|-------------|
+| `create_column(board_id, name, position)` | Create a column |
+| `list_columns(board_id)` | List columns for a board |
+| `get_column(id)` | Get a column by ID |
+| `update_column(id, updates)` | Partially update a column |
+| `delete_column(id)` | Delete column and its cards |
+| `reorder_column(id, position)` | Move column to new position |
 
-Columns: `create_column`, `list_columns`, `get_column`, `update_column`, `delete_column`,
-`reorder_column`
+### Card Operations
 
-Cards: `create_card`, `list_cards`, `get_card`, `find_card_by_identifier`, `update_card`,
-`move_card`, `archive_card`, `restore_card`, `delete_card`, `list_archived_cards`,
-`get_card_branch_name`, `get_card_git_checkout`
+| Method | Description |
+|--------|-------------|
+| `create_card(board_id, column_id, title, options)` | Create a card |
+| `list_cards(filter)` | List cards with `CardListFilter` |
+| `list_cards_paged(filter, page, page_size)` | Paginated card list |
+| `get_card(id)` | Get full card by ID |
+| `find_cards_by_identifier(s)` | Find card(s) by UUID or `KAN-5` format |
+| `update_card(id, updates)` | Partially update a card |
+| `move_card(id, column_id, position)` | Move card to a column |
+| `archive_card(id)` | Archive a card |
+| `restore_card(id, column_id)` | Restore an archived card |
+| `delete_card(id)` | Permanently delete a card |
+| `list_archived_cards()` | List all archived cards |
 
-Sprints: `create_sprint`, `list_sprints`, `get_sprint`, `update_sprint`, `activate_sprint`,
-`complete_sprint`, `cancel_sprint`, `delete_sprint`, `assign_card_to_sprint`,
-`unassign_card_from_sprint`
+### Card–Sprint Operations
 
-Bulk: `bulk_archive_cards`, `bulk_move_cards`, `bulk_assign_sprint`
+| Method | Description |
+|--------|-------------|
+| `assign_card_to_sprint(card_id, sprint_id)` | Assign a card to a sprint |
+| `unassign_card_from_sprint(card_id)` | Remove card from its sprint |
+| `get_card_branch_name(id)` | Generate git branch name for a card |
+| `get_card_git_checkout(id)` | Generate `git checkout -b <branch>` command |
 
-Import/Export: `export_board`, `import_board`
+### Bulk Operations
 
-### `DataSnapshot`
+| Method | Description |
+|--------|-------------|
+| `archive_cards(ids)` | Archive multiple cards; returns count |
+| `move_cards(ids, column_id)` | Move multiple cards; returns count |
+| `assign_cards_to_sprint(ids, sprint_id)` | Bulk sprint assignment; returns count |
+| `archive_cards_detailed(ids)` | Archive with per-card success/failure report |
+| `move_cards_detailed(ids, column_id)` | Move with per-card success/failure report |
+| `assign_cards_to_sprint_detailed(ids, sprint_id)` | Bulk assign with report |
 
-Serialisable struct written to disk. Contains the full board state:
+### Sprint Operations
+
+| Method | Description |
+|--------|-------------|
+| `create_sprint(board_id, prefix, name)` | Create a sprint |
+| `list_sprints(board_id)` | List sprints for a board |
+| `get_sprint(id)` | Get a sprint by ID |
+| `update_sprint(id, updates)` | Partially update a sprint |
+| `activate_sprint(id, duration_days)` | Activate a sprint |
+| `complete_sprint(id)` | Complete a sprint |
+| `cancel_sprint(id)` | Cancel a sprint |
+| `delete_sprint(id)` | Delete a sprint |
+| `carry_over_sprint_cards(from, to)` | Move uncompleted cards to a new sprint |
+
+---
+
+## `BatchOperationResult`
 
 ```rust
-pub struct DataSnapshot {
-    pub boards: Vec<Board>,
-    pub columns: Vec<Column>,
-    pub cards: Vec<Card>,
-    pub archived_cards: Vec<ArchivedCard>,
-    pub sprints: Vec<Sprint>,
-    pub graph: DependencyGraph,
-}
-```
-
-### `BulkOperationResult` / `BulkOperationFailure`
-
-Returned by the three `_detailed` bulk operations. Reports per-item success/failure rather than
-just a count:
-
-```rust
-pub struct BulkOperationResult {
+pub struct BatchOperationResult {
     pub succeeded: Vec<Uuid>,
-    pub failed: Vec<BulkOperationFailure>,
+    pub failed: Vec<BatchOperationFailure>,
 }
 
-pub struct BulkOperationFailure {
+pub struct BatchOperationFailure {
     pub id: Uuid,
     pub error: String,
 }
 ```
 
-## Architecture
+Returned by the `*_detailed` bulk operation methods.
 
-`kanban-service` sits between `kanban-persistence` and the consumers (`kanban-tui`, `kanban-mcp`, `kanban-cli`). See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for the full workspace dependency graph.
+---
 
-### Command Pattern Flow
+## `DataSnapshot`
 
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant KanbanContext
-    participant CommandContext
-    participant PersistenceStore
-
-    Caller->>KanbanContext: execute(command)
-    KanbanContext->>CommandContext: command.execute(&mut ctx)
-    CommandContext-->>KanbanContext: mutates boards/columns/cards/sprints vecs
-    KanbanContext-->>Caller: Ok(())
-    Caller->>KanbanContext: save()
-    KanbanContext->>PersistenceStore: save(StoreSnapshot)
-    PersistenceStore-->>KanbanContext: Ok(())
+```rust
+pub struct DataSnapshot {
+    // mirrors kanban_domain::Snapshot; used for serialization
+}
 ```
 
-## Bulk Operations
+---
 
-The `_detailed` variants return per-item results instead of a success count, which is useful
-when callers need to report partial failures:
+## Utility Functions
 
-| Method | Returns |
-|--------|---------|
-| `bulk_archive_cards_detailed(ids)` | `BulkOperationResult` |
-| `bulk_move_cards_detailed(ids, column_id)` | `BulkOperationResult` |
-| `bulk_assign_sprint_detailed(ids, sprint_id)` | `BulkOperationResult` |
+```rust
+// Build the default store registry (SQLite first, JSON as catch-all)
+pub fn default_registry() -> StoreRegistry;
+
+// Detect which backend matches a locator string
+pub fn detect_backend(locator: &str) -> Option<String>;
+
+// Create a store from backend name + locator
+pub fn make_store(backend: &str, locator: &str) -> KanbanResult<Arc<dyn PersistenceStore + Send + Sync>>;
+
+// Create a store from an optional file path + AppConfig
+pub fn make_store_with_config(file: Option<&str>, config: &AppConfig) -> KanbanResult<Arc<dyn PersistenceStore + Send + Sync>>;
+
+// Load and validate a store (returns error if file doesn't exist)
+pub async fn validate_and_load_store(backend: &str, path: &str) -> KanbanResult<Snapshot>;
+
+// Export board selection to a new SQLite file
+pub async fn export_to_sqlite(export: AllBoardsExport, filename: &str) -> KanbanResult<()>;
+
+// Migrate all data from one store to another
+pub async fn migrate_store(source: &str, target: &str) -> KanbanResult<()>;
+
+// Sync config storage_backend field to match the file's actual backend
+pub fn sync_backend_with_file(locator: &str, config: &mut AppConfig) -> bool;
+```
+
+---
+
+## Command Execution Flow
+
+```
+caller
+  │
+  ▼
+KanbanContext::execute(commands: Vec<Box<dyn Command>>)
+  │
+  ├─ 1. history.capture_before_command(current_snapshot)
+  │
+  ├─ 2. for each command:
+  │       command.execute(&mut CommandContext)   ← mutates boards/columns/cards/...
+  │       on error: restore from undo snapshot → return Err
+  │
+  ├─ 3. dirty = true
+  │
+  └─ (caller calls ctx.save() → store.save(snapshot, metadata))
+```
+
+---
 
 ## Dependencies
 
-- `kanban-core` — Foundation types and error handling
-- `kanban-domain` — Domain models and `KanbanOperations` trait
-- `kanban-persistence` — `JsonFileStore` and `PersistenceStore` trait
-- `serde`, `serde_json` — Serialization
-- `tokio` — Async runtime
-- `uuid` — ID generation
-
-## License
-
-Apache 2.0 — See [LICENSE.md](../../LICENSE.md) for details
+| Crate | Purpose |
+|-------|---------|
+| `kanban-core` | `AppConfig`, `KanbanResult` |
+| `kanban-domain` | All domain types |
+| `kanban-persistence` | `PersistenceStore`, `StoreRegistry` |
+| `kanban-persistence-json` | JSON backend (feature `json-storage`) |
+| `kanban-persistence-sqlite` | SQLite backend (feature `sqlite-storage`) |
+| `tokio` | Async runtime |
+| `serde` | Serialization |

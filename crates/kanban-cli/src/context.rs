@@ -1,21 +1,33 @@
-use kanban_core::KanbanResult;
+use kanban_core::AppConfig;
+use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
 };
-use kanban_service::KanbanContext;
+use kanban_service::{KanbanContext, StoreManager};
 use uuid::Uuid;
 
-pub use kanban_service::BulkOperationResult;
+pub use kanban_service::BatchOperationResult;
 
 pub struct CliContext {
     inner: KanbanContext,
 }
 
 impl CliContext {
-    pub async fn load(file_path: &str) -> KanbanResult<Self> {
+    pub async fn load(
+        store_manager: &StoreManager,
+        file_path: &str,
+        mut config: AppConfig,
+    ) -> KanbanResult<Self> {
+        if store_manager.sync_backend_with_file(file_path, &mut config) {
+            eprintln!(
+                "Warning: storage backend auto-corrected from config value to '{}' based on file content.",
+                config.effective_storage_backend()
+            );
+        }
+        let backend = store_manager.make_backend(file_path, &config).await?;
         Ok(Self {
-            inner: KanbanContext::load_json(file_path).await?,
+            inner: KanbanContext::open(backend, config).await?,
         })
     }
 
@@ -23,24 +35,20 @@ impl CliContext {
         self.inner.save().await
     }
 
-    pub fn bulk_archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BulkOperationResult {
-        self.inner.bulk_archive_cards_detailed(ids)
+    pub fn archive_cards_detailed(&mut self, ids: Vec<Uuid>) -> BatchOperationResult {
+        self.inner.archive_cards_detailed(ids)
     }
 
-    pub fn bulk_move_cards_detailed(
-        &mut self,
-        ids: Vec<Uuid>,
-        column_id: Uuid,
-    ) -> BulkOperationResult {
-        self.inner.bulk_move_cards_detailed(ids, column_id)
+    pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
+        self.inner.move_cards_detailed(ids, column_id)
     }
 
-    pub fn bulk_assign_sprint_detailed(
+    pub fn assign_cards_to_sprint_detailed(
         &mut self,
         ids: Vec<Uuid>,
         sprint_id: Uuid,
-    ) -> BulkOperationResult {
-        self.inner.bulk_assign_sprint_detailed(ids, sprint_id)
+    ) -> BatchOperationResult {
+        self.inner.assign_cards_to_sprint_detailed(ids, sprint_id)
     }
 }
 
@@ -112,8 +120,8 @@ impl KanbanOperations for CliContext {
         self.inner.get_card(id)
     }
 
-    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>> {
-        self.inner.find_card_by_identifier(identifier)
+    fn find_cards_by_identifier(&self, identifier: &str) -> KanbanResult<Vec<Card>> {
+        self.inner.find_cards_by_identifier(identifier)
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
@@ -161,16 +169,25 @@ impl KanbanOperations for CliContext {
         self.inner.get_card_git_checkout(id)
     }
 
-    fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        self.inner.bulk_archive_cards(ids)
+    fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
+        self.inner.archive_cards(ids)
     }
 
-    fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_move_cards(ids, column_id)
+    fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
+        self.inner.move_cards(ids, column_id)
     }
 
-    fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_assign_sprint(ids, sprint_id)
+    fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
+        self.inner.assign_cards_to_sprint(ids, sprint_id)
+    }
+
+    fn carry_over_sprint_cards(
+        &mut self,
+        from_sprint_id: Uuid,
+        to_sprint_id: Uuid,
+    ) -> KanbanResult<usize> {
+        self.inner
+            .carry_over_sprint_cards(from_sprint_id, to_sprint_id)
     }
 
     fn create_sprint(

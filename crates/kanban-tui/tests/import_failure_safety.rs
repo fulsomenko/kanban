@@ -3,8 +3,8 @@ use kanban_tui::App;
 use std::fs;
 use tempfile::tempdir;
 
-#[test]
-fn test_import_failure_prevents_empty_state_save() {
+#[tokio::test]
+async fn test_import_failure_prevents_empty_state_save() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
 
@@ -27,7 +27,7 @@ fn test_import_failure_prevents_empty_state_save() {
     let v2_content = serde_json::json!({
         "version": 2,
         "metadata": {
-            "instance_id": "test-instance-id",
+            "instance_id": "00000000-0000-0000-0000-000000000001",
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
         "data": snapshot_json
@@ -40,44 +40,44 @@ fn test_import_failure_prevents_empty_state_save() {
     .unwrap();
 
     // Create app with the V2 format file - should handle it gracefully now
-    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()))
+        .await
+        .unwrap();
+    app.load_initial_state().await;
 
     // App should load the board from V2 format
+    app.prepare_frame();
     assert_eq!(
-        app.ctx.boards.len(),
+        app.model.boards().len(),
         1,
         "V2 format should be imported successfully"
     );
-    assert_eq!(app.ctx.boards[0].name, "Test Board");
+    assert_eq!(app.model.boards()[0].name, "Test Board");
     assert!(
         app.persistence.save_file.is_some(),
         "save_file should still be enabled after successful V2 import"
     );
 }
 
-#[test]
-fn test_import_failure_disables_save_file() {
+#[tokio::test]
+async fn test_import_failure_disables_save_file() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
 
     // Create an invalid JSON file
     fs::write(&file_path, "{ invalid json }").unwrap();
 
-    // Create app with invalid file
-    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
-
-    // save_file should be None due to import failure
+    // An invalid JSON file causes App::new to fail before the TUI starts,
+    // preventing any risk of overwriting the file with empty data.
+    let result = App::new(Some(file_path.to_str().unwrap().to_string())).await;
     assert!(
-        app.persistence.save_file.is_none(),
-        "save_file should be None when import fails"
+        result.is_err(),
+        "App::new should fail for an invalid JSON file"
     );
-
-    // App should have empty state
-    assert_eq!(app.ctx.boards.len(), 0);
 }
 
-#[test]
-fn test_v2_format_is_imported_correctly() {
+#[tokio::test]
+async fn test_v2_format_is_imported_correctly() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
 
@@ -85,13 +85,7 @@ fn test_v2_format_is_imported_correctly() {
     let board = Board::new("My Project".to_string(), None);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let mut board_mut = board.clone();
-    let card = Card::new(
-        &mut board_mut,
-        column.id,
-        "Important Task".to_string(),
-        0,
-        "task",
-    );
+    let card = Card::new(&mut board_mut, column.id, "Important Task".to_string(), 0);
 
     // Create snapshot with board, column, and card
     let snapshot = Snapshot {
@@ -108,7 +102,7 @@ fn test_v2_format_is_imported_correctly() {
     let v2_content = serde_json::json!({
         "version": 2,
         "metadata": {
-            "instance_id": "test-instance",
+            "instance_id": "00000000-0000-0000-0000-000000000002",
             "saved_at": chrono::Utc::now().to_rfc3339()
         },
         "data": snapshot_json
@@ -121,14 +115,18 @@ fn test_v2_format_is_imported_correctly() {
     .unwrap();
 
     // Create app with V2 format file
-    let (app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()));
+    let (mut app, _rx) = App::new(Some(file_path.to_str().unwrap().to_string()))
+        .await
+        .unwrap();
+    app.load_initial_state().await;
 
     // Should successfully import the board with its column and card
-    assert_eq!(app.ctx.boards.len(), 1);
-    assert_eq!(app.ctx.boards[0].name, "My Project");
-    assert_eq!(app.ctx.columns.len(), 1);
-    assert_eq!(app.ctx.cards.len(), 1);
-    assert_eq!(app.ctx.cards[0].title, "Important Task");
+    app.prepare_frame();
+    assert_eq!(app.model.boards().len(), 1);
+    assert_eq!(app.model.boards()[0].name, "My Project");
+    assert_eq!(app.model.columns().len(), 1);
+    assert_eq!(app.model.cards().len(), 1);
+    assert_eq!(app.model.cards()[0].title, "Important Task");
     assert!(
         app.persistence.save_file.is_some(),
         "save_file should remain enabled after successful V2 import"

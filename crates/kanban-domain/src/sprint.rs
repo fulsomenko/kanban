@@ -13,7 +13,7 @@ pub enum SprintStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sprint {
     pub id: Uuid,
     pub board_id: Uuid,
@@ -165,7 +165,7 @@ impl Sprint {
 ///
 /// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
 /// See [`FieldUpdate`] documentation for usage examples.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct SprintUpdate {
     pub name: Option<String>,
     pub name_index: FieldUpdate<usize>,

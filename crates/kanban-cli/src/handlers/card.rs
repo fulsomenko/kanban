@@ -3,8 +3,8 @@ use crate::context::CliContext;
 use crate::output;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardUpdate, CreateCardOptions,
-    FieldUpdate, KanbanOperations,
+    format_ambiguous_matches, ArchivedCardSummary, CardListFilter, CardPriority, CardStatus,
+    CardUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
 };
 
 use uuid::Uuid;
@@ -13,10 +13,15 @@ fn resolve_card_id(ctx: &CliContext, id: &str) -> anyhow::Result<Uuid> {
     if let Ok(uuid) = Uuid::parse_str(id) {
         return Ok(uuid);
     }
-    ctx.find_card_by_identifier(id)
+    match ctx
+        .find_cards_by_identifier(id)
         .map_err(anyhow::Error::from)?
-        .map(|c| c.id)
-        .ok_or_else(|| anyhow::anyhow!("Card not found: '{}'", id))
+        .as_slice()
+    {
+        [] => Err(anyhow::anyhow!("Card not found: '{}'", id)),
+        [card] => Ok(card.id),
+        matches => Err(anyhow::anyhow!("{}", format_ambiguous_matches(id, matches))),
+    }
 }
 
 pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<()> {
@@ -47,13 +52,18 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             }
         }
         CardAction::Get { id } => {
-            let uuid = match resolve_card_id(ctx, &id) {
-                Ok(uuid) => uuid,
-                Err(e) => return output::output_error(&e.to_string()),
-            };
-            match ctx.get_card(uuid)? {
-                Some(card) => output::output_success(&card),
-                None => return output::output_error(&format!("Card not found: {}", id)),
+            if let Ok(uuid) = Uuid::parse_str(&id) {
+                match ctx.get_card(uuid)? {
+                    Some(card) => output::output_success(&card),
+                    None => return output::output_error(&format!("Card not found: '{}'", id)),
+                }
+            } else {
+                let cards = ctx.find_cards_by_identifier(&id)?;
+                match cards.as_slice() {
+                    [] => return output::output_error(&format!("Card not found: '{}'", id)),
+                    [card] => output::output_success(card),
+                    _ => output::output_success(&cards),
+                }
             }
         }
         CardAction::Update(args) => {
@@ -143,8 +153,8 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
             let cmd = ctx.get_card_git_checkout(uuid)?;
             output::output_success(serde_json::json!({"command": cmd}));
         }
-        CardAction::BulkArchive { ids } => {
-            let result = ctx.bulk_archive_cards_detailed(ids);
+        CardAction::ArchiveCards { ids } => {
+            let result = ctx.archive_cards_detailed(ids);
             ctx.save().await?;
             output::output_success(serde_json::json!({
                 "succeeded_count": result.succeeded.len(),
@@ -153,8 +163,8 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 "failed": result.failed
             }));
         }
-        CardAction::BulkMove { ids, column_id } => {
-            let result = ctx.bulk_move_cards_detailed(ids, column_id);
+        CardAction::MoveCards { ids, column_id } => {
+            let result = ctx.move_cards_detailed(ids, column_id);
             ctx.save().await?;
             output::output_success(serde_json::json!({
                 "succeeded_count": result.succeeded.len(),
@@ -163,8 +173,8 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 "failed": result.failed
             }));
         }
-        CardAction::BulkAssignSprint { ids, sprint_id } => {
-            let result = ctx.bulk_assign_sprint_detailed(ids, sprint_id);
+        CardAction::AssignCardsToSprint { ids, sprint_id } => {
+            let result = ctx.assign_cards_to_sprint_detailed(ids, sprint_id);
             ctx.save().await?;
             output::output_success(serde_json::json!({
                 "succeeded_count": result.succeeded.len(),
@@ -240,8 +250,6 @@ fn build_card_update(args: &CardUpdateArgs) -> Result<CardUpdate, String> {
             }
         },
         sprint_id: FieldUpdate::NoChange,
-        assigned_prefix: FieldUpdate::NoChange,
-        card_prefix: FieldUpdate::NoChange,
     })
 }
 

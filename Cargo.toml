@@ -4,6 +4,8 @@ members = [
     "crates/kanban-core",
     "crates/kanban-domain",
     "crates/kanban-persistence",
+    "crates/kanban-persistence-json",
+    "crates/kanban-persistence-sqlite",
     "crates/kanban-service",
     "crates/kanban-tui",
     "crates/kanban-cli",
@@ -43,7 +45,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # CLI framework
-clap = { version = "4.5", features = ["derive", "env"] }
+clap = { version = "4.5", features = ["derive", "env", "string"] }
 clap_complete = "4.5"
 
 # Logging

@@ -1,7 +1,7 @@
 use crate::app::{App, BoardFocus, DialogMode};
 use crate::dialog::{handle_dialog_input, DialogAction};
 use crossterm::event::KeyCode;
-use kanban_domain::{Card, FieldUpdate};
+use kanban_domain::FieldUpdate;
 
 /// Context for handling different types of prefix dialogs
 enum PrefixDialogContext {
@@ -81,6 +81,7 @@ impl App {
             DialogAction::Confirm => {
                 if let Err(e) = self.export_board_with_filename() {
                     tracing::error!("Failed to export board: {}", e);
+                    self.set_error(format!("Failed to export board: {}", e));
                 }
                 self.pop_mode();
                 self.input.clear();
@@ -98,6 +99,7 @@ impl App {
             DialogAction::Confirm => {
                 if let Err(e) = self.export_all_boards_with_filename() {
                     tracing::error!("Failed to export all boards: {}", e);
+                    self.set_error(format!("Failed to export all boards: {}", e));
                 }
                 self.pop_mode();
                 self.input.clear();
@@ -132,23 +134,29 @@ impl App {
                     return false;
                 };
 
+                let cards = self.model.cards();
                 let card_id = self
                     .selection
                     .active_card_index
-                    .and_then(|idx| self.ctx.cards.get(idx))
+                    .and_then(|idx| cards.get(idx))
                     .map(|c| c.id)
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
 
                 if let Some(card_id) = card_id {
-                    let cmd = Box::new(kanban_domain::commands::UpdateCard {
-                        card_id,
-                        updates: kanban_domain::CardUpdate {
-                            points: points.into(),
-                            ..Default::default()
-                        },
-                    });
+                    let cmd = kanban_domain::commands::Command::Card(
+                        kanban_domain::commands::CardCommand::Update(
+                            kanban_domain::commands::UpdateCard {
+                                card_id,
+                                updates: kanban_domain::CardUpdate {
+                                    points: points.into(),
+                                    ..Default::default()
+                                },
+                            },
+                        ),
+                    );
                     if let Err(e) = self.execute_command(cmd) {
                         tracing::error!("Failed to set card points: {}", e);
+                        self.set_error(format!("Failed to set card points: {}", e));
                     } else {
                         tracing::info!("Set points to: {:?}", points);
                     }
@@ -176,17 +184,26 @@ impl App {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.selection.board.get() {
-                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
+                                if let Some(board_id) =
+                                    self.model.boards().get(board_idx).map(|b| b.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateBoard {
-                                        board_id,
-                                        updates: kanban_domain::BoardUpdate {
-                                            sprint_prefix: FieldUpdate::Clear,
-                                            ..Default::default()
-                                        },
-                                    });
+                                    let cmd = kanban_domain::commands::Command::Board(
+                                        kanban_domain::commands::BoardCommand::Update(
+                                            kanban_domain::commands::UpdateBoard {
+                                                board_id,
+                                                updates: kanban_domain::BoardUpdate {
+                                                    sprint_prefix: FieldUpdate::Clear,
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        ),
+                                    );
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to clear sprint prefix: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to clear sprint prefix: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Cleared sprint prefix");
                                     }
@@ -196,17 +213,25 @@ impl App {
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                    self.model.sprints().get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
-                                        sprint_id,
-                                        updates: kanban_domain::SprintUpdate {
-                                            prefix: FieldUpdate::Clear,
-                                            ..Default::default()
-                                        },
-                                    });
+                                    let cmd = kanban_domain::commands::Command::Sprint(
+                                        kanban_domain::commands::SprintCommand::Update(
+                                            kanban_domain::commands::UpdateSprint {
+                                                sprint_id,
+                                                updates: kanban_domain::SprintUpdate {
+                                                    prefix: FieldUpdate::Clear,
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        ),
+                                    );
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to clear sprint prefix: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to clear sprint prefix: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Cleared sprint prefix");
                                     }
@@ -216,20 +241,28 @@ impl App {
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                    self.model.sprints().get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
-                                        sprint_id,
-                                        updates: kanban_domain::SprintUpdate {
-                                            card_prefix: FieldUpdate::Clear,
-                                            ..Default::default()
-                                        },
-                                    });
+                                    let cmd = kanban_domain::commands::Command::Sprint(
+                                        kanban_domain::commands::SprintCommand::Update(
+                                            kanban_domain::commands::UpdateSprint {
+                                                sprint_id,
+                                                updates: kanban_domain::SprintUpdate {
+                                                    card_prefix: FieldUpdate::Clear,
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        ),
+                                    );
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!(
                                             "Failed to clear sprint card prefix override: {}",
                                             e
                                         );
+                                        self.set_error(format!(
+                                            "Failed to clear sprint card prefix override: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Cleared sprint card prefix override");
                                     }
@@ -237,29 +270,34 @@ impl App {
                             }
                         }
                     }
-                } else if Card::validate_branch_prefix(&prefix_str) {
+                } else if kanban_core::validate_branch_prefix(&prefix_str) {
                     match context {
                         PrefixDialogContext::BoardSprint => {
                             if let Some(board_idx) = self.selection.board.get() {
-                                if let Some(board_id) = self.ctx.boards.get(board_idx).map(|b| b.id)
+                                if let Some(board_id) =
+                                    self.model.boards().get(board_idx).map(|b| b.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateBoard {
-                                        board_id,
-                                        updates: kanban_domain::BoardUpdate {
-                                            sprint_prefix: FieldUpdate::Set(prefix_str.clone()),
-                                            ..Default::default()
-                                        },
-                                    });
+                                    let cmd = kanban_domain::commands::Command::Board(
+                                        kanban_domain::commands::BoardCommand::Update(
+                                            kanban_domain::commands::UpdateBoard {
+                                                board_id,
+                                                updates: kanban_domain::BoardUpdate {
+                                                    sprint_prefix: FieldUpdate::Set(
+                                                        prefix_str.clone(),
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        ),
+                                    );
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to set sprint prefix: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Set sprint prefix to: {}", prefix_str);
-                                        if let Some(board) = self.ctx.boards.get_mut(board_idx) {
-                                            board.ensure_sprint_counter_initialized(
-                                                &prefix_str,
-                                                &self.ctx.sprints,
-                                            );
-                                        }
                                     }
                                 }
                             }
@@ -267,52 +305,58 @@ impl App {
                         PrefixDialogContext::Sprint => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                    self.model.sprints().get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
-                                        sprint_id,
-                                        updates: kanban_domain::SprintUpdate {
-                                            prefix: FieldUpdate::Set(prefix_str.clone()),
-                                            ..Default::default()
-                                        },
-                                    });
+                                    let cmd = kanban_domain::commands::Command::Sprint(
+                                        kanban_domain::commands::SprintCommand::Update(
+                                            kanban_domain::commands::UpdateSprint {
+                                                sprint_id,
+                                                updates: kanban_domain::SprintUpdate {
+                                                    prefix: FieldUpdate::Set(prefix_str.clone()),
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        ),
+                                    );
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!("Failed to set sprint prefix: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to set sprint prefix: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!("Set sprint prefix to: {}", prefix_str);
                                     }
-                                }
-                            }
-                            let board_idx = self
-                                .selection
-                                .active_board_index
-                                .or(self.selection.board.get());
-                            if let Some(board_idx) = board_idx {
-                                if let Some(board) = self.ctx.boards.get_mut(board_idx) {
-                                    board.ensure_sprint_counter_initialized(
-                                        &prefix_str,
-                                        &self.ctx.sprints,
-                                    );
                                 }
                             }
                         }
                         PrefixDialogContext::SprintCard => {
                             if let Some(sprint_idx) = self.selection.active_sprint_index {
                                 if let Some(sprint_id) =
-                                    self.ctx.sprints.get(sprint_idx).map(|s| s.id)
+                                    self.model.sprints().get(sprint_idx).map(|s| s.id)
                                 {
-                                    let cmd = Box::new(kanban_domain::commands::UpdateSprint {
-                                        sprint_id,
-                                        updates: kanban_domain::SprintUpdate {
-                                            card_prefix: FieldUpdate::Set(prefix_str.clone()),
-                                            ..Default::default()
-                                        },
-                                    });
+                                    let cmd = kanban_domain::commands::Command::Sprint(
+                                        kanban_domain::commands::SprintCommand::Update(
+                                            kanban_domain::commands::UpdateSprint {
+                                                sprint_id,
+                                                updates: kanban_domain::SprintUpdate {
+                                                    card_prefix: FieldUpdate::Set(
+                                                        prefix_str.clone(),
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            },
+                                        ),
+                                    );
                                     if let Err(e) = self.execute_command(cmd) {
                                         tracing::error!(
                                             "Failed to set sprint card prefix override: {}",
                                             e
                                         );
+                                        self.set_error(format!(
+                                            "Failed to set sprint card prefix override: {}",
+                                            e
+                                        ));
                                     } else {
                                         tracing::info!(
                                             "Set sprint card prefix override to: {}",
@@ -386,7 +430,7 @@ impl App {
             }
             KeyCode::Esc => {
                 // Retry later - just go back to previous mode
-                self.ctx.state_manager.clear_conflict();
+                self.ctx.clear_conflict();
                 self.pop_mode();
             }
             _ => {}

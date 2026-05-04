@@ -72,6 +72,11 @@ pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Resul
             ctx.save().await?;
             output::output_success(serde_json::json!({"deleted": id.to_string()}));
         }
+        SprintAction::CarryOver { from, to } => {
+            let count = ctx.carry_over_sprint_cards(from, to)?;
+            ctx.save().await?;
+            output::output_success(serde_json::json!({ "carried_over": count }));
+        }
     }
     Ok(())
 }

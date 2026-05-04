@@ -1,18 +1,17 @@
 pub mod snapshot;
 
-use crate::app::App;
-use kanban_core::KanbanResult;
-use kanban_domain::commands::Command;
-use kanban_domain::commands::CommandContext;
-use kanban_domain::{ArchivedCard, Board, Card, Column, HistoryManager, Snapshot, Sprint};
-use kanban_persistence::{JsonFileStore, PersistenceMetadata, PersistenceStore, StoreSnapshot};
-use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub use snapshot::TuiSnapshot;
+/// Capacity of the bounded flush-signal channel between the UI and the save worker.
+///
+/// A capacity of 1 would cause data loss on slow disks when flush signals arrive
+/// faster than the worker drains them. 100 slots allow bursts of rapid mutations
+/// (e.g. undo/redo sprees) to queue without blocking the UI thread.
+const FLUSH_QUEUE_CAPACITY: usize = 100;
 
-/// Manages state mutations and persistence with immediate auto-saving
+/// Coordinates persistence with immediate auto-saving
 ///
 /// # Save Behavior
 ///
@@ -28,52 +27,34 @@ pub use snapshot::TuiSnapshot;
 ///
 /// # Example
 /// ```ignore
-/// // Execute command - automatically saves afterward
-/// state_manager.execute(app, command)?;
-/// state_manager.save(&snapshot).await?;
+/// // Execute command via TuiContext, then queue snapshot
+/// ctx.execute_commands_batch(commands)?;
 /// ```
-pub struct StateManager {
-    store: Option<Arc<JsonFileStore>>,
-    command_queue: VecDeque<String>,
-    dirty: bool,
-    instance_id: uuid::Uuid,
-    conflict_pending: bool,
-    needs_refresh: bool,
-    save_tx: Option<mpsc::Sender<Snapshot>>,
+pub struct SaveCoordinator {
+    save_tx: Option<mpsc::Sender<()>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
     file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
-    history: HistoryManager,
 }
 
-impl StateManager {
-    /// Create a new state manager with optional persistence store
+impl SaveCoordinator {
+    /// Create a new save coordinator with optional persistence store
     ///
     /// Returns a tuple of:
-    /// - StateManager instance
-    /// - Optional receiver for async save processing (snapshots to save)
+    /// - SaveCoordinator instance
+    /// - Optional receiver for async save processing (flush signals)
     /// - Optional receiver for save completion notifications
+    ///
+    #[allow(clippy::type_complexity)]
     pub fn new(
-        save_file: Option<String>,
+        has_persistence: bool,
     ) -> (
         Self,
-        Option<mpsc::Receiver<Snapshot>>,
+        Option<mpsc::Receiver<()>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
-        // Use bounded channel (capacity: 100) to prevent unbounded memory growth
-        // If queue is full, save_if_needed() will log a warning instead of blocking
-        const SAVE_QUEUE_CAPACITY: usize = 100;
-
-        let (store, instance_id, save_channel) = if let Some(path) = save_file {
-            let store = Arc::new(JsonFileStore::new(&path));
-            let id = store.instance_id();
-            let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
-            (Some(store), id, Some((tx, rx)))
-        } else {
-            (None, uuid::Uuid::new_v4(), None)
-        };
-
-        let (save_tx, save_rx) = if let Some((tx, rx)) = save_channel {
+        let (save_tx, save_rx) = if has_persistence {
+            let (tx, rx) = mpsc::channel(FLUSH_QUEUE_CAPACITY);
             (Some(tx), Some(rx))
         } else {
             (None, None)
@@ -81,214 +62,14 @@ impl StateManager {
 
         let (save_completion_tx, save_completion_rx) = mpsc::unbounded_channel();
 
-        let manager = Self {
-            store,
-            command_queue: VecDeque::new(),
-            dirty: false,
-            instance_id,
-            conflict_pending: false,
-            needs_refresh: false,
+        let coordinator = Self {
             save_tx,
             save_completion_tx: Some(save_completion_tx),
             pending_saves: 0,
             file_watcher: None,
-            history: HistoryManager::new(),
         };
 
-        (manager, save_rx, Some(save_completion_rx))
-    }
-
-    /// Execute a command and mark state as dirty
-    /// Takes individual mutable references to avoid borrow checker issues when called from App methods
-    #[allow(clippy::too_many_arguments)]
-    pub fn execute_with_context(
-        &mut self,
-        boards: &mut Vec<Board>,
-        columns: &mut Vec<Column>,
-        cards: &mut Vec<Card>,
-        sprints: &mut Vec<Sprint>,
-        archived_cards: &mut Vec<ArchivedCard>,
-        graph: &mut kanban_domain::DependencyGraph,
-        command: Box<dyn Command>,
-    ) -> KanbanResult<()> {
-        let description = command.description();
-        tracing::debug!("Executing: {}", description);
-
-        // Create context from data
-        let mut context = CommandContext {
-            boards,
-            columns,
-            cards,
-            sprints,
-            archived_cards,
-            graph,
-        };
-
-        // Execute business logic
-        command.execute(&mut context)?;
-
-        // Mark dirty and queue command
-        self.dirty = true;
-        self.needs_refresh = true;
-        self.command_queue.push_back(description);
-
-        Ok(())
-    }
-
-    /// Execute a command and mark state as dirty (app-based convenience method)
-    ///
-    /// After execution, queues a snapshot for async saving if a save channel is configured.
-    pub fn execute(&mut self, app: &mut App, command: Box<dyn Command>) -> KanbanResult<()> {
-        // Execute command
-        self.execute_with_context(
-            &mut app.ctx.boards,
-            &mut app.ctx.columns,
-            &mut app.ctx.cards,
-            &mut app.ctx.sprints,
-            &mut app.ctx.archived_cards,
-            &mut app.ctx.graph,
-            command,
-        )?;
-
-        // Queue snapshot for async save if channel is available
-        if let Some(ref tx) = self.save_tx {
-            let snapshot = Snapshot::from_app(app);
-            tracing::debug!("Queueing snapshot for async save");
-            // Use try_send (non-blocking) since we're in a synchronous context
-            // Backpressure is handled by queue_snapshot method
-            match tx.try_send(snapshot) {
-                Ok(_) => {
-                    self.pending_saves += 1;
-                    tracing::debug!(
-                        "Snapshot queued successfully (pending: {})",
-                        self.pending_saves
-                    );
-                }
-                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!(
-                        "Save queue is full ({} pending), skipping this save. \
-                        This may indicate the disk is slow or the save worker is overloaded.",
-                        self.pending_saves
-                    );
-                }
-                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    tracing::error!("Failed to queue save: channel closed");
-                }
-            }
-        } else {
-            tracing::debug!("No save channel available - skipping save");
-        }
-
-        Ok(())
-    }
-
-    /// Execute multiple commands in a batch
-    pub fn execute_batch(
-        &mut self,
-        app: &mut App,
-        commands: Vec<Box<dyn Command>>,
-    ) -> KanbanResult<()> {
-        for command in commands {
-            self.execute(app, command)?;
-        }
-        Ok(())
-    }
-
-    /// Check if state is dirty
-    pub fn is_dirty(&self) -> bool {
-        self.dirty
-    }
-
-    /// Get the instance ID for this manager
-    pub fn instance_id(&self) -> uuid::Uuid {
-        self.instance_id
-    }
-
-    /// Get the store reference
-    pub fn store(&self) -> Option<&Arc<JsonFileStore>> {
-        self.store.as_ref()
-    }
-
-    /// Check if there's a pending conflict
-    pub fn has_conflict(&self) -> bool {
-        self.conflict_pending
-    }
-
-    /// Clear the conflict flag (called after user resolves conflict)
-    pub fn clear_conflict(&mut self) {
-        self.conflict_pending = false;
-    }
-
-    /// Clear the store reference (called when import fails to prevent accidental saves)
-    pub fn clear_store(&mut self) {
-        self.store = None;
-    }
-
-    /// Check if view needs to be refreshed
-    pub fn needs_refresh(&self) -> bool {
-        self.needs_refresh
-    }
-
-    /// Clear the refresh flag (called after view is refreshed)
-    pub fn clear_refresh(&mut self) {
-        self.needs_refresh = false;
-    }
-
-    /// Mark state as dirty and needing refresh (for direct mutations that bypass execute_command)
-    pub fn mark_dirty(&mut self) {
-        self.dirty = true;
-        self.needs_refresh = true;
-    }
-
-    /// Force overwrite external changes (user chose to keep their changes)
-    pub async fn force_overwrite(&mut self, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.conflict_pending = false;
-
-        if let Some(ref store) = self.store {
-            let data = snapshot.to_json_bytes()?;
-            let persistence_snapshot = StoreSnapshot {
-                data,
-                metadata: PersistenceMetadata::new(self.instance_id),
-            };
-
-            store.save(persistence_snapshot).await?;
-            self.dirty = false;
-            self.command_queue.clear();
-
-            tracing::info!("Force overwrote external changes");
-        }
-
-        Ok(())
-    }
-
-    /// Reload from disk (user chose to discard their changes)
-    pub async fn reload_from_disk(&mut self, app: &mut App) -> KanbanResult<()> {
-        self.conflict_pending = false;
-
-        if let Some(ref store) = self.store {
-            let (snapshot, _metadata) = store.load().await?;
-
-            // Deserialize and apply loaded data to app
-            let data: Snapshot = serde_json::from_slice(&snapshot.data)
-                .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
-
-            data.apply_to_app(app);
-
-            self.dirty = false;
-            self.command_queue.clear();
-            self.history.clear();
-
-            tracing::info!("Reloaded state from disk - undo history cleared");
-        }
-
-        Ok(())
-    }
-
-    /// Mark state as clean, clearing dirty flag and command queue
-    /// Used after successful external reload to prevent re-save
-    pub fn mark_clean(&mut self) {
-        self.dirty = false;
-        self.command_queue.clear();
+        (coordinator, save_rx, Some(save_completion_rx))
     }
 
     /// Close the save channel to signal the worker to finish processing and exit
@@ -302,61 +83,41 @@ impl StateManager {
         self.save_tx.is_some()
     }
 
-    /// Queue a snapshot for async saving
-    /// Used by App::execute_command to ensure snapshots are queued
-    /// Increments pending_saves to track unsaved changes
+    /// Queue a flush signal for async saving.
+    /// Increments pending_saves to track unsaved changes.
     ///
-    /// Pauses file watcher before queueing to prevent detecting our own writes as external changes.
-    /// The save worker will resume the watcher after the save completes.
+    /// The suppression window on the file watcher is opened by the save worker
+    /// immediately before it calls `backend.flush()`, not here. Opening it at
+    /// queue-time would allow the 200 ms window to expire before the actual
+    /// atomic rename occurs when the worker is delayed.
     ///
-    /// Uses try_send to handle bounded channel capacity (100 snapshots).
-    /// If channel is full, logs warning and skips save to prevent blocking UI.
-    pub fn queue_snapshot(&mut self, snapshot: Snapshot) {
-        // Pause file watching before queuing save to prevent detecting our own writes
-        if let Some(ref watcher) = self.file_watcher {
-            watcher.pause();
-            tracing::debug!("File watcher paused before queuing snapshot");
-        }
-
+    /// Uses try_send to handle bounded channel capacity (100 slots).
+    /// If channel is full, logs warning and skips to prevent blocking UI.
+    pub fn queue_flush(&mut self) {
         if let Some(ref tx) = self.save_tx {
             tracing::debug!(
-                "Queueing snapshot for async save (pending: {} -> {})",
+                "Queueing flush signal (pending: {} -> {})",
                 self.pending_saves,
                 self.pending_saves + 1
             );
-            match tx.try_send(snapshot) {
+            match tx.try_send(()) {
                 Ok(_) => {
                     self.pending_saves += 1;
-                    tracing::debug!("Snapshot queued successfully");
+                    tracing::debug!("Flush signal queued successfully");
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                     tracing::warn!(
-                        "Save queue is full ({} pending), skipping this save. \
+                        "Save queue is full ({} pending), skipping this flush signal. \
                         This may indicate the disk is slow or the save worker is overloaded.",
                         self.pending_saves
                     );
-                    // Resume watcher if we couldn't queue the snapshot
-                    if let Some(ref watcher) = self.file_watcher {
-                        watcher.resume();
-                        tracing::debug!("File watcher resumed (save queue full)");
-                    }
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    tracing::error!("Failed to queue save: channel closed");
-                    // Resume watcher if channel is closed
-                    if let Some(ref watcher) = self.file_watcher {
-                        watcher.resume();
-                        tracing::debug!("File watcher resumed (channel closed)");
-                    }
+                    tracing::error!("Failed to queue flush signal: channel closed");
                 }
             }
         } else {
             tracing::debug!("No save channel available - skipping save");
-            // Resume watcher if no save channel
-            if let Some(ref watcher) = self.file_watcher {
-                watcher.resume();
-                tracing::debug!("File watcher resumed (no save channel)");
-            }
         }
     }
 
@@ -374,12 +135,6 @@ impl StateManager {
                 self.pending_saves + 1,
                 self.pending_saves
             );
-
-            // If no more pending saves, clear the dirty flag
-            if self.pending_saves == 0 {
-                self.dirty = false;
-                tracing::debug!("All saves complete - clearing dirty flag");
-            }
         }
     }
 
@@ -388,36 +143,35 @@ impl StateManager {
         self.save_completion_tx.as_ref()
     }
 
-    /// Capture snapshot before command execution (for undo history)
-    pub fn capture_before_command(&mut self, snapshot: Snapshot) {
-        self.history.capture_before_command(snapshot);
-    }
-
-    /// Check if undo is available
-    pub fn can_undo(&self) -> bool {
-        self.history.can_undo()
-    }
-
-    /// Check if redo is available
-    pub fn can_redo(&self) -> bool {
-        self.history.can_redo()
-    }
-
-    /// Access to history manager for undo/redo operations
-    pub fn history_mut(&mut self) -> &mut HistoryManager {
-        &mut self.history
-    }
-
-    /// Clear undo/redo history (called after initial file load)
-    pub fn clear_history(&mut self) {
-        self.history.clear();
+    #[doc(hidden)]
+    pub fn set_pending_for_test(&mut self, n: usize) {
+        self.pending_saves = n;
     }
 
     /// Set the file watcher for coordinating pause/resume with saves
     /// Called after the file watcher is initialized in App::run()
     pub fn set_file_watcher(&mut self, watcher: Arc<kanban_persistence::FileWatcher>) {
         self.file_watcher = Some(watcher);
-        tracing::debug!("File watcher set on StateManager");
+        tracing::debug!("File watcher set on SaveCoordinator");
+    }
+
+    /// Reset save channels after a backend migration.
+    ///
+    /// Drops the old save channel (causing the old save worker to exit),
+    /// creates new channels. Returns receivers so the caller can spawn a new save worker.
+    /// The store itself lives on KanbanContext.
+    #[allow(clippy::type_complexity)]
+    pub fn reset_save_channels(&mut self) -> (mpsc::Receiver<()>, mpsc::UnboundedReceiver<()>) {
+        self.file_watcher = None;
+        self.pending_saves = 0;
+
+        let (tx, rx) = mpsc::channel(FLUSH_QUEUE_CAPACITY);
+        self.save_tx = Some(tx);
+
+        let (completion_tx, completion_rx) = mpsc::unbounded_channel();
+        self.save_completion_tx = Some(completion_tx);
+
+        (rx, completion_rx)
     }
 }
 
@@ -425,31 +179,44 @@ impl StateManager {
 mod tests {
     use super::*;
 
+    /// `queue_flush()` must NOT open the file-watcher suppression window.
+    /// The window must be opened by the save worker immediately before
+    /// `backend.flush()` to avoid expiring before the atomic rename occurs.
     #[test]
-    fn test_state_manager_creation() {
-        let (manager, _rx, _completion_rx) = StateManager::new(None);
-        assert!(!manager.is_dirty());
+    fn test_queue_flush_does_not_open_suppress_window() {
+        let (mut coordinator, _rx, _crx) = SaveCoordinator::new(true);
+        let watcher = Arc::new(kanban_persistence::FileWatcher::new());
+        coordinator.set_file_watcher(Arc::clone(&watcher));
+
+        coordinator.queue_flush();
+
+        assert_eq!(
+            watcher.suppress_remaining(),
+            0,
+            "queue_flush must not open the suppress window"
+        );
     }
 
     #[test]
-    fn test_dirty_flag_after_execute() {
-        let (mut manager, _rx, _completion_rx) = StateManager::new(None);
+    fn test_save_coordinator_creation_no_persistence() {
+        let (coordinator, save_rx, _completion_rx) = SaveCoordinator::new(false);
+        assert!(!coordinator.has_pending_saves());
+        assert!(save_rx.is_none());
+    }
 
-        struct DummyCommand;
-        impl Command for DummyCommand {
-            fn execute(&self, _context: &mut CommandContext) -> KanbanResult<()> {
-                Ok(())
-            }
+    #[test]
+    fn test_save_coordinator_creation_with_persistence() {
+        let (coordinator, save_rx, _completion_rx) = SaveCoordinator::new(true);
+        assert!(!coordinator.has_pending_saves());
+        assert!(save_rx.is_some());
+        assert!(coordinator.has_save_channel());
+    }
 
-            fn description(&self) -> String {
-                "dummy".to_string()
-            }
-        }
-
-        let command = Box::new(DummyCommand);
-        let (mut app, _app_rx) = App::new(None);
-        manager.execute(&mut app, command).unwrap();
-
-        assert!(manager.is_dirty());
+    #[test]
+    fn test_reset_save_channels() {
+        let (mut coordinator, _rx, _crx) = SaveCoordinator::new(true);
+        let (_rx, _crx) = coordinator.reset_save_channels();
+        assert!(!coordinator.has_pending_saves());
+        assert!(coordinator.has_save_channel());
     }
 }

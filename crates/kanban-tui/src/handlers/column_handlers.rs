@@ -1,7 +1,8 @@
 use crate::app::{App, BoardFocus, DialogMode};
 use crossterm::event::KeyCode;
 use kanban_domain::commands::{
-    CreateColumn, DeleteColumn, MoveCard, SetBoardTaskListView, UpdateColumn,
+    BoardCommand, CardCommand, ColumnCommand, Command, CreateColumn, DeleteColumn, MoveCard,
+    SetBoardTaskListView, UpdateColumn,
 };
 use kanban_domain::{ColumnUpdate, TaskListView};
 
@@ -9,7 +10,7 @@ impl App {
     pub fn handle_create_column_key(&mut self) {
         if self.focus.board_focus == BoardFocus::Columns {
             if let Some(board_idx) = self.selection.board.get() {
-                if self.ctx.boards.get(board_idx).is_some() {
+                if self.model.boards().get(board_idx).is_some() {
                     self.open_dialog(DialogMode::CreateColumn);
                     self.input.clear();
                 }
@@ -22,10 +23,10 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
-                    let board_columns: Vec<_> = self
-                        .ctx
-                        .columns
+                let boards = self.model.boards();
+                if let Some(board) = boards.get(board_idx) {
+                    let columns = self.model.columns();
+                    let board_columns: Vec<_> = columns
                         .iter()
                         .filter(|col| col.board_id == board.id)
                         .collect();
@@ -46,10 +47,10 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     let column_count = self
-                        .ctx
-                        .columns
+                        .model
+                        .columns()
                         .iter()
                         .filter(|col| col.board_id == board.id)
                         .count();
@@ -69,11 +70,11 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     // Collect and sort column data before mutating
                     let mut board_columns: Vec<_> = self
-                        .ctx
-                        .columns
+                        .model
+                        .columns()
                         .iter()
                         .filter(|col| col.board_id == board.id)
                         .map(|col| (col.id, col.position))
@@ -89,26 +90,25 @@ impl App {
                             let curr_pos = board_columns[selected_idx].1;
 
                             // Swap positions using batched commands
-                            let cmd1 = Box::new(UpdateColumn {
+                            let cmd1 = Command::Column(ColumnCommand::Update(UpdateColumn {
                                 column_id: prev_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(curr_pos),
                                     ..Default::default()
                                 },
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
 
-                            let cmd2 = Box::new(UpdateColumn {
+                            let cmd2 = Command::Column(ColumnCommand::Update(UpdateColumn {
                                 column_id: curr_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(prev_pos),
                                     ..Default::default()
                                 },
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
+                                self.set_error(format!("Failed to move column: {}", e));
                                 return;
                             }
 
@@ -126,11 +126,11 @@ impl App {
             && self.dialog_input.column_selection.get().is_some()
         {
             if let Some(board_idx) = self.selection.board.get() {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     // Collect and sort column data before mutating
                     let mut board_columns: Vec<_> = self
-                        .ctx
-                        .columns
+                        .model
+                        .columns()
                         .iter()
                         .filter(|col| col.board_id == board.id)
                         .map(|col| (col.id, col.position))
@@ -146,26 +146,25 @@ impl App {
                             let next_pos = board_columns[selected_idx + 1].1;
 
                             // Swap positions using batched commands
-                            let cmd1 = Box::new(UpdateColumn {
+                            let cmd1 = Command::Column(ColumnCommand::Update(UpdateColumn {
                                 column_id: next_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(curr_pos),
                                     ..Default::default()
                                 },
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
 
-                            let cmd2 = Box::new(UpdateColumn {
+                            let cmd2 = Command::Column(ColumnCommand::Update(UpdateColumn {
                                 column_id: curr_col_id,
                                 updates: ColumnUpdate {
                                     position: Some(next_pos),
                                     ..Default::default()
                                 },
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
 
                             if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
                                 tracing::error!("Failed to move column: {}", e);
+                                self.set_error(format!("Failed to move column: {}", e));
                                 return;
                             }
 
@@ -185,7 +184,7 @@ impl App {
         }
 
         if let Some(board_idx) = self.selection.active_board_index {
-            if let Some(board) = self.ctx.boards.get(board_idx) {
+            if let Some(board) = self.model.boards().get(board_idx) {
                 let current_view_idx = match board.task_list_view {
                     TaskListView::Flat => 0,
                     TaskListView::GroupedByColumn => 1,
@@ -202,7 +201,7 @@ impl App {
     pub fn create_column(&mut self) {
         if let Some(board_idx) = self.selection.board.get() {
             // Collect board_id before command execution
-            let board_id = self.ctx.boards.get(board_idx).map(|board| board.id);
+            let board_id = self.model.boards().get(board_idx).map(|board| board.id);
 
             if let Some(board_id) = board_id {
                 let column_name = self.input.as_str().trim().to_string();
@@ -213,8 +212,8 @@ impl App {
                 }
 
                 let position = self
-                    .ctx
-                    .columns
+                    .model
+                    .columns()
                     .iter()
                     .filter(|col| col.board_id == board_id)
                     .map(|col| col.position)
@@ -222,29 +221,31 @@ impl App {
                     .unwrap_or(-1)
                     + 1;
 
-                let cmd = Box::new(CreateColumn {
+                let cmd = Command::Column(ColumnCommand::Create(CreateColumn {
+                    id: uuid::Uuid::new_v4(),
                     board_id,
                     name: column_name.clone(),
                     position,
-                });
+                }));
+
+                let prior_column_count = self
+                    .model
+                    .columns()
+                    .iter()
+                    .filter(|col| col.board_id == board_id)
+                    .count();
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to create column: {}", e);
+                    self.set_error(format!("Failed to create column: {}", e));
                     return;
                 }
 
                 tracing::info!("Created column: {} (position: {})", column_name, position);
 
-                let board_column_count = self
-                    .ctx
-                    .columns
-                    .iter()
-                    .filter(|col| col.board_id == board_id)
-                    .count();
-                let new_column_index = board_column_count.saturating_sub(1);
                 self.dialog_input
                     .column_selection
-                    .set(Some(new_column_index));
+                    .set(Some(prior_column_count));
             }
         }
     }
@@ -253,11 +254,11 @@ impl App {
         if let Some(board_idx) = self.selection.board.get() {
             // Collect column ID before mutable borrow
             let column_info = {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
+                let boards = self.model.boards();
+                if let Some(board) = boards.get(board_idx) {
                     if let Some(column_idx) = self.dialog_input.column_selection.get() {
-                        let board_columns: Vec<_> = self
-                            .ctx
-                            .columns
+                        let columns = self.model.columns();
+                        let board_columns: Vec<_> = columns
                             .iter()
                             .filter(|col| col.board_id == board.id)
                             .collect();
@@ -279,16 +280,17 @@ impl App {
                     return;
                 }
 
-                let cmd = Box::new(UpdateColumn {
+                let cmd = Command::Column(ColumnCommand::Update(UpdateColumn {
                     column_id,
                     updates: ColumnUpdate {
                         name: Some(new_name.clone()),
                         ..Default::default()
                     },
-                });
+                }));
 
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to rename column: {}", e);
+                    self.set_error(format!("Failed to rename column: {}", e));
                     return;
                 }
 
@@ -301,11 +303,11 @@ impl App {
         if let Some(board_idx) = self.selection.board.get() {
             // Collect all necessary data before mutating
             let delete_info = {
-                if let Some(board) = self.ctx.boards.get(board_idx) {
+                if let Some(board) = self.model.boards().get(board_idx) {
                     if let Some(column_idx) = self.dialog_input.column_selection.get() {
                         let board_columns: Vec<_> = self
-                            .ctx
-                            .columns
+                            .model
+                            .columns()
                             .iter()
                             .filter(|col| col.board_id == board.id)
                             .map(|col| (col.id, col.name.clone()))
@@ -320,8 +322,8 @@ impl App {
 
                         if let Some((column_id, column_name)) = column_to_delete {
                             let cards_to_move: Vec<(uuid::Uuid, i32)> = self
-                                .ctx
-                                .cards
+                                .model
+                                .cards()
                                 .iter()
                                 .filter(|card| card.column_id == column_id)
                                 .map(|card| (card.id, card.position))
@@ -348,6 +350,19 @@ impl App {
             if let Some((column_id, column_name, first_column_id, cards_to_move, column_idx)) =
                 delete_info
             {
+                let remaining_after_delete = {
+                    let columns = self.model.columns();
+                    let board = self.model.boards().get(board_idx);
+                    board
+                        .map(|b| {
+                            columns
+                                .iter()
+                                .filter(|c| c.board_id == b.id && c.id != column_id)
+                                .count()
+                        })
+                        .unwrap_or(0)
+                };
+
                 tracing::warn!("Cannot delete the last column");
 
                 if let Some(target_column_id) = first_column_id {
@@ -355,20 +370,19 @@ impl App {
                         let card_count = cards_to_move.len();
 
                         // Batch all card moves together to avoid race conditions
-                        let mut move_commands: Vec<Box<dyn kanban_domain::commands::Command>> =
-                            Vec::new();
+                        let mut move_commands: Vec<Command> = Vec::new();
                         for (card_id, position) in cards_to_move {
-                            let cmd = Box::new(MoveCard {
+                            let cmd = Command::Card(CardCommand::Move(MoveCard {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position: position,
-                            })
-                                as Box<dyn kanban_domain::commands::Command>;
+                            }));
                             move_commands.push(cmd);
                         }
 
                         if let Err(e) = self.execute_commands_batch(move_commands) {
                             tracing::error!("Failed to move cards: {}", e);
+                            self.set_error(format!("Failed to move cards: {}", e));
                             return;
                         }
 
@@ -376,32 +390,20 @@ impl App {
                     }
                 }
 
-                let cmd = Box::new(DeleteColumn { column_id });
+                let cmd = Command::Column(ColumnCommand::Delete(DeleteColumn { column_id }));
                 if let Err(e) = self.execute_command(cmd) {
                     tracing::error!("Failed to delete column: {}", e);
+                    self.set_error(format!("Failed to delete column: {}", e));
                     return;
                 }
 
                 tracing::info!("Deleted column: {}", column_name);
 
-                let remaining_columns = self
-                    .ctx
-                    .columns
-                    .iter()
-                    .filter(|col| {
-                        if let Some(board) = self.ctx.boards.get(board_idx) {
-                            col.board_id == board.id
-                        } else {
-                            false
-                        }
-                    })
-                    .count();
-
-                if remaining_columns > 0 {
-                    if column_idx >= remaining_columns {
+                if remaining_after_delete > 0 {
+                    if column_idx >= remaining_after_delete {
                         self.dialog_input
                             .column_selection
-                            .set(Some(remaining_columns - 1));
+                            .set(Some(remaining_after_delete - 1));
                     } else {
                         self.dialog_input.column_selection.set(Some(column_idx));
                     }
@@ -513,14 +515,17 @@ impl App {
                     let selected_card_id = self.get_selected_card_id();
 
                     if let Some(board_idx) = self.selection.active_board_index {
-                        if let Some(board) = self.ctx.boards.get(board_idx) {
-                            let cmd = Box::new(SetBoardTaskListView {
-                                board_id: board.id,
-                                view,
-                            });
+                        if let Some(board) = self.model.boards().get(board_idx) {
+                            let cmd = Command::Board(BoardCommand::SetTaskListView(
+                                SetBoardTaskListView {
+                                    board_id: board.id,
+                                    view,
+                                },
+                            ));
 
                             if let Err(e) = self.execute_command(cmd) {
                                 tracing::error!("Failed to set task list view: {}", e);
+                                self.set_error(format!("Failed to set task list view: {}", e));
                                 self.pop_mode();
                                 self.dialog_input.task_list_view_selection.clear();
                                 return;

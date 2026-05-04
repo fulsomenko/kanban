@@ -4,6 +4,7 @@ pub mod card_list;
 pub mod dialog_modes;
 pub mod normal_mode;
 pub mod registry;
+pub mod settings;
 pub mod sprint_detail;
 
 pub use registry::KeybindingRegistry;
@@ -56,8 +57,11 @@ pub enum KeybindingAction {
     JumpHalfViewportDown,
     ManageParents,
     ManageChildren,
+    CarryOver,
     Undo,
     Redo,
+    OpenSettings,
+    ExportBoards,
 }
 
 #[derive(Debug, Clone)]

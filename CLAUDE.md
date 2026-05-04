@@ -30,13 +30,15 @@ This is a **terminal-based kanban/project management tool** written in **Rust**,
 
 ```
 crates/
-├── kanban-core/        # Core traits, errors, and result types
-├── kanban-domain/      # Domain models (Board, Card, Column, Sprint)
-├── kanban-persistence/ # JSON storage, versioning & migrations
-├── kanban-service/     # Service layer: KanbanContext, persistence orchestration
-├── kanban-tui/         # Terminal UI with ratatui
-├── kanban-cli/         # CLI entry point
-└── kanban-mcp/         # Model Context Protocol server for LLM integration
+├── kanban-core/               # Core traits, errors, and result types
+├── kanban-domain/             # Domain models (Board, Card, Column, Sprint)
+├── kanban-persistence/        # Persistence traits, registry, and shared types
+├── kanban-persistence-json/   # JSON file storage backend
+├── kanban-persistence-sqlite/ # SQLite storage backend
+├── kanban-service/            # Service layer: KanbanContext, persistence orchestration
+├── kanban-tui/                # Terminal UI with ratatui
+├── kanban-cli/                # CLI entry point
+└── kanban-mcp/                # Model Context Protocol server for LLM integration
 ```
 
 **Dependency Flow** (respecting dependency inversion):
@@ -48,6 +50,10 @@ graph LR
     MCP[kanban-mcp] --> SVC
     TUI --> SVC
     SVC --> PER[kanban-persistence]
+    SVC -.-> JSON[kanban-persistence-json]
+    SVC -.-> SQL[kanban-persistence-sqlite]
+    JSON --> PER
+    SQL --> PER
     PER --> DOM[kanban-domain]
     DOM --> CORE[kanban-core]
 ```
@@ -119,6 +125,34 @@ cargo tarpaulin        # Code coverage
 
 **Design Pattern**: Rich domain models with behavior, no infrastructure dependencies
 
+### kanban-persistence
+**Purpose**: Persistence trait layer — defines `PersistenceStore`, `StoreFactory`, `StoreRegistry`, and shared types (errors, snapshots, conflict detection, file watching)
+
+- `PersistenceStore` - Async trait for load/save operations
+- `StoreFactory` - Trait for backend registration (`name`, `supported_patterns`, `matches`, `create`)
+- `StoreRegistry` - Registry that matches a locator string to the right factory
+- `StoreSnapshot`, `PersistenceMetadata` - Shared serialization types
+- `ConflictResolver`, `FormatVersion`, `MigrationStrategy` - Shared abstractions
+
+**Design Pattern**: Trait-based abstraction layer; backends register via `StoreFactory`
+
+### kanban-persistence-json
+**Purpose**: JSON file storage backend implementing `StoreFactory`
+
+- `JsonFileStore` - `PersistenceStore` impl with atomic writes (temp file + rename)
+- `JsonStoreFactory` - Matches `*.json` and any non-URI path (catch-all fallback)
+- V2 format with metadata envelope; automatic V1→V2 migration with `.v1.backup`
+- Debounced saving (500ms minimum interval)
+
+### kanban-persistence-sqlite
+**Purpose**: SQLite storage backend implementing `StoreFactory`
+
+- `SqliteStore` - `PersistenceStore` impl with WAL mode, foreign keys, max 2 connections
+- `SqliteStoreFactory` - Matches `*.sqlite`, `*.sqlite3`, and `*.db`
+- Relational schema (14 tables: metadata, boards, columns, cards, sprints, etc.)
+- Schema versioning (v1) with migration skeleton
+- Auto-creates database file on first use
+
 ### kanban-tui
 **Purpose**: Terminal UI implementation
 
@@ -155,10 +189,37 @@ cargo tarpaulin        # Code coverage
 - Tokio runtime for async execution
 
 ### Testing
-- Unit tests in same file as implementation
-- Integration tests in `tests/` directory
-- Use `mockall` for mocking traits
-- Test domain logic independently of infrastructure
+
+**TDD workflow (mandatory — Red → Green → Refactor):**
+
+1. **Red**: Write a failing test that specifies the expected behavior. Present tests to the user for review before implementing anything.
+2. **Green**: Write the minimum implementation needed to make the test pass. Do not over-engineer at this step.
+3. **Refactor**: Clean up implementation and tests without breaking anything. This step is not optional.
+4. No feature or fix is complete until all tests pass and the refactor step is done.
+
+**Test naming:** Names are living documentation. Use the pattern `test_<scenario>_<expected_outcome>`, e.g. `test_move_card_to_full_column_returns_wip_limit_error`. Avoid generic names like `test1` or `it_works`.
+
+**Test return types:** Prefer `-> KanbanResult<()>` over `#[should_panic]`. This gives better failure messages and composes with `?`. Use `#[should_panic]` only for unrecoverable invariant violations.
+
+**Test requirements by layer:**
+
+| Layer | Test Type | Pattern |
+|---|---|---|
+| `kanban-core`, `kanban-domain` | Inline unit tests (`#[cfg(test)]`) | Pure logic, no I/O, no mocks needed |
+| `kanban-persistence` | Inline unit tests | Trait contracts, registry logic |
+| `kanban-persistence-json` | Inline unit tests + real tempfile I/O | Serialization, migration, round-trips |
+| `kanban-persistence-sqlite` | Inline unit tests + real tempfile I/O | Schema, round-trips, concurrent access |
+| `kanban-service` | Integration tests in `tests/` | `#[tokio::test]`, `KanbanContext` with real persistence via `TempDir` |
+| `kanban-tui` | Integration tests in `tests/` | Component instantiation, key event simulation, export/import flows |
+| `kanban-cli` | Integration tests in `tests/` | `assert_cmd` + real binary invocation via `cargo_bin_cmd!` |
+| `kanban-mcp` | Integration tests in `tests/` | End-to-end tool calls against a real `KanbanContext` |
+
+**Coverage:** Use `cargo tarpaulin` to verify no untested paths exist. 100% line coverage is the floor, not the goal — every assertion must verify observable behavior or an invariant, not just execute a code path.
+
+**Refactoring for testability:** If a function cannot be tested in isolation, refactor before writing tests:
+- Extract logic from handlers/renderers into pure functions
+- Introduce trait abstractions for dependencies (e.g. I/O, time)
+- Use `mockall` for mocking traits where real I/O is impractical
 
 ## Inspirations from lazygit
 
@@ -170,11 +231,34 @@ cargo tarpaulin        # Code coverage
 
 ## Development Workflow
 
+0. **Tests First**: Follow the TDD workflow in [Testing](#testing) — write and present failing tests before any implementation.
 1. **Domain First**: Define models in `kanban-domain`
 2. **Persistence Layer**: Implement storage in `kanban-persistence`
 3. **Service Layer**: Orchestrate operations in `kanban-service`
 4. **TUI Components**: Build UI in `kanban-tui`
 5. **Integration**: Wire up in `kanban-cli`
+
+## Commit Message Convention
+
+Use conventional commits with the crate name as scope, dropping the `kanban-` prefix:
+
+```
+<type>(<crate>): <description>
+```
+
+**Types:** `feat`, `fix`, `test`, `refactor`, `chore`, `docs`
+
+**Scope:** crate name without the `kanban-` prefix — e.g. `tui`, `domain`, `service`, `persistence`, `cli`, `mcp`, `core`
+
+**Examples:**
+```
+feat(tui): preselect first board and refresh card view on startup
+fix(service): handle empty board list on context init
+test(tui): preselect first board and refresh card view on startup
+refactor(domain): extract card sorting into pure function
+```
+
+Split commits by type — tests and implementation go in separate commits.
 
 ## Guidelines
 

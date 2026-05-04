@@ -19,6 +19,7 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

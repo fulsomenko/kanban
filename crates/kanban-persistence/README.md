@@ -1,218 +1,336 @@
 # kanban-persistence
 
-Persistence layer for the kanban project management tool. Handles JSON storage, format versioning, and data migration.
+Persistence trait layer for the kanban workspace. **Pure trait definitions — all I/O lives in the backend crates.** Defines the interfaces implemented by `kanban-persistence-json` and `kanban-persistence-sqlite`, plus shared serialization types used across all persistence crates.
 
-## Installation
+## Traits
 
-Add to your `Cargo.toml`:
+### `PersistenceStore`
+
+```rust
+#[async_trait]
+pub trait PersistenceStore: Send + Sync {
+    async fn save(&self, snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata>;
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)>;
+    async fn exists(&self) -> bool;
+    fn path(&self) -> &Path;
+    fn instance_id(&self) -> uuid::Uuid;
+}
+```
+
+- `save` takes a `StoreSnapshot` and returns the persisted `PersistenceMetadata`. Implementations must guarantee an atomic write — either the full snapshot is written or the store is left unchanged.
+- `load` returns the current snapshot and its associated metadata. Returns an error if the store has never been saved.
+- `exists` returns `true` if the backing store has been written at least once.
+- `path` returns the file path or backing location.
+- `instance_id` is a stable `Uuid` that identifies this store handle across saves. Used for conflict detection between concurrent writers.
+
+### `StoreFactory`
+
+```rust
+pub trait StoreFactory: Send + Sync {
+    fn name(&self) -> &str;
+    fn matches_content(&self, header: &[u8]) -> bool { false }
+    fn create(&self, locator: &str) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError>;
+}
+```
+
+Backend plugins implement `StoreFactory` and register themselves with `StoreRegistry`.
+
+- `name` returns the canonical backend identifier used in CLI `--backend` flags and `StoreRegistry::create_store` lookups (e.g. `"json"`, `"sqlite"`).
+- `matches_content` receives the first 32 bytes of an existing file. Return `true` if those bytes indicate your format. Used for automatic backend detection when no explicit backend is specified. Defaults to `false`.
+- `create` instantiates a `PersistenceStore` for the given locator (file path or connection string).
+
+### `StoreRegistry`
+
+The registry holds a prioritized list of `StoreFactory` implementations.
+
+```rust
+impl StoreRegistry {
+    pub fn new() -> Self;
+    pub fn register(&mut self, factory: Box<dyn StoreFactory>);
+    pub fn is_empty(&self) -> bool;
+    pub fn backend_names(&self) -> Vec<&str>;
+    pub fn detect_backend(&self, locator: &str) -> Option<&str>;
+    pub fn create_store(
+        &self,
+        backend: &str,
+        locator: &str,
+    ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError>;
+}
+```
+
+- `register` appends a factory. Registration order matters: `detect_backend` returns the **first** factory whose `matches_content` returns `true`.
+- `detect_backend` reads the first 32 bytes of an existing file and returns the name of the matching factory, or `None` if no factory claims it.
+- `create_store` looks up the factory by `name` and calls `factory.create(locator)`.
+
+### `ChangeDetector` trait
+
+Provides file-watching capability for detecting external changes.
+
+```rust
+pub trait ChangeDetector: Send + Sync {
+    async fn start_watching(&self, path: PathBuf) -> PersistenceResult<()>;
+    async fn stop_watching(&self) -> PersistenceResult<()>;
+    fn subscribe(&self) -> tokio::sync::broadcast::Receiver<ChangeEvent>;
+    fn is_watching(&self) -> bool;
+}
+```
+
+### `Serializer<T>` trait
+
+```rust
+pub trait Serializer<T: Send + Sync>: Send + Sync {
+    fn serialize(&self, data: &T) -> PersistenceResult<Vec<u8>>;
+    fn deserialize(&self, bytes: &[u8]) -> PersistenceResult<T>;
+}
+```
+
+### `MigrationStrategy` trait
+
+```rust
+pub trait MigrationStrategy: Send + Sync {
+    async fn detect_version(&self, path: &Path) -> PersistenceResult<FormatVersion>;
+    async fn migrate(
+        &self,
+        from: FormatVersion,
+        to: FormatVersion,
+        path: &Path,
+    ) -> PersistenceResult<PathBuf>;
+}
+```
+
+---
+
+## Shared Types
+
+### `StoreSnapshot`
+
+```rust
+pub struct StoreSnapshot {
+    pub data: Vec<u8>,           // Raw JSON bytes of kanban_domain::Snapshot
+    pub metadata: PersistenceMetadata,
+}
+```
+
+### `PersistenceMetadata`
+
+```rust
+pub struct PersistenceMetadata {
+    pub instance_id: uuid::Uuid, // Identifies the writer
+    pub saved_at: DateTime<Utc>,
+}
+```
+
+### `FormatVersion`
+
+```rust
+pub enum FormatVersion { V1, V2 }
+```
+
+### `PersistenceError`
+
+```rust
+pub enum PersistenceError {
+    Io(std::io::Error),
+    Serialization(String),
+    Conflict { path: String },
+    Database(String),
+    NotFound(String),
+    Migration(String),
+    UnsupportedLocator { locator: String, supported: Vec<String> },
+}
+```
+
+---
+
+## Helper Functions
+
+```rust
+pub fn snapshot_to_json_bytes(snapshot: &kanban_domain::Snapshot) -> Result<Vec<u8>, KanbanError>;
+pub fn snapshot_from_json_bytes(data: &[u8]) -> Result<kanban_domain::Snapshot, KanbanError>;
+```
+
+Used by backends and the service layer to serialize/deserialize the domain `Snapshot`.
+
+---
+
+## Writing a Third-Party Backend
+
+This section walks through implementing a custom storage backend and plugging it into the CLI or MCP server without forking the repo.
+
+### Step 1 — Add dependencies
+
+In your crate's `Cargo.toml`:
 
 ```toml
 [dependencies]
-kanban-persistence = { path = "../kanban-persistence" }
+kanban-cli    = { version = "0.3", features = ["json", "sqlite"] }  # or kanban-mcp
+kanban-persistence = { version = "0.3" }
+async-trait   = "0.1"
+tokio         = { version = "1", features = ["full"] }
+uuid          = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+kanban-persistence = { version = "0.3", features = ["test-helpers"] }
+kanban-service     = { version = "0.3", features = ["test-helpers"] }
+tempfile           = "3"
+tokio              = { version = "1", features = ["full"] }
 ```
 
-## Features
-
-### Progressive Auto-Save
-
-- **Dirty Flag Tracking**: Changes are marked and queued for persistence
-- **Debounced Saving**: 500ms minimum interval between disk writes to prevent excessive I/O
-- **Atomic Writes**: Temporary file writes with atomic rename for crash safety
-- **Command Audit Log**: All commands are tracked for audit trails
-
-### Format Versioning
-
-- **V2 JSON Format**: Structured format with metadata and version tracking
-- **Automatic V1→V2 Migration**: Legacy files are transparently upgraded on first load
-- **Backup Creation**: V1 files backed up as `.v1.backup` before migration
-- **Version Detection**: Automatic format detection without user intervention
-
-### Multi-Instance Support
-
-- **Instance IDs**: Each application instance has a unique ID for coordination
-- **Last-Write-Wins**: Concurrent modifications resolved by latest timestamp
-- **File Watching**: Detects external changes for reload prompts
-- **Conflict Resolution**: Automatic merging strategies for safe concurrent access
-
-## API Reference
-
-### JsonFileStore
-
-Main persistence store implementation:
+### Step 2 — Implement `PersistenceStore`
 
 ```rust
-use kanban_persistence::{JsonFileStore, PersistenceStore};
+use async_trait::async_trait;
+use kanban_persistence::{PersistenceError, PersistenceMetadata, PersistenceResult, StoreSnapshot};
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
-// Create store
-let store = JsonFileStore::new("board.json");
-
-// Get instance ID
-let instance_id = store.instance_id();
-
-// Save data
-let snapshot = StoreSnapshot {
-    data: serde_json::to_vec(&data)?,
-    metadata: PersistenceMetadata::new(instance_id),
-};
-store.save(snapshot).await?;
-
-// Load data (automatically migrates V1 to V2)
-let (snapshot, metadata) = store.load().await?;
-```
-
-Persistence is consumed via `kanban-service::KanbanContext`, which owns a `JsonFileStore` and
-exposes `load`, `save`, and `reload` as high-level lifecycle methods. Direct use of
-`JsonFileStore` is only needed when building custom persistence consumers.
-
-## Architecture
-
-```mermaid
-flowchart TD
-    CORE[kanban-core] --> DOM[kanban-domain]
-    DOM --> PER[kanban-persistence]
-    PER --> SVC[kanban-service<br/>KanbanContext]
-    SVC --> TUI[kanban-tui]
-    SVC --> MCP[kanban-mcp]
-```
-
-### Command Pattern Flow
-
-1. **Event Handler** collects data and creates Command
-2. **Command** is executed via `KanbanContext::execute()`
-3. **CommandContext** applies mutation to in-memory vecs
-4. **Save**: `KanbanContext::save()` serializes state and calls `JsonFileStore::save()`
-5. **Atomic Write** persists to disk with temp file + rename
-
-## Format Specification
-
-### V2 Format
-
-```json
-{
-  "version": 2,
-  "metadata": {
-    "instance_id": "uuid-here",
-    "saved_at": "2024-01-15T10:30:00Z"
-  },
-  "data": {
-    "boards": [],
-    "columns": [],
-    "cards": [],
-    "sprints": [],
-    "archived_cards": []
-  }
+pub struct MyStore {
+    path: PathBuf,
+    instance_id: Uuid,
 }
-```
 
-### V1 Format (Deprecated)
-
-Legacy format without version field or metadata:
-
-```json
-{
-  "boards": [],
-  "columns": [],
-  "cards": [],
-  "sprints": []
-}
-```
-
-Migration automatically adds metadata and wraps data.
-
-## Migration Strategy
-
-### Automatic V1→V2 Migration
-
-1. **Detection**: `Migrator::detect_version()` checks for `version` field
-2. **Backup**: Original V1 file copied to `.v1.backup`
-3. **Transform**: Data wrapped with V2 metadata
-4. **Write**: Migrated file written atomically
-5. **Logging**: Migration progress logged for user visibility
-
-### Manual Migration
-
-```rust
-use kanban_persistence::migration::{Migrator, FormatVersion};
-
-// Detect current version
-let version = Migrator::detect_version("board.json").await?;
-
-// Migrate if needed
-if version == FormatVersion::V1 {
-    Migrator::migrate(FormatVersion::V1, FormatVersion::V2, "board.json").await?;
-}
-```
-
-## Performance Characteristics
-
-### Debouncing Benefits
-
-- **Reduced I/O**: Prevents disk thrashing during rapid edits
-- **Better Responsiveness**: 500ms debounce balances persistence with UI responsiveness
-- **Predictable Load**: Steady-state save frequency ~2 saves/second maximum
-
-### Atomic Write Safety
-
-- **Crash Safety**: Incomplete writes cannot corrupt file
-- **Two-Phase Commit**: Write to temp, then atomic rename
-- **Recovery**: Interrupted writes leave original file intact
-
-## Examples
-
-### Load, Mutate, Save via KanbanContext
-
-```rust
-use kanban_service::KanbanContext;
-use kanban_domain::KanbanOperations;
-
-let mut ctx = KanbanContext::load_json("board.json").await?;
-
-let board = ctx.create_board("My Project".into(), None)?;
-ctx.save().await?;
-
-// Pick up changes written by another process
-ctx.reload().await?;
-```
-
-### Handling Concurrent Modifications
-
-```rust
-// When file is modified externally (multi-instance editing)
-// KanbanContext::reload() re-reads state from disk
-// mutating_op! in kanban-mcp calls reload() before every write
-// Last-write-wins strategy automatically applied
-```
-
-## Error Handling
-
-All public APIs return `KanbanResult<T>`:
-
-```rust
-use kanban_persistence::JsonFileStore;
-
-match store.load().await {
-    Ok((snapshot, metadata)) => {
-        // Handle loaded data
+impl MyStore {
+    pub fn new(path: &Path) -> Self {
+        Self { path: path.to_owned(), instance_id: Uuid::new_v4() }
     }
-    Err(e) => {
-        // Could be serialization error, missing file, or version error
-        eprintln!("Failed to load: {}", e);
+}
+
+#[async_trait]
+impl kanban_persistence::PersistenceStore for MyStore {
+    async fn save(&self, snapshot: StoreSnapshot) -> PersistenceResult<PersistenceMetadata> {
+        // Write snapshot.data atomically (e.g. temp file + rename).
+        // Return metadata with your instance_id and the current timestamp.
+        let metadata = PersistenceMetadata::new(self.instance_id);
+        // ... write to self.path ...
+        Ok(metadata)
+    }
+
+    async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
+        // Read the file and reconstruct snapshot + metadata.
+        todo!()
+    }
+
+    async fn exists(&self) -> bool {
+        self.path.exists()
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn instance_id(&self) -> Uuid {
+        self.instance_id
     }
 }
 ```
+
+### Step 3 — Implement `StoreFactory`
+
+```rust
+use kanban_persistence::{PersistenceError, PersistenceStore, StoreFactory};
+use std::sync::Arc;
+
+pub struct MyStoreFactory;
+
+impl StoreFactory for MyStoreFactory {
+    fn name(&self) -> &str {
+        "my-backend"
+    }
+
+    fn matches_content(&self, header: &[u8]) -> bool {
+        // Return true if the first bytes of the file indicate your format.
+        // Omit this method (or return false) if you rely on explicit --backend selection.
+        header.starts_with(b"MY_MAGIC\0")
+    }
+
+    fn create(
+        &self,
+        locator: &str,
+    ) -> Result<Arc<dyn PersistenceStore + Send + Sync>, PersistenceError> {
+        Ok(Arc::new(MyStore::new(std::path::Path::new(locator))))
+    }
+}
+```
+
+### Step 4 — Validate with the contract test suite
+
+Add a test file (e.g. `tests/contract.rs`) to your crate:
+
+```rust
+fn my_factory() -> kanban_persistence::test_helpers::StoreFactory {
+    Box::new(|path| std::sync::Arc::new(MyStore::new(path)))
+}
+
+mod tier1 {
+    // 8 round-trip / metadata / conflict / path tests
+    kanban_persistence::store_contract_tests!(super::my_factory);
+}
+
+mod tier2 {
+    // Full KanbanContext integration tests (board/column/card CRUD + undo/redo)
+    kanban_service::context_contract_tests!(super::my_factory);
+}
+```
+
+Run with:
+
+```bash
+cargo test
+```
+
+All 8 Tier 1 tests must pass before the backend is usable. Tier 2 tests verify the full service layer works on top of your store.
+
+### Step 5 — Own `main()` and register your backend
+
+#### CLI binary
+
+```rust
+use kanban_cli::CliApp;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    CliApp::with_defaults()          // includes built-in json + sqlite
+        .register_backend(Box::new(MyStoreFactory))
+        .run()
+        .await
+}
+```
+
+#### MCP server binary
+
+```rust
+use kanban_mcp::McpServer;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    McpServer::with_defaults()
+        .register_backend(Box::new(MyStoreFactory))
+        .run()
+        .await
+}
+```
+
+Both builders accept any number of `.register_backend()` calls. Factories registered **before** the built-in ones take priority in content-sniffing; factories registered **after** are checked last.
+
+To ship a binary with **only** your backend (no built-in JSON or SQLite), use `CliApp::default()` / `McpServer::default()` and register exclusively your factory:
+
+```rust
+CliApp::default()
+    .register_backend(Box::new(MyStoreFactory))
+    .run()
+    .await
+```
+
+---
 
 ## Dependencies
 
-- `kanban-core` - Foundation types and traits
-- `kanban-domain` - Domain models
-- `serde`, `serde_json` - Serialization
-- `tokio` - Async runtime
-- `uuid` - ID generation
-- `chrono` - Timestamps
-- `async-trait` - Async trait support
-- `thiserror` - Error handling
-- `notify` - File watching
-
-## License
-
-Apache 2.0 - See [LICENSE.md](../../LICENSE.md) for details
+| Crate | Purpose |
+|-------|---------|
+| `kanban-core` | `KanbanError`, `KanbanResult` |
+| `kanban-domain` | `Snapshot` type |
+| `serde` + `serde_json` | Serialization |
+| `async-trait` | Async trait methods |
+| `chrono` | Timestamps in metadata |
+| `thiserror` | Error derivation |
+| `uuid` | Instance IDs |

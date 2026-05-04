@@ -1,5 +1,6 @@
+use crate::error::PersistenceError;
 use crate::traits::Serializer;
-use kanban_core::KanbanResult;
+use crate::PersistenceResult;
 
 /// JSON serializer for domain models
 pub struct JsonSerializer;
@@ -7,15 +8,15 @@ pub struct JsonSerializer;
 impl<T: serde::Serialize + serde::de::DeserializeOwned + Send + Sync> Serializer<T>
     for JsonSerializer
 {
-    fn serialize(&self, data: &T) -> KanbanResult<Vec<u8>> {
+    fn serialize(&self, data: &T) -> PersistenceResult<Vec<u8>> {
         let json = serde_json::to_vec_pretty(data)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         Ok(json)
     }
 
-    fn deserialize(&self, bytes: &[u8]) -> KanbanResult<T> {
+    fn deserialize(&self, bytes: &[u8]) -> PersistenceResult<T> {
         let data = serde_json::from_slice(bytes)
-            .map_err(|e| kanban_core::KanbanError::Serialization(e.to_string()))?;
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         Ok(data)
     }
 }

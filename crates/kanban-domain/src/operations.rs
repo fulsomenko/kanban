@@ -1,8 +1,8 @@
+use crate::KanbanResult;
 use crate::{
     ArchivedCard, Board, BoardUpdate, Card, CardStatus, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, Sprint, SprintUpdate,
 };
-use kanban_core::KanbanResult;
 use uuid::Uuid;
 
 /// Filter options for listing cards
@@ -47,7 +47,7 @@ pub trait KanbanOperations {
     ) -> KanbanResult<Card>;
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>>;
     fn get_card(&self, id: Uuid) -> KanbanResult<Option<Card>>;
-    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>>;
+    fn find_cards_by_identifier(&self, identifier: &str) -> KanbanResult<Vec<Card>>;
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card>;
     fn move_card(&mut self, id: Uuid, column_id: Uuid, position: Option<i32>)
         -> KanbanResult<Card>;
@@ -64,10 +64,15 @@ pub trait KanbanOperations {
     fn get_card_branch_name(&self, id: Uuid) -> KanbanResult<String>;
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String>;
 
-    // Bulk card operations
-    fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize>;
-    fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize>;
-    fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize>;
+    // Multi-card operations
+    fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize>;
+    fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize>;
+    fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize>;
+    fn carry_over_sprint_cards(
+        &mut self,
+        from_sprint_id: Uuid,
+        to_sprint_id: Uuid,
+    ) -> KanbanResult<usize>;
 
     // Sprint operations
     fn create_sprint(

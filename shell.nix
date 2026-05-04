@@ -6,6 +6,8 @@
   bumpVersion ? null,
   publishCrates ? null,
   validateRelease ? null,
+  listCrates ? null,
+  checkCrateListSync ? null,
 }:
 
 let
@@ -15,6 +17,8 @@ let
     bumpVersion
     publishCrates
     validateRelease
+    listCrates
+    checkCrateListSync
   ];
 in
 
@@ -36,8 +40,7 @@ pkgs.mkShell {
     # Development utilities
     bacon
 
-    asciinema_3
-    asciinema-agg
+    sqlite
   ] ++ lib.optionals stdenv.isLinux [
     # Clipboard support
     wayland

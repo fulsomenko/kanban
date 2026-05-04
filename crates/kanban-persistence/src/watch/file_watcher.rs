@@ -1,9 +1,9 @@
 use crate::traits::{ChangeDetector, ChangeEvent};
+use crate::PersistenceResult;
 use chrono::Utc;
-use kanban_core::KanbanResult;
 use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex as TokioMutex;
@@ -34,7 +34,7 @@ use tokio::sync::Mutex as TokioMutex;
 pub struct FileWatcher {
     tx: broadcast::Sender<ChangeEvent>,
     task_handle: Arc<TokioMutex<Option<tokio::task::JoinHandle<()>>>>,
-    paused: Arc<AtomicBool>,
+    suppress_remaining: Arc<AtomicUsize>,
 }
 
 impl FileWatcher {
@@ -45,20 +45,28 @@ impl FileWatcher {
         Self {
             tx,
             task_handle: Arc::new(TokioMutex::new(None)),
-            paused: Arc::new(AtomicBool::new(false)),
+            suppress_remaining: Arc::new(AtomicUsize::new(0)),
         }
     }
 
-    /// Pause file watching - events will be ignored until resumed
-    pub fn pause(&self) {
-        self.paused.store(true, Ordering::SeqCst);
-        tracing::debug!("File watcher paused");
+    /// Returns the number of events that will still be suppressed.
+    ///
+    /// Intended for tests only; not part of the stable API.
+    #[doc(hidden)]
+    pub fn suppress_remaining(&self) -> usize {
+        self.suppress_remaining.load(Ordering::SeqCst)
     }
 
-    /// Resume file watching - events will be processed normally
-    pub fn resume(&self) {
-        self.paused.store(false, Ordering::SeqCst);
-        tracing::debug!("File watcher resumed");
+    /// Suppress the next 2 own-write events.
+    ///
+    /// Call immediately before each atomic rename. Each OS event from that
+    /// rename decrements the counter; when the counter reaches 0, subsequent
+    /// events are delivered normally. Using 2 is conservative — Linux fires
+    /// only 1 event per rename on the target path (after `has_our_file`
+    /// filtering), so the counter is typically fully consumed by 1 event.
+    pub fn suppress_next_event(&self) {
+        self.suppress_remaining.store(2, Ordering::SeqCst);
+        tracing::debug!("File watcher suppress counter set to 2");
     }
 }
 
@@ -70,10 +78,10 @@ impl Default for FileWatcher {
 
 #[async_trait::async_trait]
 impl ChangeDetector for FileWatcher {
-    async fn start_watching(&self, path: PathBuf) -> KanbanResult<()> {
+    async fn start_watching(&self, path: PathBuf) -> PersistenceResult<()> {
         let tx = self.tx.clone();
         let task_handle = self.task_handle.clone();
-        let paused = self.paused.clone();
+        let suppress_remaining = self.suppress_remaining.clone();
 
         // Canonicalize to absolute path so it matches OS event paths
         let canonical_path = tokio::fs::canonicalize(&path).await?;
@@ -85,74 +93,68 @@ impl ChangeDetector for FileWatcher {
                 .expect("Canonicalized path should always have parent")
                 .to_path_buf();
             let watch_path = canonical_path.clone();
-            let paused_clone = paused.clone();
+            let suppress_remaining_clone = suppress_remaining.clone();
 
-            match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-                match res {
-                    Ok(event) => {
-                        // Detect changes from any write strategy:
-                        // - Modify(Data(Content)): direct writes
-                        // - Create(_): atomic writes (rename operation creating new file)
-                        // - Remove(_): atomic writes (old file removed during rename)
-                        let is_relevant_event = matches!(
+            match notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
+                Ok(event) => {
+                    let is_relevant_event = matches!(
+                        event.kind,
+                        notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                            notify::event::DataChange::Content,
+                        )) | notify::EventKind::Modify(notify::event::ModifyKind::Name(_),)
+                            | notify::EventKind::Create(_)
+                            | notify::EventKind::Remove(_)
+                    );
+
+                    let has_our_file = event.paths.iter().any(|p| p == &watch_path);
+
+                    if is_relevant_event {
+                        tracing::debug!(
+                            "File system event detected: kind={:?}, paths={:?}, has_our_file={}",
                             event.kind,
-                            notify::EventKind::Modify(notify::event::ModifyKind::Data(
-                                notify::event::DataChange::Content,
-                            )) | notify::EventKind::Create(_)
-                                | notify::EventKind::Remove(_)
+                            event.paths,
+                            has_our_file
                         );
+                    }
 
-                        let has_our_file = event.paths.iter().any(|p| p == &watch_path);
-
-                        if is_relevant_event {
+                    if is_relevant_event && has_our_file {
+                        let suppressed = suppress_remaining_clone
+                            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+                            .is_ok();
+                        if suppressed {
                             tracing::debug!(
-                                "File system event detected: kind={:?}, paths={:?}, has_our_file={}",
+                                "Own-write event suppressed (counter): kind={:?}, path={}",
                                 event.kind,
-                                event.paths,
-                                has_our_file
+                                watch_path.display()
                             );
+                            return;
                         }
 
-                        // For parent directory watching, trigger on any relevant event
-                        // (atomic writes show as temp file events, but the target file exists and changed)
-                        if is_relevant_event && (has_our_file || watch_path.exists()) {
-                            // Check if file watching is paused (e.g., during our own save operation)
-                            // Pause/resume is the only mechanism for filtering own-write events
-                            if paused_clone.load(Ordering::SeqCst) {
+                        tracing::debug!(
+                            "File event detected: kind={:?}, path={}, our_file_exists={}",
+                            event.kind,
+                            watch_path.display(),
+                            watch_path.exists()
+                        );
+                        let change = ChangeEvent {
+                            path: watch_path.clone(),
+                            detected_at: Utc::now(),
+                        };
+                        match tx.send(change) {
+                            Ok(receiver_count) => {
                                 tracing::debug!(
-                                    "File event ignored (watcher paused): kind={:?}, path={}",
-                                    event.kind,
-                                    watch_path.display()
+                                    "File change event sent to {} receivers",
+                                    receiver_count
                                 );
-                                return;
                             }
-
-                            tracing::debug!(
-                                "File event detected: kind={:?}, path={}, our_file_exists={}",
-                                event.kind,
-                                watch_path.display(),
-                                watch_path.exists()
-                            );
-                            let change = ChangeEvent {
-                                path: watch_path.clone(),
-                                detected_at: Utc::now(),
-                            };
-                            match tx.send(change) {
-                                Ok(receiver_count) => {
-                                    tracing::debug!(
-                                        "File change event sent to {} receivers",
-                                        receiver_count
-                                    );
-                                }
-                                Err(e) => {
-                                    tracing::warn!("Failed to send file change event: {}", e);
-                                }
+                            Err(e) => {
+                                tracing::warn!("Failed to send file change event: {}", e);
                             }
                         }
                     }
-                    Err(e) => {
-                        tracing::warn!("File watcher error: {}", e);
-                    }
+                }
+                Err(e) => {
+                    tracing::warn!("File watcher error: {}", e);
                 }
             }) {
                 Ok(mut watcher) => {
@@ -186,7 +188,7 @@ impl ChangeDetector for FileWatcher {
         Ok(())
     }
 
-    async fn stop_watching(&self) -> KanbanResult<()> {
+    async fn stop_watching(&self) -> PersistenceResult<()> {
         let mut guard = self.task_handle.lock().await;
         if let Some(handle) = guard.take() {
             handle.abort();
@@ -293,5 +295,134 @@ mod tests {
                 .unwrap_or(event.path.clone());
             assert_eq!(event_path, expected_path);
         }
+    }
+
+    /// Pure unit test: `suppress_next_event` loads the counter to 2.
+    /// No I/O, no async, no timing.
+    #[test]
+    fn test_suppress_next_event_sets_counter() {
+        let watcher = FileWatcher::new();
+        assert_eq!(watcher.suppress_remaining(), 0, "counter must start at 0");
+        watcher.suppress_next_event();
+        assert_eq!(
+            watcher.suppress_remaining(),
+            2,
+            "suppress_next_event must set counter to 2"
+        );
+    }
+
+    /// After our own atomic rename, the counter is decremented and no event
+    /// reaches the channel.  Replaces the 500 ms timeout test.
+    #[tokio::test]
+    async fn test_own_write_decrements_suppress_counter() {
+        use std::fs;
+        use tempfile::NamedTempFile;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("own.json");
+        tokio::fs::write(&file_path, b"initial").await.unwrap();
+
+        let watcher = FileWatcher::new();
+        let mut rx = watcher.subscribe();
+        watcher.start_watching(file_path.clone()).await.unwrap();
+        sleep(Duration::from_millis(100)).await;
+
+        watcher.suppress_next_event();
+        assert_eq!(watcher.suppress_remaining(), 2);
+
+        let temp = NamedTempFile::new_in(dir.path()).unwrap();
+        std::fs::write(temp.path(), b"own write").unwrap();
+        fs::rename(temp.path(), &file_path).unwrap();
+
+        // Give the OS time to deliver the event to the handler.
+        sleep(Duration::from_millis(150)).await;
+
+        assert!(
+            watcher.suppress_remaining() < 2,
+            "counter must have been decremented by the OS event"
+        );
+        // No event must have been forwarded to subscribers.
+        let result = rx.try_recv();
+        assert!(
+            result.is_err(),
+            "no event should reach the channel for an own write; got: {:?}",
+            result
+        );
+
+        watcher.stop_watching().await.unwrap();
+    }
+
+    /// After the counter is exhausted, a subsequent external write IS delivered.
+    /// Guards against a "counter stuck at MAX" regression.
+    #[tokio::test]
+    async fn test_external_write_delivered_after_counter_exhausted() {
+        use std::fs;
+        use tempfile::NamedTempFile;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("external.json");
+        tokio::fs::write(&file_path, b"initial").await.unwrap();
+
+        let watcher = FileWatcher::new();
+        let mut rx = watcher.subscribe();
+        watcher.start_watching(file_path.clone()).await.unwrap();
+        sleep(Duration::from_millis(100)).await;
+
+        // Own write — suppress counter counts it down.
+        watcher.suppress_next_event();
+        let temp = NamedTempFile::new_in(dir.path()).unwrap();
+        std::fs::write(temp.path(), b"own write").unwrap();
+        fs::rename(temp.path(), &file_path).unwrap();
+        sleep(Duration::from_millis(150)).await;
+
+        // Second rename simulates an external write after counter is exhausted.
+        let temp2 = NamedTempFile::new_in(dir.path()).unwrap();
+        std::fs::write(temp2.path(), b"external write").unwrap();
+        fs::rename(temp2.path(), &file_path).unwrap();
+
+        let result = tokio::time::timeout(Duration::from_millis(300), rx.recv()).await;
+        watcher.stop_watching().await.unwrap();
+
+        assert!(
+            result.is_ok(),
+            "external write after counter is exhausted must fire an event, got: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_watcher_does_not_fire_for_unrelated_temp_file() {
+        use tempfile::NamedTempFile;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.json");
+
+        // Create the watched file
+        tokio::fs::write(&file_path, b"initial content")
+            .await
+            .unwrap();
+
+        let watcher = FileWatcher::new();
+        let mut rx = watcher.subscribe();
+
+        watcher.start_watching(file_path.clone()).await.unwrap();
+
+        // Give watcher time to start
+        sleep(Duration::from_millis(100)).await;
+
+        // Create a temp file in the SAME directory but do NOT rename it to test.json
+        let temp_file = NamedTempFile::new_in(dir.path()).unwrap();
+        std::fs::write(temp_file.path(), b"unrelated content").unwrap();
+
+        // No event should be emitted — the temp file is not our watched path
+        let result = tokio::time::timeout(Duration::from_millis(500), rx.recv()).await;
+
+        watcher.stop_watching().await.unwrap();
+
+        assert!(
+            result.is_err(),
+            "Expected timeout (no event), but got: {:?}",
+            result
+        );
     }
 }

@@ -1,9 +1,10 @@
-use kanban_core::{KanbanResult, PaginatedList};
+use kanban_core::{AppConfig, PaginatedList};
+use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
     ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
 };
-use kanban_service::KanbanContext;
+use kanban_service::{KanbanContext, StoreManager};
 use uuid::Uuid;
 
 pub struct McpContext {
@@ -11,14 +12,45 @@ pub struct McpContext {
 }
 
 impl McpContext {
-    pub async fn new(data_file: &str) -> KanbanResult<Self> {
+    pub async fn new(
+        store_manager: &StoreManager,
+        data_file: &str,
+        mut config: AppConfig,
+    ) -> KanbanResult<Self> {
+        if store_manager.sync_backend_with_file(data_file, &mut config) {
+            tracing::warn!(
+                "Storage backend auto-corrected to '{}' based on file content.",
+                config.effective_storage_backend()
+            );
+        }
+        let backend = store_manager.make_backend(data_file, &config).await?;
         Ok(Self {
-            inner: KanbanContext::load_json(data_file).await?,
+            inner: KanbanContext::open(backend, config).await?,
         })
     }
 
     pub async fn reload(&mut self) -> KanbanResult<()> {
         self.inner.reload().await
+    }
+
+    pub fn clear_history(&mut self) -> KanbanResult<()> {
+        self.inner.clear_history()
+    }
+
+    pub fn undo(&mut self) -> KanbanResult<bool> {
+        self.inner.undo()
+    }
+
+    pub fn redo(&mut self) -> KanbanResult<bool> {
+        self.inner.redo()
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.inner.can_undo()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.inner.can_redo()
     }
 
     pub async fn save(&self) -> KanbanResult<()> {
@@ -35,7 +67,7 @@ impl McpContext {
         page_size: usize,
     ) -> KanbanResult<PaginatedList<CardSummary>> {
         let cards = self.inner.list_cards(filter)?;
-        PaginatedList::paginate(cards, page, page_size)
+        Ok(PaginatedList::paginate(cards, page, page_size)?)
     }
 }
 
@@ -119,8 +151,8 @@ impl KanbanOperations for McpContext {
         self.inner.get_card(id)
     }
 
-    fn find_card_by_identifier(&self, identifier: &str) -> KanbanResult<Option<Card>> {
-        self.inner.find_card_by_identifier(identifier)
+    fn find_cards_by_identifier(&self, identifier: &str) -> KanbanResult<Vec<Card>> {
+        self.inner.find_cards_by_identifier(identifier)
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
@@ -177,19 +209,28 @@ impl KanbanOperations for McpContext {
     }
 
     // ========================================================================
-    // Bulk Card Operations
+    // Multi-card operations
     // ========================================================================
 
-    fn bulk_archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
-        self.inner.bulk_archive_cards(ids)
+    fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize> {
+        self.inner.archive_cards(ids)
     }
 
-    fn bulk_move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_move_cards(ids, column_id)
+    fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
+        self.inner.move_cards(ids, column_id)
     }
 
-    fn bulk_assign_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
-        self.inner.bulk_assign_sprint(ids, sprint_id)
+    fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
+        self.inner.assign_cards_to_sprint(ids, sprint_id)
+    }
+
+    fn carry_over_sprint_cards(
+        &mut self,
+        from_sprint_id: Uuid,
+        to_sprint_id: Uuid,
+    ) -> KanbanResult<usize> {
+        self.inner
+            .carry_over_sprint_cards(from_sprint_id, to_sprint_id)
     }
 
     // ========================================================================

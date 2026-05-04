@@ -7,7 +7,7 @@ use crate::field_update::FieldUpdate;
 
 pub type ColumnId = Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Column {
     pub id: ColumnId,
     pub board_id: BoardId,
@@ -64,7 +64,7 @@ impl Column {
 ///
 /// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.
 /// See [`FieldUpdate`] documentation for usage examples.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ColumnUpdate {
     pub name: Option<String>,
     pub position: Option<i32>,

@@ -39,7 +39,7 @@
 
         publishCrates = pkgs.writeShellApplication {
           name = "publish-crates";
-          runtimeInputs = [rustToolchain pkgs.cargo pkgs.coreutils validateRelease];
+          runtimeInputs = [rustToolchain pkgs.cargo pkgs.coreutils pkgs.curl pkgs.gnugrep validateRelease listCrates];
           text = builtins.readFile ./scripts/publish-crates.sh;
         };
 
@@ -49,33 +49,49 @@
           text = builtins.readFile ./scripts/aggregate-changelog.sh;
         };
 
+        listCrates = pkgs.writeShellApplication {
+          name = "list-crates";
+          runtimeInputs = with pkgs; [rustToolchain cargo coreutils jq gnused];
+          text = builtins.readFile ./scripts/list-crates.sh;
+        };
+
         validateRelease = pkgs.writeShellApplication {
           name = "validate-release";
-          runtimeInputs = with pkgs; [rustToolchain cargo coreutils gnugrep gnused];
+          runtimeInputs = with pkgs; [rustToolchain cargo coreutils gnugrep gnused listCrates];
           text = builtins.readFile ./scripts/validate-release.sh;
         };
+
+        checkCrateListSync = pkgs.writeShellApplication {
+          name = "check-crate-list-sync";
+          runtimeInputs = with pkgs; [coreutils gnugrep findutils diffutils listCrates];
+          text = builtins.readFile ./scripts/check-crate-list-sync.sh;
+        };
+
+        kanban = pkgs.callPackage ./default.nix { src = self; gitRev = self.rev or null; };
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
-          inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease;
+          inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease listCrates checkCrateListSync;
         };
 
+        devShells.demo = import ./demo/shell.nix { inherit pkgs kanban; };
+
         packages = let
-          kanban = pkgs.callPackage ./default.nix { gitRev = self.rev or null; };
-          kanban-cli = pkgs.callPackage ./default.nix { gitRev = self.rev or null; withTui = false; };
+          kanban-cli = pkgs.callPackage ./default.nix { src = self; gitRev = self.rev or null; withTui = false; };
         in {
           default = kanban;
           kanban-cli = kanban-cli;
-          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix {};
+          kanban-mcp = pkgs.callPackage ./crates/kanban-mcp/default.nix { src = self; };
           kanban-web = pkgs.callPackage ./web/default.nix {};
           mcp-server-git = servers.packages.${system}.mcp-server-git;
           aggregate-changelog = aggregateChangelog;
           bump-version = bumpVersion;
           publish-crates = publishCrates;
           validate-release = validateRelease;
+          list-crates = listCrates;
+          check-crate-list-sync = checkCrateListSync;
           changeset = changeset;
         };
       }
     );
 }
-
