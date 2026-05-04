@@ -188,19 +188,12 @@ mod tests {
         let watcher = Arc::new(kanban_persistence::FileWatcher::new());
         coordinator.set_file_watcher(Arc::clone(&watcher));
 
-        let before_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-
         coordinator.queue_flush();
 
-        assert!(
-            watcher.suppress_deadline_ms() <= before_ms,
-            "queue_flush must not open the suppress window \
-             (deadline={}, before={})",
-            watcher.suppress_deadline_ms(),
-            before_ms,
+        assert_eq!(
+            watcher.suppress_remaining(),
+            0,
+            "queue_flush must not open the suppress window"
         );
     }
 

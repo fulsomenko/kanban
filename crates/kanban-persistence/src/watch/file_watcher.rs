@@ -3,7 +3,7 @@ use crate::PersistenceResult;
 use chrono::Utc;
 use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex as TokioMutex;
@@ -34,7 +34,7 @@ use tokio::sync::Mutex as TokioMutex;
 pub struct FileWatcher {
     tx: broadcast::Sender<ChangeEvent>,
     task_handle: Arc<TokioMutex<Option<tokio::task::JoinHandle<()>>>>,
-    suppress_until_ms: Arc<AtomicU64>,
+    suppress_remaining: Arc<AtomicUsize>,
 }
 
 impl FileWatcher {
@@ -45,33 +45,28 @@ impl FileWatcher {
         Self {
             tx,
             task_handle: Arc::new(TokioMutex::new(None)),
-            suppress_until_ms: Arc::new(AtomicU64::new(0)),
+            suppress_remaining: Arc::new(AtomicUsize::new(0)),
         }
     }
 
-    /// Returns the Unix-epoch millisecond timestamp until which events are
-    /// suppressed, or `0` when no window is active.
+    /// Returns the number of events that will still be suppressed.
     ///
     /// Intended for tests only; not part of the stable API.
     #[doc(hidden)]
-    pub fn suppress_deadline_ms(&self) -> u64 {
-        self.suppress_until_ms.load(Ordering::SeqCst)
+    pub fn suppress_remaining(&self) -> usize {
+        self.suppress_remaining.load(Ordering::SeqCst)
     }
 
-    /// Suppress own-write events for the next 200 ms.
+    /// Suppress the next 2 own-write events.
     ///
-    /// Call before each atomic save. Any rename/modify events that arrive within
-    /// the window are silently dropped. The window self-expires, so a missed
-    /// decrement can never permanently suppress legitimate external events.
+    /// Call immediately before each atomic rename. Each OS event from that
+    /// rename decrements the counter; when the counter reaches 0, subsequent
+    /// events are delivered normally. Using 2 is conservative — Linux fires
+    /// only 1 event per rename on the target path (after `has_our_file`
+    /// filtering), so the counter is typically fully consumed by 1 event.
     pub fn suppress_next_event(&self) {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let until = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64
-            + 200;
-        self.suppress_until_ms.store(until, Ordering::SeqCst);
-        tracing::debug!("File watcher suppress window set (200 ms)");
+        self.suppress_remaining.store(2, Ordering::SeqCst);
+        tracing::debug!("File watcher suppress counter set to 2");
     }
 }
 
@@ -86,7 +81,7 @@ impl ChangeDetector for FileWatcher {
     async fn start_watching(&self, path: PathBuf) -> PersistenceResult<()> {
         let tx = self.tx.clone();
         let task_handle = self.task_handle.clone();
-        let suppress_until_ms = self.suppress_until_ms.clone();
+        let suppress_remaining = self.suppress_remaining.clone();
 
         // Canonicalize to absolute path so it matches OS event paths
         let canonical_path = tokio::fs::canonicalize(&path).await?;
@@ -98,7 +93,7 @@ impl ChangeDetector for FileWatcher {
                 .expect("Canonicalized path should always have parent")
                 .to_path_buf();
             let watch_path = canonical_path.clone();
-            let suppress_until_ms_clone = suppress_until_ms.clone();
+            let suppress_remaining_clone = suppress_remaining.clone();
 
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
@@ -126,14 +121,14 @@ impl ChangeDetector for FileWatcher {
                         }
 
                         if is_relevant_event && has_our_file {
-                            use std::time::{SystemTime, UNIX_EPOCH};
-                            let now_ms = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_millis() as u64;
-                            if now_ms < suppress_until_ms_clone.load(Ordering::SeqCst) {
+                            let suppressed = suppress_remaining_clone
+                                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+                                    n.checked_sub(1)
+                                })
+                                .is_ok();
+                            if suppressed {
                                 tracing::debug!(
-                                    "Own-write event suppressed (in window): kind={:?}, path={}",
+                                    "Own-write event suppressed (counter): kind={:?}, path={}",
                                     event.kind,
                                     watch_path.display()
                                 );
@@ -308,13 +303,29 @@ mod tests {
         }
     }
 
+    /// Pure unit test: `suppress_next_event` loads the counter to 2.
+    /// No I/O, no async, no timing.
+    #[test]
+    fn test_suppress_next_event_sets_counter() {
+        let watcher = FileWatcher::new();
+        assert_eq!(watcher.suppress_remaining(), 0, "counter must start at 0");
+        watcher.suppress_next_event();
+        assert_eq!(
+            watcher.suppress_remaining(),
+            2,
+            "suppress_next_event must set counter to 2"
+        );
+    }
+
+    /// After our own atomic rename, the counter is decremented and no event
+    /// reaches the channel.  Replaces the 500 ms timeout test.
     #[tokio::test]
-    async fn test_suppress_next_event_prevents_own_atomic_write() {
+    async fn test_own_write_decrements_suppress_counter() {
         use std::fs;
         use tempfile::NamedTempFile;
 
         let dir = tempdir().unwrap();
-        let file_path = dir.path().join("test.json");
+        let file_path = dir.path().join("own.json");
         tokio::fs::write(&file_path, b"initial").await.unwrap();
 
         let watcher = FileWatcher::new();
@@ -322,32 +333,40 @@ mod tests {
         watcher.start_watching(file_path.clone()).await.unwrap();
         sleep(Duration::from_millis(100)).await;
 
-        // Simulate what the save coordinator does: suppress before the save
         watcher.suppress_next_event();
+        assert_eq!(watcher.suppress_remaining(), 2);
 
-        // Atomic write (same pattern as AtomicWriter)
         let temp = NamedTempFile::new_in(dir.path()).unwrap();
         std::fs::write(temp.path(), b"own write").unwrap();
         fs::rename(temp.path(), &file_path).unwrap();
 
-        // Must timeout — no event should reach the channel
-        let result = tokio::time::timeout(Duration::from_millis(500), rx.recv()).await;
+        // Give the OS time to deliver the event to the handler.
+        sleep(Duration::from_millis(150)).await;
+
+        assert!(
+            watcher.suppress_remaining() < 2,
+            "counter must have been decremented by the OS event"
+        );
+        // No event must have been forwarded to subscribers.
+        let result = rx.try_recv();
+        assert!(
+            result.is_err(),
+            "no event should reach the channel for an own write; got: {:?}",
+            result
+        );
+
         watcher.stop_watching().await.unwrap();
-        assert!(result.is_err(), "Expected no event, got: {:?}", result);
     }
 
-    /// The suppression window must self-expire after 200 ms so that a
-    /// legitimate external write arriving after the window is not silently
-    /// dropped.  A bug setting `suppress_until_ms = u64::MAX` would cause
-    /// all future external writes to be permanently ignored — this test
-    /// catches that class of regression.
+    /// After the counter is exhausted, a subsequent external write IS delivered.
+    /// Guards against a "counter stuck at MAX" regression.
     #[tokio::test]
-    async fn test_suppress_window_expires_and_external_write_is_detected() {
+    async fn test_external_write_delivered_after_counter_exhausted() {
         use std::fs;
         use tempfile::NamedTempFile;
 
         let dir = tempdir().unwrap();
-        let file_path = dir.path().join("expire.json");
+        let file_path = dir.path().join("external.json");
         tokio::fs::write(&file_path, b"initial").await.unwrap();
 
         let watcher = FileWatcher::new();
@@ -355,21 +374,24 @@ mod tests {
         watcher.start_watching(file_path.clone()).await.unwrap();
         sleep(Duration::from_millis(100)).await;
 
-        // Open the suppression window then wait for it to expire.
+        // Own write — suppress counter counts it down.
         watcher.suppress_next_event();
-        sleep(Duration::from_millis(250)).await; // > 200 ms window
-
-        // An external atomic write arriving AFTER the window must be delivered.
         let temp = NamedTempFile::new_in(dir.path()).unwrap();
-        std::fs::write(temp.path(), b"external after expiry").unwrap();
+        std::fs::write(temp.path(), b"own write").unwrap();
         fs::rename(temp.path(), &file_path).unwrap();
+        sleep(Duration::from_millis(150)).await;
 
-        let result = tokio::time::timeout(Duration::from_millis(500), rx.recv()).await;
+        // Second rename simulates an external write after counter is exhausted.
+        let temp2 = NamedTempFile::new_in(dir.path()).unwrap();
+        std::fs::write(temp2.path(), b"external write").unwrap();
+        fs::rename(temp2.path(), &file_path).unwrap();
+
+        let result = tokio::time::timeout(Duration::from_millis(300), rx.recv()).await;
         watcher.stop_watching().await.unwrap();
 
         assert!(
             result.is_ok(),
-            "external write after window expiry must fire an event, got: {:?}",
+            "external write after counter is exhausted must fire an event, got: {:?}",
             result
         );
     }
