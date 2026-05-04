@@ -61,11 +61,17 @@
           text = builtins.readFile ./scripts/validate-release.sh;
         };
 
+        checkCrateListSync = pkgs.writeShellApplication {
+          name = "check-crate-list-sync";
+          runtimeInputs = with pkgs; [coreutils gnugrep findutils diffutils listCrates];
+          text = builtins.readFile ./scripts/check-crate-list-sync.sh;
+        };
+
         kanban = pkgs.callPackage ./default.nix { src = self; gitRev = self.rev or null; };
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
-          inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease listCrates;
+          inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease listCrates checkCrateListSync;
         };
 
         devShells.demo = import ./demo/shell.nix { inherit pkgs kanban; };
@@ -83,6 +89,7 @@
           publish-crates = publishCrates;
           validate-release = validateRelease;
           list-crates = listCrates;
+          check-crate-list-sync = checkCrateListSync;
           changeset = changeset;
         };
       }

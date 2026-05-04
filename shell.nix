@@ -7,6 +7,7 @@
   publishCrates ? null,
   validateRelease ? null,
   listCrates ? null,
+  checkCrateListSync ? null,
 }:
 
 let
@@ -17,6 +18,7 @@ let
     publishCrates
     validateRelease
     listCrates
+    checkCrateListSync
   ];
 in
 
