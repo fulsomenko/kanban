@@ -27,6 +27,10 @@ pub struct JsonDataStore {
     /// `None` until first access. Populated by `ensure_loaded()`.
     inner: RwLock<Option<InMemoryStore>>,
     dirty: AtomicBool,
+    /// Set by `reload()` to suppress the dirty flag from the first
+    /// `with_mutate()` call that follows (internal housekeeping, not a user
+    /// mutation). Consumed atomically by `with_mutate()`.
+    suppress_next_dirty: AtomicBool,
     /// Cached by `on_undo_state_changed` for use during `flush()`.
     undo_cursor: Mutex<u64>,
     baseline_snapshot: Mutex<Option<Snapshot>>,
@@ -38,6 +42,7 @@ impl JsonDataStore {
             file_store,
             inner: RwLock::new(None),
             dirty: AtomicBool::new(false),
+            suppress_next_dirty: AtomicBool::new(false),
             undo_cursor: Mutex::new(0),
             baseline_snapshot: Mutex::new(None),
         }
@@ -196,7 +201,12 @@ impl JsonDataStore {
             .read()
             .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
         let result = f(guard.as_ref().expect("ensure_loaded guarantees Some"))?;
-        self.dirty.store(true, Ordering::Release);
+        // Consume the suppression flag set by reload(). If it was set, this
+        // is internal housekeeping (e.g. truncate_commands_after(0)) and must
+        // not mark the backend dirty.
+        if !self.suppress_next_dirty.swap(false, Ordering::AcqRel) {
+            self.dirty.store(true, Ordering::Release);
+        }
         Ok(result)
     }
 }
@@ -420,6 +430,10 @@ impl KanbanBackend for JsonDataStore {
         *self.baseline_snapshot.lock().map_err(|_| {
             KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
         })? = None;
+        // Suppress the dirty flag from the first with_mutate() after reload.
+        // KanbanContext::reload() calls truncate_commands_after(0) for
+        // internal housekeeping; that must not mark the backend dirty.
+        self.suppress_next_dirty.store(true, Ordering::Release);
         Ok(())
     }
 
@@ -439,10 +453,6 @@ impl KanbanBackend for JsonDataStore {
             KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
         })? = baseline;
         Ok(())
-    }
-
-    fn clear_dirty(&self) {
-        self.dirty.store(false, Ordering::Release);
     }
 
     fn instance_id(&self) -> Uuid {

@@ -55,11 +55,6 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
         Ok(())
     }
 
-    /// Clears the dirty flag without flushing. Called after `reload()` to
-    /// prevent a spurious save triggered by internal command-log housekeeping.
-    /// No-op for write-through backends (SQLite, in-memory).
-    fn clear_dirty(&self) {}
-
     /// Stable instance UUID used for own-write detection in file watchers.
     fn instance_id(&self) -> Uuid {
         Uuid::nil()

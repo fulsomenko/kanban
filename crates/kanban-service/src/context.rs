@@ -402,9 +402,6 @@ impl KanbanContext {
         self.backend.truncate_commands_after(0)?;
         self.baseline_snapshot = Some(baseline);
         self.notify_undo_state()?;
-        // truncate_commands_after routes through with_mutate which sets dirty=true,
-        // but this is internal housekeeping during reload, not a user mutation.
-        self.backend.clear_dirty();
         Ok(())
     }
 
