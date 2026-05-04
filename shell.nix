@@ -6,6 +6,7 @@
   bumpVersion ? null,
   publishCrates ? null,
   validateRelease ? null,
+  listCrates ? null,
 }:
 
 let
@@ -15,6 +16,7 @@ let
     bumpVersion
     publishCrates
     validateRelease
+    listCrates
   ];
 in
 

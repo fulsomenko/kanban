@@ -49,6 +49,12 @@
           text = builtins.readFile ./scripts/aggregate-changelog.sh;
         };
 
+        listCrates = pkgs.writeShellApplication {
+          name = "list-crates";
+          runtimeInputs = with pkgs; [rustToolchain cargo coreutils jq gnused];
+          text = builtins.readFile ./scripts/list-crates.sh;
+        };
+
         validateRelease = pkgs.writeShellApplication {
           name = "validate-release";
           runtimeInputs = with pkgs; [rustToolchain cargo coreutils gnugrep gnused];
@@ -59,7 +65,7 @@
       in {
         devShells.default = import ./shell.nix {
           inherit pkgs rustToolchain;
-          inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease;
+          inherit changeset aggregateChangelog bumpVersion publishCrates validateRelease listCrates;
         };
 
         devShells.demo = import ./demo/shell.nix { inherit pkgs kanban; };
@@ -76,6 +82,7 @@
           bump-version = bumpVersion;
           publish-crates = publishCrates;
           validate-release = validateRelease;
+          list-crates = listCrates;
           changeset = changeset;
         };
       }
