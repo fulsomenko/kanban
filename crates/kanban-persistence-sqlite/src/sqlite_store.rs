@@ -1454,10 +1454,6 @@ impl DataStore for SqliteStore {
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
         run(self.apply_snapshot_async(snapshot))
     }
-
-    fn flush(&self) -> KanbanResult<()> {
-        run(self.checkpoint())
-    }
 }
 
 impl CommandStore for SqliteStore {

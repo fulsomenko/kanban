@@ -147,7 +147,7 @@ pub async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: 
 
 pub async fn setup_app_with_json_file(dir: &std::path::Path) -> App {
     let path = create_test_json_file(dir, "source.json", &["OriginalBoard"]).await;
-    let (mut app, _rx) = App::new(Some(path)).unwrap();
+    let (mut app, _rx) = App::new(Some(path)).await.unwrap();
     app.load_initial_state().await;
     app
 }

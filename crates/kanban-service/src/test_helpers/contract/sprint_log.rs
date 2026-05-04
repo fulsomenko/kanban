@@ -1,12 +1,13 @@
-use super::super::StoreFactory;
+use super::super::BackendFactory;
 use crate::KanbanContext;
+use kanban_core::AppConfig;
 use kanban_domain::{CreateCardOptions, KanbanOperations};
 use tempfile::TempDir;
 
-pub async fn test_card_sprint_logs_roundtrip(factory: &StoreFactory) {
+pub async fn test_card_sprint_logs_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -32,9 +33,7 @@ pub async fn test_card_sprint_logs_roundtrip(factory: &StoreFactory) {
     ctx.carry_over_sprint_cards(sprint1.id, sprint2.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.sprint_id, Some(sprint2.id));
@@ -52,10 +51,10 @@ pub async fn test_card_sprint_logs_roundtrip(factory: &StoreFactory) {
     assert_eq!(log2.sprint_id, sprint2.id);
 }
 
-pub async fn test_sprint_log_with_name_roundtrip(factory: &StoreFactory) {
+pub async fn test_sprint_log_with_name_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -84,9 +83,7 @@ pub async fn test_sprint_log_with_name_roundtrip(factory: &StoreFactory) {
     ctx.assign_card_to_sprint(card.id, sprint.id).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert!(!c.sprint_logs.is_empty());

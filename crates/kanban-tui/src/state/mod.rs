@@ -1,11 +1,15 @@
 pub mod snapshot;
 
-use kanban_domain::Snapshot;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub use snapshot::TuiSnapshot;
-const SAVE_QUEUE_CAPACITY: usize = 100;
+/// Capacity of the bounded flush-signal channel between the UI and the save worker.
+///
+/// A capacity of 1 would cause data loss on slow disks when flush signals arrive
+/// faster than the worker drains them. 100 slots allow bursts of rapid mutations
+/// (e.g. undo/redo sprees) to queue without blocking the UI thread.
+const FLUSH_QUEUE_CAPACITY: usize = 100;
 
 /// Coordinates persistence with immediate auto-saving
 ///
@@ -27,7 +31,7 @@ const SAVE_QUEUE_CAPACITY: usize = 100;
 /// ctx.execute_commands_batch(commands)?;
 /// ```
 pub struct SaveCoordinator {
-    save_tx: Option<mpsc::Sender<Snapshot>>,
+    save_tx: Option<mpsc::Sender<()>>,
     save_completion_tx: Option<mpsc::UnboundedSender<()>>,
     pending_saves: usize,
     file_watcher: Option<Arc<kanban_persistence::FileWatcher>>,
@@ -38,7 +42,7 @@ impl SaveCoordinator {
     ///
     /// Returns a tuple of:
     /// - SaveCoordinator instance
-    /// - Optional receiver for async save processing (snapshots to save)
+    /// - Optional receiver for async save processing (flush signals)
     /// - Optional receiver for save completion notifications
     ///
     #[allow(clippy::type_complexity)]
@@ -46,11 +50,11 @@ impl SaveCoordinator {
         has_persistence: bool,
     ) -> (
         Self,
-        Option<mpsc::Receiver<Snapshot>>,
+        Option<mpsc::Receiver<()>>,
         Option<mpsc::UnboundedReceiver<()>>,
     ) {
         let (save_tx, save_rx) = if has_persistence {
-            let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
+            let (tx, rx) = mpsc::channel(FLUSH_QUEUE_CAPACITY);
             (Some(tx), Some(rx))
         } else {
             (None, None)
@@ -79,61 +83,41 @@ impl SaveCoordinator {
         self.save_tx.is_some()
     }
 
-    /// Queue a snapshot for async saving
-    /// Used by App::execute_command to ensure snapshots are queued
-    /// Increments pending_saves to track unsaved changes
+    /// Queue a flush signal for async saving.
+    /// Increments pending_saves to track unsaved changes.
     ///
-    /// Pauses file watcher before queueing to prevent detecting our own writes as external changes.
-    /// The save worker will resume the watcher after the save completes.
+    /// The suppression window on the file watcher is opened by the save worker
+    /// immediately before it calls `backend.flush()`, not here. Opening it at
+    /// queue-time would allow the 200 ms window to expire before the actual
+    /// atomic rename occurs when the worker is delayed.
     ///
-    /// Uses try_send to handle bounded channel capacity (100 snapshots).
-    /// If channel is full, logs warning and skips save to prevent blocking UI.
-    pub fn queue_snapshot(&mut self, snapshot: Snapshot) {
-        // Pause file watching before queuing save to prevent detecting our own writes
-        if let Some(ref watcher) = self.file_watcher {
-            watcher.pause();
-            tracing::debug!("File watcher paused before queuing snapshot");
-        }
-
+    /// Uses try_send to handle bounded channel capacity (100 slots).
+    /// If channel is full, logs warning and skips to prevent blocking UI.
+    pub fn queue_flush(&mut self) {
         if let Some(ref tx) = self.save_tx {
             tracing::debug!(
-                "Queueing snapshot for async save (pending: {} -> {})",
+                "Queueing flush signal (pending: {} -> {})",
                 self.pending_saves,
                 self.pending_saves + 1
             );
-            match tx.try_send(snapshot) {
+            match tx.try_send(()) {
                 Ok(_) => {
                     self.pending_saves += 1;
-                    tracing::debug!("Snapshot queued successfully");
+                    tracing::debug!("Flush signal queued successfully");
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                     tracing::warn!(
-                        "Save queue is full ({} pending), skipping this save. \
+                        "Save queue is full ({} pending), skipping this flush signal. \
                         This may indicate the disk is slow or the save worker is overloaded.",
                         self.pending_saves
                     );
-                    // Resume watcher if we couldn't queue the snapshot
-                    if let Some(ref watcher) = self.file_watcher {
-                        watcher.resume();
-                        tracing::debug!("File watcher resumed (save queue full)");
-                    }
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    tracing::error!("Failed to queue save: channel closed");
-                    // Resume watcher if channel is closed
-                    if let Some(ref watcher) = self.file_watcher {
-                        watcher.resume();
-                        tracing::debug!("File watcher resumed (channel closed)");
-                    }
+                    tracing::error!("Failed to queue flush signal: channel closed");
                 }
             }
         } else {
             tracing::debug!("No save channel available - skipping save");
-            // Resume watcher if no save channel
-            if let Some(ref watcher) = self.file_watcher {
-                watcher.resume();
-                tracing::debug!("File watcher resumed (no save channel)");
-            }
         }
     }
 
@@ -177,13 +161,11 @@ impl SaveCoordinator {
     /// creates new channels. Returns receivers so the caller can spawn a new save worker.
     /// The store itself lives on KanbanContext.
     #[allow(clippy::type_complexity)]
-    pub fn reset_save_channels(
-        &mut self,
-    ) -> (mpsc::Receiver<Snapshot>, mpsc::UnboundedReceiver<()>) {
+    pub fn reset_save_channels(&mut self) -> (mpsc::Receiver<()>, mpsc::UnboundedReceiver<()>) {
         self.file_watcher = None;
         self.pending_saves = 0;
 
-        let (tx, rx) = mpsc::channel(SAVE_QUEUE_CAPACITY);
+        let (tx, rx) = mpsc::channel(FLUSH_QUEUE_CAPACITY);
         self.save_tx = Some(tx);
 
         let (completion_tx, completion_rx) = mpsc::unbounded_channel();
@@ -196,6 +178,24 @@ impl SaveCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `queue_flush()` must NOT open the file-watcher suppression window.
+    /// The window must be opened by the save worker immediately before
+    /// `backend.flush()` to avoid expiring before the atomic rename occurs.
+    #[test]
+    fn test_queue_flush_does_not_open_suppress_window() {
+        let (mut coordinator, _rx, _crx) = SaveCoordinator::new(true);
+        let watcher = Arc::new(kanban_persistence::FileWatcher::new());
+        coordinator.set_file_watcher(Arc::clone(&watcher));
+
+        coordinator.queue_flush();
+
+        assert_eq!(
+            watcher.suppress_remaining(),
+            0,
+            "queue_flush must not open the suppress window"
+        );
+    }
 
     #[test]
     fn test_save_coordinator_creation_no_persistence() {

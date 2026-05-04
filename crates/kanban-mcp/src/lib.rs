@@ -133,7 +133,20 @@ async fn resolve_card_id(ctx: &Arc<Mutex<McpContext>>, s: &str) -> Result<Uuid, 
     }
 }
 
-/// Lock, mutate, save.
+/// Lock the context, reload from disk, execute a mutating operation, then save.
+///
+/// # Reload semantics and undo limitations
+///
+/// Every invocation begins with `guard.reload()`, which fully discards the
+/// in-memory cache and resets undo history to the current on-disk state.
+/// Consequently, within-session undo history from earlier API calls is always
+/// wiped before each mutation: `tool_undo` can only undo the operation
+/// recorded during the **current** tool call, not operations from prior calls.
+///
+/// **Future work**: a `reload_if_changed()` method that compares file metadata
+/// (mtime / instance_id) and skips the full reload when no external write has
+/// occurred would allow undo history to persist across calls in the same
+/// session. Track as `KanbanBackend::reload_if_changed()`.
 macro_rules! mutating_op {
     ($ctx:expr, $method:ident $(, $arg:expr)*) => {{
         async {

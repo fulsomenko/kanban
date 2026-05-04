@@ -223,7 +223,7 @@ impl App {
         self.set_success("Migrating storage...".to_string());
     }
 
-    pub fn handle_migration_complete(
+    pub async fn handle_migration_complete(
         &mut self,
         old_config: kanban_core::AppConfig,
         result: Result<(kanban_domain::Snapshot, bool), String>,
@@ -242,16 +242,13 @@ impl App {
 
         let new_storage_location =
             kanban_service::config::resolve_storage_location(&self.app_config);
-        let new_backend = self.app_config.effective_storage_backend().to_string();
 
-        let new_store: Option<
-            std::sync::Arc<dyn kanban_persistence::PersistenceStore + Send + Sync>,
-        > = match self
+        let new_backend = match self
             .store_manager
-            .make_store(&new_backend, &new_storage_location)
+            .make_backend(&new_storage_location, &self.app_config)
+            .await
         {
-            Ok(s) => Some(s),
-            Err(_) if matches!(new_backend.as_str(), "sqlite" | "sqlite3" | "db") => None,
+            Ok(b) => b,
             Err(e) => {
                 self.app_config = old_config;
                 self.set_error(format!("Store swap failed: {}", e));
@@ -259,7 +256,7 @@ impl App {
             }
         };
 
-        self.ctx.replace_store(new_store);
+        self.ctx.replace_backend(new_backend);
         let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
         use crate::state::snapshot::TuiSnapshot;
         if let Err(e) = snapshot.apply_to_app(self) {
@@ -308,7 +305,7 @@ impl App {
                 MigrationState::Idle => return,
             };
         if let Ok(result) = rx.await {
-            self.handle_migration_complete(old_config, result);
+            self.handle_migration_complete(old_config, result).await;
         }
     }
 

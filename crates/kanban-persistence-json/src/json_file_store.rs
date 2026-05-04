@@ -1,6 +1,6 @@
 use crate::atomic_writer::AtomicWriter;
 use crate::conflict::FileMetadata;
-use crate::migration::Migrator;
+use crate::migration::{transform_v2_to_v3_value, Migrator};
 use kanban_persistence::{
     FormatVersion, PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore,
     StoreSnapshot,
@@ -117,6 +117,51 @@ impl JsonEnvelope {
     }
 }
 
+// ─── Sync migration helpers ───────────────────────────────────────────────────
+
+fn migrate_to_v3_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
+    if from == FormatVersion::V1 {
+        migrate_v1_to_v2_sync(path)?;
+    }
+    migrate_v2_to_v3_sync(path)
+}
+
+fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
+    let content = std::fs::read_to_string(path)?;
+    let v1_data: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let backup_path = path.with_extension("v1.backup");
+    std::fs::copy(path, &backup_path)?;
+    let v2_envelope = JsonEnvelope::new(v1_data);
+    let json_str = v2_envelope
+        .to_json_string()
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let json_bytes = json_str.into_bytes();
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, &json_bytes)?;
+    std::fs::rename(&tmp_path, path)?;
+    let _ = std::fs::remove_file(&backup_path);
+    tracing::info!("Migrated {} from V1 to V2 (sync)", path.display());
+    Ok(json_bytes)
+}
+
+fn migrate_v2_to_v3_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
+    let content = std::fs::read_to_string(path)?;
+    let mut envelope: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    transform_v2_to_v3_value(&mut envelope)?;
+    let json_str = serde_json::to_string_pretty(&envelope)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let json_bytes = json_str.into_bytes();
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, &json_bytes)?;
+    std::fs::rename(&tmp_path, path)?;
+    tracing::info!("Migrated {} from V2 to V3 (sync)", path.display());
+    Ok(json_bytes)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 impl JsonFileStore {
     /// Create a new JSON file store
     pub fn new(path: impl AsRef<Path>) -> Self {
@@ -154,6 +199,43 @@ impl JsonFileStore {
         self.command_log_state.lock().map_err(|e| {
             PersistenceError::Serialization(format!("Command log state mutex poisoned: {e}"))
         })
+    }
+
+    /// Parse file bytes into a [`JsonEnvelope`], validating version fields.
+    /// Pure: no `&self`, no side effects.
+    fn parse_envelope(bytes: &[u8]) -> PersistenceResult<JsonEnvelope> {
+        let envelope: JsonEnvelope = serde_json::from_slice(bytes)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+
+        if envelope.version < 2 || envelope.version > 5 {
+            return Err(PersistenceError::Serialization(format!(
+                "Unsupported format version: {}",
+                envelope.version
+            )));
+        }
+
+        if envelope.command_schema_version > kanban_domain::COMMAND_SCHEMA_VERSION {
+            return Err(PersistenceError::Serialization(format!(
+                "Unsupported command schema version {}. This build supports up to {}. Please upgrade.",
+                envelope.command_schema_version,
+                kanban_domain::COMMAND_SCHEMA_VERSION
+            )));
+        }
+
+        Ok(envelope)
+    }
+
+    /// Cache the command-log state from a parsed envelope into `self.command_log_state`.
+    /// Side-effectful counterpart to the pure [`parse_envelope`][Self::parse_envelope].
+    fn cache_command_log(&self, envelope: &JsonEnvelope) -> PersistenceResult<()> {
+        let batches = envelope
+            .parse_batches()
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let mut cls = self.lock_command_log()?;
+        cls.batches = batches;
+        cls.undo_cursor = envelope.undo_cursor;
+        cls.baseline_data = envelope.baseline_data.clone();
+        Ok(())
     }
 }
 
@@ -223,10 +305,8 @@ impl PersistenceStore for JsonFileStore {
     }
 
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
-        // Detect current file version
         let current_version = Migrator::detect_version(&self.path).await?;
 
-        // Migrate if necessary (v4 is backward-compatible via serde defaults)
         if current_version < FormatVersion::V3 {
             tracing::info!(
                 "Detected {:?} format at {}. Migrating to V3...",
@@ -237,50 +317,18 @@ impl PersistenceStore for JsonFileStore {
             tracing::info!("Migration to V3 completed successfully");
         }
 
-        // Read file
         let file_bytes = tokio::fs::read(&self.path).await?;
+        let envelope = Self::parse_envelope(&file_bytes)?;
+        self.cache_command_log(&envelope)?;
 
-        // Parse JSON envelope
-        let envelope: JsonEnvelope = serde_json::from_slice(&file_bytes)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        // Validate version (accept V2, V3, V4, V5)
-        if envelope.version < 2 || envelope.version > 5 {
-            return Err(PersistenceError::Serialization(format!(
-                "Unsupported format version: {}",
-                envelope.version
-            )));
-        }
-
-        if envelope.command_schema_version > kanban_domain::COMMAND_SCHEMA_VERSION {
-            return Err(PersistenceError::Serialization(format!(
-                "Unsupported command schema version {}. This build supports up to {}. Please upgrade.",
-                envelope.command_schema_version, kanban_domain::COMMAND_SCHEMA_VERSION
-            )));
-        }
-
-        // Parse command log: V5 = batched Vec<Vec<Command>>, V4 = flat Vec<Command>
-        let batches = envelope
-            .parse_batches()
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        // Populate command log state from envelope
-        {
-            let mut cls = self.lock_command_log()?;
-            cls.batches = batches;
-            cls.undo_cursor = envelope.undo_cursor;
-            cls.baseline_data = envelope.baseline_data;
-        }
-
-        // Reconstruct snapshot
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let snapshot = StoreSnapshot {
             data,
             metadata: envelope.metadata.clone(),
         };
+        let metadata = envelope.metadata;
 
-        // Track file metadata after successful load for conflict detection
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
             *guard = Some(file_metadata);
@@ -292,7 +340,54 @@ impl PersistenceStore for JsonFileStore {
             self.path.display()
         );
 
-        Ok((snapshot, envelope.metadata))
+        Ok((snapshot, metadata))
+    }
+
+    fn load_sync(&self) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
+        if !self.path.exists() {
+            return Ok(None);
+        }
+
+        let file_bytes = std::fs::read(&self.path)?;
+        let value: serde_json::Value = serde_json::from_slice(&file_bytes)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+
+        let current_version = Migrator::detect_version_from_value(&value);
+
+        let final_bytes = if current_version < FormatVersion::V3 {
+            tracing::info!(
+                "Detected {:?} format at {}. Migrating to V3 (sync)...",
+                current_version,
+                self.path.display()
+            );
+            migrate_to_v3_sync(current_version, &self.path)?
+        } else {
+            file_bytes
+        };
+
+        let envelope = Self::parse_envelope(&final_bytes)?;
+        self.cache_command_log(&envelope)?;
+
+        let data = serde_json::to_vec(&envelope.data)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let snapshot = StoreSnapshot {
+            data,
+            metadata: envelope.metadata.clone(),
+        };
+        let metadata = envelope.metadata;
+
+        if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
+            let mut guard = self.lock_metadata()?;
+            *guard = Some(file_metadata);
+        }
+
+        tracing::info!(
+            "Loaded {} bytes from {} (sync)",
+            final_bytes.len(),
+            self.path.display()
+        );
+
+        Ok(Some((snapshot, metadata)))
     }
 
     async fn exists(&self) -> bool {
@@ -658,6 +753,38 @@ mod tests {
         assert_eq!(
             loaded_data["boards"][0]["name"], "B1",
             "snapshot data should roundtrip"
+        );
+    }
+
+    #[test]
+    fn test_migrate_v1_to_v2_sync_produces_valid_v2_and_leaves_no_artifacts() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let v1_content = json!({ "boards": [] });
+        std::fs::write(&path, v1_content.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let result = store.load_sync().unwrap();
+        assert!(result.is_some(), "load_sync must return a snapshot");
+
+        let on_disk: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let version = on_disk.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
+        assert!(
+            version >= 2,
+            "file on disk must be V2+ envelope after migration"
+        );
+
+        let backup_path = path.with_extension("v1.backup");
+        assert!(
+            !backup_path.exists(),
+            ".v1.backup must not remain after successful migration"
+        );
+
+        let tmp_path = path.with_extension("tmp");
+        assert!(
+            !tmp_path.exists(),
+            ".tmp must not remain after successful migration"
         );
     }
 }

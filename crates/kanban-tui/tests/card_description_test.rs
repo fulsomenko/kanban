@@ -4,7 +4,7 @@ use kanban_tui::App;
 
 #[test]
 fn test_card_description_appears_in_detail_view() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     // Create board and column
     let board = app
@@ -53,7 +53,7 @@ fn test_card_description_appears_in_detail_view() {
 
 #[test]
 fn test_card_description_preserved_after_edit() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     // Create board and column
     let board = app
@@ -155,7 +155,7 @@ fn test_markdown_rendering_of_description() {
 
 #[test]
 fn test_card_with_empty_string_description_displays_placeholder() {
-    let (mut app, _rx) = App::new(None).unwrap();
+    let mut app = App::test_default();
 
     // Create board and column
     let board = app

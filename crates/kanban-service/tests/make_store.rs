@@ -16,7 +16,7 @@ fn test_make_store_json_backend() {
     assert!(store.path().to_str().unwrap().ends_with(".json"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_make_store_json_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test_board");

@@ -23,6 +23,9 @@ pub enum PersistenceError {
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
+
+    #[error("unsupported operation: {0}")]
+    Unsupported(String),
 }
 
 pub type PersistenceResult<T> = Result<T, PersistenceError>;
@@ -47,6 +50,7 @@ impl From<PersistenceError> for kanban_domain::KanbanError {
             PersistenceError::ConflictDetected { path, source } => {
                 kanban_domain::KanbanError::ConflictDetected { path, source }
             }
+            PersistenceError::Unsupported(s) => kanban_domain::KanbanError::Internal(s),
         }
     }
 }

@@ -1,0 +1,64 @@
+use kanban_domain::KanbanOperations;
+use kanban_service::{AppConfig, KanbanContext};
+use kanban_tui::tui_context::TuiContext;
+use tempfile::TempDir;
+
+async fn make_tui_ctx(path: &std::path::Path) -> TuiContext {
+    let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+    let backend = sm
+        .make_backend(path.to_str().unwrap(), &AppConfig::default())
+        .await
+        .unwrap();
+    let ctx = KanbanContext::open(backend, AppConfig::default())
+        .await
+        .unwrap();
+    let (tui_ctx, _, _) = TuiContext::new(ctx).unwrap();
+    tui_ctx
+}
+
+/// After `reload()`, undo history is cleared and the context is immediately
+/// ready for mutations — no call to `initialize_undo_state` required.
+#[tokio::test]
+async fn test_tui_reload_clears_history_and_re_arms() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("reload.json");
+    let mut tui_ctx = make_tui_ctx(&path).await;
+
+    tui_ctx.create_board("Before".to_string(), None).unwrap();
+    assert!(tui_ctx.can_undo(), "must be undoable before reload");
+
+    tui_ctx.save().await.unwrap();
+    tui_ctx.reload().await.unwrap();
+
+    assert!(
+        !tui_ctx.can_undo(),
+        "undo history must be cleared after reload"
+    );
+
+    // Context must be immediately usable — no initialize_undo_state needed.
+    tui_ctx
+        .create_board("After".to_string(), None)
+        .expect("context must accept mutations immediately after reload");
+    assert!(
+        tui_ctx.can_undo(),
+        "must be undoable after a post-reload mutation"
+    );
+}
+
+/// `reload()` must expose the data that was present on disk at the time of
+/// the reload.
+#[tokio::test]
+async fn test_tui_reload_then_save_preserves_data() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("preserve.json");
+    let mut tui_ctx = make_tui_ctx(&path).await;
+
+    tui_ctx.create_board("Persisted".to_string(), None).unwrap();
+    tui_ctx.save().await.unwrap();
+
+    tui_ctx.reload().await.unwrap();
+
+    let boards = tui_ctx.list_boards().unwrap();
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].name, "Persisted");
+}

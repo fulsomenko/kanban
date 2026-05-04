@@ -101,6 +101,39 @@ impl StoreManager {
         false
     }
 
+    /// Creates a [`KanbanBackend`] for `locator`, selecting SQLite or JSON
+    /// automatically from the file content / extension.
+    pub async fn make_backend(
+        &self,
+        locator: &str,
+        config: &AppConfig,
+    ) -> Result<std::sync::Arc<dyn crate::backend::KanbanBackend>, KanbanError> {
+        if self.is_sqlite(locator) {
+            #[cfg(feature = "sqlite")]
+            {
+                let store = kanban_persistence_sqlite::SqliteStore::open(locator)
+                    .await
+                    .map_err(|e| KanbanError::Database(e.to_string()))?;
+                return Ok(std::sync::Arc::new(store));
+            }
+            #[cfg(not(feature = "sqlite"))]
+            return Err(KanbanError::Internal(format!(
+                "path '{}' requires the sqlite feature which is not compiled in",
+                locator
+            )));
+        }
+        let store = self.make_store(config.effective_storage_backend(), locator)?;
+        #[cfg(feature = "json")]
+        return Ok(std::sync::Arc::new(
+            crate::json_backend::JsonDataStore::new(store),
+        ));
+        #[cfg(not(feature = "json"))]
+        Err(KanbanError::Internal(format!(
+            "path '{}' requires the json feature which is not compiled in",
+            locator
+        )))
+    }
+
     /// Creates a `PersistenceStore` for the named `backend` at `locator`.
     /// Returns an error if `backend` is not registered in this manager.
     pub fn make_store(
@@ -445,6 +478,109 @@ fn fix_card_fks(
             if let Some(fb) = fallback_column {
                 card["column_id"] = serde_json::Value::String(fb.to_string());
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kanban_persistence::StoreRegistry;
+    use tempfile::tempdir;
+
+    fn make_sm() -> StoreManager {
+        let mut registry = StoreRegistry::new();
+        #[cfg(feature = "sqlite")]
+        registry.register(Box::new(kanban_persistence_sqlite::SqliteStoreFactory));
+        #[cfg(feature = "json")]
+        registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+        StoreManager::new(registry)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_make_backend_json_path_returns_json_data_store() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        let sm = make_sm();
+        let cfg = AppConfig::default();
+        let backend = sm.make_backend(path.to_str().unwrap(), &cfg).await.unwrap();
+        assert!(!backend.needs_flush(), "new JSON backend starts clean");
+        assert!(
+            backend.needs_save_worker(),
+            "JSON backend requires a background flush worker"
+        );
+    }
+
+    #[cfg(feature = "sqlite")]
+    mod sqlite_backend_tests {
+        use super::*;
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_make_backend_sqlite_path_returns_sqlite_store() {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("test.sqlite");
+            let sm = make_sm();
+            let cfg = AppConfig::default();
+            let backend = sm.make_backend(path.to_str().unwrap(), &cfg).await.unwrap();
+            assert!(!backend.needs_flush(), "new SQLite backend starts clean");
+            assert!(
+                !backend.needs_save_worker(),
+                "SQLite backend is write-through and does not need a save worker"
+            );
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_make_backend_detects_sqlite_by_magic_bytes() {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("noext");
+
+            // Create a real SQLite file with no extension so the registry can
+            // detect it via magic bytes.
+            kanban_persistence_sqlite::SqliteStore::open(path.to_str().unwrap())
+                .await
+                .unwrap();
+
+            let sm = make_sm();
+            let cfg = AppConfig::default();
+            let backend = sm.make_backend(path.to_str().unwrap(), &cfg).await.unwrap();
+            assert!(
+                !backend.needs_save_worker(),
+                "magic-byte SQLite detection should yield a write-through backend"
+            );
+            let boards = backend.list_boards().unwrap();
+            assert!(boards.is_empty());
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_make_backend_detects_json_by_content() {
+            use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("noext");
+
+            // Write a valid JSON envelope file with no extension so the registry
+            // detects it as JSON via content sniffing (first byte is '{').
+            {
+                let jfs = kanban_persistence_json::JsonFileStore::new(&path);
+                let snap = kanban_domain::Snapshot::new();
+                let data = kanban_persistence::snapshot_to_json_bytes(&snap).unwrap();
+                let meta = PersistenceMetadata::new(uuid::Uuid::new_v4());
+                jfs.save(StoreSnapshot {
+                    data,
+                    metadata: meta,
+                })
+                .await
+                .unwrap();
+            }
+
+            let sm = make_sm();
+            let cfg = AppConfig::default();
+            let backend = sm.make_backend(path.to_str().unwrap(), &cfg).await.unwrap();
+            assert!(
+                backend.needs_save_worker(),
+                "content-sniffed JSON backend requires a save worker"
+            );
+            let boards = backend.list_boards().unwrap();
+            assert!(boards.is_empty());
         }
     }
 }

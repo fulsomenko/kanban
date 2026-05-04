@@ -6,7 +6,7 @@ use std::fs;
 use std::time::Duration;
 use tempfile::tempdir;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_conflict_detection_on_concurrent_modification() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -74,7 +74,7 @@ async fn test_conflict_detection_on_concurrent_modification() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_no_conflict_when_file_unchanged() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -109,7 +109,7 @@ async fn test_no_conflict_when_file_unchanged() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_conflict_detection_tracks_file_metadata() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -168,7 +168,7 @@ async fn test_conflict_detection_tracks_file_metadata() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multiple_instances_with_different_ids() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -212,7 +212,7 @@ async fn test_multiple_instances_with_different_ids() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_conflict_resolution_with_force_overwrite() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("kanban.json");
@@ -262,7 +262,7 @@ async fn test_conflict_resolution_with_force_overwrite() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multi_instance_concurrent_editing_3_instances() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("shared_board.json");

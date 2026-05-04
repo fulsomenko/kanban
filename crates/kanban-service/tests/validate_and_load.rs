@@ -36,7 +36,7 @@ fn create_test_json(dir: &std::path::Path, name: &str, boards: &[&str]) -> Strin
     path.to_str().unwrap().to_string()
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_valid_json_returns_snapshot() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_json(dir.path(), "board.json", &["Board1"]);
@@ -48,7 +48,7 @@ async fn test_validate_and_load_valid_json_returns_snapshot() {
     assert_eq!(snapshot.boards.len(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_nonexistent_file_returns_error() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("nonexistent.json");
@@ -64,7 +64,7 @@ async fn test_validate_and_load_nonexistent_file_returns_error() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_invalid_json_content_returns_error() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("bad.json");
@@ -82,7 +82,7 @@ async fn test_validate_and_load_invalid_json_content_returns_error() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_empty_file_returns_error() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("empty.json");
@@ -95,7 +95,7 @@ async fn test_validate_and_load_empty_file_returns_error() {
     assert!(!err.to_string().is_empty(), "expected error, got: {}", err);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_validate_and_load_preserves_board_data() {
     let dir = tempfile::tempdir().unwrap();
     let path = create_test_json(dir.path(), "board.json", &["MyBoard"]);

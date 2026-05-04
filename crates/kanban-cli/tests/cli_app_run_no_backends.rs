@@ -15,7 +15,7 @@ async fn test_cli_app_default_run_with_board_subcommand_returns_no_backends_erro
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_cli_app_with_backends_does_not_hit_no_backends_guard() {
     let dir = tempfile::tempdir().unwrap();
     let json_path = dir.path().join("kanban.json").to_string_lossy().to_string();

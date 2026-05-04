@@ -1,23 +1,21 @@
 use super::super::helpers::fully_populated_snapshot;
-use super::super::StoreFactory;
+use super::super::BackendFactory;
 use crate::KanbanContext;
-use kanban_core::{Edge, EdgeDirection};
+use kanban_core::{AppConfig, Edge, EdgeDirection};
 use kanban_domain::board::{SortField, SortOrder};
 use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::sprint::SprintStatus;
 use kanban_domain::task_list_view::TaskListView;
-use kanban_domain::Snapshot;
 use kanban_domain::{
     BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
     KanbanOperations, KanbanResult,
 };
-use kanban_persistence::{PersistenceMetadata, StoreSnapshot};
 use tempfile::TempDir;
 
-pub async fn test_multiple_boards_roundtrip(factory: &StoreFactory) {
+pub async fn test_multiple_boards_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -47,9 +45,7 @@ pub async fn test_multiple_boards_roundtrip(factory: &StoreFactory) {
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let boards = ctx.list_boards().unwrap();
     assert_eq!(boards.len(), 2);
@@ -63,10 +59,10 @@ pub async fn test_multiple_boards_roundtrip(factory: &StoreFactory) {
     assert_eq!(cols2[0].board_id, board2.id);
 }
 
-pub async fn test_incremental_save_preserves_prior_data(factory: &StoreFactory) {
+pub async fn test_incremental_save_preserves_prior_data(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -84,19 +80,17 @@ pub async fn test_incremental_save_preserves_prior_data(factory: &StoreFactory) 
         .unwrap();
     ctx.save().await.unwrap();
 
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let boards = ctx.list_boards().unwrap();
     assert_eq!(boards.len(), 1);
     assert!(ctx.get_card(card.id).unwrap().is_some());
 }
 
-pub async fn test_delete_archived_card_roundtrip(factory: &StoreFactory) {
+pub async fn test_delete_archived_card_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -119,16 +113,14 @@ pub async fn test_delete_archived_card_roundtrip(factory: &StoreFactory) {
     ctx.delete_card(card.id).unwrap();
     ctx.save().await.unwrap();
 
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
     assert!(ctx.list_archived_cards().unwrap().is_empty());
 }
 
-pub async fn test_delete_column_roundtrip(factory: &StoreFactory) {
+pub async fn test_delete_column_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -139,16 +131,14 @@ pub async fn test_delete_column_roundtrip(factory: &StoreFactory) {
     ctx.delete_column(col.id).unwrap();
     ctx.save().await.unwrap();
 
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
     assert!(ctx.get_column(col.id).unwrap().is_none());
 }
 
-pub async fn test_delete_sprint_roundtrip(factory: &StoreFactory) {
+pub async fn test_delete_sprint_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -159,16 +149,14 @@ pub async fn test_delete_sprint_roundtrip(factory: &StoreFactory) {
     ctx.delete_sprint(sprint.id).unwrap();
     ctx.save().await.unwrap();
 
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
     assert!(ctx.get_sprint(sprint.id).unwrap().is_none());
 }
 
-pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) -> KanbanResult<()> {
+pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> KanbanResult<()> {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -324,9 +312,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) -> Ka
     }
 
     ctx.save().await.unwrap();
-    let loaded = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let loaded = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let b = loaded.get_board(board.id).unwrap().unwrap();
     assert_eq!(b.name, "Full Board");
@@ -385,31 +371,26 @@ pub async fn test_full_populated_context_roundtrip(factory: &StoreFactory) -> Ka
     Ok(())
 }
 
-pub async fn test_full_roundtrip_preserves_all_fields(factory: &StoreFactory) {
+pub async fn test_full_roundtrip_preserves_all_fields(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let store = factory(&path);
-
     let original = fully_populated_snapshot();
-    let data = serde_json::to_vec(&original).unwrap();
-    store
-        .save(StoreSnapshot {
-            data,
-            metadata: PersistenceMetadata::new(store.instance_id()),
-        })
-        .await
-        .unwrap();
 
-    let (loaded_snap, _) = store.load().await.unwrap();
-    let loaded: Snapshot = serde_json::from_slice(&loaded_snap.data).unwrap();
+    {
+        let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
+        ctx.apply_snapshot(original.clone()).unwrap();
+        ctx.save().await.unwrap();
+    }
 
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
+    let loaded = ctx.snapshot().unwrap();
     assert_eq!(original, loaded);
 }
 
-pub async fn test_load_save_reload_roundtrip(factory: &StoreFactory) {
+pub async fn test_load_save_reload_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -417,18 +398,16 @@ pub async fn test_load_save_reload_roundtrip(factory: &StoreFactory) {
         .unwrap();
     ctx.save().await.unwrap();
 
-    let reloaded = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let reloaded = KanbanContext::open_deferred(factory(&path), AppConfig::default());
     let boards = reloaded.list_boards().unwrap();
     assert_eq!(boards.len(), 1);
     assert_eq!(boards[0].name, "My Board");
 }
 
-pub async fn test_save_overwrites_correctly(factory: &StoreFactory) {
+pub async fn test_save_overwrites_correctly(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -438,26 +417,24 @@ pub async fn test_save_overwrites_correctly(factory: &StoreFactory) {
     ctx.create_board("Board Two".into(), None).unwrap();
     ctx.save().await.unwrap();
 
-    let reloaded = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let reloaded = KanbanContext::open_deferred(factory(&path), AppConfig::default());
     let boards = reloaded.list_boards().unwrap();
     assert_eq!(boards.len(), 2);
     assert!(boards.iter().any(|b| b.name == "Board One"));
     assert!(boards.iter().any(|b| b.name == "Board Two"));
 }
 
-pub async fn test_reload_picks_up_external_changes(factory: &StoreFactory) {
+pub async fn test_reload_picks_up_external_changes(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
 
-    let mut ctx_a = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx_a = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
     ctx_a.create_board("Board A".into(), None).unwrap();
     ctx_a.save().await.unwrap();
 
-    let mut ctx_b = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx_b = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
     ctx_b.create_board("Board B".into(), None).unwrap();
@@ -469,19 +446,19 @@ pub async fn test_reload_picks_up_external_changes(factory: &StoreFactory) {
     assert!(boards.iter().any(|b| b.name == "Board B"));
 }
 
-pub async fn test_save_with_stale_metadata_returns_conflict(factory: &StoreFactory) {
+pub async fn test_save_with_stale_metadata_returns_conflict(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
 
     // Store A saves a board
-    let mut ctx_a = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx_a = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
     ctx_a.create_board("Board A".into(), None).unwrap();
     ctx_a.save().await.unwrap();
 
     // Store B loads, modifies, and saves — updates metadata
-    let mut ctx_b = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx_b = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
     ctx_b.create_board("Board B".into(), None).unwrap();

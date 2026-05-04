@@ -20,6 +20,20 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
     let mut envelope: Value = serde_json::from_str(&content)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
+    transform_v2_to_v3_value(&mut envelope)?;
+
+    let json_str = serde_json::to_string_pretty(&envelope)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let tmp_path = path.with_extension("tmp");
+    tokio::fs::write(&tmp_path, json_str.as_bytes()).await?;
+    tokio::fs::rename(&tmp_path, path).await?;
+    tracing::info!("Migrated {} from V2 to V3 format", path.display());
+    Ok(())
+}
+
+/// Pure synchronous V2→V3 transformation on an already-parsed envelope value.
+/// Shared by both the async `migrate_v2_to_v3` and `JsonFileStore::load_sync`.
+pub fn transform_v2_to_v3_value(envelope: &mut Value) -> PersistenceResult<()> {
     let data = envelope
         .get_mut("data")
         .ok_or_else(|| PersistenceError::Serialization("missing 'data' field".into()))?;
@@ -214,15 +228,6 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
     // Bump version to 3
     envelope["version"] = Value::Number(3.into());
 
-    // Write atomically via temp file + rename
-    let json_str = serde_json::to_string_pretty(&envelope)
-        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-    let tmp_path = path.with_extension("tmp");
-    tokio::fs::write(&tmp_path, json_str.as_bytes()).await?;
-    tokio::fs::rename(&tmp_path, path).await?;
-
-    tracing::info!("Migrated {} from V2 to V3 format", path.display());
     Ok(())
 }
 

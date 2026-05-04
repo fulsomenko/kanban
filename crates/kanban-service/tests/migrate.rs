@@ -1,6 +1,6 @@
 use kanban_core::AppConfig;
 use kanban_persistence::StoreRegistry;
-use kanban_service::{KanbanContext, StoreManager};
+use kanban_service::StoreManager;
 
 fn manager() -> StoreManager {
     let mut registry = StoreRegistry::new();
@@ -33,7 +33,7 @@ fn create_test_json(dir: &std::path::Path, name: &str) -> String {
     )
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_json_to_json_round_trip() {
     let dir = tempfile::tempdir().unwrap();
     let from = create_test_json(dir.path(), "source.json");
@@ -62,7 +62,7 @@ async fn test_migrate_store_json_to_sqlite() {
     assert!(to.exists());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_fails_if_target_exists() {
     let dir = tempfile::tempdir().unwrap();
     let from = create_test_json(dir.path(), "source.json");
@@ -75,7 +75,7 @@ async fn test_migrate_store_fails_if_target_exists() {
     assert!(err.to_string().contains("already exists"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_fails_if_source_missing() {
     let dir = tempfile::tempdir().unwrap();
     let from = dir.path().join("nonexistent.json");
@@ -124,7 +124,7 @@ async fn test_migrate_store_repairs_dangling_sprint_id() {
         .await
         .unwrap();
 
-    let ctx = KanbanContext::open_sqlite(to.to_str().unwrap(), AppConfig::default())
+    let ctx = kanban_service::open_context(to.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let cards = ctx.cards().unwrap();
@@ -170,7 +170,7 @@ async fn test_migrate_store_repairs_orphaned_column_id() {
         .await
         .unwrap();
 
-    let ctx = KanbanContext::open_sqlite(to.to_str().unwrap(), AppConfig::default())
+    let ctx = kanban_service::open_context(to.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let cards = ctx.cards().unwrap();
@@ -194,7 +194,7 @@ async fn test_migrate_json_to_sqlite_preserves_command_log() {
     let source_str = source_path.to_str().unwrap();
 
     // Create a JSON context, execute two commands (board + column), and save
-    let mut ctx = KanbanContext::open_json(source_str, AppConfig::default())
+    let mut ctx = kanban_service::open_context(source_str, AppConfig::default())
         .await
         .unwrap();
     let board_id = uuid::Uuid::new_v4();
@@ -225,7 +225,7 @@ async fn test_migrate_json_to_sqlite_preserves_command_log() {
         .unwrap();
 
     // Open migrated SQLite and verify undo history is preserved
-    let mut ctx2 = KanbanContext::open_sqlite(target_str, AppConfig::default())
+    let mut ctx2 = kanban_service::open_context(target_str, AppConfig::default())
         .await
         .unwrap();
     assert_eq!(ctx2.undo_depth(), 2, "undo depth should survive migration");
@@ -255,7 +255,7 @@ async fn test_migrate_sqlite_to_json_preserves_command_log() {
     let source_str = source_path.to_str().unwrap();
 
     // Create a SQLite context, execute commands
-    let mut ctx = KanbanContext::open_sqlite(source_str, AppConfig::default())
+    let mut ctx = kanban_service::open_context(source_str, AppConfig::default())
         .await
         .unwrap();
     let board_id = uuid::Uuid::new_v4();
@@ -278,7 +278,7 @@ async fn test_migrate_sqlite_to_json_preserves_command_log() {
         .unwrap();
 
     // Open migrated JSON and verify undo history is preserved
-    let mut ctx2 = KanbanContext::open_json(target_str, AppConfig::default())
+    let mut ctx2 = kanban_service::open_context(target_str, AppConfig::default())
         .await
         .unwrap();
     assert!(ctx2.can_undo(), "undo history should survive migration");

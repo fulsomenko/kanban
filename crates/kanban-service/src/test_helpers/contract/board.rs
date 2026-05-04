@@ -1,15 +1,17 @@
-use super::super::StoreFactory;
+use super::super::BackendFactory;
 use crate::KanbanContext;
+use kanban_core::AppConfig;
 use kanban_domain::board::{SortField, SortOrder};
 use kanban_domain::task_list_view::TaskListView;
 use kanban_domain::{BoardUpdate, FieldUpdate, KanbanOperations};
 use tempfile::TempDir;
 
-pub async fn test_board_basic_fields_roundtrip(factory: &StoreFactory) {
+pub async fn test_board_basic_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let store = factory(&path);
-    let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx
         .create_board("Test Board".into(), Some("TB".into()))
@@ -18,9 +20,7 @@ pub async fn test_board_basic_fields_roundtrip(factory: &StoreFactory) {
     assert_eq!(board.card_prefix, Some("TB".into()));
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let board = ctx.get_board(board.id).unwrap().unwrap();
     assert_eq!(board.name, "Test Board");
@@ -32,11 +32,12 @@ pub async fn test_board_basic_fields_roundtrip(factory: &StoreFactory) {
     assert!(board.sprint_duration_days.is_none());
 }
 
-pub async fn test_board_update_all_optional_fields_roundtrip(factory: &StoreFactory) {
+pub async fn test_board_update_all_optional_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let store = factory(&path);
-    let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Done".into(), None).unwrap();
@@ -61,9 +62,7 @@ pub async fn test_board_update_all_optional_fields_roundtrip(factory: &StoreFact
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let b = ctx.get_board(board.id).unwrap().unwrap();
     assert_eq!(b.name, "Updated Board");
@@ -78,11 +77,12 @@ pub async fn test_board_update_all_optional_fields_roundtrip(factory: &StoreFact
     assert_eq!(b.completion_column_id, Some(col.id));
 }
 
-pub async fn test_board_sprint_names_roundtrip(factory: &StoreFactory) {
+pub async fn test_board_sprint_names_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let store = factory(&path);
-    let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
 
@@ -92,20 +92,19 @@ pub async fn test_board_sprint_names_roundtrip(factory: &StoreFactory) {
     ctx.data_store().upsert_board(b).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let b = ctx.get_board(board.id).unwrap().unwrap();
     assert_eq!(b.sprint_names, vec!["Alpha", "Beta", "Gamma"]);
     assert_eq!(b.sprint_name_used_count, 1);
 }
 
-pub async fn test_board_card_counter_roundtrip(factory: &StoreFactory) {
+pub async fn test_board_card_counter_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let store = factory(&path);
-    let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx
         .create_board("Board".into(), Some("PFX".into()))
@@ -118,9 +117,7 @@ pub async fn test_board_card_counter_roundtrip(factory: &StoreFactory) {
     ctx.data_store().upsert_board(b).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let b = ctx.get_board(board.id).unwrap().unwrap();
     assert_eq!(b.card_counter, 10);
@@ -128,11 +125,12 @@ pub async fn test_board_card_counter_roundtrip(factory: &StoreFactory) {
     assert_eq!(b.sprint_counters.get("SPRINT"), Some(&7));
 }
 
-pub async fn test_board_next_sprint_number_roundtrip(factory: &StoreFactory) {
+pub async fn test_board_next_sprint_number_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let store = factory(&path);
-    let mut ctx = KanbanContext::load_with_defaults(store).await.unwrap();
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
 
     let board = ctx.create_board("Board".into(), None).unwrap();
 
@@ -141,9 +139,7 @@ pub async fn test_board_next_sprint_number_roundtrip(factory: &StoreFactory) {
     ctx.data_store().upsert_board(b).unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let b = ctx.get_board(board.id).unwrap().unwrap();
     assert_eq!(b.next_sprint_number, 42);

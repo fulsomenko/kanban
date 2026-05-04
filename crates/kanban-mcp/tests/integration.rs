@@ -1,9 +1,7 @@
 use kanban_core::AppConfig;
 use kanban_domain::KanbanOperations;
 use kanban_mcp::context::McpContext;
-use kanban_persistence_json::JsonFileStore;
-use kanban_service::{KanbanContext, StoreManager};
-use std::sync::Arc;
+use kanban_service::StoreManager;
 use tempfile::TempDir;
 
 fn default_store_manager() -> StoreManager {
@@ -297,12 +295,9 @@ async fn test_create_board_persists() {
         .unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load(
-        Arc::new(JsonFileStore::new(&path_str)),
-        AppConfig::default(),
-    )
-    .await
-    .unwrap();
+    let fresh = kanban_service::open_context(&path_str, AppConfig::default())
+        .await
+        .unwrap();
     let boards = fresh.list_boards().unwrap();
     assert_eq!(boards.len(), 1);
     assert_eq!(boards[0].name, "Persistent Board");
@@ -327,12 +322,9 @@ async fn test_mutation_sequence_persists() {
         .unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load(
-        Arc::new(JsonFileStore::new(&path_str)),
-        AppConfig::default(),
-    )
-    .await
-    .unwrap();
+    let fresh = kanban_service::open_context(&path_str, AppConfig::default())
+        .await
+        .unwrap();
     assert_eq!(fresh.list_boards().unwrap().len(), 1);
     assert_eq!(fresh.list_columns(board.id).unwrap().len(), 1);
     assert_eq!(
@@ -360,12 +352,9 @@ async fn test_delete_persists() {
     mcp_ctx.delete_board(board.id).unwrap();
     mcp_ctx.save().await.unwrap();
 
-    let fresh = KanbanContext::load(
-        Arc::new(JsonFileStore::new(&path_str)),
-        AppConfig::default(),
-    )
-    .await
-    .unwrap();
+    let fresh = kanban_service::open_context(&path_str, AppConfig::default())
+        .await
+        .unwrap();
     assert!(fresh.list_boards().unwrap().is_empty());
 }
 
@@ -459,17 +448,16 @@ async fn test_mcp_undo_on_empty_returns_false() {
 }
 
 #[tokio::test]
-async fn test_mcp_reload_preserves_undo_history() {
-    // MCP reload is a pre-mutation freshness check, not a response to an external
-    // change. History remains valid across reloads so tool_undo can span multiple
-    // prior tool calls.
+async fn test_mcp_reload_resets_undo_history() {
+    // reload() semantics: "pick up external changes". The previous undo history
+    // was computed against a different file state and is no longer valid.
     let (mut ctx, _tmp) = setup().await;
     ctx.create_board("Board".into(), None).unwrap();
     assert!(ctx.can_undo(), "should have undo entry after create");
     ctx.save().await.unwrap();
     ctx.reload().await.unwrap();
     assert!(
-        ctx.can_undo(),
-        "reload should NOT clear history — undo must span multiple tool calls"
+        !ctx.can_undo(),
+        "reload must reset undo history — cursor is invalid after external change"
     );
 }

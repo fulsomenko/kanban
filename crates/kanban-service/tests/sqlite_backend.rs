@@ -1,5 +1,5 @@
 use kanban_domain::{Board, CardListFilter, KanbanOperations, Snapshot};
-use kanban_service::{AppConfig, KanbanContext};
+use kanban_service::{open_context, AppConfig, KanbanContext};
 use tempfile::TempDir;
 
 fn assert_wal_empty(db_path: &std::path::Path) {
@@ -17,7 +17,7 @@ fn assert_wal_empty(db_path: &std::path::Path) {
 async fn test_import_board_checkpoints_wal_on_sqlite_path() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     let snapshot = Snapshot {
@@ -30,32 +30,16 @@ async fn test_import_board_checkpoints_wal_on_sqlite_path() {
     };
     let json = serde_json::to_string(&snapshot).unwrap();
     ctx.import_board(&json).unwrap();
-    // No save() call — import_board() itself must checkpoint the WAL
+    ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_execute_checkpoints_wal_without_save() {
+async fn test_execute_checkpoints_wal_after_save() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
-        .await
-        .unwrap();
-    ctx.create_board("B".to_string(), None).unwrap();
-    // No save() call — execute() itself must checkpoint the WAL
-    assert_wal_empty(&path);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_save_is_noop_on_sqlite_path() {
-    // On the SQLite path save() returns Ok(()) immediately — checkpointing happens
-    // eagerly in execute(). The WAL is already empty from create_board(); save() is
-    // just a confirmed no-op that must not error.
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
@@ -65,38 +49,51 @@ async fn test_save_is_noop_on_sqlite_path() {
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_undo_checkpoints_wal_without_save() {
+async fn test_save_checkpoints_wal_on_sqlite_path() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
-    ctx.undo().unwrap();
-    // No save() call — undo() itself must checkpoint the WAL
+    ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_redo_checkpoints_wal_without_save() {
+async fn test_undo_checkpoints_wal_after_save() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite3");
-    let mut ctx = KanbanContext::open_sqlite(path.to_str().unwrap(), AppConfig::default())
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
+        .await
+        .unwrap();
+    ctx.create_board("B".to_string(), None).unwrap();
+    ctx.undo().unwrap();
+    ctx.save().await.unwrap();
+    assert_wal_empty(&path);
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_redo_checkpoints_wal_after_save() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = open_context(path.to_str().unwrap(), AppConfig::default())
         .await
         .unwrap();
     ctx.create_board("B".to_string(), None).unwrap();
     ctx.undo().unwrap();
     ctx.redo().unwrap();
-    // No save() call — redo() itself must checkpoint the WAL
+    ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
 
 async fn open_sqlite_ctx(dir: &TempDir) -> KanbanContext {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
-    KanbanContext::open_sqlite(&path, AppConfig::default())
+    open_context(&path, AppConfig::default())
         .await
-        .expect("open_sqlite must succeed")
+        .expect("open_context must succeed")
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
@@ -158,17 +155,13 @@ async fn test_sqlite_backend_undo_cursor_restored_after_reopen() {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
 
     {
-        let mut ctx = KanbanContext::open_sqlite(&path, AppConfig::default())
-            .await
-            .unwrap();
+        let mut ctx = open_context(&path, AppConfig::default()).await.unwrap();
         ctx.create_board("Board 1".to_string(), None).unwrap();
         ctx.create_board("Board 2".to_string(), None).unwrap();
         assert_eq!(ctx.undo_depth(), 2);
     }
 
-    let ctx2 = KanbanContext::open_sqlite(&path, AppConfig::default())
-        .await
-        .unwrap();
+    let ctx2 = open_context(&path, AppConfig::default()).await.unwrap();
     assert_eq!(
         ctx2.undo_depth(),
         2,
@@ -185,16 +178,12 @@ async fn test_sqlite_backend_data_persists_across_opens() {
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
 
     {
-        let mut ctx = KanbanContext::open_sqlite(&path, AppConfig::default())
-            .await
-            .unwrap();
+        let mut ctx = open_context(&path, AppConfig::default()).await.unwrap();
         ctx.create_board("Persistent Board".to_string(), None)
             .unwrap();
     }
 
-    let ctx2 = KanbanContext::open_sqlite(&path, AppConfig::default())
-        .await
-        .unwrap();
+    let ctx2 = open_context(&path, AppConfig::default()).await.unwrap();
     let boards = ctx2.list_boards().unwrap();
     assert_eq!(boards.len(), 1);
     assert_eq!(boards[0].name, "Persistent Board");

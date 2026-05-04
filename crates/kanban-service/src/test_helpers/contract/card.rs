@@ -1,13 +1,14 @@
-use super::super::StoreFactory;
+use super::super::BackendFactory;
 use crate::KanbanContext;
+use kanban_core::AppConfig;
 use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::{CardUpdate, CreateCardOptions, KanbanOperations};
 use tempfile::TempDir;
 
-pub async fn test_card_all_fields_roundtrip(factory: &StoreFactory) {
+pub async fn test_card_all_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -40,9 +41,7 @@ pub async fn test_card_all_fields_roundtrip(factory: &StoreFactory) {
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.title, "Full Card");
@@ -57,10 +56,10 @@ pub async fn test_card_all_fields_roundtrip(factory: &StoreFactory) {
     assert!(c.completed_at.is_none());
 }
 
-pub async fn test_card_minimal_fields_roundtrip(factory: &StoreFactory) {
+pub async fn test_card_minimal_fields_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -77,9 +76,7 @@ pub async fn test_card_minimal_fields_roundtrip(factory: &StoreFactory) {
         .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.title, "Minimal");
@@ -93,10 +90,10 @@ pub async fn test_card_minimal_fields_roundtrip(factory: &StoreFactory) {
     assert!(c.sprint_logs.is_empty());
 }
 
-pub async fn test_card_all_priority_variants_roundtrip(factory: &StoreFactory) {
+pub async fn test_card_all_priority_variants_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -127,9 +124,7 @@ pub async fn test_card_all_priority_variants_roundtrip(factory: &StoreFactory) {
     }
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     for (id, expected) in card_ids.iter().zip(priorities.iter()) {
         let c = ctx.get_card(*id).unwrap().unwrap();
@@ -137,10 +132,10 @@ pub async fn test_card_all_priority_variants_roundtrip(factory: &StoreFactory) {
     }
 }
 
-pub async fn test_card_all_status_variants_roundtrip(factory: &StoreFactory) {
+pub async fn test_card_all_status_variants_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -176,9 +171,7 @@ pub async fn test_card_all_status_variants_roundtrip(factory: &StoreFactory) {
     }
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     for (id, expected) in card_ids.iter().zip(statuses.iter()) {
         let c = ctx.get_card(*id).unwrap().unwrap();
@@ -186,10 +179,10 @@ pub async fn test_card_all_status_variants_roundtrip(factory: &StoreFactory) {
     }
 }
 
-pub async fn test_card_completed_at_set_on_done_status(factory: &StoreFactory) {
+pub async fn test_card_completed_at_set_on_done_status(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
-    let mut ctx = KanbanContext::load_with_defaults(factory(&path))
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
         .await
         .unwrap();
 
@@ -215,9 +208,7 @@ pub async fn test_card_completed_at_set_on_done_status(factory: &StoreFactory) {
     .unwrap();
 
     ctx.save().await.unwrap();
-    let ctx = KanbanContext::load_with_defaults(factory(&path))
-        .await
-        .unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let c = ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(c.status, CardStatus::Done);
