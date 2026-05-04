@@ -144,7 +144,13 @@ impl KanbanContext {
         if self.baseline_snapshot.is_none() {
             let count = self.backend.command_count()? as usize;
             let baseline = if count > 0 {
-                self.backend.load_snapshot_at(0)?.unwrap_or_default()
+                match self.backend.load_snapshot_at(0)? {
+                    Some(snap) => snap,
+                    // Old file: commands present but no stored baseline.
+                    // Use current data as the undo floor so undo cannot
+                    // wipe existing data.
+                    None => self.backend.snapshot()?,
+                }
             } else {
                 self.backend.snapshot()?
             };
