@@ -119,24 +119,14 @@ impl JsonEnvelope {
 
 // ─── Sync migration helpers ───────────────────────────────────────────────────
 
-fn detect_version_sync(value: &serde_json::Value) -> FormatVersion {
-    if let Some(v) = value.get("version").and_then(|v| v.as_u64()) {
-        return FormatVersion::from_u32(v as u32).unwrap_or(FormatVersion::V2);
-    }
-    if value.get("boards").is_some() {
-        return FormatVersion::V1;
-    }
-    FormatVersion::V2
-}
-
-fn migrate_to_v3_sync(from: FormatVersion, path: &Path) -> PersistenceResult<()> {
+fn migrate_to_v3_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
     if from == FormatVersion::V1 {
         migrate_v1_to_v2_sync(path)?;
     }
     migrate_v2_to_v3_sync(path)
 }
 
-fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<()> {
+fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
     let content = std::fs::read_to_string(path)?;
     let v1_data: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -146,26 +136,28 @@ fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<()> {
     let json_str = v2_envelope
         .to_json_string()
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let json_bytes = json_str.into_bytes();
     let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, json_str.as_bytes())?;
+    std::fs::write(&tmp_path, &json_bytes)?;
     std::fs::rename(&tmp_path, path)?;
     let _ = std::fs::remove_file(&backup_path);
     tracing::info!("Migrated {} from V1 to V2 (sync)", path.display());
-    Ok(())
+    Ok(json_bytes)
 }
 
-fn migrate_v2_to_v3_sync(path: &Path) -> PersistenceResult<()> {
+fn migrate_v2_to_v3_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
     let content = std::fs::read_to_string(path)?;
     let mut envelope: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
     transform_v2_to_v3_value(&mut envelope)?;
     let json_str = serde_json::to_string_pretty(&envelope)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let json_bytes = json_str.into_bytes();
     let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, json_str.as_bytes())?;
+    std::fs::write(&tmp_path, &json_bytes)?;
     std::fs::rename(&tmp_path, path)?;
     tracing::info!("Migrated {} from V2 to V3 (sync)", path.display());
-    Ok(())
+    Ok(json_bytes)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,13 +201,10 @@ impl JsonFileStore {
         })
     }
 
-    /// Parse already-read file bytes into a snapshot + metadata, and populate
-    /// the command-log state cache. Shared by `load()` (async) and `load_sync()`.
-    fn parse_envelope_bytes(
-        &self,
-        file_bytes: &[u8],
-    ) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
-        let envelope: JsonEnvelope = serde_json::from_slice(file_bytes)
+    /// Parse file bytes into a [`JsonEnvelope`], validating version fields.
+    /// Pure: no `&self`, no side effects.
+    fn parse_envelope(bytes: &[u8]) -> PersistenceResult<JsonEnvelope> {
+        let envelope: JsonEnvelope = serde_json::from_slice(bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
         if envelope.version < 2 || envelope.version > 5 {
@@ -233,25 +222,20 @@ impl JsonFileStore {
             )));
         }
 
+        Ok(envelope)
+    }
+
+    /// Cache the command-log state from a parsed envelope into `self.command_log_state`.
+    /// Side-effectful counterpart to the pure [`parse_envelope`][Self::parse_envelope].
+    fn cache_command_log(&self, envelope: &JsonEnvelope) -> PersistenceResult<()> {
         let batches = envelope
             .parse_batches()
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        {
-            let mut cls = self.lock_command_log()?;
-            cls.batches = batches;
-            cls.undo_cursor = envelope.undo_cursor;
-            cls.baseline_data = envelope.baseline_data;
-        }
-
-        let data = serde_json::to_vec(&envelope.data)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        let snapshot = StoreSnapshot {
-            data,
-            metadata: envelope.metadata.clone(),
-        };
-
-        Ok((snapshot, envelope.metadata))
+        let mut cls = self.lock_command_log()?;
+        cls.batches = batches;
+        cls.undo_cursor = envelope.undo_cursor;
+        cls.baseline_data = envelope.baseline_data.clone();
+        Ok(())
     }
 }
 
@@ -334,7 +318,16 @@ impl PersistenceStore for JsonFileStore {
         }
 
         let file_bytes = tokio::fs::read(&self.path).await?;
-        let result = self.parse_envelope_bytes(&file_bytes)?;
+        let envelope = Self::parse_envelope(&file_bytes)?;
+        self.cache_command_log(&envelope)?;
+
+        let data = serde_json::to_vec(&envelope.data)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let snapshot = StoreSnapshot {
+            data,
+            metadata: envelope.metadata.clone(),
+        };
+        let metadata = envelope.metadata;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
@@ -347,7 +340,7 @@ impl PersistenceStore for JsonFileStore {
             self.path.display()
         );
 
-        Ok(result)
+        Ok((snapshot, metadata))
     }
 
     fn load_sync(&self) -> PersistenceResult<Option<(StoreSnapshot, PersistenceMetadata)>> {
@@ -359,7 +352,7 @@ impl PersistenceStore for JsonFileStore {
         let value: serde_json::Value = serde_json::from_slice(&file_bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        let current_version = detect_version_sync(&value);
+        let current_version = Migrator::detect_version_from_value(&value);
 
         let final_bytes = if current_version < FormatVersion::V3 {
             tracing::info!(
@@ -367,13 +360,21 @@ impl PersistenceStore for JsonFileStore {
                 current_version,
                 self.path.display()
             );
-            migrate_to_v3_sync(current_version, &self.path)?;
-            std::fs::read(&self.path)?
+            migrate_to_v3_sync(current_version, &self.path)?
         } else {
             file_bytes
         };
 
-        let result = self.parse_envelope_bytes(&final_bytes)?;
+        let envelope = Self::parse_envelope(&final_bytes)?;
+        self.cache_command_log(&envelope)?;
+
+        let data = serde_json::to_vec(&envelope.data)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let snapshot = StoreSnapshot {
+            data,
+            metadata: envelope.metadata.clone(),
+        };
+        let metadata = envelope.metadata;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
@@ -386,7 +387,7 @@ impl PersistenceStore for JsonFileStore {
             self.path.display()
         );
 
-        Ok(Some(result))
+        Ok(Some((snapshot, metadata)))
     }
 
     async fn exists(&self) -> bool {

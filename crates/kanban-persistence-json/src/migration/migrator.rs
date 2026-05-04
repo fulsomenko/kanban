@@ -7,6 +7,21 @@ use std::path::Path;
 pub struct Migrator;
 
 impl Migrator {
+    /// Detect the format version from an already-parsed JSON value.
+    /// Pure: no I/O, no errors.
+    pub fn detect_version_from_value(value: &Value) -> FormatVersion {
+        // V2+ files have a "version" field at root level
+        if let Some(version) = value.get("version").and_then(|v| v.as_u64()) {
+            return FormatVersion::from_u32(version as u32).unwrap_or(FormatVersion::V2);
+        }
+        // V1 files have "boards" at root level but no version field
+        if value.get("boards").is_some() {
+            return FormatVersion::V1;
+        }
+        // Unknown format, assume V2
+        FormatVersion::V2
+    }
+
     /// Detect the version of a persisted file
     pub async fn detect_version(path: &Path) -> PersistenceResult<FormatVersion> {
         if !path.exists() {
@@ -17,18 +32,7 @@ impl Migrator {
         let value: Value = serde_json::from_str(&content)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        // V2+ files have a "version" field at root level
-        if let Some(version) = value.get("version").and_then(|v| v.as_u64()) {
-            return Ok(FormatVersion::from_u32(version as u32).unwrap_or(FormatVersion::V2));
-        }
-
-        // V1 files have "boards" at root level but no version field
-        if value.get("boards").is_some() {
-            return Ok(FormatVersion::V1);
-        }
-
-        // Unknown format, assume V2
-        Ok(FormatVersion::V2)
+        Ok(Self::detect_version_from_value(&value))
     }
 
     /// Migrate a file from one version to another, stepping through intermediate versions
