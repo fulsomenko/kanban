@@ -32,7 +32,7 @@ tracing.workspace = true
 tempfile.workspace = true
 
 [dev-dependencies]
-kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.4" }
-kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.4" }
-kanban-persistence = { path = "../kanban-persistence", version = "^0.4", features = ["test-helpers"] }
+kanban-persistence-json = { path = "../kanban-persistence-json" }
+kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite" }
+kanban-persistence = { path = "../kanban-persistence", features = ["test-helpers"] }
 tokio = { workspace = true, features = ["full"] }

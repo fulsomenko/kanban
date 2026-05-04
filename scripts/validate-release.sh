@@ -33,11 +33,17 @@ echo ""
 echo "Step 3: Checking cross-crate dependencies..."
 deps_out=$(list-crates --names) || { echo "❌ list-crates failed"; exit 1; }
 mapfile -t INTERNAL_DEPS <<< "$deps_out"
+# Only [dependencies] need version specs; [dev-dependencies] are stripped from
+# the published manifest by cargo and shouldn't carry version constraints
+# because they may form circular path-deps with sibling crates that publish
+# later in the dependency order (e.g. kanban-persistence-sqlite dev-deps on
+# kanban-service which itself depends on kanban-persistence-sqlite optionally).
 for crate in "${CRATES[@]}"; do
+  deps_section=$(awk '/^\[dependencies\]/{flag=1; next} /^\[/{flag=0} flag' "$crate/Cargo.toml")
   for dep in "${INTERNAL_DEPS[@]}"; do
-    if grep -q "$dep = { path = " "$crate/Cargo.toml" 2>/dev/null; then
-      if ! grep "$dep = { path = " "$crate/Cargo.toml" | grep -q 'version = '; then
-        echo "❌ Error: $crate is missing version spec for $dep"
+    if echo "$deps_section" | grep -q "$dep = { path = "; then
+      if ! echo "$deps_section" | grep "$dep = { path = " | grep -q 'version = '; then
+        echo "❌ Error: $crate is missing version spec for $dep in [dependencies]"
         echo "   Use: $dep = { path = \"../$dep\", version = \"^0.1\" }"
         exit 1
       fi
