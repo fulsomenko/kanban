@@ -39,7 +39,7 @@
 
         publishCrates = pkgs.writeShellApplication {
           name = "publish-crates";
-          runtimeInputs = [rustToolchain pkgs.cargo pkgs.coreutils validateRelease];
+          runtimeInputs = [rustToolchain pkgs.cargo pkgs.coreutils pkgs.curl pkgs.gnugrep validateRelease listCrates];
           text = builtins.readFile ./scripts/publish-crates.sh;
         };
 
@@ -57,7 +57,7 @@
 
         validateRelease = pkgs.writeShellApplication {
           name = "validate-release";
-          runtimeInputs = with pkgs; [rustToolchain cargo coreutils gnugrep gnused];
+          runtimeInputs = with pkgs; [rustToolchain cargo coreutils gnugrep gnused listCrates];
           text = builtins.readFile ./scripts/validate-release.sh;
         };
 

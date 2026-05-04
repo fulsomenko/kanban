@@ -1,27 +1,9 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# Crates must be published in dependency order:
-# - kanban-core: no internal deps
-# - kanban-domain: depends on kanban-core
-# - kanban-persistence: depends on kanban-core, kanban-domain
-# - kanban-persistence-json: depends on kanban-core, kanban-domain, kanban-persistence
-# - kanban-persistence-sqlite: depends on kanban-core, kanban-domain, kanban-persistence
-# - kanban-service: depends on kanban-core, kanban-domain, kanban-persistence, kanban-persistence-json
-# - kanban-tui: depends on kanban-core, kanban-domain, kanban-persistence, kanban-persistence-json, kanban-persistence-sqlite
-# - kanban-mcp: depends on kanban-core, kanban-domain, kanban-persistence, kanban-persistence-json, kanban-persistence-sqlite, kanban-service
-# - kanban-cli: depends on all above
-CRATES=(
-  "crates/kanban-core"
-  "crates/kanban-domain"
-  "crates/kanban-persistence"
-  "crates/kanban-persistence-json"
-  "crates/kanban-persistence-sqlite"
-  "crates/kanban-service"
-  "crates/kanban-tui"
-  "crates/kanban-mcp"
-  "crates/kanban-cli"
-)
+# Crates published in topological dependency order via list-crates.
+mapfile -t CRATES < <(list-crates --paths)
+[ "${#CRATES[@]}" -gt 0 ] || { echo "❌ list-crates returned empty"; exit 1; }
 
 check_version_exists() {
   local crate_name=$1

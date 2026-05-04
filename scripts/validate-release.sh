@@ -1,14 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CRATES=(
-  "crates/kanban-core"
-  "crates/kanban-domain"
-  "crates/kanban-mcp"
-  "crates/kanban-persistence"
-  "crates/kanban-tui"
-  "crates/kanban-cli"
-)
+mapfile -t CRATES < <(list-crates --paths)
+[ "${#CRATES[@]}" -gt 0 ] || { echo "❌ list-crates returned empty"; exit 1; }
 
 echo "🔍 Validating release build..."
 echo ""
@@ -37,7 +31,7 @@ echo "✓ Version consistency verified"
 
 echo ""
 echo "Step 3: Checking cross-crate dependencies..."
-INTERNAL_DEPS=("kanban-core" "kanban-mcp" "kanban-domain" "kanban-persistence" "kanban-tui")
+mapfile -t INTERNAL_DEPS < <(list-crates --names)
 for crate in "${CRATES[@]}"; do
   for dep in "${INTERNAL_DEPS[@]}"; do
     if grep -q "$dep = { path = " "$crate/Cargo.toml" 2>/dev/null; then
@@ -58,7 +52,13 @@ echo "✓ Workspace check passed"
 
 echo ""
 echo "Step 5: Validating individual crate dry-run publishes..."
-echo "  (Using --no-verify since workspace crates aren't yet on crates.io)"
+# --no-verify skips the per-crate compile during dry-run. This is necessary
+# because `cargo publish --dry-run` resolves path-deps to their crates.io
+# version, but workspace crates with API changes between releases can't
+# compile against their previously-published siblings until each is
+# published in dependency order. Step 4 (`cargo check --workspace`) already
+# verifies compile against the local source. Step 5's value here is the
+# manifest/package-shape check, not the build.
 for crate in "${CRATES[@]}"; do
   echo "  Validating $crate..."
   cd "$crate"
