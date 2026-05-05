@@ -69,9 +69,9 @@ jobs:
         with:
           pkgname: kanban
           pkgbuild: ./aur/PKGBUILD
-          commit-username: github-actions[bot]
-          commit-email: 41898282+github-actions[bot]@users.noreply.github.com
-          commit-message: "Update to ${{ github.event.release.tag_name || inputs.tag }}"
-          ssh-private-key: ${{ secrets.AUR_SSH_KEY }}
+          commit_username: github-actions[bot]
+          commit_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: "Update to ${{ github.event.release.tag_name || inputs.tag }}"
+          ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
           updpkgsums: false
-          allow-empty-commits: false
+          allow_empty_commits: false
