@@ -3,6 +3,12 @@ name: Publish to AUR
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g., v0.4.0)'
+        required: true
+        type: string
 
 jobs:
   aur-publish:
@@ -17,7 +23,7 @@ jobs:
 
       - name: Update PKGBUILD version and sha256
         env:
-          RAW_TAG: ${{ github.event.release.tag_name }}
+          RAW_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
           VERSION="${RAW_TAG#v}"
@@ -29,6 +35,7 @@ jobs:
           sed -i "s|^pkgver=.*|pkgver=${VERSION}|" ./aur/PKGBUILD
           sed -i "s|^pkgrel=.*|pkgrel=1|" ./aur/PKGBUILD
           sed -i "s|sha256sums=.*|sha256sums=(\"${SHA256}\")|" ./aur/PKGBUILD
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - uses: cachix/install-nix-action@v27
         with:
@@ -36,24 +43,35 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Generate .SRCINFO
-        run: nix shell nixpkgs#pacman -c sh -c "cd aur && makepkg --printsrcinfo > .SRCINFO"
+        run: |
+          nix shell nixpkgs#pacman -c sh -c '
+            PACMAN_ROOT="$(dirname "$(dirname "$(command -v makepkg)")")"
+            export MAKEPKG_CONF="$PACMAN_ROOT/etc/makepkg.conf"
+            cd aur && makepkg --printsrcinfo > .SRCINFO
+          '
 
       - name: Commit updated AUR files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add aur/PKGBUILD aur/.SRCINFO
-          git diff --cached --quiet || git commit -m "chore: update AUR package to ${VERSION}"
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: update AUR package to ${VERSION}"
+          if ! git push 2>&1; then
+            echo "::warning::Could not push aur/ updates to GitHub (likely branch protection blocking the bot). AUR deploy will still proceed; the repo's aur/ files will lag behind the AUR repo until manually synced or the bot is added to the master bypass list."
+          fi
 
       - name: Deploy to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@2ac5a4c1d7035885d46b10e3193393be8460b6f1
+        uses: KSXGitHub/github-actions-deploy-aur@da03e160361ce01bf087e790b6ffd196d7dccff7  # v4.1.3
         with:
           pkgname: kanban
           pkgbuild: ./aur/PKGBUILD
-          commit-username: github-actions[bot]
-          commit-email: 41898282+github-actions[bot]@users.noreply.github.com
-          commit-message: "Update to ${{ github.event.release.tag_name }}"
-          ssh-private-key: ${{ secrets.AUR_SSH_KEY }}
+          commit_username: github-actions[bot]
+          commit_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: "Update to ${{ github.event.release.tag_name || inputs.tag }}"
+          ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
           updpkgsums: false
-          allow-empty-commits: false
+          allow_empty_commits: false

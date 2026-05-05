@@ -11,9 +11,9 @@ keywords = ["kanban", "persistence", "json", "storage"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-kanban-persistence = { path = "../kanban-persistence", version = "^0.3" }
-kanban-core = { path = "../kanban-core", version = "^0.3" }
-kanban-domain = { path = "../kanban-domain", version = "^0.3" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.4" }
+kanban-core = { path = "../kanban-core", version = "^0.4" }
+kanban-domain = { path = "../kanban-domain", version = "^0.4" }
 tokio.workspace = true
 async-trait.workspace = true
 serde.workspace = true
@@ -24,6 +24,6 @@ tracing.workspace = true
 tempfile.workspace = true
 
 [dev-dependencies]
-kanban-service = { path = "../kanban-service", version = "^0.3", features = ["test-helpers"] }
+kanban-service = { path = "../kanban-service", features = ["test-helpers"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }

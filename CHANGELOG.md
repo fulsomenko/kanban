@@ -1,3 +1,506 @@
+## [0.4.0] - 2026-05-04 ([#208](https://github.com/fulsomenko/kanban/pull/208))
+
+### CAT-245 Surface Command Errors To User Via Banner In Tui Handlers (2026-05-04)
+
+Adds an in-app error log panel that captures WARN and ERROR tracing events
+without corrupting the TUI display.
+Previously, `tracing::warn!` and `tracing::error!` calls would write directly
+to stderr during raw mode, bleeding into the terminal buffer and garbling the
+UI. Log output was also lost once the session ended with no way to review it.
+The fix is two-pronged. A custom `InMemoryLogLayer` replaces the stderr
+subscriber in TUI mode, intercepting all WARN/ERROR events into a shared
+in-memory buffer. The buffer is then surfaced through a dedicated `ErrorLog`
+panel that auto-opens whenever a new ERROR is captured, and can be toggled
+on demand with F12 and dismissed with Escape. The footer shows a `[!] N errors`
+badge while there are unread errors.
+
+### CAT-260 Invert Storage Backend Plugin Architecture (2026-05-04)
+
+- refactor(cli): extract run_with_args from run to enable injection of CLI args in tests
+- fix(service): include root cause in export_to_sqlite error when sqlite backend is absent
+- feat(cli,mcp): add json/sqlite forwarding features; gate with_defaults on cfg
+- fix(cli): early-return Completions before no-backends guard
+- refactor(tui): drop direct backend deps, use kanban_service::default_registry()
+- refactor(mcp): drop direct backend deps, use kanban_service::default_registry()
+- refactor(cli): drop direct backend deps, use kanban_service::default_registry()
+- feat(service): add json/sqlite optional features and default_registry()
+- fix(mcp): add empty-registry guard, use shared validate_path, remove local fn
+- fix(cli): add empty-registry guard, validate file path, align tracing with env-filter
+- refactor(service): extract shared validate_path from kanban-mcp
+- refactor(service): add StoreManager::has_backends
+- refactor(persistence): add StoreRegistry::is_empty
+- refactor(cli): restrict internal module visibility to pub(crate)
+- fix(service): improve export_to_sqlite error for unregistered sqlite backend
+- fix(cli,mcp): use try_init to prevent double-init panic
+- docs(service): document export_to_sqlite registry requirement
+- fix(mcp): warn on backend auto-correction in McpContext
+- refactor(cli,mcp): invert storage backend ownership via builders
+- feat(service): introduce StoreManager with injectable StoreRegistry
+
+### CAT-264 Lift Undo Redo Historymanager Into Kanbancontext (2026-05-04)
+
+History-aware execute, StateManager slimming, and TuiContext encapsulation
+- Unify `execute()` and `execute_batch()` into a single `execute(Vec<Box<dyn Command>>)` — fixes spurious undo-on-failure bug and provides one uniform API with atomic rollback semantics
+- Make `execute()` capture undo history by default — all `KanbanOperations` consumers get undo/redo for free
+- Add native batch commands (`ArchiveCards`, `MoveCards`, `AssignCardsToSprint`) with single undo entry
+- Extract `clear_history()` from `reload()` — callers decide whether to clear
+- Move conflict detection (`has_conflict`/`set_conflict`/`clear_conflict`) from StateManager to KanbanContext
+- Slim StateManager to purely a save coordinator (channels + file watcher)
+- Add MCP `undo` and `redo` tools
+- Encapsulate `TuiContext` by removing `Deref` and making `inner` private
+- Remove all `_mut()` accessors from `TuiContext`, routing every mutation through domain commands
+- Add `ImportEntities`, `ApplyBoardSettings`, `ApplyCardMetadata`, `CompactColumnPositions`, `MigrateSprintLogs` commands
+- Lift sprint counter/name logic into `CreateSprint` command, eliminating caller-side board mutations
+
+### CAT-302 Starting The Tui Doesnt Select A Board (2026-05-04)
+
+- feat(tui): preselect first board and refresh card view on startup
+- test(tui): preselect first board and refresh card view on startup
+
+### CAT-312 Adjust Landing Roadmap (2026-05-04)
+
+- fix(web): correct completed elements output
+
+### CAT-341 Redesign Card Identifier Model Drop Stored Prefixes Lock Board Sprint Prefix Simplify Counters (2026-05-04)
+
+- fix(persistence-json): renumber colliding cards instead of aborting V2→V3 migration
+- refactor(tui): remove assigned_prefix management from sprint assignment handlers
+- test(service,persistence): update contract tests for card_counter
+- fix(mcp,cli): remove dead card_prefix/assigned_prefix fields from CardUpdate
+- feat(persistence-sqlite): schema v1→v2 migration; card_counter; drop prefix columns
+- feat(persistence-json): add V2→V3 migration; strip prefix fields, set card_counter
+- refactor(domain): update all Card::new call sites to drop prefix argument
+- feat(domain): lock sprint card_prefix after card assigned; enforce prefix uniqueness
+- feat(domain): lock board card_prefix after first card is created
+- feat(domain): two-level identifier resolution (sprint.card_prefix → board.card_prefix)
+- feat(domain): drop assigned_prefix and card_prefix from Card; simplify Card::new
+- feat(domain): replace prefix_counters with card_counter on Board
+- feat(persistence): add FormatVersion::V3
+
+### KAN-159 Implement Sqlite Storage Backend (2026-05-04)
+
+- docs: add .db extension to SQLite backend documentation
+- test(service): add make_store test for .db extension
+- fix(service): use store instance_id instead of throwaway UUID in save
+- docs(service): document registry registration order rationale
+- fix(persistence-json): exclude SQLite extensions from catch-all match
+- feat(persistence-sqlite): add .db extension to SqliteStoreFactory
+- docs(web): update landing page for SQLite backend support
+- docs(service,cli,mcp): update READMEs for pluggable storage
+- docs(persistence): add READMEs for JSON and SQLite backends
+- docs(persistence): rewrite README as trait abstraction layer
+- docs: update workspace structure and diagrams for pluggable persistence
+- fix(persistence-sqlite): replace len comparison with is_empty in concurrent test
+- test(persistence-json): align roundtrip test with shared snapshot
+- refactor(persistence): replace hardcoded make_store with StoreFactory registry
+- fix(persistence-sqlite): wrap load in read transaction and batch sync deletes
+- docs(persistence-sqlite): document delete-and-reinsert pattern in upserts
+- fix(persistence-sqlite): add points range validation
+- refactor(persistence-sqlite): replace fragile enum parsing with parse_enum helper
+- test(persistence-sqlite): add concurrent access test
+- fix(persistence-sqlite): narrow mutex scope in save and add schema migration skeleton
+- fix(service): remove dead let _ = ext binding
+- fix(persistence-sqlite): require NOT NULL fields in upserts instead of silent defaults
+- fix(persistence-sqlite): propagate parse errors for optional UUID and DateTime fields
+- fix(persistence-sqlite): narrow sqlx features with default-features = false
+- test(service): strengthen make_store no-extension test with save/load roundtrip
+- refactor(persistence-sqlite): deduplicate fully_populated_snapshot in roundtrip test
+- fix(service): make_store returns Result instead of panicking
+- fix(persistence-sqlite): deterministic card order, async mutex, builder API, and pool size
+- fix(persistence-sqlite): validate NOT NULL fields and sync edges incrementally
+- fix(persistence-sqlite): return errors for unknown enum variants instead of silent fallback
+- docs(persistence-sqlite): document missing FK rationale on card_edges table
+- test(cli): add sqlite-to-sqlite migration roundtrip test
+- test(persistence): add conflict detection contract test for stale metadata
+- fix(service): guard .db extension when sqlite-storage feature is disabled
+- refactor(persistence-sqlite): move WAL pragma to connection options and document sprint_logs FK
+- refactor(persistence-sqlite): split sqlite_store.rs into helpers, builders, and upserts modules
+- style: apply cargo fmt across workspace
+- refactor(persistence): replace contract test glue with macro
+- test(cli): add bidirectional migration tests
+- refactor(cli): remove direct persistence crate dependencies
+- feat(cli): make migrate command backend-agnostic
+- refactor(persistence): remove tests superseded by contract suite
+- test(persistence): wire contract tests to JSON and SQLite backends
+- feat(service): add test-helpers feature with contract test suite
+- test(service): add make_store factory dispatch tests
+- refactor(service): extract shared make_store factory from CLI, MCP, and TUI
+- feat(persistence): add instance_id() to PersistenceStore trait
+- fix(persistence-sqlite): prevent silent data degradation on load
+- fix(persistence-sqlite): normalize schema types and add missing constraints
+- refactor(persistence): delete dead store/ and migration/ modules
+- test(persistence-sqlite): add KanbanContext integration tests for SQLite backend
+- test(persistence-sqlite): add dependency graph edges to roundtrip test
+- feat(persistence-sqlite): normalize schema — replace JSON columns with relational tables
+- fix: update error types and imports after rebase onto develop
+- docs(contributing): add 'adding a domain field' checklist for schema enforcement
+- test(persistence): add fully-populated roundtrip tests for JSON and SQLite plugins
+- feat(domain): add PartialEq to domain types and graph primitives for roundtrip test assertions
+- feat(cli/mcp/tui): wire up persistence plugin architecture
+- feat(service): decouple KanbanContext from concrete persistence implementations
+- feat(persistence-sqlite): add SQLite storage backend with typed struct enforcement in row_to_* functions
+- feat(persistence-json): add JSON file store plugin crate
+- feat(persistence): refactor trait crate to remove embedded store implementations
+- feat(ci): add persistance-* crates to publish script
+- fix(tui): remove unused PersistenceStore import missed during rebase
+- fix(tui): restore TuiSnapshot export and fix SaveChannel type after rebase conflict
+- fix(sqlite): address code review feedback
+- refactor(sqlite): use Table enum instead of string literals
+- fix(sqlite): use transaction for all save operations
+- fix(tui): resolve clippy warnings for type complexity and unused import
+- feat(tui,cli): add pluggable storage backend support
+- feat(persistence): add JSON to SQLite migration utilities
+- feat(persistence): implement SqliteStore with PersistenceStore trait
+- feat(persistence): add SQLite schema for kanban data
+
+### KAN-171 Replace Silent Failures With Proper Errors (2026-05-04)
+
+- fix(domain): replace silent failure with NotFound error in CreateSubcardCommand (ef6aa323bdeeca39a07eb6afa273901719158b5f)
+- fix(domain): replace silent failures with NotFound errors in sprint commands (6828c75d20bff02169e4f04e41d0b5fdc54de0e4)
+- fix(domain): replace silent failure with NotFound error in UpdateColumn (a70a5c449f8236d8cb19e2ee59bec6fd3d9779fd)
+- fix(domain): replace silent failures with NotFound errors in card commands (00d17452e29ed77e4de1edcdeaa69b7aec5cd878)
+- fix(domain): replace silent failures with NotFound errors in board commands (d3810135a1131be6b0e9ce5acc4643248443433b)
+- feat(domain): add CommandContext lookup helpers that return NotFound errors (0e2817bb9573a2e60bb0734f5b5b691ac04b610b)
+
+### KAN-210 Carry Over Cards From Ended Sprint (2026-05-04)
+
+- feat: rebind carry-over from R to M, always moves all uncompleted cards
+- test: verify carry_over_sprint_cards skips Done cards
+- feat: add R carry-over keybinding to sprint detail help
+- feat: add R carry-over and bulk c/d actions in sprint detail view
+- feat: add carry-over sprint popup navigation and confirm handler
+- feat: trigger carry-over dialog on sprint completion with uncompleted cards
+- feat: add CarryOverSprintDialog render component
+- feat: add CarryOverSprint dialog mode and state
+- feat: add carry_over_sprint_cards MCP tool
+- feat: add sprint carry-over CLI subcommand
+- feat: implement carry_over_sprint_cards on KanbanContext
+- feat: add carry_over_sprint_cards to KanbanOperations trait
+
+### KAN-211 Disambiguate Card Identifier Lookup Across Boards (2026-05-04)
+
+- test: add CLI integration tests for ambiguous identifier resolution
+- feat: return all matches from card get for ambiguous identifier
+- test: add find_cards_by_identifier integration tests for MCP context
+- feat: return ambiguity error when multiple cards match identifier
+- refactor: rename find_card_by_identifier to find_cards_by_identifier returning Vec
+
+### KAN-230 Submit Kanban To Aur (2026-05-04)
+
+- ci: add AUR auto-publish workflow on release
+- docs: add AUR installation instructions
+
+### KAN-232 Fix C Key Can No Longer Complete Sprint From Sprint Detail View (2026-05-04)
+
+- fix: suppress no planning sprint toast on c key sprint completion
+- fix: restore c key sprint completion from sprint detail view
+
+### KAN-233 Sync Web Index Html Roadmap With Readme Md (2026-05-04)
+
+- feat: add roadmap item
+
+### KAN-235 Per Layer Error Types Domainerror Persistenceerror Kanbanerror (2026-05-04)
+
+- refactor(mcp,cli): use kanban_domain error types
+- refactor(tui): use kanban_domain error types
+- refactor(service): use kanban_domain::KanbanError with typed constructors
+- feat(persistence): add PersistenceError/PersistenceResult
+- feat(domain): add DomainError, DependencyError, and KanbanError wrapper
+- refactor(core): slim to CoreError/CoreResult, remove KanbanError
+
+### KAN-256 Fix Sqlite Db File Loading Read To String On Binary File (2026-05-04)
+
+- fix: load SQLite files via persistence store instead of read_to_string
+
+### KAN-258 Unify Initial File Loading Path Follow Up To Kan 256 (2026-05-04)
+
+- test(tui): update tests to use async load_initial_state()
+- fix(tui): unify initial file loading into async load_initial_state()
+- feat(persistence-json): implement JSON content detection with BOM support
+- feat(persistence-sqlite): implement SQLite content detection via magic bytes
+- feat(persistence): add content-based detection to StoreFactory trait
+
+### KAN-259 Make Sqlite A Default Feature In Kanban Cli (2026-05-04)
+
+- feat: make sqlite-storage a default feature and remove redundant sqlite feature flags
+
+### KAN-263 Rework Migrate Cli Backend As Positional Arg Filename As Option (2026-05-04)
+
+- feat(cli): rework migrate command to use positional backend arg
+- feat(service): add make_store_for_backend for explicit backend selection
+- feat(persistence): add create_by_name and available_backend_names to StoreRegistry
+
+### KAN-274 Settings Page Ui (2026-05-04)
+
+## Settings page UI (`S`)
+Press `S` from the boards view to open a two-column settings screen:
+- **Configuration** panel — editing format, card/sprint prefixes, storage backend and location, config format and path. Navigate with `j`/`k` across rows, `h`/`l` or `1`/`2`/`3` to jump between panels.
+- **Config File** panel — shows the resolved config path, whether it is loaded, and the serialization format.
+- **Storage** panel — shows backend and data-file path; bottom row triggers the export dialog.
+Press `e` or `Enter` (on Configuration panel) to open the config in an external editor. The file format respects `editing_format` (json or toml). Changes are validated and applied live; invalid values are rejected with an error banner.
+## Storage backend switching
+Changing `storage_location` in the editor triggers an async migration: data is copied to the new file, the store swaps in-place, and the UI reloads. If the destination already exists, data is loaded from it instead of migrated. The source backend is auto-detected from the file extension; mismatches between the configured backend and the actual file are corrected automatically with a warning.
+## Export boards dialog (`x` in Settings)
+Opens a board-selection checklist, then an options step to choose JSON or SQLite output and set a filename. JSON export is synchronous; SQLite export is async and reports success or failure via a banner when complete.
+## `kanban migrate` CLI
+```
+kanban migrate <source> <backend> [--output <path>] [--source-backend <override>]
+```
+Source backend is auto-detected from the file extension. The output path defaults to the source stem with the target backend's extension.
+## Config persistence (`~/.config/kanban/config.toml`)
+Config is written only when at least one value differs from the compiled-in defaults. Default values are stripped before saving so the file stays minimal. Both TOML and JSON serialization formats are supported (`configuration_format`). The `editing_format` field now accepts `"toml"` in addition to `"json"`.
+## Service layer additions
+- `kanban_service::config::resolve_storage_location` — resolves relative storage paths to absolute (cwd join extracted from `kanban-core`, which is now a pure data crate).
+- `kanban_service::migrate_store` — copies a snapshot between any two stores.
+- `kanban_service::validate_and_load_store` — opens an existing store and verifies it is readable.
+- `kanban_service::detect_backend` — infers the backend from a locator string.
+- `KanbanContext::load_with_defaults` — convenience constructor used throughout tests.
+
+### KAN-278 Hero Demo (2026-05-04)
+
+Create polished hero demo for kanban TUI application
+- Add pre-crafted JSON fixture with realistic development board
+- Implement single VHS recording script showcasing core workflow
+- Add Nix shell environment with vhs and neovim integration
+- Create reproducible nvim wrapper for demo editing
+- Build record script with automatic fixture reset
+- Add comprehensive README documentation
+- Replace fragile multi-tape setup with self-contained demo
+
+### KAN-299 Extract Ui Rs Into Reusable Components And View Submodules (2026-05-04)
+
+Splits the monolithic `ui.rs` (2,100 lines) in `kanban-tui` into focused, testable modules.
+**New reusable components** (each with integration tests):
+- `components/footer.rs` — keybinding footer bar
+- `components/help_popup.rs` — help overlay and viewport height calculator
+- `components/conflict_popup.rs` — file conflict and external-change dialogs
+- `components/relationship_popup.rs` — parent/child card relationship picker
+- `components/filter_popup.rs` — sprint/date/tag filter dialog
+**View submodules** under `ui/`:
+- `ui/mod.rs` — render entry point and dispatcher (~130 lines)
+- `ui/main_view.rs` — main kanban board view
+- `ui/settings_view.rs` — settings view
+- `ui/card_detail.rs` — card detail view
+- `ui/board_detail.rs` — board detail view
+- `ui/sprint_detail.rs` — sprint detail view
+- `ui/dialogs.rs` — thin dialog wrapper functions
+No behaviour changes. All existing tests pass.
+
+### KAN-300 Make Version Readout Of Web Landing Dynamic (2026-05-04)
+
+- feat(web): inject version from workspace Cargo.toml at build time
+- feat(web): replace hardcoded version with @VERSION@ placeholder
+
+### KAN-305 Fix Config File Corruption And Unnecessary Writes (2026-05-04)
+
+- fix(tui): clear cli_file_provided after migration so storage shows under Storage fields
+- fix(tui): use correct selection indices for Active Storage rows in cli-only mode
+- feat(tui): use Active Storage labels when storage source is CLI arg, Storage labels when config
+- test(tui): add red-green tests for absolute path in Storage Location settings UI
+- fix(tui): show resolved absolute path for Storage Location in settings UI
+- fix(tui): unload cli_file_override when user explicitly provides storage in editor
+- test(tui): add test for cli override unload when storage fields uncommented
+- refactor(tui): extract is_storage_line helper; revert annotate editor change
+- fix(tui): use annotate_storage_fields in editor when CLI file override is active
+- fix(tui): add annotate_storage_fields to show storage as active lines with comment
+- fix(tui): don't inject absolute storage path when CLI arg matches config default
+- fix(tui): reset config storage to original values when DTO storage is unchanged
+- test(tui): add tests for startup-injected absolute storage path not written to config
+- fix(tui): strip unchanged storage from DTO to prevent spurious config writes
+- test(tui): add test for unchanged storage not written to config
+- fix(tui): CLI-supplied storage path is always session-only
+- test(service): fix vacuous temp-file leak assertion in config write test
+- fix(tui): skip config save when editor exits without changes
+- fix(service): atomic write for config file to prevent corruption
+- fix(service): promote tempfile to regular dependency
+
+### KAN-326 Hide Grayed Config Storage Rows When Storage Is Not Set In Config (2026-05-04)
+
+Hide grayed config storage rows when storage not set in config
+- Only show grayed 'Storage Backend' / 'Storage Location' rows in the Configuration panel when storage is explicitly configured (original_storage_backend or original_storage_location is Some)
+- When config defines no storage and a CLI file overrides the default, only Active Storage rows are shown, avoiding the misleading implication that CWD-resolved defaults are configured values
+
+### KAN-339 Address Pr 208 0 4 0 Code Review Feedback (2026-05-04)
+
+- fix(ci): validate release tag and fix sed delimiter in aur-publish
+- fix(domain): cap redo stack at MAX_HISTORY_DEPTH
+- test(domain): add redo stack bounded test
+- fix(domain): validate column exists before restoring card
+- test(domain): add restore card column validation test
+- feat(domain): enforce WIP limits in CreateCard, MoveCard, MoveCards
+- fix(domain): enforce WIP limits in RestoreCard
+- test(domain): add failing WIP limit enforcement tests
+- test(domain): add WIP limit enforcement test for RestoreCard
+- feat(domain): add WipLimitExceeded error variant and predicate
+- test(domain): add error.rs predicate and From conversion tests
+
+### KAN-348 Refactor Storage To On Demand Querying Instead Of Full Snapshot In Memory (2026-05-04)
+
+### Added
+- **SQLite storage backend** — use `.sqlite`, `.sqlite3`, or `.db` file extensions to store kanban data in a relational database instead of JSON
+- **Command-replay undo/redo** — all mutations are recorded as replayable commands with full history persistence across sessions
+- **Indexed snapshots** — undo/redo on SQLite is O(1) via compressed snapshots stored alongside each command, eliminating full replay from baseline
+- **Board ordering** — boards now have an explicit `position` field for deterministic sort order
+- **Magic bytes detection** — CLI and MCP automatically detect whether a file is SQLite or JSON by reading file headers, with extension-based fallback for new files
+### Changed
+- `undo()` and `redo()` now return `KanbanResult<bool>` instead of `bool`, propagating storage errors to callers
+- Board import clears command history after completion — imported data is baked into the baseline snapshot and cannot be individually undone
+- `MigrateSprintLogs` selectively persists only cards whose sprint logs actually changed, reducing unnecessary writes
+### Fixed
+- SQLite databases created before the `card_counter` feature now auto-migrate on open instead of crashing with "no such column: card_counter"
+- Input lag when holding navigation keys — buffered key events are now drained before each redraw
+- TUI no longer renders at 60fps when idle — redraws are event-driven, reducing CPU usage to near zero when not interacting
+- Eliminated O(n²) card cloning in the render loop (was cloning all cards per visible card per frame)
+- Eliminated N+1 SQL query pattern when loading sprint logs and board auxiliary data on the SQLite backend
+### Removed
+- `SqliteBlobStore` and `SqliteStoreFactory` — replaced by `SqliteStore` (formerly `SqliteDataStore`), wired directly through `StoreManager`
+- `InMemoryDataStore` type alias — use `InMemoryStore` directly
+- `UndoPointId` and snapshot-based undo-point methods from `DataStore` trait — superseded by command-replay undo
+- Command log methods from `PersistenceStore` trait — moved to the dedicated `CommandStore` trait
+### Internal
+- `DataStore` trait provides on-demand entity queries (get/list/upsert/delete) replacing full in-memory snapshot
+- `CommandStore` trait handles command persistence and indexed snapshot storage
+- `KanbanBackend` supertrait combines `DataStore + CommandStore` with manual impls per backend
+- Create commands embed deterministic UUIDs for reproducible replay
+- TUI render path reads from `ViewState` cache populated by `refresh_view()` — no storage queries during frame rendering
+
+### KAN-364 Fix Tui Card Selection Opens Wrong Details (2026-05-04)
+
+Fixed a bug where opening the card detail view would display the wrong card. The
+detail view was resolving the selected card by indexing into
+`cards_by_id.values()`, but `HashMap` iteration order is non-deterministic and
+does not match the ordered position stored in `active_card_index`. This caused
+the wrong card to be shown whenever the HashMap's internal order diverged from
+the selection order.
+The fix stores the selected card's UUID in `SelectionHub.active_card_id` when
+entering the detail view and looks the card up directly by ID via the new
+`App::get_card_for_detail_view` method, eliminating the ordering dependency.
+
+### KAN-365 Block Quit During Migration With Double Q Ui (2026-05-04)
+
+Pressing `q` while a storage migration is in progress no longer silently
+abandons the migration. The app now shows a warning banner and requires a
+second `q` to confirm the abort. If the migration completes before the
+second `q` is pressed, the confirmation clears automatically and the next
+`q` exits cleanly with no data loss.
+This fixes a data loss scenario where triggering a JSON→SQLite migration
+via the config editor and immediately pressing `q` would leave the
+destination file unwritten.
+Also fixes a startup regression where supplying an explicit file argument
+(e.g. `kanban myboard.json`) was incorrectly treated as a SQLite file when
+the config had `storage_backend = "sqlite"` set, causing a load error.
+
+### KAN-366 Description Doesnt Load In Card Details (2026-05-04)
+
+## Fixes
+- Card descriptions now display correctly when opening card details — previously the description field appeared empty even when content existed
+- Editing a card or board field in the detail view now immediately reflects changes without requiring a manual refresh
+- Empty card descriptions now show a placeholder prompt instead of a blank field
+- Snapshot load errors during rendering are now logged as warnings instead of being silently swallowed
+- Stale model reads after `execute_command` eliminated by capturing card/column UUIDs upfront before state mutation
+- Archived cards are now indexed in `Model` for O(1) lookup and cached as a flat list to avoid per-frame clones
+- Scroll offset is now preserved in `ColumnListsLayout.refresh_lists` after mutations
+- Archived cards panel title is now dynamic (shows live card count) instead of hardcoded
+- `ArchivedCardsView` is excluded from the global `q` quit intercept — `q` now closes the view instead of quitting the app
+## Refactors
+- Replaced the manual `refresh_view()` call pattern with an automatic per-frame render loop (`prepare_frame`), eliminating a class of stale-data bugs where UI state could fall out of sync after mutations
+- Introduced a `Model` struct as the single source of truth for all board, column, card, sprint, and dependency graph data rendered each frame
+- Removed the intermediate `RenderData`/`ViewState` layer in favour of direct `Model` reads
+- Removed granular cache-invalidation methods (`invalidate_boards`, `invalidate_cards`, etc.) — the per-frame full reload makes them unnecessary
+- Removed cloning accessors (`boards()`, `sprints()`) from `TuiContext`; callers now read from `Model` or the domain snapshot directly
+## Features
+- `SqliteStore` now implements `PersistenceStore` — `path` and `instance_id` fields added; `instance_id` is persisted in the `metadata` table and survives reopens
+- `SqliteStoreFactory` added to `kanban-persistence-sqlite`, implementing `StoreFactory` with magic-byte content sniffing (`SQLite format 3 `)
+- `SqliteStoreFactory` registered first in `default_registry()` so SQLite files are detected by content before JSON extension matching
+- `is_sqlite` / `open_sqlite` bypass removed from `McpContext` and `CliContext` — all storage backends now routed uniformly through the registry
+- `VERSION` constant extracted to a shared module; MCP and CLI now share a single version string source
+- MCP server handles `-V` / `--version` flag cleanly — responds with version string and exits without error output
+
+### KAN-371 Kanban Sqlite Add Explicit Wal Checkpoint On App Exit (2026-05-04)
+
+SQLite storage now flushes pending writes to the main database file after
+every save. Previously, SQLite's WAL mode accumulated changes in a
+`.wal` sidecar file that could grow to several MB between checkpoints,
+meaning a backup of just the `.db` file could be missing recent data.
+Every write — whether from the TUI, CLI, or MCP server — now triggers a
+`PRAGMA wal_checkpoint(TRUNCATE)`, keeping the WAL file at near-zero size
+after each operation. Backups of the `.sqlite` file are now always
+complete and self-contained.
+
+### KAN-383 Bug X In Archived Cards View Restores Card Instead Of Hard Deleting It Sqlite (2026-05-04)
+
+### Bug fix: permanently deleting an archived card no longer restores it as active (SQLite)
+When using a SQLite-backed board, pressing `x` on a card in the Archived Cards view is supposed to
+permanently remove it. Instead, the card reappeared in the normal kanban view as if it had been
+restored — as though the action had triggered a restore rather than a deletion.
+**The card is now fully removed in both tables** when hard-deleted. It will no longer ghost back
+into the active board after pressing `x`.
+This fix also closes a broader durability gap: every mutation on the SQLite backend (create, update,
+move, archive, undo, redo) now immediately checkpoints the write-ahead log, so the database file on
+disk always reflects the latest state. Previously the WAL was only flushed when the app exited
+cleanly — meaning a crash or force-quit could silently discard recent changes. That risk is now
+eliminated regardless of which interface (TUI, CLI, or MCP) is used.
+
+### KAN-384 Architecture Unified Backends Via True Deferred Reads (2026-05-04)
+
+## Description
+Unified the storage backend architecture so that both JSON and SQLite
+backends are opened with zero I/O at construction time. Data is loaded
+lazily on the first read, keeping startup fast and making the two
+backends interchangeable through a single `open_context()` entry point.
+## New Features
+- **`open_context(locator, config)`** — single async function that
+  opens any supported backend (JSON or SQLite) by detecting the file
+  type automatically from magic bytes or extension, then returns a
+  ready-to-use `KanbanContext`. No per-backend wiring required in
+  callers.
+- **Lazy JSON backend (`JsonDataStore`)** — wraps a JSON persistence
+  store with an in-memory cache that is populated only on the first
+  read. Subsequent reads are served from the cache; writes set a dirty
+  flag and are flushed to disk explicitly via `save()` or by the
+  background save worker.
+- **`KanbanBackend` lifecycle methods** — `flush()`, `reload()`,
+  `needs_flush()`, `needs_save_worker()`, and `on_undo_state_changed()`
+  give callers a uniform interface for durability and conflict detection
+  across all backend types.
+## Improvements
+- `KanbanContext::open` is now the single zero-I/O constructor for all
+  backends. The legacy `open_sqlite` / `open_json` constructors are
+  retained for backward compatibility but delegate to the new path.
+- The TUI flush signal replaces the old snapshot-save channel, removing
+  a layer of indirection and aligning JSON saves with the SQLite
+  checkpoint model.
+- Backend type is auto-detected from file content (magic bytes for
+  SQLite, leading `{` / `[` for JSON), so files without a recognised
+  extension are handled correctly.
+## Fixes
+- `StoreManager::make_backend` now correctly detects SQLite databases
+  that have no file extension by reading the SQLite magic-byte header,
+  preventing them from being opened as (invalid) JSON stores.
+## Deprecations
+None.
+## Testing
+Full contract coverage added for the new architecture:
+- `KanbanBackend` lifecycle tests for `SqliteStore` (needs_flush, WAL
+  checkpoint, reload no-op).
+- `JsonDataStore` command-log round-trip (flush → reopen → command
+  count matches).
+- `StoreManager::make_backend` — JSON path, SQLite path, magic-byte
+  detection, and content-sniffing for extension-less files.
+- `KanbanContext::open` integration suite — zero-I/O construction,
+  lazy load on first read, undo/redo with lazy baseline, save/reload
+  delegation, and external-change pickup after `reload()`.
+- `open_context()` end-to-end suite — JSON round-trip, SQLite
+  round-trip, magic-byte auto-detection, new-file-starts-empty.
+
+### KAN-391 Fix Validate Release Staleness (2026-05-04)
+
+- fix(ci): derive release-script crate list dynamically via cargo metadata
+- fix(ci): propagate list-crates failures cleanly to release-script consumers
+- fix(ci): broaden crate-list-sync drift regex to catch inline arrays
+- test(ci): add crate list sync invariant guard
+
+
 ## [0.3.5] - 2026-03-22 ([#193](https://github.com/fulsomenko/kanban/pull/193))
 
 ### KAN-229 Fix Publish Crates Order Add Kanban Service Before Kanban Mcp (2026-03-22)
