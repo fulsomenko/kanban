@@ -24,14 +24,14 @@ Sleep 1000ms
 Type "n"
 Sleep 300ms
 Type "Implement MCP server support"
-Type "j"
-Sleep 400ms
-Type "j"
-Sleep 400ms
-Type "j"
-Sleep 400ms
 Sleep 300ms
 Enter
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
 Sleep 1000ms
 Enter
 Sleep 1500ms
@@ -123,8 +123,10 @@ Space
 Sleep 800ms
 Escape
 Sleep 800ms
+Shift+G
+Sleep 1100ms
 Shift+L
-Sleep 500ms
+Sleep 900ms
 
 # Beat 7: Copy git branch and quit app
 Enter
@@ -159,7 +161,5 @@ Enter
 Sleep 1300ms
 
 # End
-Ctrl+L
-Enter
 Sleep 3000ms
 
