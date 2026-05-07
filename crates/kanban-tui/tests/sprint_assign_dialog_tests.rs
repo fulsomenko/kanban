@@ -249,13 +249,7 @@ fn test_assigning_to_completed_sprint_succeeds() {
         assert!(steps < max_steps, "could not navigate to completed sprint");
     }
     app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
-    let card = app
-        .model
-        .cards()
-        .iter()
-        .find(|c| c.id == card_id)
-        .cloned()
-        .unwrap();
+    let card = app.ctx.get_card(card_id).unwrap().unwrap();
     assert_eq!(
         card.sprint_id,
         Some(target_sprint),
@@ -290,13 +284,7 @@ fn test_assigning_to_ended_sprint_succeeds() {
         assert!(steps < max_steps, "could not navigate to ended sprint");
     }
     app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
-    let card = app
-        .model
-        .cards()
-        .iter()
-        .find(|c| c.id == card_id)
-        .cloned()
-        .unwrap();
+    let card = app.ctx.get_card(card_id).unwrap().unwrap();
     assert_eq!(
         card.sprint_id,
         Some(target_sprint),
@@ -334,13 +322,7 @@ fn test_bulk_assign_handler_supports_completed_sprint() {
         assert!(steps < max_steps, "could not navigate to completed sprint");
     }
     app.handle_assign_multiple_cards_to_sprint_popup(KeyCode::Enter);
-    let card = app
-        .model
-        .cards()
-        .iter()
-        .find(|c| c.id == card_id)
-        .cloned()
-        .unwrap();
+    let card = app.ctx.get_card(card_id).unwrap().unwrap();
     assert_eq!(
         card.sprint_id,
         Some(target_sprint),
