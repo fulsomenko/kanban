@@ -175,3 +175,207 @@ pub struct SprintUpdate {
     pub start_date: FieldUpdate<DateTime<Utc>>,
     pub end_date: FieldUpdate<DateTime<Utc>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ts(s: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+    }
+
+    fn make_sprint(
+        sprint_number: u32,
+        board_id: Uuid,
+        status: SprintStatus,
+        end_date: Option<DateTime<Utc>>,
+    ) -> Sprint {
+        Sprint {
+            id: Uuid::new_v4(),
+            board_id,
+            sprint_number,
+            name_index: None,
+            prefix: None,
+            card_prefix: None,
+            status,
+            start_date: None,
+            end_date,
+            created_at: ts("2026-01-01T00:00:00Z"),
+            updated_at: ts("2026-01-01T00:00:00Z"),
+        }
+    }
+
+    #[test]
+    fn test_is_ended_returns_true_for_active_with_past_end_date() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let s = make_sprint(
+            1,
+            Uuid::new_v4(),
+            SprintStatus::Active,
+            Some(ts("2026-05-06T00:00:00Z")),
+        );
+        assert!(s.is_ended(now));
+    }
+
+    #[test]
+    fn test_is_ended_returns_false_for_active_with_future_end_date() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let s = make_sprint(
+            1,
+            Uuid::new_v4(),
+            SprintStatus::Active,
+            Some(ts("2026-05-08T00:00:00Z")),
+        );
+        assert!(!s.is_ended(now));
+    }
+
+    #[test]
+    fn test_is_ended_returns_false_for_completed_status_even_with_past_end_date() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let s = make_sprint(
+            1,
+            Uuid::new_v4(),
+            SprintStatus::Completed,
+            Some(ts("2026-05-01T00:00:00Z")),
+        );
+        assert!(!s.is_ended(now));
+    }
+
+    #[test]
+    fn test_is_ended_returns_false_for_active_with_no_end_date() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let s = make_sprint(1, Uuid::new_v4(), SprintStatus::Active, None);
+        assert!(!s.is_ended(now));
+    }
+
+    #[test]
+    fn test_for_assignment_dialog_buckets_planning_into_active_section() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let board = Uuid::new_v4();
+        let s = make_sprint(1, board, SprintStatus::Planning, None);
+        let sprints = vec![s.clone()];
+        let (active, ended) = Sprint::for_assignment_dialog(&sprints, board, now);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].id, s.id);
+        assert_eq!(ended.len(), 0);
+    }
+
+    #[test]
+    fn test_for_assignment_dialog_buckets_active_with_future_end_date_into_active_section() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let board = Uuid::new_v4();
+        let s = make_sprint(
+            2,
+            board,
+            SprintStatus::Active,
+            Some(ts("2026-05-20T00:00:00Z")),
+        );
+        let sprints = vec![s.clone()];
+        let (active, ended) = Sprint::for_assignment_dialog(&sprints, board, now);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].id, s.id);
+        assert_eq!(ended.len(), 0);
+    }
+
+    #[test]
+    fn test_for_assignment_dialog_buckets_active_with_past_end_date_into_completed_ended_section() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let board = Uuid::new_v4();
+        let s = make_sprint(
+            3,
+            board,
+            SprintStatus::Active,
+            Some(ts("2026-05-01T00:00:00Z")),
+        );
+        let sprints = vec![s.clone()];
+        let (active, ended) = Sprint::for_assignment_dialog(&sprints, board, now);
+        assert_eq!(active.len(), 0);
+        assert_eq!(ended.len(), 1);
+        assert_eq!(ended[0].id, s.id);
+    }
+
+    #[test]
+    fn test_for_assignment_dialog_buckets_completed_into_completed_ended_section() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let board = Uuid::new_v4();
+        let s = make_sprint(
+            4,
+            board,
+            SprintStatus::Completed,
+            Some(ts("2026-04-01T00:00:00Z")),
+        );
+        let sprints = vec![s.clone()];
+        let (active, ended) = Sprint::for_assignment_dialog(&sprints, board, now);
+        assert_eq!(active.len(), 0);
+        assert_eq!(ended.len(), 1);
+        assert_eq!(ended[0].id, s.id);
+    }
+
+    #[test]
+    fn test_for_assignment_dialog_excludes_cancelled_from_both_sections() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let board = Uuid::new_v4();
+        let s = make_sprint(5, board, SprintStatus::Cancelled, None);
+        let sprints = vec![s];
+        let (active, ended) = Sprint::for_assignment_dialog(&sprints, board, now);
+        assert_eq!(active.len(), 0);
+        assert_eq!(ended.len(), 0);
+    }
+
+    #[test]
+    fn test_for_assignment_dialog_excludes_other_boards() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let board = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let mine = make_sprint(1, board, SprintStatus::Planning, None);
+        let theirs_active = make_sprint(2, other, SprintStatus::Planning, None);
+        let theirs_completed = make_sprint(3, other, SprintStatus::Completed, None);
+        let sprints = vec![mine.clone(), theirs_active, theirs_completed];
+        let (active, ended) = Sprint::for_assignment_dialog(&sprints, board, now);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].id, mine.id);
+        assert_eq!(ended.len(), 0);
+    }
+
+    #[test]
+    fn test_for_assignment_dialog_orders_each_section_by_sprint_number_descending() {
+        let now = ts("2026-05-07T00:00:00Z");
+        let board = Uuid::new_v4();
+        let p1 = make_sprint(1, board, SprintStatus::Planning, None);
+        let p3 = make_sprint(3, board, SprintStatus::Planning, None);
+        let a2 = make_sprint(
+            2,
+            board,
+            SprintStatus::Active,
+            Some(ts("2026-05-20T00:00:00Z")),
+        );
+        let c10 = make_sprint(
+            10,
+            board,
+            SprintStatus::Completed,
+            Some(ts("2026-04-01T00:00:00Z")),
+        );
+        let c5 = make_sprint(
+            5,
+            board,
+            SprintStatus::Completed,
+            Some(ts("2026-03-01T00:00:00Z")),
+        );
+        let e7 = make_sprint(
+            7,
+            board,
+            SprintStatus::Active,
+            Some(ts("2026-05-01T00:00:00Z")),
+        );
+        let sprints = vec![p1.clone(), p3.clone(), a2.clone(), c10.clone(), c5.clone(), e7.clone()];
+        let (active, ended) = Sprint::for_assignment_dialog(&sprints, board, now);
+        assert_eq!(
+            active.iter().map(|s| s.sprint_number).collect::<Vec<_>>(),
+            vec![3, 2, 1]
+        );
+        assert_eq!(
+            ended.iter().map(|s| s.sprint_number).collect::<Vec<_>>(),
+            vec![10, 7, 5]
+        );
+    }
+}
