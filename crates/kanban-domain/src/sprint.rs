@@ -147,6 +147,42 @@ impl Sprint {
         }
     }
 
+    /// Splits sprints on `board_id` into two sections for the assignment dialog:
+    /// `(active_or_planned, completed_or_ended)`.
+    ///
+    /// - **Active / planned**: `Planning` status, plus `Active` sprints whose
+    ///   `end_date` is in the future (or `None`).
+    /// - **Completed / ended**: `Completed` status, plus `Active` sprints whose
+    ///   `end_date` has passed (i.e. `is_ended(now)` is true).
+    /// - `Cancelled` sprints and sprints from other boards are excluded.
+    ///
+    /// Each section is sorted by `sprint_number` descending.
+    pub fn for_assignment_dialog(
+        sprints: &[Sprint],
+        board_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> (Vec<&Sprint>, Vec<&Sprint>) {
+        let mut active = Vec::new();
+        let mut ended = Vec::new();
+        for s in sprints.iter().filter(|s| s.board_id == board_id) {
+            match s.status {
+                SprintStatus::Cancelled => {}
+                SprintStatus::Planning => active.push(s),
+                SprintStatus::Active => {
+                    if s.is_ended(now) {
+                        ended.push(s);
+                    } else {
+                        active.push(s);
+                    }
+                }
+                SprintStatus::Completed => ended.push(s),
+            }
+        }
+        active.sort_by(|a, b| b.sprint_number.cmp(&a.sprint_number));
+        ended.sort_by(|a, b| b.sprint_number.cmp(&a.sprint_number));
+        (active, ended)
+    }
+
     /// Update sprint with partial changes
     pub fn update(&mut self, updates: SprintUpdate) {
         updates.name_index.apply_to(&mut self.name_index);
