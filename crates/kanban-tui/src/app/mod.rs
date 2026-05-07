@@ -2131,6 +2131,8 @@ impl App {
     }
 
     pub fn get_current_sprint_selection_index(&self) -> usize {
+        use crate::components::sprint_assign_list::{build_entries, sprint_id_of};
+
         if let Some(card_idx) = self.selection.active_card_index {
             let cards = self.model.cards();
             if let Some(card) = cards.get(card_idx) {
@@ -2139,10 +2141,10 @@ impl App {
                         let boards = self.model.boards();
                         if let Some(board) = boards.get(board_idx) {
                             let sprints = self.model.sprints();
-                            let board_sprints = Sprint::assignable(sprints, board.id);
-                            for (idx, sprint) in board_sprints.iter().enumerate() {
-                                if sprint.id == card_sprint_id {
-                                    return idx + 1;
+                            let entries = build_entries(sprints, board.id, chrono::Utc::now());
+                            for (idx, entry) in entries.iter().enumerate() {
+                                if sprint_id_of(entry) == Some(card_sprint_id) {
+                                    return idx;
                                 }
                             }
                         }
