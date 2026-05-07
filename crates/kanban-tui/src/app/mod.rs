@@ -1469,7 +1469,7 @@ impl App {
             .model
             .sprints()
             .iter()
-            .filter(|s| s.is_ended())
+            .filter(|s| s.is_ended(chrono::Utc::now()))
             .collect();
 
         if !ended_sprints.is_empty() {

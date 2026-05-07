@@ -179,7 +179,7 @@ fn render_board_sprints_list(
                 .count();
 
             let is_active_sprint = board.active_sprint_id == Some(sprint.id);
-            let is_ended = sprint.is_ended();
+            let is_ended = sprint.is_ended(chrono::Utc::now());
 
             let mut base_style = normal_text();
             if is_selected && is_focused {

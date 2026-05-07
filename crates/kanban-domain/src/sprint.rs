@@ -136,12 +136,12 @@ impl Sprint {
         self.updated_at = Utc::now();
     }
 
-    pub fn is_ended(&self) -> bool {
+    pub fn is_ended(&self, now: DateTime<Utc>) -> bool {
         if self.status != SprintStatus::Active {
             return false;
         }
         if let Some(end_date) = self.end_date {
-            Utc::now() > end_date
+            now > end_date
         } else {
             false
         }
