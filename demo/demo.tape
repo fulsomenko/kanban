@@ -24,6 +24,12 @@ Sleep 1000ms
 Type "n"
 Sleep 300ms
 Type "Implement MCP server support"
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
 Sleep 300ms
 Enter
 Sleep 1000ms
