@@ -1,3 +1,16 @@
+## [0.4.1] - 2026-05-07 ([#242](https://github.com/fulsomenko/kanban/pull/242))
+
+### KAN-396 Fix Tui Make Settings Config Edit Tests Sandbox Safe For Nixpkgs (2026-05-07)
+
+Fix settings_config_edit_tests failing in Nix build sandbox
+- 5 tests in kanban-tui called apply_config_edit without a configuration_location
+  in the JSON, causing save() to fall back to $HOME/.config/kanban/config.toml
+- The Nix sandbox sets $HOME to a non-writable stub, so create_dir_all failed
+  with Permission denied
+- Fix: each test now creates a TempDir and passes its path as configuration_location
+  so save() writes to $TMPDIR (writable in sandbox) instead of $HOME/.config
+
+
 ## [0.4.0] - 2026-05-04 ([#208](https://github.com/fulsomenko/kanban/pull/208))
 
 ### CAT-245 Surface Command Errors To User Via Banner In Tui Handlers (2026-05-04)
