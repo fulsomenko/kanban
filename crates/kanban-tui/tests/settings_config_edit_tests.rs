@@ -132,9 +132,14 @@ fn test_export_filename_rejects_null_byte() {
 #[test]
 fn test_apply_config_edit_valid_json_updates_config() {
     let mut app = App::test_default();
+    let dir = tempfile::tempdir().unwrap();
+    let config_path_str = dir.path().join("config.toml").to_str().unwrap().to_string();
     let format = kanban_tui::edit_format::EditFormat::Json;
-    let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml"}"#;
-    let result = app.apply_config_edit(json, &format);
+    let json = format!(
+        r#"{{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","configuration_location":"{}"}}"#,
+        config_path_str
+    );
+    let result = app.apply_config_edit(&json, &format);
     assert!(result.is_ok());
     assert_eq!(app.app_config.effective_default_card_prefix(), "feat");
 }
@@ -172,13 +177,15 @@ fn test_apply_config_edit_unchanged_storage_not_written_to_config() {
     app.app_config = kanban_core::AppConfig::default();
     app.original_storage_backend = None;
     app.original_storage_location = None;
+    let dir = tempfile::tempdir().unwrap();
+    let config_path_str = dir.path().join("config.toml").to_str().unwrap().to_string();
     let active_storage = kanban_service::config::resolve_storage_location(&app.app_config);
     let format = kanban_tui::edit_format::EditFormat::Json;
     // Simulate what the editor sends back: card prefix changed, storage fields
     // present and unchanged (as from_config would populate them).
     let json = format!(
-        r#"{{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"{}"}}"#,
-        active_storage
+        r#"{{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"{}","configuration_location":"{}"}}"#,
+        active_storage, config_path_str
     );
     let result = app.apply_config_edit(&json, &format);
     assert!(result.is_ok());
@@ -200,6 +207,8 @@ fn test_apply_config_edit_with_startup_absolute_path_not_written_to_config() {
     app.app_config = kanban_core::AppConfig::default();
     app.original_storage_backend = None;
     app.original_storage_location = None;
+    let dir = tempfile::tempdir().unwrap();
+    let config_path_str = dir.path().join("config.toml").to_str().unwrap().to_string();
     let active_storage = kanban_service::config::resolve_storage_location(&app.app_config);
     // Reproduce the startup state: absolute path + detected backend, but
     // original_storage_* remain None (no prior config on disk).
@@ -208,8 +217,8 @@ fn test_apply_config_edit_with_startup_absolute_path_not_written_to_config() {
 
     let format = kanban_tui::edit_format::EditFormat::Json;
     let json = format!(
-        r#"{{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"{}"}}"#,
-        active_storage
+        r#"{{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"{}","configuration_location":"{}"}}"#,
+        active_storage, config_path_str
     );
     let result = app.apply_config_edit(&json, &format);
     assert!(result.is_ok());
@@ -271,10 +280,15 @@ fn test_apply_config_edit_with_cli_override_unloads_when_storage_explicitly_prov
     app.app_config.storage_backend = Some("json".into());
     app.has_data_file = false; // skip migration in this unit test
 
+    let dir = tempfile::tempdir().unwrap();
+    let config_path_str = dir.path().join("config.toml").to_str().unwrap().to_string();
     let format = kanban_tui::edit_format::EditFormat::Json;
     // User explicitly uncomments storage fields (both present in DTO)
-    let json = r#"{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"/tmp/new_storage.json"}"#;
-    let result = app.apply_config_edit(json, &format);
+    let json = format!(
+        r#"{{"default_card_prefix":"feat","default_sprint_prefix":"sprint","editing_format":"json","configuration_format":"toml","storage_backend":"json","storage_location":"/tmp/new_storage.json","configuration_location":"{}"}}"#,
+        config_path_str
+    );
+    let result = app.apply_config_edit(&json, &format);
 
     assert!(result.is_ok(), "expected Ok, got: {:?}", result);
     assert!(
@@ -397,9 +411,14 @@ fn test_quit_twice_with_both_pending_saves_and_migration_quits() {
 #[test]
 fn test_apply_config_edit_syncs_prefixes() {
     let mut app = App::test_default();
+    let dir = tempfile::tempdir().unwrap();
+    let config_path_str = dir.path().join("config.toml").to_str().unwrap().to_string();
     let format = kanban_tui::edit_format::EditFormat::Json;
-    let json = r#"{"default_card_prefix":"myprefix","default_sprint_prefix":"mysprint","editing_format":"json","configuration_format":"toml"}"#;
-    let result = app.apply_config_edit(json, &format);
+    let json = format!(
+        r#"{{"default_card_prefix":"myprefix","default_sprint_prefix":"mysprint","editing_format":"json","configuration_format":"toml","configuration_location":"{}"}}"#,
+        config_path_str
+    );
+    let result = app.apply_config_edit(&json, &format);
     assert!(result.is_ok());
     assert_eq!(app.app_config.effective_default_card_prefix(), "myprefix");
     assert_eq!(app.app_config.effective_default_sprint_prefix(), "mysprint");
