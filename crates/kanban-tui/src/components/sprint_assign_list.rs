@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use kanban_domain::Sprint;
+use kanban_domain::{Sprint, SprintStatus};
 use uuid::Uuid;
 
 /// Entry in the sprint-assignment dialog list. Headers are non-selectable;
@@ -16,34 +16,100 @@ pub enum SprintAssignEntry<'a> {
 pub const ACTIVE_PLANNED_HEADER: &str = "Active / Planned";
 pub const COMPLETED_ENDED_HEADER: &str = "Completed / Ended";
 
+fn is_selectable(entry: &SprintAssignEntry) -> bool {
+    !matches!(entry, SprintAssignEntry::Header(_))
+}
+
 /// Build the entry list for the dialog. Headers are emitted only when their
 /// section is non-empty. The `(None)` entry is always at index 0.
 pub fn build_entries<'a>(
-    _sprints: &'a [Sprint],
-    _board_id: Uuid,
-    _now: DateTime<Utc>,
+    sprints: &'a [Sprint],
+    board_id: Uuid,
+    now: DateTime<Utc>,
 ) -> Vec<SprintAssignEntry<'a>> {
-    Vec::new()
+    let (active, completed_or_ended) = Sprint::for_assignment_dialog(sprints, board_id, now);
+    let mut entries: Vec<SprintAssignEntry<'a>> = Vec::with_capacity(
+        1 + active.len()
+            + completed_or_ended.len()
+            + usize::from(!active.is_empty())
+            + usize::from(!completed_or_ended.is_empty()),
+    );
+    entries.push(SprintAssignEntry::None);
+    if !active.is_empty() {
+        entries.push(SprintAssignEntry::Header(ACTIVE_PLANNED_HEADER));
+        for s in active {
+            entries.push(SprintAssignEntry::ActiveOrPlanned(s));
+        }
+    }
+    if !completed_or_ended.is_empty() {
+        entries.push(SprintAssignEntry::Header(COMPLETED_ENDED_HEADER));
+        for s in completed_or_ended {
+            if s.status == SprintStatus::Completed {
+                entries.push(SprintAssignEntry::Completed(s));
+            } else {
+                entries.push(SprintAssignEntry::Ended(s));
+            }
+        }
+    }
+    entries
+}
+
+fn first_selectable(entries: &[SprintAssignEntry]) -> Option<usize> {
+    entries
+        .iter()
+        .position(|e| is_selectable(e))
+}
+
+fn last_selectable(entries: &[SprintAssignEntry]) -> Option<usize> {
+    entries
+        .iter()
+        .rposition(|e| is_selectable(e))
+}
+
+fn cur_if_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
+    cur.filter(|&c| entries.get(c).map(is_selectable).unwrap_or(false))
 }
 
 /// Move selection to the next selectable entry, skipping headers.
 /// Clamps at the last selectable entry. Returns `None` if no selectable
 /// entries exist.
-pub fn next_selectable(_entries: &[SprintAssignEntry], _cur: Option<usize>) -> Option<usize> {
-    None
+pub fn next_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
+    let start = cur.map(|i| i + 1).unwrap_or(0);
+    entries
+        .iter()
+        .enumerate()
+        .skip(start)
+        .find(|(_, e)| is_selectable(e))
+        .map(|(i, _)| i)
+        .or_else(|| cur_if_selectable(entries, cur))
+        .or_else(|| last_selectable(entries))
 }
 
 /// Move selection to the previous selectable entry, skipping headers.
 /// Clamps at the first selectable entry. Returns `None` if no selectable
 /// entries exist.
-pub fn prev_selectable(_entries: &[SprintAssignEntry], _cur: Option<usize>) -> Option<usize> {
-    None
+pub fn prev_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
+    let end = cur.unwrap_or(entries.len());
+    entries
+        .iter()
+        .enumerate()
+        .take(end)
+        .rev()
+        .find(|(_, e)| is_selectable(e))
+        .map(|(i, _)| i)
+        .or_else(|| cur_if_selectable(entries, cur))
+        .or_else(|| first_selectable(entries))
 }
 
 /// Returns the sprint id for a sprint-bearing entry, or `None` for
 /// `Header` and `None` entries.
-pub fn sprint_id_of(_entry: &SprintAssignEntry) -> Option<Uuid> {
-    None
+pub fn sprint_id_of(entry: &SprintAssignEntry) -> Option<Uuid> {
+    match entry {
+        SprintAssignEntry::ActiveOrPlanned(s)
+        | SprintAssignEntry::Completed(s)
+        | SprintAssignEntry::Ended(s) => Some(s.id),
+        SprintAssignEntry::Header(_) | SprintAssignEntry::None => None,
+    }
 }
 
 #[cfg(test)]
