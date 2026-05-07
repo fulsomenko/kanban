@@ -62,7 +62,7 @@ jobs:
         if: steps.check.outputs.has_changesets == 'true'
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin git@github.com:fulsomenko/kanban.git
 
       # bump-version reads changesets, aggregate-changelog reads then deletes them.
@@ -130,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://github.com/fulsomenko/kanban/archive/v${VERSION}.tar.gz"
-          SHA256=$(curl -sL "$URL" | sha256sum | cut -d' ' -f1)
+          SHA256=$(curl -fsL "$URL" | sha256sum | cut -d' ' -f1)
           sed -i "s|^pkgver=.*|pkgver=${VERSION}|" ./aur/PKGBUILD
           sed -i "s|^pkgrel=.*|pkgrel=1|" ./aur/PKGBUILD
           sed -i "s|sha256sums=.*|sha256sums=(\"${SHA256}\")|" ./aur/PKGBUILD
