@@ -55,7 +55,8 @@ pub(crate) fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
 }
 
 pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
-    use kanban_domain::Sprint;
+    use crate::components::sprint_assign_list::{build_entries, SprintAssignEntry};
+    use ratatui::style::Modifier;
 
     let area = centered_rect(60, 50, frame.area());
 
@@ -86,32 +87,57 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     if let Some(board_idx) = app.selection.active_board_index {
         if let Some(board) = app.model.boards().get(board_idx) {
             let sprints = app.model.sprints();
-            let board_sprints = Sprint::assignable(sprints, board.id);
+            let entries = build_entries(sprints, board.id, chrono::Utc::now());
 
-            for (idx, sprint_option) in std::iter::once(None)
-                .chain(board_sprints.iter().map(|s| Some(*s)))
-                .enumerate()
-            {
+            for (idx, entry) in entries.iter().enumerate() {
                 let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);
-
-                let style = if is_selected {
-                    Style::default().fg(Color::White).bg(Color::Blue)
-                } else {
-                    Style::default().fg(Color::White)
+                let line = match entry {
+                    SprintAssignEntry::Header(label) => Line::from(Span::styled(
+                        (*label).to_string(),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    )),
+                    SprintAssignEntry::None => {
+                        let prefix = if is_selected { "> " } else { "  " };
+                        let style = if is_selected {
+                            Style::default().fg(Color::White).bg(Color::Blue)
+                        } else {
+                            Style::default().fg(Color::White)
+                        };
+                        Line::from(Span::styled(format!("{}(None)", prefix), style))
+                    }
+                    SprintAssignEntry::ActiveOrPlanned(s) => {
+                        let prefix = if is_selected { "> " } else { "  " };
+                        let style = if is_selected {
+                            Style::default().fg(Color::White).bg(Color::Blue)
+                        } else {
+                            Style::default().fg(Color::White)
+                        };
+                        Line::from(Span::styled(
+                            format!("{}{}", prefix, s.formatted_name(board, "sprint")),
+                            style,
+                        ))
+                    }
+                    SprintAssignEntry::Completed(s) | SprintAssignEntry::Ended(s) => {
+                        let prefix = if is_selected { "> " } else { "  " };
+                        let status_color = if matches!(entry, SprintAssignEntry::Completed(_)) {
+                            Color::Green
+                        } else {
+                            Color::Red
+                        };
+                        let style = if is_selected {
+                            Style::default().fg(Color::White).bg(Color::Blue)
+                        } else {
+                            Style::default().fg(status_color)
+                        };
+                        Line::from(Span::styled(
+                            format!("{}{}", prefix, s.formatted_name(board, "sprint")),
+                            style,
+                        ))
+                    }
                 };
-
-                let prefix = if is_selected { "> " } else { "  " };
-
-                let sprint_name = if let Some(sprint) = sprint_option {
-                    sprint.formatted_name(board, "sprint")
-                } else {
-                    "(None)".to_string()
-                };
-
-                lines.push(Line::from(Span::styled(
-                    format!("{}{}", prefix, sprint_name),
-                    style,
-                )));
+                lines.push(line);
             }
         }
     }
