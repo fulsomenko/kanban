@@ -55,7 +55,9 @@ pub(crate) fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
 }
 
 pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
-    use crate::components::sprint_assign_list::{build_entries, SprintAssignEntry};
+    use crate::components::sprint_assign_list::{
+        build_entries, scroll_offset_to_show, SprintAssignEntry,
+    };
     use ratatui::style::Modifier;
 
     let area = centered_rect(60, 50, frame.area());
@@ -142,6 +144,12 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
         }
     }
 
-    let list = Paragraph::new(lines);
+    let selected = app
+        .dialog_input
+        .sprint_assign_selection
+        .get()
+        .unwrap_or(0);
+    let scroll = scroll_offset_to_show(selected, lines.len(), chunks[1].height as usize);
+    let list = Paragraph::new(lines).scroll((scroll as u16, 0));
     frame.render_widget(list, chunks[1]);
 }

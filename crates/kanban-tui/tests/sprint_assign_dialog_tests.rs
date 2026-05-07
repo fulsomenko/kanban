@@ -386,3 +386,71 @@ fn sprint_at(app: &App, idx: usize) -> Option<Uuid> {
     sprint_id_of(entries.get(idx)?)
 }
 
+#[test]
+fn test_dialog_scrolls_to_keep_selected_sprint_visible_when_list_overflows() {
+    // 30 planning sprints overflows the dialog's visible area at the
+    // standard 120x30 test backend size.
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("B".into(), None).unwrap();
+    let column = app.ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    app.ctx
+        .create_card(
+            board.id,
+            column.id,
+            "Task".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    for _ in 0..30 {
+        app.ctx.create_sprint(board.id, None, None).unwrap();
+    }
+    app.selection.active_board_index = Some(0);
+    app.selection.active_card_index = Some(0);
+    app.prepare_frame();
+
+    open_assign_dialog(&mut app);
+
+    // Sprints are sorted by sprint_number desc, so the oldest sprint sits at
+    // the bottom of the active section — guaranteed off-screen without scroll.
+    let oldest_id = app
+        .model
+        .sprints()
+        .iter()
+        .min_by_key(|s| s.sprint_number)
+        .map(|s| s.id)
+        .unwrap();
+
+    let max_steps = 50;
+    let mut steps = 0;
+    loop {
+        let idx = app
+            .dialog_input
+            .sprint_assign_selection
+            .get()
+            .expect("selection set");
+        if sprint_at(&app, idx) == Some(oldest_id) {
+            break;
+        }
+        app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
+        steps += 1;
+        assert!(steps < max_steps, "could not navigate to oldest sprint");
+    }
+
+    let board_after = app.model.boards()[0].clone();
+    let oldest = app
+        .model
+        .sprints()
+        .iter()
+        .find(|s| s.id == oldest_id)
+        .cloned()
+        .unwrap();
+    let oldest_name = oldest.formatted_name(&board_after, "sprint");
+
+    let output = render_dialog_to_string(&app);
+    assert!(
+        output.contains(&oldest_name),
+        "selected sprint at end of long list must remain visible after scroll; output:\n{}",
+        output
+    );
+}
+
