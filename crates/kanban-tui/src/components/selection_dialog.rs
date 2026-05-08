@@ -1,5 +1,8 @@
 use crate::app::App;
-use kanban_domain::{Sprint, SprintStatus};
+use crate::components::sprint_assign_list::{
+    build_entries, render_entry_line, scroll_offset_to_show, section_header_for, SprintAssignEntry,
+};
+use kanban_domain::SprintStatus;
 use ratatui::Frame;
 
 pub trait SelectionDialog {
@@ -291,22 +294,17 @@ impl SelectionDialog for SprintAssignDialog {
             let boards = app.model.boards();
             if let Some(board) = boards.get(board_idx) {
                 let sprints = app.model.sprints();
-                let sprint_count = Sprint::assignable(sprints, board.id).len();
-                sprint_count + 1 // +1 for None option
-            } else {
-                1
+                return build_entries(sprints, board.id, chrono::Utc::now()).len();
             }
-        } else {
-            1
         }
+        1
     }
 
     fn render(&self, app: &App, frame: &mut Frame) {
         use crate::components::centered_rect;
         use ratatui::{
             layout::{Constraint, Direction, Layout},
-            style::{Color, Modifier, Style},
-            text::{Line, Span},
+            style::{Color, Style},
             widgets::{Block, Borders, Clear, Paragraph},
         };
 
@@ -336,7 +334,7 @@ impl SelectionDialog for SprintAssignDialog {
             let boards = app.model.boards();
             if let Some(board) = boards.get(board_idx) {
                 let sprints = app.model.sprints();
-                let board_sprints = Sprint::assignable(sprints, board.id);
+                let entries = build_entries(sprints, board.id, chrono::Utc::now());
 
                 let cards = app.model.cards();
                 let current_sprint_id = if let Some(card_idx) = app.selection.active_card_index {
@@ -345,45 +343,69 @@ impl SelectionDialog for SprintAssignDialog {
                     None
                 };
 
-                for (idx, sprint_option) in std::iter::once(None)
-                    .chain(board_sprints.iter().map(|s| Some(*s)))
-                    .enumerate()
-                {
+                for (idx, entry) in entries.iter().enumerate() {
                     let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);
-                    let is_current = match (sprint_option, current_sprint_id) {
-                        (None, None) => true,
-                        (Some(s), Some(id)) => s.id == id,
-                        _ => false,
-                    };
-
-                    let style = if is_selected {
-                        Style::default().fg(Color::White).bg(Color::Blue)
-                    } else if is_current {
-                        Style::default()
-                            .fg(Color::Green)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(Color::White)
-                    };
-
-                    let prefix = if is_selected { "> " } else { "  " };
-                    let current_indicator = if is_current { " (current)" } else { "" };
-
-                    let sprint_name = if let Some(sprint) = sprint_option {
-                        sprint.formatted_name(board, "sprint")
-                    } else {
-                        "(None)".to_string()
-                    };
-
-                    lines.push(Line::from(Span::styled(
-                        format!("{}{}{}", prefix, sprint_name, current_indicator),
-                        style,
-                    )));
+                    lines.push(render_entry_line(
+                        entry,
+                        is_selected,
+                        current_sprint_id,
+                        board,
+                    ));
                 }
             }
         }
 
-        let list = Paragraph::new(lines);
+        let selected = app.dialog_input.sprint_assign_selection.get().unwrap_or(0);
+        let entries_for_header = if let Some(board_idx) = app.selection.active_board_index {
+            app.model
+                .boards()
+                .get(board_idx)
+                .map(|b| build_entries(app.model.sprints(), b.id, chrono::Utc::now()))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let scroll = scroll_offset_to_show(selected, lines.len(), chunks[1].height as usize);
+        let list = Paragraph::new(lines).scroll((scroll as u16, 0));
         frame.render_widget(list, chunks[1]);
+        render_sticky_section_header(frame, chunks[1], &entries_for_header, selected, scroll);
     }
+}
+
+fn render_sticky_section_header(
+    frame: &mut Frame,
+    list_area: ratatui::layout::Rect,
+    entries: &[SprintAssignEntry<'_>],
+    selected: usize,
+    scroll: usize,
+) {
+    use ratatui::{
+        layout::Rect,
+        style::{Color, Modifier, Style},
+        text::{Line, Span},
+        widgets::Paragraph,
+    };
+
+    if list_area.height == 0 {
+        return;
+    }
+    let Some((header_idx, label)) = section_header_for(entries, selected) else {
+        return;
+    };
+    if header_idx >= scroll {
+        return;
+    }
+    let overlay = Paragraph::new(Line::from(Span::styled(
+        label.to_string(),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )));
+    let top_row = Rect {
+        x: list_area.x,
+        y: list_area.y,
+        width: list_area.width,
+        height: 1,
+    };
+    frame.render_widget(overlay, top_row);
 }

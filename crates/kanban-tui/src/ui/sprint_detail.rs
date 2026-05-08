@@ -80,7 +80,7 @@ fn sprint_date_lines(sprint: &Sprint) -> Vec<Line<'static>> {
         ));
     }
     if let Some(end) = sprint.end_date {
-        let end_style = if sprint.is_ended() {
+        let end_style = if sprint.is_ended(chrono::Utc::now()) {
             Style::default().fg(Color::Red)
         } else {
             normal_text()

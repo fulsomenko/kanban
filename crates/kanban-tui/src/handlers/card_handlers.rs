@@ -5,7 +5,7 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, Command, CreateCard, MoveCard, RestoreCard, SetBoardTaskSort,
     UpdateCard,
 };
-use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, KanbanOperations, SortOrder, Sprint};
+use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, KanbanOperations, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -94,8 +94,20 @@ impl App {
                 let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
                     let sprints = self.model.sprints();
-                    let sprint_count = Sprint::assignable(sprints, board.id).len();
-                    if sprint_count > 0 {
+                    let entries = crate::components::sprint_assign_list::build_entries(
+                        sprints,
+                        board.id,
+                        chrono::Utc::now(),
+                    );
+                    let has_assignable = entries.iter().any(|e| {
+                        matches!(
+                            e,
+                            crate::components::sprint_assign_list::SprintAssignEntry::ActiveOrPlanned(_)
+                                | crate::components::sprint_assign_list::SprintAssignEntry::Completed(_)
+                                | crate::components::sprint_assign_list::SprintAssignEntry::Ended(_)
+                        )
+                    });
+                    if has_assignable {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
                             let card_id = selected_card.id;
                             let actual_idx =
