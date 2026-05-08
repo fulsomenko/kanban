@@ -409,4 +409,3 @@ fn render_sticky_section_header(
     };
     frame.render_widget(overlay, top_row);
 }
-
