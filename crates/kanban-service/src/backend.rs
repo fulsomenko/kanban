@@ -62,8 +62,6 @@ impl KanbanBackend for InMemoryStore {
     // needs_flush=false, needs_save_worker=false.
 }
 
-// SqliteBackend impl is in sqlite_backend.rs (field visibility)
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,19 +9,17 @@ use kanban_domain::{
 };
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_sqlite::SqliteStore;
-use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct SqliteBackend {
-    pub(crate) db: Arc<SqliteStore>,
+    db: SqliteStore,
     mem: InMemoryStore,
 }
 
 impl SqliteBackend {
     pub async fn open(locator: &str) -> KanbanResult<Self> {
-        let store = SqliteStore::open(locator).await?;
         Ok(Self {
-            db: Arc::new(store),
+            db: SqliteStore::open(locator).await?,
             mem: InMemoryStore::new(),
         })
     }
