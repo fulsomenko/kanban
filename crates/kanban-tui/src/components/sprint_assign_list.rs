@@ -1,5 +1,9 @@
 use chrono::{DateTime, Utc};
-use kanban_domain::{Sprint, SprintStatus};
+use kanban_domain::{Board, Sprint, SprintStatus};
+use ratatui::{
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+};
 use uuid::Uuid;
 
 /// Entry in the sprint-assignment dialog list. Headers are non-selectable;
@@ -105,6 +109,78 @@ pub fn sprint_id_of(entry: &SprintAssignEntry) -> Option<Uuid> {
         | SprintAssignEntry::Completed(s)
         | SprintAssignEntry::Ended(s) => Some(s.id),
         SprintAssignEntry::Header(_) | SprintAssignEntry::None => None,
+    }
+}
+
+/// Renders a single dialog row for the given entry. Shared by both the
+/// single-card and multi-card sprint-assign dialogs. Pass
+/// `current_sprint_id = None` from contexts that don't track a current
+/// sprint (e.g. the multi-card variant).
+pub fn render_entry_line(
+    entry: &SprintAssignEntry<'_>,
+    is_selected: bool,
+    current_sprint_id: Option<Uuid>,
+    board: &Board,
+) -> Line<'static> {
+    match entry {
+        SprintAssignEntry::Header(label) => Line::from(Span::styled(
+            (*label).to_string(),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
+        SprintAssignEntry::None => {
+            let is_current = current_sprint_id.is_none();
+            let prefix = if is_selected { "> " } else { "  " };
+            let suffix = if is_current { " (current)" } else { "" };
+            let style = if is_selected {
+                Style::default().fg(Color::White).bg(Color::Blue)
+            } else if is_current {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            Line::from(Span::styled(format!("{}(None){}", prefix, suffix), style))
+        }
+        SprintAssignEntry::ActiveOrPlanned(s) => {
+            let is_current = current_sprint_id == Some(s.id);
+            let prefix = if is_selected { "> " } else { "  " };
+            let suffix = if is_current { " (current)" } else { "" };
+            let style = if is_selected {
+                Style::default().fg(Color::White).bg(Color::Blue)
+            } else if is_current {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            Line::from(Span::styled(
+                format!("{}{}{}", prefix, s.formatted_name(board, "sprint"), suffix),
+                style,
+            ))
+        }
+        SprintAssignEntry::Completed(s) | SprintAssignEntry::Ended(s) => {
+            let is_current = current_sprint_id == Some(s.id);
+            let prefix = if is_selected { "> " } else { "  " };
+            let suffix = if is_current { " (current)" } else { "" };
+            let status_color = if matches!(entry, SprintAssignEntry::Completed(_)) {
+                Color::Green
+            } else {
+                Color::Red
+            };
+            let style = if is_selected {
+                Style::default().fg(Color::White).bg(Color::Blue)
+            } else {
+                Style::default().fg(status_color)
+            };
+            Line::from(Span::styled(
+                format!("{}{}{}", prefix, s.formatted_name(board, "sprint"), suffix),
+                style,
+            ))
+        }
     }
 }
 

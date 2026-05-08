@@ -3,7 +3,6 @@ use crate::components::*;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
-    text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
@@ -56,9 +55,8 @@ pub(crate) fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
 
 pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     use crate::components::sprint_assign_list::{
-        build_entries, scroll_offset_to_show, SprintAssignEntry,
+        build_entries, render_entry_line, scroll_offset_to_show,
     };
-    use ratatui::style::Modifier;
 
     let area = centered_rect(60, 50, frame.area());
 
@@ -90,56 +88,9 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
         if let Some(board) = app.model.boards().get(board_idx) {
             let sprints = app.model.sprints();
             let entries = build_entries(sprints, board.id, chrono::Utc::now());
-
             for (idx, entry) in entries.iter().enumerate() {
                 let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);
-                let line = match entry {
-                    SprintAssignEntry::Header(label) => Line::from(Span::styled(
-                        (*label).to_string(),
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    )),
-                    SprintAssignEntry::None => {
-                        let prefix = if is_selected { "> " } else { "  " };
-                        let style = if is_selected {
-                            Style::default().fg(Color::White).bg(Color::Blue)
-                        } else {
-                            Style::default().fg(Color::White)
-                        };
-                        Line::from(Span::styled(format!("{}(None)", prefix), style))
-                    }
-                    SprintAssignEntry::ActiveOrPlanned(s) => {
-                        let prefix = if is_selected { "> " } else { "  " };
-                        let style = if is_selected {
-                            Style::default().fg(Color::White).bg(Color::Blue)
-                        } else {
-                            Style::default().fg(Color::White)
-                        };
-                        Line::from(Span::styled(
-                            format!("{}{}", prefix, s.formatted_name(board, "sprint")),
-                            style,
-                        ))
-                    }
-                    SprintAssignEntry::Completed(s) | SprintAssignEntry::Ended(s) => {
-                        let prefix = if is_selected { "> " } else { "  " };
-                        let status_color = if matches!(entry, SprintAssignEntry::Completed(_)) {
-                            Color::Green
-                        } else {
-                            Color::Red
-                        };
-                        let style = if is_selected {
-                            Style::default().fg(Color::White).bg(Color::Blue)
-                        } else {
-                            Style::default().fg(status_color)
-                        };
-                        Line::from(Span::styled(
-                            format!("{}{}", prefix, s.formatted_name(board, "sprint")),
-                            style,
-                        ))
-                    }
-                };
-                lines.push(line);
+                lines.push(render_entry_line(entry, is_selected, None, board));
             }
         }
     }

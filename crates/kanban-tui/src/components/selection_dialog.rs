@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::components::sprint_assign_list::{
-    build_entries, scroll_offset_to_show, SprintAssignEntry,
+    build_entries, render_entry_line, scroll_offset_to_show,
 };
 use kanban_domain::SprintStatus;
 use ratatui::Frame;
@@ -362,74 +362,3 @@ impl SelectionDialog for SprintAssignDialog {
     }
 }
 
-fn render_entry_line<'a>(
-    entry: &SprintAssignEntry<'_>,
-    is_selected: bool,
-    current_sprint_id: Option<uuid::Uuid>,
-    board: &kanban_domain::Board,
-) -> ratatui::text::Line<'a> {
-    use ratatui::style::{Color, Modifier, Style};
-    use ratatui::text::{Line, Span};
-
-    match entry {
-        SprintAssignEntry::Header(label) => Line::from(Span::styled(
-            (*label).to_string(),
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )),
-        SprintAssignEntry::None => {
-            let is_current = current_sprint_id.is_none();
-            let prefix = if is_selected { "> " } else { "  " };
-            let suffix = if is_current { " (current)" } else { "" };
-            let style = if is_selected {
-                Style::default().fg(Color::White).bg(Color::Blue)
-            } else if is_current {
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            Line::from(Span::styled(format!("{}(None){}", prefix, suffix), style))
-        }
-        SprintAssignEntry::ActiveOrPlanned(s) => {
-            let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "> " } else { "  " };
-            let suffix = if is_current { " (current)" } else { "" };
-            let style = if is_selected {
-                Style::default().fg(Color::White).bg(Color::Blue)
-            } else if is_current {
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            Line::from(Span::styled(
-                format!("{}{}{}", prefix, s.formatted_name(board, "sprint"), suffix),
-                style,
-            ))
-        }
-        SprintAssignEntry::Completed(s) | SprintAssignEntry::Ended(s) => {
-            let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "> " } else { "  " };
-            let suffix = if is_current { " (current)" } else { "" };
-            let status_color = if matches!(entry, SprintAssignEntry::Completed(_)) {
-                Color::Green
-            } else {
-                Color::Red
-            };
-            let style = if is_selected {
-                Style::default().fg(Color::White).bg(Color::Blue)
-            } else {
-                // Status colour wins; no bold override even when is_current.
-                Style::default().fg(status_color)
-            };
-            Line::from(Span::styled(
-                format!("{}{}{}", prefix, s.formatted_name(board, "sprint"), suffix),
-                style,
-            ))
-        }
-    }
-}
