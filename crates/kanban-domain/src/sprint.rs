@@ -33,14 +33,6 @@ pub struct Sprint {
 pub type SprintId = Uuid;
 
 impl Sprint {
-    pub fn assignable(sprints: &[Sprint], board_id: Uuid) -> Vec<&Sprint> {
-        sprints
-            .iter()
-            .filter(|s| s.board_id == board_id)
-            .filter(|s| s.status != SprintStatus::Completed && s.status != SprintStatus::Cancelled)
-            .collect()
-    }
-
     pub fn new(
         board_id: Uuid,
         sprint_number: u32,
@@ -403,7 +395,14 @@ mod tests {
             SprintStatus::Active,
             Some(ts("2026-05-01T00:00:00Z")),
         );
-        let sprints = vec![p1.clone(), p3.clone(), a2.clone(), c10.clone(), c5.clone(), e7.clone()];
+        let sprints = vec![
+            p1.clone(),
+            p3.clone(),
+            a2.clone(),
+            c10.clone(),
+            c5.clone(),
+            e7.clone(),
+        ];
         let (active, ended) = Sprint::for_assignment_dialog(&sprints, board, now);
         assert_eq!(
             active.iter().map(|s| s.sprint_number).collect::<Vec<_>>(),

@@ -133,11 +133,16 @@ sprint.activate(duration_days: u32)
 sprint.formatted_name(board: &Board, default_prefix: &str) -> String
 // e.g. "KAN-3/bugfix-week" or "KAN-3"
 
-sprint.is_ended() -> bool
-// True if Active and end_date is in the past.
+sprint.is_ended(now: DateTime<Utc>) -> bool
+// True if Active and end_date is before `now`.
 
-Sprint::assignable(sprints: &[Sprint], board_id: Uuid) -> Vec<&Sprint>
-// Returns sprints in Planning or Active state.
+Sprint::for_assignment_dialog(
+    sprints: &[Sprint],
+    board_id: Uuid,
+    now: DateTime<Utc>,
+) -> (Vec<&Sprint>, Vec<&Sprint>)
+// Splits a board's sprints into (active_or_planned, completed_or_ended).
+// Cancelled sprints are excluded; each section is sorted by sprint_number desc.
 ```
 
 ---

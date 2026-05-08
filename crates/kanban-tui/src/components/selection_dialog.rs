@@ -1,5 +1,7 @@
 use crate::app::App;
-use crate::components::sprint_assign_list::{build_entries, scroll_offset_to_show, SprintAssignEntry};
+use crate::components::sprint_assign_list::{
+    build_entries, scroll_offset_to_show, SprintAssignEntry,
+};
 use kanban_domain::SprintStatus;
 use ratatui::Frame;
 
@@ -353,11 +355,7 @@ impl SelectionDialog for SprintAssignDialog {
             }
         }
 
-        let selected = app
-            .dialog_input
-            .sprint_assign_selection
-            .get()
-            .unwrap_or(0);
+        let selected = app.dialog_input.sprint_assign_selection.get().unwrap_or(0);
         let scroll = scroll_offset_to_show(selected, lines.len(), chunks[1].height as usize);
         let list = Paragraph::new(lines).scroll((scroll as u16, 0));
         frame.render_widget(list, chunks[1]);
@@ -393,10 +391,7 @@ fn render_entry_line<'a>(
             } else {
                 Style::default().fg(Color::White)
             };
-            Line::from(Span::styled(
-                format!("{}(None){}", prefix, suffix),
-                style,
-            ))
+            Line::from(Span::styled(format!("{}(None){}", prefix, suffix), style))
         }
         SprintAssignEntry::ActiveOrPlanned(s) => {
             let is_current = current_sprint_id == Some(s.id);

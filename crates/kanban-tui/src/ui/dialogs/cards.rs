@@ -144,11 +144,7 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
         }
     }
 
-    let selected = app
-        .dialog_input
-        .sprint_assign_selection
-        .get()
-        .unwrap_or(0);
+    let selected = app.dialog_input.sprint_assign_selection.get().unwrap_or(0);
     let scroll = scroll_offset_to_show(selected, lines.len(), chunks[1].height as usize);
     let list = Paragraph::new(lines).scroll((scroll as u16, 0));
     frame.render_widget(list, chunks[1]);

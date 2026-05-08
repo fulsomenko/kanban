@@ -55,15 +55,11 @@ pub fn build_entries<'a>(
 }
 
 fn first_selectable(entries: &[SprintAssignEntry]) -> Option<usize> {
-    entries
-        .iter()
-        .position(|e| is_selectable(e))
+    entries.iter().position(|e| is_selectable(e))
 }
 
 fn last_selectable(entries: &[SprintAssignEntry]) -> Option<usize> {
-    entries
-        .iter()
-        .rposition(|e| is_selectable(e))
+    entries.iter().rposition(|e| is_selectable(e))
 }
 
 fn cur_if_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
@@ -175,8 +171,14 @@ mod tests {
         let now = ts("2026-05-07T00:00:00Z");
         let board = Uuid::new_v4();
         let entries = build_entries(&[], board, now);
-        assert!(!entries.is_empty(), "entries must contain at least the None option");
-        assert!(is_none_entry(&entries[0]), "index 0 must be the None unassign entry");
+        assert!(
+            !entries.is_empty(),
+            "entries must contain at least the None option"
+        );
+        assert!(
+            is_none_entry(&entries[0]),
+            "index 0 must be the None unassign entry"
+        );
     }
 
     #[test]
@@ -261,7 +263,10 @@ mod tests {
                 _ => {}
             }
         }
-        assert!(saw_completed && saw_ended, "section must contain both Completed and Ended entries");
+        assert!(
+            saw_completed && saw_ended,
+            "section must contain both Completed and Ended entries"
+        );
     }
 
     #[test]

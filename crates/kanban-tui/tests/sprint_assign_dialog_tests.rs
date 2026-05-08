@@ -2,9 +2,7 @@ mod helpers;
 
 use chrono::{Duration, Utc};
 use crossterm::event::KeyCode;
-use kanban_domain::{
-    field_update::FieldUpdate, CreateCardOptions, KanbanOperations, SprintUpdate,
-};
+use kanban_domain::{field_update::FieldUpdate, CreateCardOptions, KanbanOperations, SprintUpdate};
 use kanban_tui::{
     app::mode::{AppMode, DialogMode},
     components::{SelectionDialog, SprintAssignDialog},
@@ -27,7 +25,10 @@ struct DialogFixture {
 fn setup_app_with_sprints() -> DialogFixture {
     let mut app = App::test_default();
     let board = app.ctx.create_board("B".into(), None).unwrap();
-    let column = app.ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
     let card = app
         .ctx
         .create_card(
@@ -339,7 +340,9 @@ fn test_current_sprint_indicator_does_not_apply_color_override_in_completed_ende
 
     // Pre-assign card to the completed sprint (simulates the retrospective
     // scenario where the user previously assigned to a Completed sprint).
-    app.ctx.assign_card_to_sprint(card_id, completed_id).unwrap();
+    app.ctx
+        .assign_card_to_sprint(card_id, completed_id)
+        .unwrap();
     app.prepare_frame();
 
     open_assign_dialog(&mut app);
@@ -392,7 +395,10 @@ fn test_dialog_scrolls_to_keep_selected_sprint_visible_when_list_overflows() {
     // standard 120x30 test backend size.
     let mut app = App::test_default();
     let board = app.ctx.create_board("B".into(), None).unwrap();
-    let column = app.ctx.create_column(board.id, "Todo".into(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
     app.ctx
         .create_card(
             board.id,
@@ -453,4 +459,3 @@ fn test_dialog_scrolls_to_keep_selected_sprint_visible_when_list_overflows() {
         output
     );
 }
-
