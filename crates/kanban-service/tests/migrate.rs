@@ -182,7 +182,6 @@ async fn test_migrate_store_repairs_orphaned_column_id() {
     );
 }
 
-
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_migrate_store_cleans_up_destination_on_failure() {

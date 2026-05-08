@@ -132,10 +132,8 @@ impl JsonDataStore {
                 None => return Ok(()), // Never loaded — nothing to flush.
             };
 
-            let snapshot = store.snapshot()?;
-
-            snapshot
             // `guard` is dropped here, before any await.
+            store.snapshot()?
         };
 
         // Command log is in-session only — strip it from the file on every save.
@@ -635,7 +633,6 @@ mod tests {
         assert!(jds.needs_flush(), "apply_snapshot must mark backend dirty");
     }
 
-
     #[tokio::test(flavor = "multi_thread")]
     async fn test_ensure_loaded_is_idempotent_under_concurrent_access() {
         use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
@@ -676,5 +673,4 @@ mod tests {
         assert_eq!(boards1[0].name, "ConcurrentBoard");
         assert_eq!(boards2[0].name, "ConcurrentBoard");
     }
-
 }

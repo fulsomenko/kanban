@@ -68,7 +68,6 @@ mod sqlite_tests {
     }
 }
 
-
 /// `KanbanContext::open_deferred` without `initialize_undo_state` must return an error
 /// on the first `execute()` call.
 #[tokio::test(flavor = "multi_thread")]

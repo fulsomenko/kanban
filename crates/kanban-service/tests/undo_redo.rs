@@ -945,7 +945,11 @@ async fn test_undo_history_is_not_preserved_across_sessions() -> KanbanResult<()
     ctx.save().await?;
 
     let ctx2 = open_context(path.to_str().unwrap(), kanban_core::AppConfig::default()).await?;
-    assert_eq!(ctx2.boards()?.len(), 2, "board data survives the session boundary");
+    assert_eq!(
+        ctx2.boards()?.len(),
+        2,
+        "board data survives the session boundary"
+    );
     assert!(
         !ctx2.can_undo(),
         "undo is in-session only; history must not carry over across sessions"

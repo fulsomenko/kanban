@@ -148,7 +148,6 @@ async fn test_sqlite_backend_undo_redo() {
     assert_eq!(ctx.list_boards().unwrap().len(), 1);
 }
 
-
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_backend_data_persists_across_opens() {

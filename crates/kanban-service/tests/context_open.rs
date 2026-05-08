@@ -423,7 +423,6 @@ async fn test_initialize_undo_state_restores_correct_baseline_after_restart() ->
     Ok(())
 }
 
-
 // ─── Gap E: replace_backend + execute contract ───────────────────────────────
 
 /// `execute()` must return an error when `baseline_snapshot` is `None` —
