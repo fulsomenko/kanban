@@ -32,11 +32,10 @@ pub fn build_entries<'a>(
     now: DateTime<Utc>,
 ) -> Vec<SprintAssignEntry<'a>> {
     let (active, completed_or_ended) = Sprint::for_assignment_dialog(sprints, board_id, now);
+    let active_header = if active.is_empty() { 0 } else { 1 };
+    let lower_header = if completed_or_ended.is_empty() { 0 } else { 1 };
     let mut entries: Vec<SprintAssignEntry<'a>> = Vec::with_capacity(
-        1 + active.len()
-            + completed_or_ended.len()
-            + usize::from(!active.is_empty())
-            + usize::from(!completed_or_ended.is_empty()),
+        1 + active.len() + completed_or_ended.len() + active_header + lower_header,
     );
     entries.push(SprintAssignEntry::None);
     if !active.is_empty() {

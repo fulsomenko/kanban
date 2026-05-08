@@ -128,6 +128,12 @@ impl Sprint {
         self.updated_at = Utc::now();
     }
 
+    /// Returns true when this is an Active sprint whose `end_date` is in the past.
+    ///
+    /// Boundary: `now == end_date` returns `false` — the sprint's clock has
+    /// not strictly passed. The bucket logic in
+    /// [`Sprint::for_assignment_dialog`] calls this internally and inherits the
+    /// same boundary semantics.
     pub fn is_ended(&self, now: DateTime<Utc>) -> bool {
         if self.status != SprintStatus::Active {
             return false;

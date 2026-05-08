@@ -2,7 +2,10 @@ mod helpers;
 
 use chrono::{Duration, Utc};
 use crossterm::event::KeyCode;
-use kanban_domain::{field_update::FieldUpdate, CreateCardOptions, KanbanOperations, SprintUpdate};
+use kanban_domain::{
+    field_update::FieldUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
+};
+use kanban_tui::components::{build_entries, sprint_id_of};
 use kanban_tui::{
     app::mode::{AppMode, DialogMode},
     components::{SelectionDialog, SprintAssignDialog},
@@ -13,11 +16,12 @@ use ratatui::style::Color;
 use ratatui::Terminal;
 use uuid::Uuid;
 
-#[allow(dead_code)]
+const TEST_BACKEND_WIDTH: u16 = 120;
+const TEST_BACKEND_HEIGHT: u16 = 30;
+
 struct DialogFixture {
     app: App,
     card_id: Uuid,
-    planning_id: Uuid,
     completed_id: Uuid,
     ended_id: Uuid,
 }
@@ -39,7 +43,7 @@ fn setup_app_with_sprints() -> DialogFixture {
         )
         .unwrap();
 
-    let planning = app.ctx.create_sprint(board.id, None, None).unwrap();
+    app.ctx.create_sprint(board.id, None, None).unwrap();
 
     let active = app.ctx.create_sprint(board.id, None, None).unwrap();
     app.ctx.activate_sprint(active.id, Some(7)).unwrap();
@@ -65,7 +69,6 @@ fn setup_app_with_sprints() -> DialogFixture {
     DialogFixture {
         app,
         card_id: card.id,
-        planning_id: planning.id,
         completed_id: to_complete.id,
         ended_id: active.id,
     }
@@ -77,7 +80,7 @@ fn open_assign_dialog(app: &mut App) {
 }
 
 fn render_dialog_to_string(app: &App) -> String {
-    let backend = TestBackend::new(120, 30);
+    let backend = TestBackend::new(TEST_BACKEND_WIDTH, TEST_BACKEND_HEIGHT);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
@@ -97,7 +100,7 @@ fn render_dialog_to_string(app: &App) -> String {
 }
 
 fn render_dialog_with_colors(app: &App) -> Vec<(String, Option<Color>)> {
-    let backend = TestBackend::new(120, 30);
+    let backend = TestBackend::new(TEST_BACKEND_WIDTH, TEST_BACKEND_HEIGHT);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
@@ -117,7 +120,7 @@ fn render_dialog_with_colors(app: &App) -> Vec<(String, Option<Color>)> {
 }
 
 fn line_color(grid: &[(String, Option<Color>)], substring: &str) -> Option<Color> {
-    let width = 120;
+    let width = TEST_BACKEND_WIDTH as usize;
     let height = grid.len() / width;
     for y in 0..height {
         let line: String = (0..width)
@@ -381,8 +384,6 @@ fn test_current_sprint_indicator_does_not_apply_color_override_in_completed_ende
 // Helper: returns the sprint id selected by the dialog at index `idx`,
 // using the same entry layout the renderer/handler uses.
 fn sprint_at(app: &App, idx: usize) -> Option<Uuid> {
-    use kanban_domain::Sprint;
-    use kanban_tui::components::{build_entries, sprint_id_of};
     let board = app.model.boards().first().cloned()?;
     let sprints: Vec<Sprint> = app.model.sprints().to_vec();
     let entries = build_entries(&sprints, board.id, Utc::now());
@@ -462,6 +463,8 @@ fn test_dialog_scrolls_to_keep_selected_sprint_visible_when_list_overflows() {
 
 #[test]
 fn test_sticky_header_appears_at_top_when_scrolled_past_active_planned_header() {
+    // 30 planning sprints — selected at the last entry forces the
+    // Active / Planned header (at entry index 1) to scroll off the top.
     let mut app = App::test_default();
     let board = app.ctx.create_board("B".into(), None).unwrap();
     let column = app
@@ -485,6 +488,7 @@ fn test_sticky_header_appears_at_top_when_scrolled_past_active_planned_header() 
 
     open_assign_dialog(&mut app);
 
+    // Navigate to the last selectable entry.
     for _ in 0..50 {
         app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
     }
@@ -499,6 +503,8 @@ fn test_sticky_header_appears_at_top_when_scrolled_past_active_planned_header() 
 
 #[test]
 fn test_sticky_header_does_not_duplicate_when_list_fits_without_scrolling() {
+    // Short list — header sits at its natural position; no overlay should
+    // render so the label appears exactly once in the output.
     let fx = setup_app_with_sprints();
     let mut app = fx.app;
     open_assign_dialog(&mut app);
@@ -514,6 +520,9 @@ fn test_sticky_header_does_not_duplicate_when_list_fits_without_scrolling() {
 
 #[test]
 fn test_sticky_header_switches_to_completed_ended_when_selecting_in_lower_section() {
+    // 30 planning + 30 completed sprints. With the selection on the last
+    // completed entry, both section headers have scrolled off — the overlay
+    // should pin the *enclosing* section's header (Completed / Ended).
     let mut app = App::test_default();
     let board = app.ctx.create_board("B".into(), None).unwrap();
     let column = app
@@ -542,6 +551,8 @@ fn test_sticky_header_switches_to_completed_ended_when_selecting_in_lower_sectio
 
     open_assign_dialog(&mut app);
 
+    // Walk all the way to the last entry — guaranteed to be a completed sprint
+    // with the lower section's header scrolled off.
     for _ in 0..200 {
         app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
     }
@@ -552,6 +563,8 @@ fn test_sticky_header_switches_to_completed_ended_when_selecting_in_lower_sectio
         "Completed / Ended must be pinned at the top when selection is in the lower section; output:\n{}",
         output
     );
+    // The upper section's header is also scrolled off but should NOT appear —
+    // the overlay shows the *enclosing* section header for the selection.
     assert!(
         !output.contains("Active / Planned"),
         "Active / Planned must not appear when selection is past it and the overlay belongs to the lower section; output:\n{}",
