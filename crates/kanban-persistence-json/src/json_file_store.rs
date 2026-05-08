@@ -18,7 +18,12 @@ pub struct JsonFileStore {
     last_known_metadata: Mutex<Option<FileMetadata>>,
 }
 
-/// Wrapper structure for the JSON file format (v2+)
+/// Wrapper structure for the JSON file format (v2+).
+///
+/// Unknown fields from older formats (e.g. `commands`, `undo_cursor`,
+/// `baseline_data`, `command_schema_version`) are intentionally ignored on
+/// deserialization and dropped on the next save — do NOT add
+/// `#[serde(deny_unknown_fields)]` here without a migration path.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonEnvelope {
     version: u32,
