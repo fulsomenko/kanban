@@ -154,11 +154,6 @@ impl KanbanContext {
         Ok(())
     }
 
-    fn notify_undo_state(&self) -> KanbanResult<()> {
-        self.backend
-            .on_undo_state_changed(self.undo_cursor as u64, self.baseline_snapshot.clone())
-    }
-
     /// Execute a batch of commands as a single undo unit.
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
@@ -231,7 +226,6 @@ impl KanbanContext {
         }
 
         self.dirty = true;
-        self.notify_undo_state()?;
         Ok(())
     }
 
@@ -282,7 +276,6 @@ impl KanbanContext {
         }
 
         self.dirty = true;
-        self.notify_undo_state()?;
         Ok(true)
     }
 
@@ -319,7 +312,6 @@ impl KanbanContext {
 
         self.undo_cursor += 1;
         self.dirty = true;
-        self.notify_undo_state()?;
         Ok(true)
     }
 
@@ -336,7 +328,6 @@ impl KanbanContext {
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
-        self.notify_undo_state()?;
         Ok(())
     }
 
@@ -394,7 +385,6 @@ impl KanbanContext {
         let baseline = self.backend.snapshot()?;
         self.backend.truncate_commands_after(0)?;
         self.baseline_snapshot = Some(baseline);
-        self.notify_undo_state()?;
         Ok(())
     }
 
@@ -1153,7 +1143,6 @@ impl KanbanOperations for KanbanContext {
         self.undo_cursor = 0;
         self.command_count = 0;
         self.dirty = true;
-        self.notify_undo_state()?;
 
         Ok(board)
     }

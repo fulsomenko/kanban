@@ -12,7 +12,7 @@ use kanban_persistence::{
 };
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, RwLock,
+    Arc, RwLock,
 };
 use uuid::Uuid;
 
@@ -31,9 +31,6 @@ pub struct JsonDataStore {
     /// `with_mutate()` call that follows (internal housekeeping, not a user
     /// mutation). Consumed atomically by `with_mutate()`.
     suppress_next_dirty: AtomicBool,
-    /// Cached by `on_undo_state_changed` for use during `flush()`.
-    undo_cursor: Mutex<u64>,
-    baseline_snapshot: Mutex<Option<Snapshot>>,
 }
 
 impl JsonDataStore {
@@ -43,8 +40,6 @@ impl JsonDataStore {
             inner: RwLock::new(None),
             dirty: AtomicBool::new(false),
             suppress_next_dirty: AtomicBool::new(false),
-            undo_cursor: Mutex::new(0),
-            baseline_snapshot: Mutex::new(None),
         }
     }
 
@@ -71,15 +66,10 @@ impl JsonDataStore {
             .load_sync()
             .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
 
-        let file_cursor = 0u64;
-        let baseline: Option<kanban_domain::Snapshot> = None;
-
         if let Some((ss, _meta)) = loaded {
             let snapshot = snapshot_from_json_bytes(&ss.data)
                 .map_err(|e| KanbanError::Internal(format!("json_backend: parse failed: {e}")))?;
             store.apply_snapshot(snapshot)?;
-
-            // Command log is in-session only for the JSON backend — not loaded from disk.
         }
 
         // Acquire write lock only to swap in the built store.
@@ -94,15 +84,6 @@ impl JsonDataStore {
         }
 
         *guard = Some(store);
-        // Hold the write lock while updating caches — ensures any concurrent
-        // fast-path thread that acquires the read lock sees consistent
-        // (inner=Some, cursor, baseline) rather than a partially-updated state.
-        *self.undo_cursor.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-        })? = file_cursor;
-        *self.baseline_snapshot.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-        })? = baseline;
         drop(guard);
 
         Ok(())
@@ -135,12 +116,6 @@ impl JsonDataStore {
             // `guard` is dropped here, before any await.
             store.snapshot()?
         };
-
-        // Command log is in-session only — strip it from the file on every save.
-        self.file_store
-            .sync_command_log(&[], 0, None)
-            .await
-            .map_err(KanbanError::from)?;
 
         let data = snapshot_to_json_bytes(&snapshot)
             .map_err(|e| KanbanError::Internal(format!("json_backend: snapshot serialise: {e}")))?;
@@ -340,19 +315,6 @@ impl CommandStore for JsonDataStore {
         self.with_mutate(|s| s.store_snapshot_at(idx, snapshot))
     }
     fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        if idx == 0 {
-            // Ensure the file has been loaded so baseline_snapshot is populated.
-            self.ensure_loaded()?;
-            let guard = self.baseline_snapshot.lock().map_err(|_| {
-                KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-            })?;
-            if guard.is_some() {
-                return Ok(guard.clone());
-            }
-            // baseline_snapshot is None after loading — file had no stored
-            // baseline (e.g. freshly created). Fall through; InMemoryStore
-            // will also return None, matching the existing behaviour.
-        }
         self.with_read(|s| s.load_snapshot_at(idx))
     }
     fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
@@ -388,12 +350,6 @@ impl KanbanBackend for JsonDataStore {
             *guard = None;
         } // inner write lock released — mirrors ensure_loaded's ordering
         self.dirty.store(false, Ordering::Release);
-        *self.undo_cursor.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-        })? = 0;
-        *self.baseline_snapshot.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-        })? = None;
         // Suppress the dirty flag from the first with_mutate() after reload.
         // KanbanContext::reload() calls truncate_commands_after(0) for
         // internal housekeeping; that must not mark the backend dirty.
@@ -407,16 +363,6 @@ impl KanbanBackend for JsonDataStore {
 
     fn needs_save_worker(&self) -> bool {
         true
-    }
-
-    fn on_undo_state_changed(&self, cursor: u64, baseline: Option<Snapshot>) -> KanbanResult<()> {
-        *self.undo_cursor.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-        })? = cursor;
-        *self.baseline_snapshot.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-        })? = baseline;
-        Ok(())
     }
 
     fn instance_id(&self) -> Uuid {
@@ -613,16 +559,6 @@ mod tests {
         let dir = tempdir().unwrap();
         let jds = make_store(&dir.path().join("t.json"));
         assert!(jds.needs_save_worker());
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_on_undo_state_changed_updates_caches() {
-        let dir = tempdir().unwrap();
-        let jds = make_store(&dir.path().join("t.json"));
-        let snap = Snapshot::new();
-        jds.on_undo_state_changed(42, Some(snap)).unwrap();
-        assert_eq!(*jds.undo_cursor.lock().unwrap(), 42);
-        assert!(jds.baseline_snapshot.lock().unwrap().is_some());
     }
 
     #[tokio::test(flavor = "multi_thread")]
