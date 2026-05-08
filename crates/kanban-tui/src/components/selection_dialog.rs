@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::components::sprint_assign_list::{
-    build_entries, render_entry_line, scroll_offset_to_show,
+    build_entries, render_entry_line, scroll_offset_to_show, section_header_for, SprintAssignEntry,
 };
 use kanban_domain::SprintStatus;
 use ratatui::Frame;
@@ -356,9 +356,57 @@ impl SelectionDialog for SprintAssignDialog {
         }
 
         let selected = app.dialog_input.sprint_assign_selection.get().unwrap_or(0);
+        let entries_for_header = if let Some(board_idx) = app.selection.active_board_index {
+            app.model
+                .boards()
+                .get(board_idx)
+                .map(|b| build_entries(app.model.sprints(), b.id, chrono::Utc::now()))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let scroll = scroll_offset_to_show(selected, lines.len(), chunks[1].height as usize);
         let list = Paragraph::new(lines).scroll((scroll as u16, 0));
         frame.render_widget(list, chunks[1]);
+        render_sticky_section_header(frame, chunks[1], &entries_for_header, selected, scroll);
     }
+}
+
+fn render_sticky_section_header(
+    frame: &mut Frame,
+    list_area: ratatui::layout::Rect,
+    entries: &[SprintAssignEntry<'_>],
+    selected: usize,
+    scroll: usize,
+) {
+    use ratatui::{
+        layout::Rect,
+        style::{Color, Modifier, Style},
+        text::{Line, Span},
+        widgets::Paragraph,
+    };
+
+    if list_area.height == 0 {
+        return;
+    }
+    let Some((header_idx, label)) = section_header_for(entries, selected) else {
+        return;
+    };
+    if header_idx >= scroll {
+        return;
+    }
+    let overlay = Paragraph::new(Line::from(Span::styled(
+        label.to_string(),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )));
+    let top_row = Rect {
+        x: list_area.x,
+        y: list_area.y,
+        width: list_area.width,
+        height: 1,
+    };
+    frame.render_widget(overlay, top_row);
 }
 

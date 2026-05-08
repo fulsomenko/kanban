@@ -459,3 +459,102 @@ fn test_dialog_scrolls_to_keep_selected_sprint_visible_when_list_overflows() {
         output
     );
 }
+
+#[test]
+fn test_sticky_header_appears_at_top_when_scrolled_past_active_planned_header() {
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("B".into(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
+    app.ctx
+        .create_card(
+            board.id,
+            column.id,
+            "Task".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    for _ in 0..30 {
+        app.ctx.create_sprint(board.id, None, None).unwrap();
+    }
+    app.selection.active_board_index = Some(0);
+    app.selection.active_card_index = Some(0);
+    app.prepare_frame();
+
+    open_assign_dialog(&mut app);
+
+    for _ in 0..50 {
+        app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
+    }
+
+    let output = render_dialog_to_string(&app);
+    assert!(
+        output.contains("Active / Planned"),
+        "Active / Planned header must be pinned at the top of the list area when scrolled past; output:\n{}",
+        output
+    );
+}
+
+#[test]
+fn test_sticky_header_does_not_duplicate_when_list_fits_without_scrolling() {
+    let fx = setup_app_with_sprints();
+    let mut app = fx.app;
+    open_assign_dialog(&mut app);
+
+    let output = render_dialog_to_string(&app);
+    let count = output.matches("Active / Planned").count();
+    assert_eq!(
+        count, 1,
+        "without scroll, Active / Planned should appear exactly once (natural position); got {} in:\n{}",
+        count, output
+    );
+}
+
+#[test]
+fn test_sticky_header_switches_to_completed_ended_when_selecting_in_lower_section() {
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("B".into(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
+    app.ctx
+        .create_card(
+            board.id,
+            column.id,
+            "Task".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    for _ in 0..30 {
+        app.ctx.create_sprint(board.id, None, None).unwrap();
+    }
+    for _ in 0..30 {
+        let s = app.ctx.create_sprint(board.id, None, None).unwrap();
+        app.ctx.activate_sprint(s.id, Some(7)).unwrap();
+        app.ctx.complete_sprint(s.id).unwrap();
+    }
+    app.selection.active_board_index = Some(0);
+    app.selection.active_card_index = Some(0);
+    app.prepare_frame();
+
+    open_assign_dialog(&mut app);
+
+    for _ in 0..200 {
+        app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
+    }
+
+    let output = render_dialog_to_string(&app);
+    assert!(
+        output.contains("Completed / Ended"),
+        "Completed / Ended must be pinned at the top when selection is in the lower section; output:\n{}",
+        output
+    );
+    assert!(
+        !output.contains("Active / Planned"),
+        "Active / Planned must not appear when selection is past it and the overlay belongs to the lower section; output:\n{}",
+        output
+    );
+}

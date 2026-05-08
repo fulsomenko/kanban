@@ -101,6 +101,25 @@ pub fn prev_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Opt
         .or_else(|| first_selectable(entries))
 }
 
+/// Returns the `(header_index, label)` of the section header that
+/// encloses `entries[idx]` — the closest `Header` walking backwards.
+/// Returns `None` when `idx` is out of bounds, points at the (None)
+/// entry at index 0, or precedes the first header.
+pub fn section_header_for(
+    entries: &[SprintAssignEntry],
+    idx: usize,
+) -> Option<(usize, &'static str)> {
+    if idx >= entries.len() {
+        return None;
+    }
+    for i in (0..idx).rev() {
+        if let SprintAssignEntry::Header(label) = entries[i] {
+            return Some((i, label));
+        }
+    }
+    None
+}
+
 /// Returns the sprint id for a sprint-bearing entry, or `None` for
 /// `Header` and `None` entries.
 pub fn sprint_id_of(entry: &SprintAssignEntry) -> Option<Uuid> {
@@ -479,5 +498,55 @@ mod tests {
     #[test]
     fn test_scroll_offset_handles_empty_list() {
         assert_eq!(scroll_offset_to_show(0, 0, 5), 0);
+    }
+
+    #[test]
+    fn test_section_header_for_returns_none_for_index_zero() {
+        let entries = vec![SprintAssignEntry::None];
+        assert_eq!(section_header_for(&entries, 0), None);
+    }
+
+    #[test]
+    fn test_section_header_for_returns_none_for_out_of_bounds() {
+        let entries: Vec<SprintAssignEntry> = vec![SprintAssignEntry::None];
+        assert_eq!(section_header_for(&entries, 5), None);
+    }
+
+    #[test]
+    fn test_section_header_for_returns_active_header_for_entry_in_active_section() {
+        let board = Uuid::new_v4();
+        let s = make_sprint(1, board, SprintStatus::Planning, None);
+        let entries = vec![
+            SprintAssignEntry::None,
+            SprintAssignEntry::Header(ACTIVE_PLANNED_HEADER),
+            SprintAssignEntry::ActiveOrPlanned(&s),
+        ];
+        assert_eq!(
+            section_header_for(&entries, 2),
+            Some((1, ACTIVE_PLANNED_HEADER))
+        );
+    }
+
+    #[test]
+    fn test_section_header_for_returns_completed_header_for_entry_in_lower_section() {
+        let board = Uuid::new_v4();
+        let s_active = make_sprint(1, board, SprintStatus::Planning, None);
+        let s_completed = make_sprint(
+            2,
+            board,
+            SprintStatus::Completed,
+            Some(ts("2026-04-01T00:00:00Z")),
+        );
+        let entries = vec![
+            SprintAssignEntry::None,
+            SprintAssignEntry::Header(ACTIVE_PLANNED_HEADER),
+            SprintAssignEntry::ActiveOrPlanned(&s_active),
+            SprintAssignEntry::Header(COMPLETED_ENDED_HEADER),
+            SprintAssignEntry::Completed(&s_completed),
+        ];
+        assert_eq!(
+            section_header_for(&entries, 4),
+            Some((3, COMPLETED_ENDED_HEADER))
+        );
     }
 }
