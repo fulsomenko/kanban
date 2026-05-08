@@ -142,21 +142,14 @@ impl KanbanContext {
     /// calls this automatically.  Idempotent if called more than once.
     pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
-            let count = self.backend.command_count()? as usize;
-            let baseline = if count > 0 {
-                match self.backend.load_snapshot_at(0)? {
-                    Some(snap) => snap,
-                    // Old file: commands present but no stored baseline.
-                    // Use current data as the undo floor so undo cannot
-                    // wipe existing data.
-                    None => self.backend.snapshot()?,
-                }
-            } else {
-                self.backend.snapshot()?
-            };
+            let baseline = self.backend.snapshot()?;
+            // Undo is in-session only — discard commands carried over from previous sessions.
+            if self.backend.command_count()? > 0 {
+                self.backend.truncate_commands_after(0)?;
+            }
             self.baseline_snapshot = Some(baseline);
-            self.command_count = count;
-            self.undo_cursor = count;
+            self.command_count = 0;
+            self.undo_cursor = 0;
         }
         Ok(())
     }
