@@ -355,6 +355,89 @@ async fn test_sqlite_apply_snapshot_replaces_existing_data() {
     assert_eq!(boards[0].name, "New");
 }
 
+// --- Legacy table drop migration ---
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_open_drops_legacy_command_log_and_undo_state_tables() {
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+    let dir = TempDir::new().unwrap();
+    let db_path = dir.path().join("legacy.sqlite");
+
+    // Seed the file with the pre-405 legacy tables, populated, before
+    // SqliteStore::open ever runs schema.sql or migrate().
+    {
+        let options = SqliteConnectOptions::new()
+            .filename(&db_path)
+            .create_if_missing(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE command_log (idx INTEGER PRIMARY KEY, cmd_json TEXT NOT NULL); \
+             INSERT INTO command_log (cmd_json) VALUES ('[]'); \
+             CREATE TABLE undo_state (id INTEGER PRIMARY KEY, cursor INTEGER NOT NULL); \
+             INSERT INTO undo_state (id, cursor) VALUES (1, 0);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+    }
+
+    let store = SqliteStore::open(&db_path).await.unwrap();
+
+    let has_command_log: bool = sqlx::query_scalar(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='command_log'",
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    let has_undo_state: bool = sqlx::query_scalar(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='undo_state'",
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+
+    assert!(
+        !has_command_log,
+        "command_log must be dropped when migrating a pre-405 database"
+    );
+    assert!(
+        !has_undo_state,
+        "undo_state must be dropped when migrating a pre-405 database"
+    );
+
+    // Confirm the rest of the schema is intact and the DB is usable.
+    let board = make_board("Survived migrate");
+    let id = board.id;
+    store.upsert_board(board).unwrap();
+    assert_eq!(
+        store.get_board(id).unwrap().unwrap().name,
+        "Survived migrate"
+    );
+}
+
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_open_succeeds_when_legacy_tables_absent() {
+    let (store, _dir) = make_store().await;
+    let has_command_log: bool = sqlx::query_scalar(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='command_log'",
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert!(
+        !has_command_log,
+        "fresh database must not contain a command_log table"
+    );
+}
+
 #[tokio::test(flavor = "current_thread")]
 #[should_panic(expected = "SqliteStore requires a multi-threaded Tokio runtime")]
 async fn test_sqlite_on_current_thread_runtime_gives_clear_error() {
