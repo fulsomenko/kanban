@@ -636,16 +636,6 @@ impl App {
         }
     }
 
-    pub fn compact_column_positions(&mut self, column_id: uuid::Uuid) {
-        let cmd = Command::Card(CardCommand::CompactPositions(
-            kanban_domain::commands::CompactColumnPositions { column_id },
-        ));
-        if let Err(e) = self.ctx.execute_command(cmd) {
-            tracing::error!("Failed to compact column positions: {}", e);
-            self.set_error(format!("Failed to compact column positions: {}", e));
-        }
-    }
-
     pub fn select_card_after_deletion(
         &mut self,
         deleted_column_id: uuid::Uuid,
