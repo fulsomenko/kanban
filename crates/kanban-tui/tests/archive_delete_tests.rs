@@ -1,4 +1,5 @@
 use kanban_domain::{CreateCardOptions, KanbanOperations};
+use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::AppMode;
 use kanban_tui::App;
 use std::time::{Duration, Instant};
@@ -258,6 +259,84 @@ fn test_multi_column_archive_compacts_every_affected_column() {
     assert_eq!(
         k2.position, 0,
         "col2 must be compacted to position 0 after archiving its first card"
+    );
+}
+
+/// When archiving cards from multiple columns at once, post-archive selection
+/// must anchor to the column the user's cursor was on — not jump to whichever
+/// column happened to be iterated last in HashMap order.
+#[test]
+fn test_archive_anchors_selection_to_focused_card_column() {
+    let mut app = App::test_default();
+
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let col1 = app
+        .ctx
+        .create_column(board.id, "C1".to_string(), None)
+        .unwrap();
+    let col2 = app
+        .ctx
+        .create_column(board.id, "C2".to_string(), None)
+        .unwrap();
+
+    let archive1 = app
+        .ctx
+        .create_card(
+            board.id,
+            col1.id,
+            "A1".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    let keep1 = app
+        .ctx
+        .create_card(
+            board.id,
+            col1.id,
+            "K1".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    let archive2 = app
+        .ctx
+        .create_card(
+            board.id,
+            col2.id,
+            "A2".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    app.ctx
+        .create_card(
+            board.id,
+            col2.id,
+            "K2".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+
+    app.selection.active_board_index = Some(0);
+    app.focus.active = Focus::Cards;
+    app.prepare_frame();
+
+    // Multi-select cards from both columns; cursor on col1's archive target.
+    app.multi_select.selected_cards.insert(archive1.id);
+    app.multi_select.selected_cards.insert(archive2.id);
+    app.multi_select.selection_mode_active = true;
+    app.select_card_by_id(archive1.id);
+
+    app.handle_archive_card();
+
+    force_animation_complete(&mut app, archive1.id);
+    force_animation_complete(&mut app, archive2.id);
+    app.handle_animation_tick();
+    app.prepare_frame();
+
+    assert_eq!(
+        app.get_selected_card_id(),
+        Some(keep1.id),
+        "selection must anchor to the cursor's column (col1 → keep1), not \
+         jump to col2 based on archive iteration order"
     );
 }
 
