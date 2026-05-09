@@ -1,6 +1,9 @@
-use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent};
 use std::time::Duration;
 use tokio::sync::mpsc;
+
+#[cfg(target_os = "windows")]
+use crossterm::event::KeyEventKind;
 
 #[derive(Debug, Clone)]
 pub enum Event {
