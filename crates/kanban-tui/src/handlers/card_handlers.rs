@@ -604,11 +604,25 @@ impl App {
             return;
         }
 
+        self.animation.archive_anchor = self.cursor_archive_anchor();
+
         if !self.multi_select.selected_cards.is_empty() {
             self.start_delete_animations_for_selected();
         } else if let Some(card_id) = self.get_selected_card_id() {
             self.start_delete_animation(card_id);
         }
+    }
+
+    /// Look up the cursor card's column and position so the post-archive
+    /// selection can anchor where the user was actually looking, rather than
+    /// inferring it from whichever archived card lands last in HashMap order.
+    fn cursor_archive_anchor(&self) -> Option<(uuid::Uuid, i32)> {
+        let card_id = self.get_selected_card_id()?;
+        self.model
+            .cards()
+            .iter()
+            .find(|c| c.id == card_id)
+            .map(|c| (c.column_id, c.position))
     }
 
     fn start_delete_animations_for_selected(&mut self) {

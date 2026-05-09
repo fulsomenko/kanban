@@ -1088,8 +1088,6 @@ impl App {
         let mut affected_columns: Vec<uuid::Uuid> = Vec::new();
         let mut restore_cards = Vec::new();
         let mut delete_cards = Vec::new();
-        let mut last_archive_column = None;
-        let mut last_archive_position = None;
 
         for (card_id, animation_type) in completed_animations {
             self.animation.animating.remove(&card_id);
@@ -1101,8 +1099,6 @@ impl App {
                         if !affected_columns.contains(&card.column_id) {
                             affected_columns.push(card.column_id);
                         }
-                        last_archive_column = Some(card.column_id);
-                        last_archive_position = Some(card.position);
                         archive_cards.push(card_id);
                     }
                 }
@@ -1138,9 +1134,7 @@ impl App {
 
             if let Err(e) = self.execute_commands_batch(commands) {
                 tracing::error!("Failed to archive cards: {}", e);
-            } else if let (Some(column_id), Some(position)) =
-                (last_archive_column, last_archive_position)
-            {
+            } else if let Some((column_id, position)) = self.animation.archive_anchor.take() {
                 self.select_card_after_deletion(column_id, position);
             }
         }
