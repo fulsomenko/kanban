@@ -261,4 +261,46 @@ mod tests {
         sorter.sort_by(&mut shuffled);
         assert_eq!((shuffled[0].card_number, shuffled[1].card_number), expected);
     }
+
+    /// The card_number tiebreaker is implemented in `OrderedSorter::sort_by`,
+    /// not in any specific `SortBy` variant — so it should stabilise tied
+    /// cards regardless of which primary sort key the user picks. This test
+    /// exercises every variant where ties realistically occur (Card::new
+    /// defaults make all five primaries tie naturally between fresh cards).
+    /// `CardNumber` and `Position` are excluded because their primaries are
+    /// themselves unique per slice — there's nothing to tiebreak.
+    #[test]
+    fn test_ordered_sorter_tiebreaker_applies_to_every_sort_field_with_ties() {
+        let variants = [
+            SortBy::Points,
+            SortBy::Priority,
+            SortBy::Status,
+            SortBy::CreatedAt,
+            SortBy::UpdatedAt,
+        ];
+
+        for variant in variants {
+            let board = Board::new("Test".to_string(), None);
+            let column = Column::new(board.id, "Todo".to_string(), 0);
+            let mut board_mut = board.clone();
+            let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 0);
+            let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 1);
+            let card3 = Card::new(&mut board_mut, column.id, "C".to_string(), 2);
+            let expected = (card1.card_number, card2.card_number, card3.card_number);
+
+            let sorter = OrderedSorter::new(variant, SortOrder::Ascending);
+            let mut shuffled = vec![&card3, &card1, &card2];
+            sorter.sort_by(&mut shuffled);
+
+            assert_eq!(
+                (
+                    shuffled[0].card_number,
+                    shuffled[1].card_number,
+                    shuffled[2].card_number,
+                ),
+                expected,
+                "tiebreaker must order tied cards by card_number for every sort variant"
+            );
+        }
+    }
 }
