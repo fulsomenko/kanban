@@ -59,6 +59,13 @@ impl OrderedSorter {
     /// or unordered SQL result sets cause tied cards to jump on every render.
     /// The tiebreaker stays ascending even when `order` is descending so that
     /// toggling sort direction does not reshuffle tied cards.
+    ///
+    /// Note: `card_number` is unique only within a single board, so this
+    /// stabiliser only holds when the slice contains cards from one board —
+    /// which is currently always the case via `BoardFilter` in `query/mod.rs`
+    /// and the sprint-scoped slices in `query/sprint.rs`. A future cross-board
+    /// view would need a different tiebreaker (e.g. `(board_id, card_number)`
+    /// or `card.id`).
     pub fn sort_by<T: Borrow<Card>>(&self, cards: &mut [T]) {
         cards.sort_by(|a, b| {
             let primary = self.sorter.compare(a.borrow(), b.borrow());
