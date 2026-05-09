@@ -52,13 +52,21 @@ impl OrderedSorter {
     }
 
     /// Sort a slice in place. Works with both `&Card` and `Card` elements.
+    ///
+    /// Ties on the primary key are broken by ascending `card_number` so that
+    /// sort output is deterministic regardless of input order. Without this,
+    /// backends that yield cards in HashMap iteration order (`InMemoryStore`)
+    /// or unordered SQL result sets cause tied cards to jump on every render.
+    /// The tiebreaker stays ascending even when `order` is descending so that
+    /// toggling sort direction does not reshuffle tied cards.
     pub fn sort_by<T: Borrow<Card>>(&self, cards: &mut [T]) {
         cards.sort_by(|a, b| {
-            let cmp = self.sorter.compare(a.borrow(), b.borrow());
-            match self.order {
-                SortOrder::Ascending => cmp,
-                SortOrder::Descending => cmp.reverse(),
-            }
+            let primary = self.sorter.compare(a.borrow(), b.borrow());
+            let primary = match self.order {
+                SortOrder::Ascending => primary,
+                SortOrder::Descending => primary.reverse(),
+            };
+            primary.then_with(|| a.borrow().card_number.cmp(&b.borrow().card_number))
         });
     }
 }
