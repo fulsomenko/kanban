@@ -375,10 +375,15 @@ mod tests {
         assert!(guard.unwrap().is_none());
     }
 
-    /// Files with stale `commands`/`undo_cursor`/`baseline_data` fields (written
-    /// by older builds) load cleanly — serde ignores unknown fields by default.
+    /// Files with stale `commands`/`undo_cursor`/`baseline_data`/
+    /// `command_schema_version` fields (written by pre-KAN-405 builds) must
+    /// be actively scrubbed from disk on load — not just ignored in memory.
+    /// Serde would silently drop them on the next save, but that "lazy" cleanup
+    /// leaves dust on disk until the user happens to mutate. The load path
+    /// rewrites the file with a clean envelope as soon as legacy fields are
+    /// detected so the cleanup is observable and guaranteed.
     #[tokio::test]
-    async fn test_commands_field_in_old_file_is_ignored_on_load() {
+    async fn test_legacy_command_fields_are_scrubbed_from_disk_on_load() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("legacy.json");
 
@@ -409,8 +414,106 @@ mod tests {
 
         let store = JsonFileStore::new(&file_path);
         let (snapshot, _meta) = store.load().await.unwrap();
+
         let loaded: serde_json::Value = serde_json::from_slice(&snapshot.data).unwrap();
         assert_eq!(loaded["boards"][0]["name"], "B", "board data must survive");
+
+        let on_disk_bytes = tokio::fs::read(&file_path).await.unwrap();
+        let on_disk: serde_json::Value = serde_json::from_slice(&on_disk_bytes).unwrap();
+        let keys: Vec<_> = on_disk.as_object().unwrap().keys().cloned().collect();
+        assert!(
+            !keys.iter().any(|k| k == "commands"),
+            "commands field must be scrubbed from disk, found keys: {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k == "undo_cursor"),
+            "undo_cursor field must be scrubbed from disk, found keys: {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k == "baseline_data"),
+            "baseline_data field must be scrubbed from disk, found keys: {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k == "command_schema_version"),
+            "command_schema_version field must be scrubbed from disk, found keys: {keys:?}"
+        );
+        assert_eq!(
+            on_disk["data"]["boards"][0]["name"], "B",
+            "board data must remain on disk after scrub"
+        );
+    }
+
+    /// `load_sync` must scrub legacy fields with the same guarantee as the
+    /// async `load` — both are valid entry points and both must leave a clean
+    /// file on disk.
+    #[test]
+    fn test_legacy_command_fields_are_scrubbed_from_disk_on_load_sync() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("legacy_sync.json");
+
+        let legacy = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            },
+            "commands": [],
+            "undo_cursor": 0,
+            "command_schema_version": 1,
+            "baseline_data": {}
+        });
+        std::fs::write(&file_path, legacy.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let on_disk_bytes = std::fs::read(&file_path).unwrap();
+        let on_disk: serde_json::Value = serde_json::from_slice(&on_disk_bytes).unwrap();
+        let keys: Vec<_> = on_disk.as_object().unwrap().keys().cloned().collect();
+        for legacy_key in ["commands", "undo_cursor", "baseline_data", "command_schema_version"] {
+            assert!(
+                !keys.iter().any(|k| k == legacy_key),
+                "{legacy_key} must be scrubbed from disk by load_sync, found keys: {keys:?}"
+            );
+        }
+    }
+
+    /// Loading a file that has no legacy fields must not rewrite it. A
+    /// spurious write would change the file's mtime, trip file-watcher
+    /// notifications, and risk altering byte-for-byte content (which some
+    /// users may track in version control).
+    #[tokio::test]
+    async fn test_load_is_a_noop_write_when_no_legacy_fields_present() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("clean.json");
+
+        let clean = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        let original_bytes = serde_json::to_vec_pretty(&clean).unwrap();
+        tokio::fs::write(&file_path, &original_bytes).await.unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let _ = store.load().await.unwrap();
+
+        let after_bytes = tokio::fs::read(&file_path).await.unwrap();
+        assert_eq!(
+            original_bytes, after_bytes,
+            "loading a clean file must not rewrite it"
+        );
     }
 
     #[tokio::test]
