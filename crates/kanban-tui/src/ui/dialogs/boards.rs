@@ -222,15 +222,20 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
         .margin(2)
         .constraints([
             Constraint::Length(4), // description
-            Constraint::Length(1), // format radio
+            Constraint::Length(1), // spacer
             Constraint::Length(1), // "Filename:" label
             Constraint::Length(3), // input box
             Constraint::Length(1), // resolved-path preview
+            Constraint::Length(1), // spacer
+            Constraint::Length(1), // format radio
             Constraint::Length(1), // spacer
             Constraint::Length(1), // hint
             Constraint::Min(0),
         ])
         .split(inner);
+
+    let bold_normal = normal_text().add_modifier(Modifier::BOLD);
+    let bold_label = label_text().add_modifier(Modifier::BOLD);
 
     let description = vec![
         Line::from(Span::styled(
@@ -245,26 +250,13 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
             "in memory and lost when you quit — you can export it at",
             normal_text(),
         )),
-        Line::from(Span::styled("any time with 'x'.", normal_text())),
+        Line::from(vec![
+            Span::styled("any time with '", normal_text()),
+            Span::styled("x", bold_normal),
+            Span::styled("'.", normal_text()),
+        ]),
     ];
     frame.render_widget(Paragraph::new(description), chunks[0]);
-
-    let radio = Line::from(vec![
-        Span::styled("Format: ", highlight_text()),
-        radio_marker(
-            app.choose_storage_backend,
-            StorageBackendChoice::Json,
-            "JSON",
-        ),
-        Span::styled("   ", normal_text()),
-        radio_marker(
-            app.choose_storage_backend,
-            StorageBackendChoice::Sqlite,
-            "SQLite",
-        ),
-        Span::styled("    (Tab to toggle)", label_text()),
-    ]);
-    frame.render_widget(Paragraph::new(radio), chunks[1]);
 
     let label = Paragraph::new("Filename:").style(highlight_text());
     frame.render_widget(label, chunks[2]);
@@ -285,8 +277,32 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
     ]));
     frame.render_widget(preview, chunks[4]);
 
-    let hint = Paragraph::new("Enter — create file   Esc — continue in memory").style(label_text());
-    frame.render_widget(hint, chunks[6]);
+    let radio = Line::from(vec![
+        Span::styled("Format: ", highlight_text()),
+        radio_marker(
+            app.choose_storage_backend,
+            StorageBackendChoice::Json,
+            "JSON",
+        ),
+        Span::styled("   ", normal_text()),
+        radio_marker(
+            app.choose_storage_backend,
+            StorageBackendChoice::Sqlite,
+            "SQLite",
+        ),
+        Span::styled("    (", label_text()),
+        Span::styled("Tab", bold_label),
+        Span::styled(" to toggle)", label_text()),
+    ]);
+    frame.render_widget(Paragraph::new(radio), chunks[6]);
+
+    let hint = Line::from(vec![
+        Span::styled("Enter", bold_label),
+        Span::styled(" — create file   ", label_text()),
+        Span::styled("Esc", bold_label),
+        Span::styled(" — continue in memory", label_text()),
+    ]);
+    frame.render_widget(Paragraph::new(hint), chunks[8]);
 }
 
 fn radio_marker(
