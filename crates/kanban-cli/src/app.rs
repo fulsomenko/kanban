@@ -252,22 +252,19 @@ impl CliApp {
             .clone()
             .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
 
-        let needs_data_file = matches!(
+        let needs_data_file = !matches!(
             &command,
-            Some(Commands::Board(_))
-                | Some(Commands::Column(_))
-                | Some(Commands::Card(_))
-                | Some(Commands::Sprint(_))
-                | Some(Commands::Export(_))
-                | Some(Commands::Import(_))
+            None | Some(Commands::Completions { .. }) | Some(Commands::Migrate(_))
         );
         if needs_data_file && validated_file.is_none() && config.storage_location.is_none() {
             anyhow::bail!(
-                "No data file specified.\n\n\
-                 Provide the file path in one of these ways:\n\
-                 \x20 kanban <path>           (first positional argument)\n\
-                 \x20 KANBAN_FILE=<path>      (environment variable)\n\
-                 \x20 storage_location = ...  (config file setting)"
+                "\
+No data file specified.
+
+Provide the file path in one of these ways:
+  kanban <path>           (first positional argument)
+  KANBAN_FILE=<path>      (environment variable)
+  storage_location = ...  (config file setting)"
             );
         }
 
