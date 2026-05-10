@@ -2368,3 +2368,121 @@ mod no_file_tests {
             .success();
     }
 }
+
+mod version_and_help_tests {
+    use super::*;
+
+    fn kanban_no_config(dir: &std::path::Path) -> Command {
+        let mut cmd = kanban();
+        cmd.current_dir(dir)
+            .env_remove("KANBAN_FILE")
+            .env_remove("XDG_CONFIG_HOME")
+            .env("HOME", dir);
+        cmd
+    }
+
+    // The version output must go to stdout with a clean exit, no
+    // "Error:" prefix, and a single trailing newline. Both -V and
+    // --version must behave identically.
+    #[test]
+    fn test_short_version_flag_writes_clean_to_stdout() {
+        let dir = tempdir().unwrap();
+        let assert = kanban_no_config(dir.path()).args(["-V"]).assert().success();
+        let output = assert.get_output();
+        assert!(
+            output.stderr.is_empty(),
+            "stderr must be empty for -V, got: {:?}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.starts_with("kanban "),
+            "stdout must start with \"kanban \", got: {:?}",
+            stdout
+        );
+        assert!(
+            !stdout.starts_with("Error:"),
+            "stdout must not start with \"Error:\", got: {:?}",
+            stdout
+        );
+        assert!(
+            stdout.ends_with('\n') && !stdout.ends_with("\n\n"),
+            "stdout must end with exactly one newline, got: {:?}",
+            stdout
+        );
+    }
+
+    #[test]
+    fn test_long_version_flag_writes_clean_to_stdout() {
+        let dir = tempdir().unwrap();
+        let assert = kanban_no_config(dir.path())
+            .args(["--version"])
+            .assert()
+            .success();
+        let output = assert.get_output();
+        assert!(
+            output.stderr.is_empty(),
+            "stderr must be empty for --version, got: {:?}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.starts_with("kanban "),
+            "stdout must start with \"kanban \", got: {:?}",
+            stdout
+        );
+        assert!(
+            !stdout.starts_with("Error:"),
+            "stdout must not start with \"Error:\", got: {:?}",
+            stdout
+        );
+        assert!(
+            stdout.ends_with('\n') && !stdout.ends_with("\n\n"),
+            "stdout must end with exactly one newline, got: {:?}",
+            stdout
+        );
+    }
+
+    // --help must also reach stdout with exit 0 — same clap pitfall.
+    #[test]
+    fn test_help_flag_writes_clean_to_stdout() {
+        let dir = tempdir().unwrap();
+        let assert = kanban_no_config(dir.path())
+            .args(["--help"])
+            .assert()
+            .success();
+        let output = assert.get_output();
+        assert!(
+            output.stderr.is_empty(),
+            "stderr must be empty for --help, got: {:?}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            !stdout.starts_with("Error:"),
+            "--help stdout must not start with \"Error:\", got: {:?}",
+            stdout
+        );
+        assert!(
+            stdout.contains("Usage:"),
+            "--help stdout must include a Usage: section, got: {:?}",
+            stdout
+        );
+    }
+
+    // Real argument errors continue to be treated as errors.
+    #[test]
+    fn test_unknown_flag_still_errors_to_stderr() {
+        let dir = tempdir().unwrap();
+        let assert = kanban_no_config(dir.path())
+            .args(["--no-such-flag"])
+            .assert()
+            .failure();
+        let output = assert.get_output();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.is_empty(),
+            "an unknown flag must surface a stderr error message"
+        );
+    }
+}

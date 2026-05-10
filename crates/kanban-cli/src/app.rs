@@ -93,7 +93,17 @@ where
             ))
         })
     });
-    let matches = cmd.try_get_matches_from_mut(args)?;
+    // For -V/--version and --help, clap returns Err with a kind that
+    // signals "print this and exit cleanly". `e.exit()` dispatches
+    // per-kind internally — DisplayHelp / DisplayVersion go to stdout
+    // with exit code 0; real argument errors go to stderr with exit
+    // code 2. No `match e.kind()` needed here. Without it the error
+    // propagates through main's generic eprintln!("Error: {e}") path,
+    // sending the version / help text to stderr with exit 1 and a
+    // doubled trailing newline.
+    let matches = cmd
+        .try_get_matches_from_mut(args)
+        .unwrap_or_else(|e| e.exit());
     let cli = Cli::from_arg_matches(&matches)?;
     Ok((cli, cmd))
 }
