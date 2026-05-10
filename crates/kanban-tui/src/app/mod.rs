@@ -530,7 +530,7 @@ impl App {
         if !self.has_data_file {
             self.choose_storage_backend = StorageBackendChoice::Json;
             self.input
-                .set(format!("kanban{}", StorageBackendChoice::Json.extension()));
+                .set(format!("boards{}", StorageBackendChoice::Json.extension()));
             self.open_dialog(DialogMode::ChooseStorageFile);
         }
     }
@@ -2562,7 +2562,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_no_file_tui_startup_pushes_choose_storage_dialog_prefilled_with_kanban_json() {
+    async fn test_no_file_tui_startup_pushes_choose_storage_dialog_prefilled_with_boards_json() {
         let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
         let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
 
@@ -2575,8 +2575,8 @@ mod tests {
         );
         assert_eq!(
             app.input.as_str(),
-            "kanban.json",
-            "dialog must be pre-filled with kanban.json"
+            "boards.json",
+            "dialog must be pre-filled with boards.json"
         );
     }
 
@@ -2792,7 +2792,7 @@ mod tests {
         );
         assert_eq!(
             app.input.as_str(),
-            "kanban.json",
+            "boards.json",
             "default filename must end in .json to match the default backend"
         );
     }
@@ -2813,7 +2813,7 @@ mod tests {
         );
         assert_eq!(
             app.input.as_str(),
-            "kanban.sqlite",
+            "boards.sqlite",
             "Tab must swap the filename extension to match the new backend"
         );
 
@@ -2825,7 +2825,7 @@ mod tests {
         );
         assert_eq!(
             app.input.as_str(),
-            "kanban.json",
+            "boards.json",
             "Tab must swap the filename extension back to .json"
         );
     }

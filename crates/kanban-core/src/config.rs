@@ -2,8 +2,8 @@ use crate::CoreResult;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_STORAGE_BACKEND: &str = "json";
-pub const DEFAULT_JSON_FILENAME: &str = "kanban.json";
-pub const DEFAULT_SQLITE_FILENAME: &str = "kanban.sqlite";
+pub const DEFAULT_JSON_FILENAME: &str = "boards.json";
+pub const DEFAULT_SQLITE_FILENAME: &str = "boards.sqlite";
 
 pub fn validate_branch_prefix(prefix: &str) -> bool {
     if prefix.is_empty() {
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn test_effective_storage_location_defaults_to_json() {
         let config = AppConfig::default();
-        assert_eq!(config.effective_storage_location(), "kanban.json");
+        assert_eq!(config.effective_storage_location(), "boards.json");
     }
 
     #[test]
@@ -201,7 +201,7 @@ mod tests {
             storage_backend: Some("sqlite".into()),
             ..Default::default()
         };
-        assert_eq!(config.effective_storage_location(), "kanban.sqlite");
+        assert_eq!(config.effective_storage_location(), "boards.sqlite");
     }
 
     #[test]
