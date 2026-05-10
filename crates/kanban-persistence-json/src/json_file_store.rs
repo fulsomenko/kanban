@@ -560,7 +560,12 @@ mod tests {
         let on_disk_bytes = std::fs::read(&file_path).unwrap();
         let on_disk: serde_json::Value = serde_json::from_slice(&on_disk_bytes).unwrap();
         let keys: Vec<_> = on_disk.as_object().unwrap().keys().cloned().collect();
-        for legacy_key in ["commands", "undo_cursor", "baseline_data", "command_schema_version"] {
+        for legacy_key in [
+            "commands",
+            "undo_cursor",
+            "baseline_data",
+            "command_schema_version",
+        ] {
             assert!(
                 !keys.iter().any(|k| k == legacy_key),
                 "{legacy_key} must be scrubbed from disk by load_sync, found keys: {keys:?}"
