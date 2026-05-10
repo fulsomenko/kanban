@@ -571,6 +571,17 @@ impl App {
                 .unwrap_or_else(|_| filename.clone())
         };
 
+        // The dialog creates a *new* board file. Refuse to clobber anything
+        // already at the chosen path — if the user wants to open an existing
+        // file they should quit and relaunch with `kanban <path>`.
+        if std::path::Path::new(&path).exists() {
+            self.set_error(format!(
+                "\"{}\" already exists. Pick a different name, or quit and run `kanban {}` to open it.",
+                filename, filename
+            ));
+            return false;
+        }
+
         let handle = tokio::runtime::Handle::current();
         debug_assert!(
             handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread,
