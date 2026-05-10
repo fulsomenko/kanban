@@ -1,5 +1,5 @@
 ---
-bump: minor
+bump: patch
 ---
 
 Group sprints by status in the sprint assignment dialog (KAN-406)
