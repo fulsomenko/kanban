@@ -530,6 +530,17 @@ impl App {
             "adopt_storage_file requires a multi-threaded Tokio runtime; \
              block_in_place is unavailable on a current_thread runtime."
         );
+        // Capture in-memory state before swapping backends; replace_backend
+        // discards the old backend and the new one starts empty (or loaded
+        // from a non-existent file).
+        let snapshot = match self.ctx.snapshot() {
+            Ok(s) => s,
+            Err(e) => {
+                self.set_error(format!("Could not capture in-memory state: {}", e));
+                return false;
+            }
+        };
+
         let store_manager = self.store_manager.clone();
         let app_config = self.app_config.clone();
         let path_for_closure = path.clone();
@@ -543,6 +554,12 @@ impl App {
 
         match backend_result {
             Ok(backend) => {
+                // Transfer the in-memory state to the new backend; this also
+                // marks it dirty so the queued flush actually writes to disk.
+                if let Err(e) = backend.as_data_store().apply_snapshot(snapshot) {
+                    self.set_error(format!("Could not seed \"{}\": {}", filename, e));
+                    return false;
+                }
                 self.ctx.replace_backend(backend);
                 let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
                 self.persistence.save_file = Some(path.clone());
