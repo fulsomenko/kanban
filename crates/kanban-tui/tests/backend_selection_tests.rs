@@ -80,4 +80,3 @@ async fn test_new_with_store_no_file_uses_in_memory_backend_and_has_no_save_file
 
     std::env::set_current_dir(original_cwd).unwrap();
 }
-

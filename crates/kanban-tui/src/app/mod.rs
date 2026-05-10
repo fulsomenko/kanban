@@ -1034,9 +1034,7 @@ impl App {
                 DialogMode::ManageChildren => self.handle_manage_children_popup(key.code),
                 DialogMode::CarryOverSprint => self.handle_carry_over_sprint_popup(key.code),
                 DialogMode::ExportBoards => self.handle_export_boards_dialog(key.code),
-                DialogMode::ChooseStorageFile => {
-                    self.handle_choose_storage_file_dialog(key.code)
-                }
+                DialogMode::ChooseStorageFile => self.handle_choose_storage_file_dialog(key.code),
             },
         }
         should_restart_events
