@@ -109,6 +109,43 @@ pub struct App {
     pub needs_redraw: bool,
     pub error_log: Arc<Mutex<crate::error_log::ErrorLogState>>,
     pub auto_open_seen_count: usize,
+    pub(crate) choose_storage_backend: StorageBackendChoice,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum StorageBackendChoice {
+    #[default]
+    Json,
+    Sqlite,
+}
+
+impl StorageBackendChoice {
+    pub(crate) fn extension(self) -> &'static str {
+        match self {
+            Self::Json => ".json",
+            Self::Sqlite => ".sqlite",
+        }
+    }
+
+    pub(crate) fn toggle(self) -> Self {
+        match self {
+            Self::Json => Self::Sqlite,
+            Self::Sqlite => Self::Json,
+        }
+    }
+}
+
+/// Replaces a known data-file extension on `filename` with `new_ext`, or
+/// appends `new_ext` if no known extension is present. Used by the
+/// choose-storage dialog when the user toggles between JSON and SQLite.
+pub(crate) fn swap_known_extension(filename: &str, new_ext: &str) -> String {
+    const KNOWN: &[&str] = &[".json", ".sqlite", ".sqlite3", ".db"];
+    for ext in KNOWN {
+        if let Some(stem) = filename.strip_suffix(ext) {
+            return format!("{}{}", stem, new_ext);
+        }
+    }
+    format!("{}{}", filename, new_ext)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,6 +238,10 @@ impl App {
         let config_storage_location = config_resolved.clone();
         let original_storage_backend = app_config.storage_backend.clone();
         let original_storage_location = app_config.storage_location.clone();
+        // True when the caller or config provides an explicit file path.
+        // When false the TUI runs with an in-memory backend and nothing is
+        // written to disk.
+        let has_explicit_file = save_file.is_some() || original_storage_location.is_some();
         if let Some(ref file) = save_file {
             let path = std::path::Path::new(file);
             let resolved = if path.is_absolute() {
@@ -215,27 +256,41 @@ impl App {
             // File arg is the source of truth — ignore config's storage_backend
             app_config.storage_backend = None;
         }
-        if store_manager
-            .sync_backend_with_file(&app_config.effective_storage_location(), &mut app_config)
+        if has_explicit_file
+            && store_manager
+                .sync_backend_with_file(&app_config.effective_storage_location(), &mut app_config)
         {
             tracing::warn!(
                 "Storage backend auto-corrected to '{}' based on file content",
                 app_config.effective_storage_backend()
             );
         }
-        let effective_file = kanban_service::config::resolve_storage_location(&app_config);
-        let cli_file_override = save_file.is_some() && effective_file != config_resolved;
-        // If the CLI-supplied file resolves to the same path as the configured
-        // default, this is not a real override. Don't write the canonical
-        // absolute path into app_config.storage_location — it is
-        // indistinguishable from a user-set value and would be written to the
-        // config file whenever any other setting is changed.
-        if save_file.is_some() && !cli_file_override && original_storage_location.is_none() {
-            app_config.storage_location = None;
-        }
-        let kanban_backend = store_manager
-            .make_backend(&effective_file, &app_config)
-            .await?;
+        let (kanban_backend, persistence_file, cli_file_override): (
+            std::sync::Arc<dyn kanban_service::KanbanBackend>,
+            Option<String>,
+            bool,
+        ) = if has_explicit_file {
+            let effective_file = kanban_service::config::resolve_storage_location(&app_config);
+            let cli_file_override = save_file.is_some() && effective_file != config_resolved;
+            // If the CLI-supplied file resolves to the same path as the configured
+            // default, this is not a real override. Don't write the canonical
+            // absolute path into app_config.storage_location — it is
+            // indistinguishable from a user-set value and would be written to the
+            // config file whenever any other setting is changed.
+            if save_file.is_some() && !cli_file_override && original_storage_location.is_none() {
+                app_config.storage_location = None;
+            }
+            let backend = store_manager
+                .make_backend(&effective_file, &app_config)
+                .await?;
+            (backend, Some(effective_file), cli_file_override)
+        } else {
+            (
+                std::sync::Arc::new(kanban_domain::InMemoryStore::new()),
+                None,
+                false,
+            )
+        };
         let inner_ctx =
             kanban_service::KanbanContext::open(kanban_backend, app_config.clone()).await?;
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(inner_ctx)?;
@@ -255,7 +310,7 @@ impl App {
             filter: FilterState::default(),
             dialog_input: DialogInputState::default(),
             focus: FocusState::default(),
-            persistence: PersistenceState::new(Some(effective_file), save_completion_rx),
+            persistence: PersistenceState::new(persistence_file, save_completion_rx),
             multi_select: MultiSelectState::default(),
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
@@ -263,7 +318,7 @@ impl App {
             model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
-            has_data_file: true,
+            has_data_file: has_explicit_file,
             cli_file_provided: save_file.is_some(),
             cli_file_override,
             config_storage_backend,
@@ -276,6 +331,7 @@ impl App {
             needs_redraw: true,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
             auto_open_seen_count: 0,
+            choose_storage_backend: StorageBackendChoice::default(),
         };
 
         Ok((app, save_rx))
@@ -470,6 +526,140 @@ impl App {
         self.push_mode(AppMode::Dialog(dialog));
     }
 
+    pub fn maybe_push_startup_file_dialog(&mut self) {
+        if !self.has_data_file {
+            self.choose_storage_backend = StorageBackendChoice::Json;
+            self.input
+                .set(format!("boards{}", StorageBackendChoice::Json.extension()));
+            self.open_dialog(DialogMode::ChooseStorageFile);
+        }
+    }
+
+    pub fn handle_choose_storage_file_dialog(&mut self, key_code: crossterm::event::KeyCode) {
+        use crate::dialog::{handle_dialog_input, DialogAction};
+        if matches!(key_code, crossterm::event::KeyCode::Tab) {
+            self.choose_storage_backend = self.choose_storage_backend.toggle();
+            let new_filename =
+                swap_known_extension(self.input.as_str(), self.choose_storage_backend.extension());
+            self.input.set(new_filename);
+            return;
+        }
+        match handle_dialog_input(&mut self.input, key_code, false) {
+            DialogAction::Confirm => {
+                let filename = self.input.as_str().to_string();
+                if self.adopt_storage_file(filename) {
+                    self.input.clear();
+                    self.pop_mode();
+                }
+                // On failure, leave the dialog open so the user can correct
+                // the path and retry; the error banner explains what went wrong.
+            }
+            DialogAction::Cancel => {
+                self.input.clear();
+                self.pop_mode();
+            }
+            DialogAction::None => {}
+        }
+    }
+
+    fn adopt_storage_file(&mut self, filename: String) -> bool {
+        let path = if std::path::Path::new(&filename).is_absolute() {
+            filename.clone()
+        } else {
+            std::env::current_dir()
+                .map(|cwd| cwd.join(&filename).display().to_string())
+                .unwrap_or_else(|_| filename.clone())
+        };
+
+        // The dialog creates a *new* board file. Refuse to clobber anything
+        // already at the chosen path — if the user wants to open an existing
+        // file they should quit and relaunch with `kanban <path>`.
+        if std::path::Path::new(&path).exists() {
+            self.set_error(format!(
+                "\"{}\" already exists. Pick a different name, or quit and run `kanban {}` to open it.",
+                filename, filename
+            ));
+            return false;
+        }
+
+        let handle = tokio::runtime::Handle::current();
+        debug_assert!(
+            handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread,
+            "adopt_storage_file requires a multi-threaded Tokio runtime; \
+             block_in_place is unavailable on a current_thread runtime."
+        );
+        // Capture in-memory state before swapping backends; replace_backend
+        // discards the old backend and the new one starts empty (or loaded
+        // from a non-existent file).
+        let snapshot = match self.ctx.snapshot() {
+            Ok(s) => s,
+            Err(e) => {
+                self.set_error(format!("Could not capture in-memory state: {}", e));
+                return false;
+            }
+        };
+
+        let store_manager = self.store_manager.clone();
+        let app_config = self.app_config.clone();
+        let path_for_closure = path.clone();
+        // make_backend creates the backing file as a side effect for SQLite
+        // (sqlx opens the DB during construction). A probe failure below
+        // therefore can leave an empty SQLite file at `path`; sqlx opens an
+        // existing empty DB cleanly so a retry on the same path is safe.
+        let backend_result = tokio::task::block_in_place(|| {
+            handle.block_on(async move {
+                store_manager
+                    .make_backend(&path_for_closure, &app_config)
+                    .await
+            })
+        });
+
+        match backend_result {
+            Ok(backend) => {
+                // Transfer the in-memory state to the new backend; this also
+                // marks it dirty so the queued flush actually writes to disk.
+                if let Err(e) = backend.as_data_store().apply_snapshot(snapshot) {
+                    self.set_error(format!("Could not seed \"{}\": {}", filename, e));
+                    return false;
+                }
+                // Probe the read paths initialize_undo_state will exercise so
+                // a failure surfaces before any commit on KanbanContext.
+                if let Err(e) = backend.snapshot() {
+                    self.set_error(format!(
+                        "Could not read seeded snapshot from \"{}\": {}",
+                        filename, e
+                    ));
+                    return false;
+                }
+                if let Err(e) = backend.command_count() {
+                    self.set_error(format!(
+                        "Could not read command count from \"{}\": {}",
+                        filename, e
+                    ));
+                    return false;
+                }
+                // ── commit point: every operation below is infallible for a
+                // backend that just passed the probes above.
+                self.ctx.replace_backend(backend);
+                self.ctx
+                    .initialize_undo_state()
+                    .expect("backend was validated immediately before replace_backend");
+                let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
+                self.persistence.save_file = Some(path.clone());
+                self.persistence.save_completion_rx = Some(completion_rx);
+                self.has_data_file = true;
+                self.app_config.storage_location = Some(path);
+                self.spawn_save_worker(save_rx, None);
+                self.ctx.save_coordinator.queue_flush();
+                true
+            }
+            Err(e) => {
+                self.set_error(format!("Could not open \"{}\": {}", filename, e));
+                false
+            }
+        }
+    }
+
     pub fn set_error(&mut self, message: impl Into<String>) {
         self.ui_state.banner = Some(Banner::error(message));
     }
@@ -640,6 +830,7 @@ impl App {
                 | AppMode::Dialog(DialogMode::RenameColumn)
                 | AppMode::Dialog(DialogMode::SetSprintPrefix)
                 | AppMode::Dialog(DialogMode::SetSprintCardPrefix)
+                | AppMode::Dialog(DialogMode::ChooseStorageFile)
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q'))
@@ -943,6 +1134,7 @@ impl App {
                 DialogMode::ManageChildren => self.handle_manage_children_popup(key.code),
                 DialogMode::CarryOverSprint => self.handle_carry_over_sprint_popup(key.code),
                 DialogMode::ExportBoards => self.handle_export_boards_dialog(key.code),
+                DialogMode::ChooseStorageFile => self.handle_choose_storage_file_dialog(key.code),
             },
         }
         should_restart_events
@@ -1751,6 +1943,8 @@ impl App {
             tracing::debug!("No save channel receiver - no saves will be processed");
         }
 
+        self.maybe_push_startup_file_dialog();
+
         while !self.should_quit {
             let mut events = EventHandler::new();
 
@@ -2250,6 +2444,7 @@ impl App {
             needs_redraw: true,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
             auto_open_seen_count: 0,
+            choose_storage_backend: StorageBackendChoice::default(),
         }
     }
 }
@@ -2352,6 +2547,7 @@ mod tests {
             needs_redraw: false,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
             auto_open_seen_count: 0,
+            choose_storage_backend: StorageBackendChoice::default(),
         };
 
         app.spawn_save_worker(save_rx, None);
@@ -2391,5 +2587,378 @@ mod tests {
             app.ui_state.help_list.get_scroll_offset() > 0,
             "help list should have scrolled to bring item 49 into view"
         );
+    }
+
+    #[tokio::test]
+    async fn test_no_file_tui_startup_pushes_choose_storage_dialog_prefilled_with_boards_json() {
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+
+        app.maybe_push_startup_file_dialog();
+
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::ChooseStorageFile),
+            "no-file startup must open the ChooseStorageFile dialog"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            "boards.json",
+            "dialog must be pre-filled with boards.json"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_file_tui_startup_dialog_cancel_stays_in_memory() {
+        use crossterm::event::KeyCode;
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        app.handle_choose_storage_file_dialog(KeyCode::Esc);
+
+        assert_eq!(
+            app.mode,
+            AppMode::Normal,
+            "cancelling the dialog must return to Normal mode"
+        );
+        assert!(
+            !app.has_data_file,
+            "cancelling must leave the app in in-memory mode"
+        );
+        assert!(
+            app.persistence.save_file.is_none(),
+            "cancelling must not set a save file"
+        );
+    }
+
+    // multi_thread required: adopt_storage_file uses block_in_place, which
+    // panics on the current_thread runtime.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_no_file_tui_startup_dialog_confirm_creates_file_and_adopts_backend() {
+        use crossterm::event::KeyCode;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("myboard.json");
+        let target_str = target.to_str().unwrap().to_string();
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        app.input.clear();
+        app.input.set(target_str.clone());
+
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        assert!(
+            app.has_data_file,
+            "confirming must mark the app as having a data file"
+        );
+        assert_eq!(
+            app.persistence.save_file.as_deref(),
+            Some(target_str.as_str()),
+            "persistence.save_file must point to the chosen path"
+        );
+        assert_eq!(
+            app.mode,
+            AppMode::Normal,
+            "confirming must dismiss the dialog"
+        );
+    }
+
+    // multi_thread required: adopt_storage_file uses block_in_place + the save
+    // worker is a spawned task that writes to disk asynchronously.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_no_file_tui_startup_dialog_confirm_persists_in_memory_state_to_disk() {
+        use crossterm::event::KeyCode;
+        use kanban_domain::Board;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("seeded.json");
+        let target_str = target.to_str().unwrap().to_string();
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+
+        // Seed in-memory state with a board so we can detect whether adopt
+        // transferred it to the new on-disk backend.
+        let mut snapshot = app.ctx.snapshot().unwrap();
+        snapshot.boards.push(Board::new("BeforeAdopt".into(), None));
+        app.ctx.apply_snapshot(snapshot).unwrap();
+
+        app.maybe_push_startup_file_dialog();
+        app.input.clear();
+        app.input.set(target_str.clone());
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        // Wait for the save worker to flush at least once.
+        let completion_rx = app
+            .persistence
+            .save_completion_rx
+            .as_mut()
+            .expect("save completion channel must exist after adopt");
+        tokio::time::timeout(std::time::Duration::from_secs(2), completion_rx.recv())
+            .await
+            .expect("save worker must signal completion within 2s")
+            .expect("completion sender dropped before signal");
+
+        assert!(
+            target.exists(),
+            "target file must exist on disk after adopt"
+        );
+
+        use kanban_persistence::PersistenceStore;
+        let on_disk = kanban_persistence_json::JsonFileStore::new(&target_str);
+        let (snap, _meta) = on_disk
+            .load_sync()
+            .unwrap()
+            .expect("file must contain a snapshot");
+        let parsed = kanban_persistence::snapshot_from_json_bytes(&snap.data).unwrap();
+        assert!(
+            parsed.boards.iter().any(|b| b.name == "BeforeAdopt"),
+            "in-memory state must be transferred to the new on-disk backend"
+        );
+    }
+
+    // multi_thread required for the same reason as the success test.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_no_file_tui_startup_dialog_confirm_refuses_existing_path() {
+        use crossterm::event::KeyCode;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("already-here.json");
+        std::fs::write(&target, b"{\"boards\":[]}").unwrap();
+        let target_str = target.to_str().unwrap().to_string();
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+        app.input.clear();
+        app.input.set(target_str.clone());
+
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::ChooseStorageFile),
+            "existing-file confirm must leave the dialog open"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            target_str.as_str(),
+            "input must be preserved so the user can pick a different name"
+        );
+        assert!(
+            !app.has_data_file,
+            "existing-file confirm must not flip has_data_file"
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("existing-file confirm must surface a banner");
+        assert_eq!(banner.variant, crate::components::BannerVariant::Error);
+        assert!(
+            banner.message.contains("already exists"),
+            "banner must explain that the file already exists, got: {}",
+            banner.message
+        );
+        // The pre-existing file content must not have been touched.
+        let on_disk = std::fs::read(&target).unwrap();
+        assert_eq!(
+            on_disk,
+            b"{\"boards\":[]}".to_vec(),
+            "the existing file must not have been overwritten"
+        );
+    }
+
+    // multi_thread required for the same reason as the success test.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_no_file_tui_startup_dialog_confirm_failure_keeps_dialog_open() {
+        use crossterm::event::KeyCode;
+
+        // SQLite path inside a non-existent parent directory — SqliteBackend::open
+        // cannot create the file because the parent doesn't exist, so make_backend
+        // returns Err.
+        let dir = tempfile::TempDir::new().unwrap();
+        let bad_path = dir
+            .path()
+            .join("nonexistent_subdir")
+            .join("foo.sqlite")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        app.input.clear();
+        app.input.set(bad_path.clone());
+
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::ChooseStorageFile),
+            "confirm failure must leave the dialog open so the user can retry"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            bad_path.as_str(),
+            "input must be preserved on failure so the user can edit the path"
+        );
+        assert!(
+            !app.has_data_file,
+            "confirm failure must not flip has_data_file"
+        );
+        assert!(
+            app.persistence.save_file.is_none(),
+            "confirm failure must not set a save file"
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("confirm failure must surface a banner");
+        assert_eq!(
+            banner.variant,
+            crate::components::BannerVariant::Error,
+            "banner must be an error variant"
+        );
+    }
+
+    // multi_thread required: adopt_storage_file uses block_in_place.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_adopt_storage_file_leaves_context_ready_for_mutations() {
+        use crossterm::event::KeyCode;
+        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("after-adopt.json");
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+        app.input.clear();
+        app.input.set(target.to_str().unwrap().to_string());
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        // Mirrors the user-level "press n to create a board" path: the
+        // context must accept a command after the backend has been swapped.
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "AfterAdopt".into(),
+            card_prefix: None,
+            position: 0,
+        }));
+        app.ctx
+            .execute_command(cmd)
+            .expect("execute_command must succeed after adopt_storage_file");
+    }
+
+    #[tokio::test]
+    async fn test_choose_storage_dialog_default_backend_is_json() {
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        assert_eq!(
+            app.choose_storage_backend,
+            StorageBackendChoice::Json,
+            "default storage backend selection must be JSON"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            "boards.json",
+            "default filename must end in .json to match the default backend"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_choose_storage_dialog_tab_toggles_backend_and_swaps_extension() {
+        use crossterm::event::KeyCode;
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        app.handle_choose_storage_file_dialog(KeyCode::Tab);
+        assert_eq!(
+            app.choose_storage_backend,
+            StorageBackendChoice::Sqlite,
+            "Tab must toggle the backend selection from JSON to SQLite"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            "boards.sqlite",
+            "Tab must swap the filename extension to match the new backend"
+        );
+
+        app.handle_choose_storage_file_dialog(KeyCode::Tab);
+        assert_eq!(
+            app.choose_storage_backend,
+            StorageBackendChoice::Json,
+            "Tab must toggle the backend selection back to JSON"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            "boards.json",
+            "Tab must swap the filename extension back to .json"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_choose_storage_dialog_tab_appends_extension_for_filename_without_one() {
+        use crossterm::event::KeyCode;
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+        app.input.clear();
+        app.input.set("myboard".to_string());
+
+        app.handle_choose_storage_file_dialog(KeyCode::Tab);
+
+        assert_eq!(
+            app.input.as_str(),
+            "myboard.sqlite",
+            "Tab must append the extension when the filename has no known extension"
+        );
+    }
+
+    #[test]
+    fn test_swap_known_extension_table() {
+        let cases = [
+            // Primary swap
+            ("boards.json", ".sqlite", "boards.sqlite"),
+            ("boards.sqlite", ".json", "boards.json"),
+            // Alternative SQLite extensions are recognised
+            ("boards.sqlite3", ".json", "boards.json"),
+            ("boards.db", ".json", "boards.json"),
+            // No known extension → append
+            ("boards", ".sqlite", "boards.sqlite"),
+            // Empty input → returns just the new extension. The dialog
+            // pre-fills "boards.json" so this is unreachable in practice;
+            // documented for the helper's stand-alone behaviour.
+            ("", ".json", ".json"),
+            // Multi-dot stems are preserved
+            ("foo.tar.json", ".sqlite", "foo.tar.sqlite"),
+            // Known list is lowercase-only — uppercase extensions are
+            // not recognised and the new extension is appended.
+            ("FOO.JSON", ".sqlite", "FOO.JSON.sqlite"),
+        ];
+
+        for (input, ext, expected) in cases {
+            assert_eq!(
+                swap_known_extension(input, ext),
+                expected,
+                "swap_known_extension({:?}, {:?})",
+                input,
+                ext
+            );
+        }
     }
 }

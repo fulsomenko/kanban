@@ -6,16 +6,15 @@ CLI entry point for the kanban workspace. Parses commands with [clap](https://do
 
 ```bash
 kanban [FILE] [COMMAND]
-kanban                        # Launch TUI with default file
-kanban myboard.json           # Launch TUI with specific file
-kanban myboard.json board list  # Run a CLI command
+kanban                        # Launch TUI; pick or skip a file from the startup dialog
+kanban boards.json            # Launch TUI with specific file
+kanban boards.json board list # Run a CLI command
 ```
 
-**File selection priority**:
+**File selection priority** (TUI launches the choose-storage dialog when none of these is set):
 1. Positional `FILE` argument
 2. `KANBAN_FILE` environment variable
 3. Config file `storage_location`
-4. Default: `kanban.json`
 
 All commands output JSON to stdout. Errors are written to stderr.
 
@@ -118,10 +117,10 @@ kanban completions <bash|zsh|fish|powershell>
 
 ```bash
 # JSON → SQLite
-kanban migrate kanban.json sqlite
+kanban migrate boards.json sqlite
 
 # SQLite → JSON with explicit output path
-kanban migrate kanban.sqlite json -o backup.json
+kanban migrate boards.sqlite json -o backup.json
 
 # Source format cannot be detected from extension
 kanban migrate data.bin json --source-backend sqlite

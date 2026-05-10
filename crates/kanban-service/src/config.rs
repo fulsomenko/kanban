@@ -180,7 +180,7 @@ pub fn has_non_default_values(config: &AppConfig) -> bool {
 ///
 /// When *both* `storage_backend` and `storage_location` are `Some`, this function
 /// always returns `false`, even if both hold default values (e.g. `"json"` /
-/// `"kanban.json"`).  The reasoning:
+/// `"boards.json"`).  The reasoning:
 ///
 /// - For an *existing* file, the backend is detected from the file via
 ///   `sync_backend_with_file` and then stored as an explicit `Some` so that
@@ -688,7 +688,7 @@ mod tests {
             dto.storage_location
                 .as_deref()
                 .unwrap()
-                .ends_with("/kanban.json"),
+                .ends_with("/boards.json"),
             "got: {:?}",
             dto.storage_location
         );
@@ -713,7 +713,7 @@ mod tests {
             dto.storage_location
                 .as_deref()
                 .unwrap()
-                .ends_with("/kanban.sqlite"),
+                .ends_with("/boards.sqlite"),
             "got: {:?}",
             dto.storage_location
         );
@@ -834,7 +834,7 @@ mod tests {
             editing_format: Some("json".into()),
             configuration_format: Some("toml".into()),
             configuration_location: config_path().map(|p| p.display().to_string()),
-            storage_location: Some("kanban.json".into()),
+            storage_location: Some("boards.json".into()),
         };
         assert!(has_non_default_values(&config));
     }
@@ -936,7 +936,7 @@ mod tests {
             default_sprint_prefix: Some("sprint".into()),
             editing_format: Some("json".into()),
             storage_backend: Some("json".into()),
-            storage_location: Some("kanban.json".into()),
+            storage_location: Some("boards.json".into()),
         };
         let serialized = serde_json::to_string_pretty(&dto).unwrap();
         let keys: Vec<&str> = serialized
@@ -1010,7 +1010,7 @@ mod tests {
     #[test]
     fn test_strip_defaults_strips_default_storage_location() {
         let mut config = AppConfig {
-            storage_location: Some("kanban.json".into()),
+            storage_location: Some("boards.json".into()),
             ..Default::default()
         };
         strip_defaults(&mut config);
@@ -1031,17 +1031,17 @@ mod tests {
     fn test_strip_defaults_preserves_location_when_backend_explicit() {
         let mut config = AppConfig {
             storage_backend: Some("json".into()),
-            storage_location: Some("kanban.json".into()),
+            storage_location: Some("boards.json".into()),
             ..Default::default()
         };
         strip_defaults(&mut config);
-        assert_eq!(config.storage_location.as_deref(), Some("kanban.json"));
+        assert_eq!(config.storage_location.as_deref(), Some("boards.json"));
     }
 
     #[test]
     fn test_strip_defaults_strips_location_when_backend_not_set() {
         let mut config = AppConfig {
-            storage_location: Some("kanban.json".into()),
+            storage_location: Some("boards.json".into()),
             ..Default::default()
         };
         strip_defaults(&mut config);

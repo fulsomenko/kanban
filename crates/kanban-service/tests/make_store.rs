@@ -74,5 +74,5 @@ fn test_make_store_with_config_explicit_path_wins() {
 fn test_make_store_with_config_none_uses_json_default() {
     let config = AppConfig::default();
     let store = manager().make_store_with_config(None, &config).unwrap();
-    assert!(store.path().to_str().unwrap().ends_with("kanban.json"));
+    assert!(store.path().to_str().unwrap().ends_with("boards.json"));
 }

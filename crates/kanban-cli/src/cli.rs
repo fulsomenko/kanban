@@ -390,9 +390,9 @@ pub struct SprintUpdateArgs {
 // Migrate command
 #[derive(Args)]
 #[command(after_help = "EXAMPLES:
-    kanban migrate kanban.json sqlite
-    kanban migrate kanban.json sqlite -o /path/to/output.sqlite
-    kanban migrate kanban.sqlite json -o kanban.json
+    kanban migrate boards.json sqlite
+    kanban migrate boards.json sqlite -o /path/to/output.sqlite
+    kanban migrate boards.sqlite json -o boards.json
     kanban migrate data.bin json --source-backend sqlite")]
 pub struct MigrateArgs {
     /// Path to source file

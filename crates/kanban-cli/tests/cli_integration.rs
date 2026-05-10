@@ -2305,3 +2305,66 @@ mod error_tests {
             .stderr(predicate::str::contains("notadate"));
     }
 }
+
+mod no_file_tests {
+    use super::*;
+
+    // Runs `kanban <args>` in a fresh temp dir with no KANBAN_FILE env var and
+    // HOME pointing at the same empty dir (so no config file is found).
+    fn kanban_no_config(dir: &std::path::Path) -> Command {
+        let mut cmd = kanban();
+        cmd.current_dir(dir)
+            .env_remove("KANBAN_FILE")
+            .env_remove("XDG_CONFIG_HOME")
+            .env("HOME", dir);
+        cmd
+    }
+
+    #[test]
+    fn test_subcommand_with_no_file_and_no_config_fails_with_actionable_message() {
+        let dir = tempdir().unwrap();
+        kanban_no_config(dir.path())
+            .args(["board", "list"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("No data file specified"))
+            .stderr(predicate::str::contains("KANBAN_FILE"));
+        assert!(
+            !dir.path().join("kanban.json").exists(),
+            "must not silently create kanban.json"
+        );
+    }
+
+    #[test]
+    fn test_kanban_file_env_var_accepted_without_positional_arg() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("via-env.json");
+        // Seed the file via the positional path so this test verifies env-var
+        // resolution rather than implicit JSON auto-create-on-open.
+        kanban_no_config(dir.path())
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "SeededViaPositional",
+            ])
+            .assert()
+            .success();
+        kanban_no_config(dir.path())
+            .env("KANBAN_FILE", file.to_str().unwrap())
+            .args(["board", "list"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("SeededViaPositional"));
+    }
+
+    #[test]
+    fn test_completions_subcommand_requires_no_file() {
+        let dir = tempdir().unwrap();
+        kanban_no_config(dir.path())
+            .args(["completions", "bash"])
+            .assert()
+            .success();
+    }
+}
