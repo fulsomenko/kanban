@@ -46,9 +46,21 @@ async fn test_new_with_store_json_path_yields_save_worker() {
     );
 }
 
+// cwd is process-global; the only test in this file that mutates it must
+// serialize access. A static lock keeps the file robust if more cwd-dependent
+// tests are added later.
+static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[tokio::test]
+// Holding the std Mutex across the await is safe here: this test runs on the
+// single-threaded current_thread runtime, no other task can need the lock,
+// and we need cwd to remain set for the full duration of the call.
+#[allow(clippy::await_holding_lock)]
 async fn test_new_with_store_no_file_uses_in_memory_backend_and_has_no_save_file() {
     let dir = tempfile::TempDir::new().unwrap();
+    let _guard = CWD_LOCK.lock().unwrap();
+    let original_cwd = std::env::current_dir().unwrap();
+    std::env::set_current_dir(dir.path()).unwrap();
 
     let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
     let (app, _save_rx) = kanban_tui::App::new_with_store(sm, None).await.unwrap();
@@ -63,7 +75,9 @@ async fn test_new_with_store_no_file_uses_in_memory_backend_and_has_no_save_file
     );
     assert!(
         !dir.path().join("kanban.json").exists(),
-        "must not create kanban.json when no file is given"
+        "must not create kanban.json in cwd when no file is given"
     );
+
+    std::env::set_current_dir(original_cwd).unwrap();
 }
 
