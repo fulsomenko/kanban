@@ -2,6 +2,9 @@ use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+#[cfg(target_os = "windows")]
+use crossterm::event::KeyEventKind;
+
 #[derive(Debug, Clone)]
 pub enum Event {
     Key(KeyEvent),
@@ -34,6 +37,11 @@ impl EventHandler {
                         let mut had_key = false;
                         while event::poll(Duration::from_millis(0)).unwrap_or(false) {
                             if let Ok(CrosstermEvent::Key(key)) = event::read() {
+                                #[cfg(target_os = "windows")]
+                                if key.kind != KeyEventKind::Press {
+                                    continue;
+                                }
+
                                 had_key = true;
                                 if tx.send(Event::Key(key)).is_err() {
                                     break;
