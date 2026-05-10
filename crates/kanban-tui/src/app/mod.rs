@@ -500,9 +500,12 @@ impl App {
         match handle_dialog_input(&mut self.input, key_code, false) {
             DialogAction::Confirm => {
                 let filename = self.input.as_str().to_string();
-                self.input.clear();
-                self.pop_mode();
-                self.adopt_storage_file(filename);
+                if self.adopt_storage_file(filename) {
+                    self.input.clear();
+                    self.pop_mode();
+                }
+                // On failure, leave the dialog open so the user can correct
+                // the path and retry; the error banner explains what went wrong.
             }
             DialogAction::Cancel => {
                 self.input.clear();
@@ -512,7 +515,7 @@ impl App {
         }
     }
 
-    fn adopt_storage_file(&mut self, filename: String) {
+    fn adopt_storage_file(&mut self, filename: String) -> bool {
         let path = if std::path::Path::new(&filename).is_absolute() {
             filename.clone()
         } else {
@@ -548,9 +551,11 @@ impl App {
                 self.app_config.storage_location = Some(path);
                 self.spawn_save_worker(save_rx, None);
                 self.ctx.save_coordinator.queue_flush();
+                true
             }
             Err(e) => {
                 self.set_error(format!("Could not open \"{}\": {}", filename, e));
+                false
             }
         }
     }
