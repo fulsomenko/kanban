@@ -591,6 +591,10 @@ impl App {
         let store_manager = self.store_manager.clone();
         let app_config = self.app_config.clone();
         let path_for_closure = path.clone();
+        // make_backend creates the backing file as a side effect for SQLite
+        // (sqlx opens the DB during construction). A probe failure below
+        // therefore can leave an empty SQLite file at `path`; sqlx opens an
+        // existing empty DB cleanly so a retry on the same path is safe.
         let backend_result = tokio::task::block_in_place(|| {
             handle.block_on(async move {
                 store_manager
@@ -607,15 +611,28 @@ impl App {
                     self.set_error(format!("Could not seed \"{}\": {}", filename, e));
                     return false;
                 }
-                self.ctx.replace_backend(backend);
-                // replace_backend resets baseline_snapshot/undo_cursor/dirty;
-                // the caller is responsible for re-initialising undo state
-                // before the next mutation, otherwise execute() bails with
-                // "undo state not initialized".
-                if let Err(e) = self.ctx.initialize_undo_state() {
-                    self.set_error(format!("Could not initialise undo state: {}", e));
+                // Probe the read paths initialize_undo_state will exercise so
+                // a failure surfaces before any commit on KanbanContext.
+                if let Err(e) = backend.snapshot() {
+                    self.set_error(format!(
+                        "Could not read seeded snapshot from \"{}\": {}",
+                        filename, e
+                    ));
                     return false;
                 }
+                if let Err(e) = backend.command_count() {
+                    self.set_error(format!(
+                        "Could not read command count from \"{}\": {}",
+                        filename, e
+                    ));
+                    return false;
+                }
+                // ── commit point: every operation below is infallible for a
+                // backend that just passed the probes above.
+                self.ctx.replace_backend(backend);
+                self.ctx
+                    .initialize_undo_state()
+                    .expect("backend was validated immediately before replace_backend");
                 let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
                 self.persistence.save_file = Some(path.clone());
                 self.persistence.save_completion_rx = Some(completion_rx);
