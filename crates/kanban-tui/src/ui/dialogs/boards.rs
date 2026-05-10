@@ -206,10 +206,10 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
     use crate::components::centered_rect_abs;
     use ratatui::widgets::{Block, Borders, Clear};
 
-    // Sum of inner row constraints (4 + 1 + 1 + 3 + 2 + 1 + 1 + 1 + 1) = 15,
-    // plus 2*2 vertical margin + 2 borders = 21 rows minimum. Below that
+    // Sum of inner row constraints (3 + 1 + 1 + 3 + 2 + 1 + 1 + 1 + 1) = 14,
+    // plus 2*2 vertical margin + 2 borders = 20 rows minimum. Below that
     // the popup just fills the available height (centered_rect_abs clamps).
-    const MIN_HEIGHT: u16 = 21;
+    const MIN_HEIGHT: u16 = 20;
     const PERCENT_X: u16 = 70;
 
     let area = centered_rect_abs(PERCENT_X, MIN_HEIGHT, frame.area());
@@ -227,7 +227,7 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
         .direction(Direction::Vertical)
         .margin(2)
         .constraints([
-            Constraint::Length(4), // description
+            Constraint::Length(3), // description
             Constraint::Length(1), // spacer
             Constraint::Length(1), // "Filename:" label
             Constraint::Length(3), // input box
@@ -241,7 +241,6 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
         .split(inner);
 
     let bold_normal = normal_text().add_modifier(Modifier::BOLD);
-    let bold_label = label_text().add_modifier(Modifier::BOLD);
 
     let description = vec![
         Line::from(Span::styled(
@@ -249,11 +248,7 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
             normal_text(),
         )),
         Line::from(Span::styled(
-            "to continue without one. Work done without a file is held",
-            normal_text(),
-        )),
-        Line::from(Span::styled(
-            "in memory and lost when you quit — you can export it at",
+            "to continue without one - you can export it at",
             normal_text(),
         )),
         Line::from(vec![
@@ -297,17 +292,17 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
             StorageBackendChoice::Sqlite,
             "SQLite",
         ),
-        Span::styled("    (", label_text()),
-        Span::styled("Tab", bold_label),
-        Span::styled(" to toggle)", label_text()),
+        Span::styled("    (", normal_text()),
+        Span::styled("Tab", bold_normal),
+        Span::styled(" to toggle)", normal_text()),
     ]);
     frame.render_widget(Paragraph::new(radio), chunks[6]);
 
     let hint = Line::from(vec![
-        Span::styled("Enter", bold_label),
-        Span::styled(" — create file   ", label_text()),
-        Span::styled("Esc", bold_label),
-        Span::styled(" — continue in memory", label_text()),
+        Span::styled("Enter", bold_normal),
+        Span::styled(" — create file   ", normal_text()),
+        Span::styled("Esc", bold_normal),
+        Span::styled(" — continue in memory", normal_text()),
     ]);
     frame.render_widget(Paragraph::new(hint), chunks[8]);
 }
