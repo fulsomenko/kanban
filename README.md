@@ -26,8 +26,9 @@
 ### TUI
 
 ```bash
-kanban myboard.json     # open or create a JSON board file
-kanban myboard.sqlite   # open or create a SQLite board file
+kanban                  # launch in-memory; pick or skip a file from the startup dialog
+kanban boards.json      # open or create a JSON board file
+kanban boards.sqlite    # open or create a SQLite board file
 ```
 
 Press `?` at any time to see context-sensitive help.
@@ -35,7 +36,7 @@ Press `?` at any time to see context-sensitive help.
 ### CLI
 
 ```bash
-export KANBAN_FILE=myboard.json   # or pass the path as the first argument
+export KANBAN_FILE=boards.json   # or pass the path as the first argument
 
 kanban board create --name "My Project"
 kanban board list
@@ -57,7 +58,7 @@ All commands output JSON. Use `kanban --help` for full reference.
   "mcpServers": {
     "kanban": {
       "command": "kanban-mcp",
-      "args": ["kanban.json"]
+      "args": ["boards.json"]
     }
   }
 }

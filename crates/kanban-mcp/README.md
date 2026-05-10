@@ -40,8 +40,8 @@ cargo install --path crates/kanban-mcp
 ## Usage
 
 ```bash
-kanban-mcp /path/to/kanban.json
-kanban-mcp /path/to/kanban.sqlite
+kanban-mcp /path/to/boards.json
+kanban-mcp /path/to/boards.sqlite
 ```
 
 ## MCP Client Configuration
@@ -52,7 +52,7 @@ kanban-mcp /path/to/kanban.sqlite
   "mcpServers": {
     "kanban": {
       "command": "kanban-mcp",
-      "args": ["/path/to/kanban.json"]
+      "args": ["/path/to/boards.json"]
     }
   }
 }
@@ -64,7 +64,7 @@ kanban-mcp /path/to/kanban.sqlite
   "mcpServers": {
     "kanban": {
       "command": "kanban-mcp",
-      "args": ["kanban.json"]
+      "args": ["boards.json"]
     }
   }
 }
