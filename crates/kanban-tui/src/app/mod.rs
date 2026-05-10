@@ -109,25 +109,25 @@ pub struct App {
     pub needs_redraw: bool,
     pub error_log: Arc<Mutex<crate::error_log::ErrorLogState>>,
     pub auto_open_seen_count: usize,
-    pub choose_storage_backend: StorageBackendChoice,
+    pub(crate) choose_storage_backend: StorageBackendChoice,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum StorageBackendChoice {
+pub(crate) enum StorageBackendChoice {
     #[default]
     Json,
     Sqlite,
 }
 
 impl StorageBackendChoice {
-    pub fn extension(self) -> &'static str {
+    pub(crate) fn extension(self) -> &'static str {
         match self {
             Self::Json => ".json",
             Self::Sqlite => ".sqlite",
         }
     }
 
-    pub fn toggle(self) -> Self {
+    pub(crate) fn toggle(self) -> Self {
         match self {
             Self::Json => Self::Sqlite,
             Self::Sqlite => Self::Json,
@@ -138,7 +138,7 @@ impl StorageBackendChoice {
 /// Replaces a known data-file extension on `filename` with `new_ext`, or
 /// appends `new_ext` if no known extension is present. Used by the
 /// choose-storage dialog when the user toggles between JSON and SQLite.
-pub fn swap_known_extension(filename: &str, new_ext: &str) -> String {
+pub(crate) fn swap_known_extension(filename: &str, new_ext: &str) -> String {
     const KNOWN: &[&str] = &[".json", ".sqlite", ".sqlite3", ".db"];
     for ext in KNOWN {
         if let Some(stem) = filename.strip_suffix(ext) {
