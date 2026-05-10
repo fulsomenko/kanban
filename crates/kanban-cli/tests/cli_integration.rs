@@ -2339,11 +2339,24 @@ mod no_file_tests {
     fn test_kanban_file_env_var_accepted_without_positional_arg() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("via-env.json");
+        // Seed the file via the positional path so this test verifies env-var
+        // resolution rather than implicit JSON auto-create-on-open.
+        kanban_no_config(dir.path())
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "SeededViaPositional",
+            ])
+            .assert()
+            .success();
         kanban_no_config(dir.path())
             .env("KANBAN_FILE", file.to_str().unwrap())
             .args(["board", "list"])
             .assert()
-            .success();
+            .success()
+            .stdout(predicate::str::contains("SeededViaPositional"));
     }
 
     #[test]
