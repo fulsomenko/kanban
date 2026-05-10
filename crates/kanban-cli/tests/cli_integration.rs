@@ -2420,11 +2420,27 @@ mod version_and_help_tests {
             .assert()
             .success();
         let output = assert.get_output();
-        assert!(output.stderr.is_empty());
+        assert!(
+            output.stderr.is_empty(),
+            "stderr must be empty for --version, got: {:?}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.starts_with("kanban "));
-        assert!(!stdout.starts_with("Error:"));
-        assert!(stdout.ends_with('\n') && !stdout.ends_with("\n\n"));
+        assert!(
+            stdout.starts_with("kanban "),
+            "stdout must start with \"kanban \", got: {:?}",
+            stdout
+        );
+        assert!(
+            !stdout.starts_with("Error:"),
+            "stdout must not start with \"Error:\", got: {:?}",
+            stdout
+        );
+        assert!(
+            stdout.ends_with('\n') && !stdout.ends_with("\n\n"),
+            "stdout must end with exactly one newline, got: {:?}",
+            stdout
+        );
     }
 
     // --help must also reach stdout with exit 0 — same clap pitfall.
