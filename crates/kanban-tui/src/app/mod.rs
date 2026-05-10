@@ -2562,4 +2562,60 @@ mod tests {
             "confirming must dismiss the dialog"
         );
     }
+
+    // multi_thread required for the same reason as the success test.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_no_file_tui_startup_dialog_confirm_failure_keeps_dialog_open() {
+        use crossterm::event::KeyCode;
+
+        // SQLite path inside a non-existent parent directory — SqliteBackend::open
+        // cannot create the file because the parent doesn't exist, so make_backend
+        // returns Err.
+        let dir = tempfile::TempDir::new().unwrap();
+        let bad_path = dir
+            .path()
+            .join("nonexistent_subdir")
+            .join("foo.sqlite")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        app.input.clear();
+        app.input.set(bad_path.clone());
+
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::ChooseStorageFile),
+            "confirm failure must leave the dialog open so the user can retry"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            bad_path.as_str(),
+            "input must be preserved on failure so the user can edit the path"
+        );
+        assert!(
+            !app.has_data_file,
+            "confirm failure must not flip has_data_file"
+        );
+        assert!(
+            app.persistence.save_file.is_none(),
+            "confirm failure must not set a save file"
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("confirm failure must surface a banner");
+        assert_eq!(
+            banner.variant,
+            crate::components::BannerVariant::Error,
+            "banner must be an error variant"
+        );
+    }
 }
