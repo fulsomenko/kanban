@@ -2483,4 +2483,83 @@ mod tests {
             "help list should have scrolled to bring item 49 into view"
         );
     }
+
+    #[tokio::test]
+    async fn test_no_file_tui_startup_pushes_choose_storage_dialog_prefilled_with_kanban_json() {
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+
+        app.maybe_push_startup_file_dialog();
+
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::ChooseStorageFile),
+            "no-file startup must open the ChooseStorageFile dialog"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            "kanban.json",
+            "dialog must be pre-filled with kanban.json"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_file_tui_startup_dialog_cancel_stays_in_memory() {
+        use crossterm::event::KeyCode;
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        app.handle_choose_storage_file_dialog(KeyCode::Esc);
+
+        assert_eq!(
+            app.mode,
+            AppMode::Normal,
+            "cancelling the dialog must return to Normal mode"
+        );
+        assert!(
+            !app.has_data_file,
+            "cancelling must leave the app in in-memory mode"
+        );
+        assert!(
+            app.persistence.save_file.is_none(),
+            "cancelling must not set a save file"
+        );
+    }
+
+    // multi_thread required: adopt_storage_file uses block_in_place, which
+    // panics on the current_thread runtime.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_no_file_tui_startup_dialog_confirm_creates_file_and_adopts_backend() {
+        use crossterm::event::KeyCode;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("myboard.json");
+        let target_str = target.to_str().unwrap().to_string();
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        app.input.clear();
+        app.input.set(target_str.clone());
+
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        assert!(
+            app.has_data_file,
+            "confirming must mark the app as having a data file"
+        );
+        assert_eq!(
+            app.persistence.save_file.as_deref(),
+            Some(target_str.as_str()),
+            "persistence.save_file must point to the chosen path"
+        );
+        assert_eq!(
+            app.mode,
+            AppMode::Normal,
+            "confirming must dismiss the dialog"
+        );
+    }
 }
