@@ -228,28 +228,30 @@ impl App {
                 app_config.effective_storage_backend()
             );
         }
-        let effective_file = kanban_service::config::resolve_storage_location(&app_config);
-        let cli_file_override = save_file.is_some() && effective_file != config_resolved;
-        // If the CLI-supplied file resolves to the same path as the configured
-        // default, this is not a real override. Don't write the canonical
-        // absolute path into app_config.storage_location — it is
-        // indistinguishable from a user-set value and would be written to the
-        // config file whenever any other setting is changed.
-        if save_file.is_some() && !cli_file_override && original_storage_location.is_none() {
-            app_config.storage_location = None;
-        }
-        let (kanban_backend, persistence_file): (
+        let (kanban_backend, persistence_file, cli_file_override): (
             std::sync::Arc<dyn kanban_service::KanbanBackend>,
             Option<String>,
+            bool,
         ) = if has_explicit_file {
+            let effective_file = kanban_service::config::resolve_storage_location(&app_config);
+            let cli_file_override = save_file.is_some() && effective_file != config_resolved;
+            // If the CLI-supplied file resolves to the same path as the configured
+            // default, this is not a real override. Don't write the canonical
+            // absolute path into app_config.storage_location — it is
+            // indistinguishable from a user-set value and would be written to the
+            // config file whenever any other setting is changed.
+            if save_file.is_some() && !cli_file_override && original_storage_location.is_none() {
+                app_config.storage_location = None;
+            }
             let backend = store_manager
                 .make_backend(&effective_file, &app_config)
                 .await?;
-            (backend, Some(effective_file))
+            (backend, Some(effective_file), cli_file_override)
         } else {
             (
                 std::sync::Arc::new(kanban_domain::InMemoryStore::new()),
                 None,
+                false,
             )
         };
         let inner_ctx =
