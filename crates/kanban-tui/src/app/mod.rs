@@ -608,6 +608,14 @@ impl App {
                     return false;
                 }
                 self.ctx.replace_backend(backend);
+                // replace_backend resets baseline_snapshot/undo_cursor/dirty;
+                // the caller is responsible for re-initialising undo state
+                // before the next mutation, otherwise execute() bails with
+                // "undo state not initialized".
+                if let Err(e) = self.ctx.initialize_undo_state() {
+                    self.set_error(format!("Could not initialise undo state: {}", e));
+                    return false;
+                }
                 let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
                 self.persistence.save_file = Some(path.clone());
                 self.persistence.save_completion_rx = Some(completion_rx);
