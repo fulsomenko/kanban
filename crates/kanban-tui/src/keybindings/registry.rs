@@ -106,6 +106,9 @@ impl KeybindingRegistry {
                     Box::new(DialogSelectionProvider::new("Carry Over to Sprint"))
                 }
                 DialogMode::ExportBoards => Box::new(DialogSelectionProvider::new("Export Boards")),
+                DialogMode::ChooseStorageFile => {
+                    Box::new(DialogInputProvider::new("Choose Storage File"))
+                }
             },
             AppMode::ErrorLog => Box::new(ErrorLogProvider),
         }

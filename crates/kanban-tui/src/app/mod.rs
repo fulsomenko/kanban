@@ -486,6 +486,67 @@ impl App {
         self.push_mode(AppMode::Dialog(dialog));
     }
 
+    pub fn maybe_push_startup_file_dialog(&mut self) {
+        if !self.has_data_file {
+            self.input.set("kanban.json".to_string());
+            self.open_dialog(DialogMode::ChooseStorageFile);
+        }
+    }
+
+    pub fn handle_choose_storage_file_dialog(&mut self, key_code: crossterm::event::KeyCode) {
+        use crate::dialog::{handle_dialog_input, DialogAction};
+        match handle_dialog_input(&mut self.input, key_code, false) {
+            DialogAction::Confirm => {
+                let filename = self.input.as_str().to_string();
+                self.input.clear();
+                self.pop_mode();
+                self.adopt_storage_file(filename);
+            }
+            DialogAction::Cancel => {
+                self.input.clear();
+                self.pop_mode();
+            }
+            DialogAction::None => {}
+        }
+    }
+
+    fn adopt_storage_file(&mut self, filename: String) {
+        let path = if std::path::Path::new(&filename).is_absolute() {
+            filename.clone()
+        } else {
+            std::env::current_dir()
+                .map(|cwd| cwd.join(&filename).display().to_string())
+                .unwrap_or_else(|_| filename.clone())
+        };
+
+        let store_manager = self.store_manager.clone();
+        let app_config = self.app_config.clone();
+        let path_for_closure = path.clone();
+        let backend_result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async move {
+                store_manager
+                    .make_backend(&path_for_closure, &app_config)
+                    .await
+            })
+        });
+
+        match backend_result {
+            Ok(backend) => {
+                self.ctx.replace_backend(backend);
+                let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
+                self.persistence.save_file = Some(path.clone());
+                self.persistence.save_completion_rx = Some(completion_rx);
+                self.has_data_file = true;
+                self.app_config.storage_location = Some(path);
+                self.spawn_save_worker(save_rx, None);
+                self.ctx.save_coordinator.queue_flush();
+            }
+            Err(e) => {
+                self.set_error(format!("Could not open \"{}\": {}", filename, e));
+            }
+        }
+    }
+
     pub fn set_error(&mut self, message: impl Into<String>) {
         self.ui_state.banner = Some(Banner::error(message));
     }
@@ -656,6 +717,7 @@ impl App {
                 | AppMode::Dialog(DialogMode::RenameColumn)
                 | AppMode::Dialog(DialogMode::SetSprintPrefix)
                 | AppMode::Dialog(DialogMode::SetSprintCardPrefix)
+                | AppMode::Dialog(DialogMode::ChooseStorageFile)
         );
 
         if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q'))
@@ -959,6 +1021,9 @@ impl App {
                 DialogMode::ManageChildren => self.handle_manage_children_popup(key.code),
                 DialogMode::CarryOverSprint => self.handle_carry_over_sprint_popup(key.code),
                 DialogMode::ExportBoards => self.handle_export_boards_dialog(key.code),
+                DialogMode::ChooseStorageFile => {
+                    self.handle_choose_storage_file_dialog(key.code)
+                }
             },
         }
         should_restart_events
@@ -1766,6 +1831,8 @@ impl App {
         } else {
             tracing::debug!("No save channel receiver - no saves will be processed");
         }
+
+        self.maybe_push_startup_file_dialog();
 
         while !self.should_quit {
             let mut events = EventHandler::new();

@@ -200,3 +200,59 @@ pub(crate) fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
         app.input.cursor_byte_offset(),
     );
 }
+
+pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
+    use crate::components::centered_rect;
+    use ratatui::widgets::{Block, Borders, Clear};
+
+    let area = centered_rect(65, 55, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("No board file configured")
+        .borders(Borders::ALL)
+        .style(popup_bg());
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(4), // description
+            Constraint::Length(1), // spacer
+            Constraint::Length(1), // "Filename:" label
+            Constraint::Length(3), // input box
+            Constraint::Length(1), // spacer
+            Constraint::Length(1), // hint
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let description = Paragraph::new(
+        "Enter a filename to create a board file, or press Escape to\n\
+         continue without one. Work done without a file is held in\n\
+         memory and will be lost when you quit — you can export it\n\
+         at any time with 'x'.",
+    )
+    .style(normal_text())
+    .wrap(ratatui::widgets::Wrap { trim: false });
+    frame.render_widget(description, chunks[0]);
+
+    let label = Paragraph::new("Filename:").style(highlight_text());
+    frame.render_widget(label, chunks[2]);
+
+    let input = Paragraph::new(app.input.as_str())
+        .style(normal_text())
+        .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(input, chunks[3]);
+
+    let cursor_x = chunks[3].x + app.input.cursor_byte_offset() as u16 + 1;
+    let cursor_y = chunks[3].y + 1;
+    frame.set_cursor_position((cursor_x, cursor_y));
+
+    let hint = Paragraph::new("Enter — create file   Esc — continue in memory")
+        .style(label_text());
+    frame.render_widget(hint, chunks[5]);
+}

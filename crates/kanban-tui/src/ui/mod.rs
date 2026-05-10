@@ -98,6 +98,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                     crate::components::render_manage_children_popup(app, frame)
                 }
                 DialogMode::ConfirmSprintPrefixCollision => {}
+                DialogMode::ChooseStorageFile => {
+                    dialogs::render_choose_storage_file_popup(app, frame)
+                }
             }
         }
     } else {
