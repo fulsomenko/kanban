@@ -12,7 +12,7 @@ use kanban_persistence::{
 };
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, RwLock,
+    Arc, RwLock,
 };
 use uuid::Uuid;
 
@@ -31,9 +31,6 @@ pub struct JsonDataStore {
     /// `with_mutate()` call that follows (internal housekeeping, not a user
     /// mutation). Consumed atomically by `with_mutate()`.
     suppress_next_dirty: AtomicBool,
-    /// Cached by `on_undo_state_changed` for use during `flush()`.
-    undo_cursor: Mutex<u64>,
-    baseline_snapshot: Mutex<Option<Snapshot>>,
 }
 
 impl JsonDataStore {
@@ -43,8 +40,6 @@ impl JsonDataStore {
             inner: RwLock::new(None),
             dirty: AtomicBool::new(false),
             suppress_next_dirty: AtomicBool::new(false),
-            undo_cursor: Mutex::new(0),
-            baseline_snapshot: Mutex::new(None),
         }
     }
 
@@ -71,31 +66,10 @@ impl JsonDataStore {
             .load_sync()
             .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
 
-        let mut file_cursor = 0u64;
-        let mut baseline: Option<kanban_domain::Snapshot> = None;
-
         if let Some((ss, _meta)) = loaded {
             let snapshot = snapshot_from_json_bytes(&ss.data)
                 .map_err(|e| KanbanError::Internal(format!("json_backend: parse failed: {e}")))?;
             store.apply_snapshot(snapshot)?;
-
-            let (batches, cursor, file_baseline_bytes) =
-                self.file_store.get_command_log().map_err(|e| {
-                    KanbanError::Internal(format!("json_backend: get_command_log failed: {e}"))
-                })?;
-
-            for batch in &batches {
-                store.append_commands(batch)?;
-            }
-
-            file_cursor = cursor;
-            baseline = file_baseline_bytes
-                .as_deref()
-                .map(snapshot_from_json_bytes)
-                .transpose()
-                .map_err(|e| {
-                    KanbanError::Internal(format!("json_backend: baseline parse failed: {e}"))
-                })?;
         }
 
         // Acquire write lock only to swap in the built store.
@@ -110,15 +84,6 @@ impl JsonDataStore {
         }
 
         *guard = Some(store);
-        // Hold the write lock while updating caches — ensures any concurrent
-        // fast-path thread that acquires the read lock sees consistent
-        // (inner=Some, cursor, baseline) rather than a partially-updated state.
-        *self.undo_cursor.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-        })? = file_cursor;
-        *self.baseline_snapshot.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-        })? = baseline;
         drop(guard);
 
         Ok(())
@@ -137,7 +102,7 @@ impl JsonDataStore {
     /// has been cleared; `flush()` restores it if this returns an error.
     async fn do_flush(&self) -> KanbanResult<()> {
         // Collect everything we need from the inner store before any await.
-        let (snapshot, batches, cursor, baseline_bytes) = {
+        let snapshot = {
             let guard = self
                 .inner
                 .read()
@@ -148,33 +113,9 @@ impl JsonDataStore {
                 None => return Ok(()), // Never loaded — nothing to flush.
             };
 
-            let snapshot = store.snapshot()?;
-            let (batches, _count) = store.load_all_commands()?;
-
-            let cursor = *self.undo_cursor.lock().map_err(|_| {
-                KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-            })?;
-
-            let baseline_bytes = {
-                let bl = self.baseline_snapshot.lock().map_err(|_| {
-                    KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-                })?;
-                bl.as_ref()
-                    .map(snapshot_to_json_bytes)
-                    .transpose()
-                    .map_err(|e| {
-                        KanbanError::Internal(format!("json_backend: baseline serialise: {e}"))
-                    })?
-            };
-
-            (snapshot, batches, cursor, baseline_bytes)
             // `guard` is dropped here, before any await.
+            store.snapshot()?
         };
-
-        self.file_store
-            .sync_command_log(&batches, cursor, baseline_bytes.as_deref())
-            .await
-            .map_err(KanbanError::from)?;
 
         let data = snapshot_to_json_bytes(&snapshot)
             .map_err(|e| KanbanError::Internal(format!("json_backend: snapshot serialise: {e}")))?;
@@ -374,19 +315,6 @@ impl CommandStore for JsonDataStore {
         self.with_mutate(|s| s.store_snapshot_at(idx, snapshot))
     }
     fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        if idx == 0 {
-            // Ensure the file has been loaded so baseline_snapshot is populated.
-            self.ensure_loaded()?;
-            let guard = self.baseline_snapshot.lock().map_err(|_| {
-                KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-            })?;
-            if guard.is_some() {
-                return Ok(guard.clone());
-            }
-            // baseline_snapshot is None after loading — file had no stored
-            // baseline (e.g. freshly created). Fall through; InMemoryStore
-            // will also return None, matching the existing behaviour.
-        }
         self.with_read(|s| s.load_snapshot_at(idx))
     }
     fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
@@ -422,12 +350,6 @@ impl KanbanBackend for JsonDataStore {
             *guard = None;
         } // inner write lock released — mirrors ensure_loaded's ordering
         self.dirty.store(false, Ordering::Release);
-        *self.undo_cursor.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-        })? = 0;
-        *self.baseline_snapshot.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-        })? = None;
         // Suppress the dirty flag from the first with_mutate() after reload.
         // KanbanContext::reload() calls truncate_commands_after(0) for
         // internal housekeeping; that must not mark the backend dirty.
@@ -441,16 +363,6 @@ impl KanbanBackend for JsonDataStore {
 
     fn needs_save_worker(&self) -> bool {
         true
-    }
-
-    fn on_undo_state_changed(&self, cursor: u64, baseline: Option<Snapshot>) -> KanbanResult<()> {
-        *self.undo_cursor.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: undo_cursor mutex poisoned".into())
-        })? = cursor;
-        *self.baseline_snapshot.lock().map_err(|_| {
-            KanbanError::Internal("json_backend: baseline_snapshot mutex poisoned".into())
-        })? = baseline;
-        Ok(())
     }
 
     fn instance_id(&self) -> Uuid {
@@ -650,47 +562,11 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_on_undo_state_changed_updates_caches() {
-        let dir = tempdir().unwrap();
-        let jds = make_store(&dir.path().join("t.json"));
-        let snap = Snapshot::new();
-        jds.on_undo_state_changed(42, Some(snap)).unwrap();
-        assert_eq!(*jds.undo_cursor.lock().unwrap(), 42);
-        assert!(jds.baseline_snapshot.lock().unwrap().is_some());
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
     async fn test_apply_snapshot_sets_dirty_flag() {
         let dir = tempdir().unwrap();
         let jds = make_store(&dir.path().join("t.json"));
         jds.apply_snapshot(Snapshot::new()).unwrap();
         assert!(jds.needs_flush(), "apply_snapshot must mark backend dirty");
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_command_log_round_trip() {
-        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
-
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("cmd_log.json");
-        let jds = make_store(&path);
-
-        // Append 3 batches (one command each) to the command log.
-        for (i, name) in ["B1", "B2", "B3"].iter().enumerate() {
-            jds.append_commands(&[Command::Board(BoardCommand::Create(CreateBoard {
-                id: uuid::Uuid::new_v4(),
-                name: name.to_string(),
-                card_prefix: None,
-                position: i as i32,
-            }))])
-            .unwrap();
-        }
-
-        jds.flush().await.unwrap();
-
-        // A second store at the same path must see the same command count.
-        let jds2 = make_store(&path);
-        assert_eq!(jds2.command_count().unwrap(), 3);
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -732,58 +608,5 @@ mod tests {
         assert_eq!(boards2.len(), 1);
         assert_eq!(boards1[0].name, "ConcurrentBoard");
         assert_eq!(boards2[0].name, "ConcurrentBoard");
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_concurrent_load_snapshot_at_0_never_returns_stale_none() {
-        use kanban_domain::CommandStore;
-        use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
-        use std::sync::Barrier;
-
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("concurrent_baseline.json");
-
-        // Pre-populate the file with a stored baseline snapshot.
-        // sync_command_log must be called before save() so that save()
-        // includes baseline_data in the JSON envelope it writes to disk.
-        {
-            let file_store = Arc::new(JsonFileStore::new(&path));
-            let snap = kanban_domain::Snapshot::new();
-            let baseline_bytes = snapshot_to_json_bytes(&snap).unwrap();
-            file_store
-                .sync_command_log(&[], 0, Some(&baseline_bytes))
-                .await
-                .unwrap();
-            let data = snapshot_to_json_bytes(&snap).unwrap();
-            file_store
-                .save(StoreSnapshot {
-                    data,
-                    metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
-                })
-                .await
-                .unwrap();
-        }
-
-        const N: usize = 8;
-        let barrier = Arc::new(Barrier::new(N));
-        let jds = Arc::new(make_store(&path));
-
-        let mut handles = Vec::new();
-        for _ in 0..N {
-            let jds_clone = Arc::clone(&jds);
-            let barrier_clone = Arc::clone(&barrier);
-            handles.push(tokio::task::spawn_blocking(move || {
-                barrier_clone.wait();
-                jds_clone.load_snapshot_at(0)
-            }));
-        }
-
-        for handle in handles {
-            let result = handle.await.unwrap().unwrap();
-            assert!(
-                result.is_some(),
-                "load_snapshot_at(0) must never return None when file has a stored baseline"
-            );
-        }
     }
 }

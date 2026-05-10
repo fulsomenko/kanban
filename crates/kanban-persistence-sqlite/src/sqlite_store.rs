@@ -3,8 +3,6 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use kanban_core::graph::{Edge, Graph};
-use kanban_domain::command_store::CommandStore;
-use kanban_domain::commands::Command;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
@@ -300,15 +298,37 @@ impl SqliteStore {
     }
 
     async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
-        let has_snapshot_col: bool = sqlx::query_scalar(
-            "SELECT COUNT(*) > 0 FROM pragma_table_info('command_log') WHERE name = 'snapshot_data'",
+        // Drop command_log and undo_state tables if they exist (legacy persistence
+        // of undo history — commands are now in-session only).
+        let has_command_log: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='command_log'",
         )
         .fetch_one(pool)
         .await
         .map_err(db_err)?;
 
-        if !has_snapshot_col {
-            sqlx::raw_sql("ALTER TABLE command_log ADD COLUMN snapshot_data BLOB")
+        if has_command_log {
+            tracing::info!(
+                "dropping legacy command_log table: undo history is now in-session only and cannot be carried back to pre-KAN-405 builds"
+            );
+            sqlx::raw_sql("DROP TABLE IF EXISTS command_log")
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
+        }
+
+        let has_undo_state: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='undo_state'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+
+        if has_undo_state {
+            tracing::info!(
+                "dropping legacy undo_state table: undo cursor is now in-session only and cannot be carried back to pre-KAN-405 builds"
+            );
+            sqlx::raw_sql("DROP TABLE IF EXISTS undo_state")
                 .execute(pool)
                 .await
                 .map_err(db_err)?;
@@ -1453,189 +1473,6 @@ impl DataStore for SqliteStore {
 
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
         run(self.apply_snapshot_async(snapshot))
-    }
-}
-
-impl CommandStore for SqliteStore {
-    fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
-        let batch_json = serde_json::to_string(cmds).map_err(ser_err)?;
-        let count: i64 = run(async {
-            let mut tx = self.pool.begin().await.map_err(db_err)?;
-            sqlx::query("INSERT INTO command_log (cmd_json) VALUES (?)")
-                .bind(&batch_json)
-                .execute(&mut *tx)
-                .await
-                .map_err(db_err)?;
-            let c: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(db_err)?;
-            tx.commit().await.map_err(db_err)?;
-            Ok::<i64, KanbanError>(c)
-        })?;
-        Ok(count as u64)
-    }
-
-    fn command_count(&self) -> KanbanResult<u64> {
-        let count: i64 = run(async {
-            sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
-                .fetch_one(&self.pool)
-                .await
-                .map_err(db_err)
-        })?;
-        Ok(count as u64)
-    }
-
-    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
-        let rows: Vec<String> = run(async {
-            sqlx::query_scalar(
-                "SELECT cmd_json FROM command_log WHERE idx > ? AND idx <= ? ORDER BY idx",
-            )
-            .bind(from as i64)
-            .bind(to as i64)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(db_err)
-        })?;
-        rows.iter()
-            .map(|json| serde_json::from_str::<Vec<Command>>(json).map_err(ser_err))
-            .collect()
-    }
-
-    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
-        run(async {
-            let mut tx = self.pool.begin().await.map_err(db_err)?;
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(db_err)?;
-            let rows: Vec<String> =
-                sqlx::query_scalar("SELECT cmd_json FROM command_log ORDER BY idx")
-                    .fetch_all(&mut *tx)
-                    .await
-                    .map_err(db_err)?;
-            tx.commit().await.map_err(db_err)?;
-            let batches = rows
-                .iter()
-                .map(|json| serde_json::from_str::<Vec<Command>>(json).map_err(ser_err))
-                .collect::<KanbanResult<Vec<Vec<Command>>>>()?;
-            Ok((batches, count as u64))
-        })
-    }
-
-    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        run(async {
-            sqlx::query("DELETE FROM command_log WHERE idx > ?")
-                .bind(after as i64)
-                .execute(&self.pool)
-                .await
-                .map_err(db_err)
-        })?;
-        Ok(())
-    }
-
-    fn supports_indexed_snapshots(&self) -> bool {
-        true
-    }
-
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        use flate2::write::DeflateEncoder;
-        use flate2::Compression;
-        use std::io::Write;
-
-        let json = serde_json::to_vec(snapshot).map_err(ser_err)?;
-        let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
-        encoder
-            .write_all(&json)
-            .map_err(|e| KanbanError::Database(e.to_string()))?;
-        let compressed = encoder
-            .finish()
-            .map_err(|e| KanbanError::Database(e.to_string()))?;
-
-        run(async {
-            sqlx::query("UPDATE command_log SET snapshot_data = ? WHERE idx = ?")
-                .bind(&compressed)
-                .bind(idx as i64)
-                .execute(&self.pool)
-                .await
-                .map_err(db_err)
-        })?;
-        Ok(())
-    }
-
-    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        run(async {
-            let mut tx = self.pool.begin().await.map_err(db_err)?;
-
-            // Get the idx values to keep (ordered), skip the first drop_count
-            let kept_ids: Vec<i64> =
-                sqlx::query_scalar("SELECT idx FROM command_log ORDER BY idx LIMIT -1 OFFSET ?")
-                    .bind(drop_count as i64)
-                    .fetch_all(&mut *tx)
-                    .await
-                    .map_err(db_err)?;
-
-            if kept_ids.is_empty() {
-                sqlx::query("DELETE FROM command_log")
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(db_err)?;
-            } else {
-                // Delete the oldest drop_count rows
-                sqlx::query("DELETE FROM command_log WHERE idx < ?")
-                    .bind(kept_ids[0])
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(db_err)?;
-
-                // Renumber remaining rows to be 1-based contiguous
-                for (new_idx, &old_idx) in kept_ids.iter().enumerate() {
-                    let new_val = (new_idx + 1) as i64;
-                    if new_val != old_idx {
-                        sqlx::query("UPDATE command_log SET idx = -? WHERE idx = ?")
-                            .bind(new_val)
-                            .bind(old_idx)
-                            .execute(&mut *tx)
-                            .await
-                            .map_err(db_err)?;
-                    }
-                }
-                // Fix negative indices (used to avoid conflicts during renumbering)
-                sqlx::query("UPDATE command_log SET idx = -idx WHERE idx < 0")
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(db_err)?;
-            }
-
-            tx.commit().await.map_err(db_err)?;
-            Ok(())
-        })
-    }
-
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        use flate2::read::DeflateDecoder;
-        use std::io::Read;
-
-        let blob: Option<Vec<u8>> = run(async {
-            sqlx::query_scalar("SELECT snapshot_data FROM command_log WHERE idx = ?")
-                .bind(idx as i64)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(db_err)
-        })?;
-
-        match blob {
-            Some(compressed) => {
-                let mut decoder = DeflateDecoder::new(&compressed[..]);
-                let mut json = Vec::new();
-                decoder
-                    .read_to_end(&mut json)
-                    .map_err(|e| KanbanError::Database(e.to_string()))?;
-                let snapshot: Snapshot = serde_json::from_slice(&json).map_err(ser_err)?;
-                Ok(Some(snapshot))
-            }
-            None => Ok(None),
-        }
     }
 }
 

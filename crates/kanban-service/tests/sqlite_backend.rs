@@ -150,29 +150,6 @@ async fn test_sqlite_backend_undo_redo() {
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_backend_undo_cursor_restored_after_reopen() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.sqlite").to_string_lossy().to_string();
-
-    {
-        let mut ctx = open_context(&path, AppConfig::default()).await.unwrap();
-        ctx.create_board("Board 1".to_string(), None).unwrap();
-        ctx.create_board("Board 2".to_string(), None).unwrap();
-        assert_eq!(ctx.undo_depth(), 2);
-    }
-
-    let ctx2 = open_context(&path, AppConfig::default()).await.unwrap();
-    assert_eq!(
-        ctx2.undo_depth(),
-        2,
-        "undo_cursor should be restored from command log on reopen"
-    );
-    assert!(ctx2.can_undo());
-    assert!(!ctx2.can_redo());
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
 async fn test_sqlite_backend_data_persists_across_opens() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.sqlite").to_string_lossy().to_string();

@@ -10,50 +10,47 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use uuid::Uuid;
 
-/// In-memory state for the command log (batched: each inner Vec is one undo unit)
-struct CommandLogState {
-    batches: Vec<Vec<kanban_domain::commands::Command>>,
-    undo_cursor: u64,
-    baseline_data: Option<serde_json::Value>,
-}
-
-impl CommandLogState {
-    fn new() -> Self {
-        Self {
-            batches: vec![],
-            undo_cursor: 0,
-            baseline_data: None,
-        }
-    }
-}
-
 /// JSON file-based persistence store
 /// Implements the PersistenceStore trait for JSON file operations
 pub struct JsonFileStore {
     path: PathBuf,
     instance_id: Uuid,
     last_known_metadata: Mutex<Option<FileMetadata>>,
-    command_log_state: Mutex<CommandLogState>,
 }
 
-/// Wrapper structure for the JSON file format (v2–v5)
+/// Wrapper structure for the JSON file format (v2+).
+///
+/// Pre-KAN-405 fields (`commands`, `undo_cursor`, `baseline_data`,
+/// `command_schema_version`) are tolerated on deserialize so old files load
+/// cleanly, then actively scrubbed from disk by `load`/`load_sync` — see
+/// [`LEGACY_FIELDS`] and `scrub_legacy_fields`. Do NOT add
+/// `#[serde(deny_unknown_fields)]` here: it would break the load path for
+/// any file written by an older build.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonEnvelope {
     version: u32,
     metadata: PersistenceMetadata,
     data: serde_json::Value,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    baseline_data: Option<serde_json::Value>,
-    #[serde(default)]
-    commands: serde_json::Value,
-    #[serde(default)]
-    undo_cursor: u64,
-    #[serde(default = "default_command_schema_version")]
-    command_schema_version: u32,
 }
 
-fn default_command_schema_version() -> u32 {
-    1
+/// Top-level fields that pre-KAN-405 builds wrote alongside the envelope and
+/// that this build actively removes when loading.
+const LEGACY_FIELDS: &[&str] = &[
+    "commands",
+    "undo_cursor",
+    "baseline_data",
+    "command_schema_version",
+];
+
+fn detect_legacy_fields(value: &serde_json::Value) -> Vec<&'static str> {
+    let Some(obj) = value.as_object() else {
+        return Vec::new();
+    };
+    LEGACY_FIELDS
+        .iter()
+        .copied()
+        .filter(|f| obj.contains_key(*f))
+        .collect()
 }
 
 impl JsonEnvelope {
@@ -66,10 +63,6 @@ impl JsonEnvelope {
                 saved_at: chrono::Utc::now(),
             },
             data,
-            baseline_data: None,
-            commands: serde_json::Value::Array(vec![]),
-            undo_cursor: 0,
-            command_schema_version: 1,
         }
     }
 
@@ -87,33 +80,6 @@ impl JsonEnvelope {
     /// Serialize to pretty-printed JSON string
     pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(self)
-    }
-
-    /// Parse the `commands` field into batched format.
-    /// V4 stored `Vec<Command>` (flat); V5+ stores `Vec<Vec<Command>>` (batched).
-    /// On load from V4, wraps the flat list as a single batch.
-    fn parse_batches(
-        &self,
-    ) -> Result<Vec<Vec<kanban_domain::commands::Command>>, serde_json::Error> {
-        if self.commands.is_null()
-            || (self.commands.is_array() && self.commands.as_array().unwrap().is_empty())
-        {
-            return Ok(vec![]);
-        }
-        // Try V5 batched format first
-        if let Ok(batches) = serde_json::from_value::<Vec<Vec<kanban_domain::commands::Command>>>(
-            self.commands.clone(),
-        ) {
-            return Ok(batches);
-        }
-        // Fall back to V4 flat format — wrap as single batch
-        let flat: Vec<kanban_domain::commands::Command> =
-            serde_json::from_value(self.commands.clone())?;
-        if flat.is_empty() {
-            Ok(vec![])
-        } else {
-            Ok(vec![flat])
-        }
     }
 }
 
@@ -169,7 +135,6 @@ impl JsonFileStore {
             path: path.as_ref().to_path_buf(),
             instance_id: Uuid::new_v4(),
             last_known_metadata: Mutex::new(None),
-            command_log_state: Mutex::new(CommandLogState::new()),
         }
     }
 
@@ -180,7 +145,6 @@ impl JsonFileStore {
             path: path.as_ref().to_path_buf(),
             instance_id,
             last_known_metadata: Mutex::new(None),
-            command_log_state: Mutex::new(CommandLogState::new()),
         }
     }
 
@@ -193,12 +157,6 @@ impl JsonFileStore {
         self.last_known_metadata
             .lock()
             .map_err(|e| PersistenceError::Serialization(format!("Metadata mutex poisoned: {e}")))
-    }
-
-    fn lock_command_log(&self) -> PersistenceResult<std::sync::MutexGuard<'_, CommandLogState>> {
-        self.command_log_state.lock().map_err(|e| {
-            PersistenceError::Serialization(format!("Command log state mutex poisoned: {e}"))
-        })
     }
 
     /// Parse file bytes into a [`JsonEnvelope`], validating version fields.
@@ -214,27 +172,43 @@ impl JsonFileStore {
             )));
         }
 
-        if envelope.command_schema_version > kanban_domain::COMMAND_SCHEMA_VERSION {
-            return Err(PersistenceError::Serialization(format!(
-                "Unsupported command schema version {}. This build supports up to {}. Please upgrade.",
-                envelope.command_schema_version,
-                kanban_domain::COMMAND_SCHEMA_VERSION
-            )));
-        }
-
         Ok(envelope)
     }
 
-    /// Cache the command-log state from a parsed envelope into `self.command_log_state`.
-    /// Side-effectful counterpart to the pure [`parse_envelope`][Self::parse_envelope].
-    fn cache_command_log(&self, envelope: &JsonEnvelope) -> PersistenceResult<()> {
-        let batches = envelope
-            .parse_batches()
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        let mut cls = self.lock_command_log()?;
-        cls.batches = batches;
-        cls.undo_cursor = envelope.undo_cursor;
-        cls.baseline_data = envelope.baseline_data.clone();
+    fn serialize_envelope(envelope: &JsonEnvelope) -> PersistenceResult<Vec<u8>> {
+        serde_json::to_vec_pretty(envelope)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))
+    }
+
+    async fn scrub_legacy_fields_async(
+        &self,
+        envelope: &JsonEnvelope,
+        detected: &[&'static str],
+    ) -> PersistenceResult<()> {
+        tracing::info!(
+            "scrubbing pre-KAN-405 legacy fields {:?} from {}; undo history is now in-session only",
+            detected,
+            self.path.display()
+        );
+        let bytes = Self::serialize_envelope(envelope)?;
+        AtomicWriter::write_atomic(&self.path, &bytes).await?;
+        Ok(())
+    }
+
+    fn scrub_legacy_fields_sync(
+        &self,
+        envelope: &JsonEnvelope,
+        detected: &[&'static str],
+    ) -> PersistenceResult<()> {
+        tracing::info!(
+            "scrubbing pre-KAN-405 legacy fields {:?} from {} (sync); undo history is now in-session only",
+            detected,
+            self.path.display()
+        );
+        let bytes = Self::serialize_envelope(envelope)?;
+        let tmp_path = self.path.with_extension("tmp");
+        std::fs::write(&tmp_path, &bytes)?;
+        std::fs::rename(&tmp_path, &self.path)?;
         Ok(())
     }
 }
@@ -263,23 +237,12 @@ impl PersistenceStore for JsonFileStore {
         snapshot.metadata.instance_id = self.instance_id;
         snapshot.metadata.saved_at = chrono::Utc::now();
 
-        // Create JSON envelope with v4 format, including command log state
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        let (batches_value, cursor, baseline) = {
-            let cls = self.lock_command_log()?;
-            let v = serde_json::to_value(&cls.batches)
-                .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-            (v, cls.undo_cursor, cls.baseline_data.clone())
-        };
         let envelope = JsonEnvelope {
             version: 5,
             metadata: snapshot.metadata.clone(),
             data: data_value,
-            baseline_data: baseline,
-            commands: batches_value,
-            undo_cursor: cursor,
-            command_schema_version: 1,
         };
 
         // Serialize envelope to JSON
@@ -319,7 +282,19 @@ impl PersistenceStore for JsonFileStore {
 
         let file_bytes = tokio::fs::read(&self.path).await?;
         let envelope = Self::parse_envelope(&file_bytes)?;
-        self.cache_command_log(&envelope)?;
+
+        let raw_value: serde_json::Value = serde_json::from_slice(&file_bytes)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let detected = detect_legacy_fields(&raw_value);
+        if !detected.is_empty() {
+            if let Err(e) = self.scrub_legacy_fields_async(&envelope, &detected).await {
+                tracing::warn!(
+                    "failed to scrub legacy fields from {}: {}; data still loaded successfully, cleanup will be retried on next open",
+                    self.path.display(),
+                    e
+                );
+            }
+        }
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -366,7 +341,19 @@ impl PersistenceStore for JsonFileStore {
         };
 
         let envelope = Self::parse_envelope(&final_bytes)?;
-        self.cache_command_log(&envelope)?;
+
+        let raw_value: serde_json::Value = serde_json::from_slice(&final_bytes)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let detected = detect_legacy_fields(&raw_value);
+        if !detected.is_empty() {
+            if let Err(e) = self.scrub_legacy_fields_sync(&envelope, &detected) {
+                tracing::warn!(
+                    "failed to scrub legacy fields from {} (sync): {}; data still loaded successfully, cleanup will be retried on next open",
+                    self.path.display(),
+                    e
+                );
+            }
+        }
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -400,39 +387,6 @@ impl PersistenceStore for JsonFileStore {
 
     fn instance_id(&self) -> Uuid {
         self.instance_id
-    }
-
-    async fn sync_command_log(
-        &self,
-        batches: &[Vec<kanban_domain::commands::Command>],
-        cursor: u64,
-        baseline: Option<&[u8]>,
-    ) -> PersistenceResult<()> {
-        let mut cls = self.lock_command_log()?;
-        cls.batches = batches.to_vec();
-        cls.undo_cursor = cursor;
-        cls.baseline_data = baseline
-            .map(serde_json::from_slice)
-            .transpose()
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        Ok(())
-    }
-
-    fn get_command_log(
-        &self,
-    ) -> PersistenceResult<(
-        Vec<Vec<kanban_domain::commands::Command>>,
-        u64,
-        Option<Vec<u8>>,
-    )> {
-        let cls = self.lock_command_log()?;
-        let baseline_bytes = cls
-            .baseline_data
-            .as_ref()
-            .map(serde_json::to_vec)
-            .transpose()
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        Ok((cls.batches.clone(), cls.undo_cursor, baseline_bytes))
     }
 }
 
@@ -506,26 +460,154 @@ mod tests {
         assert!(guard.unwrap().is_none());
     }
 
-    #[test]
-    fn test_lock_command_log_returns_result_not_panic() {
-        let store = JsonFileStore::new("/tmp/nonexistent.json");
-        let guard = store.lock_command_log();
-        assert!(guard.is_ok());
+    /// Files with stale `commands`/`undo_cursor`/`baseline_data`/
+    /// `command_schema_version` fields (written by pre-KAN-405 builds) must
+    /// be actively scrubbed from disk on load — not just ignored in memory.
+    /// Serde would silently drop them on the next save, but that "lazy" cleanup
+    /// leaves dust on disk until the user happens to mutate. The load path
+    /// rewrites the file with a clean envelope as soon as legacy fields are
+    /// detected so the cleanup is observable and guaranteed.
+    #[tokio::test]
+    async fn test_legacy_command_fields_are_scrubbed_from_disk_on_load() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("legacy.json");
+
+        let legacy = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [{"id": "550e8400-e29b-41d4-a716-446655440001", "name": "B",
+                    "task_sort_field": "Default", "task_sort_order": "Ascending",
+                    "sprint_name_used_count": 0, "next_sprint_number": 1,
+                    "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
+                    "card_counter": 0, "position": 0,
+                    "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}],
+                "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            },
+            "commands": [{"type": "Board", "variant": "Create", "id": "00000000-0000-0000-0000-000000000001"}],
+            "undo_cursor": 1,
+            "command_schema_version": 1,
+            "baseline_data": {}
+        });
+        tokio::fs::write(&file_path, legacy.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (snapshot, _meta) = store.load().await.unwrap();
+
+        let loaded: serde_json::Value = serde_json::from_slice(&snapshot.data).unwrap();
+        assert_eq!(loaded["boards"][0]["name"], "B", "board data must survive");
+
+        let on_disk_bytes = tokio::fs::read(&file_path).await.unwrap();
+        let on_disk: serde_json::Value = serde_json::from_slice(&on_disk_bytes).unwrap();
+        let keys: Vec<_> = on_disk.as_object().unwrap().keys().cloned().collect();
+        assert!(
+            !keys.iter().any(|k| k == "commands"),
+            "commands field must be scrubbed from disk, found keys: {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k == "undo_cursor"),
+            "undo_cursor field must be scrubbed from disk, found keys: {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k == "baseline_data"),
+            "baseline_data field must be scrubbed from disk, found keys: {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k == "command_schema_version"),
+            "command_schema_version field must be scrubbed from disk, found keys: {keys:?}"
+        );
+        assert_eq!(
+            on_disk["data"]["boards"][0]["name"], "B",
+            "board data must remain on disk after scrub"
+        );
     }
 
+    /// `load_sync` must scrub legacy fields with the same guarantee as the
+    /// async `load` — both are valid entry points and both must leave a clean
+    /// file on disk.
     #[test]
-    fn test_command_schema_version_defaults_to_1_for_old_files() {
-        let json_str = r#"{
-            "version": 4,
-            "metadata": { "instance_id": "00000000-0000-0000-0000-000000000000", "saved_at": "2024-01-01T00:00:00Z" },
-            "data": { "boards": [] }
-        }"#;
-        let envelope: JsonEnvelope = serde_json::from_str(json_str).unwrap();
-        assert_eq!(envelope.command_schema_version, 1);
+    fn test_legacy_command_fields_are_scrubbed_from_disk_on_load_sync() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("legacy_sync.json");
+
+        let legacy = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            },
+            "commands": [],
+            "undo_cursor": 0,
+            "command_schema_version": 1,
+            "baseline_data": {}
+        });
+        std::fs::write(&file_path, legacy.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let on_disk_bytes = std::fs::read(&file_path).unwrap();
+        let on_disk: serde_json::Value = serde_json::from_slice(&on_disk_bytes).unwrap();
+        let keys: Vec<_> = on_disk.as_object().unwrap().keys().cloned().collect();
+        for legacy_key in [
+            "commands",
+            "undo_cursor",
+            "baseline_data",
+            "command_schema_version",
+        ] {
+            assert!(
+                !keys.iter().any(|k| k == legacy_key),
+                "{legacy_key} must be scrubbed from disk by load_sync, found keys: {keys:?}"
+            );
+        }
+    }
+
+    /// Loading a file that has no legacy fields must not rewrite it. A
+    /// spurious write would change the file's mtime, trip file-watcher
+    /// notifications, and risk altering byte-for-byte content (which some
+    /// users may track in version control).
+    #[tokio::test]
+    async fn test_load_is_a_noop_write_when_no_legacy_fields_present() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("clean.json");
+
+        let clean = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        let original_bytes = serde_json::to_vec_pretty(&clean).unwrap();
+        tokio::fs::write(&file_path, &original_bytes).await.unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let _ = store.load().await.unwrap();
+
+        let after_bytes = tokio::fs::read(&file_path).await.unwrap();
+        assert_eq!(
+            original_bytes, after_bytes,
+            "loading a clean file must not rewrite it"
+        );
     }
 
     #[tokio::test]
-    async fn test_v3_file_loads_with_empty_command_defaults() {
+    async fn test_v3_file_loads_correctly() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("v3.json");
 
@@ -550,210 +632,8 @@ mod tests {
 
         let store = JsonFileStore::new(&file_path);
         let (snapshot, _meta) = store.load().await.unwrap();
-
         let loaded: serde_json::Value = serde_json::from_slice(&snapshot.data).unwrap();
         assert!(loaded["boards"].is_array());
-
-        let (batches, cursor, _baseline) = store.get_command_log().unwrap();
-        assert!(batches.is_empty());
-        assert_eq!(cursor, 0);
-    }
-
-    #[tokio::test]
-    async fn test_v4_flat_commands_loaded_as_single_batch() {
-        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("v4_flat.json");
-
-        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
-            id: uuid::Uuid::new_v4(),
-            name: "B".into(),
-            card_prefix: None,
-            position: 0,
-        }));
-        let flat_commands = serde_json::to_value(vec![cmd]).unwrap();
-
-        let v4_content = json!({
-            "version": 4,
-            "metadata": {
-                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
-                "saved_at": "2024-01-01T00:00:00Z"
-            },
-            "data": {
-                "boards": [],
-                "columns": [],
-                "cards": [],
-                "archived_cards": [],
-                "sprints": [],
-                "graph": { "cards": { "edges": [] } }
-            },
-            "commands": flat_commands,
-            "undo_cursor": 1
-        });
-        tokio::fs::write(&file_path, v4_content.to_string())
-            .await
-            .unwrap();
-
-        let store = JsonFileStore::new(&file_path);
-        let (_snapshot, _meta) = store.load().await.unwrap();
-
-        let (batches, cursor, _baseline) = store.get_command_log().unwrap();
-        assert_eq!(
-            batches.len(),
-            1,
-            "flat commands should be wrapped as one batch"
-        );
-        assert_eq!(batches[0].len(), 1);
-        assert_eq!(cursor, 1);
-    }
-
-    #[tokio::test]
-    async fn test_v5_batched_commands_loaded_correctly() {
-        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("v5.json");
-
-        let cmd1 = Command::Board(BoardCommand::Create(CreateBoard {
-            id: uuid::Uuid::new_v4(),
-            name: "B1".into(),
-            card_prefix: None,
-            position: 0,
-        }));
-        let cmd2 = Command::Board(BoardCommand::Create(CreateBoard {
-            id: uuid::Uuid::new_v4(),
-            name: "B2".into(),
-            card_prefix: None,
-            position: 1,
-        }));
-        let batched = serde_json::to_value(vec![vec![cmd1], vec![cmd2]]).unwrap();
-
-        let v5_content = json!({
-            "version": 5,
-            "metadata": {
-                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
-                "saved_at": "2024-01-01T00:00:00Z"
-            },
-            "data": {
-                "boards": [],
-                "columns": [],
-                "cards": [],
-                "archived_cards": [],
-                "sprints": [],
-                "graph": { "cards": { "edges": [] } }
-            },
-            "commands": batched,
-            "undo_cursor": 2,
-            "command_schema_version": 1
-        });
-        tokio::fs::write(&file_path, v5_content.to_string())
-            .await
-            .unwrap();
-
-        let store = JsonFileStore::new(&file_path);
-        let (_snapshot, _meta) = store.load().await.unwrap();
-
-        let (batches, cursor, _baseline) = store.get_command_log().unwrap();
-        assert_eq!(batches.len(), 2, "two separate batches should be preserved");
-        assert_eq!(cursor, 2);
-    }
-
-    #[tokio::test]
-    async fn test_load_rejects_unsupported_command_schema_version() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("future.json");
-
-        let envelope = json!({
-            "version": 5,
-            "metadata": { "instance_id": "00000000-0000-0000-0000-000000000000", "saved_at": "2020-01-01T00:00:00Z" },
-            "data": { "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [], "graph": { "cards": { "edges": [] } } },
-            "commands": [],
-            "undo_cursor": 0,
-            "command_schema_version": 99
-        });
-
-        tokio::fs::write(&file_path, serde_json::to_vec_pretty(&envelope).unwrap())
-            .await
-            .unwrap();
-
-        let store = JsonFileStore::new(&file_path);
-        let result = store.load().await;
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(
-            err.contains("command schema version"),
-            "Error should mention command schema version, got: {err}"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_v5_save_reload_roundtrip_preserves_all_data() {
-        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
-
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("roundtrip.json");
-
-        let board_id = "550e8400-e29b-41d4-a716-446655440000";
-        let cmd1 = Command::Board(BoardCommand::Create(CreateBoard {
-            id: uuid::Uuid::new_v4(),
-            name: "Batch1".into(),
-            card_prefix: None,
-            position: 1,
-        }));
-        let cmd2 = Command::Board(BoardCommand::Create(CreateBoard {
-            id: uuid::Uuid::new_v4(),
-            name: "Batch2".into(),
-            card_prefix: None,
-            position: 2,
-        }));
-
-        let snapshot_data = json!({
-            "boards": [{"id": board_id, "name": "B1",
-                "task_sort_field": "Default", "task_sort_order": "Ascending",
-                "sprint_name_used_count": 0, "next_sprint_number": 1,
-                "task_list_view": "Flat", "prefix_counters": {}, "sprint_counters": {},
-                "sprint_names": [], "card_counter": 0, "position": 0}],
-            "columns": [],
-            "cards": [],
-            "archived_cards": [],
-            "sprints": [],
-            "graph": { "cards": { "edges": [] } }
-        });
-
-        let batched_cmds = serde_json::to_value(vec![vec![&cmd1], vec![&cmd2]]).unwrap();
-        let baseline_data = snapshot_data.clone();
-
-        let v5_content = json!({
-            "version": 5,
-            "metadata": {
-                "instance_id": "550e8400-e29b-41d4-a716-446655440001",
-                "saved_at": "2024-06-01T00:00:00Z"
-            },
-            "data": snapshot_data,
-            "commands": batched_cmds,
-            "undo_cursor": 2,
-            "command_schema_version": 1,
-            "baseline_data": baseline_data
-        });
-        tokio::fs::write(&file_path, v5_content.to_string())
-            .await
-            .unwrap();
-
-        let store = JsonFileStore::new(&file_path);
-        let (loaded_snapshot, _meta) = store.load().await.unwrap();
-
-        let (batches, cursor, loaded_baseline) = store.get_command_log().unwrap();
-        assert_eq!(batches.len(), 2, "two command batches should persist");
-        assert_eq!(cursor, 2, "undo cursor should persist");
-        assert!(
-            loaded_baseline.is_some(),
-            "baseline snapshot should persist"
-        );
-
-        let loaded_data: serde_json::Value = serde_json::from_slice(&loaded_snapshot.data).unwrap();
-        assert_eq!(
-            loaded_data["boards"][0]["name"], "B1",
-            "snapshot data should roundtrip"
-        );
     }
 
     #[test]

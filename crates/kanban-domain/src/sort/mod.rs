@@ -52,13 +52,28 @@ impl OrderedSorter {
     }
 
     /// Sort a slice in place. Works with both `&Card` and `Card` elements.
+    ///
+    /// Ties on the primary key are broken by ascending `card_number` so that
+    /// sort output is deterministic regardless of input order. Without this,
+    /// backends that yield cards in HashMap iteration order (`InMemoryStore`)
+    /// or unordered SQL result sets cause tied cards to jump on every render.
+    /// The tiebreaker stays ascending even when `order` is descending so that
+    /// toggling sort direction does not reshuffle tied cards.
+    ///
+    /// Note: `card_number` is unique only within a single board, so this
+    /// stabiliser only holds when the slice contains cards from one board —
+    /// which is currently always the case via `BoardFilter` in `query/mod.rs`
+    /// and the sprint-scoped slices in `query/sprint.rs`. A future cross-board
+    /// view would need a different tiebreaker (e.g. `(board_id, card_number)`
+    /// or `card.id`).
     pub fn sort_by<T: Borrow<Card>>(&self, cards: &mut [T]) {
         cards.sort_by(|a, b| {
-            let cmp = self.sorter.compare(a.borrow(), b.borrow());
-            match self.order {
-                SortOrder::Ascending => cmp,
-                SortOrder::Descending => cmp.reverse(),
-            }
+            let primary = self.sorter.compare(a.borrow(), b.borrow());
+            let primary = match self.order {
+                SortOrder::Ascending => primary,
+                SortOrder::Descending => primary.reverse(),
+            };
+            primary.then_with(|| a.borrow().card_number.cmp(&b.borrow().card_number))
         });
     }
 }
@@ -193,5 +208,106 @@ mod tests {
 
         card1.points = None;
         assert_eq!(SortBy::Points.compare(&card1, &card2), Ordering::Equal);
+    }
+
+    /// Cards with equal primary sort keys (e.g. all `points = None`) must
+    /// always end up in the same final order regardless of how the slice
+    /// arrived at the sort. Without a deterministic tiebreaker, backends
+    /// that yield cards in HashMap iteration order (`InMemoryStore::snapshot`)
+    /// or unordered SQL result sets cause tied cards to visibly jump on every
+    /// re-render.
+    #[test]
+    fn test_ordered_sorter_is_deterministic_when_primary_keys_tie() {
+        let board = Board::new("Test".to_string(), None);
+        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let mut board_mut = board.clone();
+
+        // All three cards have points=None, so SortBy::Points reports them equal.
+        let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 0);
+        let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 1);
+        let card3 = Card::new(&mut board_mut, column.id, "C".to_string(), 2);
+        let card_numbers = (card1.card_number, card2.card_number, card3.card_number);
+
+        let sorter = OrderedSorter::new(SortBy::Points, SortOrder::Ascending);
+
+        let mut shuffled_a = vec![&card1, &card2, &card3];
+        sorter.sort_by(&mut shuffled_a);
+        let mut shuffled_b = vec![&card3, &card1, &card2];
+        sorter.sort_by(&mut shuffled_b);
+        let mut shuffled_c = vec![&card2, &card3, &card1];
+        sorter.sort_by(&mut shuffled_c);
+
+        let order = |cs: &[&Card]| (cs[0].card_number, cs[1].card_number, cs[2].card_number);
+        let expected = (card_numbers.0, card_numbers.1, card_numbers.2);
+
+        assert_eq!(
+            order(&shuffled_a),
+            expected,
+            "tied cards must order by card_number regardless of input order"
+        );
+        assert_eq!(order(&shuffled_b), expected);
+        assert_eq!(order(&shuffled_c), expected);
+    }
+
+    /// Tiebreaker must remain ascending even when the primary sort is
+    /// descending — flipping the tiebreaker too would make tied cards swap
+    /// when the user toggles direction, which is just as disorienting as
+    /// the original instability.
+    #[test]
+    fn test_ordered_sorter_tiebreaker_is_ascending_under_descending_primary() {
+        let board = Board::new("Test".to_string(), None);
+        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let mut board_mut = board.clone();
+
+        let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 0);
+        let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 1);
+        let expected = (card1.card_number, card2.card_number);
+
+        let sorter = OrderedSorter::new(SortBy::Points, SortOrder::Descending);
+        let mut shuffled = vec![&card2, &card1];
+        sorter.sort_by(&mut shuffled);
+        assert_eq!((shuffled[0].card_number, shuffled[1].card_number), expected);
+    }
+
+    /// The card_number tiebreaker is implemented in `OrderedSorter::sort_by`,
+    /// not in any specific `SortBy` variant — so it should stabilise tied
+    /// cards regardless of which primary sort key the user picks. This test
+    /// exercises every variant where ties realistically occur (Card::new
+    /// defaults make all five primaries tie naturally between fresh cards).
+    /// `CardNumber` and `Position` are excluded because their primaries are
+    /// themselves unique per slice — there's nothing to tiebreak.
+    #[test]
+    fn test_ordered_sorter_tiebreaker_applies_to_every_sort_field_with_ties() {
+        let variants = [
+            SortBy::Points,
+            SortBy::Priority,
+            SortBy::Status,
+            SortBy::CreatedAt,
+            SortBy::UpdatedAt,
+        ];
+
+        for variant in variants {
+            let board = Board::new("Test".to_string(), None);
+            let column = Column::new(board.id, "Todo".to_string(), 0);
+            let mut board_mut = board.clone();
+            let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 0);
+            let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 1);
+            let card3 = Card::new(&mut board_mut, column.id, "C".to_string(), 2);
+            let expected = (card1.card_number, card2.card_number, card3.card_number);
+
+            let sorter = OrderedSorter::new(variant, SortOrder::Ascending);
+            let mut shuffled = vec![&card3, &card1, &card2];
+            sorter.sort_by(&mut shuffled);
+
+            assert_eq!(
+                (
+                    shuffled[0].card_number,
+                    shuffled[1].card_number,
+                    shuffled[2].card_number,
+                ),
+                expected,
+                "tiebreaker must order tied cards by card_number for every sort variant"
+            );
+        }
     }
 }

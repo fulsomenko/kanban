@@ -13,4 +13,10 @@ pub struct CardAnimation {
 #[derive(Default)]
 pub struct AnimationState {
     pub animating: HashMap<Uuid, CardAnimation>,
+    /// Column id and card position to anchor selection on after the next
+    /// archive batch completes. Captured at the moment the user triggers the
+    /// archive (from the focused/cursor card) so that multi-column archives
+    /// land selection on the column the user was actually looking at, rather
+    /// than an arbitrary archived card chosen by HashMap iteration order.
+    pub archive_anchor: Option<(Uuid, i32)>,
 }
