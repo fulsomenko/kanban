@@ -25,6 +25,33 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
+/// Like [`centered_rect`] but with an absolute height in rows. Width is still
+/// percentage-based so the popup scales with terminal width. Use this when a
+/// dialog has a fixed content budget that must not collapse on smaller
+/// terminals; the height clamps to `r.height` so callers don't need to guard
+/// against tall layouts on 24-row terminals.
+pub fn centered_rect_abs(percent_x: u16, height: u16, r: Rect) -> Rect {
+    let height = height.min(r.height);
+    let extra = r.height - height;
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(extra / 2),
+            Constraint::Length(height),
+            Constraint::Length(extra - extra / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
 pub fn render_input_popup(
     frame: &mut Frame,
     title: &str,

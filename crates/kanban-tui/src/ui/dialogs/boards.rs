@@ -203,10 +203,16 @@ pub(crate) fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
 
 pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
     use crate::app::StorageBackendChoice;
-    use crate::components::centered_rect;
+    use crate::components::centered_rect_abs;
     use ratatui::widgets::{Block, Borders, Clear};
 
-    let area = centered_rect(70, 45, frame.area());
+    // Sum of inner row constraints (4 + 1 + 1 + 3 + 2 + 1 + 1 + 1 + 1) = 15,
+    // plus 2*2 vertical margin + 2 borders = 21 rows minimum. Below that
+    // the popup just fills the available height (centered_rect_abs clamps).
+    const MIN_HEIGHT: u16 = 21;
+    const PERCENT_X: u16 = 70;
+
+    let area = centered_rect_abs(PERCENT_X, MIN_HEIGHT, frame.area());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
@@ -387,7 +393,10 @@ mod tests {
     #[test]
     fn test_shrink_home_substitutes_home_prefix() {
         with_home(Some("/home/max"), || {
-            assert_eq!(shrink_home("/home/max/foo/boards.json"), "~/foo/boards.json");
+            assert_eq!(
+                shrink_home("/home/max/foo/boards.json"),
+                "~/foo/boards.json"
+            );
         });
     }
 
