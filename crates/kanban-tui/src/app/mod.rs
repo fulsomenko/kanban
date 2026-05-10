@@ -201,6 +201,10 @@ impl App {
         let config_storage_location = config_resolved.clone();
         let original_storage_backend = app_config.storage_backend.clone();
         let original_storage_location = app_config.storage_location.clone();
+        // True when the caller or config provides an explicit file path.
+        // When false the TUI runs with an in-memory backend and nothing is
+        // written to disk.
+        let has_explicit_file = save_file.is_some() || original_storage_location.is_some();
         if let Some(ref file) = save_file {
             let path = std::path::Path::new(file);
             let resolved = if path.is_absolute() {
@@ -215,8 +219,9 @@ impl App {
             // File arg is the source of truth — ignore config's storage_backend
             app_config.storage_backend = None;
         }
-        if store_manager
-            .sync_backend_with_file(&app_config.effective_storage_location(), &mut app_config)
+        if has_explicit_file
+            && store_manager
+                .sync_backend_with_file(&app_config.effective_storage_location(), &mut app_config)
         {
             tracing::warn!(
                 "Storage backend auto-corrected to '{}' based on file content",
@@ -233,9 +238,20 @@ impl App {
         if save_file.is_some() && !cli_file_override && original_storage_location.is_none() {
             app_config.storage_location = None;
         }
-        let kanban_backend = store_manager
-            .make_backend(&effective_file, &app_config)
-            .await?;
+        let (kanban_backend, persistence_file): (
+            std::sync::Arc<dyn kanban_service::KanbanBackend>,
+            Option<String>,
+        ) = if has_explicit_file {
+            let backend = store_manager
+                .make_backend(&effective_file, &app_config)
+                .await?;
+            (backend, Some(effective_file))
+        } else {
+            (
+                std::sync::Arc::new(kanban_domain::InMemoryStore::new()),
+                None,
+            )
+        };
         let inner_ctx =
             kanban_service::KanbanContext::open(kanban_backend, app_config.clone()).await?;
         let (ctx, save_rx, save_completion_rx) = TuiContext::new(inner_ctx)?;
@@ -255,7 +271,7 @@ impl App {
             filter: FilterState::default(),
             dialog_input: DialogInputState::default(),
             focus: FocusState::default(),
-            persistence: PersistenceState::new(Some(effective_file), save_completion_rx),
+            persistence: PersistenceState::new(persistence_file, save_completion_rx),
             multi_select: MultiSelectState::default(),
             ui_state: UiState::default(),
             sprint_view: SprintViewState::default(),
@@ -263,7 +279,7 @@ impl App {
             model: model::Model::default(),
             relationship: RelationshipState::default(),
             pending_key: None,
-            has_data_file: true,
+            has_data_file: has_explicit_file,
             cli_file_provided: save_file.is_some(),
             cli_file_override,
             config_storage_backend,

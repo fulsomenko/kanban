@@ -252,9 +252,14 @@ impl CliApp {
             .clone()
             .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
 
-        let needs_data_file = !matches!(
+        let needs_data_file = matches!(
             &command,
-            Some(Commands::Completions { .. }) | Some(Commands::Migrate(_))
+            Some(Commands::Board(_))
+                | Some(Commands::Column(_))
+                | Some(Commands::Card(_))
+                | Some(Commands::Sprint(_))
+                | Some(Commands::Export(_))
+                | Some(Commands::Import(_))
         );
         if needs_data_file && validated_file.is_none() && config.storage_location.is_none() {
             anyhow::bail!(
