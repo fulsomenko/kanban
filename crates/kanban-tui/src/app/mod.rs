@@ -2694,4 +2694,74 @@ mod tests {
             "banner must be an error variant"
         );
     }
+
+    #[tokio::test]
+    async fn test_choose_storage_dialog_default_backend_is_json() {
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        assert_eq!(
+            app.choose_storage_backend,
+            StorageBackendChoice::Json,
+            "default storage backend selection must be JSON"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            "kanban.json",
+            "default filename must end in .json to match the default backend"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_choose_storage_dialog_tab_toggles_backend_and_swaps_extension() {
+        use crossterm::event::KeyCode;
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+
+        app.handle_choose_storage_file_dialog(KeyCode::Tab);
+        assert_eq!(
+            app.choose_storage_backend,
+            StorageBackendChoice::Sqlite,
+            "Tab must toggle the backend selection from JSON to SQLite"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            "kanban.sqlite",
+            "Tab must swap the filename extension to match the new backend"
+        );
+
+        app.handle_choose_storage_file_dialog(KeyCode::Tab);
+        assert_eq!(
+            app.choose_storage_backend,
+            StorageBackendChoice::Json,
+            "Tab must toggle the backend selection back to JSON"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            "kanban.json",
+            "Tab must swap the filename extension back to .json"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_choose_storage_dialog_tab_appends_extension_for_filename_without_one() {
+        use crossterm::event::KeyCode;
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+        app.input.clear();
+        app.input.set("myboard".to_string());
+
+        app.handle_choose_storage_file_dialog(KeyCode::Tab);
+
+        assert_eq!(
+            app.input.as_str(),
+            "myboard.sqlite",
+            "Tab must append the extension when the filename has no known extension"
+        );
+    }
 }
