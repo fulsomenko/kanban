@@ -2566,6 +2566,62 @@ mod tests {
         );
     }
 
+    // multi_thread required: adopt_storage_file uses block_in_place + the save
+    // worker is a spawned task that writes to disk asynchronously.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_no_file_tui_startup_dialog_confirm_persists_in_memory_state_to_disk() {
+        use crossterm::event::KeyCode;
+        use kanban_domain::Board;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("seeded.json");
+        let target_str = target.to_str().unwrap().to_string();
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+
+        // Seed in-memory state with a board so we can detect whether adopt
+        // transferred it to the new on-disk backend.
+        let mut snapshot = app.ctx.snapshot().unwrap();
+        snapshot
+            .boards
+            .push(Board::new("BeforeAdopt".into(), None));
+        app.ctx.apply_snapshot(snapshot).unwrap();
+
+        app.maybe_push_startup_file_dialog();
+        app.input.clear();
+        app.input.set(target_str.clone());
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        // Wait for the save worker to flush at least once.
+        let completion_rx = app
+            .persistence
+            .save_completion_rx
+            .as_mut()
+            .expect("save completion channel must exist after adopt");
+        tokio::time::timeout(std::time::Duration::from_secs(2), completion_rx.recv())
+            .await
+            .expect("save worker must signal completion within 2s")
+            .expect("completion sender dropped before signal");
+
+        assert!(target.exists(), "target file must exist on disk after adopt");
+
+        use kanban_persistence::PersistenceStore;
+        let on_disk = kanban_persistence_json::JsonFileStore::new(&target_str);
+        let (snap, _meta) = on_disk
+            .load_sync()
+            .unwrap()
+            .expect("file must contain a snapshot");
+        let parsed = kanban_persistence::snapshot_from_json_bytes(&snap.data).unwrap();
+        assert!(
+            parsed
+                .boards
+                .iter()
+                .any(|b| b.name == "BeforeAdopt"),
+            "in-memory state must be transferred to the new on-disk backend"
+        );
+    }
+
     // multi_thread required for the same reason as the success test.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_no_file_tui_startup_dialog_confirm_failure_keeps_dialog_open() {
