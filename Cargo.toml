@@ -15,6 +15,7 @@ members = [
 [workspace.package]
 version = "0.4.1"
 edition = "2021"
+rust-version = "1.74"
 authors = ["Max Emil Yoon Blomstervall"]
 license = "Apache-2.0"
 repository = "https://github.com/fulsomenko/kanban"
