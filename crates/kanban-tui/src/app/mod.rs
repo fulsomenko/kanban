@@ -2742,6 +2742,35 @@ mod tests {
         );
     }
 
+    // multi_thread required: adopt_storage_file uses block_in_place.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_adopt_storage_file_leaves_context_ready_for_mutations() {
+        use crossterm::event::KeyCode;
+        use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("after-adopt.json");
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+        app.input.clear();
+        app.input.set(target.to_str().unwrap().to_string());
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        // Mirrors the user-level "press n to create a board" path: the
+        // context must accept a command after the backend has been swapped.
+        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
+            id: uuid::Uuid::new_v4(),
+            name: "AfterAdopt".into(),
+            card_prefix: None,
+            position: 0,
+        }));
+        app.ctx
+            .execute_command(cmd)
+            .expect("execute_command must succeed after adopt_storage_file");
+    }
+
     #[tokio::test]
     async fn test_choose_storage_dialog_default_backend_is_json() {
         let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
