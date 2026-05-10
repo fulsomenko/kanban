@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 Fix undo crash and strip command log from persistence (KAN-404, KAN-405)
