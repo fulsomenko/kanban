@@ -205,7 +205,7 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
     use crate::components::centered_rect;
     use ratatui::widgets::{Block, Borders, Clear};
 
-    let area = centered_rect(65, 55, frame.area());
+    let area = centered_rect(70, 40, frame.area());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
@@ -221,38 +221,64 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
         .margin(2)
         .constraints([
             Constraint::Length(4), // description
-            Constraint::Length(1), // spacer
             Constraint::Length(1), // "Filename:" label
             Constraint::Length(3), // input box
+            Constraint::Length(1), // resolved-path preview
             Constraint::Length(1), // spacer
             Constraint::Length(1), // hint
             Constraint::Min(0),
         ])
         .split(inner);
 
-    let description = Paragraph::new(
-        "Enter a filename to create a board file, or press Escape to\n\
-         continue without one. Work done without a file is held in\n\
-         memory and will be lost when you quit — you can export it\n\
-         at any time with 'x'.",
-    )
-    .style(normal_text())
-    .wrap(ratatui::widgets::Wrap { trim: false });
-    frame.render_widget(description, chunks[0]);
+    let description = vec![
+        Line::from(Span::styled(
+            "Enter a filename to create a board file, or press Escape",
+            normal_text(),
+        )),
+        Line::from(Span::styled(
+            "to continue without one. Work done without a file is held",
+            normal_text(),
+        )),
+        Line::from(Span::styled(
+            "in memory and lost when you quit — you can export it at",
+            normal_text(),
+        )),
+        Line::from(Span::styled("any time with 'x'.", normal_text())),
+    ];
+    frame.render_widget(Paragraph::new(description), chunks[0]);
 
     let label = Paragraph::new("Filename:").style(highlight_text());
-    frame.render_widget(label, chunks[2]);
+    frame.render_widget(label, chunks[1]);
 
     let input = Paragraph::new(app.input.as_str())
         .style(normal_text())
         .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(input, chunks[3]);
+    frame.render_widget(input, chunks[2]);
 
-    let cursor_x = chunks[3].x + app.input.cursor_byte_offset() as u16 + 1;
-    let cursor_y = chunks[3].y + 1;
+    let cursor_x = chunks[2].x + app.input.cursor_byte_offset() as u16 + 1;
+    let cursor_y = chunks[2].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 
-    let hint = Paragraph::new("Enter — create file   Esc — continue in memory")
-        .style(label_text());
+    let resolved = resolve_dialog_path(app.input.as_str());
+    let preview = Paragraph::new(Line::from(vec![
+        Span::styled("Will be saved at: ", label_text()),
+        Span::styled(resolved, normal_text()),
+    ]));
+    frame.render_widget(preview, chunks[3]);
+
+    let hint = Paragraph::new("Enter — create file   Esc — continue in memory").style(label_text());
     frame.render_widget(hint, chunks[5]);
+}
+
+fn resolve_dialog_path(input: &str) -> String {
+    if input.is_empty() {
+        return String::new();
+    }
+    let path = std::path::Path::new(input);
+    if path.is_absolute() {
+        return path.display().to_string();
+    }
+    std::env::current_dir()
+        .map(|cwd| cwd.join(path).display().to_string())
+        .unwrap_or_else(|_| input.to_string())
 }
