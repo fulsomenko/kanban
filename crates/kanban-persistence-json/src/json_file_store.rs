@@ -20,15 +20,37 @@ pub struct JsonFileStore {
 
 /// Wrapper structure for the JSON file format (v2+).
 ///
-/// Unknown fields from older formats (e.g. `commands`, `undo_cursor`,
-/// `baseline_data`, `command_schema_version`) are intentionally ignored on
-/// deserialization and dropped on the next save — do NOT add
-/// `#[serde(deny_unknown_fields)]` here without a migration path.
+/// Pre-KAN-405 fields (`commands`, `undo_cursor`, `baseline_data`,
+/// `command_schema_version`) are tolerated on deserialize so old files load
+/// cleanly, then actively scrubbed from disk by `load`/`load_sync` — see
+/// [`LEGACY_FIELDS`] and `scrub_legacy_fields`. Do NOT add
+/// `#[serde(deny_unknown_fields)]` here: it would break the load path for
+/// any file written by an older build.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonEnvelope {
     version: u32,
     metadata: PersistenceMetadata,
     data: serde_json::Value,
+}
+
+/// Top-level fields that pre-KAN-405 builds wrote alongside the envelope and
+/// that this build actively removes when loading.
+const LEGACY_FIELDS: &[&str] = &[
+    "commands",
+    "undo_cursor",
+    "baseline_data",
+    "command_schema_version",
+];
+
+fn detect_legacy_fields(value: &serde_json::Value) -> Vec<&'static str> {
+    let Some(obj) = value.as_object() else {
+        return Vec::new();
+    };
+    LEGACY_FIELDS
+        .iter()
+        .copied()
+        .filter(|f| obj.contains_key(*f))
+        .collect()
 }
 
 impl JsonEnvelope {
@@ -152,6 +174,43 @@ impl JsonFileStore {
 
         Ok(envelope)
     }
+
+    fn serialize_envelope(envelope: &JsonEnvelope) -> PersistenceResult<Vec<u8>> {
+        serde_json::to_vec_pretty(envelope)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))
+    }
+
+    async fn scrub_legacy_fields_async(
+        &self,
+        envelope: &JsonEnvelope,
+        detected: &[&'static str],
+    ) -> PersistenceResult<()> {
+        tracing::info!(
+            "scrubbing pre-KAN-405 legacy fields {:?} from {}; undo history is now in-session only",
+            detected,
+            self.path.display()
+        );
+        let bytes = Self::serialize_envelope(envelope)?;
+        AtomicWriter::write_atomic(&self.path, &bytes).await?;
+        Ok(())
+    }
+
+    fn scrub_legacy_fields_sync(
+        &self,
+        envelope: &JsonEnvelope,
+        detected: &[&'static str],
+    ) -> PersistenceResult<()> {
+        tracing::info!(
+            "scrubbing pre-KAN-405 legacy fields {:?} from {} (sync); undo history is now in-session only",
+            detected,
+            self.path.display()
+        );
+        let bytes = Self::serialize_envelope(envelope)?;
+        let tmp_path = self.path.with_extension("tmp");
+        std::fs::write(&tmp_path, &bytes)?;
+        std::fs::rename(&tmp_path, &self.path)?;
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -224,6 +283,19 @@ impl PersistenceStore for JsonFileStore {
         let file_bytes = tokio::fs::read(&self.path).await?;
         let envelope = Self::parse_envelope(&file_bytes)?;
 
+        let raw_value: serde_json::Value = serde_json::from_slice(&file_bytes)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let detected = detect_legacy_fields(&raw_value);
+        if !detected.is_empty() {
+            if let Err(e) = self.scrub_legacy_fields_async(&envelope, &detected).await {
+                tracing::warn!(
+                    "failed to scrub legacy fields from {}: {}; data still loaded successfully, cleanup will be retried on next open",
+                    self.path.display(),
+                    e
+                );
+            }
+        }
+
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let snapshot = StoreSnapshot {
@@ -269,6 +341,19 @@ impl PersistenceStore for JsonFileStore {
         };
 
         let envelope = Self::parse_envelope(&final_bytes)?;
+
+        let raw_value: serde_json::Value = serde_json::from_slice(&final_bytes)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let detected = detect_legacy_fields(&raw_value);
+        if !detected.is_empty() {
+            if let Err(e) = self.scrub_legacy_fields_sync(&envelope, &detected) {
+                tracing::warn!(
+                    "failed to scrub legacy fields from {} (sync): {}; data still loaded successfully, cleanup will be retried on next open",
+                    self.path.display(),
+                    e
+                );
+            }
+        }
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
