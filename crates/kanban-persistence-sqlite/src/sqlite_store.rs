@@ -308,6 +308,9 @@ impl SqliteStore {
         .map_err(db_err)?;
 
         if has_command_log {
+            tracing::info!(
+                "dropping legacy command_log table: undo history is now in-session only and cannot be carried back to pre-KAN-405 builds"
+            );
             sqlx::raw_sql("DROP TABLE IF EXISTS command_log")
                 .execute(pool)
                 .await
@@ -322,6 +325,9 @@ impl SqliteStore {
         .map_err(db_err)?;
 
         if has_undo_state {
+            tracing::info!(
+                "dropping legacy undo_state table: undo cursor is now in-session only and cannot be carried back to pre-KAN-405 builds"
+            );
             sqlx::raw_sql("DROP TABLE IF EXISTS undo_state")
                 .execute(pool)
                 .await
