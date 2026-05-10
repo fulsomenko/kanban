@@ -2713,6 +2713,58 @@ mod tests {
 
     // multi_thread required for the same reason as the success test.
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_no_file_tui_startup_dialog_confirm_refuses_existing_path() {
+        use crossterm::event::KeyCode;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("already-here.json");
+        std::fs::write(&target, b"{\"boards\":[]}").unwrap();
+        let target_str = target.to_str().unwrap().to_string();
+
+        let sm = kanban_service::StoreManager::new(kanban_service::default_registry());
+        let (mut app, _save_rx) = App::new_with_store(sm, None).await.unwrap();
+        app.maybe_push_startup_file_dialog();
+        app.input.clear();
+        app.input.set(target_str.clone());
+
+        app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::ChooseStorageFile),
+            "existing-file confirm must leave the dialog open"
+        );
+        assert_eq!(
+            app.input.as_str(),
+            target_str.as_str(),
+            "input must be preserved so the user can pick a different name"
+        );
+        assert!(
+            !app.has_data_file,
+            "existing-file confirm must not flip has_data_file"
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("existing-file confirm must surface a banner");
+        assert_eq!(banner.variant, crate::components::BannerVariant::Error);
+        assert!(
+            banner.message.contains("already exists"),
+            "banner must explain that the file already exists, got: {}",
+            banner.message
+        );
+        // The pre-existing file content must not have been touched.
+        let on_disk = std::fs::read(&target).unwrap();
+        assert_eq!(
+            on_disk,
+            b"{\"boards\":[]}".to_vec(),
+            "the existing file must not have been overwritten"
+        );
+    }
+
+    // multi_thread required for the same reason as the success test.
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_no_file_tui_startup_dialog_confirm_failure_keeps_dialog_open() {
         use crossterm::event::KeyCode;
 
