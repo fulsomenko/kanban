@@ -521,11 +521,17 @@ impl App {
                 .unwrap_or_else(|_| filename.clone())
         };
 
+        let handle = tokio::runtime::Handle::current();
+        debug_assert!(
+            handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread,
+            "adopt_storage_file requires a multi-threaded Tokio runtime; \
+             block_in_place is unavailable on a current_thread runtime."
+        );
         let store_manager = self.store_manager.clone();
         let app_config = self.app_config.clone();
         let path_for_closure = path.clone();
         let backend_result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async move {
+            handle.block_on(async move {
                 store_manager
                     .make_backend(&path_for_closure, &app_config)
                     .await
