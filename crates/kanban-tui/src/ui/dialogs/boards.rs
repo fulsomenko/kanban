@@ -225,7 +225,7 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
             Constraint::Length(1), // spacer
             Constraint::Length(1), // "Filename:" label
             Constraint::Length(3), // input box
-            Constraint::Length(1), // resolved-path preview
+            Constraint::Length(2), // resolved-path preview (wraps if long)
             Constraint::Length(1), // spacer
             Constraint::Length(1), // format radio
             Constraint::Length(1), // spacer
@@ -270,11 +270,12 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
     let cursor_y = chunks[3].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 
-    let resolved = resolve_dialog_path(app.input.as_str());
+    let resolved = display_dialog_path(app.input.as_str());
     let preview = Paragraph::new(Line::from(vec![
         Span::styled("Will be saved at: ", label_text()),
         Span::styled(resolved, normal_text()),
-    ]));
+    ]))
+    .wrap(ratatui::widgets::Wrap { trim: false });
     frame.render_widget(preview, chunks[4]);
 
     let radio = Line::from(vec![
@@ -330,4 +331,110 @@ fn resolve_dialog_path(input: &str) -> String {
     std::env::current_dir()
         .map(|cwd| cwd.join(path).display().to_string())
         .unwrap_or_else(|_| input.to_string())
+}
+
+/// Resolves `input` to an absolute path, then substitutes `$HOME` with `~`
+/// when the resolved path lies under the user's home directory. On Windows
+/// or when `HOME` is unset, returns the absolute path unchanged.
+fn display_dialog_path(input: &str) -> String {
+    shrink_home(&resolve_dialog_path(input))
+}
+
+fn shrink_home(abs: &str) -> String {
+    if abs.is_empty() {
+        return String::new();
+    }
+    let Some(home_os) = std::env::var_os("HOME") else {
+        return abs.to_string();
+    };
+    let home = home_os.to_string_lossy();
+    if home.is_empty() {
+        return abs.to_string();
+    }
+    if abs == home.as_ref() {
+        return "~".to_string();
+    }
+    if let Some(rest) = abs.strip_prefix(home.as_ref()) {
+        if rest.starts_with('/') {
+            return format!("~{}", rest);
+        }
+    }
+    abs.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // HOME is process-global; serialise the few tests that mutate it.
+    static HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn with_home<R>(home: Option<&str>, f: impl FnOnce() -> R) -> R {
+        let _g = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let prev = std::env::var_os("HOME");
+        match home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+        let r = f();
+        match prev {
+            Some(p) => std::env::set_var("HOME", p),
+            None => std::env::remove_var("HOME"),
+        }
+        r
+    }
+
+    #[test]
+    fn test_shrink_home_substitutes_home_prefix() {
+        with_home(Some("/home/max"), || {
+            assert_eq!(shrink_home("/home/max/foo/boards.json"), "~/foo/boards.json");
+        });
+    }
+
+    #[test]
+    fn test_shrink_home_returns_tilde_for_exact_home() {
+        with_home(Some("/home/max"), || {
+            assert_eq!(shrink_home("/home/max"), "~");
+        });
+    }
+
+    #[test]
+    fn test_shrink_home_leaves_path_outside_home_unchanged() {
+        with_home(Some("/home/max"), || {
+            assert_eq!(shrink_home("/var/log/x.json"), "/var/log/x.json");
+        });
+    }
+
+    #[test]
+    fn test_shrink_home_ignores_partial_prefix_match() {
+        with_home(Some("/home/max"), || {
+            // "/home/maximus/x" must not become "imus/x" — only true segment
+            // boundaries count.
+            assert_eq!(shrink_home("/home/maximus/x"), "/home/maximus/x");
+        });
+    }
+
+    #[test]
+    fn test_shrink_home_returns_input_when_home_unset() {
+        with_home(None, || {
+            assert_eq!(shrink_home("/some/path"), "/some/path");
+        });
+    }
+
+    #[test]
+    fn test_shrink_home_returns_empty_for_empty_input() {
+        with_home(Some("/home/max"), || {
+            assert_eq!(shrink_home(""), "");
+        });
+    }
+
+    #[test]
+    fn test_display_dialog_path_shrinks_absolute_input_under_home() {
+        with_home(Some("/home/max"), || {
+            assert_eq!(
+                display_dialog_path("/home/max/notes/boards.json"),
+                "~/notes/boards.json"
+            );
+        });
+    }
 }
