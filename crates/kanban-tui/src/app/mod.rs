@@ -109,6 +109,43 @@ pub struct App {
     pub needs_redraw: bool,
     pub error_log: Arc<Mutex<crate::error_log::ErrorLogState>>,
     pub auto_open_seen_count: usize,
+    pub choose_storage_backend: StorageBackendChoice,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum StorageBackendChoice {
+    #[default]
+    Json,
+    Sqlite,
+}
+
+impl StorageBackendChoice {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Json => ".json",
+            Self::Sqlite => ".sqlite",
+        }
+    }
+
+    pub fn toggle(self) -> Self {
+        match self {
+            Self::Json => Self::Sqlite,
+            Self::Sqlite => Self::Json,
+        }
+    }
+}
+
+/// Replaces a known data-file extension on `filename` with `new_ext`, or
+/// appends `new_ext` if no known extension is present. Used by the
+/// choose-storage dialog when the user toggles between JSON and SQLite.
+pub fn swap_known_extension(filename: &str, new_ext: &str) -> String {
+    const KNOWN: &[&str] = &[".json", ".sqlite", ".sqlite3", ".db"];
+    for ext in KNOWN {
+        if let Some(stem) = filename.strip_suffix(ext) {
+            return format!("{}{}", stem, new_ext);
+        }
+    }
+    format!("{}{}", filename, new_ext)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -294,6 +331,7 @@ impl App {
             needs_redraw: true,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
             auto_open_seen_count: 0,
+            choose_storage_backend: StorageBackendChoice::default(),
         };
 
         Ok((app, save_rx))
@@ -490,13 +528,22 @@ impl App {
 
     pub fn maybe_push_startup_file_dialog(&mut self) {
         if !self.has_data_file {
-            self.input.set("kanban.json".to_string());
+            self.choose_storage_backend = StorageBackendChoice::Json;
+            self.input
+                .set(format!("kanban{}", StorageBackendChoice::Json.extension()));
             self.open_dialog(DialogMode::ChooseStorageFile);
         }
     }
 
     pub fn handle_choose_storage_file_dialog(&mut self, key_code: crossterm::event::KeyCode) {
         use crate::dialog::{handle_dialog_input, DialogAction};
+        if matches!(key_code, crossterm::event::KeyCode::Tab) {
+            self.choose_storage_backend = self.choose_storage_backend.toggle();
+            let new_filename =
+                swap_known_extension(self.input.as_str(), self.choose_storage_backend.extension());
+            self.input.set(new_filename);
+            return;
+        }
         match handle_dialog_input(&mut self.input, key_code, false) {
             DialogAction::Confirm => {
                 let filename = self.input.as_str().to_string();
@@ -2361,6 +2408,7 @@ impl App {
             needs_redraw: true,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
             auto_open_seen_count: 0,
+            choose_storage_backend: StorageBackendChoice::default(),
         }
     }
 }
@@ -2463,6 +2511,7 @@ mod tests {
             needs_redraw: false,
             error_log: Arc::new(Mutex::new(crate::error_log::ErrorLogState::default())),
             auto_open_seen_count: 0,
+            choose_storage_backend: StorageBackendChoice::default(),
         };
 
         app.spawn_save_worker(save_rx, None);
@@ -2600,9 +2649,7 @@ mod tests {
         // Seed in-memory state with a board so we can detect whether adopt
         // transferred it to the new on-disk backend.
         let mut snapshot = app.ctx.snapshot().unwrap();
-        snapshot
-            .boards
-            .push(Board::new("BeforeAdopt".into(), None));
+        snapshot.boards.push(Board::new("BeforeAdopt".into(), None));
         app.ctx.apply_snapshot(snapshot).unwrap();
 
         app.maybe_push_startup_file_dialog();
@@ -2621,7 +2668,10 @@ mod tests {
             .expect("save worker must signal completion within 2s")
             .expect("completion sender dropped before signal");
 
-        assert!(target.exists(), "target file must exist on disk after adopt");
+        assert!(
+            target.exists(),
+            "target file must exist on disk after adopt"
+        );
 
         use kanban_persistence::PersistenceStore;
         let on_disk = kanban_persistence_json::JsonFileStore::new(&target_str);
@@ -2631,10 +2681,7 @@ mod tests {
             .expect("file must contain a snapshot");
         let parsed = kanban_persistence::snapshot_from_json_bytes(&snap.data).unwrap();
         assert!(
-            parsed
-                .boards
-                .iter()
-                .any(|b| b.name == "BeforeAdopt"),
+            parsed.boards.iter().any(|b| b.name == "BeforeAdopt"),
             "in-memory state must be transferred to the new on-disk backend"
         );
     }

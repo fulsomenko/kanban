@@ -202,10 +202,11 @@ pub(crate) fn render_set_branch_prefix_popup(app: &App, frame: &mut Frame) {
 }
 
 pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
+    use crate::app::StorageBackendChoice;
     use crate::components::centered_rect;
     use ratatui::widgets::{Block, Borders, Clear};
 
-    let area = centered_rect(70, 40, frame.area());
+    let area = centered_rect(70, 45, frame.area());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
@@ -221,6 +222,7 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
         .margin(2)
         .constraints([
             Constraint::Length(4), // description
+            Constraint::Length(1), // format radio
             Constraint::Length(1), // "Filename:" label
             Constraint::Length(3), // input box
             Constraint::Length(1), // resolved-path preview
@@ -247,16 +249,33 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
     ];
     frame.render_widget(Paragraph::new(description), chunks[0]);
 
+    let radio = Line::from(vec![
+        Span::styled("Format: ", highlight_text()),
+        radio_marker(
+            app.choose_storage_backend,
+            StorageBackendChoice::Json,
+            "JSON",
+        ),
+        Span::styled("   ", normal_text()),
+        radio_marker(
+            app.choose_storage_backend,
+            StorageBackendChoice::Sqlite,
+            "SQLite",
+        ),
+        Span::styled("    (Tab to toggle)", label_text()),
+    ]);
+    frame.render_widget(Paragraph::new(radio), chunks[1]);
+
     let label = Paragraph::new("Filename:").style(highlight_text());
-    frame.render_widget(label, chunks[1]);
+    frame.render_widget(label, chunks[2]);
 
     let input = Paragraph::new(app.input.as_str())
         .style(normal_text())
         .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(input, chunks[2]);
+    frame.render_widget(input, chunks[3]);
 
-    let cursor_x = chunks[2].x + app.input.cursor_byte_offset() as u16 + 1;
-    let cursor_y = chunks[2].y + 1;
+    let cursor_x = chunks[3].x + app.input.cursor_byte_offset() as u16 + 1;
+    let cursor_y = chunks[3].y + 1;
     frame.set_cursor_position((cursor_x, cursor_y));
 
     let resolved = resolve_dialog_path(app.input.as_str());
@@ -264,10 +283,24 @@ pub(crate) fn render_choose_storage_file_popup(app: &App, frame: &mut Frame) {
         Span::styled("Will be saved at: ", label_text()),
         Span::styled(resolved, normal_text()),
     ]));
-    frame.render_widget(preview, chunks[3]);
+    frame.render_widget(preview, chunks[4]);
 
     let hint = Paragraph::new("Enter — create file   Esc — continue in memory").style(label_text());
-    frame.render_widget(hint, chunks[5]);
+    frame.render_widget(hint, chunks[6]);
+}
+
+fn radio_marker(
+    selected: crate::app::StorageBackendChoice,
+    choice: crate::app::StorageBackendChoice,
+    label: &str,
+) -> Span<'static> {
+    let marker = if selected == choice { "(*)" } else { "( )" };
+    let style = if selected == choice {
+        highlight_text()
+    } else {
+        normal_text()
+    };
+    Span::styled(format!("{} {}", marker, label), style)
 }
 
 fn resolve_dialog_path(input: &str) -> String {
