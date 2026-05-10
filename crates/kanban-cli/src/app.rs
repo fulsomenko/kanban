@@ -252,6 +252,20 @@ impl CliApp {
             .clone()
             .unwrap_or_else(|| kanban_service::config::resolve_storage_location(&config));
 
+        let needs_data_file = !matches!(
+            &command,
+            Some(Commands::Completions { .. }) | Some(Commands::Migrate(_))
+        );
+        if needs_data_file && validated_file.is_none() && config.storage_location.is_none() {
+            anyhow::bail!(
+                "No data file specified.\n\n\
+                 Provide the file path in one of these ways:\n\
+                 \x20 kanban <path>           (first positional argument)\n\
+                 \x20 KANBAN_FILE=<path>      (environment variable)\n\
+                 \x20 storage_location = ...  (config file setting)"
+            );
+        }
+
         match command {
             None => {
                 #[cfg(feature = "tui")]

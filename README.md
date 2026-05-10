@@ -26,9 +26,8 @@
 ### TUI
 
 ```bash
-kanban                  # launch with default kanban.json
-kanban myboard.json     # load a specific file
-kanban myboard.sqlite   # load a SQLite file
+kanban myboard.json     # open or create a JSON board file
+kanban myboard.sqlite   # open or create a SQLite board file
 ```
 
 Press `?` at any time to see context-sensitive help.
@@ -36,7 +35,7 @@ Press `?` at any time to see context-sensitive help.
 ### CLI
 
 ```bash
-export KANBAN_FILE=kanban.json
+export KANBAN_FILE=myboard.json   # or pass the path as the first argument
 
 kanban board create --name "My Project"
 kanban board list
