@@ -194,6 +194,52 @@ async fn test_update_card_with_explicit_column_id_and_status_respects_both() -> 
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_move_cards_batch_to_completion_column_sets_status_done_on_all() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+    let board_id = ctx.boards()?[0].id;
+    let card2 = ctx.create_card(board_id, fx.backlog_id, "Card 2".into(), Default::default())?;
+
+    let moved = ctx.move_cards(vec![fx.card_id, card2.id], fx.done_id)?;
+    assert_eq!(moved, 2);
+
+    for id in [fx.card_id, card2.id] {
+        let card = ctx.get_card(id)?.unwrap();
+        assert_eq!(card.column_id, fx.done_id);
+        assert_eq!(
+            card.status,
+            CardStatus::Done,
+            "move_cards batch must set status=Done on every card moved to completion column"
+        );
+        assert!(card.completed_at.is_some());
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_move_cards_batch_away_from_completion_column_clears_done_status() -> KanbanResult<()>
+{
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+    let board_id = ctx.boards()?[0].id;
+    let card2 = ctx.create_card(board_id, fx.backlog_id, "Card 2".into(), Default::default())?;
+
+    ctx.move_cards(vec![fx.card_id, card2.id], fx.done_id)?;
+    ctx.move_cards(vec![fx.card_id, card2.id], fx.backlog_id)?;
+    for id in [fx.card_id, card2.id] {
+        let card = ctx.get_card(id)?.unwrap();
+        assert_eq!(card.column_id, fx.backlog_id);
+        assert_eq!(
+            card.status,
+            CardStatus::Todo,
+            "move_cards batch away from completion column must clear Done"
+        );
+        assert!(card.completed_at.is_none());
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_undo_after_update_card_status_done_reverses_both_status_and_column_move(
 ) -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
