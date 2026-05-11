@@ -384,6 +384,10 @@ impl App {
                     }
                 }
 
+                // Refresh the view-layer task list so the new card's ID is
+                // present before we try to select it. Without this the
+                // selection silently stays on the prior card (KAN-403).
+                self.prepare_frame();
                 self.select_card_by_id(card_id);
             }
         }
