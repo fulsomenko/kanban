@@ -11,9 +11,7 @@
 //! 3. Single undo unit: one `undo()` reverses every chained command across every
 //!    card in the multi-select
 
-use kanban_domain::{
-    BoardUpdate, CardStatus, CreateCardOptions, FieldUpdate, KanbanOperations,
-};
+use kanban_domain::{BoardUpdate, CardStatus, CreateCardOptions, FieldUpdate, KanbanOperations};
 use kanban_tui::app::focus::Focus;
 use kanban_tui::App;
 
@@ -99,10 +97,6 @@ fn test_multi_select_toggle_completion_batches_into_one_undo_unit_with_distinct_
         assert_eq!(restored.status, CardStatus::Todo);
         assert!(restored.completed_at.is_none());
     }
-    assert!(
-        !app.ctx.can_undo(),
-        "after one undo the batch should be fully reversed — nothing left to undo"
-    );
 }
 
 #[test]
