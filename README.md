@@ -99,6 +99,14 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 
 ---
 
+## Limitations
+
+### Editing in VS Code
+
+Changes are made in an external editor as defined by your `EDITOR`. VS Code specifically does not work in the current implementation. Vim-like editors are the most supported and tested for this project currently, but only VS Code is known to have issues.
+
+---
+
 ## Features
 
 ### Boards & Cards
