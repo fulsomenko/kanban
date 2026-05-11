@@ -6,7 +6,7 @@ Thank you for considering contributing to Kanban! This document provides guideli
 
 ### Prerequisites
 
-- Rust 1.70+ with cargo
+- Rust 1.74+ with cargo
 - Nix (recommended for reproducible environment)
 
 ### Getting Started
