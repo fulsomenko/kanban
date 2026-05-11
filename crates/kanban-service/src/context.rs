@@ -4,9 +4,9 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, SprintCommand,
 };
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot, Sprint,
-    SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardStatus, CardSummary, CardUpdate,
+    Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot,
+    Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -598,6 +598,58 @@ impl KanbanContext {
             }
         }
     }
+
+    /// KAN-394: given a status that's about to be applied to a card, compute the
+    /// target column the card should live in to maintain the status ↔ completion
+    /// column invariant. Returns None when no chained move is needed.
+    fn compute_target_column_for_status(
+        &self,
+        card_id: Uuid,
+        new_status: CardStatus,
+    ) -> KanbanResult<Option<(Uuid, i32)>> {
+        let Some(card) = self.backend.get_card(card_id)? else {
+            return Ok(None);
+        };
+        let Some(column) = self.backend.get_column(card.column_id)? else {
+            return Ok(None);
+        };
+        let Some(board) = self.backend.get_board(column.board_id)? else {
+            return Ok(None);
+        };
+        let columns = self.backend.list_columns_by_board(board.id)?;
+        let cards = self.backend.list_all_cards()?;
+        Ok(kanban_domain::card_lifecycle::target_column_for_status(
+            &card, new_status, &board, &columns, &cards,
+        ))
+    }
+
+    /// KAN-394: given a column the card is about to move to, compute the status
+    /// the card should have to maintain the status ↔ completion column invariant.
+    /// Returns None when no chained status update is needed.
+    fn compute_target_status_for_move(
+        &self,
+        card_id: Uuid,
+        new_column_id: Uuid,
+    ) -> KanbanResult<Option<CardStatus>> {
+        let Some(card) = self.backend.get_card(card_id)? else {
+            return Ok(None);
+        };
+        let Some(column) = self.backend.get_column(new_column_id)? else {
+            return Ok(None);
+        };
+        let Some(board) = self.backend.get_board(column.board_id)? else {
+            return Ok(None);
+        };
+        let columns = self.backend.list_columns_by_board(board.id)?;
+        Ok(
+            kanban_domain::card_lifecycle::target_status_for_column_move(
+                &card,
+                new_column_id,
+                &board,
+                &columns,
+            ),
+        )
+    }
 }
 
 // ── KanbanOperations impl ─────────────────────────────────────────────────────
@@ -778,12 +830,27 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
-        use kanban_domain::commands::UpdateCard;
-        let cmd = Command::Card(CardCommand::Update(UpdateCard {
+        use kanban_domain::commands::{MoveCard, UpdateCard};
+        let mut batch = vec![Command::Card(CardCommand::Update(UpdateCard {
             card_id: id,
-            updates,
-        }));
-        self.execute(vec![cmd])?;
+            updates: updates.clone(),
+        }))];
+
+        if let Some(new_status) = updates.status {
+            if updates.column_id.is_none() {
+                if let Some((target_col, pos)) =
+                    self.compute_target_column_for_status(id, new_status)?
+                {
+                    batch.push(Command::Card(CardCommand::Move(MoveCard {
+                        card_id: id,
+                        new_column_id: target_col,
+                        new_position: pos,
+                    })));
+                }
+            }
+        }
+
+        self.execute(batch)?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
@@ -794,17 +861,28 @@ impl KanbanOperations for KanbanContext {
         column_id: Uuid,
         position: Option<i32>,
     ) -> KanbanResult<Card> {
-        use kanban_domain::commands::MoveCard;
+        use kanban_domain::commands::{MoveCard, UpdateCard};
         let position = match position {
             Some(p) => p,
             None => self.backend.list_cards_by_column(column_id)?.len() as i32,
         };
-        let cmd = Command::Card(CardCommand::Move(MoveCard {
+        let mut batch = vec![Command::Card(CardCommand::Move(MoveCard {
             card_id: id,
             new_column_id: column_id,
             new_position: position,
-        }));
-        self.execute(vec![cmd])?;
+        }))];
+
+        if let Some(new_status) = self.compute_target_status_for_move(id, column_id)? {
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id: id,
+                updates: CardUpdate {
+                    status: Some(new_status),
+                    ..Default::default()
+                },
+            })));
+        }
+
+        self.execute(batch)?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
