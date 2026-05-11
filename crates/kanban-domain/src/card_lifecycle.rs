@@ -166,7 +166,8 @@ pub fn compute_card_column_move(
 /// Compute the column where a card should live given its new status,
 /// to maintain the status ↔ completion column invariant.
 ///
-/// Returns `Some((target_column_id, new_position))` if the card must move.
+/// Returns `Some(target_column_id)` if the card must move. Position within
+/// the target column is the caller's responsibility (typically "append at end").
 /// Returns `None` if no move is needed (already correctly placed, or board
 /// has fewer than 2 columns, or no completion column is resolvable).
 pub fn target_column_for_status(
@@ -174,8 +175,7 @@ pub fn target_column_for_status(
     new_status: CardStatus,
     board: &Board,
     columns: &[Column],
-    cards: &[Card],
-) -> Option<(Uuid, i32)> {
+) -> Option<Uuid> {
     let sorted = sorted_board_columns(board.id, columns);
     if sorted.len() < 2 {
         return None;
@@ -186,8 +186,7 @@ pub fn target_column_for_status(
         if card.column_id == completion_col_id {
             return None;
         }
-        let pos = next_position_in_column(cards, completion_col_id);
-        Some((completion_col_id, pos))
+        Some(completion_col_id)
     } else {
         if card.column_id != completion_col_id {
             return None;
@@ -196,9 +195,7 @@ pub fn target_column_for_status(
         if completion_idx == 0 {
             return None;
         }
-        let target = sorted[completion_idx - 1];
-        let pos = next_position_in_column(cards, target.id);
-        Some((target.id, pos))
+        Some(sorted[completion_idx - 1].id)
     }
 }
 

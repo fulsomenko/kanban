@@ -600,8 +600,13 @@ impl KanbanContext {
     }
 
     /// KAN-394: given a status that's about to be applied to a card, compute the
-    /// target column the card should live in to maintain the status ↔ completion
-    /// column invariant. Returns None when no chained move is needed.
+    /// target column the card should live in (and the position to use in that
+    /// column) to maintain the status ↔ completion column invariant. Returns
+    /// None when no chained move is needed.
+    ///
+    /// The position is computed via a column-scoped `list_cards_by_column`
+    /// query — same convention as `KanbanContext::move_card(_, _, None)` — so
+    /// we only ever read the target column, never the full cards table.
     fn compute_target_column_for_status(
         &self,
         card_id: Uuid,
@@ -617,10 +622,13 @@ impl KanbanContext {
             return Ok(None);
         };
         let columns = self.backend.list_columns_by_board(board.id)?;
-        let cards = self.backend.list_all_cards()?;
-        Ok(kanban_domain::card_lifecycle::target_column_for_status(
-            &card, new_status, &board, &columns, &cards,
-        ))
+        let Some(target_col) = kanban_domain::card_lifecycle::target_column_for_status(
+            &card, new_status, &board, &columns,
+        ) else {
+            return Ok(None);
+        };
+        let pos = self.backend.list_cards_by_column(target_col)?.len() as i32;
+        Ok(Some((target_col, pos)))
     }
 
     /// KAN-394: given a column the card is about to move to, compute the status
@@ -831,23 +839,25 @@ impl KanbanOperations for KanbanContext {
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
         use kanban_domain::commands::{MoveCard, UpdateCard};
+
+        // Decide whether we need to chain a column move *before* moving `updates`
+        // into the UpdateCard command, so we don't have to clone the struct.
+        let chained_move = match (updates.status, &updates.column_id) {
+            (Some(new_status), None) => self.compute_target_column_for_status(id, new_status)?,
+            _ => None,
+        };
+
         let mut batch = vec![Command::Card(CardCommand::Update(UpdateCard {
             card_id: id,
-            updates: updates.clone(),
+            updates,
         }))];
 
-        if let Some(new_status) = updates.status {
-            if updates.column_id.is_none() {
-                if let Some((target_col, pos)) =
-                    self.compute_target_column_for_status(id, new_status)?
-                {
-                    batch.push(Command::Card(CardCommand::Move(MoveCard {
-                        card_id: id,
-                        new_column_id: target_col,
-                        new_position: pos,
-                    })));
-                }
-            }
+        if let Some((target_col, pos)) = chained_move {
+            batch.push(Command::Card(CardCommand::Move(MoveCard {
+                card_id: id,
+                new_column_id: target_col,
+                new_position: pos,
+            })));
         }
 
         self.execute(batch)?;
