@@ -2,8 +2,7 @@ use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
 use kanban_domain::commands::{
-    BoardCommand, CardCommand, Command, CreateCard, MoveCard, RestoreCard, SetBoardTaskSort,
-    UpdateCard,
+    BoardCommand, CardCommand, Command, CreateCard, RestoreCard, SetBoardTaskSort, UpdateCard,
 };
 use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, KanbanOperations, SortOrder};
 use ratatui::{backend::CrosstermBackend, Terminal};
@@ -256,53 +255,35 @@ impl App {
 
     fn toggle_selected_cards_completion(&mut self) {
         let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
-        let mut toggled_count = 0;
         let first_card_id = card_ids.first().copied();
 
-        let mut update_commands: Vec<Command> = Vec::new();
+        let updates: Vec<(uuid::Uuid, CardUpdate)> = card_ids
+            .iter()
+            .filter_map(|card_id| {
+                let card = self
+                    .model
+                    .cards()
+                    .iter()
+                    .find(|c| c.id == *card_id)?
+                    .clone();
+                let new_status = if card.status == CardStatus::Done {
+                    CardStatus::Todo
+                } else {
+                    CardStatus::Done
+                };
+                Some((
+                    *card_id,
+                    CardUpdate {
+                        status: Some(new_status),
+                        ..Default::default()
+                    },
+                ))
+            })
+            .collect();
 
-        for card_id in card_ids {
-            let all_cards = self.model.cards();
-            let card = match all_cards.iter().find(|c| c.id == card_id) {
-                Some(c) => c.clone(),
-                None => continue,
-            };
-
-            let new_status = if card.status == CardStatus::Done {
-                CardStatus::Todo
-            } else {
-                CardStatus::Done
-            };
-
-            let boards = self.model.boards();
-            let columns = self.model.columns();
-            let cards = self.model.cards();
-            let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                boards.get(idx).and_then(|board| {
-                    kanban_domain::card_lifecycle::compute_completion_toggle(
-                        &card, board, columns, cards,
-                    )
-                })
-            });
-
-            let mut updates = CardUpdate {
-                status: Some(new_status),
-                ..Default::default()
-            };
-
-            if let Some(ref result) = toggle_result {
-                updates.column_id = Some(result.target_column_id);
-                updates.position = Some(result.new_position);
-                updates.status = Some(result.new_status);
-            }
-
-            let cmd = Command::Card(CardCommand::Update(UpdateCard { card_id, updates }));
-            update_commands.push(cmd);
-            toggled_count += 1;
-        }
-
-        if !update_commands.is_empty() {
-            if let Err(e) = self.execute_commands_batch(update_commands) {
+        let toggled_count = updates.len();
+        if !updates.is_empty() {
+            if let Err(e) = self.ctx.update_cards(updates) {
                 tracing::error!("Failed to toggle card completion: {}", e);
                 self.set_error(format!("Failed to toggle card completion: {}", e));
                 return;
@@ -509,48 +490,31 @@ impl App {
 
         let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
         let first_card_id = card_ids.first().copied();
-        let mut commands: Vec<Command> = Vec::new();
-        let mut moved_count = 0;
 
-        for card_id in &card_ids {
-            let all_cards = self.model.cards();
-            let card = match all_cards.iter().find(|c| c.id == *card_id) {
-                Some(c) => c,
-                None => continue,
-            };
-
-            let columns = self.model.columns();
-            let cards = self.model.cards();
-            let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
-                card, board, columns, cards, direction,
-            );
-
-            let move_result = match move_result {
-                Some(r) => r,
-                None => continue,
-            };
-
-            commands.push(Command::Card(CardCommand::Move(MoveCard {
-                card_id: *card_id,
-                new_column_id: move_result.target_column_id,
-                new_position: move_result.new_position,
-            })));
-
-            if let Some(new_status) = move_result.new_status {
-                commands.push(Command::Card(CardCommand::Update(UpdateCard {
-                    card_id: *card_id,
-                    updates: CardUpdate {
-                        status: Some(new_status),
+        // Use the pure helper only to resolve the per-card target column;
+        // status sync is chained by the service layer's `update_cards`.
+        let columns = self.model.columns();
+        let cards = self.model.cards();
+        let updates: Vec<(uuid::Uuid, CardUpdate)> = card_ids
+            .iter()
+            .filter_map(|card_id| {
+                let card = cards.iter().find(|c| c.id == *card_id)?;
+                let result = kanban_domain::card_lifecycle::compute_card_column_move(
+                    card, board, columns, cards, direction,
+                )?;
+                Some((
+                    *card_id,
+                    CardUpdate {
+                        column_id: Some(result.target_column_id),
                         ..Default::default()
                     },
-                })));
-            }
+                ))
+            })
+            .collect();
 
-            moved_count += 1;
-        }
-
-        if !commands.is_empty() {
-            if let Err(e) = self.execute_commands_batch(commands) {
+        let moved_count = updates.len();
+        if !updates.is_empty() {
+            if let Err(e) = self.ctx.update_cards(updates) {
                 let dir = match direction {
                     kanban_domain::card_lifecycle::MoveDirection::Left => "left",
                     kanban_domain::card_lifecycle::MoveDirection::Right => "right",
