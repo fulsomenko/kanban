@@ -237,30 +237,14 @@ impl App {
                 CardStatus::Done
             };
 
-            let boards = self.model.boards();
-            let columns = self.model.columns();
-            let cards = self.model.cards();
-            let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                boards.get(idx).and_then(|board| {
-                    kanban_domain::card_lifecycle::compute_completion_toggle(
-                        &card, board, columns, cards,
-                    )
-                })
-            });
-
-            let mut updates = CardUpdate {
-                status: Some(new_status),
-                ..Default::default()
-            };
-
-            if let Some(ref result) = toggle_result {
-                updates.column_id = Some(result.target_column_id);
-                updates.position = Some(result.new_position);
-                updates.status = Some(result.new_status);
-            }
-
-            let cmd = Command::Card(CardCommand::Update(UpdateCard { card_id, updates }));
-            if let Err(e) = self.execute_command(cmd) {
+            // Service layer chains the column move automatically.
+            if let Err(e) = self.ctx.update_card(
+                card_id,
+                CardUpdate {
+                    status: Some(new_status),
+                    ..Default::default()
+                },
+            ) {
                 tracing::error!("Failed to toggle card completion: {}", e);
                 self.set_error(format!("Failed to toggle card completion: {}", e));
                 return;
@@ -453,37 +437,23 @@ impl App {
                 None => return,
             };
 
+            // Use the pure helper only to resolve the target column for the
+            // given direction; the service handles any status sync.
             let columns = self.model.columns();
             let cards = self.model.cards();
             let move_result = kanban_domain::card_lifecycle::compute_card_column_move(
                 &card, board, columns, cards, direction,
             );
-
             let move_result = match move_result {
                 Some(r) => r,
                 None => return,
             };
 
             let card_id = card.id;
-            let mut commands: Vec<Command> = Vec::new();
-
-            commands.push(Command::Card(CardCommand::Move(MoveCard {
-                card_id,
-                new_column_id: move_result.target_column_id,
-                new_position: move_result.new_position,
-            })));
-
-            if let Some(new_status) = move_result.new_status {
-                commands.push(Command::Card(CardCommand::Update(UpdateCard {
-                    card_id,
-                    updates: CardUpdate {
-                        status: Some(new_status),
-                        ..Default::default()
-                    },
-                })));
-            }
-
-            if let Err(e) = self.execute_commands_batch(commands) {
+            if let Err(e) = self
+                .ctx
+                .move_card(card_id, move_result.target_column_id, None)
+            {
                 let dir = match direction {
                     kanban_domain::card_lifecycle::MoveDirection::Left => "left",
                     kanban_domain::card_lifecycle::MoveDirection::Right => "right",
