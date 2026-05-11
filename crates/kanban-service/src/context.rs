@@ -4,9 +4,9 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, SprintCommand,
 };
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot, Sprint,
-    SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardStatus, CardSummary, CardUpdate,
+    Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot,
+    Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -489,10 +489,41 @@ impl KanbanContext {
             };
         }
         let succeeded = to_move.clone();
-        match self.execute(vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
+
+        let chained_status_updates =
+            match self.chained_status_updates_for_batch_move(&to_move, column_id) {
+                Ok(v) => v,
+                Err(e) => {
+                    let err = e.to_string();
+                    let mut all_failed = failed;
+                    all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                        id,
+                        error: err.clone(),
+                    }));
+                    return BatchOperationResult {
+                        succeeded: vec![],
+                        failed: all_failed,
+                    };
+                }
+            };
+
+        let mut batch = vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
             ids: to_move,
             column_id,
-        }))]) {
+        }))];
+        for (card_id, new_status) in chained_status_updates {
+            batch.push(Command::Card(CardCommand::Update(
+                kanban_domain::commands::UpdateCard {
+                    card_id,
+                    updates: CardUpdate {
+                        status: Some(new_status),
+                        ..Default::default()
+                    },
+                },
+            )));
+        }
+
+        match self.execute(batch) {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
@@ -597,6 +628,85 @@ impl KanbanContext {
                 }
             }
         }
+    }
+
+    /// KAN-394: given a status that's about to be applied to a card, compute the
+    /// target column the card should live in (and the position to use in that
+    /// column) to maintain the status ↔ completion column invariant. Returns
+    /// None when no chained move is needed.
+    ///
+    /// The position is computed via a column-scoped `list_cards_by_column`
+    /// query — same convention as `KanbanContext::move_card(_, _, None)` — so
+    /// we only ever read the target column, never the full cards table.
+    fn compute_target_column_for_status(
+        &self,
+        card_id: Uuid,
+        new_status: CardStatus,
+    ) -> KanbanResult<Option<(Uuid, i32)>> {
+        let Some(card) = self.backend.get_card(card_id)? else {
+            return Ok(None);
+        };
+        let Some(column) = self.backend.get_column(card.column_id)? else {
+            return Ok(None);
+        };
+        let Some(board) = self.backend.get_board(column.board_id)? else {
+            return Ok(None);
+        };
+        let columns = self.backend.list_columns_by_board(board.id)?;
+        let Some(target_col) = kanban_domain::card_lifecycle::target_column_for_status(
+            &card, new_status, &board, &columns,
+        ) else {
+            return Ok(None);
+        };
+        let pos = self.backend.list_cards_by_column(target_col)?.len() as i32;
+        Ok(Some((target_col, pos)))
+    }
+
+    /// KAN-394: per-card chained status updates for a batch move. For each id
+    /// in `ids`, asks the domain whether moving to `new_column_id` requires a
+    /// status flip. Returns the cards that need a status update along with
+    /// their target status. Cards that aren't found are silently skipped — the
+    /// `MoveCards` command will surface the not-found error itself.
+    fn chained_status_updates_for_batch_move(
+        &self,
+        ids: &[Uuid],
+        new_column_id: Uuid,
+    ) -> KanbanResult<Vec<(Uuid, CardStatus)>> {
+        let mut updates = Vec::new();
+        for &card_id in ids {
+            if let Some(new_status) = self.compute_target_status_for_move(card_id, new_column_id)? {
+                updates.push((card_id, new_status));
+            }
+        }
+        Ok(updates)
+    }
+
+    /// KAN-394: given a column the card is about to move to, compute the status
+    /// the card should have to maintain the status ↔ completion column invariant.
+    /// Returns None when no chained status update is needed.
+    fn compute_target_status_for_move(
+        &self,
+        card_id: Uuid,
+        new_column_id: Uuid,
+    ) -> KanbanResult<Option<CardStatus>> {
+        let Some(card) = self.backend.get_card(card_id)? else {
+            return Ok(None);
+        };
+        let Some(column) = self.backend.get_column(new_column_id)? else {
+            return Ok(None);
+        };
+        let Some(board) = self.backend.get_board(column.board_id)? else {
+            return Ok(None);
+        };
+        let columns = self.backend.list_columns_by_board(board.id)?;
+        Ok(
+            kanban_domain::card_lifecycle::target_status_for_column_move(
+                &card,
+                new_column_id,
+                &board,
+                &columns,
+            ),
+        )
     }
 }
 
@@ -778,12 +888,29 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
-        use kanban_domain::commands::UpdateCard;
-        let cmd = Command::Card(CardCommand::Update(UpdateCard {
+        use kanban_domain::commands::{MoveCard, UpdateCard};
+
+        // Decide whether we need to chain a column move *before* moving `updates`
+        // into the UpdateCard command, so we don't have to clone the struct.
+        let chained_move = match (updates.status, &updates.column_id) {
+            (Some(new_status), None) => self.compute_target_column_for_status(id, new_status)?,
+            _ => None,
+        };
+
+        let mut batch = vec![Command::Card(CardCommand::Update(UpdateCard {
             card_id: id,
             updates,
-        }));
-        self.execute(vec![cmd])?;
+        }))];
+
+        if let Some((target_col, pos)) = chained_move {
+            batch.push(Command::Card(CardCommand::Move(MoveCard {
+                card_id: id,
+                new_column_id: target_col,
+                new_position: pos,
+            })));
+        }
+
+        self.execute(batch)?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
@@ -794,17 +921,28 @@ impl KanbanOperations for KanbanContext {
         column_id: Uuid,
         position: Option<i32>,
     ) -> KanbanResult<Card> {
-        use kanban_domain::commands::MoveCard;
+        use kanban_domain::commands::{MoveCard, UpdateCard};
         let position = match position {
             Some(p) => p,
             None => self.backend.list_cards_by_column(column_id)?.len() as i32,
         };
-        let cmd = Command::Card(CardCommand::Move(MoveCard {
+        let mut batch = vec![Command::Card(CardCommand::Move(MoveCard {
             card_id: id,
             new_column_id: column_id,
             new_position: position,
-        }));
-        self.execute(vec![cmd])?;
+        }))];
+
+        if let Some(new_status) = self.compute_target_status_for_move(id, column_id)? {
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id: id,
+                updates: CardUpdate {
+                    status: Some(new_status),
+                    ..Default::default()
+                },
+            })));
+        }
+
+        self.execute(batch)?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
@@ -935,14 +1073,90 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        use kanban_domain::commands::MoveCards;
+        use kanban_domain::commands::{MoveCards, UpdateCard};
         let before = self.backend.list_cards_by_column(column_id)?.len();
-        self.execute(vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
+
+        let chained_status_updates = self.chained_status_updates_for_batch_move(&ids, column_id)?;
+        let mut batch = vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
             ids,
             column_id,
-        }))])?;
+        }))];
+        for (card_id, new_status) in chained_status_updates {
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id,
+                updates: CardUpdate {
+                    status: Some(new_status),
+                    ..Default::default()
+                },
+            })));
+        }
+
+        self.execute(batch)?;
         let after = self.backend.list_cards_by_column(column_id)?.len();
         Ok(after - before)
+    }
+
+    fn update_cards(&mut self, updates: Vec<(Uuid, CardUpdate)>) -> KanbanResult<usize> {
+        use kanban_domain::commands::{MoveCard, UpdateCard};
+        use std::collections::HashMap;
+
+        let count = updates.len();
+        let mut batch: Vec<Command> = Vec::with_capacity(count * 2);
+        // Track per-column position offsets within this batch so chained moves
+        // into the same target column don't all collapse onto the same
+        // position. `compute_target_column_for_status` reads `list_cards_by_column`
+        // once per call against the pre-batch state.
+        let mut position_offsets: HashMap<Uuid, i32> = HashMap::new();
+
+        enum Chained {
+            Move(Uuid, i32),
+            Status(CardStatus),
+        }
+
+        for (card_id, card_updates) in updates {
+            let chained = match (card_updates.status, card_updates.column_id) {
+                (Some(new_status), None) => self
+                    .compute_target_column_for_status(card_id, new_status)?
+                    .map(|(col, base_pos)| {
+                        let offset = position_offsets.entry(col).or_insert(0);
+                        let pos = base_pos + *offset;
+                        *offset += 1;
+                        Chained::Move(col, pos)
+                    }),
+                (None, Some(new_col)) => self
+                    .compute_target_status_for_move(card_id, new_col)?
+                    .map(Chained::Status),
+                _ => None,
+            };
+
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id,
+                updates: card_updates,
+            })));
+
+            match chained {
+                Some(Chained::Move(col, pos)) => {
+                    batch.push(Command::Card(CardCommand::Move(MoveCard {
+                        card_id,
+                        new_column_id: col,
+                        new_position: pos,
+                    })));
+                }
+                Some(Chained::Status(status)) => {
+                    batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                        card_id,
+                        updates: CardUpdate {
+                            status: Some(status),
+                            ..Default::default()
+                        },
+                    })));
+                }
+                None => {}
+            }
+        }
+
+        self.execute(batch)?;
+        Ok(count)
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {

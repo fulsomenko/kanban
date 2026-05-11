@@ -163,6 +163,65 @@ pub fn compute_card_column_move(
     })
 }
 
+/// Compute the column where a card should live given its new status,
+/// to maintain the status ↔ completion column invariant.
+///
+/// Returns `Some(target_column_id)` if the card must move. Position within
+/// the target column is the caller's responsibility (typically "append at end").
+/// Returns `None` if no move is needed (already correctly placed, or board
+/// has fewer than 2 columns, or no completion column is resolvable).
+pub fn target_column_for_status(
+    card: &Card,
+    new_status: CardStatus,
+    board: &Board,
+    columns: &[Column],
+) -> Option<Uuid> {
+    let sorted = sorted_board_columns(board.id, columns);
+    if sorted.len() < 2 {
+        return None;
+    }
+    let completion_col_id = board.resolve_completion_column(columns)?;
+
+    if new_status == CardStatus::Done {
+        if card.column_id == completion_col_id {
+            return None;
+        }
+        Some(completion_col_id)
+    } else {
+        if card.column_id != completion_col_id {
+            return None;
+        }
+        let completion_idx = sorted.iter().position(|c| c.id == completion_col_id)?;
+        if completion_idx == 0 {
+            return None;
+        }
+        Some(sorted[completion_idx - 1].id)
+    }
+}
+
+/// Compute the status a card should have after being moved to `new_column_id`,
+/// to maintain the status ↔ completion column invariant.
+///
+/// Returns `Some(new_status)` if status must change, `None` otherwise.
+pub fn target_status_for_column_move(
+    card: &Card,
+    new_column_id: Uuid,
+    board: &Board,
+    columns: &[Column],
+) -> Option<CardStatus> {
+    let completion_col_id = board.resolve_completion_column(columns)?;
+    let moving_to_completion = new_column_id == completion_col_id;
+    let was_in_completion = card.column_id == completion_col_id;
+
+    if moving_to_completion && card.status != CardStatus::Done {
+        Some(CardStatus::Done)
+    } else if !moving_to_completion && was_in_completion && card.status == CardStatus::Done {
+        Some(CardStatus::Todo)
+    } else {
+        None
+    }
+}
+
 /// Compact card positions in a column to be sequential (0, 1, 2, ...).
 pub fn compact_column_positions(cards: &mut [Card], column_id: Uuid) {
     let mut indices: Vec<usize> = cards
