@@ -37,6 +37,7 @@ impl EventHandler {
                         let mut had_key = false;
                         while event::poll(Duration::from_millis(0)).unwrap_or(false) {
                             if let Ok(CrosstermEvent::Key(key)) = event::read() {
+                                tracing::trace!(code = ?key.code, kind = ?key.kind, modifiers = ?key.modifiers, "raw key event");
                                 #[cfg(target_os = "windows")]
                                 if key.kind != KeyEventKind::Press {
                                     continue;
