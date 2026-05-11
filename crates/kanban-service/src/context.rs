@@ -888,11 +888,6 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
-        // Singular is a shorthand over the plural — `update_cards` owns the
-        // status ↔ completion-column orchestration, the per-batch position
-        // offsets, and the future config-driven opt-out (KAN-432). Keeping
-        // the singular as a one-line wrapper guarantees that any tweak lands
-        // in exactly one place.
         self.update_cards(vec![(id, updates)])?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
@@ -985,10 +980,6 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
-        // Singular is a shorthand over the plural. Both dispatched the same
-        // `AssignCardsToSprint { ids: vec![card_id], sprint_id }` command;
-        // keeping the singular as a one-line wrapper means any orchestration
-        // change (logging, sprint-state validation, etc.) lands in one place.
         self.assign_cards_to_sprint(vec![card_id], sprint_id)?;
         self.get_card(card_id)?
             .ok_or_else(|| KanbanError::not_found("card", card_id))
