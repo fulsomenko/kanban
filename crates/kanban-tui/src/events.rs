@@ -24,6 +24,19 @@ impl Default for EventHandler {
 
 impl EventHandler {
     pub fn new() -> Self {
+        tracing::debug!(
+            target_os = std::env::consts::OS,
+            target_arch = std::env::consts::ARCH,
+            target_family = std::env::consts::FAMILY,
+            target_endian = if cfg!(target_endian = "little") {
+                "little"
+            } else {
+                "big"
+            },
+            target_pointer_width = std::mem::size_of::<usize>() * 8,
+            "EventHandler starting"
+        );
+
         let (tx, rx) = mpsc::unbounded_channel();
         let (shutdown_tx, mut shutdown_rx) = mpsc::unbounded_channel();
 
@@ -37,6 +50,7 @@ impl EventHandler {
                         let mut had_key = false;
                         while event::poll(Duration::from_millis(0)).unwrap_or(false) {
                             if let Ok(CrosstermEvent::Key(key)) = event::read() {
+                                tracing::trace!(code = ?key.code, kind = ?key.kind, modifiers = ?key.modifiers, "raw key event");
                                 #[cfg(target_os = "windows")]
                                 if key.kind != KeyEventKind::Press {
                                     continue;
