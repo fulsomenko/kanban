@@ -52,7 +52,7 @@ async fn build_fixture(ctx: &mut KanbanContext, set_completion_column: bool) -> 
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn update_card_status_to_done_moves_to_completion_column() -> KanbanResult<()> {
+async fn test_update_card_status_to_done_moves_to_completion_column() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let fx = build_fixture(&mut ctx, true).await;
 
@@ -74,7 +74,7 @@ async fn update_card_status_to_done_moves_to_completion_column() -> KanbanResult
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn update_card_status_to_done_uses_last_column_when_no_completion_column_set(
+async fn test_update_card_status_to_done_uses_last_column_when_no_completion_column_set(
 ) -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let fx = build_fixture(&mut ctx, false).await;
@@ -96,7 +96,7 @@ async fn update_card_status_to_done_uses_last_column_when_no_completion_column_s
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn update_card_status_done_to_todo_in_completion_column_moves_to_second_to_last(
+async fn test_update_card_status_done_to_todo_in_completion_column_moves_to_second_to_last(
 ) -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let fx = build_fixture(&mut ctx, true).await;
@@ -131,7 +131,8 @@ async fn update_card_status_done_to_todo_in_completion_column_moves_to_second_to
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn move_card_to_completion_column_sets_status_done_and_completed_at() -> KanbanResult<()> {
+async fn test_move_card_to_completion_column_sets_status_done_and_completed_at() -> KanbanResult<()>
+{
     let mut ctx = make_ctx().await;
     let fx = build_fixture(&mut ctx, true).await;
 
@@ -151,7 +152,7 @@ async fn move_card_to_completion_column_sets_status_done_and_completed_at() -> K
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn move_card_away_from_completion_column_clears_done_status() -> KanbanResult<()> {
+async fn test_move_card_away_from_completion_column_clears_done_status() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let fx = build_fixture(&mut ctx, true).await;
 
@@ -169,7 +170,7 @@ async fn move_card_away_from_completion_column_clears_done_status() -> KanbanRes
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn update_card_with_explicit_column_id_and_status_respects_both() -> KanbanResult<()> {
+async fn test_update_card_with_explicit_column_id_and_status_respects_both() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let fx = build_fixture(&mut ctx, true).await;
 
@@ -193,7 +194,7 @@ async fn update_card_with_explicit_column_id_and_status_respects_both() -> Kanba
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn undo_after_update_card_status_done_reverses_both_status_and_column_move(
+async fn test_undo_after_update_card_status_done_reverses_both_status_and_column_move(
 ) -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let fx = build_fixture(&mut ctx, true).await;
