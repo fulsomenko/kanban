@@ -1137,4 +1137,202 @@ mod tests {
         let card = tc.store.get_card(card_id).unwrap().unwrap();
         assert_eq!(card.updated_at, fixed_time);
     }
+
+    // --- KAN-394: status ↔ completion column invariant ---
+    //
+    // Helpers to build a three-column board (Backlog, InProgress, Done)
+    // with a card in Backlog. Used by the invariant tests below.
+
+    struct CompletionFixture {
+        backlog_id: Uuid,
+        progress_id: Uuid,
+        done_id: Uuid,
+        card_id: Uuid,
+    }
+
+    fn build_completion_fixture(
+        tc: &TestContext,
+        set_completion_column: bool,
+    ) -> CompletionFixture {
+        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
+        let backlog = crate::Column::new(board.id, "Backlog".to_string(), 0);
+        let progress = crate::Column::new(board.id, "InProgress".to_string(), 1);
+        let done = crate::Column::new(board.id, "Done".to_string(), 2);
+        if set_completion_column {
+            board.update_completion_column_id(Some(done.id));
+        }
+        let card = crate::Card::new(&mut board, backlog.id, "Card".to_string(), 0);
+        let card_id = card.id;
+        let backlog_id = backlog.id;
+        let progress_id = progress.id;
+        let done_id = done.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(backlog).unwrap();
+        tc.store.upsert_column(progress).unwrap();
+        tc.store.upsert_column(done).unwrap();
+        tc.store.upsert_card(card).unwrap();
+        CompletionFixture {
+            backlog_id,
+            progress_id,
+            done_id,
+            card_id,
+        }
+    }
+
+    #[test]
+    fn test_update_card_status_to_done_moves_card_to_completion_column() {
+        let tc = TestContext::new();
+        let fx = build_completion_fixture(&tc, true);
+        let context = tc.as_command_context();
+        let cmd = UpdateCard {
+            card_id: fx.card_id,
+            updates: CardUpdate {
+                status: Some(crate::CardStatus::Done),
+                ..Default::default()
+            },
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(fx.card_id).unwrap().unwrap();
+        assert_eq!(card.status, crate::CardStatus::Done);
+        assert_eq!(
+            card.column_id, fx.done_id,
+            "status=Done should auto-move card to completion column"
+        );
+        assert!(card.completed_at.is_some(), "completed_at must be set");
+    }
+
+    #[test]
+    fn test_update_card_status_to_done_uses_last_column_when_no_completion_column_set() {
+        let tc = TestContext::new();
+        let fx = build_completion_fixture(&tc, false);
+        let context = tc.as_command_context();
+        let cmd = UpdateCard {
+            card_id: fx.card_id,
+            updates: CardUpdate {
+                status: Some(crate::CardStatus::Done),
+                ..Default::default()
+            },
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(fx.card_id).unwrap().unwrap();
+        assert_eq!(card.status, crate::CardStatus::Done);
+        assert_eq!(
+            card.column_id, fx.done_id,
+            "with no explicit completion_column_id, last column should be used"
+        );
+    }
+
+    #[test]
+    fn test_update_card_status_done_to_todo_in_completion_column_moves_to_second_to_last() {
+        let tc = TestContext::new();
+        let fx = build_completion_fixture(&tc, true);
+
+        // Place card in completion column with status=Done
+        let mut card = tc.store.get_card(fx.card_id).unwrap().unwrap();
+        card.column_id = fx.done_id;
+        card.status = crate::CardStatus::Done;
+        card.completed_at = Some(Utc::now());
+        tc.store.upsert_card(card).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = UpdateCard {
+            card_id: fx.card_id,
+            updates: CardUpdate {
+                status: Some(crate::CardStatus::Todo),
+                ..Default::default()
+            },
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(fx.card_id).unwrap().unwrap();
+        assert_eq!(card.status, crate::CardStatus::Todo);
+        assert_eq!(
+            card.column_id, fx.progress_id,
+            "Done→Todo in completion column should move to second-to-last column"
+        );
+        assert!(card.completed_at.is_none(), "completed_at must be cleared");
+    }
+
+    #[test]
+    fn test_move_card_to_completion_column_sets_status_done_and_completed_at() {
+        let tc = TestContext::new();
+        let fx = build_completion_fixture(&tc, true);
+        let context = tc.as_command_context();
+        let cmd = MoveCard {
+            card_id: fx.card_id,
+            new_column_id: fx.done_id,
+            new_position: 0,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(fx.card_id).unwrap().unwrap();
+        assert_eq!(card.column_id, fx.done_id);
+        assert_eq!(
+            card.status,
+            crate::CardStatus::Done,
+            "move to completion column should set status=Done"
+        );
+        assert!(
+            card.completed_at.is_some(),
+            "completed_at must be populated"
+        );
+    }
+
+    #[test]
+    fn test_move_card_away_from_completion_column_clears_done_status() {
+        let tc = TestContext::new();
+        let fx = build_completion_fixture(&tc, true);
+
+        // Pre-state: card in completion column, status=Done
+        let mut card = tc.store.get_card(fx.card_id).unwrap().unwrap();
+        card.column_id = fx.done_id;
+        card.status = crate::CardStatus::Done;
+        card.completed_at = Some(Utc::now());
+        tc.store.upsert_card(card).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = MoveCard {
+            card_id: fx.card_id,
+            new_column_id: fx.backlog_id,
+            new_position: 0,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(fx.card_id).unwrap().unwrap();
+        assert_eq!(card.column_id, fx.backlog_id);
+        assert_eq!(
+            card.status,
+            crate::CardStatus::Todo,
+            "moving away from completion column should clear Done status"
+        );
+        assert!(card.completed_at.is_none(), "completed_at must be cleared");
+    }
+
+    #[test]
+    fn test_update_card_with_explicit_column_id_and_status_respects_both() {
+        let tc = TestContext::new();
+        let fx = build_completion_fixture(&tc, true);
+        let context = tc.as_command_context();
+        // TUI-style atomic update: caller supplies both column_id and status
+        let cmd = UpdateCard {
+            card_id: fx.card_id,
+            updates: CardUpdate {
+                status: Some(crate::CardStatus::Done),
+                column_id: Some(fx.progress_id),
+                position: Some(0),
+                ..Default::default()
+            },
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(fx.card_id).unwrap().unwrap();
+        // Explicit caller intent wins: status=Done AND column=progress (whatever the caller asked for)
+        assert_eq!(card.status, crate::CardStatus::Done);
+        assert_eq!(
+            card.column_id, fx.progress_id,
+            "explicit column_id in update must not be overridden by auto-sync"
+        );
+    }
 }
