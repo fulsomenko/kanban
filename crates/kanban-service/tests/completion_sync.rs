@@ -193,6 +193,93 @@ async fn test_update_card_with_explicit_column_id_and_status_respects_both() -> 
     Ok(())
 }
 
+// --- KAN-434: column-only update_card must auto-sync status, mirroring update_cards ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_update_card_column_only_to_completion_column_sets_status_done() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+
+    // Column-only update, no status pinned. Card is currently Todo in Backlog.
+    let updated = ctx.update_card(
+        fx.card_id,
+        CardUpdate {
+            column_id: Some(fx.done_id),
+            ..Default::default()
+        },
+    )?;
+
+    assert_eq!(updated.column_id, fx.done_id);
+    assert_eq!(
+        updated.status,
+        CardStatus::Done,
+        "column-only update_card into completion column must auto-set status=Done"
+    );
+    assert!(updated.completed_at.is_some());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_update_card_column_only_away_from_completion_clears_done() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+
+    // Pre-state: card in completion column with status=Done.
+    ctx.update_card(
+        fx.card_id,
+        CardUpdate {
+            status: Some(CardStatus::Done),
+            ..Default::default()
+        },
+    )?;
+    let pre = ctx.get_card(fx.card_id)?.unwrap();
+    assert_eq!(pre.column_id, fx.done_id);
+    assert_eq!(pre.status, CardStatus::Done);
+
+    // Column-only update moving it back to Backlog. No status pinned.
+    let moved = ctx.update_card(
+        fx.card_id,
+        CardUpdate {
+            column_id: Some(fx.backlog_id),
+            ..Default::default()
+        },
+    )?;
+
+    assert_eq!(moved.column_id, fx.backlog_id);
+    assert_eq!(
+        moved.status,
+        CardStatus::Todo,
+        "column-only update_card away from completion column must clear Done"
+    );
+    assert!(moved.completed_at.is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_update_card_column_only_to_non_completion_column_no_status_change() -> KanbanResult<()>
+{
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+
+    // Move from Backlog → InProgress (neither side is the completion column).
+    let updated = ctx.update_card(
+        fx.card_id,
+        CardUpdate {
+            column_id: Some(fx.progress_id),
+            ..Default::default()
+        },
+    )?;
+
+    assert_eq!(updated.column_id, fx.progress_id);
+    assert_eq!(
+        updated.status,
+        CardStatus::Todo,
+        "moving between non-completion columns must not flip status"
+    );
+    assert!(updated.completed_at.is_none());
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_move_cards_batch_to_completion_column_sets_status_done_on_all() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
