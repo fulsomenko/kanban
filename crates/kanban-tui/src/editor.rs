@@ -4,39 +4,42 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
+use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::Command;
 
-fn which_editor() -> String {
-    let editors = if cfg!(target_os = "windows") {
-        vec!["nvim", "vim", "nano", "notepad"]
+fn editor_env_hint() -> &'static str {
+    if env::var_os("PSModulePath").is_some() {
+        "$env:EDITOR"
     } else {
-        vec!["nvim", "vim", "nano", "vi"]
+        "$EDITOR"
+    }
+}
+
+fn fallback_editor() -> (String, Vec<String>) {
+    if cfg!(target_os = "windows") {
+        ("notepad".to_string(), vec![])
+    } else {
+        ("vi".to_string(), vec![])
+    }
+}
+
+fn parse_editor(full_command: &str) -> (String, Vec<String>) {
+    let parts = shell_words::split(full_command).unwrap_or_default();
+    let program = parts.first().cloned().unwrap_or_default();
+    let args = parts.into_iter().skip(1).collect();
+    (program, args)
+}
+
+fn resolve_editor() -> (PathBuf, Vec<String>) {
+    let (program, args) = match env::var("EDITOR") {
+        Ok(value) => parse_editor(&value),
+        Err(_) => fallback_editor(),
     };
 
-    for editor in &editors {
-        let which_cmd = if cfg!(target_os = "windows") {
-            "where"
-        } else {
-            "which"
-        };
-
-        if Command::new(which_cmd)
-            .arg(editor)
-            .output()
-            .map(|output| output.status.success())
-            .unwrap_or(false)
-        {
-            return editor.to_string();
-        }
-    }
-
-    if cfg!(target_os = "windows") {
-        "notepad".to_string()
-    } else {
-        "vi".to_string()
-    }
+    let path = which::which(&program).unwrap_or_else(|_| PathBuf::from(program));
+    (path, args)
 }
 
 pub fn edit_in_external_editor(
@@ -45,7 +48,7 @@ pub fn edit_in_external_editor(
     temp_file: PathBuf,
     initial_content: &str,
 ) -> io::Result<Option<String>> {
-    let editor = std::env::var("EDITOR").unwrap_or_else(|_| which_editor());
+    let (program, args) = resolve_editor();
 
     std::fs::write(&temp_file, initial_content)?;
 
@@ -55,18 +58,19 @@ pub fn edit_in_external_editor(
     execute!(io::stdout(), LeaveAlternateScreen)?;
     io::stdout().flush()?;
 
-    let status = Command::new(&editor).arg(&temp_file).status();
+    let status = Command::new(&program).args(&args).arg(&temp_file).status();
 
     if let Err(ref e) = status {
-        tracing::error!("Failed to launch editor '{}': {}", editor, e);
+        tracing::error!("Failed to launch editor '{}': {}", program.display(), e);
         execute!(io::stdout(), EnterAlternateScreen)?;
         enable_raw_mode()?;
         terminal.clear()?;
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
             format!(
-                "Editor '{}' not found. Please set $EDITOR environment variable.",
-                editor
+                "Editor '{}' not found. Please set {} environment variable.",
+                program.display(),
+                editor_env_hint()
             ),
         ));
     }

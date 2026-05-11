@@ -30,6 +30,8 @@ tracing-subscriber.workspace = true
 arboard = { version = "3.4", features = ["wayland-data-control"] }
 pulldown-cmark = "0.13"
 toml = "0.8"
+shell-words = "1.1.1"
+which = "8.0.2"
 
 [features]
 test-helpers = []
