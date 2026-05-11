@@ -97,3 +97,97 @@ pub fn edit_in_external_editor(
 
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env::{remove_var, set_var};
+
+    #[test]
+    fn editor_env_hint_powershell() {
+        set_var("PSModulePath", "mock_data");
+        assert_eq!(editor_env_hint(), "$env:EDITOR");
+        remove_var("PSModulePath");
+    }
+
+    #[test]
+    fn editor_env_hint_non_powershell() {
+        remove_var("PSModulePath");
+        assert_eq!(editor_env_hint(), "$EDITOR");
+    }
+
+    #[test]
+    fn parse_editor_handles_single_word() {
+        let (program, args) = parse_editor("vim");
+        assert_eq!(program, "vim");
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn parse_editor_splits_program_and_args() {
+        let (program, args) = parse_editor("vim -u NONE");
+        assert_eq!(program, "vim");
+        assert_eq!(args, vec!["-u", "NONE"]);
+    }
+
+    #[test]
+    fn parse_editor_handles_double_quoted_paths() {
+        let (program, args) = parse_editor("\"C:/Program Files/VS Code/code.cmd\" --wait");
+        assert_eq!(program, "C:/Program Files/VS Code/code.cmd");
+        assert_eq!(args, vec!["--wait"]);
+    }
+
+    #[test]
+    fn parse_editor_handles_single_quoted_paths() {
+        let (program, args) = parse_editor("\'C:/Program Files/VS Code/code.cmd\' --wait");
+        assert_eq!(program, "C:/Program Files/VS Code/code.cmd");
+        assert_eq!(args, vec!["--wait"]);
+    }
+
+    #[test]
+    fn resolve_editor_uses_env_var() {
+        set_var("EDITOR", "vim");
+        let (path, args) = resolve_editor();
+
+        assert!(path.ends_with("vim") || path.ends_with("vim.exe"));
+        assert!(args.is_empty());
+
+        remove_var("EDITOR");
+    }
+
+    #[test]
+    fn resolve_editor_handles_multiword_editor() {
+        set_var("EDITOR", "code --wait");
+        let (path, args) = resolve_editor();
+
+        assert!(path.ends_with("code") || path.ends_with("code.exe") || path.ends_with("code.cmd"));
+        assert_eq!(args, vec!["--wait"]);
+
+        remove_var("EDITOR");
+    }
+
+    #[test]
+    fn resolve_editor_falls_back_when_env_missing() {
+        remove_var("EDITOR");
+        let (path, args) = resolve_editor();
+
+        if cfg!(target_os = "windows") {
+            assert!(path.ends_with("notepad") || path.ends_with("notepad.exe"));
+            assert!(args.is_empty());
+        } else {
+            assert!(path.ends_with("vi"));
+            assert!(args.is_empty());
+        }
+    }
+
+    #[test]
+    fn resolve_editor_handles_nonexistent_program() {
+        set_var("EDITOR", "vi_and_emacs --flag");
+        let (path, args) = resolve_editor();
+
+        assert_eq!(path, PathBuf::from("vi_and_emacs"));
+        assert_eq!(args, vec!["--flag"]);
+
+        remove_var("EDITOR");
+    }
+}
