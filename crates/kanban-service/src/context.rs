@@ -985,12 +985,11 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
-        use kanban_domain::commands::AssignCardsToSprint;
-        let cmd = Command::Card(CardCommand::AssignToSprint(AssignCardsToSprint {
-            ids: vec![card_id],
-            sprint_id,
-        }));
-        self.execute(vec![cmd])?;
+        // Singular is a shorthand over the plural. Both dispatched the same
+        // `AssignCardsToSprint { ids: vec![card_id], sprint_id }` command;
+        // keeping the singular as a one-line wrapper means any orchestration
+        // change (logging, sprint-state validation, etc.) lands in one place.
+        self.assign_cards_to_sprint(vec![card_id], sprint_id)?;
         self.get_card(card_id)?
             .ok_or_else(|| KanbanError::not_found("card", card_id))
     }
