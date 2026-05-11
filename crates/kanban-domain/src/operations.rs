@@ -67,6 +67,13 @@ pub trait KanbanOperations {
     // Multi-card operations
     fn archive_cards(&mut self, ids: Vec<Uuid>) -> KanbanResult<usize>;
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize>;
+    /// Apply per-card updates as a single undo unit. For each entry, the service
+    /// layer auto-syncs the status ↔ completion-column invariant:
+    /// - `status` set + `column_id` unset → chain a move to the completion column
+    /// - `column_id` set + `status` unset → chain a status flip when the move crosses
+    ///   the completion-column boundary
+    /// - both set → caller intent wins, no chaining
+    fn update_cards(&mut self, updates: Vec<(Uuid, CardUpdate)>) -> KanbanResult<usize>;
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize>;
     fn carry_over_sprint_cards(
         &mut self,

@@ -220,6 +220,13 @@ impl KanbanOperations for McpContext {
         self.inner.move_cards(ids, column_id)
     }
 
+    fn update_cards(
+        &mut self,
+        updates: Vec<(Uuid, kanban_domain::CardUpdate)>,
+    ) -> KanbanResult<usize> {
+        self.inner.update_cards(updates)
+    }
+
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         self.inner.assign_cards_to_sprint(ids, sprint_id)
     }

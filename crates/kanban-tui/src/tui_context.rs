@@ -285,6 +285,14 @@ impl KanbanOperations for TuiContext {
         self.with_flush(r)
     }
 
+    fn update_cards(
+        &mut self,
+        updates: Vec<(Uuid, kanban_domain::CardUpdate)>,
+    ) -> KanbanResult<usize> {
+        let r = self.inner.update_cards(updates);
+        self.with_flush(r)
+    }
+
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         let r = self.inner.assign_cards_to_sprint(ids, sprint_id);
         self.with_flush(r)

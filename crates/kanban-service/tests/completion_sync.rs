@@ -274,3 +274,186 @@ async fn test_undo_after_update_card_status_done_reverses_both_status_and_column
     assert!(card_after_undo.completed_at.is_none());
     Ok(())
 }
+
+// --- update_cards (batch) ---
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_update_cards_batch_status_to_done_moves_all_to_completion_column() -> KanbanResult<()>
+{
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+    let board_id = ctx.boards()?[0].id;
+    let card2 = ctx.create_card(board_id, fx.backlog_id, "Card 2".into(), Default::default())?;
+    let card3 = ctx.create_card(board_id, fx.backlog_id, "Card 3".into(), Default::default())?;
+
+    let updated = ctx.update_cards(vec![
+        (
+            fx.card_id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        ),
+        (
+            card2.id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        ),
+        (
+            card3.id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        ),
+    ])?;
+    assert_eq!(updated, 3);
+
+    let mut positions = Vec::new();
+    for id in [fx.card_id, card2.id, card3.id] {
+        let card = ctx.get_card(id)?.unwrap();
+        assert_eq!(card.column_id, fx.done_id);
+        assert_eq!(card.status, CardStatus::Done);
+        assert!(card.completed_at.is_some());
+        positions.push(card.position);
+    }
+    positions.sort();
+    assert_eq!(
+        positions,
+        vec![0, 1, 2],
+        "chained moves into the same column must use distinct positions, not collide"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_update_cards_batch_column_to_completion_sets_status_done() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+    let board_id = ctx.boards()?[0].id;
+    let card2 = ctx.create_card(board_id, fx.backlog_id, "Card 2".into(), Default::default())?;
+
+    let updated = ctx.update_cards(vec![
+        (
+            fx.card_id,
+            CardUpdate {
+                column_id: Some(fx.done_id),
+                ..Default::default()
+            },
+        ),
+        (
+            card2.id,
+            CardUpdate {
+                column_id: Some(fx.done_id),
+                ..Default::default()
+            },
+        ),
+    ])?;
+    assert_eq!(updated, 2);
+
+    for id in [fx.card_id, card2.id] {
+        let card = ctx.get_card(id)?.unwrap();
+        assert_eq!(card.column_id, fx.done_id);
+        assert_eq!(
+            card.status,
+            CardStatus::Done,
+            "column-only update into completion column must auto-set status=Done"
+        );
+        assert!(card.completed_at.is_some());
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_update_cards_per_entry_explicit_column_and_status_respects_both() -> KanbanResult<()>
+{
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+    let board_id = ctx.boards()?[0].id;
+    let card2 = ctx.create_card(board_id, fx.backlog_id, "Card 2".into(), Default::default())?;
+
+    // Entry 0 pins both fields → no chained move.
+    // Entry 1 sets status only → service chains move to completion column.
+    let updated = ctx.update_cards(vec![
+        (
+            fx.card_id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                column_id: Some(fx.progress_id),
+                position: Some(0),
+                ..Default::default()
+            },
+        ),
+        (
+            card2.id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        ),
+    ])?;
+    assert_eq!(updated, 2);
+
+    let pinned = ctx.get_card(fx.card_id)?.unwrap();
+    assert_eq!(pinned.status, CardStatus::Done);
+    assert_eq!(
+        pinned.column_id, fx.progress_id,
+        "explicit column on a batch entry must not be overridden by auto-sync"
+    );
+
+    let chained = ctx.get_card(card2.id)?.unwrap();
+    assert_eq!(chained.status, CardStatus::Done);
+    assert_eq!(
+        chained.column_id, fx.done_id,
+        "status-only batch entry must still chain to completion column"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_undo_after_update_cards_batch_reverses_every_chained_command() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let fx = build_fixture(&mut ctx, true).await;
+    let board_id = ctx.boards()?[0].id;
+    let card2 = ctx.create_card(board_id, fx.backlog_id, "Card 2".into(), Default::default())?;
+    let card3 = ctx.create_card(board_id, fx.backlog_id, "Card 3".into(), Default::default())?;
+
+    ctx.update_cards(vec![
+        (
+            fx.card_id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        ),
+        (
+            card2.id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        ),
+        (
+            card3.id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        ),
+    ])?;
+
+    assert!(ctx.undo()?, "undo should report success");
+
+    for id in [fx.card_id, card2.id, card3.id] {
+        let card = ctx.get_card(id)?.unwrap();
+        assert_eq!(
+            card.column_id, fx.backlog_id,
+            "single undo must revert every chained column move in the batch"
+        );
+        assert_eq!(card.status, CardStatus::Todo);
+        assert!(card.completed_at.is_none());
+    }
+    Ok(())
+}

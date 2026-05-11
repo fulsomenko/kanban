@@ -1096,6 +1096,69 @@ impl KanbanOperations for KanbanContext {
         Ok(after - before)
     }
 
+    fn update_cards(&mut self, updates: Vec<(Uuid, CardUpdate)>) -> KanbanResult<usize> {
+        use kanban_domain::commands::{MoveCard, UpdateCard};
+        use std::collections::HashMap;
+
+        let count = updates.len();
+        let mut batch: Vec<Command> = Vec::with_capacity(count * 2);
+        // Track per-column position offsets within this batch so chained moves
+        // into the same target column don't all collapse onto the same
+        // position. `compute_target_column_for_status` reads `list_cards_by_column`
+        // once per call against the pre-batch state.
+        let mut position_offsets: HashMap<Uuid, i32> = HashMap::new();
+
+        enum Chained {
+            Move(Uuid, i32),
+            Status(CardStatus),
+        }
+
+        for (card_id, card_updates) in updates {
+            let chained = match (card_updates.status, card_updates.column_id) {
+                (Some(new_status), None) => self
+                    .compute_target_column_for_status(card_id, new_status)?
+                    .map(|(col, base_pos)| {
+                        let offset = position_offsets.entry(col).or_insert(0);
+                        let pos = base_pos + *offset;
+                        *offset += 1;
+                        Chained::Move(col, pos)
+                    }),
+                (None, Some(new_col)) => self
+                    .compute_target_status_for_move(card_id, new_col)?
+                    .map(Chained::Status),
+                _ => None,
+            };
+
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id,
+                updates: card_updates,
+            })));
+
+            match chained {
+                Some(Chained::Move(col, pos)) => {
+                    batch.push(Command::Card(CardCommand::Move(MoveCard {
+                        card_id,
+                        new_column_id: col,
+                        new_position: pos,
+                    })));
+                }
+                Some(Chained::Status(status)) => {
+                    batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                        card_id,
+                        updates: CardUpdate {
+                            status: Some(status),
+                            ..Default::default()
+                        },
+                    })));
+                }
+                None => {}
+            }
+        }
+
+        self.execute(batch)?;
+        Ok(count)
+    }
+
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
         use kanban_domain::commands::AssignCardsToSprint;
         let before = self.backend.list_cards_by_sprint(sprint_id)?.len();
