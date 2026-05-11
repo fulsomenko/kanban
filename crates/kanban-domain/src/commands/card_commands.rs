@@ -70,6 +70,25 @@ impl UpdateCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let mut card = context.get_card(self.card_id)?;
         card.update(self.updates.clone());
+
+        let status_only_change = self.updates.status.is_some() && self.updates.column_id.is_none();
+        if status_only_change {
+            let new_status = self
+                .updates
+                .status
+                .expect("status_only_change implies Some");
+            if let Some(column) = context.store.get_column(card.column_id)? {
+                let board = context.get_board(column.board_id)?;
+                let columns = context.store.list_columns_by_board(board.id)?;
+                let cards = context.store.list_all_cards()?;
+                if let Some((target_col, pos)) = crate::card_lifecycle::target_column_for_status(
+                    &card, new_status, &board, &columns, &cards,
+                ) {
+                    card.move_to_column(target_col, pos);
+                }
+            }
+        }
+
         context.store.upsert_card(card)?;
         Ok(())
     }
@@ -171,7 +190,24 @@ impl MoveCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
         let mut card = context.get_card(self.card_id)?;
-        card.move_to_column(self.new_column_id, self.new_position);
+
+        if let Some(column) = context.store.get_column(self.new_column_id)? {
+            let board = context.get_board(column.board_id)?;
+            let columns = context.store.list_columns_by_board(board.id)?;
+            let target_status = crate::card_lifecycle::target_status_for_column_move(
+                &card,
+                self.new_column_id,
+                &board,
+                &columns,
+            );
+            card.move_to_column(self.new_column_id, self.new_position);
+            if let Some(new_status) = target_status {
+                card.update_status(new_status);
+            }
+        } else {
+            card.move_to_column(self.new_column_id, self.new_position);
+        }
+
         context.store.upsert_card(card)?;
         Ok(())
     }
