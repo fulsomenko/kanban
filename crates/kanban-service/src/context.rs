@@ -888,29 +888,12 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
-        use kanban_domain::commands::{MoveCard, UpdateCard};
-
-        // Decide whether we need to chain a column move *before* moving `updates`
-        // into the UpdateCard command, so we don't have to clone the struct.
-        let chained_move = match (updates.status, &updates.column_id) {
-            (Some(new_status), None) => self.compute_target_column_for_status(id, new_status)?,
-            _ => None,
-        };
-
-        let mut batch = vec![Command::Card(CardCommand::Update(UpdateCard {
-            card_id: id,
-            updates,
-        }))];
-
-        if let Some((target_col, pos)) = chained_move {
-            batch.push(Command::Card(CardCommand::Move(MoveCard {
-                card_id: id,
-                new_column_id: target_col,
-                new_position: pos,
-            })));
-        }
-
-        self.execute(batch)?;
+        // Singular is a shorthand over the plural — `update_cards` owns the
+        // status ↔ completion-column orchestration, the per-batch position
+        // offsets, and the future config-driven opt-out (KAN-432). Keeping
+        // the singular as a one-line wrapper guarantees that any tweak lands
+        // in exactly one place.
+        self.update_cards(vec![(id, updates)])?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
