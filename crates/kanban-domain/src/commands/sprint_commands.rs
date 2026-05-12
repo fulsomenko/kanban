@@ -73,10 +73,7 @@ impl UpdateSprint {
     }
 }
 
-fn validate_card_prefix_not_locked(
-    sprint_id: Uuid,
-    context: &CommandContext,
-) -> KanbanResult<()> {
+fn validate_card_prefix_not_locked(sprint_id: Uuid, context: &CommandContext) -> KanbanResult<()> {
     let has_active = !context.store.list_cards_by_sprint(sprint_id)?.is_empty();
     let has_archived = context
         .store
