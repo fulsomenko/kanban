@@ -52,67 +52,14 @@ impl UpdateSprint {
 
         if !matches!(updates.card_prefix, crate::FieldUpdate::NoChange) {
             let sprint = context.get_sprint(self.sprint_id)?;
-            let board_id = sprint.board_id;
-            let sprint_id = sprint.id;
-
-            // Lock check: prefix is locked if any card (active or archived) is assigned
-            let has_cards = !context.store.list_cards_by_sprint(sprint_id)?.is_empty()
-                || context
-                    .store
-                    .list_archived_cards()?
-                    .iter()
-                    .any(|ac| ac.card.sprint_id == Some(sprint_id));
-            if has_cards {
-                return Err(KanbanError::validation(
-                    "sprint card_prefix cannot be changed after cards have been assigned",
-                ));
-            }
-
-            // Uniqueness check when setting a new prefix
+            validate_card_prefix_not_locked(self.sprint_id, context)?;
             if let crate::FieldUpdate::Set(ref new_prefix) = updates.card_prefix {
-                let new_prefix_lower = new_prefix.to_lowercase();
-
-                let board = context.get_board(board_id)?;
-
-                if board
-                    .card_prefix
-                    .as_deref()
-                    .map(|p| p.to_lowercase())
-                    .as_deref()
-                    == Some(new_prefix_lower.as_str())
-                {
-                    return Err(KanbanError::validation(
-                        "sprint card_prefix must not match the board card_prefix",
-                    ));
-                }
-
-                let sibling_collision = context
-                    .store
-                    .list_sprints_by_board(board_id)?
-                    .iter()
-                    .filter(|s| s.id != sprint_id)
-                    .any(|s| {
-                        s.card_prefix
-                            .as_deref()
-                            .map(|p| p.to_lowercase())
-                            .as_deref()
-                            == Some(new_prefix_lower.as_str())
-                    });
-                if sibling_collision {
-                    return Err(KanbanError::validation(
-                        "sprint card_prefix must be unique within the board",
-                    ));
-                }
+                validate_card_prefix_unique(new_prefix, self.sprint_id, sprint.board_id, context)?;
             }
         }
 
         if let Some(ref name) = updates.name {
-            let sprint = context.get_sprint(self.sprint_id)?;
-            let board_id = sprint.board_id;
-            let mut board = context.get_board(board_id)?;
-            let idx = board.add_sprint_name_at_used_index(name.clone());
-            updates.name_index = crate::FieldUpdate::Set(idx);
-            context.store.upsert_board(board)?;
+            allocate_sprint_name(name.clone(), self.sprint_id, context, &mut updates)?;
         }
 
         let mut sprint = context.get_sprint(self.sprint_id)?;
@@ -124,6 +71,79 @@ impl UpdateSprint {
     pub fn description(&self) -> String {
         "Update sprint".to_string()
     }
+}
+
+fn validate_card_prefix_not_locked(
+    sprint_id: Uuid,
+    context: &CommandContext,
+) -> KanbanResult<()> {
+    let has_active = !context.store.list_cards_by_sprint(sprint_id)?.is_empty();
+    let has_archived = context
+        .store
+        .list_archived_cards()?
+        .iter()
+        .any(|ac| ac.card.sprint_id == Some(sprint_id));
+    if has_active || has_archived {
+        return Err(KanbanError::validation(
+            "sprint card_prefix cannot be changed after cards have been assigned",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_card_prefix_unique(
+    new_prefix: &str,
+    sprint_id: Uuid,
+    board_id: Uuid,
+    context: &CommandContext,
+) -> KanbanResult<()> {
+    let new_prefix_lower = new_prefix.to_lowercase();
+    let board = context.get_board(board_id)?;
+
+    if board
+        .card_prefix
+        .as_deref()
+        .map(|p| p.to_lowercase())
+        .as_deref()
+        == Some(new_prefix_lower.as_str())
+    {
+        return Err(KanbanError::validation(
+            "sprint card_prefix must not match the board card_prefix",
+        ));
+    }
+
+    let sibling_collision = context
+        .store
+        .list_sprints_by_board(board_id)?
+        .iter()
+        .filter(|s| s.id != sprint_id)
+        .any(|s| {
+            s.card_prefix
+                .as_deref()
+                .map(|p| p.to_lowercase())
+                .as_deref()
+                == Some(new_prefix_lower.as_str())
+        });
+    if sibling_collision {
+        return Err(KanbanError::validation(
+            "sprint card_prefix must be unique within the board",
+        ));
+    }
+    Ok(())
+}
+
+fn allocate_sprint_name(
+    name: String,
+    sprint_id: Uuid,
+    context: &CommandContext,
+    updates: &mut SprintUpdate,
+) -> KanbanResult<()> {
+    let sprint = context.get_sprint(sprint_id)?;
+    let mut board = context.get_board(sprint.board_id)?;
+    let idx = board.add_sprint_name_at_used_index(name);
+    updates.name_index = crate::FieldUpdate::Set(idx);
+    context.store.upsert_board(board)?;
+    Ok(())
 }
 
 /// Create a new sprint.
