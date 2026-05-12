@@ -749,9 +749,50 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
-        use kanban_domain::commands::DeleteBoard;
-        let cmd = Command::Board(BoardCommand::Delete(DeleteBoard { board_id: id }));
-        self.execute(vec![cmd])
+        use kanban_domain::commands::{
+            DeleteArchivedCardsByColumns, DeleteBoard, DeleteCardsByColumns, DeleteColumnsByBoard,
+            DeleteSprintsByBoard, DependencyCommand, RemoveCardsFromGraphCommand,
+        };
+
+        let column_ids: Vec<Uuid> = self
+            .backend
+            .list_columns_by_board(id)?
+            .iter()
+            .map(|c| c.id)
+            .collect();
+
+        let mut card_ids: Vec<Uuid> = Vec::new();
+        for col_id in &column_ids {
+            for card in self.backend.list_cards_by_column(*col_id)? {
+                card_ids.push(card.id);
+            }
+        }
+        for ac in self.backend.list_archived_cards_by_columns(&column_ids)? {
+            card_ids.push(ac.card.id);
+        }
+
+        let commands = vec![
+            Command::Dependency(DependencyCommand::RemoveCards(
+                RemoveCardsFromGraphCommand { ids: card_ids },
+            )),
+            Command::Card(CardCommand::DeleteCardsByColumns(DeleteCardsByColumns {
+                column_ids: column_ids.clone(),
+            })),
+            Command::Card(CardCommand::DeleteArchivedCardsByColumns(
+                DeleteArchivedCardsByColumns {
+                    column_ids: column_ids.clone(),
+                },
+            )),
+            Command::Column(ColumnCommand::DeleteByBoard(DeleteColumnsByBoard {
+                board_id: id,
+            })),
+            Command::Sprint(SprintCommand::DeleteByBoard(DeleteSprintsByBoard {
+                board_id: id,
+            })),
+            Command::Board(BoardCommand::Delete(DeleteBoard { board_id: id })),
+        ];
+
+        self.execute(commands)
     }
 
     fn create_column(
