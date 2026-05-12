@@ -20,7 +20,6 @@ pub enum CardCommand {
     UnassignFromSprint(UnassignCardFromSprint),
     ApplyMetadata(ApplyCardMetadata),
     CompactPositions(CompactColumnPositions),
-    MigrateSprintLogs(MigrateSprintLogs),
 }
 
 impl CardCommand {
@@ -37,7 +36,6 @@ impl CardCommand {
             CardCommand::UnassignFromSprint(c) => c.execute(context),
             CardCommand::ApplyMetadata(c) => c.execute(context),
             CardCommand::CompactPositions(c) => c.execute(context),
-            CardCommand::MigrateSprintLogs(c) => c.execute(context),
         }
     }
 
@@ -54,7 +52,6 @@ impl CardCommand {
             CardCommand::UnassignFromSprint(c) => c.description(),
             CardCommand::ApplyMetadata(c) => c.description(),
             CardCommand::CompactPositions(c) => c.description(),
-            CardCommand::MigrateSprintLogs(c) => c.description(),
         }
     }
 }
@@ -431,33 +428,6 @@ impl CompactColumnPositions {
 
     pub fn description(&self) -> String {
         format!("Compact positions in column {}", self.column_id)
-    }
-}
-
-/// Backfill sprint_logs for cards that have a sprint_id but empty logs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MigrateSprintLogs;
-
-impl MigrateSprintLogs {
-    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let mut cards = context.store.list_all_cards()?;
-        let sprints = context.store.list_all_sprints()?;
-        let boards = context.store.list_boards()?;
-        let before_lens: Vec<usize> = cards.iter().map(|c| c.sprint_logs.len()).collect();
-        let count = crate::card_lifecycle::migrate_sprint_logs(&mut cards, &sprints, &boards);
-        if count > 0 {
-            tracing::info!("Migrated sprint logs for {} card(s)", count);
-            for (card, before_len) in cards.into_iter().zip(before_lens) {
-                if card.sprint_logs.len() != before_len {
-                    context.store.upsert_card(card)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn description(&self) -> String {
-        "Migrate sprint logs".to_string()
     }
 }
 
@@ -978,35 +948,6 @@ mod tests {
         let c3 = tc.store.get_card(c3_id).unwrap().unwrap();
         assert_eq!(c1.position, 1, "first moved card should be at base(1) + 0");
         assert_eq!(c3.position, 2, "second moved card should be at base(1) + 1");
-    }
-
-    #[test]
-    fn test_migrate_sprint_logs_backfills_cards_missing_sprint_log() {
-        let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board.id, 1, None, Some("Alpha".to_string()));
-        let sprint_id = sprint.id;
-        let mut card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0);
-        let card_id = card.id;
-        // Card has sprint_id set but no sprint logs
-        card.sprint_id = Some(sprint_id);
-        assert!(card.sprint_logs.is_empty());
-        tc.store.upsert_board(board).unwrap();
-        tc.store.upsert_sprint(sprint).unwrap();
-        tc.store.upsert_card(card).unwrap();
-
-        let context = tc.as_command_context();
-        let cmd = MigrateSprintLogs;
-        cmd.execute(&context).unwrap();
-
-        let card = tc.store.get_card(card_id).unwrap().unwrap();
-        assert_eq!(
-            card.sprint_logs.len(),
-            1,
-            "sprint log should be backfilled for card with sprint_id but empty logs"
-        );
-        assert_eq!(card.sprint_logs[0].sprint_number, 1);
     }
 
     #[test]

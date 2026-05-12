@@ -311,16 +311,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_command_serde_roundtrip_migrate_sprint_logs() {
-        let cmd = Command::Card(CardCommand::MigrateSprintLogs(MigrateSprintLogs));
-        let json = serde_json::to_string(&cmd).unwrap();
-        let back: Command = serde_json::from_str(&json).unwrap();
-        assert!(matches!(
-            back,
-            Command::Card(CardCommand::MigrateSprintLogs(_))
-        ));
-    }
 
     #[test]
     fn test_command_serde_roundtrip_complex_card_commands() {
