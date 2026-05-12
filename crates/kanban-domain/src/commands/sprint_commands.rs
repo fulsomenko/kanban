@@ -13,6 +13,7 @@ pub enum SprintCommand {
     Complete(CompleteSprint),
     Cancel(CancelSprint),
     Delete(DeleteSprint),
+    DeleteByBoard(DeleteSprintsByBoard),
 }
 
 impl SprintCommand {
@@ -24,6 +25,7 @@ impl SprintCommand {
             SprintCommand::Complete(c) => c.execute(context),
             SprintCommand::Cancel(c) => c.execute(context),
             SprintCommand::Delete(c) => c.execute(context),
+            SprintCommand::DeleteByBoard(c) => c.execute(context),
         }
     }
 
@@ -35,6 +37,7 @@ impl SprintCommand {
             SprintCommand::Complete(c) => c.description(),
             SprintCommand::Cancel(c) => c.description(),
             SprintCommand::Delete(c) => c.description(),
+            SprintCommand::DeleteByBoard(c) => c.description(),
         }
     }
 }
@@ -282,6 +285,24 @@ impl DeleteSprint {
 
     pub fn description(&self) -> String {
         format!("Delete sprint {}", self.sprint_id)
+    }
+}
+
+/// Delete all sprints belonging to the given board in a single command.
+///
+/// Atomic batch deletion used by cascade-delete orchestration (board deletion).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteSprintsByBoard {
+    pub board_id: Uuid,
+}
+
+impl DeleteSprintsByBoard {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context.store.delete_sprints_by_board(self.board_id)
+    }
+
+    pub fn description(&self) -> String {
+        format!("Delete all sprints in board {}", self.board_id)
     }
 }
 
@@ -754,6 +775,31 @@ mod tests {
         let context = tc.as_command_context();
         let err = validate_card_prefix_unique("SPR", sprint2_id, board_id, &context).unwrap_err();
         assert!(err.is_validation());
+    }
+
+    #[test]
+    fn test_delete_sprints_by_board_removes_all_sprints_of_board() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), None);
+        let board_id = board.id;
+        let other_board = crate::Board::new("Other".to_string(), None);
+        let other_board_id = other_board.id;
+        let sprint1 = crate::Sprint::new(board_id, 1, None, None);
+        let sprint2 = crate::Sprint::new(board_id, 2, None, None);
+        let other_sprint = crate::Sprint::new(other_board_id, 1, None, None);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_board(other_board).unwrap();
+        tc.store.upsert_sprint(sprint1).unwrap();
+        tc.store.upsert_sprint(sprint2).unwrap();
+        tc.store.upsert_sprint(other_sprint).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteSprintsByBoard { board_id };
+        cmd.execute(&context).unwrap();
+
+        let remaining = tc.store.list_all_sprints().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].board_id, other_board_id);
     }
 
     #[test]

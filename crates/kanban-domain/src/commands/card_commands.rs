@@ -21,6 +21,8 @@ pub enum CardCommand {
     ApplyMetadata(ApplyCardMetadata),
     CompactPositions(CompactColumnPositions),
     MigrateSprintLogs(MigrateSprintLogs),
+    DeleteCardsByColumns(DeleteCardsByColumns),
+    DeleteArchivedCardsByColumns(DeleteArchivedCardsByColumns),
 }
 
 impl CardCommand {
@@ -38,6 +40,8 @@ impl CardCommand {
             CardCommand::ApplyMetadata(c) => c.execute(context),
             CardCommand::CompactPositions(c) => c.execute(context),
             CardCommand::MigrateSprintLogs(c) => c.execute(context),
+            CardCommand::DeleteCardsByColumns(c) => c.execute(context),
+            CardCommand::DeleteArchivedCardsByColumns(c) => c.execute(context),
         }
     }
 
@@ -55,6 +59,8 @@ impl CardCommand {
             CardCommand::ApplyMetadata(c) => c.description(),
             CardCommand::CompactPositions(c) => c.description(),
             CardCommand::MigrateSprintLogs(c) => c.description(),
+            CardCommand::DeleteCardsByColumns(c) => c.description(),
+            CardCommand::DeleteArchivedCardsByColumns(c) => c.description(),
         }
     }
 }
@@ -458,6 +464,55 @@ impl MigrateSprintLogs {
 
     pub fn description(&self) -> String {
         "Migrate sprint logs".to_string()
+    }
+}
+
+/// Delete all active cards belonging to the given columns in a single command.
+///
+/// Atomic batch deletion used by cascade-delete orchestration (board deletion).
+/// The dependency graph must be cleaned up separately (see `RemoveCardsFromGraphCommand`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteCardsByColumns {
+    pub column_ids: Vec<Uuid>,
+}
+
+impl DeleteCardsByColumns {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context.store.delete_cards_by_columns(&self.column_ids)
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Delete all cards in {} column(s)",
+            self.column_ids.len()
+        )
+    }
+}
+
+/// Delete all archived cards belonging to the given columns in a single command.
+///
+/// Atomic batch deletion used by cascade-delete orchestration (board deletion).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteArchivedCardsByColumns {
+    pub column_ids: Vec<Uuid>,
+}
+
+impl DeleteArchivedCardsByColumns {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let archived = context
+            .store
+            .list_archived_cards_by_columns(&self.column_ids)?;
+        for ac in archived {
+            context.store.delete_archived_card(ac.card.id)?;
+        }
+        Ok(())
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Delete archived cards in {} column(s)",
+            self.column_ids.len()
+        )
     }
 }
 
@@ -1136,5 +1191,67 @@ mod tests {
 
         let card = tc.store.get_card(card_id).unwrap().unwrap();
         assert_eq!(card.updated_at, fixed_time);
+    }
+
+    #[test]
+    fn test_delete_cards_by_columns_removes_only_cards_in_given_columns() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".into(), Some("TST".into()));
+        let col1 = crate::Column::new(board.id, "C1".into(), 0);
+        let col2 = crate::Column::new(board.id, "C2".into(), 1);
+        let col3 = crate::Column::new(board.id, "C3".into(), 2);
+        let card1 = crate::Card::new(&mut board, col1.id, "1".into(), 0);
+        let card2 = crate::Card::new(&mut board, col2.id, "2".into(), 0);
+        let card3 = crate::Card::new(&mut board, col3.id, "3".into(), 0);
+        let card3_id = card3.id;
+        let col3_id = col3.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col1.clone()).unwrap();
+        tc.store.upsert_column(col2.clone()).unwrap();
+        tc.store.upsert_column(col3).unwrap();
+        tc.store.upsert_card(card1).unwrap();
+        tc.store.upsert_card(card2).unwrap();
+        tc.store.upsert_card(card3).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteCardsByColumns {
+            column_ids: vec![col1.id, col2.id],
+        };
+        cmd.execute(&context).unwrap();
+
+        let remaining = tc.store.list_all_cards().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, card3_id);
+        assert_eq!(remaining[0].column_id, col3_id);
+    }
+
+    #[test]
+    fn test_delete_archived_cards_by_columns_removes_only_archived_in_given_columns() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".into(), Some("TST".into()));
+        let col1 = crate::Column::new(board.id, "C1".into(), 0);
+        let col2 = crate::Column::new(board.id, "C2".into(), 1);
+        let col1_id = col1.id;
+        let col2_id = col2.id;
+        let card1 = crate::Card::new(&mut board, col1_id, "1".into(), 0);
+        let card2 = crate::Card::new(&mut board, col2_id, "2".into(), 0);
+        let arch1 = crate::ArchivedCard::new(card1, col1_id, 0);
+        let arch2 = crate::ArchivedCard::new(card2, col2_id, 0);
+        let arch2_card_id = arch2.card.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col1).unwrap();
+        tc.store.upsert_column(col2).unwrap();
+        tc.store.insert_archived_card(arch1).unwrap();
+        tc.store.insert_archived_card(arch2).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteArchivedCardsByColumns {
+            column_ids: vec![col1_id],
+        };
+        cmd.execute(&context).unwrap();
+
+        let remaining = tc.store.list_archived_cards().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].card.id, arch2_card_id);
     }
 }

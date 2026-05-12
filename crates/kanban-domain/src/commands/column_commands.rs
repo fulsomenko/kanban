@@ -10,6 +10,7 @@ pub enum ColumnCommand {
     Create(CreateColumn),
     Update(UpdateColumn),
     Delete(DeleteColumn),
+    DeleteByBoard(DeleteColumnsByBoard),
 }
 
 impl ColumnCommand {
@@ -18,6 +19,7 @@ impl ColumnCommand {
             ColumnCommand::Create(c) => c.execute(context),
             ColumnCommand::Update(c) => c.execute(context),
             ColumnCommand::Delete(c) => c.execute(context),
+            ColumnCommand::DeleteByBoard(c) => c.execute(context),
         }
     }
 
@@ -26,6 +28,7 @@ impl ColumnCommand {
             ColumnCommand::Create(c) => c.description(),
             ColumnCommand::Update(c) => c.description(),
             ColumnCommand::Delete(c) => c.description(),
+            ColumnCommand::DeleteByBoard(c) => c.description(),
         }
     }
 }
@@ -109,6 +112,26 @@ impl DeleteColumn {
     }
 }
 
+/// Delete all columns belonging to the given board in a single command.
+///
+/// Atomic batch deletion used by cascade-delete orchestration (board deletion).
+/// Bypasses the per-column emptiness checks in `DeleteColumn` since the cascade
+/// flow removes cards beforehand.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteColumnsByBoard {
+    pub board_id: Uuid,
+}
+
+impl DeleteColumnsByBoard {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context.store.delete_columns_by_board(self.board_id)
+    }
+
+    pub fn description(&self) -> String {
+        format!("Delete all columns in board {}", self.board_id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::test_helpers::TestContext;
@@ -124,5 +147,31 @@ mod tests {
         };
         let result = cmd.execute(&context);
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn test_delete_columns_by_board_removes_all_columns_of_board() {
+        use crate::DataStore;
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".into(), None);
+        let board_id = board.id;
+        let other_board = crate::Board::new("Other".into(), None);
+        let other_board_id = other_board.id;
+        let col1 = crate::Column::new(board_id, "C1".into(), 0);
+        let col2 = crate::Column::new(board_id, "C2".into(), 1);
+        let other_col = crate::Column::new(other_board_id, "OC".into(), 0);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_board(other_board).unwrap();
+        tc.store.upsert_column(col1).unwrap();
+        tc.store.upsert_column(col2).unwrap();
+        tc.store.upsert_column(other_col).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteColumnsByBoard { board_id };
+        cmd.execute(&context).unwrap();
+
+        let remaining = tc.store.list_all_columns().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].board_id, other_board_id);
     }
 }
