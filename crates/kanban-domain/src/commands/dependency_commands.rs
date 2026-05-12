@@ -14,7 +14,6 @@ pub enum DependencyCommand {
     SetParent(SetParentCommand),
     RemoveParent(RemoveParentCommand),
     CreateSubcard(CreateSubcardCommand),
-    RemoveCards(RemoveCardsFromGraphCommand),
 }
 
 impl DependencyCommand {
@@ -26,7 +25,6 @@ impl DependencyCommand {
             DependencyCommand::SetParent(c) => c.execute(context),
             DependencyCommand::RemoveParent(c) => c.execute(context),
             DependencyCommand::CreateSubcard(c) => c.execute(context),
-            DependencyCommand::RemoveCards(c) => c.execute(context),
         }
     }
 
@@ -38,7 +36,6 @@ impl DependencyCommand {
             DependencyCommand::SetParent(c) => c.description(),
             DependencyCommand::RemoveParent(c) => c.description(),
             DependencyCommand::CreateSubcard(c) => c.description(),
-            DependencyCommand::RemoveCards(c) => c.description(),
         }
     }
 }
@@ -210,31 +207,6 @@ impl CreateSubcardCommand {
             "Create subcard '{}' under parent {}",
             self.title, self.parent_id
         )
-    }
-}
-
-/// Remove all dependency-graph edges for a batch of card IDs.
-///
-/// Used by cascade-delete operations (e.g. board deletion) to detach
-/// cards from the graph before the cards themselves are removed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoveCardsFromGraphCommand {
-    pub ids: Vec<Uuid>,
-}
-
-impl RemoveCardsFromGraphCommand {
-    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let ids = self.ids.clone();
-        context.store.modify_graph(Box::new(move |graph| {
-            for id in &ids {
-                graph.cards.remove_card_edges(*id);
-            }
-            Ok(())
-        }))
-    }
-
-    pub fn description(&self) -> String {
-        format!("Remove {} card(s) from dependency graph", self.ids.len())
     }
 }
 
@@ -463,53 +435,6 @@ mod tests {
             .find(|c| c.title == "Subcard without description")
             .unwrap();
         assert_eq!(subcard.description, None);
-    }
-
-    #[test]
-    fn test_remove_cards_from_graph_removes_all_edges_for_given_ids() {
-        let tc = TestContext::new();
-        let card_a = Uuid::new_v4();
-        let card_b = Uuid::new_v4();
-        let card_c = Uuid::new_v4();
-
-        {
-            let mut graph = tc.store.get_graph().unwrap();
-            graph.cards.add_blocks(card_a, card_b).unwrap();
-            graph.cards.add_blocks(card_b, card_c).unwrap();
-            tc.store.set_graph(graph).unwrap();
-        }
-        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 2);
-
-        let context = tc.as_command_context();
-        let cmd = RemoveCardsFromGraphCommand {
-            ids: vec![card_a, card_b],
-        };
-        cmd.execute(&context).unwrap();
-
-        let graph = tc.store.get_graph().unwrap();
-        assert_eq!(
-            graph.cards.edges().len(),
-            0,
-            "edges incident to card_a or card_b should be removed"
-        );
-    }
-
-    #[test]
-    fn test_remove_cards_from_graph_with_empty_input_is_noop() {
-        let tc = TestContext::new();
-        let card_a = Uuid::new_v4();
-        let card_b = Uuid::new_v4();
-        {
-            let mut graph = tc.store.get_graph().unwrap();
-            graph.cards.add_blocks(card_a, card_b).unwrap();
-            tc.store.set_graph(graph).unwrap();
-        }
-
-        let context = tc.as_command_context();
-        let cmd = RemoveCardsFromGraphCommand { ids: vec![] };
-        cmd.execute(&context).unwrap();
-
-        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 1);
     }
 
     #[test]
