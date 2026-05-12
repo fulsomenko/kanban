@@ -482,10 +482,7 @@ impl DeleteCardsByColumns {
     }
 
     pub fn description(&self) -> String {
-        format!(
-            "Delete all cards in {} column(s)",
-            self.column_ids.len()
-        )
+        format!("Delete all cards in {} column(s)", self.column_ids.len())
     }
 }
 
