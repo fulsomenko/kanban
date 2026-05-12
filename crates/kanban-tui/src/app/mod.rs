@@ -2292,12 +2292,7 @@ impl App {
     }
 
     fn migrate_sprint_logs(&mut self) {
-        let cmd = kanban_domain::commands::Command::Card(
-            kanban_domain::commands::CardCommand::MigrateSprintLogs(
-                kanban_domain::commands::MigrateSprintLogs,
-            ),
-        );
-        if let Err(e) = self.ctx.execute_command(cmd) {
+        if let Err(e) = self.ctx.migrate_sprint_logs() {
             tracing::error!("Failed to migrate sprint logs: {}", e);
         }
     }
