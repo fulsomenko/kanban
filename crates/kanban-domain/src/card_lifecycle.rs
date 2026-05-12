@@ -5,7 +5,34 @@
 //! to ensure consistent behavior.
 
 use crate::{Board, Card, CardStatus, Column, Sprint, SprintLog};
+use std::collections::HashSet;
 use uuid::Uuid;
+
+/// Compute the target positions for a batch move of cards into a column.
+///
+/// Cards whose IDs are in `moving_ids` are placed at the tail of the column,
+/// in their input order, starting at the position right after the last
+/// non-moving card. Returns `(card_id, target_position)` pairs in the same
+/// order the IDs were provided.
+///
+/// This is a pure function: it does no I/O and takes the current column
+/// contents as a snapshot input. The service layer is responsible for
+/// reading `existing_cards` and persisting the resulting positions.
+pub fn compute_move_positions(
+    existing_cards: &[Card],
+    moving_ids: &[Uuid],
+) -> Vec<(Uuid, i32)> {
+    let moving_set: HashSet<Uuid> = moving_ids.iter().copied().collect();
+    let base = existing_cards
+        .iter()
+        .filter(|c| !moving_set.contains(&c.id))
+        .count();
+    moving_ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (*id, (base + i) as i32))
+        .collect()
+}
 
 /// Direction for moving a card between columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -693,5 +720,76 @@ mod tests {
             cards[2].sprint_logs, no_sprint_before,
             "card with no sprint_id should be untouched"
         );
+    }
+
+    // --- compute_move_positions ---
+
+    #[test]
+    fn compute_move_positions_appends_after_existing_non_moving_cards() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let existing1 = test_card(&mut board, &cols[0], "E1", 0);
+        let existing2 = test_card(&mut board, &cols[0], "E2", 1);
+        let existing = vec![existing1, existing2];
+
+        let move_a = Uuid::new_v4();
+        let move_b = Uuid::new_v4();
+
+        let positions = compute_move_positions(&existing, &[move_a, move_b]);
+
+        assert_eq!(positions, vec![(move_a, 2), (move_b, 3)]);
+    }
+
+    #[test]
+    fn compute_move_positions_within_same_column_excludes_moving_from_base() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let card1 = test_card(&mut board, &cols[0], "C1", 0);
+        let card2 = test_card(&mut board, &cols[0], "C2", 1);
+        let card3 = test_card(&mut board, &cols[0], "C3", 2);
+        let c1 = card1.id;
+        let c3 = card3.id;
+        let existing = vec![card1, card2, card3];
+
+        // Move c1 and c3; c2 stays — base = 1 (only c2 is non-moving)
+        let positions = compute_move_positions(&existing, &[c1, c3]);
+
+        assert_eq!(positions, vec![(c1, 1), (c3, 2)]);
+    }
+
+    #[test]
+    fn compute_move_positions_into_empty_column_starts_at_zero() {
+        let move_a = Uuid::new_v4();
+        let move_b = Uuid::new_v4();
+
+        let positions = compute_move_positions(&[], &[move_a, move_b]);
+
+        assert_eq!(positions, vec![(move_a, 0), (move_b, 1)]);
+    }
+
+    #[test]
+    fn compute_move_positions_with_empty_moving_returns_empty() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let existing = vec![test_card(&mut board, &cols[0], "E", 0)];
+
+        let positions = compute_move_positions(&existing, &[]);
+
+        assert!(positions.is_empty());
+    }
+
+    #[test]
+    fn compute_move_positions_preserves_input_order() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let existing = vec![test_card(&mut board, &cols[0], "E", 0)];
+
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+        let id3 = Uuid::new_v4();
+
+        let positions = compute_move_positions(&existing, &[id3, id1, id2]);
+
+        assert_eq!(positions, vec![(id3, 1), (id1, 2), (id2, 3)]);
     }
 }
