@@ -311,7 +311,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_command_serde_roundtrip_complex_card_commands() {
         let commands = vec![
