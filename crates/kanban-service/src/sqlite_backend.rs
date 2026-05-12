@@ -69,6 +69,9 @@ impl DataStore for SqliteBackend {
     fn list_cards_by_column(&self, column_id: Uuid) -> KanbanResult<Vec<Card>> {
         self.db.list_cards_by_column(column_id)
     }
+    fn list_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<Vec<Card>> {
+        self.db.list_cards_by_columns(column_ids)
+    }
     fn list_cards_by_sprint(&self, sprint_id: Uuid) -> KanbanResult<Vec<Card>> {
         self.db.list_cards_by_sprint(sprint_id)
     }

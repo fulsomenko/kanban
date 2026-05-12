@@ -5,12 +5,14 @@ use uuid::Uuid;
 
 pub mod board_commands;
 pub mod card_commands;
+pub mod cascade_commands;
 pub mod column_commands;
 pub mod dependency_commands;
 pub mod sprint_commands;
 
 pub use board_commands::*;
 pub use card_commands::*;
+pub use cascade_commands::CascadeCommand;
 pub use column_commands::*;
 pub use dependency_commands::*;
 pub use sprint_commands::*;
@@ -25,6 +27,7 @@ pub enum Command {
     Card(CardCommand),
     Sprint(SprintCommand),
     Dependency(DependencyCommand),
+    Cascade(CascadeCommand),
 }
 
 impl Command {
@@ -35,6 +38,7 @@ impl Command {
             Command::Card(cmd) => cmd.execute(context),
             Command::Sprint(cmd) => cmd.execute(context),
             Command::Dependency(cmd) => cmd.execute(context),
+            Command::Cascade(cmd) => cmd.execute(context),
         }
     }
 
@@ -45,6 +49,7 @@ impl Command {
             Command::Card(cmd) => cmd.description(),
             Command::Sprint(cmd) => cmd.description(),
             Command::Dependency(cmd) => cmd.description(),
+            Command::Cascade(cmd) => cmd.description(),
         }
     }
 }
