@@ -40,7 +40,59 @@ fn test_sprint_detail_uncompleted_panel_supports_movement() {
 #[test]
 fn test_sprint_detail_default_panel_is_uncompleted() {
     let app = App::test_default();
-    // Regression guard: opening sprint detail must focus the Uncompleted
-    // panel first, not the Completed one.
     assert_eq!(app.sprint_view.panel, SprintTaskPanel::Uncompleted);
+}
+
+// --- Scrolling: sync_scroll catches up when navigation pushes the selection
+//                past the visible viewport. ---
+
+#[test]
+fn test_sprint_detail_uncompleted_panel_scrolls_when_selection_passes_viewport() {
+    let mut app = App::test_default();
+    let cards: Vec<Uuid> = (0..30).map(|_| Uuid::new_v4()).collect();
+    app.sprint_view.uncompleted_cards.update_cards(cards);
+    app.sprint_view
+        .uncompleted_cards
+        .set_selected_index(Some(0));
+
+    // Walk past a 5-row viewport.
+    for _ in 0..10 {
+        app.sprint_view.uncompleted_cards.navigate_down();
+    }
+    assert_eq!(
+        app.sprint_view.uncompleted_cards.get_scroll_offset(),
+        0,
+        "no scroll happens just from navigating — needs sync_scroll"
+    );
+
+    app.sprint_view.sync_scroll(5, 5);
+    assert!(
+        app.sprint_view.uncompleted_cards.get_scroll_offset() > 0,
+        "after sync_scroll the offset must advance so the selection is visible"
+    );
+}
+
+#[test]
+fn test_sprint_detail_completed_panel_scrolls_independently_of_uncompleted() {
+    let mut app = App::test_default();
+    let unc: Vec<Uuid> = (0..30).map(|_| Uuid::new_v4()).collect();
+    let comp: Vec<Uuid> = (0..30).map(|_| Uuid::new_v4()).collect();
+    app.sprint_view.uncompleted_cards.update_cards(unc);
+    app.sprint_view.completed_cards.update_cards(comp);
+
+    app.sprint_view.completed_cards.set_selected_index(Some(20));
+    app.sprint_view
+        .uncompleted_cards
+        .set_selected_index(Some(0));
+
+    app.sprint_view.sync_scroll(5, 5);
+    assert!(
+        app.sprint_view.completed_cards.get_scroll_offset() > 0,
+        "Completed panel must scroll based on its own selection"
+    );
+    assert_eq!(
+        app.sprint_view.uncompleted_cards.get_scroll_offset(),
+        0,
+        "Uncompleted panel must not scroll if its selection is already visible"
+    );
 }

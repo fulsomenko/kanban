@@ -35,3 +35,15 @@ impl Default for SprintViewState {
         }
     }
 }
+
+impl SprintViewState {
+    /// Bring both panel scroll offsets back in sync with their selections.
+    /// Called once per frame by the sprint-detail renderer with the actual
+    /// viewport heights derived from the rendered area.
+    pub fn sync_scroll(&mut self, uncompleted_viewport: usize, completed_viewport: usize) {
+        self.uncompleted_cards
+            .ensure_selected_visible(uncompleted_viewport);
+        self.completed_cards
+            .ensure_selected_visible(completed_viewport);
+    }
+}
