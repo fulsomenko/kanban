@@ -656,4 +656,42 @@ mod tests {
 
         assert_eq!(count, 0);
     }
+
+    #[test]
+    fn migrate_with_mixed_cards_only_backfills_eligible() {
+        let mut board = test_board();
+        let col = Column::new(board.id, "Todo".to_string(), 0);
+        let sprint = Sprint::new(board.id, 1, None, None);
+
+        let mut card_needs_backfill = test_card(&mut board, &col, "Needs Backfill", 0);
+        card_needs_backfill.sprint_id = Some(sprint.id);
+
+        let mut card_already_logged = test_card(&mut board, &col, "Already Logged", 1);
+        card_already_logged.sprint_id = Some(sprint.id);
+        card_already_logged.sprint_logs.push(SprintLog::new(
+            sprint.id,
+            1,
+            None,
+            "Active".to_string(),
+        ));
+        let already_logged_before = card_already_logged.sprint_logs.clone();
+
+        let card_no_sprint = test_card(&mut board, &col, "No Sprint", 2);
+        let no_sprint_before = card_no_sprint.sprint_logs.clone();
+
+        let mut cards = vec![card_needs_backfill, card_already_logged, card_no_sprint];
+        let count = migrate_sprint_logs(&mut cards, &[sprint], &[board]);
+
+        assert_eq!(count, 1, "only the eligible card should be migrated");
+        assert_eq!(cards[0].sprint_logs.len(), 1);
+        assert_eq!(cards[0].sprint_logs[0].sprint_number, 1);
+        assert_eq!(
+            cards[1].sprint_logs, already_logged_before,
+            "card with existing logs should be untouched"
+        );
+        assert_eq!(
+            cards[2].sprint_logs, no_sprint_before,
+            "card with no sprint_id should be untouched"
+        );
+    }
 }

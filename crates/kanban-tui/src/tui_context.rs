@@ -78,6 +78,14 @@ impl TuiContext {
         self.inner.snapshot()
     }
 
+    pub fn migrate_sprint_logs(&mut self) -> KanbanResult<usize> {
+        let result = self.inner.migrate_sprint_logs()?;
+        if result > 0 && self.save_coordinator.has_save_channel() {
+            self.save_coordinator.queue_flush();
+        }
+        Ok(result)
+    }
+
     pub fn apply_snapshot(&mut self, s: kanban_domain::Snapshot) -> KanbanResult<()> {
         self.inner.apply_snapshot(s)
     }
