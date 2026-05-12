@@ -5,7 +5,6 @@ use uuid::Uuid;
 
 pub mod board_commands;
 pub mod card_commands;
-pub mod cascade;
 pub mod cascade_commands;
 pub mod column_commands;
 pub mod dependency_commands;

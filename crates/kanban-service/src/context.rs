@@ -749,8 +749,7 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
-        let commands =
-            kanban_domain::commands::cascade::delete_board(self.backend.as_data_store(), id)?;
+        let commands = crate::cascade::delete_board(self.backend.as_data_store(), id)?;
         self.execute(commands)
     }
 
