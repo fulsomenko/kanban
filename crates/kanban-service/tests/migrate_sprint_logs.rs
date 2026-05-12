@@ -82,10 +82,75 @@ macro_rules! migrate_sprint_logs_tests {
                 backend.upsert_column(col).unwrap();
                 backend.upsert_card(card).unwrap();
 
+                let before = backend.list_all_cards().unwrap();
                 let migrated = ctx.migrate_sprint_logs().unwrap();
                 assert_eq!(
                     migrated, 0,
                     "migrate_sprint_logs should report zero when no card needs backfilling"
+                );
+                assert_eq!(
+                    backend.list_all_cards().unwrap(),
+                    before,
+                    "no-op migration must not mutate any card"
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_migrate_sprint_logs_only_backfills_eligible_cards_in_mixed_batch() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let backend = ctx.backend();
+
+                let mut board = Board::new("B".to_string(), Some("TST".to_string()));
+                let col = Column::new(board.id, "Col".to_string(), 0);
+                let sprint = Sprint::new(board.id, 1, None, Some("Alpha".to_string()));
+                let sprint_id = sprint.id;
+
+                let mut card_needs_backfill =
+                    Card::new(&mut board, col.id, "Needs Backfill".to_string(), 0);
+                card_needs_backfill.sprint_id = Some(sprint_id);
+                let needs_backfill_id = card_needs_backfill.id;
+
+                let mut card_already_logged =
+                    Card::new(&mut board, col.id, "Already Logged".to_string(), 1);
+                card_already_logged.sprint_id = Some(sprint_id);
+                card_already_logged
+                    .sprint_logs
+                    .push(kanban_domain::SprintLog::new(
+                        sprint_id,
+                        1,
+                        None,
+                        "Active".to_string(),
+                    ));
+                let already_logged_id = card_already_logged.id;
+                let already_logged_before = card_already_logged.sprint_logs.clone();
+
+                let card_no_sprint = Card::new(&mut board, col.id, "No Sprint".to_string(), 2);
+                let no_sprint_id = card_no_sprint.id;
+
+                backend.upsert_board(board).unwrap();
+                backend.upsert_column(col).unwrap();
+                backend.upsert_sprint(sprint).unwrap();
+                backend.upsert_card(card_needs_backfill).unwrap();
+                backend.upsert_card(card_already_logged).unwrap();
+                backend.upsert_card(card_no_sprint).unwrap();
+
+                let migrated = ctx.migrate_sprint_logs().unwrap();
+                assert_eq!(migrated, 1, "only the eligible card should be migrated");
+
+                let backfilled = backend.get_card(needs_backfill_id).unwrap().unwrap();
+                assert_eq!(backfilled.sprint_logs.len(), 1);
+                assert_eq!(backfilled.sprint_logs[0].sprint_number, 1);
+
+                let already_logged = backend.get_card(already_logged_id).unwrap().unwrap();
+                assert_eq!(
+                    already_logged.sprint_logs, already_logged_before,
+                    "card with existing logs must be untouched"
+                );
+
+                let no_sprint = backend.get_card(no_sprint_id).unwrap().unwrap();
+                assert!(
+                    no_sprint.sprint_logs.is_empty(),
+                    "card without sprint_id must remain unlogged"
                 );
             }
         }
