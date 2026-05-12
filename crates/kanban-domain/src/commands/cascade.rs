@@ -16,15 +16,20 @@ use uuid::Uuid;
 /// Build the ordered cascade for deleting `board_id` and everything that hangs
 /// off it (graph edges → cards → archived cards → columns → sprints → board).
 ///
-/// Returns the empty vector wrapped in `Ok` if the board has no columns; the
-/// final `DeleteBoard` is still appended so a no-op delete is still recorded
-/// as a single command (and is consistent with the SQLite atomic delete).
+/// Returns a single `DeleteBoard` command when the board has no columns,
+/// skipping all cascade primitives.
 pub fn delete_board(store: &dyn DataStore, board_id: Uuid) -> KanbanResult<Vec<Command>> {
     let column_ids: Vec<Uuid> = store
         .list_columns_by_board(board_id)?
         .iter()
         .map(|c| c.id)
         .collect();
+
+    if column_ids.is_empty() {
+        return Ok(vec![Command::Board(BoardCommand::Delete(DeleteBoard {
+            board_id,
+        }))]);
+    }
 
     let mut card_ids: Vec<Uuid> = store
         .list_cards_by_columns(&column_ids)?
@@ -62,6 +67,18 @@ mod tests {
     use super::*;
     use crate::commands::test_helpers::TestContext;
     use crate::{ArchivedCard, Board, Card, Column, Sprint};
+
+    #[test]
+    fn test_delete_board_empty_board_returns_single_delete_command() {
+        let tc = TestContext::new();
+        let board = Board::new("B".into(), None);
+        let board_id = board.id;
+        tc.store.upsert_board(board).unwrap();
+
+        let cmds = delete_board(&tc.store, board_id).unwrap();
+        assert_eq!(cmds.len(), 1);
+        assert!(matches!(cmds[0], Command::Board(BoardCommand::Delete(_))));
+    }
 
     #[test]
     fn test_delete_board_builds_six_command_batch() {
