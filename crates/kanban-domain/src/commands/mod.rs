@@ -317,10 +317,6 @@ mod tests {
             Command::Card(CardCommand::Archive(ArchiveCards {
                 ids: vec![Uuid::new_v4(), Uuid::new_v4()],
             })),
-            Command::Card(CardCommand::MoveMultiple(MoveCards {
-                ids: vec![Uuid::new_v4()],
-                column_id: Uuid::new_v4(),
-            })),
             Command::Card(CardCommand::AssignToSprint(AssignCardsToSprint {
                 ids: vec![Uuid::new_v4()],
                 sprint_id: Uuid::new_v4(),
