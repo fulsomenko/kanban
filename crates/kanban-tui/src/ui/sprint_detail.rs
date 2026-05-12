@@ -11,8 +11,6 @@ use ratatui::{
 };
 
 pub(super) fn render_sprint_detail_view(app: &mut App, frame: &mut Frame, area: Rect) {
-    // Snapshot the sprint and board we want so we can mutably borrow
-    // `app.sprint_view` further down without aliasing.
     let sprint_idx = match app.selection.active_sprint_index {
         Some(i) => i,
         None => return,
@@ -179,9 +177,6 @@ pub(super) fn render_sprint_detail_with_tasks(
     let uncompleted_focused = app.sprint_view.panel == crate::app::SprintTaskPanel::Uncompleted;
     let completed_focused = app.sprint_view.panel == crate::app::SprintTaskPanel::Completed;
 
-    // Bring scroll state in sync with the current selection *before* render
-    // reads from the list — this is what makes the lists scrollable when
-    // navigation pushes the selection past the visible viewport.
     let uncompleted_viewport = chunks[0].height.saturating_sub(2) as usize;
     let completed_viewport = chunks[1].height.saturating_sub(2) as usize;
     app.sprint_view

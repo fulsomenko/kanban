@@ -1471,12 +1471,6 @@ impl App {
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
-        // Route the panels through `CardQueryBuilder` when we have a resolvable
-        // board so the board's active sort field + order applies on populate,
-        // matching the main-board card list. Falls back to the raw
-        // `partition_sprint_cards` helper if no board is active. We
-        // post-partition by completion status since the builder doesn't
-        // filter on it directly.
         let cards = self.model.cards();
         let board_opt = self
             .selection
