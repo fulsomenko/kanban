@@ -1472,19 +1472,47 @@ impl App {
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let cards = self.model.cards();
-        let (uncompleted_ids, completed_ids) = partition_sprint_cards(sprint_id, cards);
+        let board_opt = self
+            .selection
+            .active_board_index
+            .and_then(|i| self.model.boards().get(i));
+
+        let (uncompleted_ids, completed_ids) = if let Some(board) = board_opt {
+            let columns = self.model.columns();
+            let sprints = self.model.sprints();
+            let sorted_sprint_ids =
+                kanban_domain::CardQueryBuilder::new(cards, columns, sprints, board)
+                    .in_sprints(std::iter::once(sprint_id))
+                    .execute();
+            let mut unc = Vec::new();
+            let mut comp = Vec::new();
+            for id in sorted_sprint_ids {
+                if let Some(card) = cards.iter().find(|c| c.id == id) {
+                    if card.is_completed() {
+                        comp.push(id);
+                    } else {
+                        unc.push(id);
+                    }
+                }
+            }
+            (unc, comp)
+        } else {
+            partition_sprint_cards(sprint_id, cards)
+        };
 
         self.sprint_view
             .uncompleted_cards
-            .update_cards(uncompleted_ids);
-        self.sprint_view.completed_cards.update_cards(completed_ids);
+            .update_cards(uncompleted_ids.clone());
+        self.sprint_view
+            .completed_cards
+            .update_cards(completed_ids.clone());
 
         self.sprint_view
             .uncompleted_component
-            .update_cards(self.sprint_view.uncompleted_cards.cards.clone());
+            .update_cards(uncompleted_ids);
         self.sprint_view
             .completed_component
-            .update_cards(self.sprint_view.completed_cards.cards.clone());
+            .update_cards(completed_ids);
 
         // Default to uncompleted panel
         self.sprint_view.panel = SprintTaskPanel::Uncompleted;
