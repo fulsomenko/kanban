@@ -18,6 +18,7 @@
 - **Git-native** — generate branch names and `git checkout` commands from any card
 - **LLM-native** — full MCP server (40 tools) works with Claude Code, Cursor, and any MCP client
 - **Offline-first** — works anywhere; JSON and SQLite backends, atomic writes, live conflict detection
+- **Cross-platform** - works on any desktop OS; Linux, Mac OS, Windows, and WSL
 
 ---
 
@@ -99,11 +100,13 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 
 ---
 
-## Limitations
+## EDITOR configuration
 
-### Editing in VS Code
+Changes are made in an external editor as defined by your `EDITOR`. Neovim, nano, or some other terminal-based editor is recommended, both for easier swtiching between edits and browsing, and because editors that leave the terminal may cause issues.
 
-Changes are made in an external editor as defined by your `EDITOR`. VS Code specifically does not work in the current implementation. Vim-like editors are the most supported and tested for this project currently, but only VS Code is known to have issues.
+VS Code is known not to work in the current implementation.
+
+`kanban` is well-tested on supported OSes and is designed to be shell-agnostic. If your `EDITOR` is not set, it will default to `notepad` on Windows and `vi` otherwise.
 
 ---
 
