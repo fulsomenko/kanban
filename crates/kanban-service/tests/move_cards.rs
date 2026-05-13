@@ -337,6 +337,25 @@ macro_rules! move_cards_tests {
                 let moved = backend.get_card(card_a.id).unwrap().unwrap();
                 assert_eq!(moved.column_id, dst_col.id);
             }
+
+            // KAN-428 followup: move_cards_detailed.failed must also dedup
+            // repeated invalid ids — symmetric to the succeeded-side dedup.
+            // A caller passing [bogus, bogus, bogus] should see one failure
+            // entry, not three copies of the same not_found error.
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_move_cards_detailed_dedupes_failed_for_duplicate_invalid_ids() {
+                let (mut ctx, _dir) = $open_ctx.await;
+
+                let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
+                let dst_col = ctx.create_column(board.id, "Dst".into(), None).unwrap();
+                let bogus = uuid::Uuid::new_v4();
+
+                let result = ctx.move_cards_detailed(vec![bogus, bogus, bogus], dst_col.id);
+
+                assert!(result.succeeded.is_empty());
+                assert_eq!(result.failed.len(), 1);
+                assert_eq!(result.failed[0].id, bogus);
+            }
         }
     };
 }
