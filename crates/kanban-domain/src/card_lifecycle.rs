@@ -821,4 +821,40 @@ mod tests {
         // base = 1 (one existing non-moving), only two unique moving ids → positions 1, 2.
         assert_eq!(positions, vec![(id_a, 1), (id_b, 2)]);
     }
+
+    // --- dedup_preserving_order ---
+
+    #[test]
+    fn dedup_preserving_order_empty_input_returns_empty() {
+        let out: Vec<u32> = dedup_preserving_order(&[]);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn dedup_preserving_order_no_duplicates_returns_input_in_order() {
+        let out = dedup_preserving_order(&[3u32, 1, 2]);
+        assert_eq!(out, vec![3, 1, 2]);
+    }
+
+    #[test]
+    fn dedup_preserving_order_all_duplicates_returns_single_first() {
+        let out = dedup_preserving_order(&[7u32, 7, 7, 7]);
+        assert_eq!(out, vec![7]);
+    }
+
+    #[test]
+    fn dedup_preserving_order_mixed_preserves_first_occurrence_order() {
+        // First-occurrence positions: a=0, b=1, c=3 → output order [a, b, c].
+        let out = dedup_preserving_order(&[1u32, 2, 1, 3, 2, 1, 3]);
+        assert_eq!(out, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn dedup_preserving_order_works_for_uuid() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let c = Uuid::new_v4();
+        let out = dedup_preserving_order(&[a, b, a, c, b]);
+        assert_eq!(out, vec![a, b, c]);
+    }
 }
