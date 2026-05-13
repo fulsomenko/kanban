@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
 use uuid::Uuid;
@@ -15,6 +15,12 @@ struct StoreState {
     boards: HashMap<Uuid, Board>,
     columns: HashMap<Uuid, Column>,
     cards: HashMap<Uuid, Card>,
+    /// Secondary index: column_id -> set of card ids currently in that column.
+    /// Maintained transactionally by every method that mutates `cards`'s
+    /// column membership (upsert_card, delete_card, delete_cards_by_columns,
+    /// apply_snapshot). Lets `count_cards_in_column_excluding` and friends
+    /// run in O(column_size) instead of O(total_cards).
+    cards_by_column: HashMap<Uuid, HashSet<Uuid>>,
     sprints: HashMap<Uuid, Sprint>,
     archived_cards: HashMap<Uuid, ArchivedCard>,
     graph: DependencyGraph,
@@ -26,9 +32,36 @@ impl StoreState {
             boards: HashMap::new(),
             columns: HashMap::new(),
             cards: HashMap::new(),
+            cards_by_column: HashMap::new(),
             sprints: HashMap::new(),
             archived_cards: HashMap::new(),
             graph: DependencyGraph::new(),
+        }
+    }
+
+    fn add_card_to_column_index(&mut self, card_id: Uuid, column_id: Uuid) {
+        self.cards_by_column
+            .entry(column_id)
+            .or_default()
+            .insert(card_id);
+    }
+
+    fn remove_card_from_column_index(&mut self, card_id: Uuid, column_id: Uuid) {
+        if let Some(set) = self.cards_by_column.get_mut(&column_id) {
+            set.remove(&card_id);
+            if set.is_empty() {
+                self.cards_by_column.remove(&column_id);
+            }
+        }
+    }
+
+    fn rebuild_card_column_index(&mut self) {
+        self.cards_by_column.clear();
+        for card in self.cards.values() {
+            self.cards_by_column
+                .entry(card.column_id)
+                .or_default()
+                .insert(card.id);
         }
     }
 }
@@ -206,12 +239,11 @@ impl DataStore for InMemoryStore {
 
     fn count_cards_in_column(&self, column_id: Uuid) -> KanbanResult<usize> {
         let state = self.read_state()?;
-        let count = state
-            .cards
-            .values()
-            .filter(|c| c.column_id == column_id)
-            .count();
-        Ok(count)
+        Ok(state
+            .cards_by_column
+            .get(&column_id)
+            .map(|s| s.len())
+            .unwrap_or(0))
     }
 
     fn count_cards_in_column_excluding(
@@ -221,22 +253,31 @@ impl DataStore for InMemoryStore {
     ) -> KanbanResult<usize> {
         let state = self.read_state()?;
         let count = state
-            .cards
-            .values()
-            .filter(|c| c.column_id == column_id && !exclude.contains(&c.id))
-            .count();
+            .cards_by_column
+            .get(&column_id)
+            .map(|ids| ids.iter().filter(|id| !exclude.contains(id)).count())
+            .unwrap_or(0);
         Ok(count)
     }
 
     fn upsert_card(&self, card: Card) -> KanbanResult<()> {
         let mut state = self.write_state()?;
+        let old_column_id = state.cards.get(&card.id).map(|c| c.column_id);
+        if let Some(old) = old_column_id {
+            if old != card.column_id {
+                state.remove_card_from_column_index(card.id, old);
+            }
+        }
+        state.add_card_to_column_index(card.id, card.column_id);
         state.cards.insert(card.id, card);
         Ok(())
     }
 
     fn delete_card(&self, id: Uuid) -> KanbanResult<()> {
         let mut state = self.write_state()?;
-        state.cards.remove(&id);
+        if let Some(card) = state.cards.remove(&id) {
+            state.remove_card_from_column_index(id, card.column_id);
+        }
         Ok(())
     }
 
@@ -245,6 +286,9 @@ impl DataStore for InMemoryStore {
         state
             .cards
             .retain(|_, c| !column_ids.contains(&c.column_id));
+        for col_id in column_ids {
+            state.cards_by_column.remove(col_id);
+        }
         Ok(())
     }
 
@@ -419,6 +463,7 @@ impl DataStore for InMemoryStore {
         state.boards = snapshot.boards.into_iter().map(|b| (b.id, b)).collect();
         state.columns = snapshot.columns.into_iter().map(|c| (c.id, c)).collect();
         state.cards = snapshot.cards.into_iter().map(|c| (c.id, c)).collect();
+        state.rebuild_card_column_index();
         state.archived_cards = snapshot
             .archived_cards
             .into_iter()
