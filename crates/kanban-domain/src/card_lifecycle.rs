@@ -808,4 +808,21 @@ mod tests {
 
         assert_eq!(positions, vec![(id3, 1), (id1, 2), (id2, 3)]);
     }
+
+    #[test]
+    fn compute_move_positions_dedupes_repeated_moving_ids_first_occurrence_wins() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let existing = vec![test_card(&mut board, &cols[0], "E", 0)];
+
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+
+        // Duplicates of id_a and id_b: only first occurrence kept.
+        let positions =
+            compute_move_positions(&existing, &[id_a, id_b, id_a, id_b, id_a]).unwrap();
+
+        // base = 1 (one existing non-moving), only two unique moving ids → positions 1, 2.
+        assert_eq!(positions, vec![(id_a, 1), (id_b, 2)]);
+    }
 }
