@@ -739,13 +739,15 @@ impl KanbanContext {
 
     /// KAN-428: build the command batch for a multi-card move into one column.
     ///
-    /// Performs a single batch-level WIP pre-check using the data already
-    /// fetched for position computation, then emits one atomic `MoveCard` per
-    /// card followed by the chained status updates. Returns the batch plus a
-    /// set containing `column_id` when the column has a WIP limit, so the
-    /// executor can mark that column as trusted and short-circuit the now-
-    /// redundant per-`MoveCard` `check_wip_limit` calls (O(N) → O(1) for the
-    /// batch).
+    /// When the column has a WIP limit, performs a single batch-level WIP
+    /// pre-check using the data already fetched for position computation.
+    /// The target column is then *unconditionally* added to the returned
+    /// trust set so the executor can short-circuit the per-`MoveCard`
+    /// `check_wip_limit` calls — both the redundant ones (limit set, batch
+    /// already verified) and the cheap-but-wasteful ones (no limit, every
+    /// per-card check would just re-fetch the column and short-circuit).
+    /// Net effect: O(1) WIP work per batch instead of O(N) `get_column`
+    /// lookups regardless of whether the column is bounded.
     fn build_move_cards_batch(
         &self,
         ids: &[Uuid],
@@ -762,7 +764,6 @@ impl KanbanContext {
             .get_column(column_id)?
             .ok_or_else(|| KanbanError::not_found("column", column_id))?;
 
-        let mut trusted: HashSet<Uuid> = HashSet::new();
         if let Some(limit) = column.wip_limit {
             let moving_set: HashSet<Uuid> = ids.iter().copied().collect();
             let non_moving = existing
@@ -775,8 +776,10 @@ impl KanbanContext {
                     limit as u32,
                 )));
             }
-            trusted.insert(column_id);
         }
+
+        let mut trusted: HashSet<Uuid> = HashSet::new();
+        trusted.insert(column_id);
 
         let positions =
             kanban_domain::card_lifecycle::compute_move_positions(&existing, ids);
@@ -1165,6 +1168,23 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
+        // KAN-428: validate that all input ids correspond to known cards before
+        // building the batch. Without this, an unknown id passed alongside
+        // valid ones can flip the batch WIP pre-check in build_move_cards_batch
+        // (which counts ids.len() against the limit) and return
+        // WipLimitExceeded when the underlying cause is not_found.
+        let known: std::collections::HashSet<Uuid> = self
+            .backend
+            .list_all_cards()?
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        for &id in &ids {
+            if !known.contains(&id) {
+                return Err(KanbanError::not_found("card", id));
+            }
+        }
+
         let before = self.backend.list_cards_by_column(column_id)?.len();
 
         let chained_status_updates = self.chained_status_updates_for_batch_move(&ids, column_id)?;
