@@ -61,10 +61,12 @@ impl Command {
 /// `wip_trusted_columns` is a per-batch hint set by the service layer: when a
 /// column id appears in it, `MoveCard::execute` will skip its own per-card WIP
 /// check because the service has already validated the entire batch fits.
-/// Other commands ignore this set.
+/// Other commands ignore this set. The field is `pub(crate)` so only in-crate
+/// command code can read it; external callers populate it via the
+/// [`with_trusted_columns`] builder.
 pub struct CommandContext<'a> {
     pub store: &'a dyn DataStore,
-    pub wip_trusted_columns: HashSet<Uuid>,
+    pub(crate) wip_trusted_columns: HashSet<Uuid>,
 }
 
 impl<'a> CommandContext<'a> {
