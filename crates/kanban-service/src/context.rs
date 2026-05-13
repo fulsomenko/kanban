@@ -495,32 +495,19 @@ impl KanbanContext {
     }
 
     pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
-        let all_cards = match self.backend.list_all_cards() {
-            Ok(c) => c,
-            Err(e) => {
-                return BatchOperationResult {
-                    succeeded: vec![],
-                    failed: ids
-                        .into_iter()
-                        .map(|id| BatchOperationFailure {
-                            id,
-                            error: e.to_string(),
-                        })
-                        .collect(),
-                };
-            }
-        };
-        let card_ids: std::collections::HashSet<Uuid> = all_cards.iter().map(|c| c.id).collect();
         let mut to_move = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
-            if card_ids.contains(&id) {
-                to_move.push(id);
-            } else {
-                failed.push(BatchOperationFailure {
+            match self.backend.get_card(id) {
+                Ok(Some(_)) => to_move.push(id),
+                Ok(None) => failed.push(BatchOperationFailure {
                     id,
                     error: KanbanError::not_found("card", id).to_string(),
-                });
+                }),
+                Err(e) => failed.push(BatchOperationFailure {
+                    id,
+                    error: e.to_string(),
+                }),
             }
         }
         if to_move.is_empty() {
@@ -725,13 +712,14 @@ impl KanbanContext {
 
     /// KAN-428: build the command batch for a multi-card move into one column.
     ///
-    /// When the column has a WIP limit, performs a single batch-level WIP
-    /// pre-check using the data already fetched for position computation —
-    /// this surfaces a clean batch-level `WipLimitExceeded` before any
-    /// per-card command runs. The per-card `MoveCard::execute` WIP check
-    /// still runs as belt-and-suspenders, but since
-    /// `count_cards_in_column_excluding` is now O(column_size + exclude.len()),
-    /// the redundant per-card checks are cheap.
+    /// Validates that every input id is a known card up front so that an
+    /// unknown id surfaces as `not_found` rather than being miscounted by
+    /// the batch WIP pre-check. When the target column has a WIP limit,
+    /// performs a single batch-level pre-check that returns one clean
+    /// `WipLimitExceeded` before any per-card command runs. The per-card
+    /// `MoveCard::execute` WIP check still runs as belt-and-suspenders, but
+    /// since `count_cards_in_column_excluding` is now O(column_size +
+    /// exclude.len()), the redundant per-card checks are cheap.
     fn build_move_cards_batch(
         &self,
         ids: &[Uuid],
@@ -741,6 +729,12 @@ impl KanbanContext {
         use kanban_domain::commands::{MoveCard, UpdateCard};
         use kanban_domain::DomainError;
         use std::collections::HashSet;
+
+        for &id in ids {
+            if self.backend.get_card(id)?.is_none() {
+                return Err(KanbanError::not_found("card", id));
+            }
+        }
 
         let existing = self.backend.list_cards_by_column(column_id)?;
         let column = self
@@ -1149,23 +1143,6 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        // KAN-428: validate that all input ids correspond to known cards before
-        // building the batch. Without this, an unknown id passed alongside
-        // valid ones can flip the batch WIP pre-check in build_move_cards_batch
-        // (which counts ids.len() against the limit) and return
-        // WipLimitExceeded when the underlying cause is not_found.
-        let known: std::collections::HashSet<Uuid> = self
-            .backend
-            .list_all_cards()?
-            .into_iter()
-            .map(|c| c.id)
-            .collect();
-        for &id in &ids {
-            if !known.contains(&id) {
-                return Err(KanbanError::not_found("card", id));
-            }
-        }
-
         let before = self.backend.list_cards_by_column(column_id)?.len();
 
         let chained_status_updates = self.chained_status_updates_for_batch_move(&ids, column_id)?;
