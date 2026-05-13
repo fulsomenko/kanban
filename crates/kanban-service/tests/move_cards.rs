@@ -110,9 +110,7 @@ macro_rules! move_cards_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let backend = ctx.backend();
 
-                let board = ctx
-                    .create_board("B".into(), Some("TST".into()))
-                    .unwrap();
+                let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
                 let src_col = ctx.create_column(board.id, "Src".into(), None).unwrap();
                 let dst_col = ctx.create_column(board.id, "Dst".into(), None).unwrap();
                 ctx.update_column(
@@ -133,7 +131,10 @@ macro_rules! move_cards_tests {
                 let dst_id = dst_col.id;
 
                 let result = ctx.move_cards(vec![card1.id, card2.id], dst_id);
-                assert!(result.is_err(), "moving 2 cards into limit=1 column must error");
+                assert!(
+                    result.is_err(),
+                    "moving 2 cards into limit=1 column must error"
+                );
 
                 // Atomic: nothing moved (snapshot rollback)
                 let c1 = backend.get_card(card1.id).unwrap().unwrap();

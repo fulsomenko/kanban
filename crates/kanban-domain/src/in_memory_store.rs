@@ -218,7 +218,11 @@ impl DataStore for InMemoryStore {
         let mut cards: Vec<Card> = state
             .cards_by_column
             .get(&column_id)
-            .map(|ids| ids.iter().filter_map(|id| state.cards.get(id).cloned()).collect())
+            .map(|ids| {
+                ids.iter()
+                    .filter_map(|id| state.cards.get(id).cloned())
+                    .collect()
+            })
             .unwrap_or_default();
         cards.sort_by_key(|c| c.position);
         Ok(cards)

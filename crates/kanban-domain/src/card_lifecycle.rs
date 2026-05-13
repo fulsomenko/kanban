@@ -815,8 +815,7 @@ mod tests {
         let id_b = Uuid::new_v4();
 
         // Duplicates of id_a and id_b: only first occurrence kept.
-        let positions =
-            compute_move_positions(&existing, &[id_a, id_b, id_a, id_b, id_a]);
+        let positions = compute_move_positions(&existing, &[id_a, id_b, id_a, id_b, id_a]);
 
         // base = 1 (one existing non-moving), only two unique moving ids → positions 1, 2.
         assert_eq!(positions, vec![(id_a, 1), (id_b, 2)]);

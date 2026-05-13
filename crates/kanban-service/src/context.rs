@@ -540,8 +540,7 @@ impl KanbanContext {
                 }
             };
 
-        let batch = match self.build_move_cards_batch(&to_move, column_id, chained_status_updates)
-        {
+        let batch = match self.build_move_cards_batch(&to_move, column_id, chained_status_updates) {
             Ok(b) => b,
             Err(e) => {
                 let err = e.to_string();

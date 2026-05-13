@@ -867,5 +867,4 @@ mod tests {
         let card = tc.store.get_card(card_id).unwrap().unwrap();
         assert_eq!(card.updated_at, fixed_time);
     }
-
 }
