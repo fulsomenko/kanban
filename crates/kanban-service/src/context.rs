@@ -198,6 +198,20 @@ impl KanbanContext {
 
     /// Execute a batch of commands as a single undo unit.
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
+        self.execute_with_trusted_columns(commands, std::collections::HashSet::new())
+    }
+
+    /// Execute a batch of commands with a set of columns whose WIP limit the
+    /// caller has already validated for the whole batch. Inside the executor,
+    /// `MoveCard::execute` will skip its per-card `check_wip_limit` for any
+    /// column in `trusted_columns` (see `CommandContext::wip_trusted_columns`).
+    /// All other batching semantics (snapshot/rollback, append, undo bookkeeping)
+    /// are identical to `execute`.
+    fn execute_with_trusted_columns(
+        &mut self,
+        commands: Vec<Command>,
+        trusted_columns: std::collections::HashSet<Uuid>,
+    ) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
             return Err(KanbanError::Internal(
                 "undo state not initialized — call initialize_undo_state() or open()".into(),
@@ -216,7 +230,7 @@ impl KanbanContext {
         };
         let result = {
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext::new(store);
+            let ctx = CommandContext::new(store).with_trusted_columns(trusted_columns);
             commands.iter().try_for_each(|cmd| cmd.execute(&ctx))
         };
         if let Err(e) = result {
@@ -548,23 +562,24 @@ impl KanbanContext {
                 }
             };
 
-        let batch = match self.build_move_cards_batch(&to_move, column_id, chained_status_updates) {
-            Ok(b) => b,
-            Err(e) => {
-                let err = e.to_string();
-                let mut all_failed = failed;
-                all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
-                    id,
-                    error: err.clone(),
-                }));
-                return BatchOperationResult {
-                    succeeded: vec![],
-                    failed: all_failed,
-                };
-            }
-        };
+        let (batch, trusted_columns) =
+            match self.build_move_cards_batch(&to_move, column_id, chained_status_updates) {
+                Ok(b) => b,
+                Err(e) => {
+                    let err = e.to_string();
+                    let mut all_failed = failed;
+                    all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                        id,
+                        error: err.clone(),
+                    }));
+                    return BatchOperationResult {
+                        succeeded: vec![],
+                        failed: all_failed,
+                    };
+                }
+            };
 
-        match self.execute(batch) {
+        match self.execute_with_trusted_columns(batch, trusted_columns) {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
@@ -723,22 +738,46 @@ impl KanbanContext {
     }
 
     /// KAN-428: build the command batch for a multi-card move into one column.
-    /// Computes target positions via the pure
-    /// `kanban_domain::card_lifecycle::compute_move_positions` helper and
-    /// emits one atomic `MoveCard` per card, followed by chained status
-    /// updates. Each `MoveCard` performs its own WIP check; the per-card
-    /// checks are mathematically equivalent to the original batch check
-    /// when they run sequentially inside a single `execute` batch (rollback
-    /// on failure preserves atomicity).
+    ///
+    /// Performs a single batch-level WIP pre-check using the data already
+    /// fetched for position computation, then emits one atomic `MoveCard` per
+    /// card followed by the chained status updates. Returns the batch plus a
+    /// set containing `column_id` when the column has a WIP limit, so the
+    /// executor can mark that column as trusted and short-circuit the now-
+    /// redundant per-`MoveCard` `check_wip_limit` calls (O(N) → O(1) for the
+    /// batch).
     fn build_move_cards_batch(
         &self,
         ids: &[Uuid],
         column_id: Uuid,
         chained_status_updates: Vec<(Uuid, CardStatus)>,
-    ) -> KanbanResult<Vec<Command>> {
+    ) -> KanbanResult<(Vec<Command>, std::collections::HashSet<Uuid>)> {
         use kanban_domain::commands::{MoveCard, UpdateCard};
+        use kanban_domain::DomainError;
+        use std::collections::HashSet;
 
         let existing = self.backend.list_cards_by_column(column_id)?;
+        let column = self
+            .backend
+            .get_column(column_id)?
+            .ok_or_else(|| KanbanError::not_found("column", column_id))?;
+
+        let mut trusted: HashSet<Uuid> = HashSet::new();
+        if let Some(limit) = column.wip_limit {
+            let moving_set: HashSet<Uuid> = ids.iter().copied().collect();
+            let non_moving = existing
+                .iter()
+                .filter(|c| !moving_set.contains(&c.id))
+                .count();
+            if non_moving + ids.len() > limit as usize {
+                return Err(KanbanError::Domain(DomainError::wip_limit_exceeded(
+                    column_id,
+                    limit as u32,
+                )));
+            }
+            trusted.insert(column_id);
+        }
+
         let positions =
             kanban_domain::card_lifecycle::compute_move_positions(&existing, ids);
 
@@ -759,7 +798,7 @@ impl KanbanContext {
                 },
             })));
         }
-        Ok(batch)
+        Ok((batch, trusted))
     }
 
     /// KAN-394: given a column the card is about to move to, compute the status
@@ -1129,9 +1168,10 @@ impl KanbanOperations for KanbanContext {
         let before = self.backend.list_cards_by_column(column_id)?.len();
 
         let chained_status_updates = self.chained_status_updates_for_batch_move(&ids, column_id)?;
-        let batch = self.build_move_cards_batch(&ids, column_id, chained_status_updates)?;
+        let (batch, trusted_columns) =
+            self.build_move_cards_batch(&ids, column_id, chained_status_updates)?;
 
-        self.execute(batch)?;
+        self.execute_with_trusted_columns(batch, trusted_columns)?;
         let after = self.backend.list_cards_by_column(column_id)?.len();
         Ok(after - before)
     }
