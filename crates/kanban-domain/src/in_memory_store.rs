@@ -216,11 +216,10 @@ impl DataStore for InMemoryStore {
     fn list_cards_by_column(&self, column_id: Uuid) -> KanbanResult<Vec<Card>> {
         let state = self.read_state()?;
         let mut cards: Vec<Card> = state
-            .cards
-            .values()
-            .filter(|c| c.column_id == column_id)
-            .cloned()
-            .collect();
+            .cards_by_column
+            .get(&column_id)
+            .map(|ids| ids.iter().filter_map(|id| state.cards.get(id).cloned()).collect())
+            .unwrap_or_default();
         cards.sort_by_key(|c| c.position);
         Ok(cards)
     }
