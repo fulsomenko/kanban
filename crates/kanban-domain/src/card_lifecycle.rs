@@ -12,8 +12,16 @@ use uuid::Uuid;
 ///
 /// Cards whose IDs are in `moving_ids` are placed at the tail of the column,
 /// in their input order, starting at the position right after the last
-/// non-moving card. Returns `(card_id, target_position)` pairs in the same
-/// order the IDs were provided.
+/// non-moving card. Returns `(card_id, target_position)` pairs in the order
+/// of the first occurrence of each id in `moving_ids`.
+///
+/// Duplicates in `moving_ids` are deduplicated (first occurrence wins) so
+/// that the caller doesn't end up emitting two `MoveCard` commands for the
+/// same id with conflicting positions.
+///
+/// Returns `None` if the computed positions would not fit in `i32` (column
+/// size approaching `i32::MAX` — practically unreachable, but avoids the
+/// silent overflow that a bare `as i32` cast would produce).
 ///
 /// This is a pure function: it does no I/O and takes the current column
 /// contents as a snapshot input. The service layer is responsible for
@@ -21,16 +29,24 @@ use uuid::Uuid;
 pub fn compute_move_positions(
     existing_cards: &[Card],
     moving_ids: &[Uuid],
-) -> Vec<(Uuid, i32)> {
-    let moving_set: HashSet<Uuid> = moving_ids.iter().copied().collect();
+) -> Option<Vec<(Uuid, i32)>> {
+    let mut seen: HashSet<Uuid> = HashSet::new();
+    let deduped: Vec<Uuid> = moving_ids
+        .iter()
+        .copied()
+        .filter(|id| seen.insert(*id))
+        .collect();
     let base = existing_cards
         .iter()
-        .filter(|c| !moving_set.contains(&c.id))
+        .filter(|c| !seen.contains(&c.id))
         .count();
-    moving_ids
-        .iter()
+    deduped
+        .into_iter()
         .enumerate()
-        .map(|(i, id)| (*id, (base + i) as i32))
+        .map(|(i, id)| {
+            let pos = i32::try_from(base.checked_add(i)?).ok()?;
+            Some((id, pos))
+        })
         .collect()
 }
 
@@ -735,7 +751,7 @@ mod tests {
         let move_a = Uuid::new_v4();
         let move_b = Uuid::new_v4();
 
-        let positions = compute_move_positions(&existing, &[move_a, move_b]);
+        let positions = compute_move_positions(&existing, &[move_a, move_b]).unwrap();
 
         assert_eq!(positions, vec![(move_a, 2), (move_b, 3)]);
     }
@@ -752,7 +768,7 @@ mod tests {
         let existing = vec![card1, card2, card3];
 
         // Move c1 and c3; c2 stays — base = 1 (only c2 is non-moving)
-        let positions = compute_move_positions(&existing, &[c1, c3]);
+        let positions = compute_move_positions(&existing, &[c1, c3]).unwrap();
 
         assert_eq!(positions, vec![(c1, 1), (c3, 2)]);
     }
@@ -762,7 +778,7 @@ mod tests {
         let move_a = Uuid::new_v4();
         let move_b = Uuid::new_v4();
 
-        let positions = compute_move_positions(&[], &[move_a, move_b]);
+        let positions = compute_move_positions(&[], &[move_a, move_b]).unwrap();
 
         assert_eq!(positions, vec![(move_a, 0), (move_b, 1)]);
     }
@@ -773,7 +789,7 @@ mod tests {
         let cols = add_columns(&board, &["Col"]);
         let existing = vec![test_card(&mut board, &cols[0], "E", 0)];
 
-        let positions = compute_move_positions(&existing, &[]);
+        let positions = compute_move_positions(&existing, &[]).unwrap();
 
         assert!(positions.is_empty());
     }
@@ -788,7 +804,7 @@ mod tests {
         let id2 = Uuid::new_v4();
         let id3 = Uuid::new_v4();
 
-        let positions = compute_move_positions(&existing, &[id3, id1, id2]);
+        let positions = compute_move_positions(&existing, &[id3, id1, id2]).unwrap();
 
         assert_eq!(positions, vec![(id3, 1), (id1, 2), (id2, 3)]);
     }

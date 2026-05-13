@@ -781,8 +781,13 @@ impl KanbanContext {
         let mut trusted: HashSet<Uuid> = HashSet::new();
         trusted.insert(column_id);
 
-        let positions =
-            kanban_domain::card_lifecycle::compute_move_positions(&existing, ids);
+        let positions = kanban_domain::card_lifecycle::compute_move_positions(&existing, ids)
+            .ok_or_else(|| {
+                KanbanError::Internal(format!(
+                    "column {column_id} target positions overflow i32 ({} existing cards)",
+                    existing.len()
+                ))
+            })?;
 
         let mut batch: Vec<Command> = Vec::with_capacity(positions.len() + chained_status_updates.len());
         for (card_id, new_position) in positions {
