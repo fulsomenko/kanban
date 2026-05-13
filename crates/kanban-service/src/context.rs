@@ -495,6 +495,12 @@ impl KanbanContext {
     }
 
     pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
+        // Dedup at the input boundary so the per-id classification loop both
+        // (a) reports each invalid id once in `failed` and (b) reports each
+        // valid id once in `succeeded`, matching the one `MoveCard` per
+        // unique id that `compute_move_positions` will emit. Also avoids
+        // redundant get_card calls for the same id.
+        let ids = kanban_domain::card_lifecycle::dedup_preserving_order(&ids);
         let mut to_move = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
@@ -510,11 +516,6 @@ impl KanbanContext {
                 }),
             }
         }
-        // Dedup so that the reported `succeeded` matches the actual number of
-        // `MoveCard` commands `compute_move_positions` will emit — without this,
-        // a caller passing `[a, a, a]` would see succeeded = [a, a, a] even
-        // though only one move runs.
-        let to_move = kanban_domain::card_lifecycle::dedup_preserving_order(&to_move);
         if to_move.is_empty() {
             return BatchOperationResult {
                 succeeded: vec![],
