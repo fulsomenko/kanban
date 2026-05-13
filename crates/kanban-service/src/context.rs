@@ -510,6 +510,11 @@ impl KanbanContext {
                 }),
             }
         }
+        // Dedup so that the reported `succeeded` matches the actual number of
+        // `MoveCard` commands `compute_move_positions` will emit — without this,
+        // a caller passing `[a, a, a]` would see succeeded = [a, a, a] even
+        // though only one move runs.
+        let to_move = kanban_domain::card_lifecycle::dedup_preserving_order(&to_move);
         if to_move.is_empty() {
             return BatchOperationResult {
                 succeeded: vec![],
@@ -743,12 +748,16 @@ impl KanbanContext {
             .ok_or_else(|| KanbanError::not_found("column", column_id))?;
 
         if let Some(limit) = column.wip_limit {
+            // `moving_set.len()` is the post-dedup mover count — `compute_move_positions`
+            // emits one `MoveCard` per unique id, so the pre-check must use the same
+            // count to avoid a false `WipLimitExceeded` when the caller passes
+            // duplicates that would actually fit under the limit.
             let moving_set: HashSet<Uuid> = ids.iter().copied().collect();
             let non_moving = existing
                 .iter()
                 .filter(|c| !moving_set.contains(&c.id))
                 .count();
-            if non_moving + ids.len() > limit as usize {
+            if non_moving + moving_set.len() > limit as usize {
                 return Err(KanbanError::Domain(DomainError::wip_limit_exceeded(
                     column_id,
                     limit as u32,
