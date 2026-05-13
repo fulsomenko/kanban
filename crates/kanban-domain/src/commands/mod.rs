@@ -226,6 +226,27 @@ mod tests {
     }
 
     #[test]
+    fn test_command_context_new_has_empty_trust_set() {
+        let tc = TestContext::new();
+        let ctx = CommandContext::new(&tc.store);
+        assert!(ctx.wip_trusted_columns.is_empty());
+    }
+
+    #[test]
+    fn test_command_context_with_trusted_columns_populates_set() {
+        let tc = TestContext::new();
+        let col_a = Uuid::new_v4();
+        let col_b = Uuid::new_v4();
+        let mut set = HashSet::new();
+        set.insert(col_a);
+        set.insert(col_b);
+        let ctx = CommandContext::new(&tc.store).with_trusted_columns(set);
+        assert!(ctx.wip_trusted_columns.contains(&col_a));
+        assert!(ctx.wip_trusted_columns.contains(&col_b));
+        assert_eq!(ctx.wip_trusted_columns.len(), 2);
+    }
+
+    #[test]
     fn test_command_serde_roundtrip_create_board() {
         let cmd = Command::Board(BoardCommand::Create(CreateBoard {
             id: Uuid::new_v4(),
