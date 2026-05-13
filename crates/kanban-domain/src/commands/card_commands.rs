@@ -163,9 +163,7 @@ pub struct MoveCard {
 
 impl MoveCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        if !context.wip_trusted_columns.contains(&self.new_column_id) {
-            context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
-        }
+        context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
         let mut card = context.get_card(self.card_id)?;
         card.move_to_column(self.new_column_id, self.new_position);
         context.store.upsert_card(card)?;
@@ -870,70 +868,4 @@ mod tests {
         assert_eq!(card.updated_at, fixed_time);
     }
 
-    // --- wip_trusted_columns gating on MoveCard ---
-
-    fn make_move_card_fixture(wip_limit: i32) -> (TestContext, Uuid, Uuid, Uuid) {
-        let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let src = crate::Column::new(board.id, "Src".to_string(), 0);
-        let mut dst = crate::Column::new(board.id, "Dst".to_string(), 1);
-        dst.wip_limit = Some(wip_limit);
-        let src_id = src.id;
-        let dst_id = dst.id;
-        let occupant = crate::Card::new(&mut board, dst_id, "Occupant".to_string(), 0);
-        let mover = crate::Card::new(&mut board, src_id, "Mover".to_string(), 0);
-        let mover_id = mover.id;
-        tc.store.upsert_board(board).unwrap();
-        tc.store.upsert_column(src).unwrap();
-        tc.store.upsert_column(dst).unwrap();
-        tc.store.upsert_card(occupant).unwrap();
-        tc.store.upsert_card(mover).unwrap();
-        (tc, dst_id, mover_id, src_id)
-    }
-
-    #[test]
-    fn test_move_card_skips_wip_check_when_target_in_trusted_set() {
-        let (tc, dst_id, mover_id, _src_id) = make_move_card_fixture(1);
-        let mut trusted = std::collections::HashSet::new();
-        trusted.insert(dst_id);
-        let context = CommandContext::new(&tc.store).with_trusted_columns(trusted);
-        let cmd = MoveCard {
-            card_id: mover_id,
-            new_column_id: dst_id,
-            new_position: 1,
-        };
-        cmd.execute(&context)
-            .expect("WIP check must be skipped when target column is trusted");
-        let moved = tc.store.get_card(mover_id).unwrap().unwrap();
-        assert_eq!(moved.column_id, dst_id);
-        assert_eq!(moved.position, 1);
-    }
-
-    #[test]
-    fn test_move_card_still_checks_wip_when_target_not_in_trusted_set() {
-        let (tc, dst_id, mover_id, _src_id) = make_move_card_fixture(1);
-        let context = tc.as_command_context();
-        let cmd = MoveCard {
-            card_id: mover_id,
-            new_column_id: dst_id,
-            new_position: 1,
-        };
-        let err = cmd.execute(&context).unwrap_err();
-        assert!(err.is_wip_limit_exceeded());
-    }
-
-    #[test]
-    fn test_move_card_trust_set_does_not_apply_to_other_columns() {
-        let (tc, dst_id, mover_id, _src_id) = make_move_card_fixture(1);
-        let mut trusted = std::collections::HashSet::new();
-        trusted.insert(Uuid::new_v4()); // unrelated column
-        let context = CommandContext::new(&tc.store).with_trusted_columns(trusted);
-        let cmd = MoveCard {
-            card_id: mover_id,
-            new_column_id: dst_id,
-            new_position: 1,
-        };
-        let err = cmd.execute(&context).unwrap_err();
-        assert!(err.is_wip_limit_exceeded());
-    }
 }

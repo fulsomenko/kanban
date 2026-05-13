@@ -198,20 +198,6 @@ impl KanbanContext {
 
     /// Execute a batch of commands as a single undo unit.
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
-        self.execute_with_trusted_columns(commands, std::collections::HashSet::new())
-    }
-
-    /// Execute a batch of commands with a set of columns whose WIP limit the
-    /// caller has already validated for the whole batch. Inside the executor,
-    /// `MoveCard::execute` will skip its per-card `check_wip_limit` for any
-    /// column in `trusted_columns` (see `CommandContext::wip_trusted_columns`).
-    /// All other batching semantics (snapshot/rollback, append, undo bookkeeping)
-    /// are identical to `execute`.
-    fn execute_with_trusted_columns(
-        &mut self,
-        commands: Vec<Command>,
-        trusted_columns: std::collections::HashSet<Uuid>,
-    ) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
             return Err(KanbanError::Internal(
                 "undo state not initialized — call initialize_undo_state() or open()".into(),
@@ -230,7 +216,7 @@ impl KanbanContext {
         };
         let result = {
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext::new(store).with_trusted_columns(trusted_columns);
+            let ctx = CommandContext { store };
             commands.iter().try_for_each(|cmd| cmd.execute(&ctx))
         };
         if let Err(e) = result {
@@ -323,7 +309,7 @@ impl KanbanContext {
                 .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_default())?;
             let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext::new(store);
+            let ctx = CommandContext { store };
             for batch in &batches {
                 for cmd in batch {
                     cmd.execute(&ctx)?;
@@ -358,7 +344,7 @@ impl KanbanContext {
                 .backend
                 .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext::new(store);
+            let ctx = CommandContext { store };
             for batch in &batches {
                 for cmd in batch {
                     cmd.execute(&ctx)?;
@@ -562,24 +548,24 @@ impl KanbanContext {
                 }
             };
 
-        let (batch, trusted_columns) =
-            match self.build_move_cards_batch(&to_move, column_id, chained_status_updates) {
-                Ok(b) => b,
-                Err(e) => {
-                    let err = e.to_string();
-                    let mut all_failed = failed;
-                    all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
-                        id,
-                        error: err.clone(),
-                    }));
-                    return BatchOperationResult {
-                        succeeded: vec![],
-                        failed: all_failed,
-                    };
-                }
-            };
+        let batch = match self.build_move_cards_batch(&to_move, column_id, chained_status_updates)
+        {
+            Ok(b) => b,
+            Err(e) => {
+                let err = e.to_string();
+                let mut all_failed = failed;
+                all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                    id,
+                    error: err.clone(),
+                }));
+                return BatchOperationResult {
+                    succeeded: vec![],
+                    failed: all_failed,
+                };
+            }
+        };
 
-        match self.execute_with_trusted_columns(batch, trusted_columns) {
+        match self.execute(batch) {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
@@ -740,20 +726,18 @@ impl KanbanContext {
     /// KAN-428: build the command batch for a multi-card move into one column.
     ///
     /// When the column has a WIP limit, performs a single batch-level WIP
-    /// pre-check using the data already fetched for position computation.
-    /// The target column is then *unconditionally* added to the returned
-    /// trust set so the executor can short-circuit the per-`MoveCard`
-    /// `check_wip_limit` calls — both the redundant ones (limit set, batch
-    /// already verified) and the cheap-but-wasteful ones (no limit, every
-    /// per-card check would just re-fetch the column and short-circuit).
-    /// Net effect: O(1) WIP work per batch instead of O(N) `get_column`
-    /// lookups regardless of whether the column is bounded.
+    /// pre-check using the data already fetched for position computation —
+    /// this surfaces a clean batch-level `WipLimitExceeded` before any
+    /// per-card command runs. The per-card `MoveCard::execute` WIP check
+    /// still runs as belt-and-suspenders, but since
+    /// `count_cards_in_column_excluding` is now O(column_size + exclude.len()),
+    /// the redundant per-card checks are cheap.
     fn build_move_cards_batch(
         &self,
         ids: &[Uuid],
         column_id: Uuid,
         chained_status_updates: Vec<(Uuid, CardStatus)>,
-    ) -> KanbanResult<(Vec<Command>, std::collections::HashSet<Uuid>)> {
+    ) -> KanbanResult<Vec<Command>> {
         use kanban_domain::commands::{MoveCard, UpdateCard};
         use kanban_domain::DomainError;
         use std::collections::HashSet;
@@ -778,9 +762,6 @@ impl KanbanContext {
             }
         }
 
-        let mut trusted: HashSet<Uuid> = HashSet::new();
-        trusted.insert(column_id);
-
         let positions = kanban_domain::card_lifecycle::compute_move_positions(&existing, ids)
             .ok_or_else(|| {
                 KanbanError::Internal(format!(
@@ -789,7 +770,8 @@ impl KanbanContext {
                 ))
             })?;
 
-        let mut batch: Vec<Command> = Vec::with_capacity(positions.len() + chained_status_updates.len());
+        let mut batch: Vec<Command> =
+            Vec::with_capacity(positions.len() + chained_status_updates.len());
         for (card_id, new_position) in positions {
             batch.push(Command::Card(CardCommand::Move(MoveCard {
                 card_id,
@@ -806,7 +788,7 @@ impl KanbanContext {
                 },
             })));
         }
-        Ok((batch, trusted))
+        Ok(batch)
     }
 
     /// KAN-394: given a column the card is about to move to, compute the status
@@ -1193,10 +1175,9 @@ impl KanbanOperations for KanbanContext {
         let before = self.backend.list_cards_by_column(column_id)?.len();
 
         let chained_status_updates = self.chained_status_updates_for_batch_move(&ids, column_id)?;
-        let (batch, trusted_columns) =
-            self.build_move_cards_batch(&ids, column_id, chained_status_updates)?;
+        let batch = self.build_move_cards_batch(&ids, column_id, chained_status_updates)?;
 
-        self.execute_with_trusted_columns(batch, trusted_columns)?;
+        self.execute(batch)?;
         let after = self.backend.list_cards_by_column(column_id)?.len();
         Ok(after - before)
     }
@@ -1451,7 +1432,7 @@ impl KanbanOperations for KanbanContext {
 
         {
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext::new(store);
+            let ctx = CommandContext { store };
             for cmd in &commands {
                 cmd.execute(&ctx)?;
             }

@@ -12,7 +12,7 @@ fn test_delete_card_cleans_dependencies() {
     store.upsert_board(board).unwrap();
     store.upsert_column(column).unwrap();
 
-    let ctx = CommandContext::new(&store);
+    let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
         id: uuid::Uuid::new_v4(),
@@ -63,7 +63,7 @@ fn test_delete_column_with_cards_fails() {
     store.upsert_board(board).unwrap();
     store.upsert_column(column).unwrap();
 
-    let ctx = CommandContext::new(&store);
+    let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
         id: uuid::Uuid::new_v4(),
@@ -94,7 +94,7 @@ fn test_delete_column_with_archived_cards_fails() {
     store.upsert_board(board).unwrap();
     store.upsert_column(column).unwrap();
 
-    let ctx = CommandContext::new(&store);
+    let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
         id: uuid::Uuid::new_v4(),
@@ -132,7 +132,7 @@ fn test_delete_sprint_unassigns_cards() {
     store.upsert_column(column).unwrap();
     store.upsert_sprint(sprint).unwrap();
 
-    let ctx = CommandContext::new(&store);
+    let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
         id: uuid::Uuid::new_v4(),
@@ -203,7 +203,7 @@ fn test_archive_card_preserves_edges() {
     store.upsert_board(board).unwrap();
     store.upsert_column(column).unwrap();
 
-    let ctx = CommandContext::new(&store);
+    let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
         id: uuid::Uuid::new_v4(),
@@ -263,7 +263,7 @@ fn test_delete_column_succeeds_when_empty() {
     store.upsert_board(board).unwrap();
     store.upsert_column(column).unwrap();
 
-    let ctx = CommandContext::new(&store);
+    let ctx = CommandContext { store: &store };
 
     let cmd = DeleteColumn { column_id };
     let result = cmd.execute(&ctx);
@@ -282,7 +282,7 @@ fn test_cycle_detection_parent_child() {
     store.upsert_board(board).unwrap();
     store.upsert_column(column).unwrap();
 
-    let ctx = CommandContext::new(&store);
+    let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
         id: uuid::Uuid::new_v4(),
@@ -347,7 +347,7 @@ fn test_cycle_detection_blocks() {
     store.upsert_board(board).unwrap();
     store.upsert_column(column).unwrap();
 
-    let ctx = CommandContext::new(&store);
+    let ctx = CommandContext { store: &store };
 
     let cmd = CreateCard {
         id: uuid::Uuid::new_v4(),

@@ -1,7 +1,6 @@
 use crate::data_store::DataStore;
 use crate::{DomainError, KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use uuid::Uuid;
 
 pub mod board_commands;
@@ -57,31 +56,11 @@ impl Command {
 
 /// Context passed to commands for mutation.
 /// Holds a reference to the DataStore which uses interior mutability.
-///
-/// `wip_trusted_columns` is a per-batch hint set by the service layer: when a
-/// column id appears in it, `MoveCard::execute` will skip its own per-card WIP
-/// check because the service has already validated the entire batch fits.
-/// Other commands ignore this set. The field is `pub(crate)` so only in-crate
-/// command code can read it; external callers populate it via the
-/// [`with_trusted_columns`] builder.
 pub struct CommandContext<'a> {
     pub store: &'a dyn DataStore,
-    pub(crate) wip_trusted_columns: HashSet<Uuid>,
 }
 
 impl<'a> CommandContext<'a> {
-    pub fn new(store: &'a dyn DataStore) -> Self {
-        Self {
-            store,
-            wip_trusted_columns: HashSet::new(),
-        }
-    }
-
-    pub fn with_trusted_columns(mut self, columns: HashSet<Uuid>) -> Self {
-        self.wip_trusted_columns = columns;
-        self
-    }
-
     pub fn get_board(&self, id: Uuid) -> KanbanResult<crate::Board> {
         self.store
             .get_board(id)?
@@ -225,27 +204,6 @@ mod tests {
         let ctx = tc.as_command_context();
         let result = ctx.check_wip_limit(col_id, 2, &[]);
         assert!(result.unwrap_err().is_wip_limit_exceeded());
-    }
-
-    #[test]
-    fn test_command_context_new_has_empty_trust_set() {
-        let tc = TestContext::new();
-        let ctx = CommandContext::new(&tc.store);
-        assert!(ctx.wip_trusted_columns.is_empty());
-    }
-
-    #[test]
-    fn test_command_context_with_trusted_columns_populates_set() {
-        let tc = TestContext::new();
-        let col_a = Uuid::new_v4();
-        let col_b = Uuid::new_v4();
-        let mut set = HashSet::new();
-        set.insert(col_a);
-        set.insert(col_b);
-        let ctx = CommandContext::new(&tc.store).with_trusted_columns(set);
-        assert!(ctx.wip_trusted_columns.contains(&col_a));
-        assert!(ctx.wip_trusted_columns.contains(&col_b));
-        assert_eq!(ctx.wip_trusted_columns.len(), 2);
     }
 
     #[test]
@@ -398,7 +356,7 @@ pub(crate) mod test_helpers {
         }
 
         pub fn as_command_context(&self) -> CommandContext<'_> {
-            CommandContext::new(&self.store)
+            CommandContext { store: &self.store }
         }
     }
 }
