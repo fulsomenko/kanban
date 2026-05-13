@@ -237,6 +237,41 @@ macro_rules! move_cards_tests {
                     "expected WipLimitExceeded, got {err:?}"
                 );
             }
+
+            // KAN-428 followup: when invalid ids would *also* push the count
+            // past a WIP limit, the pre-existence check should surface
+            // not_found first — the WipLimitExceeded that the batch WIP
+            // pre-check would otherwise produce is misleading.
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_move_cards_invalid_id_into_wip_limited_column_returns_not_found() {
+                let (mut ctx, _dir) = $open_ctx.await;
+
+                let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
+                let src_col = ctx.create_column(board.id, "Src".into(), None).unwrap();
+                let dst_col = ctx.create_column(board.id, "Dst".into(), None).unwrap();
+                // Limit the destination column to 1 so any oversized batch would trip WIP.
+                ctx.update_column(
+                    dst_col.id,
+                    kanban_domain::ColumnUpdate {
+                        wip_limit: kanban_domain::FieldUpdate::Set(1),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                let valid = ctx
+                    .create_card(board.id, src_col.id, "C1".into(), Default::default())
+                    .unwrap();
+                let invalid_a = uuid::Uuid::new_v4();
+                let invalid_b = uuid::Uuid::new_v4();
+
+                let err = ctx
+                    .move_cards(vec![valid.id, invalid_a, invalid_b], dst_col.id)
+                    .unwrap_err();
+                assert!(
+                    err.is_not_found(),
+                    "expected NotFound (precedes WIP pre-check), got {err:?}"
+                );
+            }
         }
     };
 }
