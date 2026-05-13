@@ -216,7 +216,7 @@ impl KanbanContext {
         };
         let result = {
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext { store };
+            let ctx = CommandContext::new(store);
             commands.iter().try_for_each(|cmd| cmd.execute(&ctx))
         };
         if let Err(e) = result {
@@ -309,7 +309,7 @@ impl KanbanContext {
                 .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_default())?;
             let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext { store };
+            let ctx = CommandContext::new(store);
             for batch in &batches {
                 for cmd in batch {
                     cmd.execute(&ctx)?;
@@ -344,7 +344,7 @@ impl KanbanContext {
                 .backend
                 .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext { store };
+            let ctx = CommandContext::new(store);
             for batch in &batches {
                 for cmd in batch {
                     cmd.execute(&ctx)?;
@@ -1386,7 +1386,7 @@ impl KanbanOperations for KanbanContext {
 
         {
             let store: &dyn DataStore = self.backend.as_data_store();
-            let ctx = CommandContext { store };
+            let ctx = CommandContext::new(store);
             for cmd in &commands {
                 cmd.execute(&ctx)?;
             }

@@ -1,6 +1,7 @@
 use crate::data_store::DataStore;
 use crate::{DomainError, KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 pub mod board_commands;
@@ -56,11 +57,29 @@ impl Command {
 
 /// Context passed to commands for mutation.
 /// Holds a reference to the DataStore which uses interior mutability.
+///
+/// `wip_trusted_columns` is a per-batch hint set by the service layer: when a
+/// column id appears in it, `MoveCard::execute` will skip its own per-card WIP
+/// check because the service has already validated the entire batch fits.
+/// Other commands ignore this set.
 pub struct CommandContext<'a> {
     pub store: &'a dyn DataStore,
+    pub wip_trusted_columns: HashSet<Uuid>,
 }
 
 impl<'a> CommandContext<'a> {
+    pub fn new(store: &'a dyn DataStore) -> Self {
+        Self {
+            store,
+            wip_trusted_columns: HashSet::new(),
+        }
+    }
+
+    pub fn with_trusted_columns(mut self, columns: HashSet<Uuid>) -> Self {
+        self.wip_trusted_columns = columns;
+        self
+    }
+
     pub fn get_board(&self, id: Uuid) -> KanbanResult<crate::Board> {
         self.store
             .get_board(id)?
@@ -356,7 +375,7 @@ pub(crate) mod test_helpers {
         }
 
         pub fn as_command_context(&self) -> CommandContext<'_> {
-            CommandContext { store: &self.store }
+            CommandContext::new(&self.store)
         }
     }
 }

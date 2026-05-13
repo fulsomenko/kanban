@@ -163,7 +163,9 @@ pub struct MoveCard {
 
 impl MoveCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
+        if !context.wip_trusted_columns.contains(&self.new_column_id) {
+            context.check_wip_limit(self.new_column_id, 1, &[self.card_id])?;
+        }
         let mut card = context.get_card(self.card_id)?;
         card.move_to_column(self.new_column_id, self.new_position);
         context.store.upsert_card(card)?;
