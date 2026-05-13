@@ -168,6 +168,75 @@ macro_rules! move_cards_tests {
                 let valid = backend.get_card(valid_id).unwrap().unwrap();
                 assert_eq!(valid.column_id, col_to_id);
             }
+
+            // KAN-428 followup: pin behaviour change — move_cards now errors and
+            // rolls back when any input ID is unknown (previously, invalid IDs
+            // were silently skipped by the removed MoveCards batch command).
+            // Callers that need partial-success semantics use move_cards_detailed.
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_move_cards_with_invalid_id_errors_and_rolls_back() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let backend = ctx.backend();
+
+                let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
+                let col_from = ctx.create_column(board.id, "From".into(), None).unwrap();
+                let col_to = ctx.create_column(board.id, "To".into(), None).unwrap();
+                let card = ctx
+                    .create_card(board.id, col_from.id, "C".into(), Default::default())
+                    .unwrap();
+                let invalid_id = uuid::Uuid::new_v4();
+                let from_id = col_from.id;
+                let to_id = col_to.id;
+
+                let result = ctx.move_cards(vec![card.id, invalid_id], to_id);
+                assert!(
+                    result.is_err(),
+                    "move_cards with any invalid ID must error after KAN-428"
+                );
+
+                let fetched = backend.get_card(card.id).unwrap().unwrap();
+                assert_eq!(
+                    fetched.column_id, from_id,
+                    "valid card must not have moved (snapshot rollback)"
+                );
+            }
+
+            // KAN-428 followup: the service-level batch WIP pre-check produces a
+            // single WipLimitExceeded error before any per-card MoveCard runs,
+            // restoring the original batch-level error semantics.
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_move_cards_exceeding_wip_limit_returns_single_batch_error() {
+                let (mut ctx, _dir) = $open_ctx.await;
+
+                let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
+                let src_col = ctx.create_column(board.id, "Src".into(), None).unwrap();
+                let dst_col = ctx.create_column(board.id, "Dst".into(), None).unwrap();
+                ctx.update_column(
+                    dst_col.id,
+                    kanban_domain::ColumnUpdate {
+                        wip_limit: kanban_domain::FieldUpdate::Set(1),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                let c1 = ctx
+                    .create_card(board.id, src_col.id, "C1".into(), Default::default())
+                    .unwrap();
+                let c2 = ctx
+                    .create_card(board.id, src_col.id, "C2".into(), Default::default())
+                    .unwrap();
+                let c3 = ctx
+                    .create_card(board.id, src_col.id, "C3".into(), Default::default())
+                    .unwrap();
+
+                let err = ctx
+                    .move_cards(vec![c1.id, c2.id, c3.id], dst_col.id)
+                    .unwrap_err();
+                assert!(
+                    err.is_wip_limit_exceeded(),
+                    "expected WipLimitExceeded, got {err:?}"
+                );
+            }
         }
     };
 }
