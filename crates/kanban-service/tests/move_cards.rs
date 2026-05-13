@@ -272,6 +272,70 @@ macro_rules! move_cards_tests {
                     "expected NotFound (precedes WIP pre-check), got {err:?}"
                 );
             }
+
+            // KAN-428 followup: duplicate ids in the input must be deduplicated
+            // before the WIP pre-check compares against the limit. compute_move_positions
+            // emits one MoveCard per unique id, so the pre-check must use the
+            // same post-dedup count — otherwise a caller passing [a, a, a] into
+            // a WIP-limited column with room for the one real move gets a
+            // false WipLimitExceeded.
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_move_cards_with_duplicate_ids_uses_deduped_count_for_wip_check() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let backend = ctx.backend();
+
+                let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
+                let src_col = ctx.create_column(board.id, "Src".into(), None).unwrap();
+                let dst_col = ctx.create_column(board.id, "Dst".into(), None).unwrap();
+                // Limit dst to 1; with empty dst and one unique mover (a),
+                // [a, a, a] would have tripped the pre-check before the fix
+                // (`ids.len() == 3 > 1`).
+                ctx.update_column(
+                    dst_col.id,
+                    kanban_domain::ColumnUpdate {
+                        wip_limit: kanban_domain::FieldUpdate::Set(1),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                let card_a = ctx
+                    .create_card(board.id, src_col.id, "A".into(), Default::default())
+                    .unwrap();
+
+                let count = ctx
+                    .move_cards(vec![card_a.id, card_a.id, card_a.id], dst_col.id)
+                    .expect("duplicate ids must dedup to one real move that fits the limit");
+                assert_eq!(count, 1, "exactly one card should land in dst_col");
+
+                let moved = backend.get_card(card_a.id).unwrap().unwrap();
+                assert_eq!(moved.column_id, dst_col.id);
+            }
+
+            // KAN-428 followup: move_cards_detailed.succeeded must report the
+            // post-dedup mover list, not the raw input. compute_move_positions
+            // collapses duplicates, so reporting succeeded = [a, a, a] when only
+            // one MoveCard ran is a caller-visibility bug.
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_move_cards_detailed_dedupes_succeeded_for_duplicate_ids() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let backend = ctx.backend();
+
+                let board = ctx.create_board("B".into(), Some("TST".into())).unwrap();
+                let src_col = ctx.create_column(board.id, "Src".into(), None).unwrap();
+                let dst_col = ctx.create_column(board.id, "Dst".into(), None).unwrap();
+                let card_a = ctx
+                    .create_card(board.id, src_col.id, "A".into(), Default::default())
+                    .unwrap();
+
+                let result =
+                    ctx.move_cards_detailed(vec![card_a.id, card_a.id, card_a.id], dst_col.id);
+
+                assert_eq!(result.succeeded, vec![card_a.id]);
+                assert!(result.failed.is_empty());
+
+                let moved = backend.get_card(card_a.id).unwrap().unwrap();
+                assert_eq!(moved.column_id, dst_col.id);
+            }
         }
     };
 }
