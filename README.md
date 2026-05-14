@@ -97,6 +97,20 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 - **Wayland**: `wl-clip-persist`, `cliphist`, `clipman`, or your DE's built-in manager
 - **X11**: Most desktop environments include one by default
 
+### Windows and WSL
+
+If your setup is Windows and WSL, and you often switch between them, then it is recommended to install separate binaries for each system to avoid constant recompiles.
+
+---
+
+## EDITOR configuration
+
+Changes are made in an external editor as defined by your `EDITOR`. Neovim, nano, or some other terminal-based editor is recommended, both for easier switching between edits and browsing, and because editors that leave the terminal may cause issues.
+
+VS Code is known not to work in the current implementation.
+
+`kanban` is well-tested on supported OSes and is designed to be shell-agnostic. If your `EDITOR` is not set, it will default to `notepad` on Windows and `vi` otherwise.
+
 ---
 
 ## Features

@@ -31,6 +31,8 @@ arboard = { version = "3.4", features = ["wayland-data-control"] }
 pulldown-cmark = "0.13"
 toml = "0.8"
 dunce.workspace = true
+shell-words = "^1.1"
+which = "^8.0"
 
 [features]
 test-helpers = []
