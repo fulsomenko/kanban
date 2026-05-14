@@ -24,6 +24,7 @@ mod board_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -48,6 +49,7 @@ mod board_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let create_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -90,6 +92,8 @@ mod board_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
+
         let output = kanban()
             .args([file.to_str().unwrap(), "board", "list"])
             .assert()
@@ -108,6 +112,7 @@ mod board_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         kanban()
             .args([
                 file.to_str().unwrap(),
@@ -148,6 +153,7 @@ mod board_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let create_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -183,6 +189,7 @@ mod board_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let create_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -225,6 +232,7 @@ mod board_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let create_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -265,6 +273,7 @@ mod column_tests {
     use super::*;
 
     fn setup_board(file: &std::path::Path) -> String {
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -457,6 +466,7 @@ mod card_tests {
     use super::*;
 
     fn setup_board_and_column(file: &std::path::Path) -> (String, String) {
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let board_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -1183,6 +1193,7 @@ mod card_tests {
         file: &std::path::Path,
         prefix: &str,
     ) -> (String, String) {
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let board_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -1475,6 +1486,7 @@ mod sprint_tests {
     use super::*;
 
     fn setup_board(file: &std::path::Path) -> String {
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -1903,6 +1915,7 @@ mod export_import_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         kanban()
             .args([
                 file.to_str().unwrap(),
@@ -1928,6 +1941,7 @@ mod export_import_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let board_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -1959,6 +1973,7 @@ mod export_import_tests {
         let file = dir.path().join("test.json");
         let import_file = dir.path().join("import.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         kanban()
             .args([
                 file.to_str().unwrap(),
@@ -1985,6 +2000,11 @@ mod export_import_tests {
         .unwrap();
 
         let new_file = dir.path().join("new.json");
+        kanban()
+            .args([new_file.to_str().unwrap()])
+            .assert()
+            .success();
+
         let output = kanban()
             .args([
                 new_file.to_str().unwrap(),
@@ -2034,6 +2054,7 @@ mod error_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
 
+        kanban().args([file.to_str().unwrap()]).assert().success();
         kanban()
             .args([
                 file.to_str().unwrap(),
@@ -2063,6 +2084,7 @@ mod error_tests {
     fn test_card_get_nonexistent_numeric_identifier() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
+        setup_board_and_column(&file);
 
         kanban()
             .args([file.to_str().unwrap(), "card", "get", "555"])
@@ -2077,6 +2099,7 @@ mod error_tests {
     fn test_card_get_nonexistent_prefix_identifier() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
+        setup_board_and_column(&file);
 
         kanban()
             .args([file.to_str().unwrap(), "card", "get", "KAN-5"])
@@ -2101,6 +2124,7 @@ mod error_tests {
     }
 
     fn setup_board_and_column(file: &std::path::Path) -> (String, String) {
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let board_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -2169,6 +2193,7 @@ mod error_tests {
     fn test_card_list_invalid_status() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
+        setup_board_and_column(&file);
 
         kanban()
             .args([
@@ -2228,6 +2253,7 @@ mod error_tests {
     }
 
     fn setup_sprint(file: &std::path::Path) -> String {
+        kanban().args([file.to_str().unwrap()]).assert().success();
         let board_output = kanban()
             .args([
                 file.to_str().unwrap(),
@@ -2341,6 +2367,10 @@ mod no_file_tests {
         let file = dir.path().join("via-env.json");
         // Seed the file via the positional path so this test verifies env-var
         // resolution rather than implicit JSON auto-create-on-open.
+        kanban_no_config(dir.path())
+            .args([file.to_str().unwrap()])
+            .assert()
+            .success();
         kanban_no_config(dir.path())
             .args([
                 file.to_str().unwrap(),
@@ -2484,5 +2514,40 @@ mod version_and_help_tests {
             !stderr.is_empty(),
             "an unknown flag must surface a stderr error message"
         );
+    }
+}
+
+mod missing_file_tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_file_gives_clear_error() {
+        kanban()
+            .args(["doesntexist.json", "card", "get", "KAN-1"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("\"success\":false"))
+            .stderr(predicate::str::contains("Board file not found"));
+    }
+
+    #[test]
+    fn test_board_create_requires_existing_file() {
+        kanban()
+            .args(["doesntexist.json", "board", "create", "--name", "Test"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Board file not found"));
+    }
+
+    #[test]
+    fn test_no_subcommand_creates_file_when_missing() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("new.json");
+        assert!(!file.exists());
+        kanban()
+            .args([file.to_str().unwrap()])
+            .assert()
+            .success();
+        assert!(file.exists(), "kanban <file> must create the file when missing");
     }
 }
