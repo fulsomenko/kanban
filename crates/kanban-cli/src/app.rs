@@ -287,13 +287,12 @@ Provide the file path in one of these ways:
                     use kanban_persistence::{
                         snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot,
                     };
-                    let store = store_manager
-                        .make_store_with_config(validated_file.as_deref(), &config)?;
+                    let store =
+                        store_manager.make_store_with_config(validated_file.as_deref(), &config)?;
                     if !store.exists().await {
                         let data = snapshot_to_json_bytes(&Snapshot::new())
                             .map_err(|e| anyhow::anyhow!("{e}"))?;
-                        let metadata =
-                            PersistenceMetadata::new(uuid::Uuid::new_v4());
+                        let metadata = PersistenceMetadata::new(uuid::Uuid::new_v4());
                         store
                             .save(StoreSnapshot { data, metadata })
                             .await

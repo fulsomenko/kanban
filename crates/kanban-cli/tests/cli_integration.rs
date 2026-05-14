@@ -2544,10 +2544,10 @@ mod missing_file_tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("new.json");
         assert!(!file.exists());
-        kanban()
-            .args([file.to_str().unwrap()])
-            .assert()
-            .success();
-        assert!(file.exists(), "kanban <file> must create the file when missing");
+        kanban().args([file.to_str().unwrap()]).assert().success();
+        assert!(
+            file.exists(),
+            "kanban <file> must create the file when missing"
+        );
     }
 }
