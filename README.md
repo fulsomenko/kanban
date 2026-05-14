@@ -18,7 +18,6 @@
 - **Git-native** — generate branch names and `git checkout` commands from any card
 - **LLM-native** — full MCP server (40 tools) works with Claude Code, Cursor, and any MCP client
 - **Offline-first** — works anywhere; JSON and SQLite backends, atomic writes, live conflict detection
-- **Cross-platform** - works on any desktop OS; Linux, Mac OS, Windows, and WSL
 
 ---
 
