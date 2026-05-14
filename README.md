@@ -105,7 +105,7 @@ If your setup is Windows and WSL, and you often switch between them, then it is 
 
 ## EDITOR configuration
 
-Changes are made in an external editor as defined by your `EDITOR`. Neovim, nano, or some other terminal-based editor is recommended, both for easier swtiching between edits and browsing, and because editors that leave the terminal may cause issues.
+Changes are made in an external editor as defined by your `EDITOR`. Neovim, nano, or some other terminal-based editor is recommended, both for easier switching between edits and browsing, and because editors that leave the terminal may cause issues.
 
 VS Code is known not to work in the current implementation.
 

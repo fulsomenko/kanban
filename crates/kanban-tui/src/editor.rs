@@ -152,14 +152,14 @@ mod tests {
     fn parse_editor_handles_malformed_single_word_command() {
         let (program, args) = parse_editor("'vim");
         assert_eq!(program, "'vim");
-        assert!(args.is_empty())
+        assert!(args.is_empty());
     }
 
     #[test]
     fn parse_editor_handles_malformed_multiword_command() {
         let (program, args) = parse_editor("'vim -u NONE");
         assert_eq!(program, "'vim -u NONE");
-        assert!(args.is_empty())
+        assert!(args.is_empty());
     }
 
     #[test]
