@@ -9,8 +9,8 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::Command;
 
-fn editor_env_hint() -> &'static str {
-    if env::var_os("PSModulePath").is_some() {
+fn editor_env_hint(is_powershell: bool) -> &'static str {
+    if is_powershell {
         "$env:EDITOR"
     } else {
         "$EDITOR"
@@ -32,14 +32,17 @@ fn parse_editor(full_command: &str) -> (String, Vec<String>) {
     (program, args)
 }
 
-fn resolve_editor() -> (PathBuf, Vec<String>) {
-    let (program, args) = match env::var("EDITOR") {
-        Ok(value) => parse_editor(&value),
-        Err(_) => fallback_editor(),
+fn resolve_editor_with(editor_env: Option<&str>) -> (PathBuf, Vec<String>) {
+    let (program, args) = match editor_env {
+        Some(value) => parse_editor(value),
+        None => fallback_editor(),
     };
-
     let path = which::which(&program).unwrap_or_else(|_| PathBuf::from(program));
     (path, args)
+}
+
+fn resolve_editor() -> (PathBuf, Vec<String>) {
+    resolve_editor_with(env::var("EDITOR").ok().as_deref())
 }
 
 pub fn edit_in_external_editor(
@@ -70,7 +73,7 @@ pub fn edit_in_external_editor(
             format!(
                 "Editor '{}' not found. Please set {} environment variable.",
                 program.display(),
-                editor_env_hint()
+                editor_env_hint(env::var_os("PSModulePath").is_some()),
             ),
         ));
     }
@@ -101,19 +104,15 @@ pub fn edit_in_external_editor(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env::{remove_var, set_var};
 
     #[test]
     fn editor_env_hint_powershell() {
-        set_var("PSModulePath", "mock_data");
-        assert_eq!(editor_env_hint(), "$env:EDITOR");
-        remove_var("PSModulePath");
+        assert_eq!(editor_env_hint(true), "$env:EDITOR");
     }
 
     #[test]
     fn editor_env_hint_non_powershell() {
-        remove_var("PSModulePath");
-        assert_eq!(editor_env_hint(), "$EDITOR");
+        assert_eq!(editor_env_hint(false), "$EDITOR");
     }
 
     #[test]
@@ -145,49 +144,35 @@ mod tests {
     }
 
     #[test]
-    fn resolve_editor_uses_env_var() {
-        set_var("EDITOR", "vim");
-        let (path, args) = resolve_editor();
-
+    fn resolve_editor_with_handles_simple_editor() {
+        let (path, args) = resolve_editor_with(Some("vim"));
         assert!(path.ends_with("vim") || path.ends_with("vim.exe"));
         assert!(args.is_empty());
-
-        remove_var("EDITOR");
     }
 
     #[test]
-    fn resolve_editor_handles_multiword_editor() {
-        set_var("EDITOR", "code --wait");
-        let (path, args) = resolve_editor();
-
+    fn resolve_editor_with_handles_multiword_editor() {
+        let (path, args) = resolve_editor_with(Some("code --wait"));
         assert!(path.ends_with("code") || path.ends_with("code.exe") || path.ends_with("code.cmd"));
         assert_eq!(args, vec!["--wait"]);
-
-        remove_var("EDITOR");
     }
 
     #[test]
-    fn resolve_editor_falls_back_when_env_missing() {
-        remove_var("EDITOR");
-        let (path, args) = resolve_editor();
+    fn resolve_editor_with_falls_back_when_env_missing() {
+        let (path, args) = resolve_editor_with(None);
 
         if cfg!(target_os = "windows") {
             assert!(path.ends_with("notepad") || path.ends_with("notepad.exe"));
-            assert!(args.is_empty());
         } else {
             assert!(path.ends_with("vi"));
-            assert!(args.is_empty());
         }
+        assert!(args.is_empty());
     }
 
     #[test]
-    fn resolve_editor_handles_nonexistent_program() {
-        set_var("EDITOR", "vi_and_emacs --flag");
-        let (path, args) = resolve_editor();
-
+    fn resolve_editor_with_handles_nonexistent_program() {
+        let (path, args) = resolve_editor_with(Some("vi_and_emacs --flag"));
         assert_eq!(path, PathBuf::from("vi_and_emacs"));
         assert_eq!(args, vec!["--flag"]);
-
-        remove_var("EDITOR");
     }
 }
